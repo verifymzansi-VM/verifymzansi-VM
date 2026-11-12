@@ -253,9 +253,17 @@ describe("in the local test copy", () => {
     expect(attachedUrl()).toBe(MOCK_URL);
   });
 
-  it("returns a stored mock payment page without another provider call", async () => {
+  it("offers a stored mock payment page to continue, without another provider call", async () => {
     storedCheckoutUrl = MOCK_URL;
-    expect(await start(COPY_ORIGIN)).toEqual({ paymentId: payment, checkoutUrl: MOCK_URL });
+    await expect(start(COPY_ORIGIN)).rejects.toMatchObject({
+      status: 409,
+      code: "PENDING_PAYMENT_EXISTS",
+      pendingPayment: {
+        id: payment,
+        checkoutUrl: MOCK_URL,
+        statusUrl: `${COPY_ORIGIN}/billing/success?payment=${payment}`,
+      },
+    });
     expect(createOzowHostedPayment).not.toHaveBeenCalled();
   });
 

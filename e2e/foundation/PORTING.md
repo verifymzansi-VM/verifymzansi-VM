@@ -22,6 +22,15 @@ folder's config ignores it). It backs the required check `Visual regression
 (chosen frontend)`. Its new pictures and how they differ from the stub suite's
 are recorded in `VISUAL-BASELINES.md`.
 
+**Retired (test plan step 10, after `e2e-foundation` joined the release gate):**
+`billing-payment-roundtrip`, `contact-form`, `kyc-verification` and
+`kyc-authenticated` were deleted from the stub suite. Their rows below say where
+the coverage lives. The high-risk governance escalation of `kyc-authenticated`
+has no foundation browser counterpart yet. `verification-flow` stays: its
+camera checks (live ID and selfie camera, framing, focus, landscape fit, the
+manual-review fallback when face detection is blocked) are backend-independent
+and not yet ported; the foundation specs use the upload fallback.
+
 | Stub spec                         | Class   | Where its coverage lives / why not ported                                                                                                                                                                                                                                                                               |
 | --------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `a11y.spec.ts`                    | a       | `a11y.spec.ts` (all 17 checks).                                                                                                                                                                                                                                                                                         |
@@ -56,7 +65,7 @@ are recorded in `VISUAL-BASELINES.md`.
 | `billing-payment-roundtrip.spec.ts` | b     | `checkout-smoke.spec.ts`, `checkout-fulfilment.spec.ts` (mock Ozow round trip, declined payment, lost notification).                                                                                                                                                                                                   |
 | `dashboard-status.spec.ts`        | b       | `member-post-publish.spec.ts` ("the member is shown as verified").                                                                                                                                                                                                                                                      |
 | `profile-completion.spec.ts`      | b       | `member-post-publish.spec.ts` (phone code from the SMS sink).                                                                                                                                                                                                                                                           |
-| `verification-flow.spec.ts`       | b       | `member-post-publish.spec.ts`, `staff-review.spec.ts` (ID and selfie photos through the website).                                                                                                                                                                                                                        |
+| `verification-flow.spec.ts`       | a + b   | Kept in the stub suite until its camera checks are ported. Upload path: `member-post-publish.spec.ts`, `staff-review.spec.ts`.
 | `kyc-authenticated.spec.ts`       | b + c   | Submission and review: `staff-review.spec.ts`. The high-risk governance escalation uses stub personas and has no foundation counterpart yet.                                                                                                                                                                             |
 | `posting.chromium.spec.ts`        | b | `posting-forms.spec.ts`: the step-1 gate, then a new verified member fills in and submits the listing, business, event and tourism-stay forms through their own steps; the listing is approved and edited through its edit form (the edit waits for review; the live post keeps the approved version). A post waiting for review cannot be edited on foundation. |
 | `posting.mobile.spec.ts`          | c | Not ported yet: the forms on a phone (`posting-forms.spec.ts` runs on desktop chromium). |

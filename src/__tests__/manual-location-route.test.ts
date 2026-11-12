@@ -39,7 +39,8 @@ vi.mock("@/lib/utils/api", () => ({
   parseAndValidateJsonRequest: mockParseAndValidateJsonRequest,
 }));
 
-vi.mock("@/lib/constants/verification", () => ({
+vi.mock("@/lib/constants/verification", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   MANUAL_ONLY_BASELINE_RISK: 20,
 }));
 vi.mock("@/lib/account/verification-summary", () => ({

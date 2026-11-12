@@ -23,7 +23,7 @@ export type DuplicationBaseline = {
 function relative(file: string, root: string) {
   return path.relative(root, file).replace(/\\/g, "/");
 }
-export function fingerprints(report: Report, root: string): string[] {
+function fingerprints(report: Report, root: string): string[] {
   return report.duplicates
     .map((dup) =>
       createHash("sha256")
@@ -103,10 +103,24 @@ export function validateDuplication(
       );
   }
   const approved = new Set(baseline.fingerprints);
-  const added = fingerprints(value, root).filter((id) => !approved.has(id));
+  const current = fingerprints(value, root);
+  const added = current.filter((id) => !approved.has(id));
   if (added.length)
     errors.push(
       `${added.length} new/changed duplicate fragments require correction or explicit debt review`
     );
+  // Ratchet: debt that has been removed must leave the baseline, so the budget
+  // only ever goes down.
+  const present = new Set(current);
+  const resolved = baseline.fingerprints.filter((id) => !present.has(id));
+  if (resolved.length)
+    errors.push(
+      `${resolved.length} recorded duplicate fragments no longer exist; remove them from the baseline`
+    );
+  for (const key of ["clones", "duplicatedLines"] as const)
+    if (value.statistics.total[key] < baseline.total[key])
+      errors.push(
+        `${key} is below the reviewed baseline: lower it to ${value.statistics.total[key]} (was ${baseline.total[key]})`
+      );
   return errors;
 }

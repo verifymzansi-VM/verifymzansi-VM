@@ -8,7 +8,7 @@ import type { User } from "@supabase/supabase-js";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 
 vi.mock("server-only", () => ({}));
-vi.mock("next/headers", () => ({ cookies: vi.fn() }));
+vi.mock("next/headers", () => ({ cookies: vi.fn(), headers: vi.fn(async () => new Headers()) }));
 vi.mock("./runtime-connection", () => ({ readFoundationRuntimeConnection: () => ({}) }));
 vi.mock("./request-api", async (original) => ({
   ...(await original<Record<string, unknown>>()),

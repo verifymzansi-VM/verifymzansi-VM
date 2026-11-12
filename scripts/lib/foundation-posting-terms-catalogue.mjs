@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { assertFixturePath } from "./foundation-native-paths.mjs";
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("base64url");
-export function readPostingTermsCatalogue() {
+function readPostingTermsCatalogue() {
   const root = process.cwd(),
     prefix = "src/lib/legal/terms-documents/";
   const paths = {};

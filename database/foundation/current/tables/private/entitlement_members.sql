@@ -13,5 +13,6 @@ create table private.entitlement_members (
 );
 alter table private.entitlement_members owner to postgres;
 alter table private.entitlement_members enable row level security;
+CREATE INDEX entitlement_members_added_by_idx ON private.entitlement_members USING btree (added_by);
 CREATE INDEX entitlement_members_member_idx ON private.entitlement_members USING btree (member_id, entitlement_id);
 revoke all on private.entitlement_members from public;

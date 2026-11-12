@@ -1,42 +1,54 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  // Scripts are not blanket entry points: knip finds the ones package.json,
+  // the workflows and other scripts run. A script reached any other way is
+  // listed below with the reason, so an unused script is reported.
   "entry": [
     "open-next.config.ts",
     "src/app/**/{page,layout,template,error,loading,default}.{ts,tsx}",
     "src/app/**/route.ts",
-    // Retained UI and foundation adapters are standalone entrypoints awaiting integration.
-    "src/lib/foundation/owner-posts.ts",
-    "src/lib/foundation/staff-dashboard.ts",
-    "src/lib/foundation/owner-inbox.ts",
-    "src/lib/foundation/password-update-input.ts",
-    "src/lib/foundation/staff-read.ts",
-    "src/instrumentation.ts",
-    "src/proxy.ts",
-    "src/instrumentation-client.ts",
     "src/app/**/{not-found,global-error,forbidden,unauthorized,sitemap,robots,manifest,icon,apple-icon,opengraph-image,twitter-image}.{ts,tsx}",
     "workers/*.ts",
-    "scripts/**/*.{ts,js,mjs,cjs}",
     "remotion/*index.{ts,tsx}",
     // Run inside the pinned browser image by scripts/foundation-visual.mjs.
     "playwright.visual.config.ts",
+    // Build command in wrangler.toml.
+    "scripts/ensure-opennext-build.mjs",
+    // Worker fixtures started by path by the check-*-runtime scripts.
+    "scripts/fixtures/*.ts",
+    // Preloaded with --import by scripts/foundation-e2e.mjs.
+    "scripts/lib/foundation-e2e-outbound-preload.mjs",
+    // Spawned by path by scripts/lib/foundation-baseline-{auth,http}.mjs.
+    "scripts/prove-foundation-clean-auth.ts",
+    "scripts/prove-foundation-public-adapter.ts",
+    // Compile-time API type tests, checked by pnpm typecheck.
+    "scripts/foundation-api-typecheck.ts",
+    // Manual steps documented in database/foundation/README.md.
+    "scripts/build-foundation-baseline.mjs",
+    "scripts/check-foundation-hosted-exposure.mjs",
+    "scripts/generate-person-name-rule.mjs",
+    "scripts/probe-foundation-staff-adapter.mjs",
+    // Generators named in the headers of the SQL files they produce.
+    "scripts/build-taxonomy-sql.mjs",
+    // Offline checker recorded by docs/backend-foundation/tools/record-implementation-run.mjs.
+    "scripts/check-backend-foundation.mjs",
+    // Manual tools documented in docs/showroom-artwork.md and
+    // docs/business-verification-spec.md.
+    "scripts/optimize-showroom-artwork.cjs",
+    "scripts/check-cipc-sample.ts",
+    // Regenerate committed media used by the remotion compositions (as do the
+    // scripts/generate-*.py audio generators).
+    "scripts/capture-advert-browsing.cjs",
+    "scripts/prepare-advert-originals.cjs",
   ],
   "project": [
-    "src/**/*.{ts,tsx}",
+    "src/**/*.{ts,tsx,css}",
     "scripts/**/*.{ts,js,mjs,cjs}",
     "workers/*.ts",
     "remotion/**/*.{ts,tsx}",
     ".storybook/**/*.{ts,tsx,js,mjs,cjs}",
     ".husky/*",
     "*.{ts,js,mjs,cjs}",
-    ".github/workflows/*.{yml,yaml}",
-  ],
-  "ignoreFiles": [
-    "next-env.d.ts",
-    "src/lib/api/v1.d.ts",
-    "coverage/**",
-    "output/**",
-    "playwright-report/**",
-    "test-results/**",
   ],
   "ignoreDependencies": [
     // Copied by path into public/vendor (scripts/vendor-wasm-assets.mjs), never imported.
@@ -45,12 +57,8 @@
     "@storybook/addon-essentials",
     "@storybook/addon-interactions",
     "@storybook/nextjs",
-    "canvas",
     "k6",
-    "lint-staged",
-    "supabase",
   ],
-  "ignoreBinaries": ["lint-staged", "storybook", "supabase"],
   "ignoreIssues": {
     "src/lib/account/compat.ts": ["duplicates"],
     "src/lib/utils/phone.ts": ["duplicates"],

@@ -19,7 +19,9 @@ const envelope = z.looseObject({
   }),
   expectedRevision: z.number().int().min(1).max(2147483646).optional(),
 });
-export class RestoredPostInputError extends Error {}
+export class RestoredPostInputError extends Error {
+  override name = "RestoredPostInputError";
+}
 /** The path part of the public media address. Empty in production
  * (https://media.verifymzansi.com); the private browser-test copy serves media
  * under a path (/e2e-media), which upload addresses carry before /media/. */
