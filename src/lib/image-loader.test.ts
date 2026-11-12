@@ -74,14 +74,17 @@ describe("cloudflareImageLoader", () => {
     ).toBe("/api/media/serve/media/listing/hero.w400.webp");
   });
 
-  it("transforms known media host absolute URLs via /cdn-cgi/image/ when resizing enabled", async () => {
+  // The zone has no Cloudflare Image Resizing: a /cdn-cgi/image/ path on this
+  // site would not exist, so media host URLs keep their own address.
+  it("keeps media host absolute URLs on the media host", async () => {
     vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
     const { default: loader } = await import("./image-loader");
     const result = loader({ src: "https://media.verifymzansi.com/photos/hero.jpg", width: 768 });
-    expect(result).toBe("/cdn-cgi/image/width=768,quality=75,format=auto/photos/hero.jpg");
+    expect(result).toBe("https://media.verifymzansi.com/photos/hero.jpg?w=768&q=75");
+    expect(result).not.toContain("/cdn-cgi/");
   });
 
-  it("transforms known staging media host absolute URLs via /cdn-cgi/image/ when resizing enabled", async () => {
+  it("keeps staging media host absolute URLs on the staging media host", async () => {
     vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
     const { default: loader } = await import("./image-loader");
     const result = loader({
@@ -89,7 +92,19 @@ describe("cloudflareImageLoader", () => {
       width: 640,
       quality: 80,
     });
-    expect(result).toBe("/cdn-cgi/image/width=640,quality=80,format=auto/photos/hero.jpg");
+    expect(result).toBe("https://media-staging.verifymzansi.com/photos/hero.jpg?w=640&q=80");
+  });
+
+  it("leaves same-origin paths without an image extension unchanged in production", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+    const { default: loader } = await import("./image-loader");
+    expect(loader({ src: "/api/og/card", width: 400 })).toBe("/api/og/card");
+  });
+
+  it("adds width and quality to every same-origin path when the setting is off", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "false");
+    const { default: loader } = await import("./image-loader");
+    expect(loader({ src: "/api/og/card", width: 400 })).toBe("/api/og/card?w=400&q=75");
   });
 
   it("keeps existing query parameters and the hash when adding width and quality", async () => {

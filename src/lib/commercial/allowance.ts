@@ -16,7 +16,9 @@ export interface PostingAllowance {
   boostAllowed: boolean;
 }
 
-class PostingAllowanceError extends Error {}
+class PostingAllowanceError extends Error {
+  override name = "PostingAllowanceError";
+}
 
 function toNumber(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;

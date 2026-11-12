@@ -34,6 +34,7 @@ export const foundationUploadedMediaSchema = z.strictObject({
 });
 export type FoundationUploadedMedia = z.infer<typeof foundationUploadedMediaSchema>;
 export class FoundationMediaError extends Error {
+  override name = "FoundationMediaError";
   constructor(readonly status: 400 | 403 | 409 | 429 | 503) {
     super("Media upload could not be completed");
   }

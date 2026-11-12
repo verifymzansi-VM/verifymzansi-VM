@@ -9,6 +9,7 @@ const log = createLogger("FoundationPasswordUpdate");
 const secretKey = z.string().regex(/^sb_secret_[A-Za-z0-9_-]+$/);
 
 export class FoundationPasswordUpdateError extends Error {
+  override name = "FoundationPasswordUpdateError";
   constructor(
     readonly status: 400 | 401 | 403 | 429 | 503,
     readonly reason:
@@ -25,6 +26,7 @@ export class FoundationPasswordUpdateError extends Error {
 /** A recovery update whose outcome is unknown. Global sign-out was attempted
  * anyway, because the new password may already be in force. */
 export class FoundationPasswordResetUncertainError extends FoundationPasswordUpdateError {
+  override name = "FoundationPasswordResetUncertainError";
   constructor(readonly signOutComplete: boolean) {
     super(503, "unavailable", "uncertain");
   }

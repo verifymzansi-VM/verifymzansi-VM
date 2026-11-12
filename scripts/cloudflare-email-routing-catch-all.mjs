@@ -11,7 +11,7 @@ const token = process.env.CF_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN;
 const accountId = process.env.CF_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID;
 const zoneId = process.env.CF_ZONE_ID || "05204c43f4378589a4cabecbe66917cc";
 const domain = process.env.CF_DOMAIN || "verifymzansi.com";
-const destinationEmail = process.env.CF_EMAIL_ROUTING_DESTINATION || "verifymzansi2s@gmail.com";
+const destinationEmail = process.env.CF_EMAIL_ROUTING_DESTINATION;
 const routeName =
   process.env.CF_EMAIL_ROUTING_RULE_NAME || `Catch-all ${domain} -> ${destinationEmail}`;
 
@@ -44,6 +44,11 @@ if (!token) {
 
 if (!accountId) {
   console.error("Missing CF_ACCOUNT_ID or CLOUDFLARE_ACCOUNT_ID in environment.");
+  process.exit(1);
+}
+
+if (!destinationEmail) {
+  console.error("Missing CF_EMAIL_ROUTING_DESTINATION in environment.");
   process.exit(1);
 }
 

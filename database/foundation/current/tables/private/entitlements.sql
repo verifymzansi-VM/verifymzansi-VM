@@ -49,6 +49,8 @@ END),
 );
 alter table private.entitlements owner to postgres;
 alter table private.entitlements enable row level security;
+CREATE INDEX entitlements_granted_by_idx ON private.entitlements USING btree (granted_by) WHERE (granted_by IS NOT NULL);
+CREATE INDEX entitlements_owner_id_idx ON private.entitlements USING btree (owner_id);
 CREATE INDEX entitlements_owner_usable_idx ON private.entitlements USING btree (owner_id, ends_at) WHERE (status = 'active'::text);
 CREATE TRIGGER entitlement_capabilities_immutable BEFORE UPDATE OF addon_capabilities ON private.entitlements FOR EACH ROW EXECUTE FUNCTION internal.entitlement_capability_guard();
 revoke all on private.entitlements from public;

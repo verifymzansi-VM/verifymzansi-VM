@@ -1,5 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  expectFoundationPostFields,
+  installFoundationPostFetch,
+} from "@/test/foundation-post-transport";
 import CreateBusinessPage from "./page";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -142,6 +146,9 @@ vi.mock("@/components/business/layouts/business-layout-router", () => ({
 describe("CreateBusinessPage", () => {
   const mockPush = vi.fn();
   const mockToast = vi.fn();
+  let fetchMock: Mock;
+  let postingTermsFetch: Mock;
+  let termsLoaded: () => Promise<void>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -151,7 +158,11 @@ describe("CreateBusinessPage", () => {
     (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(new URLSearchParams());
     global.URL.createObjectURL = vi.fn(() => "blob:business-media-preview");
     global.URL.revokeObjectURL = vi.fn();
-    global.fetch = vi.fn() as unknown as typeof fetch;
+    ({
+      api: fetchMock,
+      terms: postingTermsFetch,
+      termsLoaded,
+    } = installFoundationPostFetch(vi.fn()));
   });
 
   function acceptBusinessTerms() {
@@ -273,7 +284,7 @@ describe("CreateBusinessPage", () => {
   });
 
   it("does not submit while advancing into the media review step", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
     });
@@ -288,14 +299,47 @@ describe("CreateBusinessPage", () => {
     expect(screen.getByText("Cover photo (optional)")).toBeInTheDocument();
     expect(screen.getByText(/Profile photos \(up to 5\)/i)).toBeInTheDocument();
     expect(screen.getByText(/Video \(optional\)/i)).toBeInTheDocument();
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("submits successfully without any media uploads", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
     });
+
+    render(<CreateBusinessPage />);
+    await termsLoaded();
+
+    await completeStandaloneStepOne();
+    await completeLocationStep();
+    acceptBusinessTerms();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    const submitCall = fetchMock.mock.calls[0];
+    expect(submitCall[0]).toBe("/api/businesses");
+
+    const payload = JSON.parse(submitCall[1].body as string);
+    expect(payload.logo_url).toBeUndefined();
+    expect(payload.cover_photo).toBeUndefined();
+    expect(payload.gallery_photos).toBeUndefined();
+    expect(payload.cover_video).toBeUndefined();
+    expect(payload.video_thumbnail).toBeUndefined();
+    expect(payload.termsAccepted).toBe(true);
+    expectFoundationPostFields(payload);
+    expect(postingTermsFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not submit before the posting terms have loaded", async () => {
+    postingTermsFetch.mockReturnValue(new Promise(() => {}));
+    fetchMock.mockResolvedValue(jsonResponse({ success: true }));
 
     render(<CreateBusinessPage />);
 
@@ -307,23 +351,13 @@ describe("CreateBusinessPage", () => {
       fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
     });
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(1);
-    });
-
-    const submitCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(submitCall[0]).toBe("/api/businesses");
-
-    const payload = JSON.parse(submitCall[1].body as string);
-    expect(payload.logo_url).toBeUndefined();
-    expect(payload.cover_photo).toBeUndefined();
-    expect(payload.gallery_photos).toBeUndefined();
-    expect(payload.cover_video).toBeUndefined();
-    expect(payload.video_thumbnail).toBeUndefined();
+    expect(await screen.findByText(/Posting terms are still loading/)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("submits selected business media only after uploads succeed", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>)
+    fetchMock
       .mockResolvedValueOnce(
         jsonResponse({ urls: ["https://media.verifymzansi.com/media/business_logo/user/logo.png"] })
       )
@@ -343,6 +377,7 @@ describe("CreateBusinessPage", () => {
       .mockResolvedValueOnce(jsonResponse({ success: true }));
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
 
     await completeStandaloneStepOne();
     await completeLocationStep();
@@ -362,13 +397,11 @@ describe("CreateBusinessPage", () => {
     });
 
     await waitFor(() => {
-      const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      const calls = fetchMock.mock.calls;
       expect(calls.some((call) => call[0] === "/api/businesses")).toBe(true);
     });
 
-    const submitCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
-      (call) => call[0] === "/api/businesses"
-    );
+    const submitCall = fetchMock.mock.calls.find((call) => call[0] === "/api/businesses");
     expect(submitCall).toBeDefined();
     if (!submitCall) {
       throw new Error("Expected /api/businesses submission call");
@@ -386,14 +419,16 @@ describe("CreateBusinessPage", () => {
       "https://media.verifymzansi.com/media/business_gallery/user/photo-1.png",
       "https://media.verifymzansi.com/media/business_gallery/user/photo-2.png",
     ]);
+    expectFoundationPostFields(payload);
   });
 
   it("blocks submission when a selected image upload fails", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+    fetchMock.mockResolvedValueOnce(
       jsonResponse({ error: "Failed to upload media" }, { ok: false, status: 500 })
     );
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
 
     await completeStandaloneStepOne();
     await completeLocationStep();
@@ -414,12 +449,12 @@ describe("CreateBusinessPage", () => {
         "Selected business media could not be uploaded. Retry the highlighted files and try again."
       ).length
     ).toBeGreaterThan(0);
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("blocks submission when profile photo upload returns partial success", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+    fetchMock.mockResolvedValueOnce(
       jsonResponse(
         {
           urls: ["https://media.verifymzansi.com/media/business_gallery/user/photo-1.png"],
@@ -430,6 +465,7 @@ describe("CreateBusinessPage", () => {
     );
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
 
     await completeStandaloneStepOne();
     await completeLocationStep();
@@ -449,15 +485,14 @@ describe("CreateBusinessPage", () => {
         )
       ).length
     ).toBeGreaterThan(0);
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("maps business image upload network failures back to the media step", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new TypeError("Failed to fetch")
-    );
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
 
     await completeStandaloneStepOne();
     await completeLocationStep();
@@ -485,7 +520,7 @@ describe("CreateBusinessPage", () => {
       },
       { timeout: 3000 }
     );
-    expect(global.fetch).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(mockPush).not.toHaveBeenCalled();
   });
 
@@ -493,24 +528,23 @@ describe("CreateBusinessPage", () => {
     (checkUploadServiceReachable as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce(
       new Promise(() => undefined)
     );
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/media/upload") {
-          return jsonResponse({
-            urls: ["https://media.verifymzansi.com/media/business_logo/user/logo.png"],
-            errors: [],
-          });
-        }
-
-        if (input === "/api/businesses") {
-          return jsonResponse({ success: true, business: { id: "biz-1" } }, { status: 201 });
-        }
-
-        return jsonResponse({});
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload") {
+        return jsonResponse({
+          urls: ["https://media.verifymzansi.com/media/business_logo/user/logo.png"],
+          errors: [],
+        });
       }
-    );
+
+      if (input === "/api/businesses") {
+        return jsonResponse({ success: true, business: { id: "biz-1" } }, { status: 201 });
+      }
+
+      return jsonResponse({});
+    });
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
 
     await completeStandaloneStepOne();
     await completeLocationStep();
@@ -524,7 +558,7 @@ describe("CreateBusinessPage", () => {
     });
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         "/api/media/upload",
         expect.objectContaining({ method: "POST" })
       );
@@ -545,8 +579,9 @@ describe("CreateBusinessPage", () => {
       if (input === "/api/businesses") return jsonResponse({ success: true });
       return jsonResponse({});
     });
-    global.fetch = calls as unknown as typeof fetch;
+    ({ termsLoaded } = installFoundationPostFetch(calls));
     render(<CreateBusinessPage />);
+    await termsLoaded();
     await completeStandaloneStepOne();
     await completeLocationStep();
     fireEvent.click(screen.getByRole("button", { name: "Cover photo (optional)" }));
@@ -570,23 +605,22 @@ describe("CreateBusinessPage", () => {
   });
 
   it("uploads promo video through the validated server upload path", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/media/upload") {
-          return jsonResponse({
-            urls: ["https://media.verifymzansi.com/media/business_cover/user/video-fallback.mp4"],
-          });
-        }
-
-        if (input === "/api/businesses") {
-          return jsonResponse({ success: true, business: { id: "biz-1" } }, { status: 201 });
-        }
-
-        return jsonResponse({});
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload") {
+        return jsonResponse({
+          urls: ["https://media.verifymzansi.com/media/business_cover/user/video-fallback.mp4"],
+        });
       }
-    );
+
+      if (input === "/api/businesses") {
+        return jsonResponse({ success: true, business: { id: "biz-1" } }, { status: 201 });
+      }
+
+      return jsonResponse({});
+    });
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
 
     await completeStandaloneStepOne();
     await completeLocationStep();
@@ -600,7 +634,7 @@ describe("CreateBusinessPage", () => {
     });
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         "/api/businesses",
         expect.objectContaining({
           method: "POST",
@@ -656,7 +690,7 @@ describe("CreateBusinessPage", () => {
       true
     );
     expect(screen.getByText(/Step 3 of 4/i)).toBeInTheDocument();
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("shows website, social media and location pin fields openly on the contact step", async () => {
@@ -675,7 +709,7 @@ describe("CreateBusinessPage", () => {
   });
 
   it("shows an inline slug error when the API rejects a duplicate slug", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: false,
       json: async () => ({
         error: "Business slug already in use",
@@ -685,6 +719,7 @@ describe("CreateBusinessPage", () => {
     });
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
 
     await completeStandaloneStepOne();
     await completeLocationStep();
@@ -701,13 +736,14 @@ describe("CreateBusinessPage", () => {
   });
 
   it("maps API 422 photo-limit errors to business media field errors", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: false,
       status: 422,
       json: async () => ({ error: "Maximum 5 gallery photos allowed on your plan" }),
     });
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
 
     await completeStandaloneStepOne();
     await completeLocationStep();
@@ -724,13 +760,14 @@ describe("CreateBusinessPage", () => {
   });
 
   it("maps API 422 video-limit errors to business media field errors", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: false,
       status: 422,
       json: async () => ({ error: "Video upload is not available on your current plan." }),
     });
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
 
     await completeStandaloneStepOne();
     await completeLocationStep();
@@ -747,13 +784,14 @@ describe("CreateBusinessPage", () => {
   });
 
   it("redirects to complete profile when API returns phone-gate 403 redirectUrl", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: false,
       status: 403,
       json: async () => ({ redirectUrl: "/dashboard/complete-profile" }),
     });
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
 
     await completeStandaloneStepOne();
     await completeLocationStep();
@@ -767,13 +805,14 @@ describe("CreateBusinessPage", () => {
   });
 
   it("shows plan-limit reason when API returns 403 reason", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: false,
       status: 403,
       json: async () => ({ reason: "You reached your plan posting limit." }),
     });
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
 
     await completeStandaloneStepOne();
     await completeLocationStep();
@@ -789,13 +828,14 @@ describe("CreateBusinessPage", () => {
 
   it("offers a sign-in link back to this page when the session expired (401)", async () => {
     window.history.pushState({}, "", "/post/create-business");
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: false,
       status: 401,
       json: async () => ({ error: "Unauthorized" }),
     });
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
     await completeStandaloneStepOne();
     await completeLocationStep();
     acceptBusinessTerms();
@@ -812,13 +852,14 @@ describe("CreateBusinessPage", () => {
   });
 
   it("does not follow an off-site server redirectUrl", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: false,
       status: 403,
       json: async () => ({ redirectUrl: "https://evil.example/phish" }),
     });
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
     await completeStandaloneStepOne();
     await completeLocationStep();
     acceptBusinessTerms();
@@ -831,12 +872,13 @@ describe("CreateBusinessPage", () => {
   });
 
   it("keeps the submitted-for-review state after redirecting to the dashboard", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
     });
 
     render(<CreateBusinessPage />);
+    await termsLoaded();
 
     await completeStandaloneStepOne();
     await completeLocationStep();

@@ -1,9 +1,21 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import {
+  ID_ARTIFACT,
+  MEMBER,
+  OTHER_STAFF,
+  REVIEW_SCOPE,
+  SELFIE_ARTIFACT,
+  STAFF_ACTOR,
+  SUBJECT_LABEL,
+  identityMetadata,
+  staffEvidenceBytes,
+  staffJson,
+} from "@/test/foundation-identity-review";
 
 vi.mock("next/image", () => ({
   default: ({
@@ -82,222 +94,257 @@ Object.defineProperty(OriginalURL, "revokeObjectURL", {
 
 const { KycComparisonViewer } = await import("@/components/admin/kyc-comparison-viewer");
 
+const METADATA_PATH = "/api/admin/verification/evidence/metadata";
+const EVIDENCE_PATH = "/api/admin/verification/evidence";
+const signedIn = (id: string) => ({ data: { user: { id } }, error: null });
+
+type Metadata = ReturnType<typeof identityMetadata>;
+/**
+ * Answers the viewer's requests as the foundation routes do: the metadata of
+ * one claimed ID and selfie, and each artifact's decrypted bytes, all stamped
+ * with the served staff account.
+ */
+function serveFoundation({
+  metadata = identityMetadata(),
+  metadataActor = STAFF_ACTOR as string | null,
+  bytes = {
+    [ID_ARTIFACT]: ["synthetic id", "image/jpeg"],
+    [SELFIE_ARTIFACT]: ["synthetic selfie", "image/png"],
+  } as Record<string, [string, string]>,
+}: {
+  metadata?: Metadata;
+  metadataActor?: string | null;
+  bytes?: Record<string, [string, string]>;
+} = {}) {
+  mockFetch.mockImplementation(async (url: string, init: RequestInit) => {
+    if (url === METADATA_PATH) return staffJson(metadata, { actor: metadataActor });
+    if (url === EVIDENCE_PATH) {
+      const [body, type] = bytes[JSON.parse(String(init.body)).artifactId];
+      return staffEvidenceBytes(body, type);
+    }
+    throw new Error(`Unexpected request to ${url}`);
+  });
+}
+const evidenceRequests = () =>
+  mockFetch.mock.calls
+    .filter(([url]) => url === EVIDENCE_PATH)
+    .map(([, init]) => JSON.parse(String(init.body)));
+
+function renderViewer(props: Partial<React.ComponentProps<typeof KycComparisonViewer>> = {}) {
+  return render(
+    <KycComparisonViewer
+      isOpen
+      userId={MEMBER}
+      displayName="Fixture Member"
+      onClose={vi.fn()}
+      {...props}
+    />
+  );
+}
+const checkAllReviewChecks = () =>
+  screen.getAllByRole("checkbox").forEach((checkbox) => fireEvent.click(checkbox));
+
 describe("KycComparisonViewer", () => {
-  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.clearAllMocks();
     // Fully reset the fetch mock queue so mockResolvedValueOnce chains from a
     // previous test cannot leak into the next one.
     mockFetch.mockReset();
+    getNativeUser.mockResolvedValue(signedIn(STAFF_ACTOR));
   });
 
   it("renders an inspected native PDF and sends the viewed scope only after all review checks", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
-    const uuid = (n: number) => `11111111-1111-4111-8111-${String(n).padStart(12, "0")}`;
-    const actor = uuid(9),
-      owner = uuid(8),
-      foundation = {
-        caseId: uuid(1),
-        caseVersion: 7,
-        submissionId: uuid(2),
-        claimGeneration: "4",
-        claimNonce: uuid(3),
-      };
-    getNativeUser.mockResolvedValue({ data: { user: { id: actor } }, error: null });
-    const artifacts = ["id_doc", "selfie"].map((step_type, n) => ({
-      id: uuid(n + 4),
-      step_type,
-      artifact_kind: step_type,
-      r2_key: null,
-      content_type: "application/octet-stream",
-      file_size_bytes: null,
-      status: "clean",
-      created_at: "2026-11-04T10:00:00Z",
-      purge_after: null,
-      sha256: null,
-      foundation,
-      review_subject_label: "Fixture Member · ID 8001015009087",
-      review_risk_score: 10,
-      review_risk_level: "low",
-    }));
-    mockFetch.mockImplementation(async (url: string, init: RequestInit) => {
-      if (url.endsWith("/metadata"))
-        return Response.json(
-          {
-            artifacts,
-            providerResults: [],
-            riskSignals: [],
-            review_subject_label: "Fixture Member · ID 8001015009087",
-          },
-          { headers: { "X-VerifyMzansi-Actor": actor } }
-        );
-      const body = JSON.parse(String(init.body));
-      return new Response(body.artifactId === uuid(4) ? "%PDF-1.4\n" : "synthetic image", {
-        headers: {
-          "Content-Type": body.artifactId === uuid(4) ? "application/pdf" : "image/png",
-          "X-VerifyMzansi-Actor": actor,
-        },
-      });
+    serveFoundation({
+      bytes: {
+        [ID_ARTIFACT]: ["%PDF-1.4\n", "application/pdf"],
+        [SELFIE_ARTIFACT]: ["synthetic image", "image/png"],
+      },
     });
     const review = vi.fn();
-    render(
-      <KycComparisonViewer
-        isOpen
-        userId={owner}
-        displayName="Fixture Member"
-        onClose={vi.fn()}
-        onReviewStep={review}
-        reviewableSteps={["id_doc", "selfie"]}
-      />
-    );
+    renderViewer({ onReviewStep: review, reviewableSteps: ["id_doc", "selfie"] });
     await waitFor(() => expect(screen.getByTitle("ID Document").tagName).toBe("IFRAME"));
     expect(mockCreateObjectURL).toHaveBeenCalledTimes(2);
     expect(screen.getByAltText("Selfie")).toBeInTheDocument();
-    expect(screen.getByText(/ID 8001015009087/)).toBeInTheDocument();
+    expect(screen.getByText(`Identity Comparison: ${SUBJECT_LABEL}`)).toBeInTheDocument();
+    expect(
+      screen.getByText(/The ID number and legal name match the submitted details shown above/)
+    ).toBeInTheDocument();
     const approve = screen.getByRole("button", { name: "Approve ID" });
     expect(approve).toBeDisabled();
-    screen.getAllByRole("checkbox").forEach((checkbox) => fireEvent.click(checkbox));
+    checkAllReviewChecks();
     expect(
       screen.getAllByRole("checkbox").map((checkbox) => (checkbox as HTMLInputElement).checked)
     ).toEqual([true, true, true]);
     await waitFor(() => expect(screen.getByRole("button", { name: "Approve ID" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Approve ID" }));
-    expect(review).toHaveBeenCalledExactlyOnceWith(
-      "id_doc",
-      "approved",
-      expect.objectContaining({ artifactId: uuid(4), foundation })
-    );
-    const streams = mockFetch.mock.calls.filter(
-      ([url]) => url === "/api/admin/verification/evidence"
-    );
-    expect(streams).toHaveLength(2);
-    expect(JSON.parse(streams[0][1].body)).toMatchObject({ foundation });
+    expect(review).toHaveBeenCalledExactlyOnceWith("id_doc", "approved", {
+      artifactId: ID_ARTIFACT,
+      foundation: REVIEW_SCOPE,
+      review_subject_label: SUBJECT_LABEL,
+      review_risk_score: 10,
+      review_risk_level: "low",
+    });
+    expect(mockFetch.mock.calls[0][0]).toBe(METADATA_PATH);
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({ userId: MEMBER });
+    expect(evidenceRequests()).toEqual([
+      { artifactId: ID_ARTIFACT, foundation: REVIEW_SCOPE },
+      { artifactId: SELFIE_ARTIFACT, foundation: REVIEW_SCOPE },
+    ]);
   });
 
-  it("loads the newest artifact first when duplicate step types exist", async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            artifacts: [
-              {
-                id: "id-older",
-                step_type: "id_doc",
-                artifact_kind: "document",
-                r2_key: "kyc/id/older.bin",
-                content_type: "image/jpeg",
-                file_size_bytes: 1000,
-                status: "pending",
-                created_at: "2026-03-27T08:00:00Z",
-                purge_after: null,
-                sha256: null,
-              },
-              {
-                id: "id-newer",
-                step_type: "id_doc",
-                artifact_kind: "document",
-                r2_key: "kyc/id/newer.bin",
-                content_type: "image/jpeg",
-                file_size_bytes: 1100,
-                status: "pending",
-                created_at: "2026-03-27T09:00:00Z",
-                purge_after: null,
-                sha256: null,
-              },
-              {
-                id: "selfie-1",
-                step_type: "selfie",
-                artifact_kind: "selfie",
-                r2_key: "kyc/selfie/current.bin",
-                content_type: "image/jpeg",
-                file_size_bytes: 1200,
-                status: "pending",
-                created_at: "2026-03-27T09:05:00Z",
-                purge_after: null,
-                sha256: null,
-              },
-            ],
-          }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        blob: () => Promise.resolve(new Blob(["newer"], { type: "image/jpeg" })),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        blob: () => Promise.resolve(new Blob(["older"], { type: "image/jpeg" })),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        blob: () => Promise.resolve(new Blob(["selfie"], { type: "image/jpeg" })),
-      });
-
-    render(
-      <KycComparisonViewer isOpen userId="user-1" displayName="Test User" onClose={vi.fn()} />
+  it("requires all review checks before approving a specific document", async () => {
+    serveFoundation();
+    const review = vi.fn();
+    renderViewer({ onReviewStep: review, reviewableSteps: ["id_doc", "selfie"] });
+    await screen.findByAltText("Selfie");
+    const approve = screen.getByRole("button", { name: "Approve selfie" });
+    expect(approve).toBeDisabled();
+    checkAllReviewChecks();
+    expect(approve).toBeEnabled();
+    fireEvent.click(approve);
+    expect(review).toHaveBeenCalledWith(
+      "selfie",
+      "approved",
+      expect.objectContaining({ artifactId: SELFIE_ARTIFACT, foundation: REVIEW_SCOPE })
     );
+  });
 
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(4);
+  it("sends rejections and retake requests with the artifact's review scope", async () => {
+    serveFoundation({ metadata: identityMetadata(85) });
+    const review = vi.fn();
+    renderViewer({ onReviewStep: review, reviewableSteps: ["id_doc", "selfie"] });
+    await screen.findByAltText("Selfie");
+    const [rejectId] = screen.getAllByRole("button", { name: "Reject" });
+    fireEvent.click(rejectId);
+    fireEvent.click(screen.getAllByRole("button", { name: "Request retake" })[1]);
+    expect(review.mock.calls).toEqual([
+      [
+        "id_doc",
+        "rejected",
+        {
+          artifactId: ID_ARTIFACT,
+          foundation: REVIEW_SCOPE,
+          review_subject_label: SUBJECT_LABEL,
+          review_risk_score: 85,
+          review_risk_level: "high",
+        },
+      ],
+      [
+        "selfie",
+        "needs_resubmission",
+        expect.objectContaining({ artifactId: SELFIE_ARTIFACT, foundation: REVIEW_SCOPE }),
+      ],
+    ]);
+  });
+
+  it("refuses a decision on evidence that carries no claimed review scope", async () => {
+    const metadata = identityMetadata();
+    metadata.artifacts = metadata.artifacts.map(({ foundation: _scope, ...artifact }) => ({
+      ...artifact,
+    })) as Metadata["artifacts"];
+    serveFoundation({ metadata });
+    const review = vi.fn();
+    renderViewer({ onReviewStep: review, reviewableSteps: ["id_doc", "selfie"] });
+    await screen.findByText("Identity Comparison: Fixture Member · ID 8001015009087");
+    // Both panels settle on an error instead of a preview.
+    await waitFor(() => expect(screen.queryAllByText("loading")).toHaveLength(0));
+    // Without a scope the evidence itself is never requested.
+    expect(evidenceRequests()).toEqual([]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Reject" })[0]);
+    expect(
+      await screen.findByText("Reload the claimed evidence before deciding it.")
+    ).toBeInTheDocument();
+    expect(review).not.toHaveBeenCalled();
+  });
+
+  it("refuses metadata without the served-actor receipt and loads no evidence", async () => {
+    serveFoundation({ metadataActor: null });
+    renderViewer();
+    expect(
+      await screen.findByText("Evidence authorization could not be confirmed. Reload the queue.")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Retry/ })).toBeInTheDocument();
+    expect(evidenceRequests()).toEqual([]);
+    expect(mockCreateObjectURL).not.toHaveBeenCalled();
+  });
+
+  it("refuses evidence once another staff account is signed in", async () => {
+    // The account changes after the metadata has loaded.
+    getNativeUser.mockResolvedValueOnce(signedIn(STAFF_ACTOR));
+    getNativeUser.mockResolvedValue(signedIn(OTHER_STAFF));
+    serveFoundation();
+    renderViewer({ onReviewStep: vi.fn(), reviewableSteps: ["id_doc", "selfie"] });
+    const refusals = await screen.findAllByText(
+      "Staff account changed. Reload this page before viewing evidence."
+    );
+    expect(refusals).toHaveLength(2);
+    expect(mockCreateObjectURL).not.toHaveBeenCalled();
+    checkAllReviewChecks();
+    expect(screen.getByRole("button", { name: "Approve ID" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Approve selfie" })).toBeDisabled();
+  });
+
+  it("refuses bytes whose format the server did not confirm and blocks approval", async () => {
+    serveFoundation({
+      bytes: {
+        [ID_ARTIFACT]: ["synthetic id", "application/octet-stream"],
+        [SELFIE_ARTIFACT]: ["synthetic selfie", "image/png"],
+      },
     });
+    renderViewer({ onReviewStep: vi.fn(), reviewableSteps: ["id_doc", "selfie"] });
+    expect(
+      await screen.findByText("The evidence format could not be confirmed.")
+    ).toBeInTheDocument();
+    expect(await screen.findByAltText("Selfie")).toBeInTheDocument();
+    checkAllReviewChecks();
+    expect(screen.getByRole("button", { name: "Approve selfie" })).toBeDisabled();
+  });
 
-    expect(String(mockFetch.mock.calls[1][0])).toContain("/api/admin/verification/evidence");
-    expect(String(mockFetch.mock.calls[2][0])).toContain("/api/admin/verification/evidence");
-    expect(String(mockFetch.mock.calls[1][1]?.body)).toContain('"artifactId":"id-newer"');
-    expect(String(mockFetch.mock.calls[2][1]?.body)).toContain('"artifactId":"id-older"');
-    expect(screen.getAllByText("ID Document")).toHaveLength(1);
+  it("downloads and re-checks the evidence again every time it is opened", async () => {
+    serveFoundation();
+    const { rerender } = renderViewer();
+    await screen.findByAltText("Selfie");
+    rerender(
+      <KycComparisonViewer
+        isOpen={false}
+        userId={MEMBER}
+        displayName="Fixture Member"
+        onClose={vi.fn()}
+      />
+    );
+    rerender(
+      <KycComparisonViewer isOpen userId={MEMBER} displayName="Fixture Member" onClose={vi.fn()} />
+    );
+    await waitFor(() => expect(evidenceRequests()).toHaveLength(4));
+    await screen.findByAltText("Selfie");
+    // Two metadata reads and four evidence reads, each checked against the signed-in account.
+    expect(getNativeUser).toHaveBeenCalledTimes(6);
+  });
+
+  it("shows the server's refusal of the metadata and retries on request", async () => {
+    mockFetch.mockResolvedValueOnce(
+      staffJson(
+        {
+          error: "The identity submission changed. Reload the queue.",
+          reason: "staff_command_refused",
+        },
+        { status: 409 }
+      )
+    );
+    renderViewer();
+    expect(
+      await screen.findByText("The identity submission changed. Reload the queue.")
+    ).toBeInTheDocument();
+    serveFoundation();
+    fireEvent.click(screen.getByRole("button", { name: /Retry/ }));
+    expect(await screen.findByAltText("Selfie")).toBeInTheDocument();
   });
 
   it("expands image viewport sizing on zoom in and resets to base size", async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            artifacts: [
-              {
-                id: "id-1",
-                step_type: "id_doc",
-                artifact_kind: "document",
-                r2_key: "kyc/id/current.bin",
-                content_type: "image/jpeg",
-                file_size_bytes: 1000,
-                status: "pending",
-                created_at: "2026-03-27T09:00:00Z",
-                purge_after: null,
-                sha256: null,
-              },
-              {
-                id: "selfie-1",
-                step_type: "selfie",
-                artifact_kind: "selfie",
-                r2_key: "kyc/selfie/current.bin",
-                content_type: "image/jpeg",
-                file_size_bytes: 1200,
-                status: "pending",
-                created_at: "2026-03-27T09:05:00Z",
-                purge_after: null,
-                sha256: null,
-              },
-            ],
-          }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        blob: () => Promise.resolve(new Blob(["id"], { type: "image/jpeg" })),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        blob: () => Promise.resolve(new Blob(["selfie"], { type: "image/jpeg" })),
-      });
+    serveFoundation();
+    renderViewer();
 
-    render(
-      <KycComparisonViewer isOpen userId="user-1" displayName="Test User" onClose={vi.fn()} />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByLabelText("Zoom in ID Document")).toBeDefined();
-    });
+    await screen.findByAltText("ID Document");
 
     const idViewport = screen.getByAltText("ID Document").parentElement;
     expect(idViewport).toBeDefined();
@@ -320,250 +367,14 @@ describe("KycComparisonViewer", () => {
     });
   });
 
-  function mockTwoImageArtifacts(metaExtras: Record<string, unknown> = {}) {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            artifacts: [
-              {
-                id: "id-1",
-                step_type: "id_doc",
-                artifact_kind: "document",
-                r2_key: "kyc/id/current.bin",
-                content_type: "image/jpeg",
-                file_size_bytes: 1000,
-                status: "pending",
-                created_at: "2026-03-27T09:00:00Z",
-                purge_after: null,
-                sha256: null,
-              },
-              {
-                id: "selfie-1",
-                step_type: "selfie",
-                artifact_kind: "selfie",
-                r2_key: "kyc/selfie/current.bin",
-                content_type: "image/jpeg",
-                file_size_bytes: 1200,
-                status: "pending",
-                created_at: "2026-03-27T09:05:00Z",
-                purge_after: null,
-                sha256: null,
-              },
-            ],
-            ...metaExtras,
-          }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        blob: () => Promise.resolve(new Blob(["id"], { type: "image/jpeg" })),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        blob: () => Promise.resolve(new Blob(["selfie"], { type: "image/jpeg" })),
-      });
-  }
-
-  it("shows a neutral 'liveness unknown' verdict when the selfie has no signals or provider score", async () => {
-    mockTwoImageArtifacts({ riskSignals: [], providerResults: [] });
-
-    render(
-      <KycComparisonViewer isOpen userId="user-1" displayName="Test User" onClose={vi.fn()} />
-    );
+  it("shows a neutral 'liveness unknown' verdict and the manual-review signal", async () => {
+    serveFoundation();
+    renderViewer();
 
     await waitFor(() => {
       expect(screen.getByText(/Liveness unknown/i)).toBeDefined();
     });
-  });
-
-  it("requires all review checks before approving a specific document", async () => {
-    mockTwoImageArtifacts({ riskSignals: [], providerResults: [] });
-    const review = vi.fn();
-    render(
-      <KycComparisonViewer
-        isOpen
-        userId="review-checks"
-        displayName="Sample"
-        onClose={vi.fn()}
-        onReviewStep={review}
-        reviewableSteps={["id_doc", "selfie"]}
-      />
-    );
-    const approve = await screen.findByRole("button", { name: "Approve selfie" });
-    expect(approve).toBeDisabled();
-    for (const checkbox of screen.getAllByRole("checkbox")) fireEvent.click(checkbox);
-    expect(approve).toBeEnabled();
-    fireEvent.click(approve);
-    expect(review).toHaveBeenCalledWith("selfie", "approved");
-  });
-
-  it("groups repeated unavailable checks without hiding their severity", async () => {
-    mockTwoImageArtifacts({
-      riskSignals: [
-        { id: "v1", artifact_id: "id-1", signal_code: "velocity_check_error", severity: "block" },
-        {
-          id: "v2",
-          artifact_id: "selfie-1",
-          signal_code: "velocity_check_error",
-          severity: "block",
-        },
-      ],
-    });
-    render(
-      <KycComparisonViewer isOpen userId="risk-grouping" displayName="Sample" onClose={vi.fn()} />
-    );
-    const signals = await screen.findAllByText(/Upload frequency check unavailable/);
-    expect(signals).toHaveLength(1);
-    expect(signals[0].className).toContain("border-red");
-  });
-
-  it("warns when the selfie was uploaded as a file instead of live capture", async () => {
-    mockTwoImageArtifacts({
-      riskSignals: [
-        {
-          id: "sig-1",
-          artifact_id: "selfie-1",
-          signal_code: "selfie_not_camera_captured",
-          severity: "warn",
-          value_json: { captureMethod: "file_upload" },
-          created_at: "2026-03-27T09:06:00Z",
-        },
-      ],
-      providerResults: [],
-    });
-
-    render(
-      <KycComparisonViewer isOpen userId="user-1" displayName="Test User" onClose={vi.fn()} />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText(/Uploaded file/i)).toBeDefined();
-    });
-    expect(screen.getByText(/uploaded as a file, not captured live/i)).toBeDefined();
-  });
-
-  it("warns when the liveness challenge was not completed", async () => {
-    mockTwoImageArtifacts({
-      riskSignals: [
-        {
-          id: "sig-2",
-          artifact_id: "selfie-1",
-          signal_code: "liveness_not_verified",
-          severity: "warn",
-          value_json: { captureMethod: "camera", livenessPassed: null },
-          created_at: "2026-03-27T09:06:00Z",
-        },
-      ],
-      providerResults: [],
-    });
-
-    render(
-      <KycComparisonViewer isOpen userId="user-1" displayName="Test User" onClose={vi.fn()} />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText(/Liveness not verified/i)).toBeDefined();
-    });
-  });
-
-  it("labels a completed browser liveness challenge as review context, not proof", async () => {
-    mockTwoImageArtifacts({
-      riskSignals: [
-        {
-          id: "sig-browser-liveness",
-          artifact_id: "selfie-1",
-          signal_code: "browser_liveness_claimed",
-          severity: "info",
-          value_json: { captureMethod: "camera", livenessPassed: true },
-          created_at: "2026-03-27T09:06:00Z",
-        },
-      ],
-      providerResults: [],
-    });
-
-    render(
-      <KycComparisonViewer isOpen userId="user-1" displayName="Test User" onClose={vi.fn()} />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText(/Browser liveness check completed/i)).toBeDefined();
-      expect(screen.getByText(/not a server-verified proof/i)).toBeDefined();
-    });
-  });
-
-  it("surfaces a low provider liveness score as a blocking review warning", async () => {
-    mockTwoImageArtifacts({
-      riskSignals: [
-        {
-          id: "sig-low-liveness",
-          artifact_id: "selfie-1",
-          signal_code: "low_liveness_score",
-          severity: "warn",
-          value_json: { livenessScore: 20, threshold: 60 },
-          created_at: "2026-03-27T09:06:00Z",
-        },
-      ],
-      providerResults: [],
-    });
-
-    render(
-      <KycComparisonViewer isOpen userId="user-1" displayName="Test User" onClose={vi.fn()} />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText(/^Low liveness score$/i)).toBeDefined();
-    });
-  });
-
-  it("renders risk signal chips with human-friendly labels", async () => {
-    mockTwoImageArtifacts({
-      riskSignals: [
-        {
-          id: "sig-3",
-          artifact_id: "id-1",
-          signal_code: "near_duplicate_phash",
-          severity: "warn",
-          value_json: {},
-          created_at: "2026-03-27T09:06:00Z",
-        },
-      ],
-      providerResults: [],
-    });
-
-    render(
-      <KycComparisonViewer isOpen userId="user-1" displayName="Test User" onClose={vi.fn()} />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText(/Near-duplicate of another account's image/i)).toBeDefined();
-    });
-  });
-
-  it("shows the provider face-match score when available", async () => {
-    mockTwoImageArtifacts({
-      riskSignals: [],
-      providerResults: [
-        {
-          id: "pr-1",
-          artifact_id: "selfie-1",
-          provider_name: "stub",
-          provider_status: "needs_manual_review",
-          face_match_score: 42,
-          liveness_score: 88,
-          doc_auth_score: null,
-        },
-      ],
-    });
-
-    render(
-      <KycComparisonViewer isOpen userId="user-1" displayName="Test User" onClose={vi.fn()} />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText(/Face match/i)).toBeDefined();
-    });
-    expect(screen.getByText(/42\/100/)).toBeDefined();
-    expect(screen.getByText(/Liveness 88\/100/i)).toBeDefined();
+    expect(screen.getByTitle("manual_review_only")).toHaveTextContent("manual review only");
+    expect(screen.queryByText(/Face match/i)).not.toBeInTheDocument();
   });
 });

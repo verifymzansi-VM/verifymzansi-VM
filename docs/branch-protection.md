@@ -15,6 +15,7 @@ pull request whose required checks pass.
 | 2026-11-11 | The owner has applied the reviewed file: `pnpm check:branch-ruleset -- --live` reports that the live ruleset matches it, so pull requests and the required checks below are enforced.                                                                          |
 | 2026-11-11 | CI clean-up: removed the checks of deleted jobs (`Foundation Worker runtime`, `db-rls`, `payment-kyc-regressions`, `e2e-smoke (chromium)`, `e2e-smoke (mobile-chrome)`, `launch-flows-bundle`), each just before the pull request that deleted its job merged. |
 | 2026-11-11 | Added `Workflow lint (actionlint)` and `Browser test build` after both jobs had run on `main`.                                                                                                                                                                 |
+| 2026-11-11 | Ruleset file adds `e2e-foundation` (it had passed on 11 consecutive `main` runs). Not enforced until the owner applies it, after the release-gate change is on `main`.                                                                                         |
 
 Update this table when GitHub's enforced ruleset changes. Verify at any time,
 read-only:
@@ -71,17 +72,21 @@ such a check would block every pull request.
   - `Browser test build` (job `build-e2e`): builds the site once with the fixed
     browser-test settings; `e2e-full-matrix` serves that build.
   - `e2e-full-matrix` (chromium, firefox, mobile-chrome): every browser test
-    except the pictures, including the `@smoke` subset. On chromium and
-    mobile-chrome it also proves the signed-in KYC scenarios passed. (The
-    separate `e2e-smoke` and `launch-flows-bundle` jobs repeated subsets of it
-    and were removed; `pnpm test:browser:isolated` stays as a local release
-    check.)
+    except the pictures, including the `@smoke` subset. (The separate
+    `e2e-smoke` and `launch-flows-bundle` jobs repeated subsets of it and were
+    removed; `pnpm test:browser:isolated` stays as a local release check.)
   - `Visual regression (chosen frontend)`: compares the main public screens with
-    the approved pictures of the chosen frontend.
+    the approved pictures of the chosen frontend, served from the private local
+    foundation test copy, with the browser in the pinned Playwright image
+    (`scripts/foundation-visual.mjs`).
   - `foundation-native` (workflow "Foundation native"): the native database
     suite. It starts on every pull request to `main`; when a pull request does
     not touch the suite's inputs the job ends green without starting Docker, so
     the check never waits forever.
+  - `e2e-foundation` (workflow "E2E foundation"): the browser tests against a
+    private local copy of the production (foundation) schema. The aggregate
+    check passes only when both per-project jobs, `e2e-foundation (chromium)`
+    and `e2e-foundation (mobile-chrome)`, passed.
 - **"Require branches to be up to date" is off.** Turning it on would force a
   rebase and a fresh CI run (about 48 minutes) after every merge. It is safe to
   leave off because the deploy also requires a successful CI run on the merge
@@ -102,14 +107,17 @@ The Lighthouse audit is an advisory step inside `bundle-analysis`. This keeps
 required on pull requests; when no staging address (`STAGING_APP_URL`) is
 configured they show as skipped, not as a success (`Staging address configured`
 decides this in a job-level condition). Later slices add their jobs here and to
-the ruleset file (foundation browser tests, frontend ledger). `e2e-foundation`
-(workflow "E2E foundation") runs on every pull request and every push to `main`
-but stays optional until it has passed on 10 consecutive `main` runs. Its `main`
-runs, like those of `foundation-native`, are separate workflow runs outside the
-deploy gate; a failed `main` or scheduled run of any workflow opens or updates
-one GitHub issue (workflow "Failure alert"). When it becomes required, list only
-the aggregate check `e2e-foundation`: it passes only when both per-project jobs,
-`e2e-foundation (chromium)` and `e2e-foundation (mobile-chrome)`, passed.
+the ruleset file (foundation browser tests, frontend ledger).
+
+**Release gate.** On `main`, CI calls the workflows "Foundation native" and "E2E
+foundation" (jobs `Release gate (foundation native)` and
+`Release gate (e2e foundation)`), so the deploy, which needs the whole `main` CI
+run to succeed, waits for both suites. They are not called on pull requests,
+where the two workflows run on their own and report `foundation-native` and
+`e2e-foundation`. Each caller job has a concurrency group per commit and is
+never cancelled, so a later merge cannot cancel an earlier commit's gate. A
+failed `main` or scheduled run of any workflow opens or updates one GitHub issue
+(workflow "Failure alert").
 
 ## How the owner applies it
 

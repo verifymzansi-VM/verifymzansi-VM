@@ -139,7 +139,7 @@ test.describe("showroom carousel on its test page", () => {
     await page.waitForLoadState("networkidle").catch(() => {});
     const showroom = page.locator("section[aria-roledescription='carousel']").first();
     await expect(showroom).toBeVisible();
-    const liveRegion = showroom.locator('[aria-live="polite"]').first();
+    const liveRegion = showroom.locator("[aria-live]").filter({ hasText: /^Slide \d+ of \d+$/ });
     await expect(liveRegion).toContainText("Slide 1 of");
 
     // Ambient videos stay poster-first until an explicit play action
@@ -174,7 +174,7 @@ test.describe("showroom carousel on its test page", () => {
     await page.waitForLoadState("networkidle").catch(() => {});
     const showroom = page.locator("section[aria-roledescription='carousel']").first();
     await expect(showroom).toBeVisible();
-    const liveRegion = showroom.locator('[aria-live="polite"]').first();
+    const liveRegion = showroom.locator("[aria-live]").filter({ hasText: /^Slide \d+ of \d+$/ });
     await expect(liveRegion).toContainText("Slide 1 of");
     const cardLink = showroom.getByRole("link", { name: /^Open / }).first();
     await expect(cardLink).toBeVisible();

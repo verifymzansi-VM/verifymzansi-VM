@@ -43,7 +43,7 @@ import {
 import { StickyContactBar } from "@/components/business/shared/sticky-contact-bar";
 import { ManagedByCard } from "@/components/business/shared/business-sidebar-cards";
 import { BusinessDetailsAccordion } from "@/components/business/shared/business-details-accordion";
-import { MediaLightbox } from "@/components/ui/media-lightbox";
+import { MediaLightbox } from "@/components/ui/media-lightbox-lazy";
 import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
@@ -67,6 +67,13 @@ import {
 import { placeLine } from "@/lib/utils/place-line";
 import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 import { BusinessStickers } from "@/components/trust/business-stickers";
+import {
+  CaptionPlace,
+  POST_CAPTION_ABOVE_CONTROLS,
+  POST_MEDIA_FIRST_SCREEN_HEIGHT,
+  useMediaPlaying,
+} from "@/components/listings/poster-caption";
+import { cn } from "@/lib/utils";
 import { ID_REVIEWED_TRUST_LEVEL } from "@/lib/business-verification/public";
 
 interface UnifiedLayoutProps {
@@ -181,6 +188,10 @@ function MediaColumn({
   const activeMedia = heroMediaItems[activeMediaIndex] ?? null;
   const canPrevious = activeMediaIndex > 0;
   const canNext = activeMediaIndex < heroMediaItems.length - 1;
+  const media = useMediaPlaying(activeMedia?.key ?? "");
+  const isVideo = activeMedia?.kind === "video";
+  // The showroom card's place: the town, else the province.
+  const captionPlace = business.location_city || business.location_province;
   const goToPreviousMedia = useCallback(() => {
     setActiveMediaIndex((current) => Math.max(current - 1, 0));
   }, []);
@@ -235,7 +246,15 @@ function MediaColumn({
     <div className="space-y-3">
       <div className={columnWidthClass}>
         <div className="relative overflow-hidden rounded-[28px] border border-slate-200/70 bg-slate-950 shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] dark:border-white/10">
-          <div className="relative aspect-[9/16] overflow-hidden touch-pan-y" {...swipeHandlers}>
+          <div
+            className={cn(
+              "relative aspect-[9/16] overflow-hidden touch-pan-y",
+              // The sticky contact bar is public-only; previews keep the full frame.
+              layoutMode === "public" && POST_MEDIA_FIRST_SCREEN_HEIGHT
+            )}
+            {...swipeHandlers}
+            {...media.handlers}
+          >
             {activeMedia?.kind === "video" ? (
               <VideoViewTracker
                 targetId={business.id}
@@ -294,40 +313,56 @@ function MediaColumn({
               </div>
             )}
 
-            {activeMedia?.kind !== "video" && (
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4">
-                <div className="flex items-end gap-3">
-                  <div className="h-14 w-14 overflow-hidden rounded-2xl border border-white/20 bg-white p-1 shadow-lg dark:bg-warm-900">
-                    {business.logo_url ? (
-                      <Image
-                        src={normalizeMediaUrl(business.logo_url)}
-                        alt={`${business.business_name} logo`}
-                        width={56}
-                        height={56}
-                        className="h-full w-full rounded-xl object-contain"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                        <Store className="h-5 w-5" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1 text-left text-white">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/70">
-                      {family === "tourism"
-                        ? "Tourism & Hospitality"
-                        : family === "professional"
-                          ? "Business Profile"
-                          : "Featured Profile"}
-                    </p>
-                    {/* Decorative repeat of the name; the page heading lives in the details column. */}
-                    <p className="line-clamp-2 font-display text-2xl font-semibold leading-tight">
-                      {business.business_name}
-                    </p>
-                  </div>
+            {/* A repeat of the page heading, so screen readers skip it. Over a
+                video it shows on phones only, above the controls, and fades
+                while the video plays. */}
+            <div
+              aria-hidden="true"
+              data-post-caption
+              className={cn(
+                "pointer-events-none absolute inset-x-0 p-4 transition-opacity duration-300 motion-reduce:transition-none",
+                // Phones: shading strong enough for the place line (at least 65% black under the text).
+                "max-md:bg-[linear-gradient(to_top,rgb(0_0_0/0.8),rgb(0_0_0/0.65)_calc(100%_-_2.5rem),transparent)] max-md:pt-10",
+                isVideo ? cn("md:hidden", POST_CAPTION_ABOVE_CONTROLS) : "bottom-0 z-[15]",
+                media.playing ? "opacity-0" : "opacity-100"
+              )}
+            >
+              <div className="flex items-end gap-3">
+                <div className="h-14 w-14 overflow-hidden rounded-2xl border border-white/20 bg-white p-1 shadow-lg dark:bg-warm-900">
+                  {business.logo_url ? (
+                    <Image
+                      src={normalizeMediaUrl(business.logo_url)}
+                      alt={`${business.business_name} logo`}
+                      width={56}
+                      height={56}
+                      className="h-full w-full rounded-xl object-contain"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                      <Store className="h-5 w-5" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 text-left text-white">
+                  <p className="text-xs font-semibold text-white/70">
+                    {family === "tourism"
+                      ? "Tourism & Hospitality"
+                      : family === "professional"
+                        ? "Business Profile"
+                        : "Featured Profile"}
+                  </p>
+                  <p className="line-clamp-2 font-display text-2xl font-semibold leading-tight">
+                    {business.business_name}
+                  </p>
+                  {captionPlace ? (
+                    <CaptionPlace
+                      location={captionPlace}
+                      className="mt-1 text-xs sm:text-sm md:hidden"
+                    />
+                  ) : null}
                 </div>
               </div>
-            )}
+            </div>
 
             {heroMediaItems.length > 1 ? (
               <>
@@ -487,13 +522,25 @@ export function UnifiedLayout({
         ? "Service Scope"
         : ctaConfig?.servicesHeading;
   const showStickyContactBar = layoutMode === "public" && showPublicActions;
+  const acceptsEnquiries = acceptsInboxEnquiries(business.category_details);
+  const contactConfig = businessContactConfig(
+    business.id,
+    business.business_name,
+    `${family === "tourism" ? "/tourism-events" : "/mzansi-business"}/${business.id}`
+  );
+  const hasOtherContact = Boolean(
+    business.email ||
+    business.website ||
+    Object.values(business.social_links ?? {}).some((url) => Boolean(url))
+  );
   const shellClassName = isReviewLayout
     ? "grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] 2xl:items-start"
     : showStickyContactBar &&
         (contactPhone(business.phone) ||
           contactPhone(business.whatsapp) ||
           business.contact_available?.phone ||
-          business.contact_available?.whatsapp)
+          business.contact_available?.whatsapp ||
+          acceptsEnquiries)
       ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start lg:pb-0"
       : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start";
   const viewCountLabel = `${viewCount} ${viewCount === 1 ? "view" : "views"}`;
@@ -564,9 +611,7 @@ export function UnifiedLayout({
             key={`${fact.label}-${fact.value}`}
             className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]"
           >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {fact.label}
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">{fact.label}</p>
             <p className="mt-1 text-sm font-medium">{fact.value}</p>
           </div>
         ))}
@@ -626,9 +671,7 @@ export function UnifiedLayout({
                   : "rounded-2xl bg-muted/40 p-3"
               }
             >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                {fact.label}
-              </p>
+              <p className="text-xs font-semibold text-muted-foreground">{fact.label}</p>
               <p className="mt-1 text-sm font-medium">{fact.value}</p>
             </div>
           ))}
@@ -637,15 +680,11 @@ export function UnifiedLayout({
     ) : family === "professional" ? (
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl bg-muted/40 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Service model
-          </p>
+          <p className="text-xs font-semibold text-muted-foreground">Service model</p>
           <p className="mt-1 text-sm font-medium">{typeLabel ?? "Not listed"}</p>
         </div>
         <div className="rounded-2xl bg-muted/40 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Delivery
-          </p>
+          <p className="text-xs font-semibold text-muted-foreground">Delivery</p>
           <p className="mt-1 text-sm font-medium">
             {deliveryAvailable ? "Available for customers" : "Not listed"}
           </p>
@@ -654,9 +693,7 @@ export function UnifiedLayout({
     ) : (
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl bg-muted/40 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Photos and videos
-          </p>
+          <p className="text-xs font-semibold text-muted-foreground">Photos and videos</p>
           <p className="mt-1 text-sm font-medium">
             {galleryPhotos.length > 0
               ? `${galleryPhotos.length} supporting photos`
@@ -664,9 +701,7 @@ export function UnifiedLayout({
           </p>
         </div>
         <div className="rounded-2xl bg-muted/40 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Live offers
-          </p>
+          <p className="text-xs font-semibold text-muted-foreground">Live offers</p>
           <p className="mt-1 text-sm font-medium">
             {promotions.length > 0
               ? `${promotions.length} Tourism & Events posts visible`
@@ -796,9 +831,7 @@ export function UnifiedLayout({
       {showPromotions && promotions.length > 0 ? (
         <div className="space-y-3">
           <div className="space-y-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Active posts
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">Active posts</p>
             <h2 className="font-display text-xl font-semibold">Tourism &amp; Events posts</h2>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -811,6 +844,7 @@ export function UnifiedLayout({
                 negotiable={promo.price_negotiable}
                 imageUrl={promo.videos?.[0] || promo.photos?.[0]}
                 posterUrl={promo.video_thumbnail || promo.photos?.[0] || undefined}
+                isVideo={Boolean(promo.videos?.[0])}
                 categoryLabel={getPromotionCategoryDisplayLabel(promo.category_key, promo.category)}
                 province={promo.location_province}
                 city={promo.location_city}
@@ -928,13 +962,10 @@ export function UnifiedLayout({
                       : null
                   }
                   showPhoneButton={true}
-                  showMessageButton={acceptsInboxEnquiries(business.category_details)}
+                  showMessageButton={acceptsEnquiries}
                   messageIcon={MessageSquare}
-                  config={businessContactConfig(
-                    business.id,
-                    business.business_name,
-                    `${family === "tourism" ? "/tourism-events" : "/mzansi-business"}/${business.id}`
-                  )}
+                  config={contactConfig}
+                  hasOtherContact={hasOtherContact}
                 />
               </CardContent>
             </Card>
@@ -943,7 +974,11 @@ export function UnifiedLayout({
       </div>
 
       {showStickyContactBar ? (
-        <StickyContactBar business={business} ctaLabel={ctaConfig?.primaryCta ?? "Call Now"} />
+        <StickyContactBar
+          business={business}
+          ctaLabel={ctaConfig?.primaryCta ?? "Call Now"}
+          enquiry={acceptsEnquiries ? contactConfig : null}
+        />
       ) : null}
     </>
   );
