@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeBusinessShowcase } from "./home-business-showcase";
 import { restoredHomeCollection } from "@/lib/foundation/marketplace-server";
@@ -93,17 +93,18 @@ describe("HomeBusinessShowcase", () => {
     expect(props.provinceCode).toBe("GP");
   });
 
-  it("renders a branded empty state when there are no live businesses", async () => {
+  it("collapses to one 'be the first' card when there are no live businesses", async () => {
     vi.mocked(restoredHomeCollection).mockResolvedValue(homeCollection([]));
 
     const ui = await HomeBusinessShowcase();
     render(ui);
 
-    expect(screen.getByText("No businesses yet")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /add a business/i })).toHaveAttribute(
-      "href",
-      "/post/create-business"
-    );
+    const card = screen.getByRole("region", { name: "Be the first to add a business" });
+    expect(within(card).getAllByRole("link")).toHaveLength(1);
+    expect(within(card).getByRole("link")).toHaveAttribute("href", "/post/create-business");
+    expect(screen.queryByRole("heading", { name: "Mzansi Business" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /view all/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/yet/i)).not.toBeInTheDocument();
   });
 
   it("renders businesses inside the shared auto-scroll rail", async () => {

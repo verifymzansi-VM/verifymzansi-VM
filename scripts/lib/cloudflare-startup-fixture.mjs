@@ -18,6 +18,7 @@ export function createCloudflareStartupFixture(publicSettings = {}) {
     FOUNDATION_SUPABASE_SECRET_KEY: serverKey,
     FOUNDATION_PASSWORD_AUTH_MODE: "native-captcha",
     FOUNDATION_REGISTRATION_ENABLED: "true",
+    FOUNDATION_REGISTRATION_INVITE_ONLY: "true",
     FOUNDATION_AUTH_CALLBACK_ENABLED: "true",
     FOUNDATION_RECOVERY_ENABLED: "true",
     SUPABASE_SERVICE_ROLE_KEY: serverKey,

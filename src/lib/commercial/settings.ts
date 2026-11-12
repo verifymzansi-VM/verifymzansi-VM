@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { safeErrorCode } from "@/lib/foundation/call-failures";
+import { recordDefaultFallback } from "@/lib/utils/fallback-events";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("CommercialSettings");
 
 /**
  * Admin-editable commercial numbers (table `commercial_settings`). Prices live
@@ -165,7 +170,7 @@ type SettingsReader = {
   from: (table: "commercial_settings") => {
     select: (columns: string) => PromiseLike<{
       data: Array<{ key: string; value: unknown }> | null;
-      error: { message: string } | null;
+      error: { message: string; code?: string } | null;
     }>;
   };
 };
@@ -176,10 +181,22 @@ const CACHE_MS = 60_000;
 export async function getCommercialSettings(client: SettingsReader): Promise<CommercialSettings> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.value;
   const { data, error } = await client.from("commercial_settings").select("key, value");
-  if (error) return cache?.value ?? DEFAULT_COMMERCIAL_SETTINGS;
+  if (error) {
+    // Pages keep working on the last good or default values, but the failure is
+    // logged and counted so ignored staff settings do not go unnoticed.
+    recordDefaultFallback(log, "commercial_settings", {
+      errorCode: safeErrorCode(error.code),
+      usedCachedValue: Boolean(cache),
+    });
+    return cache?.value ?? DEFAULT_COMMERCIAL_SETTINGS;
+  }
   const value = resolveCommercialSettings(data);
   cache = { at: Date.now(), value };
   return value;
+}
+
+export function clearCommercialSettingsCache(): void {
+  cache = null;
 }
 
 /**

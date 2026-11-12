@@ -18,5 +18,7 @@ create table private.post_trial_claims (
 );
 alter table private.post_trial_claims owner to postgres;
 alter table private.post_trial_claims enable row level security;
+CREATE INDEX post_trial_claims_converted_by_activation_id_idx ON private.post_trial_claims USING btree (converted_by_activation_id) WHERE (converted_by_activation_id IS NOT NULL);
 CREATE INDEX post_trial_claims_owner_idx ON private.post_trial_claims USING btree (owner_id, post_id);
+CREATE INDEX post_trial_claims_trial_entitlement_id_idx ON private.post_trial_claims USING btree (trial_entitlement_id);
 revoke all on private.post_trial_claims from public;

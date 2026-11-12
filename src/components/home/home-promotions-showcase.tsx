@@ -1,5 +1,4 @@
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
-import { TreePalm } from "lucide-react";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { BusinessPreviewCard } from "@/components/home/business-preview-card";
 import { restoredHomeCollection } from "@/lib/foundation/marketplace-server";
@@ -96,16 +95,11 @@ export async function HomePromotionsShowcase() {
 
   if (items.length === 0) {
     return (
-      <HomeShowcaseShell title="Tourism & Events" href="/tourism-events" tone="teal">
-        <HomeShowcaseEmptyState
-          title="No stays or events yet"
-          description="Your first post is free."
-          ctaHref="/post/create-tourism"
-          ctaLabel="List a stay or event"
-          tone="teal"
-          icon={<TreePalm className="h-7 w-7" />}
-        />
-      </HomeShowcaseShell>
+      <HomeShowcaseEmptyState
+        title="Be the first to list a stay or event"
+        href="/post/create-tourism"
+        tone="teal"
+      />
     );
   }
 
@@ -159,6 +153,7 @@ export async function HomePromotionsShowcase() {
                 focalY={item.data.focal_y}
                 mediaWidth={item.data.media_width}
                 mediaHeight={item.data.media_height}
+                isVideo={Boolean(item.data.cover_video)}
               />
             ) : (
               <PromotionCard
@@ -171,6 +166,7 @@ export async function HomePromotionsShowcase() {
                   item.data.videos?.[0] || item.data.video_thumbnail || item.data.photos?.[0]
                 }
                 posterUrl={item.data.video_thumbnail || item.data.photos?.[0] || undefined}
+                isVideo={Boolean(item.data.videos?.[0])}
                 categoryLabel={getPromotionCategoryDisplayLabel(
                   item.data.category_key,
                   item.data.category

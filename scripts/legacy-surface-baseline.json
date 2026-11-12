@@ -2,10 +2,10 @@
   "$comment": "Ratchet for pnpm check:legacy-surface (roadmap M0.11). Every value may only go down. Lower it with `pnpm check:legacy-surface --update` after removing old-backend code; raising any value needs a reviewed reason. legacyClientImporters is also the frozen import list read by .dependency-cruiser.cjs.",
   "counts": {
     "backendSwitches": 43,
-    "legacyClientImports": 88,
+    "legacyClientImports": 85,
     "retiredCommandNames": 41,
     "retiredCommandCalls": 35,
-    "retiredTableReads": 183
+    "retiredTableReads": 181
   },
   "legacyClientImporters": [
     "src/app/(auth)/auth/callback/route.ts",
@@ -30,8 +30,6 @@
     "src/app/api/feed/_lib/feed-request.ts",
     "src/app/api/mock-ozow/route.ts",
     "src/app/api/organisations/[id]/report/route.ts",
-    "src/app/api/otp/health/route.ts",
-    "src/app/api/share-preview/[type]/[id]/route.tsx",
     "src/app/api/trial-extensions/[id]/route.ts",
     "src/app/api/trials/route.ts",
     "src/app/api/verification/_lib/verification-request-prelude.ts",
@@ -44,7 +42,6 @@
     "src/app/dashboard/layout.tsx",
     "src/app/dashboard/leads/page.tsx",
     "src/app/dashboard/metrics/page.tsx",
-    "src/app/dashboard/page.tsx",
     "src/app/dashboard/profile/page.tsx",
     "src/app/listing/[id]/page.tsx",
     "src/app/organisation-invite/page.tsx",
@@ -178,7 +175,6 @@
     "ops_heartbeats",
     "organisation_sponsorships",
     "organisations",
-    "otp_challenges",
     "otp_logs",
     "payments",
     "plans",

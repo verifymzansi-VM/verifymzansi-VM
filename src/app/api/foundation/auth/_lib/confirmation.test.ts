@@ -8,7 +8,7 @@ import { POST as register } from "../register/route";
 import { POST as requestRecovery } from "../recovery/request/route";
 import { readRecoveryBinding } from "@/lib/foundation/recovery-binding";
 import { handleFoundationGoogleOAuth } from "./google-oauth";
-import { handleFoundationConfirmation } from "./confirmation";
+import { googleLandingPath, googleRefusalPath, handleFoundationConfirmation } from "./confirmation";
 import { createClient as legacyClient } from "@/lib/supabase/server";
 import { createAdminClient as legacyAdmin } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
@@ -39,12 +39,14 @@ const flows: Array<{
 }> = [];
 const issued = new Map<string, number>();
 const googleUsers = new Set<number>();
+const newUsers = new Set<number>();
 const fetcher = vi.fn<typeof fetch>();
 const user = (n: number) => ({
   id: uuid(n),
   email: `person${n}@example.invalid`,
   aud: "authenticated",
   email_confirmed_at: "2026-10-24T00:00:00Z",
+  ...(newUsers.has(n) ? { created_at: new Date().toISOString() } : {}),
   is_anonymous: false,
   identities: googleUsers.has(n)
     ? [
@@ -129,6 +131,7 @@ beforeEach(() => {
   flows.length = 0;
   issued.clear();
   googleUsers.clear();
+  newUsers.clear();
   for (const [key, value] of Object.entries({
     FOUNDATION_PASSWORD_AUTH_MODE: "native-captcha",
     FOUNDATION_AUTH_CALLBACK_ENABLED: "true",
@@ -590,4 +593,75 @@ it("an email change selector never turns a sign-up or recovery code into a sessi
   expect(opened.cookies.get(BINDING)).toBeDefined();
   expect(legacyClient).not.toHaveBeenCalled();
   expect(legacyAdmin).not.toHaveBeenCalled();
+});
+
+it("sends a brand-new Google account to the phone step, keeping where it was going", async () => {
+  const jar = new Map([["vm_csrf", csrf]]);
+  const callback = await beginGoogle(jar, "/post/create");
+  googleUsers.add(1);
+  newUsers.add(1);
+  const response = await GET(new NextRequest(callback, { headers: headers(jar) }));
+  expect(response.headers.get("location")).toBe(
+    "https://verifymzansi.com/dashboard/complete-profile?returnUrl=%2Fpost%2Fcreate"
+  );
+  expect(response.cookies.get(baseCookie)?.secure).toBe(true);
+});
+
+it("tells a Google visitor plainly when registration is not open", async () => {
+  const jar = new Map([["vm_csrf", csrf]]);
+  const callback = await beginGoogle(jar);
+  callback.searchParams.delete("code");
+  callback.searchParams.set("error", "server_error");
+  callback.searchParams.set("error_description", "Registration is not open yet");
+  const response = await GET(new NextRequest(callback, { headers: headers(jar) }));
+  expect(response.headers.get("location")).toBe(
+    "https://verifymzansi.com/login?error=registration_closed#"
+  );
+  expect(response.cookies.get(baseCookie)).toBeUndefined();
+});
+
+it("says a cancelled Google sign-in was not completed, not that a link expired", async () => {
+  const jar = new Map([["vm_csrf", csrf]]);
+  const callback = await beginGoogle(jar);
+  callback.searchParams.delete("code");
+  callback.searchParams.set("error", "access_denied");
+  callback.searchParams.set("error_description", "The user denied the request");
+  const response = await GET(new NextRequest(callback, { headers: headers(jar) }));
+  expect(response.headers.get("location")).toBe(
+    "https://verifymzansi.com/login?error=google_cancelled#"
+  );
+  expect(response.cookies.get(baseCookie)).toBeUndefined();
+});
+
+it("google landing and refusal reasons never come from untrusted text", () => {
+  const now = Date.parse("2026-11-12T12:00:00Z");
+  expect(googleLandingPath("/", "2026-11-12T11:59:00Z", now)).toBe("/dashboard/complete-profile");
+  expect(googleLandingPath("/dashboard", "2026-11-12T11:55:00Z", now)).toBe(
+    "/dashboard/complete-profile"
+  );
+  expect(googleLandingPath("/listing/1?x=1", "2026-11-12T11:59:00Z", now)).toBe(
+    "/dashboard/complete-profile?returnUrl=%2Flisting%2F1%3Fx%3D1"
+  );
+  // Older accounts (including email accounts adding Google), unknown or future times.
+  expect(googleLandingPath("/dashboard", "2026-11-12T11:40:00Z", now)).toBe("/dashboard");
+  expect(googleLandingPath("/dashboard", null, now)).toBe("/dashboard");
+  expect(googleLandingPath("/dashboard", "not a date", now)).toBe("/dashboard");
+  expect(googleLandingPath("/dashboard", "2026-11-12T12:30:00Z", now)).toBe("/dashboard");
+
+  const query = (entries: Record<string, string>) => new URLSearchParams(entries);
+  expect(googleRefusalPath(query({ oauth: "google", error: "access_denied" }))).toBe(
+    "/login?error=google_cancelled#"
+  );
+  expect(
+    googleRefusalPath(
+      query({
+        oauth: "google",
+        error: "access_denied",
+        error_description: "Registration is not open yet",
+      })
+    )
+  ).toBe("/login?error=registration_closed#");
+  expect(googleRefusalPath(query({ oauth: "google", error: "server_error" }))).toBeNull();
+  expect(googleRefusalPath(query({ error: "access_denied" }))).toBeNull();
+  expect(googleRefusalPath(query({ oauth: "google" }))).toBeNull();
 });

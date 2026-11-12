@@ -127,7 +127,8 @@ describe("public trust pages", () => {
     );
     render(await TermsPage());
     expect(readCurrentPublishedPostingTerms).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Posting terms · posting-v1")).toBeInTheDocument();
+    expect(screen.getByText("Updated November 2026")).toBeInTheDocument();
+    expect(screen.queryByText(/Posting terms ·/)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "What our checks mean" })).toBeInTheDocument();
   });
 

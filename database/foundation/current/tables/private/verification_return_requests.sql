@@ -19,4 +19,5 @@ create table private.verification_return_requests (
 alter table private.verification_return_requests owner to postgres;
 alter table private.verification_return_requests enable row level security;
 CREATE INDEX verification_return_requests_case_idx ON private.verification_return_requests USING btree (case_id, created_at DESC);
+CREATE INDEX verification_return_requests_reviewer_id_idx ON private.verification_return_requests USING btree (reviewer_id);
 revoke all on private.verification_return_requests from public;

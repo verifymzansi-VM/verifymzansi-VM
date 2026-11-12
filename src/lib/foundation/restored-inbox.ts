@@ -1,4 +1,5 @@
 import type { readFoundationPresentedEnquiries } from "./owner-inbox";
+import { restoredContentType } from "./areas";
 type Enquiry = Awaited<ReturnType<typeof readFoundationPresentedEnquiries>>["items"][number];
 /** Preserve the selected lead card contract while deriving the subject and
  * contact claims from the caller-bound native inbox DTO. */
@@ -6,7 +7,7 @@ export function restoredEnquiry(row: Enquiry) {
   return {
     id: row.id,
     target_id: row.post_id,
-    target_type: row.post_kind === "event" ? "promotion" : row.post_kind,
+    target_type: restoredContentType(row.post_kind),
     target_href: `/${row.post_kind === "listing" ? "listing" : row.post_area === "tourism_events" ? "tourism-events" : "mzansi-business"}/${row.post_id}`,
     message: row.message,
     status: row.status,

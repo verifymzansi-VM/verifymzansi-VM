@@ -13,12 +13,12 @@ begin
   select jsonb_build_object('items',coalesce((select jsonb_agg(jsonb_build_object(
     'id',n.id,'kind',n.kind,'post_id',n.post_id,'post_title',p.title,'organisation_name',o.name,'organisation_slug',o.slug,
     'created_at',n.created_at,'read_at',n.read_at) order by n.created_at desc,n.id desc)
-    from (select * from private.notifications n where n.account_id=actor and n.kind not in('account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update')
+    from (select * from private.notifications n where n.account_id=actor and n.kind not in('account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','verification_returned')
       and not exists(select 1 from private.notification_dismissals d where d.notification_id=n.id)
       and (not p_unread or n.read_at is null) and (p_before is null or n.created_at<p_before)
       order by n.created_at desc,n.id desc limit p_limit) n
     left join private.posts p on p.id=n.post_id left join private.organisations o on o.id=n.organisation_id),'[]'::jsonb),
-    'unread_count',(select count(*) from private.notifications n where n.account_id=actor and n.kind not in('account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update') and n.read_at is null)) into result;
+    'unread_count',(select count(*) from private.notifications n where n.account_id=actor and n.kind not in('account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','verification_returned') and n.read_at is null)) into result;
   perform internal.price_draft_actor(); return result;
 end;
 $function$;

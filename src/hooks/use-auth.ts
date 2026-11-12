@@ -6,6 +6,11 @@ import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { hasAuthSessionCookie } from "@/lib/supabase/auth-session-cookie";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
+import {
+  foundationSessionDisplayName,
+  foundationSessionRole,
+  isStaffRole,
+} from "@/lib/auth/session-display";
 import { toast } from "@/hooks/use-toast";
 import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
 
@@ -164,12 +169,12 @@ export function useAuth() {
         setUser({
           id: account.account_id,
           email: account.email ?? "",
-          displayName: nextProfile.display_name,
-          role: account.staff?.can_access
-            ? account.staff.role === "governor"
-              ? "governance_controller"
-              : account.staff.role
-            : "user",
+          displayName: foundationSessionDisplayName(
+            nextProfile.display_name,
+            authUser.user_metadata,
+            account.email ?? authUser.email
+          ),
+          role: foundationSessionRole(account.staff),
         });
         setProfile(nextProfile);
       } catch (err) {
@@ -236,6 +241,9 @@ export function useAuth() {
   const isAuthenticated = !!user;
   const isAdmin = user?.role === "admin";
   const isModerator = user?.role === "moderator" || isAdmin;
+  // Any staff role, including governors. A UI hint only: staff pages and
+  // commands check role and two-step on the server.
+  const isStaff = isStaffRole(user?.role);
   const isVerified = readAccountVerificationStatus(profile) === "verified";
 
   return {
@@ -246,6 +254,7 @@ export function useAuth() {
     isAuthenticated,
     isAdmin,
     isModerator,
+    isStaff,
     isVerified,
     signOut,
     refresh: () => fetchUser({ force: true }),

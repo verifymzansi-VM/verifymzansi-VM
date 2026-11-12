@@ -167,7 +167,7 @@ describe("UnifiedLayout", () => {
     }
   );
 
-  it("does not render the profile identity overlay on the video slide", () => {
+  it("shows the profile identity overlay over the video on phones only, above the controls", () => {
     render(
       <UnifiedLayout
         family="showroom"
@@ -182,8 +182,11 @@ describe("UnifiedLayout", () => {
       />
     );
 
-    expect(screen.queryByAltText("Unified Studio logo")).not.toBeInTheDocument();
-    expect(screen.queryByText("Featured Profile")).not.toBeInTheDocument();
+    // From 768 px up the video keeps the whole frame, as before; on phones the
+    // name sits above the controls so the first screen says what the business is.
+    const overlay = screen.getByText("Featured Profile").closest("[data-post-caption]");
+    expect(overlay).toHaveAttribute("aria-hidden", "true");
+    expect(overlay).toHaveClass("md:hidden", "bottom-16", "pointer-events-none");
     expect(screen.getByLabelText("Unified Studio video")).toHaveAttribute(
       "data-poster-priority",
       "true"
@@ -212,7 +215,11 @@ describe("UnifiedLayout", () => {
     fireEvent.click(screen.getByRole("button", { name: "View cover photo" }));
 
     expect(screen.getByAltText("Unified Studio logo")).toBeInTheDocument();
-    expect(screen.getByText("Featured Profile")).toBeInTheDocument();
+    const overlay = screen.getByText("Featured Profile").closest("[data-post-caption]");
+    // A repeat of the page heading: screen readers hear the name once.
+    expect(overlay).toHaveAttribute("aria-hidden", "true");
+    expect(overlay).toHaveClass("bottom-0");
+    expect(overlay).not.toHaveClass("md:hidden");
   });
 
   it("keeps the cover photo as a distinct media step alongside the video and gallery photos", () => {
