@@ -651,6 +651,207 @@ previous summary capped at 7 days, the 400-day clean-up); that only
 payment's problems go with it; and that apply, rollback and re-apply return the
 same fingerprints.
 
+## The current Terms (posting-v4) and paid plans paused, 12 November 2026
+
+Two updates, applied in this order. Both are pending.
+
+### 1. Publish the Terms text: `20261112122001_publish_posting_terms_v4.sql`
+
+It publishes posting terms version `posting-v4`
+(`src/lib/legal/terms-documents/posting-v4.json`, canonical hash
+`HnObmeyoZjiuPQSF0z0aUgs_t_st87EUjVQGjDahozg`): it inserts one row into
+`private.posting_terms_versions` and changes no function, table, grant,
+acceptance or current version. It refuses (55000) when the current version is
+not `posting-v3` (or already `posting-v4`), or when `posting-v4` is already
+published with another document, and it checks before committing that the
+current version did not change. `posting-v1` to `posting-v3` are unchanged.
+
+The site has one set of Terms, shown at `/terms` with no version name (owner
+decision of 12 November 2026: there are no members yet). `posting-v4` is only
+the database's and catalogue's id for that text. It states Pricing v2 (roadmap
+Milestone 11, P1): posting slots priced per slot and per 30-day period with no
+discounts; Individual slots at R69 for 30 days, R207 for 90 days or R414 for 180
+days in any posting area; 1 to 4 Individual slots per ID-reviewed person, each
+with its own end date; slots on sale only while the pricing page offers them; at
+most 4 posts going live per paid slot in each 30-day period (a new post or an
+ended post brought back; edits do not count); one video per post, at most 2
+minutes (events 1 minute); prepaid, no automatic renewal, paid time from the
+confirmed payment, renewing early adds the new days after the current end; a
+price change applies only to new purchases; orders of R10,000 or less online,
+more by an invoice issued first and paid by EFT; no payment fees added; the
+cooling-off consent before payment (ECT Act section 42(2)), recorded before an
+invoice is paid; not registered for VAT; the refund and cancellation policy
+(cancelling by writing to billing@verifymzansi.com); a paid slot ends for a
+breach only after written notice and, for an individual, 20 business days to
+remedy it; the unchanged expiry, sold and paused rules with the 3-day grace; the
+free 7-day first post from its approval; and partner referral links.
+
+### 2. Make it current and pause paid plans: `20261112173841_switch_posting_terms_v4.sql`
+
+Owner decision of 12 November 2026: switch at once, sell nothing at the old
+prices, and keep paid plans paused until the R69 checkout (roadmap P2) is built
+and tested. In one transaction the update:
+
+- takes every plan version on sale off sale (sets `retired_at`, the only
+  catalogue column that may change; rows stay as history, prices are never
+  edited) and records each one in the new private table
+  `private.plan_sale_pauses` (row level security on, no API role access), so the
+  rollback can put exactly those plans back;
+- replaces `internal.set_post_media` so that a draft without a slot prepares the
+  free first post's media allowance (10 photos, 1 video,
+  `internal.grant_intro_trial`'s) when no plan is on sale; before, it took the
+  largest allowance of the plans on sale and, with none, refused ("no current
+  media allowance available"), so a free post could not add photos;
+- makes `posting-v4` current. Every member accepts it once before their next
+  submission or edit.
+
+It refuses (55000) unless `posting-v4` is published with the hash above and the
+current version is `posting-v3` (or already `posting-v4`). Run again, it changes
+nothing and never takes off sale a plan published after the switch (the R69
+plans of P2). Entitlements, payments, add-on versions (add-on sales stay paused
+by the website) and the free posting paths (free first post, free events,
+sponsored places, staff grants) are untouched. A plan payment already pending is
+left alone: if it is paid it settles as before.
+
+The website release that goes with it (catalogue `active_version` posting-v4)
+reads what is on sale from the database: with no plan on sale the pricing,
+billing, Advertise and checkout pages show the R69 prices with "Opens soon" and
+"Paid slots open soon", nothing links to checkout, and the checkout route
+refuses with `plan_sales_paused` (403) before it creates a payment.
+Multi-listing and sponsor prices are hidden (`PACKAGES_ON_SALE`). Former
+`/terms/versions/*` addresses redirect to `/terms` (308).
+
+**Order.** The release reads the catalogue on every request, so it is correct on
+either side of the switch: before it, it sells the old plans under the
+posting-v3 Terms as today; after it, it sells nothing. The website deployed
+before this release, however, would show its built-in old prices (R50, R140,
+R250) once the database lists no plan. So:
+
+1. merge, then apply `20261112122001_publish_posting_terms_v4.sql` (any time);
+2. deploy the release;
+3. then apply `20261112173841_switch_posting_terms_v4.sql`.
+
+**Applying.** For each update, run its preflight
+(`../preflight/<update>.check.sql`) unchanged in the SQL editor; it is read
+only. Continue only if the result is the single "summary" row: for the first,
+"current posting-v3; ...; posting-v4 not published (update not applied)"; for
+the switch, "current posting-v3 (update not applied); plans on sale: 17; plans
+taken off sale by the update: 0; pending plan payments: 0". Run the update (it
+waits at most 5 seconds for its rows and stops without changing anything if they
+are busy; run it again), then the preflight again: "posting-v4 published (update
+already applied)", then "current posting-v4 (update already applied); plans on
+sale: 0; plans taken off sale by the update: 17". After the switch, `/terms`
+shows the new text and `/pricing` shows "Opens soon".
+
+**Rollback.** `../rollback/20261112173841_switch_posting_terms_v4.down.sql`
+restores the previous `internal.set_post_media`, makes `posting-v3` current
+again, puts exactly the recorded plans back on sale (switching the catalogue
+guard trigger off for that one statement) and drops the record table. It refuses
+(55000) once a plan published after the switch is on sale, and when
+`internal.set_post_media` is neither the body the switch installed nor the one
+before it (md5 of the body): a later update (such as P2's) changed it, so undo
+that update first; the rollback never silently reverts it. The switch itself
+refuses the same way when the body it replaces is not the reviewed one.
+
+Rollback order: once the switch has run, **never roll back the website alone.**
+The earlier website's terms catalogue has no `posting-v4`, so with `posting-v4`
+current it refuses the current terms (`assertPublishedPostingTerms` throws),
+`/api/foundation/posting-terms` answers 503 and nobody can submit or edit a
+post. Roll back in this order:
+
+1. run the switch rollback above (`posting-v3` current, the old plans on sale);
+2. then revert this pull request and deploy the earlier website, which sells the
+   old plans under `posting-v3`.
+
+The first update's rollback changes nothing (published terms are immutable; the
+row then stays unused, like `posting-v2`) and refuses while `posting-v4` is
+current. Before the switch has run, the website alone can be reverted at any
+time.
+
+**Tests.** `scripts/test-foundation-posting-terms-v4.mjs` and
+`scripts/test-foundation-posting-terms-switch.mjs` (both in
+`pnpm db:foundation:lifecycle-test`) prove on the throwaway database: the
+shipped document's hash is the one inserted; the preflights are read only and
+report each state; refusals change nothing; after the first update `posting-v3`
+stays current and nobody can accept `posting-v4`; after the switch `posting-v4`
+is current, no plan is on sale, the public catalogue lists none, buying an old
+plan is refused, a held slot is untouched, the record table is closed to the API
+roles, members accept `posting-v4` once, a re-run never retires a later plan,
+neither the switch nor its rollback overwrites a later `set_post_media`, and
+apply, rollback and re-apply put exactly the same plans back and return the same
+schema fingerprint. The other lifecycle checks that still buy a plan after later
+updates publish a copy of it first (`planOnSale` in
+`scripts/lib/foundation-sql-checks.mjs`), as the browser test copy's checkout
+specs do (`e2e/foundation/support/plan-sales.ts`).
+
+## Google sign-ups start with their name, 12 November 2026
+
+`20261112181954_google_name_at_signup.sql` is not applied yet. It needs no
+earlier pending update and changes no table, grant or API command.
+
+When an Auth user is created, the trigger `create_account_profile` on
+`auth.users` (`internal.create_account_profile`) creates the member's profile.
+It read only the sign-up detail `display_name`, which the website's email
+sign-up form sends. Google sign-up stores the name as `full_name` and `name`
+(sometimes also `given_name` and `family_name`), so every Google account started
+with no display name: its profile page and public name ("Thando D.") stayed
+empty until the member typed one. From this update:
+
+- **A name from the sign-up details.** New
+  `internal.signup_display_name(details)` returns the first of `display_name`,
+  `full_name`, `name`, and `given_name` + space + `family_name` (only when both
+  are non-empty strings) that, trimmed and NFC-normalised, passes the person
+  name rule (`internal.person_name_valid`) and is not reserved
+  (`internal.person_name_reserved`); otherwise nothing. Sign-up details are
+  written by the member or the sign-in provider, so they give only a display
+  name the member could also have typed: never a legal name, a name lock, a role
+  or a verification. No API role can run it.
+- **New profiles.** `internal.create_account_profile` uses it. Anonymous users
+  are still skipped and an existing profile is left as it is.
+- **Existing profiles, once.** A profile with no display name and no locked
+  legal name, of a non-anonymous Auth user that is not deleted, gets the name
+  from that user's sign-up details, with its revision raised by one as an
+  ordinary profile save does: a page that still holds the earlier revision is
+  refused ("profile changed; reload it") and reloads. Profiles the details give
+  no valid name stay without one. Running the update again names nobody twice.
+
+**Order: any time.** No website release depends on it. Until it is applied and
+recorded, the release preflight lists it as "behind" (a warning; it has no
+command to probe). Apply and record updates in filename order: if an update with
+an earlier name is still pending, apply that one first.
+
+**Applying.**
+
+1. Run `../preflight/20261112181954_google_name_at_signup.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "reviewed body, update not applied". It also counts the
+   profiles without a name and those the update will name.
+2. Run the update, then the preflight again: it must now read "already applied"
+   with "of which the update names: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261112181954_google_name_at_signup.down.sql` (only with the
+owner's decision; prefer a forward fix). It restores the profile trigger byte
+for byte and drops the helper. Names the update gave stay: each passes the
+person name rule, and the member can change it.
+
+`node --import tsx scripts/test-foundation-google-signup-name.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves, on the throwaway database: that
+Google sign-ups got no name before; that the preflight is read only, counts the
+profiles the update will name, and reports a drifted trigger or a helper with
+another body, which the update refuses, as it refuses a premature rollback; that
+the one-time fill names unnamed profiles from `full_name`, `name` or
+`given_name` and `family_name` and leaves named, locked, anonymous, deleted,
+invalid and reserved ones untouched; that a save holding the earlier revision is
+refused; the order of the candidates, fallback past an invalid or reserved one,
+trimming and NFC, and the names refused; that sign-up details set no legal name,
+lock or role; who may run the helper; and that apply, a repeated apply, rollback
+and re-apply return the same fingerprints.
+
 ## The free week starts at the first approved post, 10 November 2026
 
 `20261110045944_intro_trial_at_first_approval.sql` is applied: the coordinator
@@ -2101,5 +2302,8 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   supabase_admin rows, after "already applied"; production fingerprint after all
   five updates matched the replay (section No default rights in schema public)
 - `20261112080000_payment_problem_alerts.sql`: pending
+- `20261112122001_publish_posting_terms_v4.sql`: pending
+- `20261112173841_switch_posting_terms_v4.sql`: pending
+- `20261112181954_google_name_at_signup.sql`: pending
 
 <!-- applied-register:end -->

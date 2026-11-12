@@ -43,7 +43,9 @@ import {
   SPONSOR_PROGRAMME_PRICES,
   URGENT_DURATION_DAYS,
   formatPlanPrice,
+  PACKAGES_ON_SALE,
 } from "@/lib/constants/pricing";
+import { PLAN_SALES_PAUSED_NOTE } from "@/lib/billing/plan-sales";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { cn } from "@/lib/utils";
@@ -51,7 +53,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Advertise",
   description:
-    "Why advertise on VerifyMzansi, and which package fits: individual posts, multi-listing for dealers and agencies, and Business Sponsor packages that support local businesses.",
+    "Why advertise on VerifyMzansi, and which package fits: individual posts and Business Sponsor packages that support local businesses.",
   alternates: { canonical: "https://verifymzansi.com/advertise" },
 };
 
@@ -200,7 +202,7 @@ const PACKAGES: readonly PackageDetail[] = [
       "An ID reviewed sticker, plus optional CIPC registered and Seen stickers for businesses",
       "Photos and a short video on your post",
       "Calls and WhatsApp straight to you, with no commission",
-      "Your first post free once your ID is reviewed (7 days, or 30 while launch spaces last), then 30, 90 or 180 days",
+      "Your first post free once your ID is reviewed (7 days), then 30, 90 or 180 days",
       "Your package sets the posting limits and how long a post stays active",
       "Up to 2 approved edits per live post",
     ],
@@ -384,9 +386,11 @@ function PackageSection({
             <Button asChild variant="ink" className="h-11 rounded-full">
               <Link href={pkg.cta.href}>{pkg.cta.label}</Link>
             </Button>
-            <Button asChild variant="outline" className="h-11 rounded-full">
-              <Link href={pkg.pricesHref}>{pkg.pricesLabel}</Link>
-            </Button>
+            {PACKAGES_ON_SALE || pkg.id === "individual" ? (
+              <Button asChild variant="outline" className="h-11 rounded-full">
+                <Link href={pkg.pricesHref}>{pkg.pricesLabel}</Link>
+              </Button>
+            ) : null}
           </div>
         </Reveal>
       </div>
@@ -435,6 +439,9 @@ export default async function AdvertisePage() {
     return plan ? formatPlanPrice(plan.priceCents) : "—";
   };
   const sponsorMax = SPONSOR_PROGRAMME_PRICES[SPONSOR_PROGRAMME_PRICES.length - 1]!;
+  // Multi-listing is not on sale under posting-v4 and sponsor fees are agreed in
+  // writing until their new prices are published: hide both price lists.
+  const packages = PACKAGES.filter((pkg) => PACKAGES_ON_SALE || pkg.id !== "multi-listing");
 
   const sheets: Record<PackageDetail["id"], PriceSheetData> = {
     individual: {
@@ -447,8 +454,9 @@ export default async function AdvertisePage() {
         })),
         { label: "Events", cells: ["Always free"] },
       ],
-      footnote:
-        "The same price in every section. Your first post is free once your ID is reviewed: 7 days, or 30 days while launch spaces last.",
+      footnote: `The same price in every section. Your first post is free once your ID is reviewed: 7 days.${
+        catalog.onSale ? "" : ` ${PLAN_SALES_PAUSED_NOTE}`
+      }`,
     },
     "multi-listing": {
       caption: "Multi-listing price (total for the term)",
@@ -465,17 +473,23 @@ export default async function AdvertisePage() {
       ],
       footnote: `${ENTERPRISE_ADMINS_INCLUDED} named administrators included.`,
     },
-    programmes: {
-      caption: "Sponsor fee (total for the term)",
-      columns: ["Businesses", "90 days", "180 days"],
-      rows: [
-        ...SPONSOR_PROGRAMME_PRICES.map((row) => ({
-          label: `Up to ${row.capacity}`,
-          cells: [formatPlanPrice(row.price90Cents), formatPlanPrice(row.price180Cents)],
-        })),
-        { label: `More than ${sponsorMax.capacity}`, cells: ["Custom proposal"] },
-      ],
-    },
+    programmes: PACKAGES_ON_SALE
+      ? {
+          caption: "Sponsor fee (total for the term)",
+          columns: ["Businesses", "90 days", "180 days"],
+          rows: [
+            ...SPONSOR_PROGRAMME_PRICES.map((row) => ({
+              label: `Up to ${row.capacity}`,
+              cells: [formatPlanPrice(row.price90Cents), formatPlanPrice(row.price180Cents)],
+            })),
+            { label: `More than ${sponsorMax.capacity}`, cells: ["Custom proposal"] },
+          ],
+        }
+      : {
+          caption: "Sponsor fee",
+          columns: ["Businesses", "Fee"],
+          rows: [{ label: "Any number", cells: ["By written proposal"] }],
+        },
   };
 
   return (
@@ -632,12 +646,17 @@ export default async function AdvertisePage() {
               Which one is for you?
             </h2>
             <p className="section-lede">
-              Three ways to advertise. Pick the one that matches what you do, then read the full
-              details below.
+              {packages.length === 3 ? "Three" : "Two"} ways to advertise. Pick the one that matches
+              what you do, then read the full details below.
             </p>
             <Reveal>
-              <ul className="mt-8 grid gap-4 lg:grid-cols-3">
-                {PACKAGES.map(({ id, icon: Icon, name, who }) => (
+              <ul
+                className={cn(
+                  "mt-8 grid gap-4",
+                  packages.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"
+                )}
+              >
+                {packages.map(({ id, icon: Icon, name, who }) => (
                   <SpotlightCard
                     as="li"
                     key={id}
@@ -662,7 +681,7 @@ export default async function AdvertisePage() {
         </section>
 
         {/* 4 ── The three packages in full ──────────────────── */}
-        {PACKAGES.map((pkg, index) => (
+        {packages.map((pkg, index) => (
           <PackageSection key={pkg.id} pkg={pkg} sheet={sheets[pkg.id]} shaded={index % 2 === 1}>
             {pkg.id === "programmes" ? (
               <div className="rounded-2xl border border-brand-gold/40 bg-brand-gold/10 p-4 text-sm">
@@ -897,8 +916,7 @@ export default async function AdvertisePage() {
                 Ready when you are.
               </h2>
               <p className="mt-2 text-white/75">
-                Your first post is free once your ID is reviewed: 7 days, or 30 days while launch
-                spaces last. Organisations can email{" "}
+                Your first post is free once your ID is reviewed: 7 days. Organisations can email{" "}
                 <a
                   className="font-semibold text-brand-gold-300 underline-offset-4 hover:underline"
                   href={`mailto:${HELLO_CONTACT_EMAIL}`}
