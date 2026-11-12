@@ -227,6 +227,20 @@ export function PromotionsExplorer() {
     [activeTab, filters, pathname, router]
   );
 
+  // `type=event` only names the Events tab, so it is not a filter of its own.
+  // A page past the last one is not "nothing yet" either.
+  const hasActiveFilters = Boolean(
+    filters.page > 1 ||
+    filters.query ||
+    filters.category ||
+    filters.province ||
+    filters.city ||
+    filters.businessId ||
+    filters.eventState ||
+    filters.subcategory ||
+    filters.eventType
+  );
+
   const cities = filters.province ? getCitiesForProvince(filters.province) : [];
   const clearQueryFilter = () => {
     updateFilters({ q: undefined });
@@ -512,7 +526,7 @@ export function PromotionsExplorer() {
     "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200";
   const inactiveTabClasses = "border-transparent text-muted-foreground hover:bg-muted/60";
   const eventTabActiveClasses =
-    "border-amber-500 bg-amber-500 text-white shadow-sm shadow-amber-500/30 hover:bg-amber-600 dark:border-amber-400 dark:bg-amber-400 dark:text-amber-950";
+    "border-amber-500 bg-amber-500 text-amber-950 shadow-sm shadow-amber-500/30 hover:bg-amber-600 dark:border-amber-400 dark:bg-amber-400 dark:text-amber-950";
   const eventTabInactiveClasses =
     "border-amber-300 bg-amber-50 text-amber-800 shadow-sm shadow-amber-200/70 hover:border-amber-400 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-500/70 dark:bg-amber-500/15 dark:text-amber-200 dark:shadow-none dark:hover:bg-amber-500/25";
   const tabClasses = (tab: ActiveTab, selected: boolean) => {
@@ -536,6 +550,15 @@ export function PromotionsExplorer() {
         ? `tourism business${total === 1 ? "" : "es"}`
         : `event${total === 1 ? "" : "s"}`;
   const EmptyIcon = activeTab === "events" ? CalendarDays : TreePalm;
+  // With no filter set the area is simply empty: say so instead of blaming filters.
+  const emptyTitles = hasActiveFilters
+    ? {
+        all: "Nothing matches your filters",
+        tourism: "No tourism businesses match your filters",
+        events: "No events match your filters",
+      }
+    : { all: "No stays or events yet", tourism: "No stays or places yet", events: "No events yet" };
+  const emptyTitle = emptyTitles[activeTab];
 
   return (
     <div className="container-page py-8 space-y-7 lg:py-10">
@@ -638,15 +661,13 @@ export function PromotionsExplorer() {
           ) : gridItems.length === 0 ? (
             <GridStateMessage
               tone="teal"
-              state="filtered-empty"
-              title={
-                activeTab === "all"
-                  ? "Nothing matches your filters"
-                  : activeTab === "tourism"
-                    ? "No tourism businesses match your filters"
-                    : "No events match your filters"
+              state={hasActiveFilters ? "filtered-empty" : "empty"}
+              title={emptyTitle}
+              body={
+                hasActiveFilters
+                  ? "Try broadening the filters or clearing a location filter."
+                  : "Be the first ID-reviewed host to list on Tourism & Events."
               }
-              body="Try broadening the filters or clearing a location filter."
               icon={<EmptyIcon className="h-7 w-7 text-teal-600 dark:text-teal-300" />}
               testId="promotions-grid-empty"
             >
@@ -656,9 +677,11 @@ export function PromotionsExplorer() {
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
-              <Button variant="outline" size="sm" className="h-11" onClick={clearAllFilters}>
-                Clear all filters
-              </Button>
+              {hasActiveFilters ? (
+                <Button variant="outline" size="sm" className="h-11" onClick={clearAllFilters}>
+                  Clear all filters
+                </Button>
+              ) : null}
             </GridStateMessage>
           ) : (
             <>

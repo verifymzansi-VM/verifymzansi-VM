@@ -15,7 +15,9 @@ test.describe("Marketplace showroom desktop drag", () => {
     const showroomSection = page.locator("section[aria-roledescription='carousel']").first();
     await expect(showroomSection).toBeVisible();
 
-    const liveRegion = showroomSection.locator('[aria-live="polite"]').first();
+    const liveRegion = showroomSection
+      .locator("[aria-live]")
+      .filter({ hasText: /^Slide \d+ of \d+$/ });
     await expect(liveRegion).toContainText("Slide 1 of");
 
     // Ambient videos stay poster-first until an explicit play action
@@ -60,7 +62,9 @@ test.describe("Marketplace showroom desktop drag", () => {
     const showroomSection = page.locator("section[aria-roledescription='carousel']").first();
     await expect(showroomSection).toBeVisible();
 
-    const liveRegion = showroomSection.locator('[aria-live="polite"]').first();
+    const liveRegion = showroomSection
+      .locator("[aria-live]")
+      .filter({ hasText: /^Slide \d+ of \d+$/ });
     await expect(liveRegion).toContainText("Slide 1 of");
 
     const activeCardLink = showroomSection.getByRole("link", { name: /^Open / }).first();
