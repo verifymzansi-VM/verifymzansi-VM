@@ -3,6 +3,7 @@
 // fail with the current check's name, synthetic API-role sessions, replaying
 // the updates before the one under test and the read-only preflight check.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { replaySteps } from "./foundation-replay.mjs";
 import { applySteps } from "./foundation-sql-lint.mjs";
 
@@ -82,4 +83,42 @@ export function assertReadOnlyPreflight(database, preflight) {
   ]);
   assert.notEqual(write.status, 0);
   assert.match(write.stderr, /ERROR:\s+25006:/);
+}
+
+/**
+ * Read-only views of `database` an update's behaviour check uses: the schema
+ * fingerprint, the update's preflight result as rows of [kind, detail], a
+ * function body's md5 ("missing" when absent), and synthetic members (an
+ * Auth user with a live session), written as the database owner.
+ */
+export function updateCheckViews(database, current, { preflight }) {
+  const { q, json } = sqlHelpers(database, current);
+  const fingerprintSql = readFileSync("database/foundation/fingerprint.sql", "utf8");
+  let membersReady = false;
+  return {
+    fingerprint: () => q(`set search_path to pg_catalog;\n${fingerprintSql}`),
+    preflightRows: () =>
+      q(preflight)
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => line.split("|")),
+    bodyMd5: (signature) =>
+      q(
+        `select coalesce((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('${signature}')),'missing');`
+      ),
+    syntheticMember: (label) => {
+      if (!membersReady) {
+        q(`create schema if not exists vmtest;
+          create or replace function vmtest.member(p_label text) returns jsonb language plpgsql as $$
+          declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); begin
+            insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
+              values(uid,p_label||'-'||uid||'@example.invalid',now(),jsonb_build_object('display_name','Fixture '||p_label));
+            insert into auth.sessions(id,user_id,aal) values(sid,uid,'aal1');
+            return jsonb_build_object('id',uid,'session',sid);
+          end$$;`);
+        membersReady = true;
+      }
+      return json(`select vmtest.member('${label}');`);
+    },
+  };
 }

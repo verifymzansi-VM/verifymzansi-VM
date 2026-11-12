@@ -240,3 +240,55 @@ describe("the retired plan-change and cancel routes", () => {
     });
   });
 });
+
+describe("failed billing requests are logged by reason code", () => {
+  const spies = { error: vi.fn(), warn: vi.fn() };
+  const logged = (level: "error" | "warn") =>
+    spies[level].mock.calls
+      .map(([line]) => String(line))
+      .filter((line) => line.includes("Billing request"));
+  beforeEach(() => {
+    spies.error = vi.spyOn(console, "error").mockImplementation(() => undefined) as never;
+    spies.warn = vi.spyOn(console, "warn").mockImplementation(() => undefined) as never;
+  });
+
+  it("logs an outage with the operation and the kind of failure only", async () => {
+    vi.mocked(startFoundationCheckout).mockRejectedValue(
+      Object.assign(new Error("PRIVATE_PROVIDER_DETAIL"), { name: "OzowProviderError" })
+    );
+    const result = await json(await handleFoundationBillingRoute(request({ planId }), "checkout"));
+    expect(result).toEqual({
+      status: 503,
+      body: { error: "Billing is temporarily unavailable" },
+    });
+    const [line] = logged("error");
+    expect(line).toContain("Billing request failed");
+    expect(line).toContain('"operation":"checkout"');
+    expect(line).toContain('"reason":"provider_unavailable"');
+    expect(line).not.toContain("PRIVATE");
+    expect(line).not.toContain(account);
+  });
+
+  it("logs a refused request with its code, and leaves the member's reply as it was", async () => {
+    vi.mocked(startFoundationCheckout).mockRejectedValue(
+      new FoundationPendingPaymentError({
+        id: uuid(6),
+        checkoutUrl: null,
+        statusUrl: "https://verifymzansi.com/billing/success",
+        canCancel: true,
+      })
+    );
+    const result = await json(await handleFoundationBillingRoute(request({ planId }), "checkout"));
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe("PENDING_PAYMENT_EXISTS");
+    const [line] = logged("warn");
+    expect(line).toContain("Billing request refused");
+    expect(line).toContain('"reason":"PENDING_PAYMENT_EXISTS"');
+  });
+
+  it("logs nothing for a request the member can fix", async () => {
+    vi.mocked(startFoundationCheckout).mockRejectedValue(new FoundationBillingError(400));
+    expect((await handleFoundationBillingRoute(request({ planId }), "checkout")).status).toBe(400);
+    expect([...logged("error"), ...logged("warn")]).toEqual([]);
+  });
+});

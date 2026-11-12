@@ -33,7 +33,7 @@ const auditEvent = z.strictObject({
   action: z.string().min(1).max(150),
   reason: z.string().max(5000).nullable(),
 });
-export const foundationAuditPage = z
+const foundationAuditPage = z
   .strictObject({
     version: z.literal(1),
     items: z.array(auditEvent).max(100),
@@ -49,7 +49,6 @@ export const foundationAuditPage = z
         value.items.at(-1)?.occurred_at === value.next_cursor.before_at
       )
   );
-export type FoundationAuditPage = z.infer<typeof foundationAuditPage>;
 
 const foundationDecisionRequest = z
   .strictObject({

@@ -60,9 +60,11 @@ Security defects are never baselined. Existing duplication is recorded in
 `scripts/audit-baselines/duplication.json`, including fragment/file-pair hashes
 and budgets. A fresh scan must cover src, scripts and workers. Empty/malformed
 reports, nonfinite totals, missing roots, new fragments and budget regressions
-block both local and CI gates. Baseline updates require review of exact debt;
-environment variables cannot increase the budget. Lint/Knip failures remain
-visible until a precise non-security baseline or correction is reviewed.
+block both local and CI gates. The budget is a ratchet: recorded fragments that
+no longer exist, or clone and line budgets above the scan, also fail until the
+baseline is lowered. Baseline updates require review of exact debt; environment
+variables cannot increase the budget. Lint/Knip failures remain visible until a
+precise non-security baseline or correction is reviewed.
 
 The former Supabase security advisor check (`supabase:advisor:security`, check
 `security-advisor`) reviewed controls of the retired source schema and was

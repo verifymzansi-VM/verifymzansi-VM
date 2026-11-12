@@ -188,6 +188,30 @@ export class MockOzow {
     return { status: 302, headers: { Location: returnUrl } };
   }
 
+  /**
+   * A transaction at the test bank that no notice reports (a lost or later
+   * notice): only the lookup stand-in shows it, so the status check finds it.
+   * `amountCents` overrides the payment's amount. Returns its id.
+   */
+  addTransaction(paymentId: string, status: "Successful" | "Error", amountCents?: number) {
+    const stored = storedRequest(paymentId);
+    if (stored.requestId !== `mock-${paymentId}`)
+      throw new Error("The mock provider has no request for this payment");
+    const transactionId = randomUUID();
+    const list = this.transactions.get(stored.requestId) ?? [];
+    list.push({
+      id: transactionId,
+      paymentRequestId: stored.requestId,
+      merchantReference: stored.merchantReference,
+      siteCode: LOCAL_OZOW_SITE_CODE,
+      status,
+      amount: { currency: "ZAR", value: (amountCents ?? stored.amountCents) / 100 },
+    });
+    this.transactions.set(stored.requestId, list);
+    this.made.push({ paymentId, transactionId, status });
+    return transactionId;
+  }
+
   /** The test bank's answer: a transaction on the request, then the notice. */
   private async settle(paymentId: string, status: "Successful" | "Error") {
     const stored = storedRequest(paymentId);

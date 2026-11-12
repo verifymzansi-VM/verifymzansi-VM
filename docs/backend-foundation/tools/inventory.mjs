@@ -6,6 +6,9 @@ import ts from "typescript";
 
 const root = process.cwd();
 const output = path.join(root, "docs/backend-foundation/evidence");
+// The three tracked inventories live outside docs/ with the schema map.
+const snapshot = path.join(root, "database/source-inventory");
+const tracked = new Set(["source-inventory", "page-inventory", "route-inventory"]);
 const walk = (dir) =>
   fs
     .readdirSync(dir, { withFileTypes: true })
@@ -205,5 +208,8 @@ for (const [name, data] of Object.entries({
   "rpc-drift": drift,
   "inventory-summary": summary,
 }))
-  fs.writeFileSync(path.join(output, name + ".json"), JSON.stringify(data, null, 2) + "\n");
+  fs.writeFileSync(
+    path.join(tracked.has(name) ? snapshot : output, name + ".json"),
+    JSON.stringify(data, null, 2) + "\n"
+  );
 console.log(JSON.stringify(summary, null, 2));
