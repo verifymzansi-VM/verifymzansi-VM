@@ -17,7 +17,9 @@ begin
     end loop;
     return null;
   end if;
-  if new.status<>'complete' then return null; end if;
+  -- Only a delivered purchase earns commission: money sent to staff for
+  -- reconciliation (needs_reconciliation) earns none.
+  if new.status<>'complete' or new.fulfillment_status<>'fulfilled' then return null; end if;
   select * into acq from private.account_acquisitions a where a.account_id=new.owner_id;
   if acq.partner_id is null then return null; end if;
   select * into partner from private.partners p where p.id=acq.partner_id;

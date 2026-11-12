@@ -1113,6 +1113,24 @@ describe("the Individual slot checkout", () => {
     await expect(refused).rejects.toThrow(message);
     expect(machine).not.toHaveBeenCalled();
   });
+  it("names the unpaid order when a slot payment is already open at Ozow", async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ...quote, amount_cents: "20700", slots: 3 },
+      error: null,
+    });
+    machine.mockResolvedValueOnce({
+      data: { ...openRequest(), amount_cents: "20700" },
+      error: null,
+    });
+    await expect(
+      slotCheckout({ ...order, slots: 2, expectedTotalCents: 13800 })
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "PENDING_PAYMENT_EXISTS",
+      pendingPayment: { id: payment, slots: 3, amountCents: 20700 },
+    });
+    expect(createOzowHostedPayment).not.toHaveBeenCalled();
+  });
   it("keeps any other refusal generic", async () => {
     rpc.mockResolvedValueOnce({ data: null, error: { code: "22023" } });
     await expect(slotCheckout()).rejects.toMatchObject({ status: 400, code: undefined });

@@ -28,16 +28,34 @@ async function buySlotHref() {
   }
 }
 
+/** The member's slots; null when they cannot be read right now. */
+async function mySlots() {
+  try {
+    return await readFoundationMySlots((await readFoundationServerSession()).api);
+  } catch (error) {
+    logDegradedRead(log, "My slots unavailable", error);
+    return null;
+  }
+}
+
 export default async function MySlotsPage() {
-  const { api } = await readFoundationServerSession();
-  const [mine, buyHref] = await Promise.all([readFoundationMySlots(api), buySlotHref()]);
+  const [mine, buyHref] = await Promise.all([mySlots(), buySlotHref()]);
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
         title="My slots"
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "My slots" }]}
       />
-      <MySlots slots={mine.slots} individual={mine.individual} buyHref={buyHref} />
+      {mine ? (
+        <MySlots slots={mine.slots} individual={mine.individual} buyHref={buyHref} />
+      ) : (
+        <p
+          role="status"
+          className="rounded-2xl border border-border p-5 text-sm text-muted-foreground"
+        >
+          Your slots cannot be shown right now. Please try again in a few minutes.
+        </p>
+      )}
     </div>
   );
 }

@@ -59,6 +59,9 @@ interface PendingPayment {
   checkoutUrl?: string | null;
   statusUrl?: string | null;
   canCancel?: boolean;
+  /** An unpaid slot order: its number of slots and its total. */
+  slots?: number;
+  amountCents?: number;
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
@@ -487,6 +490,13 @@ export function CheckoutConfirm({
                     </Link>
                   </label>
                 </div>
+              ) : null}
+              {pendingPayment &&
+              typeof pendingPayment.slots === "number" &&
+              typeof pendingPayment.amountCents === "number" ? (
+                <p data-testid="unpaid-order" className="text-sm font-medium text-foreground">
+                  {`Unpaid order: ${pendingPayment.slots} ${pendingPayment.slots === 1 ? "slot" : "slots"}, ${formatPlanPrice(pendingPayment.amountCents)}`}
+                </p>
               ) : null}
               {pendingPayment ? (
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">

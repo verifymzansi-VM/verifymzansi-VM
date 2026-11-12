@@ -13,8 +13,9 @@
 -- It takes the three Individual slot plans off sale (retired_at; the rows stay
 -- as history, as for every earlier plan), restores the previous bodies of
 -- internal.start_checkout, internal.apply_provider_event, internal.activate_post,
--- internal.reverse_payment, internal.payment_partner_commission and
--- internal.partner_commission_guard, drops the update's commands, helpers,
+-- internal.reverse_payment, internal.payment_partner_commission,
+-- internal.partner_commission_guard and
+-- internal.record_frontend_staff_payment_reversal, drops the update's commands, helpers,
 -- triggers, tables, columns and indexes, puts back the one-entitlement and
 -- one-commission-per-payment unique constraints and removes the
 -- slots:raise_limit capability. Nothing is then on sale, as after
@@ -40,23 +41,25 @@ begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.apply_provider_event(jsonb)')) is distinct from '8a226003da741381225c11dfd1e44308'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.activate_post(uuid)')) is distinct from 'd9dd75c96dd1cce5b490eaafffe308be'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.reverse_payment(uuid,text,text)')) is distinct from '66005adb9e06b17e689dbac47ce93d5a'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_partner_commission()')) is distinct from '98a544c767ef4aeac648bc6d387a4a18'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_partner_commission()')) is distinct from 'e99f071fae090328566a61186843c6e2'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.partner_commission_guard()')) is distinct from 'ddab4845789fef80739183deeaf75e4d'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_line_guard()')) is distinct from 'b15e1db8b48ae9de6b4372ecef62ceed'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slot_limit_guard()')) is distinct from '1af83fc4a5bd4555a8b99412f8acc5f1'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slot_plan(text)')) is distinct from 'c0c1d06dc52122641d02db6b1364be75'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slot_identity(uuid)')) is distinct from '4e4552c83cb629e96f1300060eeff16b'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slot_limit(text)')) is distinct from '90ecd5c02572cc9831468458f3ae0e2d'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slots_counted(text,uuid,uuid)')) is distinct from '55a1c8d0c62efce386f1b9a9751ffd5c'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slots_counted(text,uuid,uuid)')) is distinct from 'e3ec1bf332a4d2e93760d1a3d68f966b'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slot_business_checked(uuid)')) is distinct from 'e4f858e82e99bf3d1a62ea0b0c2d2820'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.start_slot_checkout(uuid,integer,bigint,boolean)')) is distinct from 'dcbb5be85829b017a483c21b91c95602'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.start_slot_checkout(uuid,integer,bigint,boolean)')) is distinct from 'b9089234d615e837ba75d31f42b8f7bf'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_slot_reversal(uuid,text,text)')) is distinct from 'ee3d342565f07d3b18ba26ac237eeab3'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_slot_reversal(uuid,text,text)')) is distinct from '44758ca0c94c7fedf9bcbeb0fa5a7736'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.record_staff_slot_reversal(uuid,text,text)')) is distinct from '2a52fbde1bcd5076472a92751af0bedb'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_set_individual_slot_limit(uuid,integer,timestamp with time zone,text)')) is distinct from '8713fe5cfb21326c8fe0c4e4d680e1f4'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_set_individual_slot_limit(uuid,integer,timestamp with time zone,text)')) is distinct from '1a10c7ba7f8c2c85674fb3c9a0b1026e'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.staff_set_individual_slot_limit(uuid,integer,timestamp with time zone,text)')) is distinct from '92da468af327632f8d1f4cba716642c9'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_my_slots()')) is distinct from '6e3a3149cf2576ae2d66ab085cc8da58'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_my_slots()')) is distinct from '0f06e8bc211c4506dae9744479d4dbdf'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_frontend_staff_payment_reversal(uuid,text,text)')) is distinct from 'd48c969a572d66b0166fd63f92f68fa3'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.same_identity(uuid,uuid)')) is distinct from '535e5c87d944edd45bd2b3dce28f98b6'
     or to_regclass('private.payment_lines') is null
     or to_regclass('private.individual_slot_limits') is null then
     raise exception 'rollback precondition: the individual slots update is not applied' using errcode='55000';
@@ -445,6 +448,39 @@ $function$;
 alter function internal.partner_commission_guard() owner to postgres;
 revoke all on function internal.partner_commission_guard() from public;
 
+CREATE OR REPLACE FUNCTION internal.record_frontend_staff_payment_reversal(p_id uuid, p_kind text, p_reason text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid;owner uuid;prior private.frontend_payment_reversals;result jsonb;
+begin
+  actor:=internal.staff_actor('payments:refund');
+  if p_id is null or p_kind is null or p_kind not in('refunded','chargeback')
+    or not coalesce(internal.plain_text_valid(p_reason,5,500,true),false)
+    then raise exception 'valid reversal and reason required' using errcode='22023';end if;
+  perform pg_advisory_xact_lock(hashtextextended('frontend-payment-reversal:'||p_id::text,0));
+  perform internal.staff_actor('payments:refund');
+  select * into prior from private.frontend_payment_reversals where payment_id=p_id;
+  if found then
+    if prior.actor_id=actor and prior.kind=p_kind and prior.reason=p_reason then
+      return jsonb_build_object('status',prior.kind,'released_activations',prior.released_activations);
+    end if;
+    raise exception 'payment already reversed' using errcode='PT409';
+  end if;
+  select owner_id into owner from private.payments where id=p_id;
+  if owner=actor then raise exception 'a different staff member must record this reversal' using errcode='42501';end if;
+  result:=internal.reverse_payment(p_id,p_kind,p_reason);
+  perform internal.staff_actor('payments:refund');
+  insert into private.frontend_payment_reversals(payment_id,actor_id,kind,reason,released_activations)
+    values(p_id,actor,p_kind,p_reason,(result->>'released_activations')::integer);
+  return result;
+end$function$;
+alter function internal.record_frontend_staff_payment_reversal(uuid,text,text) owner to postgres;
+revoke all on function internal.record_frontend_staff_payment_reversal(uuid,text,text) from public;
+grant execute on function internal.record_frontend_staff_payment_reversal(uuid,text,text) to authenticated;
+
 drop function api.start_slot_checkout(uuid,integer,bigint,boolean);
 drop function api.record_staff_slot_reversal(uuid,text,text);
 drop function api.staff_set_individual_slot_limit(uuid,integer,timestamp with time zone,text);
@@ -452,6 +488,7 @@ drop function api.get_my_slots();
 drop function internal.start_slot_checkout(uuid,integer,bigint,boolean);
 drop function internal.record_staff_slot_reversal(uuid,text,text);
 drop function internal.get_my_slots();
+drop function internal.same_identity(uuid,uuid);
 
 alter table private.entitlements drop constraint entitlements_payment_line_source;
 drop index private.entitlements_payment_line_idx;

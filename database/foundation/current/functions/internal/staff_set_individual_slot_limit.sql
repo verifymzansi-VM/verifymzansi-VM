@@ -17,13 +17,18 @@ begin
     or (p_slot_limit=4 and p_ends_at is not null) then
     raise exception 'valid slot limit (4 to 25), end date and reason required' using errcode='22023';
   end if;
-  if p_account_id=actor then
+  if internal.same_identity(actor, p_account_id) then
     raise exception 'a different staff member must change this limit' using errcode='42501';
   end if;
   perform internal.lock_evidence_subject(p_account_id);
   fingerprint:=internal.current_verified_identity(p_account_id);
-  if fingerprint is null then
+  if fingerprint is null and p_slot_limit>4 then
     raise exception 'the person''s ID review must be accepted first' using errcode='PT409';
+  end if;
+  -- Ending a raise works after the review lapsed: the person's latest fingerprint.
+  fingerprint:=coalesce(fingerprint, internal.individual_slot_identity(p_account_id));
+  if fingerprint is null then
+    raise exception 'this account has no ID review' using errcode='PT409';
   end if;
   if p_slot_limit>4 and not internal.individual_slot_business_checked(p_account_id) then
     raise exception 'more than 4 slots need a checked business' using errcode='PT409';

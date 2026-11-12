@@ -769,12 +769,13 @@ specs do (`e2e/foundation/support/plan-sales.ts`).
 
 ## Individual slots at R69, 12 November 2026
 
-`20261112174600_individual_slots_r69.sql` is not applied yet. Apply it after
-`20261112173841_switch_posting_terms_v4.sql` (it refuses with 55000 unless
-`posting-v4` is current and nothing else is on sale) and before the website
-release that uses it is deployed. It ends the pause on paid slots that the
-switch started: the slots `posting-v4` describes go on sale (roadmap Milestone
-11, P2, with M3.8).
+`20261112174600_individual_slots_r69.sql` is not applied yet. Apply it after the
+website release of `20261112173841_switch_posting_terms_v4.sql` is live and that
+update is applied (it refuses with 55000 unless `posting-v4` is current and
+nothing else is on sale), and before the pull request that uses it is merged: a
+merge into `main` is deployed, and that release calls the new commands. It ends
+the pause on paid slots that the switch started: the slots `posting-v4`
+describes go on sale (roadmap Milestone 11, P2, with M3.8).
 
 What it changes:
 
@@ -803,7 +804,9 @@ What it changes:
   online); a total other than the one the member was shown (PT428); and more
   Individual slots than the person's limit (PT429). The limit is 4 at once per
   ID-reviewed person: it counts every account that has had an accepted ID review
-  with the same identity fingerprint (ended reviews too) and slots in payments
+  with the same identity fingerprint (ended reviews too) and may still use its
+  slots (it has current account access: slots of a closed, banned or suspended
+  account, such as an impostor's, never block the person), and slots in payments
   still open at Ozow. The free first post, staff grants and sponsored places are
   not Individual slots and never count. `api.start_checkout` now refuses plans
   (it still sells add-ons).
@@ -814,9 +817,9 @@ What it changes:
   (`complete_unfulfillable_target`, alerted by the payment problem job).
 - **One slot refunded alone.** New staff command
   `api.record_staff_slot_reversal(p_line_id, p_kind, p_reason)` (capability
-  `payments:refund`, another staff member than the buyer): revokes that slot,
-  ends the posts it paid for as a whole-payment reversal does, and reverses only
-  that slot's commission. When the last open slot of a payment is reversed, the
+  `payments:refund`, never by the buyer's own identity): revokes that slot, ends
+  the posts it paid for as a whole-payment reversal does, and reverses only that
+  slot's commission. When the last open slot of a payment is reversed, the
   payment becomes refunded or charged back. `api.reverse_payment` marks every
   open line reversed, and refuses once one slot was reversed. No Ozow partial
   refund call is made: staff refund the money themselves (Ozow partial refunds
@@ -827,8 +830,18 @@ What it changes:
   (new capability `slots:raise_limit`, administrators, recent second factor): 5
   to 25 Individual slots for one ID-reviewed person until an end date at most
   366 days away, only when that account has a checked business (a live business
-  profile or an approved business check); 4 ends the raise. Rows are an audit
-  trail: a raise is only ever ended. No staff screen calls it yet.
+  profile or an approved business check); 4 ends the raise, also after the
+  person's review lapsed. Rows are an audit trail: a raise is only ever ended.
+  No staff screen calls it yet.
+- **Staff never act for themselves.** `internal.same_identity` compares every
+  fingerprint two accounts have had: staff may not raise the limit of, or record
+  a slot or whole-payment reversal on, an account of their own identity (also
+  `api.record_frontend_staff_payment_reversal`).
+- **Commission only for a delivered purchase.** The commission trigger creates
+  commission (per slot line) only when the payment is fulfilled: money sent to
+  staff for reconciliation earns none.
+- **One line per payment.** The entitlement's and the commission's line must
+  belong to the payment they name (composite foreign keys).
 - **My slots.** New member read `api.get_my_slots()`: every slot the member
   holds and every slot that ended in the last 3 days, with the posts in it, the
   sponsor's name for a sponsored place, and the member's Individual slot count,
@@ -841,7 +854,8 @@ What it changes:
 No existing API command changes its arguments or reply shape, so the release
 before it (paid slots paused) keeps working.
 
-**Applying** (after the merge and after `20261112173841`, before the deploy):
+**Applying** (after the switch release is live and `20261112173841` is applied,
+before this pull request is merged):
 
 1. Run `../preflight/20261112174600_individual_slots_r69.check.sql` unchanged in
    the SQL editor. It is read only. Continue only if its result is the single
@@ -854,14 +868,14 @@ before it (paid slots paused) keeps working.
    terms: posting-v4; on sale: individual_30d@1 6900 cents, individual_90d@1
    20700 cents, individual_180d@1 41400 cents; plan payments pending: 0; slot
    payment lines: 0".
-3. Deploy the release. `/pricing` shows R69, R207 and R414 with their checkout
-   links.
+3. Merge the pull request (its release deploys). `/pricing` shows R69, R207 and
+   R414 with their checkout links.
 
 The reviewed rollback is
 `../rollback/20261112174600_individual_slots_r69.down.sql`. It works only before
 anyone ordered a slot (it refuses once a payment line or a raised limit exists):
-it takes the three plans off sale, restores the six earlier function bodies and
-removes everything the update added, back to the paused state of
+it takes the three plans off sale, restores the seven earlier function bodies
+and removes everything the update added, back to the paused state of
 `20261112173841`. Applying the update again after it is refused while the
 retired plan rows exist: a new update must publish new plan versions. Once slots
 were ordered, stop sales with a new reviewed update that retires the three
@@ -884,8 +898,11 @@ activates a Market, a Business and a Tourism post and its fifth post going live
 in 30 days is refused, a rejected submission not counting; refunding one slot of
 a three-slot order revokes only that slot, ends only its post and reverses only
 its commission, the last slot reversing the payment; a late payment above the
-limit is recorded and sent to staff; `api.get_my_slots`; the grants; and that
-the rollback refuses once a slot was ordered.
+limit is recorded and sent to staff; `api.get_my_slots`; staff never raising a
+limit for, or reversing a payment of, their own identity (a second account of
+the same fingerprint); no commission for a payment that delivered nothing; slots
+of a banned account not blocking the person; ending a raise after the review
+lapsed; the grants; and that the rollback refuses once a slot was ordered.
 
 ## The free week starts at the first approved post, 10 November 2026
 

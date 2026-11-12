@@ -23,7 +23,8 @@ begin
     raise exception 'payment already reversed' using errcode='PT409';
   end if;
   select owner_id into owner from private.payments where id=p_id;
-  if owner=actor then raise exception 'a different staff member must record this reversal' using errcode='42501';end if;
+  if owner is not null and internal.same_identity(actor, owner) then
+    raise exception 'a different staff member must record this reversal' using errcode='42501';end if;
   result:=internal.reverse_payment(p_id,p_kind,p_reason);
   perform internal.staff_actor('payments:refund');
   insert into private.frontend_payment_reversals(payment_id,actor_id,kind,reason,released_activations)

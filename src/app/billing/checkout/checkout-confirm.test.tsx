@@ -175,6 +175,40 @@ describe("CheckoutConfirm for Individual slots", () => {
     });
   });
 
+  it("names the unpaid order the member is asked to continue or cancel", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: "You already have a pending payment.",
+              code: "PENDING_PAYMENT_EXISTS",
+              pendingPayment: {
+                id: "11111111-2222-4333-8444-999999999999",
+                checkoutUrl: "https://pay.ozow.com/x",
+                statusUrl: "/billing/success",
+                canCancel: true,
+                slots: 3,
+                amountCents: 20700,
+              },
+            }),
+            { status: 409 }
+          )
+      )
+    );
+    render(<CheckoutConfirm summary={slotSummary()} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /^My slot starts now/ }));
+    fireEvent.click(payButton());
+    expect(await screen.findByTestId("unpaid-order")).toHaveTextContent(
+      `Unpaid order: 3 slots, ${formatPlanPrice(20700)}`
+    );
+    expect(screen.getByRole("link", { name: "Continue payment" })).toHaveAttribute(
+      "href",
+      "https://pay.ozow.com/x"
+    );
+  });
+
   it("starts on the days the link chose", () => {
     render(<CheckoutConfirm summary={slotSummary({ planId: terms[2].planId })} />);
     expect(screen.getByRole("radio", { name: "180 days" })).toBeChecked();

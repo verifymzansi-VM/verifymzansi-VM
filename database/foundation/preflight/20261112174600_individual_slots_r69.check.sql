@@ -6,7 +6,7 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and reads "update not applied".
 --
--- The summary says whether the update is absent (the six functions it
+-- The summary says whether the update is absent (the seven functions it
 -- replaces have their reviewed earlier bodies, its new commands and tables are
 -- absent) or applied (every body is the update's), and shows the current
 -- posting terms version (posting-v4 is required), the plans on sale (nothing
@@ -23,8 +23,9 @@ with changed as (
     ('internal.apply_provider_event(jsonb)', '3b24cc0a39de855c0d1be3695654dc92', '8a226003da741381225c11dfd1e44308'),
     ('internal.activate_post(uuid)', '363671160e333cb9f8580bc3a883c74c', 'd9dd75c96dd1cce5b490eaafffe308be'),
     ('internal.reverse_payment(uuid,text,text)', '1beb792cd6681782bcb75d4ee8d207a0', '66005adb9e06b17e689dbac47ce93d5a'),
-    ('internal.payment_partner_commission()', '18e360e40190e49a3b4883ec1d5b1e36', '98a544c767ef4aeac648bc6d387a4a18'),
-    ('internal.partner_commission_guard()', 'a3d9e80674efaf8446a1cf89a2cc3805', 'ddab4845789fef80739183deeaf75e4d')
+    ('internal.payment_partner_commission()', '18e360e40190e49a3b4883ec1d5b1e36', 'e99f071fae090328566a61186843c6e2'),
+    ('internal.partner_commission_guard()', 'a3d9e80674efaf8446a1cf89a2cc3805', 'ddab4845789fef80739183deeaf75e4d'),
+    ('internal.record_frontend_staff_payment_reversal(uuid,text,text)', 'fbfe4f9525ff7f0ade3792ba779dd252', 'd48c969a572d66b0166fd63f92f68fa3')
   ) v(sig, before, after)
 ),
 added as (
@@ -36,16 +37,17 @@ added as (
     ('internal.individual_slot_plan(text)', 'c0c1d06dc52122641d02db6b1364be75'),
     ('internal.individual_slot_identity(uuid)', '4e4552c83cb629e96f1300060eeff16b'),
     ('internal.individual_slot_limit(text)', '90ecd5c02572cc9831468458f3ae0e2d'),
-    ('internal.individual_slots_counted(text,uuid,uuid)', '55a1c8d0c62efce386f1b9a9751ffd5c'),
+    ('internal.individual_slots_counted(text,uuid,uuid)', 'e3ec1bf332a4d2e93760d1a3d68f966b'),
     ('internal.individual_slot_business_checked(uuid)', 'e4f858e82e99bf3d1a62ea0b0c2d2820'),
     ('internal.start_slot_checkout(uuid,integer,bigint,boolean)', 'dcbb5be85829b017a483c21b91c95602'),
     ('api.start_slot_checkout(uuid,integer,bigint,boolean)', 'b9089234d615e837ba75d31f42b8f7bf'),
-    ('internal.record_staff_slot_reversal(uuid,text,text)', 'ee3d342565f07d3b18ba26ac237eeab3'),
+    ('internal.record_staff_slot_reversal(uuid,text,text)', '44758ca0c94c7fedf9bcbeb0fa5a7736'),
     ('api.record_staff_slot_reversal(uuid,text,text)', '2a52fbde1bcd5076472a92751af0bedb'),
-    ('internal.staff_set_individual_slot_limit(uuid,integer,timestamp with time zone,text)', '8713fe5cfb21326c8fe0c4e4d680e1f4'),
+    ('internal.staff_set_individual_slot_limit(uuid,integer,timestamp with time zone,text)', '1a10c7ba7f8c2c85674fb3c9a0b1026e'),
     ('api.staff_set_individual_slot_limit(uuid,integer,timestamp with time zone,text)', '92da468af327632f8d1f4cba716642c9'),
     ('internal.get_my_slots()', '6e3a3149cf2576ae2d66ab085cc8da58'),
-    ('api.get_my_slots()', '0f06e8bc211c4506dae9744479d4dbdf')
+    ('api.get_my_slots()', '0f06e8bc211c4506dae9744479d4dbdf'),
+    ('internal.same_identity(uuid,uuid)', '535e5c87d944edd45bd2b3dce28f98b6')
   ) v(sig, after)
 ),
 tables as (

@@ -8,9 +8,14 @@ CREATE OR REPLACE FUNCTION internal.individual_slots_counted(p_identity text, p_
  SET search_path TO 'pg_catalog'
 AS $function$
   with owners as (
-    select p_owner as id
-    union
-    select f.owner_id from private.accepted_identity_facts f where p_identity is not null and f.identity_hmac=p_identity
+    select o.id from (
+      select p_owner as id
+      union
+      select f.owner_id from private.accepted_identity_facts f where p_identity is not null and f.identity_hmac=p_identity
+    ) o
+    -- Slots of a closed, banned or suspended account cannot be used, so they
+    -- never block the person (for example after an impostor's account is banned).
+    where exists(select 1 from private.current_account_access a where a.id=o.id)
   )
   select jsonb_build_object(
     'held', (select count(*) from private.entitlements e

@@ -32,7 +32,7 @@ create table private.partner_commissions (
   constraint partner_commissions_paid_reference_check CHECK (paid_reference IS NULL OR internal.plain_text_valid(paid_reference, 3, 120, false)),
   constraint partner_commissions_partner_id_fkey FOREIGN KEY (partner_id) REFERENCES private.partners(id) ON DELETE RESTRICT,
   constraint partner_commissions_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES private.payments(id) ON DELETE RESTRICT,
-  constraint partner_commissions_payment_line_id_fkey FOREIGN KEY (payment_line_id) REFERENCES private.payment_lines(id) ON DELETE RESTRICT,
+  constraint partner_commissions_payment_line_id_fkey FOREIGN KEY (payment_line_id, payment_id) REFERENCES private.payment_lines(id, payment_id) ON DELETE RESTRICT,
   constraint partner_commissions_pkey PRIMARY KEY (id),
   constraint partner_commissions_rate_bps_check CHECK (rate_bps >= 0 AND rate_bps <= 5000),
   constraint partner_commissions_referred_account_id_fkey FOREIGN KEY (referred_account_id) REFERENCES auth.users(id) ON DELETE RESTRICT,
@@ -45,6 +45,7 @@ CREATE INDEX partner_commissions_due_idx ON private.partner_commissions USING bt
 CREATE INDEX partner_commissions_partner_idx ON private.partner_commissions USING btree (partner_id, created_at DESC, id DESC);
 CREATE INDEX partner_commissions_payment_id_idx ON private.partner_commissions USING btree (payment_id);
 CREATE UNIQUE INDEX partner_commissions_payment_line_idx ON private.partner_commissions USING btree (payment_line_id) WHERE (payment_line_id IS NOT NULL);
+CREATE INDEX partner_commissions_payment_line_payment_idx ON private.partner_commissions USING btree (payment_line_id, payment_id) WHERE (payment_line_id IS NOT NULL);
 CREATE UNIQUE INDEX partner_commissions_payment_unlined_idx ON private.partner_commissions USING btree (payment_id) WHERE (payment_line_id IS NULL);
 CREATE INDEX partner_commissions_referred_idx ON private.partner_commissions USING btree (referred_account_id);
 CREATE TRIGGER partner_commissions_guard BEFORE UPDATE ON private.partner_commissions FOR EACH ROW EXECUTE FUNCTION internal.partner_commission_guard();

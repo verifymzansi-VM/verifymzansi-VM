@@ -675,6 +675,51 @@ try {
     }
   );
 
+  await check("staff never raise a limit for, or reverse a payment of, their own identity", () => {
+    // admin2's own review moves to a second account of the same person.
+    const second = user("admin2-second");
+    q(`select vmtest.move_identity('${admin2.id}','${second.id}','${admin.id}');`);
+    const business = post(second, "business", "business");
+    q(
+      `update private.posts set status='live',published_at=now()-interval '1 day',visible_until=now()+interval '20 days' where id='${business}';`
+    );
+    fails(
+      staff(
+        admin2,
+        `select api.staff_set_individual_slot_limit('${second.id}',10,now()+interval '30 days','Raise for my other account');`
+      ),
+      "42501",
+      /a different staff member/
+    );
+    const order = buy(second, P30, 1);
+    fails(
+      staff(
+        admin2,
+        `select api.record_staff_slot_reversal('${lines(order)[0].id}','refunded','Refund my other account');`
+      ),
+      "42501",
+      /a different staff member/
+    );
+    fails(
+      staff(
+        admin2,
+        `select api.record_frontend_staff_payment_reversal('${order}','refunded','Refund my other account');`
+      ),
+      "42501",
+      /a different staff member/
+    );
+    // Another staff member may.
+    assert.equal(
+      json(
+        staff(
+          admin,
+          `select api.record_staff_slot_reversal('${lines(order)[0].id}','refunded','Billing error on one slot');`
+        )
+      ).payment_status,
+      "refunded"
+    );
+  });
+
   await check("a whole-payment reversal reverses every slot and its commissions", () => {
     const whole = verified("whole");
     const paymentId = buy(whole, P90, 2);
@@ -695,6 +740,13 @@ try {
     "a late payment above the limit is recorded and goes to staff, never delivered",
     () => {
       const gugu = verified("gugu");
+      const referrer = user("referrer");
+      q(`select set_config('session_replication_role','replica',false);
+      insert into private.partners(account_id,code,status,commission_bps,created_by)
+        values('${referrer.id}','PARTNER7','active',2000,'${admin.id}');
+      insert into private.account_acquisitions(account_id,source,partner_id)
+        values('${gugu.id}','partner',(select id from private.partners where account_id='${referrer.id}'));
+      select set_config('session_replication_role','origin',false);`);
       buy(gugu, P30, 3);
       const late = quote(gugu, P30, 1);
       open(gugu, late.payment_id);
@@ -715,8 +767,74 @@ try {
         ),
         1
       );
+      // Money that delivered nothing earns no commission; delivered slots do.
+      assert.equal(count(`private.partner_commissions where payment_id='${late.payment_id}'`), 0);
+      assert.equal(
+        count(
+          `private.partner_commissions c join private.payments p on p.id=c.payment_id where p.owner_id='${gugu.id}'`
+        ),
+        4
+      );
     }
   );
+
+  await check("slots of an account that may not use them do not block the person", () => {
+    // amahle's first account holds 4 slots; the person now uses a second
+    // account (moved earlier). Once the first account is banned (for example
+    // an impostor's), its slots no longer count.
+    const second = q(
+      `select f.owner_id from private.accepted_identity_facts f where f.identity_hmac='${fingerprintOf("amahle")}' and f.revoked_at is null;`
+    );
+    const secondMember = json(
+      `select jsonb_build_object('id',u.id,'session',(select s.id from auth.sessions s where s.user_id=u.id limit 1)) from auth.users u where u.id='${second}';`
+    );
+    fails(quoteSql(secondMember, P30, 1), "PT429");
+    q(`update auth.users set banned_until=now()+interval '30 days' where id='${amahle.id}';`);
+    assert.equal(slotsOf(secondMember).individual.held, 0);
+    assert.equal(quote(secondMember, P30, 4).amount_cents, String(4 * 6900));
+    q(`update auth.users set banned_until=null where id='${amahle.id}';`);
+  });
+
+  await check("staff can end a raise after the person's review lapsed", () => {
+    const lapsing = verified("lapsing");
+    const shop = post(lapsing, "business", "business");
+    q(
+      `update private.posts set status='live',published_at=now()-interval '1 day',visible_until=now()+interval '20 days' where id='${shop}';`
+    );
+    q(
+      staff(
+        admin,
+        `select api.staff_set_individual_slot_limit('${lapsing.id}',12,now()+interval '60 days','Interim limit for a checked dealer');`
+      )
+    );
+    // The review ends (for example the evidence was replaced).
+    q(`select set_config('session_replication_role','replica',false);
+      update private.accepted_identity_facts set revoked_at=now() where owner_id='${lapsing.id}' and revoked_at is null;
+      select set_config('session_replication_role','origin',false);`);
+    fails(
+      staff(
+        admin,
+        `select api.staff_set_individual_slot_limit('${lapsing.id}',20,now()+interval '60 days','Raise after the review lapsed');`
+      ),
+      "PT409",
+      /ID review must be accepted/
+    );
+    assert.equal(
+      json(
+        staff(
+          admin,
+          `select api.staff_set_individual_slot_limit('${lapsing.id}',4,null,'Business tools launched');`
+        )
+      ).slot_limit,
+      4
+    );
+    assert.equal(
+      count(
+        `private.individual_slot_limits where account_id='${lapsing.id}' and revoked_at is null`
+      ),
+      0
+    );
+  });
 
   // ---------------------------------------------------------------- my slots
   await check("My slots: every slot with its post, ended slots for 3 days, the counts", () => {

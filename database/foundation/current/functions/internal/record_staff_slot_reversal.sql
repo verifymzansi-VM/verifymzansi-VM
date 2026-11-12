@@ -17,7 +17,9 @@ begin
   end if;
   select p.owner_id into buyer from private.payment_lines l join private.payments p on p.id=l.payment_id where l.id=p_line_id;
   if buyer is null then raise exception 'slot payment line not found' using errcode='22023'; end if;
-  if buyer=actor then raise exception 'a different staff member must record this reversal' using errcode='42501'; end if;
+  if internal.same_identity(actor, buyer) then
+    raise exception 'a different staff member must record this reversal' using errcode='42501';
+  end if;
   perform internal.lock_evidence_subject(buyer);
   select p.* into pay from private.payments p join private.payment_lines l on l.payment_id=p.id where l.id=p_line_id
     for update of p;

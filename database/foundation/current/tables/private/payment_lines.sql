@@ -14,6 +14,7 @@ create table private.payment_lines (
   reversed_by uuid,
   created_at timestamp with time zone default statement_timestamp() not null,
   constraint payment_lines_amount_cents_check CHECK (amount_cents >= 100 AND amount_cents <= 1000000),
+  constraint payment_lines_id_payment_key UNIQUE (id, payment_id),
   constraint payment_lines_line_number_check CHECK (line_number >= 1 AND line_number <= 25),
   constraint payment_lines_number_key UNIQUE (payment_id, line_number),
   constraint payment_lines_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES private.payments(id) ON DELETE CASCADE,

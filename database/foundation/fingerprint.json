@@ -56,28 +56,28 @@
       "fingerprint": "9a4e6742eb4c328928d7beee57820374"
     },
     "constraints": {
-      "items": 1012,
-      "fingerprint": "17cf9b20cfbc92e5d7b191260a6acceb"
+      "items": 1013,
+      "fingerprint": "4d943233a856e609229e347b07e8e3e7"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 780,
-      "fingerprint": "6b6bc580b056723e70eb1c8315553347"
+      "items": 781,
+      "fingerprint": "68cd5f36c4cf58d4953e39b6d609f394"
     },
     "function_grants": {
       "items": 625,
       "fingerprint": "51c2a1e6b2e03385455284150a30efdd"
     },
     "function_metadata": {
-      "items": 780,
-      "fingerprint": "4eed4cf8e8fceecd2dc03a200bdae008"
+      "items": 781,
+      "fingerprint": "ec7ebd9c5c54ff6f990865791a1f745d"
     },
     "indexes": {
-      "items": 447,
-      "fingerprint": "1d45077aabb7eccc92f72c5b522bab88"
+      "items": 450,
+      "fingerprint": "6bd15d590523ecc1cafc60f7d0222b7b"
     },
     "policies": {
       "items": 1,

@@ -142,6 +142,10 @@ export interface FoundationPendingPayment {
   checkoutUrl: string | null;
   statusUrl: string;
   canCancel: boolean;
+  /** What the unpaid order is for, when it holds Individual slots: its number
+   * of slots and its total, which may differ from what the page now shows. */
+  slots?: number;
+  amountCents?: number;
 }
 export class FoundationPendingPaymentError extends FoundationBillingError {
   override name = "FoundationPendingPaymentError";
@@ -322,6 +326,8 @@ const quoteSchema = z.object({
   amount_cents: cents,
   currency: z.literal("ZAR"),
   status: z.literal("pending"),
+  // The slot checkout says how many slots the payment holds.
+  slots: z.number().int().min(1).max(25).optional(),
 });
 const claimSchema = foundationPaymentSchema.extend({
   claim_token: z.uuid().nullable(),
@@ -440,6 +446,10 @@ async function openFoundationCheckout(
             : null,
         statusUrl: `${app.origin}/billing/success?payment=${pay.id}`,
         canCancel: canAskProvider(pay.provider_request_id),
+        ...(quote.slots !== undefined && {
+          slots: quote.slots,
+          amountCents: Number(pay.amount_cents),
+        }),
       });
     return { paymentId: pay.id, checkoutUrl };
   }

@@ -652,12 +652,18 @@ test.describe("checkout to fulfilment", () => {
           checkoutUrl,
           statusUrl: `${APP_ORIGIN}/billing/success?payment=${open.id}`,
           canCancel: true,
+          slots: 1,
+          amountCents: Number(plans.pending.price_cents),
         },
       },
     });
     // The restored controls (src/app/billing/checkout/checkout-confirm.tsx),
     // unchanged from the selected frontend.
     await expect(page.getByRole("alert").filter({ hasText: PENDING_NOTICE })).toBeVisible();
+    // Which order is unpaid: its slots and total.
+    await expect(page.getByTestId("unpaid-order")).toHaveText(
+      `Unpaid order: 1 slot, R${Number(plans.pending.price_cents) / 100}`
+    );
     const resume = page.getByRole("link", { name: "Continue payment" });
     await expect(resume).toHaveAttribute("href", checkoutUrl);
     await expect(page.getByRole("link", { name: "Check status" })).toHaveAttribute(
