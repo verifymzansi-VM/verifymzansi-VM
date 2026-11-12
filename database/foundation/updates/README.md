@@ -697,6 +697,11 @@ and tested. In one transaction the update:
   edited) and records each one in the new private table
   `private.plan_sale_pauses` (row level security on, no API role access), so the
   rollback can put exactly those plans back;
+- replaces `internal.set_post_media` so that a draft without a slot prepares the
+  free first post's media allowance (10 photos, 1 video,
+  `internal.grant_intro_trial`'s) when no plan is on sale; before, it took the
+  largest allowance of the plans on sale and, with none, refused ("no current
+  media allowance available"), so a free post could not add photos;
 - makes `posting-v4` current. Every member accepts it once before their next
   submission or edit.
 
@@ -739,12 +744,13 @@ sale: 0; plans taken off sale by the update: 17". After the switch, `/terms`
 shows the new text and `/pricing` shows "Opens soon".
 
 **Rollback.** `../rollback/20261112173841_switch_posting_terms_v4.down.sql`
-makes `posting-v3` current again, puts exactly the recorded plans back on sale
-(switching the catalogue guard trigger off for that one statement) and drops the
-record table; it refuses once a plan published after the switch is on sale.
-Deploy a release that sells the old plans with it. The first update's rollback
-changes nothing (published terms are immutable; the row then stays unused, like
-`posting-v2`) and refuses while `posting-v4` is current.
+restores the previous `internal.set_post_media`, makes `posting-v3` current
+again, puts exactly the recorded plans back on sale (switching the catalogue
+guard trigger off for that one statement) and drops the record table; it refuses
+once a plan published after the switch is on sale. Deploy a release that sells
+the old plans with it. The first update's rollback changes nothing (published
+terms are immutable; the row then stays unused, like `posting-v2`) and refuses
+while `posting-v4` is current.
 
 **Tests.** `scripts/test-foundation-posting-terms-v4.mjs` and
 `scripts/test-foundation-posting-terms-switch.mjs` (both in
