@@ -394,13 +394,12 @@ test.describe("pricing and organisations", () => {
     );
   });
 
-  test("the checkout page and route sell nothing while paid plans are paused", async ({
-    page,
+  // The checkout page needs a signed-in member (its paused note is unit tested in
+  // checkout-confirm.test.tsx); the route refuses a visitor before anything else.
+  test("the checkout route sells nothing to a visitor while paid plans are paused", async ({
     request,
   }) => {
     // The first old plan's id from the seeded catalogue (catalogue-identities.json).
-    await page.goto("/billing/checkout?plan=00420f8c-0ac1-4828-83c5-d547d862fc8f");
-    await expect(page.getByText("Paid slots open soon. Until then, your first post")).toBeVisible();
     const refused = await request.post("/api/billing/create-checkout", {
       data: { planId: "00420f8c-0ac1-4828-83c5-d547d862fc8f" },
     });
