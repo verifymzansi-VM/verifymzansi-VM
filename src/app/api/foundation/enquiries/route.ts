@@ -44,7 +44,9 @@ export function PATCH(request: NextRequest) {
         : inboxRefusal(error),
   });
 }
-class FoundationNotFound extends Error {}
+class FoundationNotFound extends Error {
+  override name = "FoundationNotFound";
+}
 
 /**
  * Public enquiry on a live post, signed in or not. Turnstile, origin/CSRF and

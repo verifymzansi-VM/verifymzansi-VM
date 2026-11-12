@@ -25,6 +25,7 @@ create table private.evidence_cases (
 );
 alter table private.evidence_cases owner to postgres;
 alter table private.evidence_cases enable row level security;
+CREATE INDEX evidence_cases_claimed_by_idx ON private.evidence_cases USING btree (claimed_by) WHERE (claimed_by IS NOT NULL);
 CREATE INDEX evidence_cases_subject_idx ON private.evidence_cases USING btree (subject_id, id);
 CREATE TRIGGER evidence_case_identity BEFORE UPDATE ON private.evidence_cases FOR EACH ROW EXECUTE FUNCTION internal.evidence_case_identity_guard();
 CREATE TRIGGER evidence_decision_retention AFTER UPDATE OF status ON private.evidence_cases FOR EACH ROW WHEN (old.status = 'open'::text AND new.status = 'decided'::text) EXECUTE FUNCTION internal.evidence_decision_retention();

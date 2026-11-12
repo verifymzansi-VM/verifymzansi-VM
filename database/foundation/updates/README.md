@@ -77,6 +77,325 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Members are told when their ID is sent back, 10 November 2026
+
+`20261110173012_verification_returned_notice.sql` is not applied yet. It needs
+`20261110045944_intro_trial_at_first_approval.sql` (it replaces the mail claim
+that update changed) and refuses to run without it. It adds no command and
+changes no API signature, so the website release that uses it also works with a
+database that does not have it: the member then sees the reviewer's reason on
+the verification page, but gets no notice or email.
+
+Until now, when staff sent an identity case back, the reviewer's reason was
+stored and nothing told the member. From this update:
+
+- **Notice and email.** Sending an identity case back
+  (`internal.return_identity_submission`, which the identity review calls
+  through `internal.return_frontend_identity_step`) adds a
+  `verification_returned` notification for the member and queues a
+  `verification_returned` email. Both point at the return request by id only;
+  neither holds the reason or any identity detail. The email asks the member to
+  sign in and open the verification page, which shows the reason. Business and
+  restriction cases are unchanged.
+- **Kinds.** The closed notification and outbox kind lists gain
+  `verification_returned`. The mail claim
+  (`internal.claim_supported_notification_outbox`) accepts it (lists of up to 20
+  kinds) and gives no recipient for a closed account, as for the other account
+  notices. The enquiry-inbox reads (`internal.list_my_notifications`,
+  `internal.list_my_frontend_notifications`) leave it out, as they do the other
+  account notices; the notifications page's read
+  (`internal.list_my_frontend_notices`) lists it.
+- Cases sent back before the update are not notified afterwards.
+
+**Order: deploy first, then apply.** Unlike most updates, apply this one after
+the website release from the same pull request is deployed. That release works
+without it (its email job asks for the earlier kinds when the database refuses
+the new one), whereas the website deployed before it cannot read a
+`verification_returned` notice: its notifications list would show its error
+state to a member who has one. The release preflight reports the database behind
+by this update until it is applied. For the same reason, if that release is ever
+reverted, run the rollback below first.
+
+**Applying.** Production has `20261110045944_intro_trial_at_first_approval.sql`
+(applied 10 November 2026). The website release that knows the
+`verification_returned` kind must be live.
+
+1. Run `../preflight/20261110173012_verification_returned_notice.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "reviewed bodies, update not applied".
+2. Run the update. It locks the notification and outbox tables without waiting
+   and stops without changing anything if either is busy; run it again. Run the
+   preflight again: it must now read "already applied".
+
+## Staff see how each selfie was taken, 11 November 2026
+
+`20261111184619_selfie_capture_method.sql` is not applied yet. It needs no
+earlier pending update.
+
+The verification page sends, with the selfie, how the member's browser says it
+was taken (`camera` for the live camera step, `file_upload` for the "Or upload a
+photo" fallback) and whether the browser's liveness challenge was completed.
+Until now the website dropped both, so the staff identity viewer never showed
+its "Uploaded file" warning. From this update:
+
+- **Stored with the selfie's upload receipt.**
+  `private.frontend_verification_uploads` gains `capture_method` and
+  `browser_liveness_passed`, both nullable. They are what the browser reported,
+  not a proof: nothing grants, approves or scores anything from them.
+  Constraints keep them consistent (both set or both empty, only on a selfie, a
+  passed liveness challenge only with the camera). Receipts recorded before the
+  update stay empty ("not recorded").
+- **Recording.** New member command
+  `api.record_my_selfie_capture(request, method, liveness)`. The website checks
+  the two form fields against the closed set and calls it with the member's own
+  session after reserving the selfie upload and before completing it. It accepts
+  only the member's own selfie receipt while that upload is not completed; after
+  completion it changes nothing. Calling it directly gives a member nothing that
+  sending the form would not.
+- **Staff read.** New
+  `api.get_frontend_staff_selfie_capture(case, claim generation, claim nonce)`
+  returns, to staff with `evidence:view` holding a live claim on an open
+  identity case that is not their own, the current submission, its selfie and
+  the recorded answer. It opens no evidence and writes no access log row (a
+  deliberate exception: the answer is review context, not identity evidence, and
+  the evidence metadata read that the viewer makes first records the access).
+  The website turns the answer into the viewer's existing signals: "Uploaded
+  file", "Liveness not verified", or "Browser liveness check completed"
+  (labelled as not an attestation).
+- **Retention.** `internal.scrub_frontend_verification_receipt`, which clears
+  the ID number receipt when an evidence file is deleted, also clears the
+  answer, so it goes with the selfie file (30 days after the case decision); the
+  receipt itself follows the identity history.
+- No existing API command changes signature, grant or owner. The upload
+  completion is unchanged.
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the two new commands, and the deploy preflight probes every
+command in `../runtime-api-manifest.json`, so a deploy without the update stops
+there. Earlier website releases do not use the new commands and pass the deploy
+preflight with the update applied, so they can still be deployed or redeployed.
+
+**Applying.**
+
+1. Run `../preflight/20261111184619_selfie_capture_method.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "reviewed bodies, update not applied".
+
+## A failed payment start never blocks a member, 11 November 2026
+
+`20261111212320_payment_start_retry.sql` is not applied yet. It needs no earlier
+pending update.
+
+A checkout is one pending payment per member and product. The website leases it
+(`internal.claim_checkout_request`), asks Ozow for a payment request with the
+payment's stored expiry time and idempotency key, and attaches the request Ozow
+returns. The expiry was set once, at the first lease, and the key never changed.
+When the first call to Ozow failed, nothing was attached, the payment stayed
+pending, and every later attempt reused it with the same key and, after 30
+minutes, an expiry time in the past. Nothing ever closed such a payment. From
+this update:
+
+- **A fresh window for every attempt.** A new lease on a pending payment with no
+  Ozow request always gets a new 30-minute expiry. After an earlier lease (an
+  earlier attempt may have reached Ozow), it also gets a new idempotency key, so
+  Ozow never sees a key it already answered with a different expiry. The first
+  lease keeps the key the payment was created with. The member never received an
+  earlier request's page (the website returns a page only after attaching its
+  request), so nobody can pay an abandoned request, and a late answer to an
+  earlier lease cannot attach (its claim token is superseded). A payment that
+  already has a request is returned unchanged, as before.
+- **A sweep.** New service command `api.expire_stale_checkouts(limit)` marks
+  expired the pending payments that have no Ozow request, were created more than
+  an hour ago and are not leased now, oldest first, at most `limit` (1 to 500)
+  per call, and returns how many. It skips rows another transaction holds and
+  never touches a payment with a request (the status check handles those).
+  Repeating it changes nothing more. The website's payment status job
+  (`/api/internal/payments/reconcile`, run every 10 minutes by the
+  payment-cleanup Worker) calls it first, with a limit of 100, so such a payment
+  closes within about 70 minutes and the member's next checkout starts a new
+  one. No new schedule is needed.
+- No existing API command changes signature, grant or owner.
+
+The website release in the same pull request also answers a plan whose pending
+payment already has an Ozow request with the restored checkout page's 409
+`PENDING_PAYMENT_EXISTS` reply (Continue payment, Check status, Cancel pending
+payment). Its status check, once Ozow reports the request closed (`Expired` or
+`Cancelled`), records a declined or cancelled bank attempt as not paid, as the
+notice would; while the request is open it changes nothing, because the member
+can still pay on it. A request cancelled other than by the member's Cancel
+button is recorded as expired, so a verified late success still delivers the
+plan. Neither needs a database change.
+
+Known limits, recorded for later:
+
+- If the sweep expires a payment between the member's quote and the server's
+  lease (the member clicked Pay on a payment created over an hour ago, at the
+  moment the job ran), that click gets a "Billing could not be completed" 409;
+  the next click starts a new payment.
+- The Continue link is left out once the stored request's window has passed;
+  Cancel then asks Ozow to cancel an expired request. If Ozow refuses that, the
+  page says the pending payment could not be cancelled until the next status job
+  (at most 10 minutes) records the request as expired.
+- Not yet confirmed with Ozow (M3.5, Ozow's test system): that a second payment
+  request with the same merchant reference and a new idempotency key is
+  accepted, how a cancelled attempt is reported (the code assumes an `Error`
+  transaction and a `Cancelled` request), and the request status after a
+  cancellation.
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls `api.expire_stale_checkouts`, and the deploy preflight probes
+every command in `../runtime-api-manifest.json`, so a deploy without the update
+stops there. Earlier website releases do not use the new command and pass the
+deploy preflight with the update applied, so they can still be deployed or
+redeployed.
+
+**Applying.**
+
+1. Run `../preflight/20261111212320_payment_start_retry.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "reviewed bodies, update not applied". It also counts
+   the pending payments without an Ozow request and those the first sweep will
+   expire (0 today: production has taken no payment).
+2. Run the update, then the preflight again: it must now read "already applied".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261110173012_verification_returned_notice.down.sql` (only with
+the owner's decision; prefer a forward fix). It restores the earlier bodies and
+kind lists, and deletes every `verification_returned` notification and queued
+email to do so; return requests and their reasons are kept.
+
+`../rollback/20261111184619_selfie_capture_method.down.sql` (only with the
+owner's decision; prefer a forward fix). Revert and deploy the website release
+first: the rollback removes the two commands that release calls. It restores the
+receipt scrub byte for byte and drops the two columns with the answers recorded
+so far.
+
+`../rollback/20261111212320_payment_start_retry.down.sql` (only with the owner's
+decision; prefer a forward fix). Revert and deploy the website release first:
+the rollback removes the command that release's payment status job calls. It
+restores the checkout lease byte for byte. Payments the sweep already expired
+stay expired (none had an Ozow request, so no money was taken).
+
+`node --import tsx scripts/test-foundation-payment-start-retry.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves, on the throwaway database, the
+defect before the update; that the preflight is read only and refuses drift, and
+a premature rollback is refused; a failed first call retried 31 minutes later on
+the same payment with a fresh window and a new key, while the failed lease's
+late answer cannot attach; that an attached request is never re-leased; the
+sweep (stale, young, leased, attached and settled payments, the limit, repeat
+runs, the member's next checkout); who may run it; and that apply, rollback and
+re-apply return the same fingerprints.
+
+## Indexes for foreign keys used by deletion, 11 November 2026
+
+`20261111223723_foreign_key_indexes.sql` is not applied yet. It needs no earlier
+pending update and changes no function, grant or API command.
+
+Postgres does not index the referencing side of a foreign key. When a referenced
+row is deleted, it looks up the referencing rows of every key that points at it,
+and without a usable index each lookup reads the whole referencing table. This
+update adds 50 indexes on 31 tables, one per key on a deletion path:
+
+- **37 columns that reference `auth.users`** (owner and staff columns such as
+  `payments.owner_id`, `moderation_log.staff_id`, `decisions.proposed_by`).
+  Deleting an Auth user (account deletion, or a failed sign-up being undone)
+  checks every one of them, even for a member who never had a row there.
+- **9 columns whose parent rows the retention sweep deletes**
+  (`api.run_retention`): decisions, evidence cases, identity submissions and
+  evidence files (`internal.retention_staff_records`,
+  `internal.retention_verification`), and activations, entitlements and payments
+  (`internal.retention_commerce`).
+- **4 keys to posts**, which edits (`internal.apply_post_edit`,
+  `internal.discard_post_edit`), deletion (`internal.delete_post`) and the
+  lifecycle job (`internal.run_post_lifecycle`) delete, and to the affiliations
+  that cascade from them: `organisation_affiliations(post_id, post_kind)`,
+  `organisation_sponsorships.affiliation_id`, `post_activations.post_id`,
+  `reports.post_id`.
+
+The Supabase performance advisor's "unindexed foreign keys" check (no index
+starts with the key's columns) listed 74 keys on the replayed schema; 40 of them
+are indexed here. The other 10 indexed keys are ones the advisor counts as
+indexed although their lookup reads the table: the only index that starts with
+the column is a partial one for some rows (for example `legal_holds_active_idx`,
+`where released_at is null`).
+
+A column that may be null gets a partial index (`where <column> is not null`):
+the key lookup and every query by value look for a value, and rows without one
+stay out of the index.
+
+The other 34 keys the advisor lists stay unindexed on purpose, and it keeps
+listing them:
+
+- 12 composite keys that an existing index already serves through a unique or
+  selective leading column, for example `(post_id, post_kind)` where the primary
+  key is `post_id`, or `(case_id, owner_id)` next to an index on
+  `(case_id, id)`; a second index would only add write cost;
+- 19 keys to reference tables that no command deletes or re-keys (provinces,
+  cities, categories, catalogue and plan versions, event time zones, posting
+  terms versions);
+- 3 keys to organisation programmes, which no command deletes.
+
+The lists are in `scripts/test-foundation-fk-indexes.mjs` (`SERVED_BY_EXISTING`,
+`LEFT_UNINDEXED`, and `SCANNED_ON_PURPOSE` for the 22 keys whose lookup still
+reads the table, all with parents no command deletes). Re-run the hosted
+advisors after the first month of real traffic; "unused index" notices on an
+almost empty database are expected and are not a reason to drop an index.
+
+**Locks.** The update uses plain `create index`, not `concurrently`, because an
+update runs in one transaction. Each build takes a share lock on its table until
+the commit: reads continue, writes to those 31 tables wait. The tables are tiny
+today (the preflight prints their total size), so this takes well under a
+second; each lock wait gives up after 5 seconds (`lock_timeout`) rather than
+queue behind a long transaction. Apply it at a quiet time: a write that already
+holds one of these tables and then needs another could deadlock with it, and
+Postgres would then cancel one of the two (possibly the member's request). Index
+commands do not fire the event trigger `internal.require_table_rls` (it reacts
+to table commands only).
+
+**Order: any time.** No code depends on these indexes, so the update can be
+applied before or after any website release. Until it is applied and recorded,
+the release preflight lists it as "behind" (a warning; it has no command to
+probe). Apply and record updates in filename order: if an update with an earlier
+name is still pending, apply that one first.
+
+**Applying.**
+
+1. Run `../preflight/20261111223723_foreign_key_indexes.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "not applied ... present 0 of 50". A problem row names
+   a missing column or key, an index that already has one of the update's names
+   with another definition or is invalid, or another index that already serves
+   the key for every row; the update refuses (55000) in each of these cases.
+2. Run the update, then the preflight again: it must now read "already applied;
+   present 50 of 50".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication` (only the `indexes` category changes).
+   Once production's fingerprint matches, record it (its register line and
+   `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261111223723_foreign_key_indexes.down.sql` (only with the owner's
+decision). It drops exactly these 50 indexes, each with a short access exclusive
+lock held until the commit, and refuses when an index with one of their names
+has another definition. Running it again, or before the update, changes nothing.
+
+`node --import tsx scripts/test-foundation-fk-indexes.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves, on the throwaway database: the 74
+keys the advisor lists before and exactly the 34 listed ones after; that the
+delete lookup of every foreign key (as a generic plan) uses an index condition
+on an index starting with one of the key's columns, except the 22 documented
+reference keys, and uses the new index for each of the 50 keys; that the
+preflight is read only; that an index already serving a key, a conflicting or
+invalid index under one of the names is refused by the update, the preflight and
+the rollback; that deleting an Auth user still enforces the keys; that a partly
+applied update is reported and completed by running it again; and that apply,
+rollback and re-apply return the same fingerprints.
+
 ## No default rights in schema public, 11 November 2026
 
 `20261111234521_public_default_privileges.sql` is not applied yet. It needs no
@@ -1584,6 +1903,10 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   every count 0, after "already applied, trials to restart: 0", production
   fingerprint then matched the replay (section The free week starts at the first
   approved post)
+- `20261110173012_verification_returned_notice.sql`: pending
+- `20261111184619_selfie_capture_method.sql`: pending
+- `20261111212320_payment_start_retry.sql`: pending
+- `20261111223723_foreign_key_indexes.sql`: pending
 - `20261111234521_public_default_privileges.sql`: pending
 
 <!-- applied-register:end -->

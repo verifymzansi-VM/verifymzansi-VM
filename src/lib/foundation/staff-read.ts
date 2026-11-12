@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { auditSubjectFilters } from "./audit-filters";
+import { isStaffSecondFactorRefusal } from "./error-reasons";
 
 // Preserve Postgres microseconds in cursors; Date is for display only.
 const instant = z
@@ -122,6 +123,7 @@ export const foundationDecisionPage = z
   );
 
 export class FoundationStaffReadError extends Error {
+  override name = "FoundationStaffReadError";
   constructor(
     readonly status: 400 | 403 | 503,
     readonly mfaRequired = false
@@ -142,7 +144,7 @@ function refusal(error: { code?: string; message?: string }) {
       : ["22023", "22P02", "22007", "22008"].includes(error.code ?? "")
         ? 400
         : 503,
-    error.code === "42501" && /second.factor|authenticator app/.test(error.message ?? "")
+    error.code === "42501" && isStaffSecondFactorRefusal(error)
   );
 }
 

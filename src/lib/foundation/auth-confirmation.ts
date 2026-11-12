@@ -18,6 +18,7 @@ const exchange = z.strictObject({
 });
 
 class FoundationConfirmationError extends Error {
+  override name = "FoundationConfirmationError";
   constructor(readonly status: 401 | 503) {
     super("The confirmation could not be completed");
   }

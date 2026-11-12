@@ -44,7 +44,9 @@ export function createFoundationRouteContext(
     async respond<T>(response: NextResponse<T>): Promise<NextResponse<T>> {
       // A failed refresh can clear cookies too. Wait for its writes even when
       // the route is returning its own authentication-error response.
-      await authenticated?.catch(() => {});
+      await authenticated?.catch(() => {
+        // Only the cookie writes matter here; the route already answered the failure.
+      });
       for (const { name, value, options } of writes) response.cookies.set(name, value, options);
       response.headers.set(
         "Cache-Control",

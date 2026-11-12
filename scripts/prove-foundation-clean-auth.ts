@@ -168,7 +168,7 @@ async function run() {
           },
           transport
         ),
-      /^Error: A verified foundation account session is required$/
+      /^FoundationSessionError: A verified foundation account session is required$/
     );
     const current = await readFoundationOwnerPostingTerms(api);
     const catalogue = readBaselinePostingTermsCatalogue();
