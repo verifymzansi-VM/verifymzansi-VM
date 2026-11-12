@@ -708,6 +708,29 @@ export async function cancelOzowPaymentRequest(paymentRequestId: string): Promis
   await ozowRequest(`/v1/payments/${encodeURIComponent(paymentRequestId)}/cancel`, "POST");
 }
 
+const SIGNATURE_HEADER_PARTS = ["id", "timestamp", "signature"] as const;
+type SignatureHeaders = Record<(typeof SIGNATURE_HEADER_PARTS)[number], string>;
+
+/**
+ * The signing headers of a notice. The Svix library behind Ozow's notices sends
+ * either `svix-*` or the Standard Webhooks `webhook-*` names. One complete set
+ * is required; a header sent under both names must carry the same value, or the
+ * notice is refused. The two styles are never mixed into one set.
+ */
+export function readOzowSignatureHeaders(headers: Pick<Headers, "get">): SignatureHeaders | null {
+  const styles = (["svix", "webhook"] as const).map((prefix) =>
+    SIGNATURE_HEADER_PARTS.map((part) => headers.get(`${prefix}-${part}`))
+  );
+  const [svix, standard] = styles;
+  if (SIGNATURE_HEADER_PARTS.some((_, i) => svix[i] && standard[i] && svix[i] !== standard[i])) {
+    return null;
+  }
+  const complete = styles.find((values) => values.every(Boolean));
+  if (!complete) return null;
+  const [id, timestamp, signature] = complete as string[];
+  return { id, timestamp, signature };
+}
+
 export function verifyOzowWebhookSignature(body: string, headers: Pick<Headers, "get">): boolean {
   const secret = env("OZOW_WEBHOOK_SECRET");
   if (!secret) {
@@ -715,19 +738,18 @@ export function verifyOzowWebhookSignature(body: string, headers: Pick<Headers, 
     return false;
   }
 
-  const svixId = headers.get("svix-id");
-  const svixTimestamp = headers.get("svix-timestamp");
-  const svixSignature = headers.get("svix-signature");
-
-  if (!svixId || !svixTimestamp || !svixSignature) {
+  const signed = readOzowSignatureHeaders(headers);
+  if (!signed) {
     return false;
   }
 
   try {
+    // The library checks the timestamp tolerance (five minutes) and compares
+    // signatures in constant time, whichever header style was sent.
     new Webhook(secret).verify(body, {
-      "svix-id": svixId,
-      "svix-timestamp": svixTimestamp,
-      "svix-signature": svixSignature,
+      "svix-id": signed.id,
+      "svix-timestamp": signed.timestamp,
+      "svix-signature": signed.signature,
     });
     return true;
   } catch {
@@ -747,6 +769,30 @@ export interface NormalizedOzowWebhook {
   amount: string | null;
   currencyCode: string | null;
   rawPayload: Record<string, unknown>;
+}
+
+/**
+ * Ozow's test-mode flag: `IsTest` (full notices) or `isTest`, as a boolean or
+ * the text "true"/"false" in any case. Null when absent. A flag that is present
+ * but unreadable, or two that disagree, give `unreadable`: null for a full
+ * notice, which must carry a clear flag (validateOzowConfirmation refuses null
+ * there), and true elsewhere, so production refuses it as a test.
+ */
+function readOzowTestFlag(
+  transaction: Record<string, unknown>,
+  unreadable: boolean | null
+): boolean | null {
+  const values = [transaction.IsTest, transaction.isTest]
+    .filter((value) => value !== undefined)
+    .map((value) =>
+      typeof value === "boolean"
+        ? value
+        : typeof value === "string" && /^(true|false)$/i.test(value)
+          ? value.toLowerCase() === "true"
+          : null
+    );
+  if (values.length === 0) return null;
+  return values.every((value) => value !== null && value === values[0]) ? values[0] : unreadable;
 }
 
 export function normalizeOzowWebhook(body: unknown): NormalizedOzowWebhook | null {
@@ -790,19 +836,15 @@ export function normalizeOzowWebhook(body: unknown): NormalizedOzowWebhook | nul
     toSafeString(transaction.currency_code) ||
     toSafeString(transaction.currency);
 
+  const full = "TransactionId" in transaction || "TransactionReference" in transaction;
   return {
     eventType,
     merchantReference,
     providerPaymentId,
     transactionId,
     siteCode: toSafeString(transaction.SiteCode) || toSafeString(transaction.siteCode),
-    isTest: transaction.IsTest === "True" ? true : transaction.IsTest === "False" ? false : null,
-    format:
-      "TransactionId" in transaction || "TransactionReference" in transaction
-        ? "full"
-        : !merchantReference && transactionId
-          ? "thin"
-          : "api",
+    isTest: readOzowTestFlag(transaction, full ? null : true),
+    format: full ? "full" : !merchantReference && transactionId ? "thin" : "api",
     status,
     amount,
     currencyCode,

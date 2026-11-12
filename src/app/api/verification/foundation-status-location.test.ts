@@ -29,19 +29,22 @@ const owner = "11111111-1111-4111-8111-111111111111",
   csrf = "c".repeat(64),
   rpc = vi.fn();
 let confirmed = false;
+// A case staff sent back, as the identity review stores it (or null).
+let returned: { reason: string; decision: "rejected" | "needs_resubmission" } | null = null;
+const caseId = "22222222-2222-4222-8222-222222222222";
 function snapshot() {
   return {
     version: 1,
     account_id: owner,
     generated_at: at,
     verification: {
-      case_id: null,
-      version: null,
+      case_id: returned ? caseId : null,
+      version: returned ? 2 : null,
       verified: false,
       phone_verified: false,
       locality_confirmed: confirmed,
       submission_pending: false,
-      return_reason: null,
+      return_reason: returned?.reason ?? null,
     },
     profile_facts: {
       legal_name_locked_at: null,
@@ -90,6 +93,7 @@ function request(body?: unknown, valid = true) {
 beforeEach(() => {
   vi.clearAllMocks();
   confirmed = false;
+  returned = null;
   vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
@@ -106,10 +110,10 @@ beforeEach(() => {
       return {
         data: {
           account_id: owner,
-          case_id: null,
-          case_version: null,
-          reason: null,
-          decision: null,
+          case_id: returned ? caseId : null,
+          case_version: returned ? 2 : null,
+          reason: returned?.reason ?? null,
+          decision: returned?.decision ?? null,
           identity_reviewed_at: null,
           id_document_uploaded_at: null,
           selfie_uploaded_at: null,
@@ -181,4 +185,46 @@ it("preserves the native confirmed-locality lock instead of overwriting it", asy
   rpc.mockResolvedValue({ data: null, error: { code: "PT409" } });
   expect((await POST(request({ province: "Gauteng", city: "Johannesburg" }))).status).toBe(403);
   expect(rpc).toHaveBeenCalledTimes(1);
+});
+it("shows the reviewer's explanation and reason code on both identity steps of a returned case", async () => {
+  const note =
+    "Please retake your photo in even light without glare. Keep the camera steady and make sure the details are sharp.";
+  returned = { reason: `Retake requested (blurry_image): ${note}`, decision: "needs_resubmission" };
+  const response = await GET(request());
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.steps).toEqual([
+    expect.objectContaining({
+      step_type: "id_doc",
+      status: "needs_resubmission",
+      reason_code: "blurry_image",
+      reason_note: note,
+    }),
+    expect.objectContaining({
+      step_type: "selfie",
+      status: "needs_resubmission",
+      reason_code: "blurry_image",
+      reason_note: note,
+    }),
+  ]);
+  expect(JSON.stringify(body)).not.toContain("Retake requested");
+  expect(body.steps[0]).not.toHaveProperty("rejection_reason");
+});
+it("shows a rejected case's explanation, and a reason in another form as written", async () => {
+  returned = {
+    reason: "Rejected (mismatch): The name does not match the ID.",
+    decision: "rejected",
+  };
+  let body = await (await GET(request())).json();
+  expect(body.steps[0]).toMatchObject({
+    status: "rejected",
+    reason_code: "mismatch",
+    reason_note: "The name does not match the ID.",
+  });
+  returned = { reason: "Synthetic return written another way", decision: "needs_resubmission" };
+  body = await (await GET(request())).json();
+  expect(body.steps[0]).toMatchObject({
+    reason_code: null,
+    reason_note: "Synthetic return written another way",
+  });
 });

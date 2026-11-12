@@ -77,6 +77,110 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Members are told when their ID is sent back, 10 November 2026
+
+`20261110173012_verification_returned_notice.sql` is not applied yet. It needs
+`20261110045944_intro_trial_at_first_approval.sql` (it replaces the mail claim
+that update changed) and refuses to run without it. It adds no command and
+changes no API signature, so the website release that uses it also works with a
+database that does not have it: the member then sees the reviewer's reason on
+the verification page, but gets no notice or email.
+
+Until now, when staff sent an identity case back, the reviewer's reason was
+stored and nothing told the member. From this update:
+
+- **Notice and email.** Sending an identity case back
+  (`internal.return_identity_submission`, which the identity review calls
+  through `internal.return_frontend_identity_step`) adds a
+  `verification_returned` notification for the member and queues a
+  `verification_returned` email. Both point at the return request by id only;
+  neither holds the reason or any identity detail. The email asks the member to
+  sign in and open the verification page, which shows the reason. Business and
+  restriction cases are unchanged.
+- **Kinds.** The closed notification and outbox kind lists gain
+  `verification_returned`. The mail claim
+  (`internal.claim_supported_notification_outbox`) accepts it (lists of up to 20
+  kinds) and gives no recipient for a closed account, as for the other account
+  notices. The enquiry-inbox reads (`internal.list_my_notifications`,
+  `internal.list_my_frontend_notifications`) leave it out, as they do the other
+  account notices; the notifications page's read
+  (`internal.list_my_frontend_notices`) lists it.
+- Cases sent back before the update are not notified afterwards.
+
+**Order: deploy first, then apply.** Unlike most updates, apply this one after
+the website release from the same pull request is deployed. That release works
+without it (its email job asks for the earlier kinds when the database refuses
+the new one), whereas the website deployed before it cannot read a
+`verification_returned` notice: its notifications list would show its error
+state to a member who has one. The release preflight reports the database behind
+by this update until it is applied. For the same reason, if that release is ever
+reverted, run the rollback below first.
+
+**Applying.** Production has `20261110045944_intro_trial_at_first_approval.sql`
+(applied 10 November 2026). The website release that knows the
+`verification_returned` kind must be live.
+
+1. Run `../preflight/20261110173012_verification_returned_notice.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "reviewed bodies, update not applied".
+2. Run the update. It locks the notification and outbox tables without waiting
+   and stops without changing anything if either is busy; run it again. Run the
+   preflight again: it must now read "already applied".
+
+## Staff see how each selfie was taken, 11 November 2026
+
+`20261111184619_selfie_capture_method.sql` is not applied yet. It needs no
+earlier pending update.
+
+The verification page sends, with the selfie, how the member's browser says it
+was taken (`camera` for the live camera step, `file_upload` for the "Or upload a
+photo" fallback) and whether the browser's liveness challenge was completed.
+Until now the website dropped both, so the staff identity viewer never showed
+its "Uploaded file" warning. From this update:
+
+- **Stored with the selfie's upload receipt.**
+  `private.frontend_verification_uploads` gains `capture_method` and
+  `browser_liveness_passed`, both nullable. They are what the browser reported,
+  not a proof: nothing grants, approves or scores anything from them.
+  Constraints keep them consistent (both set or both empty, only on a selfie, a
+  passed liveness challenge only with the camera). Receipts recorded before the
+  update stay empty ("not recorded").
+- **Recording.** New member command
+  `api.record_my_selfie_capture(request, method, liveness)`. The website checks
+  the two form fields against the closed set and calls it with the member's own
+  session after reserving the selfie upload and before completing it. It accepts
+  only the member's own selfie receipt while that upload is not completed; after
+  completion it changes nothing. Calling it directly gives a member nothing that
+  sending the form would not.
+- **Staff read.** New
+  `api.get_frontend_staff_selfie_capture(case, claim generation, claim nonce)`
+  returns, to staff with `evidence:view` holding a live claim on an open
+  identity case that is not their own, the current submission, its selfie and
+  the recorded answer. It opens no evidence and writes no access log row (a
+  deliberate exception: the answer is review context, not identity evidence, and
+  the evidence metadata read that the viewer makes first records the access).
+  The website turns the answer into the viewer's existing signals: "Uploaded
+  file", "Liveness not verified", or "Browser liveness check completed"
+  (labelled as not an attestation).
+- **Retention.** `internal.scrub_frontend_verification_receipt`, which clears
+  the ID number receipt when an evidence file is deleted, also clears the
+  answer, so it goes with the selfie file (30 days after the case decision); the
+  receipt itself follows the identity history.
+- No existing API command changes signature, grant or owner. The upload
+  completion is unchanged.
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the two new commands, and the deploy preflight probes every
+command in `../runtime-api-manifest.json`, so a deploy without the update stops
+there. Earlier website releases do not use the new commands and pass the deploy
+preflight with the update applied, so they can still be deployed or redeployed.
+
+**Applying.**
+
+1. Run `../preflight/20261111184619_selfie_capture_method.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "reviewed bodies, update not applied".
+
 ## A failed payment start never blocks a member, 11 November 2026
 
 `20261111212320_payment_start_retry.sql` is not applied yet. It needs no earlier
@@ -159,6 +263,17 @@ redeployed.
    record it (its register line and `productionCheck`) as described above.
 
 The reviewed rollback is
+`../rollback/20261110173012_verification_returned_notice.down.sql` (only with
+the owner's decision; prefer a forward fix). It restores the earlier bodies and
+kind lists, and deletes every `verification_returned` notification and queued
+email to do so; return requests and their reasons are kept.
+
+`../rollback/20261111184619_selfie_capture_method.down.sql` (only with the
+owner's decision; prefer a forward fix). Revert and deploy the website release
+first: the rollback removes the two commands that release calls. It restores the
+receipt scrub byte for byte and drops the two columns with the answers recorded
+so far.
+
 `../rollback/20261111212320_payment_start_retry.down.sql` (only with the owner's
 decision; prefer a forward fix). Revert and deploy the website release first:
 the rollback removes the command that release's payment status job calls. It
@@ -1590,6 +1705,8 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   every count 0, after "already applied, trials to restart: 0", production
   fingerprint then matched the replay (section The free week starts at the first
   approved post)
+- `20261110173012_verification_returned_notice.sql`: pending
+- `20261111184619_selfie_capture_method.sql`: pending
 - `20261111212320_payment_start_retry.sql`: pending
 
 <!-- applied-register:end -->

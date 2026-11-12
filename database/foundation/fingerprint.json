@@ -34,6 +34,8 @@
       "triggers": "cbed8a32da7aa1ca298aaa7eca019d1f"
     },
     "pendingApplication": [
+      "20261110173012_verification_returned_notice.sql",
+      "20261111184619_selfie_capture_method.sql",
       "20261111212320_payment_start_retry.sql"
     ]
   },
@@ -41,7 +43,7 @@
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 55,
+  "updateCount": 57,
   "lastUpdate": "20261111212320_payment_start_retry.sql",
   "categories": {
     "column_grants": {
@@ -49,28 +51,28 @@
       "fingerprint": "11724f805587a82326eae936e0200f0c"
     },
     "columns": {
-      "items": 1093,
-      "fingerprint": "861ce3f25b51fe598e752c8bfa02ebf9"
+      "items": 1095,
+      "fingerprint": "6e1dd0c6675e1271d1fc83e63008d8ec"
     },
     "constraints": {
-      "items": 967,
-      "fingerprint": "dcd860d5723cc9ae7274c662197afdde"
+      "items": 969,
+      "fingerprint": "769b61cf30c14d1447f4007af348cb5c"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 751,
-      "fingerprint": "8fad364287a153e8533edfae52908731"
+      "items": 755,
+      "fingerprint": "beb267422515fcb16e5e7ac06dabc350"
     },
     "function_grants": {
-      "items": 603,
-      "fingerprint": "e531c3822dfd5da59fe4f2b51ee624e2"
+      "items": 607,
+      "fingerprint": "bb85cb924f8a586dfb33428fea9c6c0a"
     },
     "function_metadata": {
-      "items": 751,
-      "fingerprint": "2ca15b42d98bd9d33310fc4f38532228"
+      "items": 755,
+      "fingerprint": "92b811a8ddf250daaeefa4c3ec10abed"
     },
     "indexes": {
       "items": 375,

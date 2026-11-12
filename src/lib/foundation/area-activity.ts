@@ -2,11 +2,7 @@ import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { settleStaffCommand } from "./staff-command";
 import type { AuditLogEntry } from "../utils/admin-queries";
-const labels = {
-  market: "MZANSI_MARKET",
-  business: "MZANSI_BUSINESS",
-  tourism_events: "PROMOTIONS_EVENTS",
-} as const;
+import { restoredArea } from "./areas";
 export async function readFrontendAreaActivity(
   api: FoundationAuthenticatedApi,
   callerId: string,
@@ -52,7 +48,7 @@ export async function readFrontendAreaActivity(
   );
   const items: AuditLogEntry[] = result.items.map((row) => ({
     ...row,
-    area: row.area ? labels[row.area] : null,
+    area: row.area ? restoredArea(row.area) : null,
     metadata: {},
   }));
   return { items, today: result.today };

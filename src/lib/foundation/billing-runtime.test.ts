@@ -269,24 +269,42 @@ it("passes validated confirmation facts to the atomic native settlement command"
     },
   });
 });
+// A correctly signed notice that can never apply is refused with its reason
+// and acknowledged, not retried (PAY-08).
 it.each([
-  { amount: "0.01" },
-  { currencyCode: "USD" },
-  { siteCode: "wrong-site" },
-  { providerPaymentId: uuid(9) },
-  { isTest: true },
-])("does not settle inconsistent provider evidence", async (change) => {
-  await expect(
-    applyFoundationOzowNotification({ ...notification(), ...change }, "signed mismatch", service)
-  ).rejects.toMatchObject({ status: 400 });
+  [{ amount: "0.01" }, "amount_mismatch"],
+  [{ currencyCode: "USD" }, "currency_mismatch"],
+  [{ siteCode: "wrong-site" }, "site_code_mismatch"],
+  [{ providerPaymentId: uuid(9) }, "payment_id_mismatch"],
+  [{ isTest: true }, "test_mode_mismatch"],
+  [{ isTest: true, format: "api" as const }, "test_mode_mismatch"],
+  [{ isTest: null }, "test_mode_mismatch"],
+])("does not settle inconsistent provider evidence %j", async (change, rejected) => {
+  expect(
+    await applyFoundationOzowNotification(
+      { ...notification(), ...change },
+      "signed mismatch",
+      service
+    )
+  ).toEqual({ success: true, rejected });
   expect(machine.mock.calls.some(([name]) => name === "apply_provider_event")).toBe(false);
 });
-it("ignores an unknown merchant reference without creating a payment", async () => {
+it("refuses an unknown merchant reference without creating a payment", async () => {
   machine.mockResolvedValueOnce({ data: null, error: null });
   expect(await applyFoundationOzowNotification(notification(), "signed unknown", service)).toEqual({
     success: true,
-    ignored: true,
+    rejected: "unknown_payment",
   });
+  expect(machine).toHaveBeenCalledTimes(1);
+});
+it("asks for the notice again while its payment has no stored request", async () => {
+  machine.mockResolvedValueOnce({
+    data: { ...paymentDto(), provider_request_id: null },
+    error: null,
+  });
+  await expect(
+    applyFoundationOzowNotification(notification(), "signed early", service)
+  ).rejects.toMatchObject({ status: 503 });
   expect(machine).toHaveBeenCalledTimes(1);
 });
 it("does not reconcile a payment whose persisted claim was not obtained", async () => {

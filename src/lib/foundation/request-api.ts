@@ -27,6 +27,7 @@ import {
 
 type RequestCookies = Required<Pick<CookieMethodsServer, "getAll" | "setAll">>;
 export class FoundationSessionError extends Error {
+  override name = "FoundationSessionError";
   constructor(readonly status: 401 | 503) {
     super("A verified foundation account session is required");
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useErrorReference } from "@/hooks/use-error-reference";
 import { CloudOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
@@ -14,6 +15,7 @@ export default function ListingError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
+  const reference = useErrorReference(error);
   useEffect(() => {
     console.error("[ListingError]", error.digest ?? error.message);
   }, [error]);
@@ -35,7 +37,7 @@ export default function ListingError({
             </>
           }
           showNextSteps
-          footnote={error.digest ? <>Error reference: {error.digest}</> : undefined}
+          footnote={reference ? <>Error reference: {reference}</> : undefined}
         />
       </StatePanelPage>
       <Footer />

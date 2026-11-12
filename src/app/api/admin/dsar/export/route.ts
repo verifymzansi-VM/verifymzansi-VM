@@ -29,7 +29,9 @@ const exportSchema = z.object({ requestId: uuidSchema });
  * 20261109073519_post_lifecycle_guards.sql added event_submissions). */
 const FOUNDATION_EXPORT_DATASET_COUNT = 33;
 
-class ExportIncompleteError extends Error {}
+class ExportIncompleteError extends Error {
+  override name = "ExportIncompleteError";
+}
 
 type Row = Record<string, unknown>;
 type Admin = ReturnType<typeof createAdminClient>;
