@@ -656,7 +656,7 @@ same fingerprints.
 `20261112122001_publish_posting_terms_v4.sql` is not applied yet. It needs no
 earlier pending update. It publishes posting terms version `posting-v4`
 (`src/lib/legal/terms-documents/posting-v4.json`, canonical hash
-`ztKvrCyqPz9iQdII2hKLPMklhZey7FCilmj73EfFruc`) **without making it current**: it
+`exBEhOdoAMyb9mANZYuHtoLBKqcSyex22eciypux6BI`) **without making it current**: it
 inserts one row into `private.posting_terms_versions` and changes no function,
 table, grant, acceptance or current version. It refuses (55000) when the current
 version is not `posting-v3` (or already `posting-v4`), or when `posting-v4` is
@@ -671,25 +671,27 @@ new posts per paid slot in each 30-day period; one video per post, at most 2
 minutes (events 1 minute); prepaid, no automatic renewal, paid time from the
 confirmed payment, renewing early adds the new days after the current end; a
 price change applies only to new purchases; orders of R10,000 or less online,
-more by invoice and EFT; no payment fees added; the cooling-off consent before
-payment (ECT Act section 42(2)); not registered for VAT; the refund and
-cancellation policy (no change-of-mind refunds, a rejected post is not a refund
-reason, our failures are fixed first with extra days, individuals may cancel
-with 20 business days' notice and get the unused days less a cancellation fee,
-companies get no refund of unused days, billing errors refunded in full, refunds
-only to the paying account); the unchanged expiry, sold and paused rules with
-the 3-day grace; the free 7-day first post from its approval; and partner
-referral links (the customer is told who referred them and what the partner
-sees). `posting-v1` to `posting-v3` are unchanged. Other packages (the
+more by an invoice issued first and paid by EFT; no payment fees added; the
+cooling-off consent before payment (ECT Act section 42(2)), recorded before an
+invoice is paid; not registered for VAT; the refund and cancellation policy (no
+change-of-mind refunds, a rejected post is not a refund reason, our failures are
+fixed first with extra days, individuals may cancel with 20 business days'
+notice and get the unused days less a cancellation fee, other buyers get no
+refund of unused days, billing errors refunded in full, refunds only to the
+paying account, a purchase keeps the refund terms of the version it was made
+under, a paid slot ends for a breach only after written notice and, for an
+individual, 20 business days to remedy it); the unchanged expiry, sold and
+paused rules with the 3-day grace; the free 7-day first post from its approval;
+and partner referral links (the customer is told who referred them and what the
+partner sees). `posting-v1` to `posting-v3` are unchanged. Other packages (the
 Multi-listing and Business Sponsor prices) are not described: they are added in
 a later version when they go on sale.
 
-**Why it is not current yet.** The website still sells the plans `posting-v3`
+**Why it is not current yet.** The website sells the plans `posting-v3`
 describes, and checkout charges those prices. Making `posting-v4` current now
-would ask every member to accept prices and rules (slots, limits, invoices, the
-checkout consent, early renewal, refunds) that the site does not offer yet, and
-the Terms would no longer match what checkout charges. So the change has two
-steps:
+would ask every member to accept prices and rules that the site does not offer
+yet, and the Terms would no longer match what checkout charges. So publishing
+and switching are separate steps:
 
 1. **Now (this update and its release):** the document, its pinned hash in
    `catalogue.json` (whose `active_version` stays `posting-v3`) and this row.
@@ -697,27 +699,60 @@ steps:
    accept `posting-v4` (`internal.accept_posting_terms` accepts only the current
    version). `/terms/versions/posting-v4` shows the document with the line "Not
    in force yet. This version applies only from the date we announce; until then
-   the current Terms of Service apply." The archive page asks the database which
-   version is current, so the line disappears the moment `posting-v4` becomes
-   current, even before the release that names it active.
-2. **The switch (a separate reviewed update, in the pull request that sells the
-   new slots, roadmap P2):** one statement makes `posting-v4` current, after a
-   precondition that `posting-v4` is published with the hash above; in the same
-   pull request `catalogue.json` names `posting-v4` active, the Terms page's
-   fallback text (`src/lib/legal/terms-text.ts`) follows it, and the pricing
-   page, FAQ, Advertise page, plan step and checkout show the new prices. The
-   update is applied immediately before that release is deployed. Every member
-   then accepts `posting-v4` once before their next submission or edit. Before
-   the switch, every rule `posting-v4` states must be true on the site (the R69
-   catalogue, the 4-slot limit per person, 4 new posts per slot, the R10,000
-   online limit and the consent tick in P2; invoice payments in P2b; early
-   renewal in P3; the video limits in M4.4), and the owner gives the 14 days'
-   notice of a material change that `posting-v3` promises (by email or on the
-   Platform), unless the owner decides otherwise as for `posting-v3`.
+   the current Terms of Service apply." The page decides from the database's
+   current version, not from the release's `active_version`: a version listed
+   after the database's current one shows the line, so even a release deployed
+   before its database update cannot present `posting-v4` as in force. When the
+   database cannot be read, the newest version (and any version after the
+   release's active one) shows the line.
+2. **The switch (its own reviewed step, called P1b here, after every slice
+   below).** `posting-v4` becomes current only when every behaviour it promises
+   is live:
+   - the R69 Individual catalogue for any posting area with the old retail and
+     multi-listing plans off sale, at most 4 Individual slots per ID-reviewed
+     person (checkout only after ID acceptance, M3.8) with the free post, staff
+     grants and sponsored places not counted, the staff-raised limit for a
+     checked business, 4 new posts per paid slot per 30 days, the R10,000 online
+     limit and the consent tick at checkout with 30 days preselected (P2);
+   - invoices issued first, the consent recorded before the invoice is paid,
+     paid time from cleared money, the payment then recorded like an online
+     payment with its payment record (P2b; payment records M3.7);
+   - renewing early adds the new days after the current end (P3);
+   - one video per post, at most 2 minutes and 1 minute for events, checked
+     before publication (M4.4);
+   - the refund and cancellation tools: refunds only to the paying account, the
+     cancellation credit after 20 business days less the fee, extra days for our
+     failures, billing errors refunded in full (M3.4), and closing an account
+     handled as a cancellation request (M1.6b);
+   - the partner promises: a link or code added only at registration or within 7
+     days after it and before the first payment, then locked; one partner per
+     customer; the customer told who referred them, with "Referred by" and what
+     the partner sees shown on their account; commission only on slot payments,
+     for 12 months from the customer's first payment (PT1, PT2); the partner's
+     page showing only the fields `posting-v4` lists (PT4). Until then no
+     partner is approved.
+
+   The P1b update must refuse unless all of these hold where the database can
+   check them: `posting-v4` is published with the hash above; the current
+   version is `posting-v3`; and the plans on sale (`private.plan_versions` rows
+   that are public and not retired) are exactly the Individual slot for 30, 90
+   and 180 days at 6,900, 20,700 and 41,400 cents (R69, R207, R414), with one
+   slot each, 4 activations per 30 days and one video, and nothing else on sale.
+   The catalogue change that puts those plans on sale and retires the old ones
+   is applied in the same window, immediately before the P1b update (preferably
+   in the same file), and the release that shows the new prices
+   (`catalogue.json` naming `posting-v4` active, the Terms page's fallback text
+   in `src/lib/legal/terms-text.ts`, the pricing page, FAQ, Advertise page, plan
+   step and checkout) is deployed straight after it. The unit test that ties the
+   site's price constants to the active Terms version fails until those change
+   together. Before the switch, the owner gives members the at least 14 days'
+   notice of a material change that `posting-v3` promises, by email or on the
+   Platform. Every member then accepts `posting-v4` once before their next
+   submission or edit.
 
 **Applying.** Either order is safe: the row is unused until a later update makes
-it current, and the release reads the database only to know whether `posting-v4`
-is current. Follow the usual order (apply after the merge, before the deploy):
+it current, and the release reads the database only to know which version is
+current. Follow the usual order (apply after the merge, before the deploy):
 
 1. Run `../preflight/20261112122001_publish_posting_terms_v4.check.sql`
    unchanged in the SQL editor. It is read only. Continue only if its result is

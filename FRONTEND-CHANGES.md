@@ -197,11 +197,15 @@ Questions for the owner:
     This version applies only from the date we announce; until then the current
     Terms of Service apply.' under its title. Nothing else changes now:
     `/terms`, the pricing page and checkout keep the current prices, and members
-    keep accepting posting-v3. When the new slots go on sale (roadmap P2), one
-    reviewed database update makes posting-v4 current, the line disappears and
-    every member accepts the new version once. Do you approve the v4 wording and
-    the 'Not in force yet' line? The wording questions are listed in the pull
-    request.
+    keep accepting posting-v3. Posting-v4 becomes current only once everything
+    it promises works on the site: the R69 slots and their limits (P2), invoice
+    payments (P2b), renewing early (P3), the video limits (M4.4), the refund and
+    cancellation tools (M3.4, M1.6b) and the partner rules (PT1, PT2, PT4). So
+    the new prices go on sale only then, after at least 14 days' notice to
+    members; one reviewed database update then makes posting-v4 current, the
+    line disappears and every member accepts the new version once. Do you
+    approve the v4 wording, the 'Not in force yet' line and this timing? The
+    wording questions are listed in the pull request.
 
 <!-- frontend-ledger:start -->
 
@@ -534,8 +538,8 @@ days), the limits, invoice payment above R10,000, the cooling-off consent, the
 refund and cancellation policy, the free 7-day first post from its approval and
 partner referral links. It is published now but not in force: `/terms` and the
 posting forms keep `posting-v3` until a later reviewed database update makes
-`posting-v4` current together with the release that sells the new slots (roadmap
-P2). Until then its archive page says so.
+`posting-v4` current, once everything it promises works on the site. Until then
+its archive page says so.
 
 | File                                             | Kind              | Reason                                                                                                                                                                                    | What changes on screen                                                                                                                                                                                                                                                                                                                                                                                                                 | Proposed | Owner decision | Date       | Version      |
 | ------------------------------------------------ | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------- | ---------- | ------------ |

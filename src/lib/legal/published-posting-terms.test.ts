@@ -2,11 +2,11 @@ import { expect, it } from "vitest";
 import {
   getPublishedPostingTerms,
   assertPublishedPostingTerms,
-  isUpcomingPostingTermsVersion,
+  postingTermsAwaitingForce,
 } from "./published-posting-terms";
 import { buildTermsTextSections } from "./terms-text";
 import manifest from "./terms-documents/catalogue.json";
-import { RETAIL_OFFERS } from "@/lib/constants/pricing";
+import { ENTERPRISE_PLANS, RETAIL_OFFERS } from "@/lib/constants/pricing";
 
 const text = (version: string) =>
   getPublishedPostingTerms(version)!
@@ -57,20 +57,57 @@ it("makes posting-v3 current with the post lifecycle rules decided on 9 November
 it("publishes posting-v4 ahead of time without making it the active version", () => {
   expect(manifest.active_version).toBe("posting-v3");
   const v4 = getPublishedPostingTerms("posting-v4")!;
-  expect(v4.document_hash).toBe("ztKvrCyqPz9iQdII2hKLPMklhZey7FCilmj73EfFruc");
-  expect(isUpcomingPostingTermsVersion("posting-v4")).toBe(true);
-  for (const version of ["posting-v1", "posting-v2", "posting-v3", "posting-v5", "constructor"])
-    expect(isUpcomingPostingTermsVersion(version)).toBe(false);
+  expect(v4.document_hash).toBe("exBEhOdoAMyb9mANZYuHtoLBKqcSyex22eciypux6BI");
+});
+
+it("decides from the database's current version whether a version is in force yet", () => {
+  const awaiting = (current: string | null, catalogue = manifest) =>
+    Object.keys(catalogue.versions).filter((version) =>
+      postingTermsAwaitingForce(version, current, catalogue)
+    );
+  expect(awaiting("posting-v3")).toEqual(["posting-v4"]);
+  expect(awaiting("posting-v4")).toEqual([]);
+  expect(awaiting("posting-v1")).toEqual(["posting-v2", "posting-v3", "posting-v4"]);
+  // A release that already names posting-v4 active, deployed before the database
+  // update that makes it current, still shows posting-v4 as not in force.
+  const released = { ...manifest, active_version: "posting-v4" };
+  expect(awaiting("posting-v3", released)).toEqual(["posting-v4"]);
+  // Database unreadable (or a current version this release does not list): the
+  // newest version and any version after the active one show the line.
+  expect(awaiting(null)).toEqual(["posting-v4"]);
+  expect(awaiting("posting-v9")).toEqual(["posting-v4"]);
+  expect(awaiting(null, released)).toEqual(["posting-v4"]);
+  expect(postingTermsAwaitingForce("posting-v5", "posting-v3")).toBe(false);
+  expect(postingTermsAwaitingForce("constructor", null)).toBe(false);
 });
 
 // The site must never show one price while the Terms in force state another.
-// The release that sells Pricing v2 (roadmap P2) changes the retail offers, the
-// catalogue's active version and, through a reviewed database update, the
-// current version together.
-it("keeps the active Terms version in step with the retail prices the site shows", () => {
+// These price constants feed the pricing page's default catalogue and the
+// static price wording (FAQ, Advertise, plan step). In foundation mode the
+// prices charged come from the database catalogue, which this test cannot see:
+// the reviewed update that makes a new version current must check those
+// (database/foundation/updates/README.md, Posting Terms v4).
+it("keeps the site's price constants in step with the active Terms version", () => {
   const content = text(manifest.active_version);
+  const rand = (cents: number) => `R${(cents / 100).toLocaleString("en-US")}`;
+  expect(RETAIL_OFFERS.length).toBeGreaterThan(0);
   for (const offer of RETAIL_OFFERS)
-    expect(content).toContain(`R${offer.priceCents / 100} for ${offer.durationDays} days`);
+    expect(content).toContain(`${rand(offer.priceCents)} for ${offer.durationDays} days`);
+  // A "was" price is shown only while the active Terms allow discounts.
+  const noDiscounts = content.includes("There are no discounts");
+  const wasPrices = RETAIL_OFFERS.filter((offer) => offer.compareAtCents !== undefined);
+  for (const offer of wasPrices)
+    expect(noDiscounts, `${rand(offer.compareAtCents!)} was-price`).toBe(false);
+  // Multi-listing prices are shown only while the active Terms cover
+  // multi-listing plans or state each price.
+  const multiListingCovered = content.includes(
+    "Multi-listing plans bought online follow these Terms"
+  );
+  for (const plan of ENTERPRISE_PLANS)
+    expect(
+      multiListingCovered || content.includes(rand(plan.priceCents)),
+      `${plan.planCode} ${rand(plan.priceCents)}`
+    ).toBe(true);
 });
 
 it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
@@ -81,7 +118,7 @@ it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
     "Individual slots cost R69 per slot for each 30 days: R69 for 30 days, R207 for 90 days or R414 for 180 days",
     "An Individual slot can hold a post in any of the three posting areas",
     "You may hold 1 to 4 Individual slots at a time",
-    "The limit applies per ID-reviewed person, across all of your accounts, and each slot has its own end date",
+    "The limit counts every Individual slot held by the same ID-reviewed person, and each slot has its own end date",
     "each paid slot can take at most 4 new posts in each 30-day period",
     "Each post may include one video. A video may be at most 2 minutes long, and a video for an event at most 1 minute",
     "All slots are prepaid; nothing renews automatically",
@@ -89,21 +126,28 @@ it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
     "if you renew a slot before it ends, the new days start when its current days end",
     "Price changes apply only to new purchases",
     "Orders of R10,000 or less are paid online",
-    "For an order of more than R10,000, ask us for an invoice and pay it by EFT",
+    "For an order of more than R10,000, ask us for an invoice. We issue the invoice first and you pay it by EFT; the slots start when the money has cleared in our bank account",
+    "After a payment is confirmed (for an invoice, once the money has cleared), we issue a payment record",
     "We do not add payment fees",
-    "agree that the 7-day cooling-off period does not apply because the service starts immediately",
+    "agree that the 7-day cooling-off period therefore does not apply, because the service starts immediately",
+    "for an invoice order you confirm it when you ask for the invoice, and we record your confirmation before the invoice is paid",
     "under section 42(2)",
     "VerifyMzansi is not registered for VAT",
-    // The refund policy (pricing plan 8i, rules 1-8).
+    // The refund and cancellation policy.
     "A change of mind is not a reason for a refund",
     "A rejected post is not a reason for a refund",
     "we first put it right by adding the days you lost",
     "The slot continues for 20 business days after we receive your request",
     "minus a cancellation fee of R50",
     "Closing your account counts as a request to cancel all your slots",
-    "Companies, close corporations and trusts are not refunded for unused days",
+    "Buyers that are not individuals, such as companies, close corporations, trusts, partnerships and associations, are not refunded for unused days",
     "Billing errors and duplicate payments are refunded in full",
     "Refunds are paid only to the bank account that paid",
+    "A purchase made under an earlier version of these Terms keeps the refund terms of that version",
+    // A breach: content may be removed at once; a paid slot ends only after notice.
+    "Removing content or suspending an account under Prohibited content does not end your paid slots",
+    "the slot ends only if you have not remedied the breach within 20 business days after that notice (Consumer Protection Act, section 14(2)(b)(ii))",
+    "Paid slots end only as set out under Refunds & cancelling below",
     // Unchanged lifecycle rules and the 3-day grace.
     "You may buy a slot and reactivate such a post within 3 days; after that the post and its media are deleted",
     "deletion waits up to 24 hours more",
@@ -112,6 +156,7 @@ it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
     // The free first post, from its approval.
     "your first post is free for 7 days",
     "The 7 days start when we approve that post, not when you submit it",
+    "(a paid slot, a sponsored place or a trial we granted you), the post uses that slot instead",
     // Partners and referral links.
     "we tell you which partner referred you and what that partner can see",
     "A partner never sees your contact details, ID details, payment details",

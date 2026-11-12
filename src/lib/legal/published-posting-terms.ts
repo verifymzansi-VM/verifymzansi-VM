@@ -28,12 +28,26 @@ export function getPublishedPostingTerms(version: string) {
   return { ...structuredClone(entry.document), document_hash: entry.document_hash };
 }
 
-/** A version listed after the catalogue's active one is published ahead of
- * time: it comes into force only when a reviewed database update makes it
- * current, together with the release that names it active. */
-export function isUpcomingPostingTermsVersion(version: string) {
-  const order = Object.keys(manifest.versions);
-  return order.indexOf(version) > order.indexOf(manifest.active_version);
+type PostingTermsCatalogue = { active_version: string; versions: Record<string, string> };
+
+/** Whether a published version is still waiting to come into force. The
+ * database decides: a version listed after the one it holds as current (in
+ * catalogue order) is not in force yet, whatever this release names active, so
+ * a release deployed before its database update cannot present new terms as
+ * in force. When the database's current version is unknown (it cannot be read,
+ * or this release does not list it), the newest version and any version after
+ * this release's active one count as not in force. */
+export function postingTermsAwaitingForce(
+  version: string,
+  databaseCurrent: string | null,
+  catalogue: PostingTermsCatalogue = manifest
+) {
+  const order = Object.keys(catalogue.versions);
+  const index = order.indexOf(version);
+  if (index === -1) return false;
+  const current = databaseCurrent === null ? -1 : order.indexOf(databaseCurrent);
+  if (current !== -1) return index > current;
+  return index > order.indexOf(catalogue.active_version) || index === order.length - 1;
 }
 
 export function assertPublishedPostingTerms(document: FoundationPostingTerms) {

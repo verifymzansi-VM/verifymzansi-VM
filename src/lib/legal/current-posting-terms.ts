@@ -5,7 +5,7 @@ import { readFoundationRuntimeConnection } from "@/lib/foundation/runtime-connec
 import {
   assertPublishedPostingTerms,
   getPublishedPostingTerms,
-  isUpcomingPostingTermsVersion,
+  postingTermsAwaitingForce,
 } from "./published-posting-terms";
 
 export async function readCurrentPublishedPostingTerms() {
@@ -17,20 +17,21 @@ export async function readCurrentPublishedPostingTerms() {
   return getPublishedPostingTerms(policy.version);
 }
 
-/** Whether a version published ahead of time is still waiting to come into
- * force. The database decides: the version is in force from the moment a
- * reviewed update makes it current, even before the release that names it
- * active is deployed. When the current version cannot be read, an upcoming
- * version counts as not in force. Earlier versions never wait. */
-export async function isPostingTermsVersionAwaitingForce(version: string) {
-  if (!isUpcomingPostingTermsVersion(version)) return false;
-  if (!process.env.FOUNDATION_SUPABASE_URL) return true;
+/** The version the database holds as current, or null when it cannot be read. */
+async function readDatabaseCurrentVersion() {
+  if (!process.env.FOUNDATION_SUPABASE_URL) return null;
   try {
     const policy = await readFoundationPostingTerms(
       createFoundationPublicApi(readFoundationRuntimeConnection())
     );
-    return policy?.version !== version;
+    return policy?.version ?? null;
   } catch {
-    return true;
+    return null;
   }
+}
+
+/** Whether a published version is still waiting to come into force, decided
+ * from the database's current version (see postingTermsAwaitingForce). */
+export async function isPostingTermsVersionAwaitingForce(version: string) {
+  return postingTermsAwaitingForce(version, await readDatabaseCurrentVersion());
 }

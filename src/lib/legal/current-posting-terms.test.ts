@@ -16,36 +16,45 @@ const current = (version: string) => ({
   document_hash: "A".repeat(43),
   document_path: `/terms/versions/${version}`,
 });
+const PUBLISHED = ["posting-v1", "posting-v2", "posting-v3", "posting-v4"];
+async function awaiting() {
+  const result: string[] = [];
+  for (const version of PUBLISHED)
+    if (await isPostingTermsVersionAwaitingForce(version)) result.push(version);
+  return result;
+}
 
-describe("a posting terms version published ahead of time", () => {
+describe("whether a published posting terms version is in force yet", () => {
   beforeEach(() => {
     readFoundationPostingTerms.mockReset();
     vi.stubEnv("FOUNDATION_SUPABASE_URL", "https://foundation.example.test");
   });
   afterEach(() => vi.unstubAllEnvs());
 
-  it("waits while the database keeps the earlier version current", async () => {
+  it("follows the database: versions after its current one are not in force yet", async () => {
     readFoundationPostingTerms.mockResolvedValue(current("posting-v3"));
-    await expect(isPostingTermsVersionAwaitingForce("posting-v4")).resolves.toBe(true);
+    await expect(awaiting()).resolves.toEqual(["posting-v4"]);
   });
 
-  it("is in force as soon as the database makes it current", async () => {
+  it("takes effect as soon as the database makes the new version current", async () => {
     readFoundationPostingTerms.mockResolvedValue(current("posting-v4"));
-    await expect(isPostingTermsVersionAwaitingForce("posting-v4")).resolves.toBe(false);
+    await expect(awaiting()).resolves.toEqual([]);
   });
 
-  it("counts as not in force when the current version cannot be read", async () => {
+  it("counts the newest and any later version as not in force when the database cannot be read", async () => {
     readFoundationPostingTerms.mockRejectedValue(new Error("unavailable"));
-    await expect(isPostingTermsVersionAwaitingForce("posting-v4")).resolves.toBe(true);
+    await expect(awaiting()).resolves.toEqual(["posting-v4"]);
     readFoundationPostingTerms.mockResolvedValue(null);
-    await expect(isPostingTermsVersionAwaitingForce("posting-v4")).resolves.toBe(true);
+    await expect(awaiting()).resolves.toEqual(["posting-v4"]);
+    // A current version this release does not know is treated the same way.
+    readFoundationPostingTerms.mockResolvedValue(current("posting-v9"));
+    await expect(awaiting()).resolves.toEqual(["posting-v4"]);
     vi.stubEnv("FOUNDATION_SUPABASE_URL", "");
-    await expect(isPostingTermsVersionAwaitingForce("posting-v4")).resolves.toBe(true);
+    await expect(awaiting()).resolves.toEqual(["posting-v4"]);
   });
 
-  it("never applies to the active or earlier versions, which need no database read", async () => {
-    for (const version of ["posting-v1", "posting-v2", "posting-v3", "unpublished"])
-      await expect(isPostingTermsVersionAwaitingForce(version)).resolves.toBe(false);
-    expect(readFoundationPostingTerms).not.toHaveBeenCalled();
+  it("is false for a version this release does not publish", async () => {
+    readFoundationPostingTerms.mockResolvedValue(current("posting-v3"));
+    await expect(isPostingTermsVersionAwaitingForce("posting-v5")).resolves.toBe(false);
   });
 });
