@@ -110,7 +110,28 @@ test("each access-policy invariant fails when the replayed schema breaks it", as
          set search_path = pg_catalog as 'select 1';
        grant execute on function internal.invariant_probe_public() to public;
        create function internal.invariant_probe_no_path() returns int language sql as 'select 1';
-       revoke execute on function internal.invariant_probe_no_path() from public;`,
+       revoke execute on function internal.invariant_probe_no_path() from public;
+       -- Executable by authenticated, but no api function reaches it.
+       create function internal.invariant_probe_unreached() returns int language sql
+         set search_path = pg_catalog as 'select 1';
+       revoke execute on function internal.invariant_probe_unreached() from public;
+       grant execute on function internal.invariant_probe_unreached() to authenticated;
+       -- Reached by an api wrapper, then through an invoker helper: allowed.
+       create function internal.invariant_probe_inner() returns int language sql
+         set search_path = pg_catalog as 'select 1';
+       create function internal.invariant_probe_outer() returns int language sql
+         set search_path = pg_catalog as 'select internal.invariant_probe_inner()';
+       create function api.invariant_probe_wrapper() returns int language sql
+         set search_path = pg_catalog as 'select internal.invariant_probe_outer()';
+       revoke execute on function internal.invariant_probe_inner(), internal.invariant_probe_outer(),
+         api.invariant_probe_wrapper() from public;
+       grant execute on function internal.invariant_probe_inner(), internal.invariant_probe_outer()
+         to authenticated;
+       -- A listed exception that is no longer flagged.
+       revoke execute on function internal.price_draft_actor() from authenticated;
+       create function private.invariant_probe_fn() returns int language sql
+         set search_path = pg_catalog as 'select 1';
+       revoke execute on function private.invariant_probe_fn() from public;`,
     ],
   });
   try {
@@ -121,6 +142,12 @@ test("each access-policy invariant fails when the replayed schema breaks it", as
     assert.deepEqual(byId["no-security-definer-in-api"], ["api.invariant_probe_definer()"]);
     assert.deepEqual(byId["no-public-execute"], ["internal.invariant_probe_public()"]);
     assert.deepEqual(byId["fixed-search-path"], ["internal.invariant_probe_no_path()"]);
+    assert.deepEqual(byId["internal-execute-only-behind-api"], [
+      "internal.invariant_probe_public()",
+      "internal.invariant_probe_unreached()",
+      "internal.price_draft_actor() (listed exception no longer needed; remove it)",
+    ]);
+    assert.deepEqual(byId["no-functions-in-private"], ["private.invariant_probe_fn()"]);
   } finally {
     await db.close();
   }

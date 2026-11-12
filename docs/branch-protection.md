@@ -46,8 +46,10 @@ such a check would block every pull request.
     `database/foundation/current/` snapshot and the API manifests and types
     (`database/foundation/README.md`). It also checks access-policy invariants
     on the rebuilt schema: row level security on every table, no PUBLIC execute,
-    no SECURITY DEFINER in `api`, a fixed `search_path` on every function
-    (`scripts/lib/foundation-replay.mjs`).
+    no SECURITY DEFINER in `api`, a fixed `search_path` on every function,
+    `anon`/`authenticated` execute on an `internal` function only when an `api`
+    function reaches it (reviewed exceptions listed), and no functions in
+    `private` (`scripts/lib/foundation-replay.mjs`).
   - `foundation-sql-lint`: runs plpgsql_check over every PL/pgSQL function of
     that rebuilt schema in a throwaway local Postgres 17 and compares the result
     with `database/foundation/lint-baseline.json`.

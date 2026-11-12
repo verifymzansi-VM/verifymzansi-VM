@@ -94,7 +94,9 @@ export default function LoginPage() {
     ? (() => {
         const params = new URLSearchParams(window.location.search);
         return {
-          justRegistered: params.get("registered") === "true",
+          justRegistered:
+            params.get("registered") === "true" || params.get("registered") === "invite",
+          invitedOnly: params.get("registered") === "invite",
           emailConfirmed: params.get("confirmed") === "true",
           error: params.get("error"),
           reason: params.get("reason"),
@@ -103,6 +105,7 @@ export default function LoginPage() {
       })()
     : {
         justRegistered: false,
+        invitedOnly: false,
         emailConfirmed: false,
         error: null as string | null,
         reason: null as string | null,
@@ -143,6 +146,18 @@ export default function LoginPage() {
             ? "Your verification link appears incomplete. Please request a new email and try again."
             : "Your sign-in link has expired or is invalid. Please try again.",
         variant: "destructive",
+      });
+    } else if (loginPageFlags.error === "registration_closed") {
+      toast({
+        title: "Registration is not open yet",
+        description:
+          "VerifyMzansi is open by invitation only for now. If you already have an account, sign in with the email you used.",
+        variant: "destructive",
+      });
+    } else if (loginPageFlags.error === "google_cancelled") {
+      toast({
+        title: "Google sign-in was not completed",
+        description: "Nothing was changed. Try again when you're ready.",
       });
     } else if (loginPageFlags.error === "auth_unavailable") {
       toast({
@@ -413,7 +428,11 @@ export default function LoginPage() {
 
       {justRegistered && !emailConfirmed && (
         <AuthNotice tone="info" icon={<Mail />} title="Check your email" role="status">
-          <p>We&apos;ve sent a confirmation link to your email address.</p>
+          <p>
+            {loginPageFlags.invitedOnly
+              ? "Registration is by invitation only for now. If your email was invited, we've sent it a confirmation link."
+              : "We've sent a confirmation link to your email address."}
+          </p>
           <Button
             type="button"
             variant="outline"

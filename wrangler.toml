@@ -60,6 +60,9 @@ FOUNDATION_PROJECT_REF = "gntzjtuncsyefujajmjy"
 FOUNDATION_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_0nTWArCyTVta1nDx_U3u1Q_YOdMfZpi"
 FOUNDATION_PASSWORD_AUTH_MODE = "native-captcha"
 FOUNDATION_REGISTRATION_ENABLED = "true"
+# Sign-up is by invitation only (database sign-up guard); the registration
+# reply says so. Set to "false" when public registration opens.
+FOUNDATION_REGISTRATION_INVITE_ONLY = "true"
 FOUNDATION_AUTH_CALLBACK_ENABLED = "true"
 FOUNDATION_RECOVERY_ENABLED = "true"
 FOUNDATION_PHONE_VERIFICATION_ENABLED = "true"
@@ -246,6 +249,9 @@ FOUNDATION_PROJECT_REF = "gntzjtuncsyefujajmjy"
 FOUNDATION_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_0nTWArCyTVta1nDx_U3u1Q_YOdMfZpi"
 FOUNDATION_PASSWORD_AUTH_MODE = "native-captcha"
 FOUNDATION_REGISTRATION_ENABLED = "true"
+# Sign-up is by invitation only (database sign-up guard); the registration
+# reply says so. Set to "false" when public registration opens.
+FOUNDATION_REGISTRATION_INVITE_ONLY = "true"
 FOUNDATION_AUTH_CALLBACK_ENABLED = "true"
 FOUNDATION_RECOVERY_ENABLED = "true"
 FOUNDATION_PHONE_VERIFICATION_ENABLED = "true"

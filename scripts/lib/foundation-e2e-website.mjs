@@ -100,6 +100,7 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
     // Same switches as production (wrangler.toml [vars]).
     FOUNDATION_PASSWORD_AUTH_MODE: "native-captcha",
     FOUNDATION_REGISTRATION_ENABLED: "true",
+    FOUNDATION_REGISTRATION_INVITE_ONLY: "true",
     FOUNDATION_AUTH_CALLBACK_ENABLED: "true",
     FOUNDATION_RECOVERY_ENABLED: "true",
     FOUNDATION_PHONE_VERIFICATION_ENABLED: "true",
