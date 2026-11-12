@@ -174,10 +174,20 @@ export function restoredPublicRow(
 /** The reads behind a public post page: the post, its contact channels and its
  * card presentation (business type and form fields). Null when the post is not
  * public. */
-export async function readRestoredPublicDetail(api: FoundationPublicApi, id: string) {
+/** A publicly live post with its presentation, as its detail page reads it.
+ * The link preview asks for one kind and skips the contact-channel read it
+ * does not show. */
+export async function readRestoredPublicDetail(
+  api: FoundationPublicApi,
+  id: string,
+  options: { kind?: FoundationPublicPostCore["kind"]; withContactChannels?: boolean } = {}
+) {
   const post = await readFoundationPublicPost(api, { id });
-  if (!post) return null;
-  const contact_channels = await readFoundationPublicContactChannels(api, { id });
+  if (!post || (options.kind && post.kind !== options.kind)) return null;
+  const contact_channels =
+    options.withContactChannels === false
+      ? []
+      : await readFoundationPublicContactChannels(api, { id });
   const presentation = (
     await searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 })
   ).items[0]?.presentation;

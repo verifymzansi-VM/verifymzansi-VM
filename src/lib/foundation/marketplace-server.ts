@@ -8,6 +8,7 @@ import {
   restoredPublicRow,
   type PublicCollection,
 } from "./marketplace-read";
+import type { FoundationPublicPostCore } from "./public-post-contract";
 import { readPublicBusinessStickers } from "./business-seen";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 import type {
@@ -71,6 +72,31 @@ export const restoredPublicDetail = cache(async (id: string) => {
   if (!z.uuid().safeParse(id).success) return null;
   return readRestoredPublicDetail(foundationServerPublicApi(), id);
 });
+
+/**
+ * The link-preview card (`/api/share-preview`): title, place, price and cover
+ * of a publicly live post of the requested kind, null otherwise (unknown,
+ * unpublished, expired or another kind). No seller, contact, description or
+ * evidence field leaves here.
+ */
+export async function restoredSharePreview(kind: FoundationPublicPostCore["kind"], id: string) {
+  if (!z.uuid().safeParse(id).success) return null;
+  const post = await readRestoredPublicDetail(foundationServerPublicApi(), id, {
+    kind,
+    withContactChannels: false,
+  });
+  if (!post) return null;
+  const row = restoredPublicRow(post, post);
+  return {
+    title: row.title,
+    tourism: post.area === "tourism_events",
+    location_city: row.location_city,
+    location_province: row.location_province,
+    price_cents: row.price_cents,
+    video_thumbnail: row.video_thumbnail,
+    has_video: row.videos.length > 0,
+  };
+}
 
 export const restoredListingDetail = cache(async (id: string) => {
   const post = await restoredPublicDetail(id);

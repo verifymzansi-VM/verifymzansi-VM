@@ -85,8 +85,8 @@ export async function confirmMediaUploads({
     }
 
     // Only uploads that passed server-side validation (validated_at set) may
-    // be attached to content. Direct-R2 uploads that skipped the
-    // /api/media/upload-complete validation step are rejected here.
+    // be attached to content. Tracking rows that never passed validation
+    // (such as old direct-to-R2 uploads) are rejected here.
     const savedUrlSet = new Set(
       (savedUploads ?? [])
         .filter((upload) => upload.validated_at != null)
