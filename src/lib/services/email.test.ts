@@ -127,6 +127,21 @@ describe("email service", () => {
     expect(sold.text).toContain("deleted, with its photos and videos, shortly");
     expect(`${expired.text}${sold.text}`).not.toMatch(/3 days|30 days/);
   });
+  it("tells a member their ID was sent back and links to verification, without the reason", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "verification_returned",
+      "foundation-outbox/returned"
+    );
+    const [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.subject).toBe("Your ID check needs another look");
+    expect(message.text).toContain("We could not complete your ID check");
+    expect(message.text).toContain("https://verifymzansi.com/verification");
+    expect(message.html).toContain("https://verifymzansi.com/verification");
+    expect(options.idempotencyKey).toBe("foundation-outbox/returned");
+    vi.unstubAllEnvs();
+  });
   it("passes durable job keys to Resend for repeatable notices", async () => {
     await sendModerationNoticeEmail({
       email: "user@example.com",

@@ -5,8 +5,10 @@
 // (3-day grace, sold and paused posts keep their slot, events deleted at
 // their end, late-payment extension, cutover dates, owner reads with the
 // deletion date), 20261109224337_fix_post_command_target.sql (saving an
-// edit of an existing event) and 20261110045944_intro_trial_at_first_approval.sql
-// (the free week starts when the first post is approved).
+// edit of an existing event), 20261110045944_intro_trial_at_first_approval.sql
+// (the free week starts when the first post is approved) and
+// 20261110173012_verification_returned_notice.sql (a member whose ID is sent
+// back gets a notice and an email).
 //
 // Replays database/foundation (prelude, candidate.sql, every update) into the
 // throwaway, network-less Postgres 17 container used by the SQL lint gate,
@@ -44,6 +46,7 @@ const RULES = "20261109104020_post_expiry_rules.sql";
 const TERMS_V3 = "20261109173012_posting_terms_v3.sql";
 const TARGET_FIX = "20261109224337_fix_post_command_target.sql";
 const TRIAL = "20261110045944_intro_trial_at_first_approval.sql";
+const RETURNED = "20261110173012_verification_returned_notice.sql";
 const companion = (folder, update, suffix) =>
   readFileSync(`database/foundation/${folder}/${update.replace(/\.sql$/, suffix)}`, "utf8");
 const GUARDS_PREFLIGHT = companion("preflight", GUARDS, ".check.sql");
@@ -56,6 +59,8 @@ const TARGET_FIX_PREFLIGHT = companion("preflight", TARGET_FIX, ".check.sql");
 const TARGET_FIX_ROLLBACK = companion("rollback", TARGET_FIX, ".down.sql");
 const TRIAL_PREFLIGHT = companion("preflight", TRIAL, ".check.sql");
 const TRIAL_ROLLBACK = companion("rollback", TRIAL, ".down.sql");
+const RETURNED_PREFLIGHT = companion("preflight", RETURNED, ".check.sql");
+const RETURNED_ROLLBACK = companion("rollback", RETURNED, ".down.sql");
 const CATALOGUE = JSON.parse(readFileSync("src/lib/legal/terms-documents/catalogue.json", "utf8"));
 const FINGERPRINT = readFileSync("database/foundation/fingerprint.sql", "utf8");
 const TERMS = {
@@ -1776,8 +1781,244 @@ try {
   );
   // The later checks keep the stand-in they were written with.
   q(`${sharedIdentity};`);
-  applySteps(database, steps.slice(trialIndex + 1));
-  console.log(`Applied ${TRIAL} and any later updates.`);
+  const returnedIndex = steps.findIndex((step) => step.label === RETURNED);
+  assert.ok(returnedIndex > trialIndex, `${RETURNED} is missing`);
+  applySteps(database, steps.slice(trialIndex + 1, returnedIndex));
+
+  // ------------------------------------------- ID sent back: notice and email
+  const returnedStep = steps[returnedIndex];
+  const idReviewer = json(`select vmtest.staff('idreviewer','admin');`);
+  const idMember = user("idMember"),
+    idNotified = user("idNotified");
+  const RETURN_REASON =
+    "Retake requested (blurry_image): Please retake your photo in even light without glare.";
+  // An open identity (or business) case of the member, as the upload flow
+  // opens it; a reviewer claims it through the production command.
+  const openCase = (owner, kind = "kyc") =>
+    scalar(
+      `insert into private.evidence_cases(subject_id,kind) values('${owner.id}','${kind}') returning id;`
+    );
+  const sendBack = (caseId) => {
+    const lease = json(staffMember(idReviewer, `select api.claim_evidence_case('${caseId}');`));
+    const version = scalar(`select version from private.evidence_cases where id='${caseId}';`);
+    return json(
+      staffMember(
+        idReviewer,
+        `select api.return_identity_submission('${caseId}',${version},'${lease.claim_generation}','${lease.claim_nonce}','${RETURN_REASON}');`
+      )
+    );
+  };
+  const requestOf = (caseId, version) =>
+    scalar(
+      `select id from private.verification_return_requests where case_id='${caseId}' and case_version=${version};`
+    );
+  const told = (owner, table) =>
+    json(
+      table === "notifications"
+        ? `select coalesce(jsonb_agg(jsonb_build_object('subject_id',subject_id,'post_id',post_id,'organisation_id',organisation_id) order by created_at),'[]') from private.notifications where account_id='${owner.id}' and kind='verification_returned';`
+        : `select coalesce(jsonb_agg(jsonb_build_object('subject_id',subject_id,'dedupe_key',dedupe_key) order by created_at),'[]') from private.outbox_events where owner_id='${owner.id}' and kind='verification_returned';`
+    );
+  const returnedPreflight = () => preflight(RETURNED_PREFLIGHT);
+  const RETURNED_BODIES = [
+    [
+      "internal.return_identity_submission(uuid,integer,text,uuid,text)",
+      "8f14802233e3eabd10580aee3ff923a7",
+      "bc4304d1f5191cae942d30780ce0c29c",
+    ],
+    [
+      "internal.claim_supported_notification_outbox(text[],integer)",
+      "f0a000c6709e523e5aa2ef59af2f1948",
+      "13d3edc000634dfd830ffd1baa846381",
+    ],
+    [
+      "internal.list_my_notifications(timestamp with time zone,uuid,integer)",
+      "73580f30d3e3e417244d51c67e77e349",
+      "7defb01cc11b56fcfc1417dd25127653",
+    ],
+    [
+      "internal.list_my_frontend_notifications(integer,boolean,timestamp with time zone)",
+      "c362f120c59bf8a4fe0b5c56b33abf95",
+      "c6961ccad51ed7b788a43a1c5a4fb505",
+    ],
+  ];
+  const bodyOf = (sig) =>
+    scalar(
+      `select md5(replace(prosrc,E'\\r\\n',E'\\n')) from pg_proc where oid='${sig}'::regprocedure;`
+    );
+  const kindsOf = (owner, sql) => json(member(owner, sql)).items.map((n) => n.kind);
+  const noticeKinds = (owner) =>
+    kindsOf(owner, "select api.list_my_frontend_notices(50,false,null);");
+  const inboxKinds = (owner) => kindsOf(owner, "select api.list_my_notifications(50);");
+  const frontendInboxKinds = (owner) =>
+    kindsOf(owner, "select api.list_my_frontend_notifications(50,false,null);");
+  const mailKinds = (kinds) =>
+    `select api.claim_supported_notification_outbox(array[${kinds.map((k) => `'${k}'`).join(",")}],50);`;
+
+  await check("ID sent back: before the update, the member is not told (BL-12)", () => {
+    for (const [sig, reviewed] of RETURNED_BODIES) assert.equal(bodyOf(sig), reviewed, sig);
+    const earlyCase = openCase(idMember);
+    const answer = sendBack(earlyCase);
+    assert.equal(answer.status, "needs_resubmission");
+    assert.ok(requestOf(earlyCase, answer.version), "the reason is stored");
+    assert.deepEqual(told(idMember, "notifications"), []);
+    assert.deepEqual(told(idMember, "outbox"), []);
+    fails(service(mailKinds(["verification_returned"])), "22023");
+  });
+  await check("ID sent back preflight: read only, summary only, counts earlier returns", () => {
+    const rows = returnedPreflight();
+    assert.deepEqual(
+      rows.map((r) => r[0]),
+      ["summary"],
+      JSON.stringify(rows)
+    );
+    assert.match(
+      rows[0][1],
+      /^verification returned notice: reviewed bodies, update not applied \(apply only once the website release that knows this kind is live\); identity cases sent back so far: [1-9]\d*; returned notices: 0; returned emails not yet sent: 0$/
+    );
+    const write = database.psql(
+      `${RETURNED_PREFLIGHT}\ninsert into vmtest.marker values(gen_random_uuid());`,
+      ["-A", "-t", "-1", "-v", "VERBOSITY=verbose"]
+    );
+    assert.notEqual(write.status, 0);
+    assert.match(write.stderr, /ERROR:\s+25006:/);
+  });
+  await check("ID sent back: drift and a premature rollback are refused", () => {
+    const before = fingerprint();
+    assert.match(fails(RETURNED_ROLLBACK, "55000"), /rollback precondition/);
+    assert.equal(fingerprint(), before);
+    for (const [sig] of RETURNED_BODIES) {
+      const live = q(`select pg_get_functiondef('${sig}'::regprocedure);`);
+      // The same function with one more space at the end of its body.
+      q(
+        `do $$begin execute replace(pg_get_functiondef('${sig}'::regprocedure),E'\\n$function$',E'\\n $function$'); end$$;`
+      );
+      const rows = returnedPreflight();
+      assert.equal(rows.length, 2, JSON.stringify(rows));
+      assert.match(rows[1][1], /is not the reviewed body/);
+      assert.match(fails(returnedStep.sql, "55000"), /drift/);
+      q(`${live};`);
+    }
+    // A kind list a later update widened is never narrowed by this update.
+    const kindsDef = scalar(
+      "select pg_get_constraintdef(oid) from pg_constraint where conname='notifications_kind_check';"
+    );
+    q(
+      `alter table private.notifications drop constraint notifications_kind_check, add constraint notifications_kind_check ${kindsDef.replace("'business_check_update'::text", "'business_check_update'::text, 'later_kind'::text")};`
+    );
+    const widened = returnedPreflight();
+    assert.equal(widened.length, 2, JSON.stringify(widened));
+    assert.match(widened[1][1], /notifications kinds are not the reviewed list/);
+    assert.match(fails(returnedStep.sql, "55000"), /kind drift/);
+    q(
+      `alter table private.notifications drop constraint notifications_kind_check, add constraint notifications_kind_check ${kindsDef};`
+    );
+    assert.equal(fingerprint(), before);
+  });
+
+  const returnedBefore = fingerprint();
+  applySteps(database, [returnedStep]);
+  const returnedAfter = fingerprint();
+  await check("ID sent back: the member gets one notice and one email, without the reason", () => {
+    assert.notEqual(returnedAfter, returnedBefore);
+    for (const [sig, , updated] of RETURNED_BODIES) assert.equal(bodyOf(sig), updated, sig);
+    assert.match(returnedPreflight()[0][1], /^verification returned notice: already applied;/);
+    // A case sent back before the update stays without a notice.
+    assert.deepEqual(told(idMember, "notifications"), []);
+    const caseId = openCase(idNotified);
+    const answer = sendBack(caseId);
+    const request = requestOf(caseId, answer.version);
+    assert.ok(request);
+    assert.deepEqual(told(idNotified, "notifications"), [
+      { subject_id: request, post_id: null, organisation_id: null },
+    ]);
+    assert.deepEqual(told(idNotified, "outbox"), [
+      { subject_id: request, dedupe_key: `verification_returned:${request}` },
+    ]);
+    // The member's notifications page lists it; the enquiry inbox does not,
+    // and no other member sees it.
+    assert.deepEqual(noticeKinds(idNotified), ["verification_returned"]);
+    assert.deepEqual(inboxKinds(idNotified), []);
+    assert.deepEqual(frontendInboxKinds(idNotified), []);
+    assert.deepEqual(noticeKinds(idMember), []);
+    // A business case sent back tells nobody.
+    sendBack(openCase(idMember, "business"));
+    assert.deepEqual(told(idMember, "notifications"), []);
+    assert.deepEqual(told(idMember, "outbox"), []);
+  });
+  await check(
+    "ID sent back: the mail claim hands it out, with no address for a closed account",
+    () => {
+      const email = scalar(`select email from auth.users where id='${idNotified.id}';`);
+      const claimed = json(service(mailKinds(["verification_returned"])));
+      assert.equal(claimed.length, 1);
+      assert.equal(claimed[0].kind, "verification_returned");
+      assert.equal(claimed[0].owner_id, idNotified.id);
+      assert.equal(claimed[0].recipient, email);
+      // 20 kinds are accepted, 21 are not.
+      const all = [
+        ...[
+          "payment_completed",
+          "payment_reversed",
+          "payment_reconciliation_required",
+          "trial_started",
+          "post_expired",
+          "post_expiry_reminder",
+          "draft_deletion_warning",
+          "post_deleted",
+          "verification_phone_confirmed",
+          "identity_accepted",
+        ],
+        ...[
+          "enquiry_received",
+          "account_warning",
+          "content_hidden",
+          "account_suspended",
+          "account_banned",
+          "appeal_decided",
+          "business_check_update",
+          "post_sold",
+          "post_kept",
+          "verification_returned",
+        ],
+      ];
+      q(service(mailKinds(["post_kept"])));
+      q(service(mailKinds(all)));
+      fails(service(mailKinds([...all, "post_kept"])), "22023");
+      // A closed account gets no email.
+      const closed = user("closed");
+      sendBack(openCase(closed));
+      q(
+        `insert into private.account_closures(user_id,closed_at,evidence_delete_after) select '${closed.id}',t,t+interval '90 days' from statement_timestamp() t;`
+      );
+      const forClosed = json(service(mailKinds(["verification_returned"]))).filter(
+        (item) => item.owner_id === closed.id
+      );
+      assert.equal(forClosed.length, 1);
+      assert.equal(forClosed[0].recipient, null);
+    }
+  );
+  await check("ID sent back: apply, roll back and apply again are clean", () => {
+    applySteps(database, [{ label: "ID sent back rollback", sql: RETURNED_ROLLBACK }]);
+    assert.equal(fingerprint(), returnedBefore, "the rollback leaves the pre-update schema");
+    for (const [sig, reviewed] of RETURNED_BODIES) assert.equal(bodyOf(sig), reviewed, sig);
+    assert.deepEqual(told(idNotified, "notifications"), [], "its notices are removed");
+    assert.deepEqual(told(idNotified, "outbox"), [], "its emails are removed");
+    assert.ok(
+      Number(scalar("select count(*) from private.verification_return_requests;")) > 0,
+      "the reasons are kept"
+    );
+    applySteps(database, [returnedStep]);
+    assert.equal(fingerprint(), returnedAfter, "re-applying gives the same schema");
+    applySteps(database, [returnedStep]);
+    assert.equal(fingerprint(), returnedAfter, "a repeated run changes nothing");
+    sendBack(openCase(idNotified));
+    assert.equal(told(idNotified, "notifications").length, 1);
+    // Removed again: the later mail checks expect only their own messages.
+    q("delete from private.outbox_events where kind='verification_returned';");
+  });
+
+  applySteps(database, steps.slice(returnedIndex + 1));
+  console.log(`Applied ${TRIAL}, ${RETURNED} and any later updates.`);
 
   // ----------------------------------------------------- cutover safety
   const endedRows = () =>
@@ -3063,7 +3304,11 @@ try {
       q(claim(earlier)); // the list of the application deployed before this update
       q(claim([...earlier, "post_sold"]));
       q(claim([...earlier, "post_sold", "post_kept"]));
-      fails(claim([...earlier, "post_sold", "post_kept", "post_kept"]), "22023");
+      q(claim([...earlier, "post_sold", "post_kept", "verification_returned"]));
+      fails(
+        claim([...earlier, "post_sold", "post_kept", "verification_returned", "post_kept"]),
+        "22023"
+      );
     }
   );
 

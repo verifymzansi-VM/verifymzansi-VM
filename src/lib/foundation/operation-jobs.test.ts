@@ -736,14 +736,23 @@ it("declares and delivers the sold-post notice within the database's kind limit"
   expect(await run()).toMatchObject({ succeeded: 1 });
   const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
   expect(lists.flat()).toEqual(expect.arrayContaining(["post_sold", "post_kept"]));
-  expect(new Set(lists.flat()).size).toBe(19);
-  for (const list of lists) expect(list.length).toBeLessThanOrEqual(19);
+  expect(new Set(lists.flat()).size).toBe(20);
+  for (const list of lists) expect(list.length).toBeLessThanOrEqual(20);
   expect(deliver).toHaveBeenCalledExactlyOnceWith(
     "synthetic@example.invalid",
     "post_sold",
     `foundation-outbox/${id}`,
     undefined,
     { deletesAt: null, holdsSlot: null }
+  );
+});
+it("sends the ID-returned notice with nothing but its kind", async () => {
+  queue(job({ kind: "verification_returned" }));
+  expect(await run()).toMatchObject({ succeeded: 1 });
+  expect(deliver).toHaveBeenCalledExactlyOnceWith(
+    "synthetic@example.invalid",
+    "verification_returned",
+    `foundation-outbox/${id}`
   );
 });
 it("passes the deletion date and slot of a lifecycle notice to the email", async () => {
@@ -771,16 +780,34 @@ describe("a database without the newer kinds", () => {
     refuse("unsupported mail kind");
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 16, 14, 14]);
-    expect(lists[2]).not.toContain("post_sold");
-    expect(lists[2]).not.toContain("post_kept");
+    // The newest kind is dropped first, then the sold and kept notices.
+    expect(lists.map((l) => l.length)).toEqual([3, 17, 16, 14, 14]);
+    expect(lists[2]).not.toContain("verification_returned");
+    expect(lists[2]).toContain("post_sold");
+    expect(lists[3]).not.toContain("post_sold");
+    expect(lists[3]).not.toContain("post_kept");
   });
   it("claims the earlier kinds after a list-length refusal, and keeps using them", async () => {
     refuse("supported mail kinds required");
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
     // The follow-up claim keeps the earlier list instead of asking again.
-    expect(lists.map((l) => l.length)).toEqual([3, 16, 14, 14]);
+    expect(lists.map((l) => l.length)).toEqual([3, 17, 16, 14, 14]);
+  });
+  it("drops only the ID-returned notice for a database without that update", async () => {
+    queue(job({ kind: "post_kept" }));
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "claim_supported_notification_outbox" &&
+      args.p_supported_kinds.includes("verification_returned")
+        ? { data: null, error: { code: "22023", message: "unsupported mail kind" } }
+        : base(name, args)
+    );
+    expect(await run()).toMatchObject({ succeeded: 1 });
+    const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
+    expect(lists.map((l) => l.length)).toEqual([3, 17, 16, 16]);
+    expect(lists[3]).toContain("post_kept");
+    expect(lists[3]).not.toContain("verification_returned");
   });
   it("does not retry the claim after another invalid-parameter refusal", async () => {
     rpc.mockImplementation(async (name) =>
