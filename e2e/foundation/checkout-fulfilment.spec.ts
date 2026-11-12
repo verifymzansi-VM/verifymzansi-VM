@@ -13,6 +13,7 @@ import {
 } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
 import { MOCK_PAYMENT_ORIGIN, MockOzow } from "./support/mock-ozow";
+import { closeTestPlanSales, openTestPlanSales } from "./support/plan-sales";
 import { endedWithTest } from "./support/route-teardown";
 import {
   browserSessionCookies,
@@ -281,6 +282,8 @@ test.describe("checkout to fulfilment", () => {
   test.beforeAll(async () => {
     test.setTimeout(120_000);
     copy = readTestCopy();
+    // Paid plans are paused; this spec buys copies put on sale for it.
+    openTestPlanSales();
     const catalogue = await rpc(copy, "billing_catalogue", {});
     expect(catalogue.status).toBe(200);
     const byCode = (code: string) => {
@@ -315,6 +318,7 @@ test.describe("checkout to fulfilment", () => {
       // deleted it: the copy's showroom is shared with the other specs.
       if (business?.id && postExists(business.id)) await deleteByCommand(business.id);
     } finally {
+      closeTestPlanSales();
       await ozow.stop();
     }
   });

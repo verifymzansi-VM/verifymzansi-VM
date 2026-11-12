@@ -651,6 +651,139 @@ previous summary capped at 7 days, the 400-day clean-up); that only
 payment's problems go with it; and that apply, rollback and re-apply return the
 same fingerprints.
 
+## The current Terms (posting-v4) and paid plans paused, 12 November 2026
+
+Two updates, applied in this order. Both are pending.
+
+### 1. Publish the Terms text: `20261112122001_publish_posting_terms_v4.sql`
+
+It publishes posting terms version `posting-v4`
+(`src/lib/legal/terms-documents/posting-v4.json`, canonical hash
+`HnObmeyoZjiuPQSF0z0aUgs_t_st87EUjVQGjDahozg`): it inserts one row into
+`private.posting_terms_versions` and changes no function, table, grant,
+acceptance or current version. It refuses (55000) when the current version is
+not `posting-v3` (or already `posting-v4`), or when `posting-v4` is already
+published with another document, and it checks before committing that the
+current version did not change. `posting-v1` to `posting-v3` are unchanged.
+
+The site has one set of Terms, shown at `/terms` with no version name (owner
+decision of 12 November 2026: there are no members yet). `posting-v4` is only
+the database's and catalogue's id for that text. It states Pricing v2 (roadmap
+Milestone 11, P1): posting slots priced per slot and per 30-day period with no
+discounts; Individual slots at R69 for 30 days, R207 for 90 days or R414 for 180
+days in any posting area; 1 to 4 Individual slots per ID-reviewed person, each
+with its own end date; slots on sale only while the pricing page offers them; at
+most 4 posts going live per paid slot in each 30-day period (a new post or an
+ended post brought back; edits do not count); one video per post, at most 2
+minutes (events 1 minute); prepaid, no automatic renewal, paid time from the
+confirmed payment, renewing early adds the new days after the current end; a
+price change applies only to new purchases; orders of R10,000 or less online,
+more by an invoice issued first and paid by EFT; no payment fees added; the
+cooling-off consent before payment (ECT Act section 42(2)), recorded before an
+invoice is paid; not registered for VAT; the refund and cancellation policy
+(cancelling by writing to billing@verifymzansi.com); a paid slot ends for a
+breach only after written notice and, for an individual, 20 business days to
+remedy it; the unchanged expiry, sold and paused rules with the 3-day grace; the
+free 7-day first post from its approval; and partner referral links.
+
+### 2. Make it current and pause paid plans: `20261112173841_switch_posting_terms_v4.sql`
+
+Owner decision of 12 November 2026: switch at once, sell nothing at the old
+prices, and keep paid plans paused until the R69 checkout (roadmap P2) is built
+and tested. In one transaction the update:
+
+- takes every plan version on sale off sale (sets `retired_at`, the only
+  catalogue column that may change; rows stay as history, prices are never
+  edited) and records each one in the new private table
+  `private.plan_sale_pauses` (row level security on, no API role access), so the
+  rollback can put exactly those plans back;
+- replaces `internal.set_post_media` so that a draft without a slot prepares the
+  free first post's media allowance (10 photos, 1 video,
+  `internal.grant_intro_trial`'s) when no plan is on sale; before, it took the
+  largest allowance of the plans on sale and, with none, refused ("no current
+  media allowance available"), so a free post could not add photos;
+- makes `posting-v4` current. Every member accepts it once before their next
+  submission or edit.
+
+It refuses (55000) unless `posting-v4` is published with the hash above and the
+current version is `posting-v3` (or already `posting-v4`). Run again, it changes
+nothing and never takes off sale a plan published after the switch (the R69
+plans of P2). Entitlements, payments, add-on versions (add-on sales stay paused
+by the website) and the free posting paths (free first post, free events,
+sponsored places, staff grants) are untouched. A plan payment already pending is
+left alone: if it is paid it settles as before.
+
+The website release that goes with it (catalogue `active_version` posting-v4)
+reads what is on sale from the database: with no plan on sale the pricing,
+billing, Advertise and checkout pages show the R69 prices with "Opens soon" and
+"Paid slots open soon", nothing links to checkout, and the checkout route
+refuses with `plan_sales_paused` (403) before it creates a payment.
+Multi-listing and sponsor prices are hidden (`PACKAGES_ON_SALE`). Former
+`/terms/versions/*` addresses redirect to `/terms` (308).
+
+**Order.** The release reads the catalogue on every request, so it is correct on
+either side of the switch: before it, it sells the old plans under the
+posting-v3 Terms as today; after it, it sells nothing. The website deployed
+before this release, however, would show its built-in old prices (R50, R140,
+R250) once the database lists no plan. So:
+
+1. merge, then apply `20261112122001_publish_posting_terms_v4.sql` (any time);
+2. deploy the release;
+3. then apply `20261112173841_switch_posting_terms_v4.sql`.
+
+**Applying.** For each update, run its preflight
+(`../preflight/<update>.check.sql`) unchanged in the SQL editor; it is read
+only. Continue only if the result is the single "summary" row: for the first,
+"current posting-v3; ...; posting-v4 not published (update not applied)"; for
+the switch, "current posting-v3 (update not applied); plans on sale: 17; plans
+taken off sale by the update: 0; pending plan payments: 0". Run the update (it
+waits at most 5 seconds for its rows and stops without changing anything if they
+are busy; run it again), then the preflight again: "posting-v4 published (update
+already applied)", then "current posting-v4 (update already applied); plans on
+sale: 0; plans taken off sale by the update: 17". After the switch, `/terms`
+shows the new text and `/pricing` shows "Opens soon".
+
+**Rollback.** `../rollback/20261112173841_switch_posting_terms_v4.down.sql`
+restores the previous `internal.set_post_media`, makes `posting-v3` current
+again, puts exactly the recorded plans back on sale (switching the catalogue
+guard trigger off for that one statement) and drops the record table. It refuses
+(55000) once a plan published after the switch is on sale, and when
+`internal.set_post_media` is neither the body the switch installed nor the one
+before it (md5 of the body): a later update (such as P2's) changed it, so undo
+that update first; the rollback never silently reverts it. The switch itself
+refuses the same way when the body it replaces is not the reviewed one.
+
+Rollback order: once the switch has run, **never roll back the website alone.**
+The earlier website's terms catalogue has no `posting-v4`, so with `posting-v4`
+current it refuses the current terms (`assertPublishedPostingTerms` throws),
+`/api/foundation/posting-terms` answers 503 and nobody can submit or edit a
+post. Roll back in this order:
+
+1. run the switch rollback above (`posting-v3` current, the old plans on sale);
+2. then revert this pull request and deploy the earlier website, which sells the
+   old plans under `posting-v3`.
+
+The first update's rollback changes nothing (published terms are immutable; the
+row then stays unused, like `posting-v2`) and refuses while `posting-v4` is
+current. Before the switch has run, the website alone can be reverted at any
+time.
+
+**Tests.** `scripts/test-foundation-posting-terms-v4.mjs` and
+`scripts/test-foundation-posting-terms-switch.mjs` (both in
+`pnpm db:foundation:lifecycle-test`) prove on the throwaway database: the
+shipped document's hash is the one inserted; the preflights are read only and
+report each state; refusals change nothing; after the first update `posting-v3`
+stays current and nobody can accept `posting-v4`; after the switch `posting-v4`
+is current, no plan is on sale, the public catalogue lists none, buying an old
+plan is refused, a held slot is untouched, the record table is closed to the API
+roles, members accept `posting-v4` once, a re-run never retires a later plan,
+neither the switch nor its rollback overwrites a later `set_post_media`, and
+apply, rollback and re-apply put exactly the same plans back and return the same
+schema fingerprint. The other lifecycle checks that still buy a plan after later
+updates publish a copy of it first (`planOnSale` in
+`scripts/lib/foundation-sql-checks.mjs`), as the browser test copy's checkout
+specs do (`e2e/foundation/support/plan-sales.ts`).
+
 ## Google sign-ups start with their name, 12 November 2026
 
 `20261112181954_google_name_at_signup.sql` is not applied yet. It needs no
@@ -2169,6 +2302,8 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   supabase_admin rows, after "already applied"; production fingerprint after all
   five updates matched the replay (section No default rights in schema public)
 - `20261112080000_payment_problem_alerts.sql`: pending
+- `20261112122001_publish_posting_terms_v4.sql`: pending
+- `20261112173841_switch_posting_terms_v4.sql`: pending
 - `20261112181954_google_name_at_signup.sql`: pending
 
 <!-- applied-register:end -->

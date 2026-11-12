@@ -9,6 +9,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationCheckoutSummary } from "@/lib/foundation/checkout-summary";
+import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { createLogger } from "@/lib/utils/logger";
 import { logDegradedRead } from "@/lib/utils/request-failure";
 
@@ -62,5 +63,7 @@ export default async function CheckoutPage({
         return null;
       })
     : null;
-  return <CheckoutConfirm summary={summary} />;
+  // Without a summary, say whether paid slots are paused rather than "not available".
+  const paused = summary ? false : !(await getCommercialCatalog()).onSale;
+  return <CheckoutConfirm summary={summary} paused={paused} />;
 }
