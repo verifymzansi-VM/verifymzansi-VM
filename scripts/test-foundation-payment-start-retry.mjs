@@ -28,6 +28,7 @@ import {
   assertReadOnlyPreflight,
   createChecks,
   planOnSale,
+  planQuoteSql,
   sqlHelpers,
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
@@ -84,8 +85,7 @@ try {
     }
   );
   /** The member's quote (the website's first command). */
-  const quote = (owner, product) =>
-    json(member(owner, `select api.start_checkout('${product}',null);`));
+  const quote = (owner, product) => json(planQuoteSql(q, member, owner, product));
   /** The website's server lease before it calls Ozow. */
   const leaseSql = (owner, paymentId) =>
     service(`select api.claim_checkout_request('${paymentId}','${owner.id}');`);

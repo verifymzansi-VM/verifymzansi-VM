@@ -17,9 +17,11 @@ import {
   cancelFoundationPendingPayment,
   paymentCheckFailureReason,
   readFoundationBilling,
+  readFoundationMySlots,
   reconcileFoundationPayment,
   runFoundationPaymentReconciliation,
   startFoundationCheckout,
+  startFoundationSlotCheckout,
 } from "./billing-runtime";
 const logged = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn() }));
 vi.mock("server-only", () => ({}));
@@ -1058,5 +1060,116 @@ describe("payment problems", () => {
     ["not an error", "unexpected_error"],
   ])("names a status-check failure by its kind only: %s", (error, reason) => {
     expect(paymentCheckFailureReason(error)).toBe(reason);
+  });
+});
+
+describe("the Individual slot checkout", () => {
+  const order = { planId: product, slots: 3, expectedTotalCents: 20700, coolingOffConsent: true };
+  const slotCheckout = (value: Record<string, unknown> = order) =>
+    startFoundationSlotCheckout(
+      api,
+      owner,
+      value as typeof order,
+      "https://verifymzansi.com",
+      service
+    );
+  it("quotes the slots with the total shown and the consent, then opens Ozow for that total", async () => {
+    rpc.mockResolvedValueOnce({ data: { ...quote, amount_cents: "20700" }, error: null });
+    machine.mockImplementationOnce(async () => ({
+      data: { ...claimDto(), amount_cents: "20700" },
+      error: null,
+    }));
+    expect(await slotCheckout()).toEqual({ paymentId: payment, checkoutUrl });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("start_slot_checkout", {
+      p_plan_id: product,
+      p_slots: 3,
+      p_expected_total_cents: 20700,
+      p_cooling_off_consent: true,
+    });
+    expect(createOzowHostedPayment).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ paymentId: payment, amountCents: 20700 })
+    );
+  });
+  it.each([
+    ["without the consent", { ...order, coolingOffConsent: false }],
+    ["with no slots", { ...order, slots: 0 }],
+    ["with more slots than one order holds", { ...order, slots: 26 }],
+    ["with a total that is not whole cents", { ...order, expectedTotalCents: 207.5 }],
+  ])("refuses an order %s before any command", async (_label, value) => {
+    await expect(slotCheckout(value)).rejects.toThrow();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(createOzowHostedPayment).not.toHaveBeenCalled();
+  });
+  it.each([
+    ["PT412", 403, "ID_REVIEW_REQUIRED", /ID review must be accepted/],
+    ["PT413", 400, "INVOICE_REQUIRED", /above R10,000 are paid by invoice/],
+    ["PT428", 409, "PRICE_CHANGED", /price changed/],
+    ["PT429", 409, "SLOT_LIMIT_REACHED", /most Individual slots you can hold at once/],
+  ])("tells the member why the database refused (%s)", async (sqlstate, status, code, message) => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: sqlstate } });
+    const refused = slotCheckout();
+    await expect(refused).rejects.toMatchObject({ status, code });
+    await expect(refused).rejects.toThrow(message);
+    expect(machine).not.toHaveBeenCalled();
+  });
+  it("names the unpaid order when a slot payment is already open at Ozow", async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ...quote, amount_cents: "20700", slots: 3 },
+      error: null,
+    });
+    machine.mockResolvedValueOnce({
+      data: { ...openRequest(), amount_cents: "20700" },
+      error: null,
+    });
+    await expect(
+      slotCheckout({ ...order, slots: 2, expectedTotalCents: 13800 })
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "PENDING_PAYMENT_EXISTS",
+      pendingPayment: { id: payment, slots: 3, amountCents: 20700 },
+    });
+    expect(createOzowHostedPayment).not.toHaveBeenCalled();
+  });
+  it("keeps any other refusal generic", async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "22023" } });
+    await expect(slotCheckout()).rejects.toMatchObject({ status: 400, code: undefined });
+  });
+});
+
+describe("My slots", () => {
+  const slot = {
+    id: uuid(20),
+    source: "retail_paid",
+    individual: true,
+    label: "Individual slot — 30 days",
+    area: null,
+    starts_at: "2026-11-12T10:00:00Z",
+    ends_at: "2026-12-12T10:00:00Z",
+    state: "active",
+    places: 1,
+    sponsor: null,
+    posts: [
+      {
+        id: uuid(21),
+        kind: "listing",
+        area: "market",
+        title: "Bicycle",
+        status: "live",
+        deletes_at: null,
+      },
+    ],
+  };
+  const individual = { verified: true, held: 1, pending: 0, limit: 4, limit_ends_at: null };
+  it("reads the member's slots and counts", async () => {
+    rpc.mockResolvedValueOnce({ data: { slots: [slot], individual }, error: null });
+    expect(await readFoundationMySlots(api)).toEqual({ slots: [slot], individual });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("get_my_slots", {});
+  });
+  it("refuses an unexpected shape", async () => {
+    rpc.mockResolvedValueOnce({
+      data: { slots: [{ ...slot, owner_id: owner }], individual },
+      error: null,
+    });
+    await expect(readFoundationMySlots(api)).rejects.toThrow();
   });
 });

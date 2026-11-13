@@ -67,7 +67,7 @@ export function restoredPostingPlans(
   return PLANS.filter((p) => p.area === area).flatMap((base) => {
     const matches = catalogue.plans.filter(
       (p) =>
-        p.area === foundationArea(area) &&
+        (p.area === foundationArea(area) || p.area === null) &&
         p.slot_capacity === 1 &&
         p.duration_days === base.durationDays
     );
