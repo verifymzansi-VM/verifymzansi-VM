@@ -9,7 +9,9 @@ vi.mock("@/lib/supabase/admin", () => ({
   tryCreateAdminClient: databaseClient,
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: databaseClient }));
-vi.mock("@/lib/supabase/client", () => ({ createClient: databaseClient }));
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: databaseClient,
+}));
 
 import { POST as postEvents } from "@/app/api/analytics/events/route";
 import { POST as postVisit } from "@/app/api/analytics/visit/route";

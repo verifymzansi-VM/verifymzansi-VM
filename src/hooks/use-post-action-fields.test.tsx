@@ -3,7 +3,6 @@ import { it, expect, vi, afterEach } from "vitest";
 import { usePostActionFields } from "./use-post-action-fields";
 afterEach(() => vi.unstubAllEnvs());
 it("keeps a receipt across an uncertain retry and changes it for a new represented revision", () => {
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   const { result } = renderHook(() => usePostActionFields());
   const first = result.current("fixture", 7, "delete", "MZANSI_MARKET", "listing");
   expect(result.current("fixture", 7, "delete", "MZANSI_MARKET", "listing")).toEqual(first);

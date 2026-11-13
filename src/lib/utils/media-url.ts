@@ -23,20 +23,6 @@ const KNOWN_MEDIA_HOSTS = new Set(["media.verifymzansi.com", "media-staging.veri
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg", "mov"]);
 
 /**
- * In Playwright stub mode media is served from local fixture files via the
- * proxy route, so keep videos on the proxy there — the real CDN has no test
- * fixtures and e2e runs must never depend on production network access.
- */
-function isPlaywrightStubMode(): boolean {
-  return (
-    (process.env.PLAYWRIGHT_TEST_MODE === "1" ||
-      process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE === "1") &&
-    (process.env.PLAYWRIGHT_SUPABASE_MODE === "stub" ||
-      process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE === "stub")
-  );
-}
-
-/**
  * Returns true when a URL points to a platform-controlled media host.
  * Used by create/update validators before persisting media references.
  */
@@ -118,7 +104,7 @@ export function extractMediaStorageKey(url: string): string | null {
 /**
  * Rewrite a media URL for delivery:
  * - Videos → direct R2 custom-domain URL (edge-cached, native Range support,
- *   no Worker hop). Falls back to the proxy in Playwright stub mode.
+ *   no Worker hop).
  * - Images → media proxy for responsive variants, ETag/304 caching, and
  *   legacy fallback to the original object.
  *
@@ -132,7 +118,7 @@ export function normalizeMediaUrl(url: string | null | undefined): string {
   // Not a recognized media URL — return as-is
   if (key === null) return url;
 
-  if (isVideoUrl(key) && !isPlaywrightStubMode()) {
+  if (isVideoUrl(key)) {
     return `${MEDIA_BASE}/${key}`;
   }
 
@@ -142,18 +128,13 @@ export function normalizeMediaUrl(url: string | null | undefined): string {
 /**
  * Normalize a media URL specifically for video playback.
  * Serves directly from the R2 custom domain (edge-cached, native HTTP Range
- * support) unless running in Playwright stub mode, where the proxy serves
- * local fixture files instead.
+ * support).
  */
 export function normalizeVideoUrl(url: string | null | undefined): string {
   if (!url) return "";
 
   const key = extractMediaStorageKey(url);
   if (key === null) return url;
-
-  if (isPlaywrightStubMode()) {
-    return `${PROXY_PREFIX}${key}`;
-  }
 
   return `${MEDIA_BASE}/${key}`;
 }

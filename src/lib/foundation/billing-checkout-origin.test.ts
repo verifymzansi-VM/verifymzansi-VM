@@ -42,7 +42,6 @@ const COPY: Env = {
   PLAYWRIGHT_TEST_MODE: "1",
   ENABLE_MOCK_OZOW: "true",
   OZOW_ENV: "staging",
-  NEXT_PUBLIC_DATA_BACKEND: "foundation",
   FOUNDATION_PROJECT_REF: "local-foundation",
   FOUNDATION_SUPABASE_URL: "http://127.0.0.1:55443",
   NEXT_PUBLIC_APP_URL: COPY_ORIGIN,
@@ -325,7 +324,6 @@ describe("in the local test copy", () => {
     ["mock Ozow missing", { ENABLE_MOCK_OZOW: undefined }],
     ["OZOW_ENV=production", { OZOW_ENV: "production" }],
     ["OZOW_ENV missing", { OZOW_ENV: undefined }],
-    ["the retired backend", { NEXT_PUBLIC_DATA_BACKEND: "source" }],
     ["the London project ref", { FOUNDATION_PROJECT_REF: "gntzjtuncsyefujajmjy" }],
     [
       "the London database",

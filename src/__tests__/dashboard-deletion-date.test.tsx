@@ -55,7 +55,6 @@ const row = (overrides: Record<string, unknown>) => ({
 });
 
 beforeEach(() => {
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-11-09T10:00:00.000Z"));
   vi.mocked(readFoundationServerSession).mockResolvedValue({

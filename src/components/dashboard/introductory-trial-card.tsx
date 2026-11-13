@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 import { Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatSaLongDate } from "@/lib/utils/format";

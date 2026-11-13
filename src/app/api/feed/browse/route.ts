@@ -1,9 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { feedError, openFeedRequest, PRIVATE_NO_STORE } from "@/app/api/feed/_lib/feed-request";
 import { parseBrowse } from "@/lib/feed/browse";
-import { buildBrowseSequence } from "@/lib/feed/browse-sequence";
+import { foundationBrowseSequence } from "@/lib/foundation/feed-read";
 import { encodeRef } from "@/lib/feed/refs";
-import { getVisitorProvince } from "@/lib/showroom/visitor-province";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("FeedBrowseRoute");
@@ -17,12 +16,11 @@ export async function GET(request: NextRequest) {
   const browse = parseBrowse(request.nextUrl.searchParams);
   if (!browse) return feedError(400, "Invalid filters");
 
-  const opened = await openFeedRequest(request, "feed:browse", 30);
-  if (opened.response) return opened.response;
+  const limited = openFeedRequest(request, "feed:browse", 30);
+  if (limited) return limited;
 
   try {
-    const { province } = browse.province ? { province: null } : await getVisitorProvince();
-    const sequence = await buildBrowseSequence(opened.supabase, browse, province);
+    const sequence = await foundationBrowseSequence(browse);
     return NextResponse.json(
       {
         v: 1,

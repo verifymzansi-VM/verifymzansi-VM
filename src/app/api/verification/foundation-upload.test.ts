@@ -62,7 +62,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   selfie = false;
   completed = false;
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.stubEnv("HMAC_SECRET", "0123456789abcdef".repeat(4));
   vi.stubEnv("ID_ENCRYPTION_KEY", "fedcba9876543210".repeat(4));
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false, retryAfter: 0 });

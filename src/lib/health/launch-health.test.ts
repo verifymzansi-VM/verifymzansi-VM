@@ -1,14 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuditFailureCount } from "@/lib/services/audit";
 import { getLaunchHealthSnapshot } from "./launch-health";
 import { verifyFoundationGateway } from "@/lib/foundation/gateway-readiness";
 
 vi.mock("@/lib/foundation/gateway-readiness", () => ({ verifyFoundationGateway: vi.fn() }));
-
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: vi.fn(),
-}));
 
 vi.mock("@/lib/services/audit", () => ({
   getAuditFailureCount: vi.fn(),
@@ -43,6 +38,11 @@ const VALID_PRODUCTION_ENV = {
   TURNSTILE_SECRET_KEY: "0x4AAAAAAA_test_secret_key", // secret-scan: allow deterministic fixture
   OTP_RATE_LIMITER_URL: "https://verifymzansi-rate-limiter.example.workers.dev",
   RATE_LIMITER_API_KEY: "rate-limiter-api-key",
+  FOUNDATION_SUPABASE_URL: "https://foundation.example.supabase.co",
+  FOUNDATION_PROJECT_REF: "foundationref",
+  FOUNDATION_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_fixture",
+  FOUNDATION_SUPABASE_SECRET_KEY: "sb_secret_fixture", // secret-scan: allow deterministic fixture
+  FOUNDATION_PHONE_OTP_KEY: "d".repeat(64),
 };
 
 function stubLaunchEnv(values: Record<string, string>) {
@@ -55,7 +55,7 @@ describe("getLaunchHealthSnapshot", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     stubLaunchEnv(VALID_PRODUCTION_ENV);
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "source");
+    vi.mocked(verifyFoundationGateway).mockResolvedValue({ serviceOpenapi: {} });
     // Default: the rate limiter worker accepts the shared secret.
     vi.stubGlobal(
       "fetch",
@@ -68,38 +68,25 @@ describe("getLaunchHealthSnapshot", () => {
     vi.unstubAllGlobals();
   });
 
-  it("uses foundation gateway readiness without querying legacy tables", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
-    vi.mocked(verifyFoundationGateway).mockResolvedValue({ serviceOpenapi: {} });
+  it("uses foundation gateway readiness and requires the foundation settings", async () => {
+    vi.stubEnv("FOUNDATION_PHONE_OTP_KEY", "");
     const snapshot = await getLaunchHealthSnapshot();
     expect(verifyFoundationGateway).toHaveBeenCalledOnce();
-    expect(createAdminClient).not.toHaveBeenCalled();
     expect(snapshot.checks.supabase.status).toBe("ok");
     expect(snapshot.checks.schema.status).toBe("ok");
     expect(snapshot.checks.criticalEnv.status).toBe("degraded");
     expect(snapshot.checks.criticalEnv.failedChecks).toContain("FOUNDATION_PHONE_OTP_KEY");
   });
 
-  it("fails foundation readiness without falling back to legacy access", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+  it("fails foundation readiness without revealing the provider error", async () => {
     vi.mocked(verifyFoundationGateway).mockRejectedValue(new Error("private-provider-detail"));
     const snapshot = await getLaunchHealthSnapshot();
-    expect(createAdminClient).not.toHaveBeenCalled();
     expect(snapshot.checks.supabase.status).toBe("degraded");
     expect(snapshot.checks.schema.status).toBe("degraded");
     expect(JSON.stringify(snapshot)).not.toContain("private-provider-detail");
   });
 
-  it("returns degraded when schema probes are unavailable in the test harness", async () => {
-    vi.mocked(createAdminClient).mockImplementation(() => {
-      return {
-        from: vi.fn().mockImplementation((_table: string) => ({
-          select: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: [{}], error: null }),
-          }),
-        })),
-      } as never;
-    });
+  it("reports every check ok for a complete production configuration", async () => {
     vi.mocked(getAuditFailureCount).mockReturnValue(0);
 
     const snapshot = await getLaunchHealthSnapshot();
@@ -107,7 +94,7 @@ describe("getLaunchHealthSnapshot", () => {
     expect(snapshot.checks.config.status).toBe("ok");
     expect(snapshot.checks.criticalEnv.status).toBe("ok");
     expect(snapshot.checks.supabase.status).toBe("ok");
-    expect(snapshot.checks.schema.status).toBe("degraded");
+    expect(snapshot.checks.schema.status).toBe("ok");
     expect(snapshot.checks.r2.status).toBe("ok");
     expect(snapshot.checks.ozow.status).toBe("ok");
     expect(snapshot.checks.resend.status).toBe("ok");
@@ -115,43 +102,11 @@ describe("getLaunchHealthSnapshot", () => {
     expect(snapshot.checks.turnstile.status).toBe("ok");
     expect(snapshot.checks.rateLimiter.status).toBe("ok");
     expect(snapshot.checks.audit.status).toBe("ok");
-    expect(snapshot.status).toBe("degraded");
-  });
-
-  it("returns degraded when schema probe fails in production", async () => {
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn().mockImplementation((table: string) => {
-        if (table === "feature_flags") {
-          return {
-            select: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue({ error: { message: "relation does not exist" } }),
-            }),
-          };
-        }
-        return {
-          select: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ error: null }),
-          }),
-        };
-      }),
-    } as never);
-    vi.mocked(getAuditFailureCount).mockReturnValue(0);
-
-    const snapshot = await getLaunchHealthSnapshot();
-
-    expect(snapshot.status).toBe("degraded");
-    expect(snapshot.checks.schema.status).toBe("degraded");
+    expect(snapshot.status).toBe("ok");
   });
 
   it("returns degraded when external readiness env is missing in production", async () => {
     vi.stubEnv("RATE_LIMITER_API_KEY", "");
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    } as never);
     vi.mocked(getAuditFailureCount).mockReturnValue(0);
 
     const snapshot = await getLaunchHealthSnapshot();
@@ -168,13 +123,6 @@ describe("getLaunchHealthSnapshot", () => {
         .fn()
         .mockResolvedValue(new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }))
     );
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    } as never);
     vi.mocked(getAuditFailureCount).mockReturnValue(0);
 
     const snapshot = await getLaunchHealthSnapshot();
@@ -187,13 +135,6 @@ describe("getLaunchHealthSnapshot", () => {
 
   it("degrades when the rate limiter probe hits a network error", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connect ETIMEDOUT")));
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    } as never);
     vi.mocked(getAuditFailureCount).mockReturnValue(0);
 
     const snapshot = await getLaunchHealthSnapshot();
@@ -212,13 +153,6 @@ describe("getLaunchHealthSnapshot", () => {
     [200, '{"allowed":true}'],
   ])("degrades for an unsuccessful rate limiter response (%s, %s)", async (status, body) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, { status })));
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    } as never);
     vi.mocked(getAuditFailureCount).mockReturnValue(0);
 
     const snapshot = await getLaunchHealthSnapshot();
@@ -232,13 +166,6 @@ describe("getLaunchHealthSnapshot", () => {
       .fn()
       .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    } as never);
     vi.mocked(getAuditFailureCount).mockReturnValue(0);
 
     const snapshot = await getLaunchHealthSnapshot();
@@ -259,13 +186,6 @@ describe("getLaunchHealthSnapshot", () => {
   it("returns degraded when critical env vars are missing", async () => {
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    } as never);
     vi.mocked(getAuditFailureCount).mockReturnValue(0);
 
     const snapshot = await getLaunchHealthSnapshot();
@@ -278,13 +198,6 @@ describe("getLaunchHealthSnapshot", () => {
 
   it("returns degraded when production config drifts from launch requirements", async () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    } as never);
     vi.mocked(getAuditFailureCount).mockReturnValue(0);
 
     const snapshot = await getLaunchHealthSnapshot();
@@ -308,6 +221,7 @@ describe("getLaunchHealthSnapshot", () => {
     expect(snapshot.mode).toBe("e2e");
     expect(snapshot.checks.supabase.status).toBe("skipped");
     expect(snapshot.checks.schema.status).toBe("skipped");
+    expect(verifyFoundationGateway).not.toHaveBeenCalled();
     expect(snapshot.checks.r2.status).toBe("skipped");
     expect(snapshot.checks.ozow.status).toBe("skipped");
     expect(snapshot.checks.rateLimiter.status).toBe("skipped");

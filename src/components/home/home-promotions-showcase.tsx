@@ -8,12 +8,6 @@ import { HomeShowcaseEmptyState } from "./home-showcase-empty-state";
 import type { BusinessCategory, BusinessType, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
-import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
-import {
-  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
-  shouldHidePlaywrightFixtures,
-} from "@/lib/supabase/playwright-visual-fixtures";
-import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 
 interface PromotionRow {
   id: string;
@@ -61,10 +55,6 @@ type ShowcaseItem =
   { kind: "event"; data: PromotionRow } | { kind: "tourism"; data: TourismBusinessRow };
 
 export async function HomePromotionsShowcase() {
-  const cookieStore = await getOptionalCookieStore();
-  const hideFixtures = shouldHidePlaywrightFixtures(
-    readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
-  );
   const now = new Date().toISOString();
 
   const [{ data: eventData }, { data: tourismData }] = await Promise.all([
@@ -75,13 +65,11 @@ export async function HomePromotionsShowcase() {
   const eventRows = (eventData || []) as unknown as PromotionRow[];
 
   const promotions = eventRows
-    .filter((promotion) => !shouldHidePlaywrightFixtureRowWhenEnabled(promotion, hideFixtures))
     .filter((promotion) => !isPlaceholderMarketplaceContent(promotion.title))
     .slice(0, 4);
   const tourismRows = (tourismData || []) as unknown as TourismBusinessRow[];
 
   const tourismBusinesses = tourismRows
-    .filter((b) => !shouldHidePlaywrightFixtureRowWhenEnabled(b, hideFixtures))
     .filter((b) => !isPlaceholderMarketplaceContent(b.business_name))
     .slice(0, 4);
 

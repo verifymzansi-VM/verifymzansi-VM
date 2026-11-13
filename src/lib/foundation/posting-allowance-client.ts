@@ -1,5 +1,5 @@
 "use client";
-import { createClient } from "../supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 import type { MarketplaceArea } from "@/types/enums";
 import { postingAllowanceSchema } from "./posting-allowance";
 import { parseFoundationBillingCatalogue } from "./billing-catalogue";

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { feedError, openFeedRequest, PRIVATE_NO_STORE } from "@/app/api/feed/_lib/feed-request";
-import { loadFeedSlides } from "@/lib/feed/load-slides";
+import { foundationFeedSlides } from "@/lib/foundation/feed-read";
 import { decodeRef, refKey } from "@/lib/feed/refs";
 import type { FeedRef } from "@/lib/feed/types";
 import { createLogger } from "@/lib/utils/logger";
@@ -21,11 +21,11 @@ export async function GET(request: NextRequest) {
     return feedError(400, "Invalid refs");
   }
 
-  const opened = await openFeedRequest(request, "feed:slides", 120);
-  if (opened.response) return opened.response;
+  const limited = openFeedRequest(request, "feed:slides", 120);
+  if (limited) return limited;
 
   try {
-    const slides = await loadFeedSlides(opened, refs as FeedRef[]);
+    const slides = await foundationFeedSlides(refs as FeedRef[]);
     return NextResponse.json(
       {
         v: 1,

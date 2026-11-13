@@ -5,7 +5,9 @@ const { mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/client", () => ({ createClient: mockCreateClient }));
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: mockCreateClient,
+}));
 
 import { hasBrowserAuthSession, useAuth } from "@/hooks/use-auth";
 import { useAuthStore } from "@/stores/auth-store";

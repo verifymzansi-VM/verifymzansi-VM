@@ -12,8 +12,8 @@ const mockSupabase = {
   removeChannel: mockRemoveChannel,
 };
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: vi.fn(() => mockSupabase),
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: vi.fn(() => mockSupabase),
 }));
 
 mockChannel.mockReturnValue({

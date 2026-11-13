@@ -35,7 +35,6 @@ const item = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.mocked(readFoundationServerSession).mockResolvedValue({
     user: { id: actor },
     api: { rpc },

@@ -1,14 +1,12 @@
 import { cache } from "react";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import type { NavBadge } from "@/lib/admin/nav";
 import type { StaffRole } from "@/types/enums";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationStaffDashboard } from "@/lib/foundation/staff-dashboard";
 
 /**
- * The staff home and sidebar counts (20260929120000_staff_dashboard.sql).
- * One database call each. A section that is missing is not for the viewer's
+ * The staff home and sidebar counts, read from the foundation staff
+ * dashboard. A section that is missing is not for the viewer's
  * role; a section that is null could not be read and must show as
  * "Unavailable", never as zero.
  */
@@ -26,7 +24,7 @@ export interface StaffDashboard {
     kyc: { pending: Count; oldest_at: Timestamp; high_risk: Count; claimed: Count } | null;
     content: { pending: Count; oldest_at: Timestamp; claimed: Count } | null;
     support: { new: Count; oldest_at: Timestamp } | null;
-    /** Business verification cases waiting on staff (read here, not in the RPC). */
+    /** Business verification cases waiting on staff. */
     business_kyc?: {
       pending: Count;
       oldest_at: Timestamp;
@@ -85,98 +83,39 @@ export type StaffNavCounts = Partial<Record<NavBadge, number>>;
 
 /** The viewer's role home, or null if it could not be read at all. Deduplicated per request. */
 export const getStaffDashboard = cache(async (actorId: string): Promise<StaffDashboard | null> => {
-  if (getDataBackend() === "foundation") {
-    try {
-      const current = await readFoundationStaffDashboard(actorId);
-      if (!current.restored_queues) throw new Error("Staff presentation contract unavailable");
-      return {
-        role: current.role === "governor" ? "governance_controller" : current.role,
-        generated_at: current.generated_at,
-        queues: { ...current.restored_queues, support: current.support ?? null },
-        // These source-only summaries have no canonical equivalent yet.
-        // The preserved cards already render null as Unavailable.
-        shift: null,
-        ...(current.role === "moderator" ? {} : { decisions: null }),
-        ...(current.role === "admin" ? { platform: null } : {}),
-      };
-    } catch {
-      log.error("Staff dashboard read failed");
-      return null;
-    }
-  }
-  const { data, error } = await createAdminClient().rpc("staff_dashboard", { p_actor: actorId });
-  if (error || !data) {
-    log.error("Staff dashboard read failed", { error: error?.message ?? "no data" });
+  try {
+    const current = await readFoundationStaffDashboard(actorId);
+    if (!current.restored_queues) throw new Error("Staff presentation contract unavailable");
+    return {
+      role: current.role === "governor" ? "governance_controller" : current.role,
+      generated_at: current.generated_at,
+      queues: { ...current.restored_queues, support: current.support ?? null },
+      // These summaries have no foundation equivalent yet.
+      // The preserved cards already render null as Unavailable.
+      shift: null,
+      ...(current.role === "moderator" ? {} : { decisions: null }),
+      ...(current.role === "admin" ? { platform: null } : {}),
+    };
+  } catch {
+    log.error("Staff dashboard read failed");
     return null;
   }
-  const dashboard = data as StaffDashboard;
-  dashboard.queues = { ...dashboard.queues, business_kyc: await businessKycQueue() };
-  return dashboard;
 });
-
-/** 24-hour target for business verification cases (spec §3.5). */
-const BUSINESS_KYC_SLA_MS = 24 * 3_600_000;
-
-async function businessKycQueue(): Promise<StaffDashboard["queues"]["business_kyc"]> {
-  const admin = createAdminClient();
-  const now = new Date();
-  const breachedBefore = new Date(now.getTime() - BUSINESS_KYC_SLA_MS).toISOString();
-  const pending = () =>
-    admin
-      .from("business_verifications")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending");
-  const [all, breached, oldest, claimed] = await Promise.all([
-    pending(),
-    pending().lt("created_at", breachedBefore),
-    admin
-      .from("business_verifications")
-      .select("created_at")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-    admin
-      .from("queue_claims")
-      .select("item_id", { count: "exact", head: true })
-      .eq("queue", "business_kyc")
-      .gt("expires_at", now.toISOString()),
-  ]);
-  const failed = [all, breached, oldest, claimed].find((r) => r.error);
-  if (failed?.error) {
-    log.warn("Business verification queue unavailable", { error: failed.error.message });
-    return null;
-  }
-  return {
-    pending: all.count ?? 0,
-    oldest_at: (oldest.data?.created_at as string | undefined) ?? null,
-    breached: breached.count ?? 0,
-    claimed: claimed.count ?? 0,
-  };
-}
 
 /** Sidebar badge counts; an empty object (no badges) if they cannot be read. */
 export const getStaffNavCounts = cache(async (actorId: string): Promise<StaffNavCounts> => {
-  if (getDataBackend() === "foundation") {
-    try {
-      const current = await readFoundationStaffDashboard(actorId);
-      return {
-        reports: current.counts.reports,
-        kyc: current.counts.kyc,
-        content: current.counts.content,
-        business_kyc: current.counts.business_kyc,
-        ...(current.support ? { support: current.support.new } : {}),
-        ...(current.role === "moderator" ? {} : { decisions: current.counts.decisions }),
-      };
-    } catch {
-      log.warn("Staff navigation counts unavailable");
-      return {};
-    }
-  }
-  const { data, error } = await createAdminClient().rpc("staff_nav_counts", { p_actor: actorId });
-  if (error || !data) {
-    log.warn("Staff navigation counts unavailable", { error: error?.message ?? "no data" });
+  try {
+    const current = await readFoundationStaffDashboard(actorId);
+    return {
+      reports: current.counts.reports,
+      kyc: current.counts.kyc,
+      content: current.counts.content,
+      business_kyc: current.counts.business_kyc,
+      ...(current.support ? { support: current.support.new } : {}),
+      ...(current.role === "moderator" ? {} : { decisions: current.counts.decisions }),
+    };
+  } catch {
+    log.warn("Staff navigation counts unavailable");
     return {};
   }
-  return data as StaffNavCounts;
 });

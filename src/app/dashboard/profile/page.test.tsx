@@ -31,8 +31,8 @@ vi.mock("@/lib/utils/csrf", () => ({
   withCsrfHeaders: (h: Record<string, string>) => h,
 }));
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({
     auth: {
       getUser: mockGetUser,
       signOut: mockSignOut,
@@ -122,7 +122,6 @@ describe("ProfilePage", () => {
   });
 
   it("saves a bio with the loaded native revision even when the locked legal name exceeds the editable-name limit", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     const originalFrom = mockFrom.getMockImplementation()!;
     const legalName = `${"A".repeat(50)} ${"B".repeat(50)}`;
     mockFrom.mockImplementation((table: string) =>

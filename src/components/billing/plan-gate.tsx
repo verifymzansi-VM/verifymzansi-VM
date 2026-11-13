@@ -9,7 +9,7 @@ import { AlertTriangle, Loader2, Sparkles, Check, X, Camera, Video } from "lucid
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { createClient } from "@/lib/supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { fetchPostingAllowance } from "@/lib/foundation/posting-allowance-client";
 import { restoredPostingPlanInfo, restoredPostingPlans } from "@/lib/foundation/posting-allowance";

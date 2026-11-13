@@ -6,8 +6,10 @@ const { listFactors, challengeAndVerify } = vi.hoisted(() => ({
   listFactors: vi.fn(),
   challengeAndVerify: vi.fn(),
 }));
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { mfa: { listFactors, challengeAndVerify } } }),
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({
+    auth: { mfa: { listFactors, challengeAndVerify } },
+  }),
 }));
 
 describe("password authenticator challenge", () => {
