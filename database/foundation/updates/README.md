@@ -788,7 +788,7 @@ specs buy the Individual slots.
 
 ## Staff refunds are sent to Ozow by the server, 13 November 2026
 
-`20261113151748_ozow_api_refunds.sql` is not applied yet. It needs
+`20261113172356_ozow_api_refunds.sql` is not applied yet. It needs
 `20261113085340_retire_old_staff_reversal_commands.sql` applied and the staff
 payment fixes of `20261113021223_staff_payment_fixes.sql` with their reviewed
 bodies, and refuses (55000) otherwise. It only adds: no API command, argument or
@@ -906,9 +906,9 @@ Ozow's reference exactly as before.
 **Order: apply, then merge.** Apply after
 `20261113085340_retire_old_staff_reversal_commands.sql` and before the pull
 request that uses it is merged. The read-only preflight
-`../preflight/20261113151748_ozow_api_refunds.check.sql` must read "update not
+`../preflight/20261113172356_ozow_api_refunds.check.sql` must read "update not
 applied" with no problem row before, and "already applied" after. The rollback
-`../rollback/20261113151748_ozow_api_refunds.down.sql` refuses once a refund
+`../rollback/20261113172356_ozow_api_refunds.down.sql` refuses once a refund
 through Ozow or from the dashboard was recorded or a refund problem was raised.
 `scripts/test-foundation-ozow-api-refunds.mjs`
 (`pnpm db:foundation:lifecycle-test`) proves the preflight, the refusal, apply
@@ -2947,6 +2947,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   applied; current terms: posting-v4", after "already applied; current terms:
   posting-v4; choice changes recorded: 0; sign-up acceptances recorded: 0";
   production fingerprint after it matched the full replay
-- `20261113151748_ozow_api_refunds.sql`: pending
+- `20261113172356_ozow_api_refunds.sql`: pending
 
 <!-- applied-register:end -->

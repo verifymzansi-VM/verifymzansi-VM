@@ -81,8 +81,8 @@
 --
 -- ORDER: apply this update before the pull request that uses it is merged (a
 -- merge into main is deployed, and that release can call the new commands).
--- Read-only preflight: ../preflight/20261113151748_ozow_api_refunds.check.sql.
--- Rollback: ../rollback/20261113151748_ozow_api_refunds.down.sql.
+-- Read-only preflight: ../preflight/20261113172356_ozow_api_refunds.check.sql.
+-- Rollback: ../rollback/20261113172356_ozow_api_refunds.down.sql.
 begin;
 set local lock_timeout='5s';
 

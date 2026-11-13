@@ -387,7 +387,9 @@ Questions for the owner:
     member accepted; and whether the line under the Google button is enough to
     record a Google sign-up's acceptance of the Terms.
 
-21. **Staff refunds through Ozow (group 26).** Staff only, and nothing changes
+<!-- Question 21 belongs to pull request 218 (staff bank transfers). -->
+
+22. **Staff refunds through Ozow (group 26).** Staff only, and nothing changes
     until you switch it on (Worker setting `OZOW_API_REFUNDS_ENABLED`, after the
     Ozow set-up in the pull request). Then, on 'Payments & Refunds', a payment
     paid through Ozow has 'Refund through Ozow' instead of 'Record refund': the
@@ -992,7 +994,7 @@ shows on screen. Outside the checked scope: the two routes under
 
 Staff screens only, shown only while `OZOW_API_REFUNDS_ENABLED` is on, built
 inside the existing 'Payments & Refunds' page and its 'Recent payments' card
-(same card, badges, buttons, form and reason prompt). Owner question 21. Two
+(same card, badges, buttons, form and reason prompt). Owner question 22. Two
 rows elsewhere also carry this change (the page and the payments card in group
 20). Text outside the checked scope with the same purpose: the refusal messages
 in `src/lib/foundation/ozow-refunds.ts` and

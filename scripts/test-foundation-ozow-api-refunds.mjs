@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261113151748_ozow_api_refunds.sql: staff refunds sent
+// Behaviour checks for 20261113172356_ozow_api_refunds.sql: staff refunds sent
 // to Ozow by the server only after the approval rules pass, a separate admin
 // record of a refund made in the Ozow dashboard, Ozow's refund outcomes and the
 // daily read-only refund check.
@@ -33,7 +33,7 @@ import {
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 
-const UPDATE = "20261113151748_ozow_api_refunds.sql";
+const UPDATE = "20261113172356_ozow_api_refunds.sql";
 const [PREFLIGHT, ROLLBACK] = [
   ["preflight", ".check.sql"],
   ["rollback", ".down.sql"],

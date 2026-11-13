@@ -1,4 +1,4 @@
--- Reviewed rollback for updates/20261113151748_ozow_api_refunds.sql.
+-- Reviewed rollback for updates/20261113172356_ozow_api_refunds.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so; prefer a forward fix. Revert and deploy the website
 -- release that uses the update FIRST (or leave OZOW_API_REFUNDS_ENABLED off):

@@ -21,7 +21,7 @@ import { createLogger } from "../utils/logger";
 
 /**
  * Staff refunds sent to Ozow by the server (update
- * 20261113151748_ozow_api_refunds.sql). The database decides everything:
+ * 20261113172356_ozow_api_refunds.sql). The database decides everything:
  * who may refund, the R1,000 second-approver rule, one refund in flight per
  * payment, and that a record is handed to the sender once. This module only
  * carries the database's decisions to Ozow and Ozow's answers back:

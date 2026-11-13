@@ -44,7 +44,7 @@ export const PAYMENT_PROBLEM_REASONS = [
   "refunded_after_completion",
   // The status check found more than one successful transaction.
   "multiple_settlements",
-  // Refunds through Ozow (./ozow-refunds.ts, update 20261113151748): recorded
+  // Refunds through Ozow (./ozow-refunds.ts, update 20261113172356): recorded
   // by the database itself from Ozow's answers and the daily refund check.
   "refund_failed",
   "refund_returned",
