@@ -28,6 +28,7 @@ import {
 
 const VIDEO_FIXTURE = path.join("public", "video", "advert-browsing", "market-motion.webm");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const CARD_PLAY_BUTTON = /^(Play video$|Preview video)/;
 const MEDIA_KEY = /^media\/[0-9a-f-]{36}$/;
 
 test.use({ serviceWorkers: "block" });
@@ -256,14 +257,15 @@ test.describe("Video posts", () => {
         await expect(card).toHaveCount(1);
         await card.evaluate((element) => element.scrollIntoView({ block: "center" }));
         await expect(video).toHaveCount(1);
-        await expect(card.getByRole("button", { name: "Play video", exact: true })).toBeVisible();
+        // Desktop: "Play video"; touch screens: the small labelled "Preview".
+        await expect(card.getByRole("button", { name: CARD_PLAY_BUTTON })).toBeVisible();
       });
 
       await test.step("it plays", async () => {
         await video.evaluate((element: HTMLVideoElement) => {
           element.muted = true;
         });
-        await card.getByRole("button", { name: "Play video", exact: true }).click();
+        await card.getByRole("button", { name: CARD_PLAY_BUTTON }).click();
         await expect
           .poll(() => video.evaluate((element: HTMLVideoElement) => element.currentTime), {
             timeout: 20_000,

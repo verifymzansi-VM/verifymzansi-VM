@@ -8,6 +8,9 @@ import { requireTestData } from "../support/test-data";
 // reads no posts from the test copy.
 
 const WEBKIT_SKIP = ["webkit", "mobile-safari"];
+// Desktop (reduced motion): the "Play video" button. Touch screens: the small
+// labelled "Preview" button; a tap anywhere else on the card opens the post.
+const CARD_PLAY_BUTTON = /^(Play video$|Preview video)/;
 const WEBKIT_SKIP_MSG =
   "WebKit media playback under headless CI is unreliable for autoplay assertions.";
 
@@ -238,7 +241,7 @@ test.describe("Card video autoplay", () => {
       await card.evaluate((element) => element.scrollIntoView({ block: "center" }));
       const video = card.locator("video");
       const url = page.url();
-      await card.getByRole("button", { name: "Play video", exact: true }).click();
+      await card.getByRole("button", { name: CARD_PLAY_BUTTON }).click();
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
       await page.mouse.move(0, 0);
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
@@ -300,11 +303,80 @@ test.describe("Card video autoplay", () => {
             () => (window as Window & { __vmPlayCalls?: number }).__vmPlayCalls ?? 0
           )
         ).toBe(0);
-        await card.getByRole("button", { name: "Play video", exact: true }).click();
+        await card.getByRole("button", { name: CARD_PLAY_BUTTON }).click();
         await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
       } else {
         await assertVisibleCardVideoAutoplays(page);
       }
+    });
+
+    test(`${route.name}: one tap opens a video post; Preview plays it; data saver stops autoplay`, async ({
+      page,
+    }, testInfo) => {
+      test.skip(testInfo.project.name !== "mobile-chrome", "Runs only on mobile projects.");
+
+      await installMediaPlaybackShim(page);
+      await stubCardApiWithVideoData(page, route.name);
+      await page.addInitScript(() => {
+        // Data saver on, and a Play pressed on an earlier visit remembered:
+        // still nothing may start by itself.
+        Object.defineProperty(navigator, "connection", {
+          configurable: true,
+          value: { saveData: true, addEventListener() {}, removeEventListener() {} },
+        });
+        window.localStorage.setItem(
+          "vmz-showroom-autoplay",
+          JSON.stringify({ state: { autoplayEnabled: true }, version: 0 })
+        );
+        document.addEventListener(
+          "error",
+          (event) => {
+            if (event.target instanceof HTMLVideoElement) event.stopImmediatePropagation();
+          },
+          true
+        );
+      });
+      await gotoReady(page, route);
+      requireTestData(
+        !route.emptySelector || (await page.locator(route.emptySelector).count()) === 0,
+        `cards on ${route.name}`
+      );
+
+      const card = page
+        .locator("[data-card-variant]")
+        .filter({ has: page.locator("video") })
+        .first();
+      await card.evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(750);
+      expect(
+        await page.evaluate(
+          () => (window as Window & { __vmPlayCalls?: number }).__vmPlayCalls ?? 0
+        )
+      ).toBe(0);
+
+      // A labelled Preview button of at least 44 px plays the video in place.
+      const preview = card.getByRole("button", { name: /^Preview video/ });
+      await expect(preview).toBeVisible();
+      await expect(preview).toHaveText("Preview");
+      const previewBounds = await preview.boundingBox();
+      expect(previewBounds!.width).toBeGreaterThanOrEqual(44);
+      expect(previewBounds!.height).toBeGreaterThanOrEqual(44);
+      const url = page.url();
+      const video = card.locator("video");
+      await preview.click();
+      await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
+      expect(page.url()).toBe(url);
+      await card.getByRole("button", { name: "Pause video", exact: true }).click();
+      await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
+
+      // One tap on the picture, away from the buttons, opens the post.
+      const media = await card.locator("[data-card-media]").boundingBox();
+      expect(media).toBeTruthy();
+      const postLink = card.getByRole("link").first();
+      const href = await postLink.getAttribute("href");
+      expect(href).toBeTruthy();
+      await page.mouse.click(media!.x + media!.width / 2, media!.y + media!.height * 0.2);
+      await page.waitForURL((next) => next.pathname === href, { timeout: 15_000 });
     });
   }
 });
