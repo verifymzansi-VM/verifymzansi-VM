@@ -357,4 +357,102 @@ describe("restored marketplace reads", () => {
       clock.mockRestore();
     }
   });
+
+  describe("business search includes tourism businesses", () => {
+    const business = (n: number, score: string, extra = {}) =>
+      card(n, {
+        kind: "business",
+        area: "business",
+        category: "general_other",
+        price_mode: null,
+        price_cents: null,
+        condition: null,
+        score,
+        ...extra,
+      });
+    const tourism = (n: number, score: string, extra = {}) =>
+      business(n, score, { area: "tourism_events", category: "tourism_hospitality", ...extra });
+    const relevance = (items: Array<ReturnType<typeof card>>, total = items.length) => ({
+      ...page(items, total),
+      sort: "relevance",
+    });
+    function searchApi(own: Array<ReturnType<typeof card>>, stays: Array<ReturnType<typeof card>>) {
+      return vi.fn(async (name: string, args: { p_request: Record<string, unknown> }) => {
+        if (name !== "search_post_cards") return { data: [], error: null };
+        const {
+          area,
+          offset = 0,
+          limit = 24,
+        } = args.p_request as {
+          area: string;
+          offset?: number;
+          limit?: number;
+        };
+        const rows = area === "tourism_events" ? stays : own;
+        return { data: relevance(rows.slice(offset, offset + limit), rows.length), error: null };
+      });
+    }
+
+    it("reads the tourism business category with a text search and merges in the database's order", async () => {
+      const rpc = searchApi(
+        [business(1, "0.9"), business(2, "0.4")],
+        [tourism(3, "0.7"), tourism(4, "0.4", { published_at: "2026-10-17T10:00:00Z" })]
+      );
+      const result = await readRestoredCollection(
+        apiWith(rpc),
+        "businesses",
+        new URLSearchParams({ q: "lodge", province: "gp", limit: "3" })
+      );
+      const searches = rpc.mock.calls.filter(([name]) => name === "search_post_cards");
+      expect(searches.map(([, args]) => args.p_request)).toEqual([
+        expect.objectContaining({ area: "business", q: "lodge", province: "gp", offset: 0 }),
+        expect.objectContaining({
+          area: "tourism_events",
+          category: "tourism_hospitality",
+          q: "lodge",
+          province: "gp",
+          offset: 0,
+        }),
+      ]);
+      expect(result.total).toBe(4);
+      expect(result.rows.map((row) => row.id)).toEqual([id(1), id(3), id(4)]);
+      expect(result.rows[1]).toMatchObject({ category: "tourism_hospitality" });
+      const second = await readRestoredCollection(
+        apiWith(rpc),
+        "businesses",
+        new URLSearchParams({ q: "lodge", province: "gp", page: "2", limit: "3" })
+      );
+      expect(second.rows.map((row) => row.id)).toEqual([id(2)]);
+    });
+
+    it("keeps browsing and category filters to one scope", async () => {
+      const rpc = searchApi([business(1, "0.9")], [tourism(3, "0.7")]);
+      await readRestoredCollection(
+        apiWith(rpc),
+        "businesses",
+        new URLSearchParams({ q: "lodge", category: "general_other" })
+      );
+      await readRestoredCollection(
+        apiWith(rpc),
+        "businesses",
+        new URLSearchParams({ q: "lodge", category: "tourism_hospitality" })
+      );
+      const areas = rpc.mock.calls
+        .filter(([name]) => name === "search_post_cards")
+        .map(([, args]) => args.p_request.area);
+      expect(areas).toEqual(["business", "tourism_events"]);
+    });
+
+    it("refuses a merged search page deeper than its bound before reading", async () => {
+      const rpc = searchApi([], []);
+      await expect(
+        readRestoredCollection(
+          apiWith(rpc),
+          "businesses",
+          new URLSearchParams({ q: "lodge", page: "11", limit: "48" })
+        )
+      ).rejects.toThrow(MarketplaceQueryError);
+      expect(rpc).not.toHaveBeenCalled();
+    });
+  });
 });

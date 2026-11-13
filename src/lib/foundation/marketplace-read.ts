@@ -208,6 +208,68 @@ function integer(params: URLSearchParams, key: string, fallback: number, max: nu
   return Number(raw);
 }
 
+type PresentedCard = Awaited<ReturnType<typeof searchFoundationPresentedCards>>["items"][number];
+
+/** The tourism area's business category (stays, restaurants, tours). */
+const TOURISM_BUSINESS_CATEGORY = "tourism_hospitality";
+/** Deepest result a merged search reads from each scope (ten card reads). */
+const MERGED_SEARCH_DEPTH = 480;
+
+/** Cards of one search scope from `start`, at most `want` of them, in bounded
+ * reads of 48. Refuses a card of another kind. */
+async function readCards(
+  api: FoundationPublicApi,
+  input: Record<string, unknown>,
+  kind: PresentedCard["kind"],
+  { start, want }: { start: number; want: number }
+) {
+  const cards: PresentedCard[] = [];
+  let total = 0;
+  for (let count = 0; ; count++) {
+    if (count >= 200) throw new Error("Public collection is too large to paginate safely");
+    const requested = Math.min(48, want - cards.length);
+    const offset = start + cards.length;
+    const result = await searchFoundationPresentedCards(api, {
+      ...input,
+      offset,
+      limit: requested,
+    });
+    if (result.items.some((row) => row.kind !== kind))
+      throw new Error("Invalid public collection response");
+    total = result.total;
+    cards.push(...result.items);
+    if (
+      result.items.length < requested ||
+      offset + result.items.length >= total ||
+      cards.length >= want
+    )
+      break;
+  }
+  return { cards, total };
+}
+
+/** The database's result order (internal.search_posts), used to merge scopes:
+ * relevance score, then price (missing prices last), then newest, then id. */
+function databaseOrder(sort: unknown) {
+  return (a: PresentedCard, b: PresentedCard) => {
+    if (sort === "relevance") {
+      const score = Number(b.score ?? 0) - Number(a.score ?? 0);
+      if (score) return score;
+    }
+    if (sort === "price_asc" || sort === "price_desc") {
+      if (a.price_cents === null || b.price_cents === null) {
+        if (a.price_cents !== b.price_cents) return a.price_cents === null ? 1 : -1;
+      } else {
+        const price = Number(a.price_cents) - Number(b.price_cents);
+        if (price) return sort === "price_asc" ? price : -price;
+      }
+    }
+    const published = Date.parse(b.published_at) - Date.parse(a.published_at);
+    if (published) return published;
+    return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+  };
+}
+
 /** Translate the selected frontend's filters, never send legacy table names,
  * SQL expressions or private fields to the replacement database. */
 export async function readRestoredCollection(
@@ -217,7 +279,8 @@ export async function readRestoredCollection(
 ) {
   const page = integer(params, "page", 1, 10000);
   const limit = integer(params, "limit", 24, 50);
-  const tourism = collection === "businesses" && params.get("category") === "tourism_hospitality";
+  const tourism =
+    collection === "businesses" && params.get("category") === TOURISM_BUSINESS_CATEGORY;
   const area =
     collection === "listings"
       ? "market"
@@ -292,55 +355,42 @@ export async function readRestoredCollection(
     if (params.get("event_order")) input.event_order = params.get("event_order");
   }
   input.offset = (page - 1) * limit;
-  let cards: Awaited<ReturnType<typeof searchFoundationPresentedCards>>["items"] = [];
-  try {
-    buildFoundationPostSearch(input);
-  } catch {
-    throw new MarketplaceQueryError("Invalid marketplace filters");
+  const kind =
+    collection === "listings" ? "listing" : collection === "businesses" ? "business" : "event";
+  // A text search under Businesses also finds tourism businesses (stays,
+  // restaurants, tours), as the chosen frontend's search did. The database
+  // keeps them in the tourism area, so both scopes are read and merged in the
+  // database's own order (map 03a C8).
+  const scopes: Array<Record<string, unknown>> =
+    collection === "businesses" && q && !category
+      ? [input, { ...input, area: "tourism_events", category: TOURISM_BUSINESS_CATEGORY }]
+      : [input];
+  const merged = scopes.length > 1;
+  if (merged && !organisation && page * limit > MERGED_SEARCH_DEPTH)
+    throw new MarketplaceQueryError("Search page is too deep");
+  for (const scope of scopes) {
+    try {
+      buildFoundationPostSearch(scope);
+    } catch {
+      throw new MarketplaceQueryError("Invalid marketplace filters");
+    }
   }
+  let cards: PresentedCard[] = [];
   let total = 0;
   // Ordinary pages use SQL filtering, ordering, counts and offsets. At most two
   // bounded card reads serve the legacy 50-card viewer batch; no detail fan-out.
   // Organisation relationships remain public, bounded batches until their
-  // dedicated directory read gains the same filter contract.
-  for (let count = 0; ; count++) {
-    if (count >= 200) throw new Error("Public collection is too large to paginate safely");
-    const requested = organisation ? 48 : Math.min(48, limit - cards.length);
-    const offset = organisation ? count * 48 : (page - 1) * limit + cards.length;
-    const result = await searchFoundationPresentedCards(api, {
-      ...input,
-      offset,
-      limit: requested,
+  // dedicated directory read gains the same filter contract. A merged search
+  // reads each scope from its start up to the requested page.
+  for (const scope of scopes) {
+    const read = await readCards(api, scope, kind, {
+      start: organisation || merged ? 0 : (page - 1) * limit,
+      want: organisation ? Number.POSITIVE_INFINITY : merged ? page * limit : limit,
     });
-    if (
-      result.items.some(
-        (row) =>
-          row.kind !==
-          (collection === "listings"
-            ? "listing"
-            : collection === "businesses"
-              ? "business"
-              : "event")
-      )
-    )
-      throw new Error("Invalid public collection response");
-    total = result.total;
-    cards.push(
-      ...result.items.filter((row) =>
-        collection === "listings"
-          ? row.kind === "listing"
-          : collection === "businesses"
-            ? row.kind === "business"
-            : row.kind === "event"
-      )
-    );
-    if (
-      result.items.length < requested ||
-      offset + result.items.length >= total ||
-      (!organisation && cards.length >= limit)
-    )
-      break;
+    cards.push(...read.cards);
+    total += read.total;
   }
+  if (merged) cards.sort(databaseOrder(input.sort));
   if (organisation) {
     const affiliated = new Set<string>();
     for (let offset = 0; offset < cards.length; offset += 100) {
@@ -367,7 +417,7 @@ export async function readRestoredCollection(
     }
   }
   if (organisation) total = cards.length;
-  const selected = organisation ? cards.slice((page - 1) * limit, page * limit) : cards;
+  const selected = organisation || merged ? cards.slice((page - 1) * limit, page * limit) : cards;
   const stickers = await readPublicBusinessStickers(
     api,
     selected.filter((row) => row.kind === "business").map((row) => row.id)
