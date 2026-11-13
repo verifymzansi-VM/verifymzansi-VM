@@ -28,6 +28,8 @@ export type RefundTarget = {
   priorCents: number;
   label: string;
   accountId: string;
+  /** How it was paid: an Ozow refund, or a bank transfer back for a bank transfer. */
+  method?: "ozow" | "invoice";
 };
 
 type Run = (payload: CommercialPayload, successText?: string) => Promise<unknown>;
@@ -47,6 +49,7 @@ export function RefundForm({
   const refund = target.kind === "refunded";
   const needsApproval = target.priorCents + target.amountCents > APPROVAL_ABOVE_CENTS;
   const what = refund ? "refund" : "chargeback";
+  const bank = target.method === "invoice";
   return (
     <form
       className="w-full space-y-3 rounded-lg border bg-muted/40 p-3"
@@ -110,7 +113,13 @@ export function RefundForm({
       </label>
       <label className="block text-sm">
         <span className="font-medium">
-          {refund ? "Ozow refund reference" : "Ozow chargeback reference"}
+          {bank
+            ? refund
+              ? "Bank reference of the refund transfer"
+              : "Bank chargeback reference"
+            : refund
+              ? "Ozow refund reference"
+              : "Ozow chargeback reference"}
         </span>
         <input
           name="ozowReference"
@@ -119,7 +128,9 @@ export function RefundForm({
           autoComplete="off"
           spellCheck={false}
           className="mt-1 block w-full rounded-md border bg-background p-2 font-mono"
-          placeholder="From the Ozow merchant dashboard"
+          placeholder={
+            bank ? "From the bank's payment confirmation" : "From the Ozow merchant dashboard"
+          }
         />
       </label>
       <ReasonField />

@@ -160,6 +160,45 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
     [403, "You need a current accepted ID review of your own to change payments."],
   ],
   ["staff_same_identity", [403, "Another staff member must handle a payment of your own."]],
+  [
+    "invoice_payment_invalid",
+    [422, "Enter the customer's email, the slot term, the number of slots and the amount."],
+  ],
+  [
+    "invoice_amount_above_limit",
+    [422, "Bank transfers above R50 000 cannot be recorded yet. Nothing was recorded."],
+  ],
+  ["bank_reference_required", [422, "Enter the bank reference from the bank statement."]],
+  [
+    "bank_reference_invalid",
+    [422, "The bank reference is 4 to 60 letters, digits, spaces or . _ : / -."],
+  ],
+  [
+    "cleared_date_invalid",
+    [422, "Enter the date the money cleared: today or in the last 90 days."],
+  ],
+  [
+    "cooling_off_waiver_required",
+    [422, "Confirm the customer agreed in writing to the cooling-off waiver."],
+  ],
+  ["invoice_account_unavailable", [404, "No confirmed account has that email."]],
+  [
+    "staff_referred_customer",
+    [403, "Another staff member must record a payment of a customer you referred."],
+  ],
+  [
+    "bank_reference_used",
+    [409, "That bank reference was already recorded. Check the payments list before recording it."],
+  ],
+  ["invoice_plan_unavailable", [409, "No slot for that term is on sale now."]],
+  [
+    "invoice_buyer_unverified",
+    [409, "The customer's ID review must be accepted before their slots are recorded."],
+  ],
+  [
+    "invoice_amount_mismatch",
+    [422, "The amount received is not the order total. Check the term and the number of slots."],
+  ],
 ]);
 
 async function settlePaymentCommand<T>(
@@ -307,4 +346,130 @@ export function declineStaffPaymentRefund(
       repeated: z.boolean(),
     })
   );
+}
+
+/** The slot terms a bank transfer can pay for (the Individual slots on sale). */
+export const BANK_TRANSFER_TERMS = [30, 90, 180] as const;
+export type BankTransferTerm = (typeof BANK_TRANSFER_TERMS)[number];
+/** Bank transfers above R50 000 are refused for now (a second staff member's
+ * check above that amount is not built yet). The database decides. */
+export const BANK_TRANSFER_LIMIT_CENTS = 5_000_000;
+
+/** A bank reference as the database stores it: spaces collapsed, 4 to 60
+ * letters, digits, spaces or . _ : / -, with at least four letters or digits. */
+export function normaliseBankReference(value: string): string | null {
+  const reference = value.trim().replace(/\s+/g, " ");
+  return /^[A-Za-z0-9][A-Za-z0-9 ._:/-]{3,59}$/.test(reference) &&
+    reference.replace(/[^A-Za-z0-9]/g, "").length >= 4
+    ? reference
+    : null;
+}
+
+export type StaffBankTransferInput = {
+  accountEmail: string;
+  termDays: BankTransferTerm;
+  slots: number;
+  amountCents: number;
+  bankReference: string;
+  /** The date the money cleared, YYYY-MM-DD (South African date). */
+  clearedOn: string;
+  /** The customer agreed in writing that their slots start now (no cooling-off). */
+  coolingOffWaiver: boolean;
+  reason: string;
+};
+
+/** Records a cleared bank transfer as a payment: the slots start now, with the
+ * same receipt email and partner commission as an Ozow payment (audited). */
+export async function recordStaffBankTransfer(
+  api: FoundationAuthenticatedApi,
+  input: StaffBankTransferInput
+) {
+  if (!input.bankReference.trim())
+    throw new FoundationStaffCommandError(422, "Enter the bank reference from the bank statement.");
+  const reference = normaliseBankReference(input.bankReference);
+  if (!reference)
+    throw new FoundationStaffCommandError(
+      422,
+      "The bank reference is 4 to 60 letters, digits, spaces or . _ : / -."
+    );
+  if (input.coolingOffWaiver !== true)
+    throw new FoundationStaffCommandError(
+      422,
+      "Confirm the customer agreed in writing to the cooling-off waiver."
+    );
+  if (input.amountCents > BANK_TRANSFER_LIMIT_CENTS)
+    throw new FoundationStaffCommandError(
+      422,
+      "Bank transfers above R50 000 cannot be recorded yet. Nothing was recorded."
+    );
+  return settlePaymentCommand(
+    api.rpc(
+      "record_staff_invoice_payment",
+      {
+        p_account_email: input.accountEmail.trim(),
+        p_term_days: input.termDays,
+        p_slots: input.slots,
+        p_amount_cents: input.amountCents,
+        p_bank_reference: reference,
+        p_cleared_on: input.clearedOn,
+        p_cooling_off_waiver: true,
+        p_reason: staffReason.parse(input.reason),
+      },
+      { get: false }
+    ),
+    z.strictObject({
+      payment_id: z.uuid(),
+      customer_name: z.string().max(120).nullable(),
+      slots: z.number().int().min(1).max(25),
+      term_days: z.union([z.literal(30), z.literal(90), z.literal(180)]),
+      amount_cents: cents.max(BANK_TRANSFER_LIMIT_CENTS),
+      ends_at: z.iso.datetime({ offset: true }).nullable(),
+      commissions: count,
+      payment_status: z.enum(actualStatuses),
+      repeated: z.boolean(),
+    })
+  );
+}
+
+/** Whose account an email names, before staff record a bank transfer for it. */
+export function readStaffBankTransferCustomer(api: FoundationAuthenticatedApi, email: string) {
+  return settlePaymentCommand(
+    api.rpc("get_staff_invoice_customer", { p_account_email: email.trim() }, { get: false }),
+    z.strictObject({
+      customer_name: z.string().max(120).nullable(),
+      id_reviewed: z.boolean(),
+      can_use_slots: z.boolean(),
+      slots_held: count.nullable(),
+      slot_limit: z.number().int().min(1).max(25).nullable(),
+    })
+  );
+}
+
+const staffBankTransfer = z.strictObject({
+  payment_id: z.uuid(),
+  bank_reference: z.string().min(4).max(60),
+  cleared_on: z.iso.date(),
+  amount_received_cents: cents,
+  recorded_at: z.iso.datetime({ offset: true }),
+  recorded_by_me: z.boolean(),
+  reason: z.string().min(5).max(500),
+});
+export type StaffBankTransfer = z.infer<typeof staffBankTransfer>;
+
+/** The bank transfer details of the listed payments (those paid by bank transfer). */
+export async function readStaffBankTransfers(
+  api: FoundationAuthenticatedApi,
+  paymentIds: readonly string[]
+): Promise<StaffBankTransfer[]> {
+  const ids = z
+    .array(z.uuid())
+    .max(50)
+    .parse([...new Set(paymentIds)]);
+  if (ids.length === 0) return [];
+  const result = await settleStaffCommand(
+    api.rpc("get_staff_invoice_payments", { p_payment_ids: ids }, { get: false }),
+    z.strictObject({ items: z.array(staffBankTransfer).max(50) })
+  );
+  const asked = new Set(ids);
+  return result.items.filter((item) => asked.has(item.payment_id));
 }

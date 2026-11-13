@@ -35,6 +35,23 @@ describe("readPaymentReceipt", () => {
     });
   });
 
+  it("shows the customer's transfer reference for a bank transfer recorded by staff", () => {
+    const transfer = {
+      ...row,
+      provider_transaction_id: null,
+      payment_method: "invoice",
+      bank_reference: "FNB 2026-11 A1",
+    };
+    expect(readPaymentReceipt(transfer, expected)).toMatchObject({
+      bankReference: "FNB 2026-11 A1",
+    });
+    // Without its reference the email goes without payment details.
+    expect(readPaymentReceipt({ ...transfer, bank_reference: null }, expected)).toBeNull();
+    expect(
+      readPaymentReceipt({ ...row, payment_method: "ozow", bank_reference: null }, expected)
+    ).toMatchObject({ bankReference: "abcdef12345678" });
+  });
+
   it("falls back to the label and the invoice time when those are missing", () => {
     expect(
       readPaymentReceipt(

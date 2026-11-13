@@ -8,6 +8,8 @@ import {
   activateStaffPaidPayment,
   approveStaffPaymentRefund,
   declineStaffPaymentRefund,
+  readStaffBankTransferCustomer,
+  recordStaffBankTransfer,
   recordStaffPaymentRefund,
   recordStaffSlotRefund,
   refundReasonCode,
@@ -130,6 +132,23 @@ const schema = z.discriminatedUnion("action", [
     reason,
   }),
   z.object({ action: z.literal("payment.activate"), paymentId: uuid, reason }),
+  z.object({
+    action: z.literal("payment.transfer_customer"),
+    accountEmail: z.string().trim().min(3).max(254),
+  }),
+  // A cleared bank transfer recorded as a payment. An empty bank reference or
+  // an unticked waiver reaches the adapter, which refuses it in plain words.
+  z.object({
+    action: z.literal("payment.record_transfer"),
+    accountEmail: z.string().trim().min(3).max(254),
+    termDays: z.union([z.literal(30), z.literal(90), z.literal(180)]),
+    slots: z.number().int().min(1).max(25),
+    amountCents: z.number().int().positive().max(100_000_000),
+    bankReference: z.string().max(200).default(""),
+    clearedOn: z.iso.date(),
+    coolingOffWaiver: z.boolean(),
+    reason,
+  }),
   z.object({ action: z.literal("payment.refund_approve"), requestId: uuid }),
   z.object({ action: z.literal("payment.refund_decline"), requestId: uuid, reason }),
   z.object({
@@ -248,6 +267,13 @@ export async function POST(request: Request) {
           success: true,
           data: await activateStaffPaidPayment(api, body.paymentId.toLowerCase(), body.reason),
         };
+      if (body.action === "payment.transfer_customer")
+        return {
+          success: true,
+          data: await readStaffBankTransferCustomer(api, body.accountEmail),
+        };
+      if (body.action === "payment.record_transfer")
+        return { success: true, data: await recordStaffBankTransfer(api, body) };
       if (body.action === "payment.refund_approve")
         return {
           success: true,

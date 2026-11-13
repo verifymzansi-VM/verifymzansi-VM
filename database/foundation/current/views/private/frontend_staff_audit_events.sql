@@ -66,6 +66,15 @@ UNION ALL
     'payment:slot_'::text || l.reversal_kind AS action,
     l.reversal_reason AS reason
    FROM private.payment_lines l
-  WHERE l.reversed_by IS NOT NULL;
+  WHERE l.reversed_by IS NOT NULL
+UNION ALL
+ SELECT 'payment_invoice:'::text || t.payment_id::text AS id,
+    t.recorded_at AS occurred_at,
+    t.recorded_by AS actor_id,
+    t.payment_id AS target_id,
+    'payment'::text AS target_type,
+    'payment:invoice_recorded'::text AS action,
+    (((('Bank transfer '::text || t.bank_reference) || ' cleared '::text) || to_char(t.cleared_on::timestamp without time zone, 'YYYY-MM-DD'::text)) || ': '::text) || t.reason AS reason
+   FROM private.invoice_payments t;
 alter view private.frontend_staff_audit_events owner to postgres;
 revoke all on private.frontend_staff_audit_events from public;

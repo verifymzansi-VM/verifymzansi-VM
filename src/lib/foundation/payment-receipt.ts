@@ -21,6 +21,10 @@ const receiptRow = z.object({
     .nullable(),
   issued_at: time.nullable(),
   merchant_reference: z.string().min(1).max(100),
+  // A bank transfer recorded by staff ('invoice') shows the reference of the
+  // customer's transfer; older reads have neither field (an Ozow payment).
+  payment_method: z.enum(["ozow", "invoice"]).optional(),
+  bank_reference: z.string().trim().min(4).max(60).nullable().optional(),
 });
 
 /**
@@ -36,7 +40,10 @@ export function readPaymentReceipt(
   if (!row.success) return null;
   const r = row.data;
   const paidAt = r.completed_at ?? r.issued_at;
-  const bankReference = toOzowReferenceField(r.merchant_reference);
+  const bankReference =
+    r.payment_method === "invoice"
+      ? (r.bank_reference ?? "")
+      : toOzowReferenceField(r.merchant_reference);
   if (
     r.payment_id !== expected.paymentId ||
     r.owner_id !== expected.ownerId ||

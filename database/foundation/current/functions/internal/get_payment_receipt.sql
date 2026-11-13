@@ -14,7 +14,9 @@ AS $function$
       then p.snapshot->'slots' else 'null'::jsonb end,
     'invoice_description', i.description, 'invoice_number', i.invoice_number, 'issued_at', i.issued_at,
     'merchant_reference', p.merchant_reference, 'provider_transaction_id', p.provider_transaction_id,
-    'status', p.status, 'fulfillment_status', p.fulfillment_status)
+    'status', p.status, 'fulfillment_status', p.fulfillment_status,
+    'payment_method', p.provider,
+    'bank_reference', (select t.bank_reference from private.invoice_payments t where t.payment_id = p.id))
   from private.payments p left join private.invoices i on i.payment_id = p.id
   where p.id = p_payment_id;
 $function$;

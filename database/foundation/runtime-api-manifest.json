@@ -476,7 +476,10 @@
     },
     {
       "name": "get_payment_receipt",
-      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "updates": [
+        "updates/20261113021223_staff_payment_fixes.sql",
+        "updates/20261113133605_staff_invoice_payments.sql"
+      ],
       "arguments": [
         {
           "name": "p_payment_id",
@@ -491,7 +494,99 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Service-only read for the receipt email: one payment's amount, currency, completion time, product kind, label, slot count, status, delivery status, merchant reference, Ozow transaction id and invoice (number, description, issue time), with its owner id; null for an unknown payment. No contact or identity details."
+      "authority": "Service-only read for the receipt email: one payment's amount, currency, completion time, product kind, label, slot count, status, delivery status, merchant reference, Ozow transaction id, payment method (ozow or invoice), the bank reference of a recorded bank transfer and invoice (number, description, issue time), with its owner id; null for an unknown payment. No contact or identity details."
+    },
+    {
+      "name": "record_staff_invoice_payment",
+      "updates": ["updates/20261113133605_staff_invoice_payments.sql"],
+      "arguments": [
+        {
+          "name": "p_account_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_term_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_slots",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_amount_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_bank_reference",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_cleared_on",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_waiver",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; a confirmed account with current access and an accepted ID review, an Individual slot on sale for 30, 90 or 180 days, 1 to 25 slots within the person's Individual slot limit, the amount received equal to the order total and at most R50,000, money cleared today or in the last 90 days, the customer's written cooling-off waiver confirmed and a bank reference never recorded before: records a complete, fulfilled invoice payment with its lines, slots starting now, invoice, receipt event and partner commission, and the audited bank transfer record; the same request again returns the first result."
+    },
+    {
+      "name": "get_staff_invoice_customer",
+      "updates": ["updates/20261113133605_staff_invoice_payments.sql"],
+      "arguments": [
+        {
+          "name": "p_account_email",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred: for the one confirmed account with that email, its public name, whether its ID review is accepted and it can use slots, the Individual slots held and the person's slot limit. No email, legal name or contact details."
+    },
+    {
+      "name": "get_staff_invoice_payments",
+      "updates": ["updates/20261113133605_staff_invoice_payments.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability and recent authenticator proof: the bank transfer details (reference, date cleared, amount, reason, recorded time and whether the caller's identity recorded it) of up to 50 listed payments that staff recorded from a bank transfer."
     },
     {
       "name": "get_frontend_staff_organisation_detail",

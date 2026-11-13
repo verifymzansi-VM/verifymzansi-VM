@@ -47,6 +47,21 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_staff_payment_list: { Args: { p_page: number; p_filter?: string }; Returns: Json };
+      record_staff_invoice_payment: {
+        Args: {
+          p_account_email: string;
+          p_term_days: number;
+          p_slots: number;
+          p_amount_cents: number;
+          p_bank_reference: string;
+          p_cleared_on: string;
+          p_cooling_off_waiver: boolean;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      get_staff_invoice_customer: { Args: { p_account_email: string }; Returns: Json };
+      get_staff_invoice_payments: { Args: { p_payment_ids: string[] }; Returns: Json };
       activate_staff_paid_payment: {
         Args: { p_payment_id: string; p_reason: string };
         Returns: Json;
