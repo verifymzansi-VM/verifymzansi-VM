@@ -54,6 +54,21 @@ const PDF_FIXTURES = [
   ],
 ];
 
+// pdf.js in Node notes that it cannot draw the FreeText annotation fixture
+// (it has no canvas); reading is unaffected. Keep only that known line quiet.
+const PDFJS_CANVAS_NOTE = "Warning: FreeTextAnnotation: OffscreenCanvas is not supported";
+async function quietExtractPdf(bytes) {
+  const warn = console.warn;
+  console.warn = (...args) => {
+    if (!(typeof args[0] === "string" && args[0].startsWith(PDFJS_CANVAS_NOTE))) warn(...args);
+  };
+  try {
+    return await extractPdf(bytes);
+  } finally {
+    console.warn = warn;
+  }
+}
+
 const CARD = {
   title: "Garden cottage in Richards Bay",
   section: "Mzansi Market",
@@ -103,7 +118,7 @@ try {
     assert.equal(response.status, 200, name);
     const { result } = await response.json();
     // Same answer as the website's own reader, after the JSON round trip.
-    const expected = JSON.parse(JSON.stringify(await extractPdf(bytes)));
+    const expected = JSON.parse(JSON.stringify(await quietExtractPdf(bytes)));
     assert.notEqual(expected, null, name);
     assert.deepEqual(result, expected, `${name}: offload reads the PDF as Node does`);
   }
