@@ -39,6 +39,8 @@ describe("POST /api/admin/commercial", () => {
         action: "payment.reverse",
         paymentId: crypto.randomUUID(),
         kind: "refunded",
+        reasonCode: "billing_error",
+        ozowReference: "OZ-REF-1",
         reason: "Refund approved",
       })
     );

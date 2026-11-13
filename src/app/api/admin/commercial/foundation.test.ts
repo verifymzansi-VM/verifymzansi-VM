@@ -1,0 +1,160 @@
+/** @vitest-environment node */
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { NextRequest, type NextResponse } from "next/server";
+import { POST } from "./route";
+import { createFoundationRouteContext } from "@/lib/foundation/request-route";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
+vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: vi.fn() }));
+vi.mock("@/lib/foundation/runtime-connection", () => ({
+  readFoundationRuntimeConnection: () => ({}),
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: vi.fn(),
+  getClientRateLimitIdentity: () => ({ key: "fixture" }),
+}));
+vi.mock("@/lib/utils/admin-route-guard", () => ({
+  enforceAdminMutationGuard: vi.fn(() => {
+    throw new Error("Retired staff guard used");
+  }),
+}));
+vi.mock("@/lib/services/email", () => ({ sendOrganisationAdminInviteEmail: vi.fn() }));
+
+const payment = "11111111-1111-4111-8111-111111111111",
+  line = "22222222-2222-4222-8222-222222222222",
+  csrf = "c".repeat(64),
+  rpc = vi.fn();
+function request(body: unknown) {
+  return new NextRequest("https://verifymzansi.com/api/admin/commercial", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: {
+      origin: "https://verifymzansi.com",
+      "content-type": "application/json",
+      cookie: `vm_csrf=${csrf}`,
+      "x-csrf-token": csrf,
+    },
+  });
+}
+const refundReply = {
+  request_id: line,
+  status: "applied",
+  kind: "refunded",
+  released_activations: 1,
+  payment_status: "refunded",
+  repeated: false,
+};
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+  vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+  vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
+  vi.mocked(createFoundationRouteContext).mockReturnValue({
+    authenticate: async () => ({ rpc }),
+    respond: (response: NextResponse) => response,
+  } as unknown as ReturnType<typeof createFoundationRouteContext>);
+});
+afterEach(() => vi.unstubAllEnvs());
+
+it("refuses a refund without Ozow's reference before any database call", async () => {
+  const response = await POST(
+    request({
+      action: "payment.reverse",
+      paymentId: payment,
+      kind: "refunded",
+      reasonCode: "billing_error",
+      reason: "Charged twice by mistake",
+    })
+  );
+  expect(response.status).toBe(422);
+  expect(await response.json()).toMatchObject({ error: "Enter Ozow's refund reference." });
+  expect(rpc).not.toHaveBeenCalled();
+});
+
+it("refuses a refund without a reason code", async () => {
+  const response = await POST(
+    request({
+      action: "payment.reverse",
+      paymentId: payment,
+      kind: "refunded",
+      ozowReference: "OZ-REF-1",
+      reason: "Charged twice by mistake",
+    })
+  );
+  expect(response.status).toBe(422);
+  expect(rpc).not.toHaveBeenCalled();
+});
+
+it("records a whole-payment refund and a slot refund with the new commands", async () => {
+  rpc.mockResolvedValue({ data: refundReply, error: null });
+  const whole = await POST(
+    request({
+      action: "payment.reverse",
+      paymentId: payment.toUpperCase(),
+      kind: "refunded",
+      reasonCode: "duplicate",
+      ozowReference: "OZ-REF-1",
+      reason: "Charged twice by mistake",
+    })
+  );
+  expect(whole.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "record_staff_payment_refund",
+    {
+      p_payment_id: payment,
+      p_kind: "refunded",
+      p_reason_code: "duplicate",
+      p_reason: "Charged twice by mistake",
+      p_ozow_reference: "OZ-REF-1",
+    },
+    { get: false }
+  );
+  rpc.mockResolvedValue({ data: { ...refundReply, line_id: line }, error: null });
+  const slot = await POST(
+    request({
+      action: "payment.reverse_slot",
+      lineId: line,
+      kind: "chargeback",
+      reasonCode: "s14_cancellation",
+      ozowReference: "OZ-CB-1",
+      reason: "Bank chargeback on one slot",
+    })
+  );
+  expect(slot.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "record_staff_slot_refund",
+    expect.objectContaining({ p_line_id: line, p_kind: "chargeback", p_ozow_reference: "OZ-CB-1" }),
+    { get: false }
+  );
+});
+
+it("activates a paid but undelivered payment and approves a waiting refund", async () => {
+  rpc.mockResolvedValueOnce({
+    data: {
+      payment_id: payment,
+      fulfillment_status: "fulfilled",
+      entitlements: 1,
+      addon_window: false,
+      commissions: 0,
+      repeated: false,
+    },
+    error: null,
+  });
+  const activated = await POST(
+    request({ action: "payment.activate", paymentId: payment, reason: "Paid after cancel" })
+  );
+  expect(activated.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "activate_staff_paid_payment",
+    { p_payment_id: payment, p_reason: "Paid after cancel" },
+    { get: false }
+  );
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: { code: "42501", details: "refund_approver_same", message: "refused" },
+  });
+  const approved = await POST(request({ action: "payment.refund_approve", requestId: line }));
+  expect(approved.status).toBe(403);
+  expect(await approved.json()).toMatchObject({
+    error: "Another staff member must approve this refund: you recorded it.",
+  });
+});
