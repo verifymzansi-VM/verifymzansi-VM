@@ -537,7 +537,7 @@ describe("a repeated thin notice", () => {
     expect(new Set(keys).size).toBe(3);
   });
 
-  it("records a later Refunded status and logs it for staff", async () => {
+  it("records a later Refunded status without a payment alert (refunds have their own records)", async () => {
     machine.mockImplementation(async (name: string) =>
       name === "apply_provider_event"
         ? { data: { outcome: "late_status_ignored", payment_id: PAYMENT }, error: null }
@@ -547,12 +547,9 @@ describe("a repeated thin notice", () => {
     const response = await notice(signedNotice(thinNotice()));
     expect(response.status).toBe(200);
     expect(settled()).toHaveLength(1);
-    expect(error).toHaveBeenCalledWith("Payment problem", {
-      paymentId: PAYMENT,
-      reason: "refunded_after_completion",
-      source: "notice",
-      anomaly: "refunded",
-    });
+    // Ozow keeps a refunded payment "Complete"; refunds are followed through
+    // their own records (src/lib/foundation/ozow-refunds.ts), not this status.
+    expect(error).not.toHaveBeenCalledWith("Payment problem", expect.anything());
   });
 
   it("keeps the same key while nothing changed, so the database sees a repeat", async () => {

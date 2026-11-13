@@ -499,8 +499,9 @@ function confirmationShape(pay: FoundationPayment): PaymentRecordShape {
  * then Successful, Refunded or Error), so the bytes alone would drop the later
  * status as a repeat. An identical repeat still has the same key. A later
  * status reaches the database and is recorded there; it does not reverse a
- * completed payment (a Refunded status is recorded as late_status_ignored and
- * logged for staff below; refunds are handled by staff).
+ * completed payment (a later status is recorded as late_status_ignored; Ozow
+ * keeps a refunded payment "Complete", and refunds are followed through their
+ * own records, ./ozow-refunds.ts).
  */
 export function providerEventKey(payload: NormalizedOzowWebhook, evidence: string): string {
   const evidenceHash = createHash("sha256").update(evidence).digest("hex");
@@ -540,8 +541,10 @@ async function applyTransaction(
 }
 
 /** Settlement outcomes that need a person, as payment problem reasons.
- * A later Refunded status on a completed payment is recorded by the database
- * as late_status_ignored: the money went back, the plan is still active. */
+ * Refunds are not watched here: Ozow keeps a refunded payment "Complete", so a
+ * payment status never reports one. Refunds are followed through their own
+ * records (./ozow-refunds.ts: Ozow's refund notices and the daily check of
+ * Ozow's refund list, which alerts staff to a refund with no record). */
 const SETTLEMENT_PROBLEMS: ReadonlySet<string> = new Set([
   "unknown_reference",
   "request_mismatch",
@@ -551,10 +554,8 @@ const SETTLEMENT_PROBLEMS: ReadonlySet<string> = new Set([
   "transaction_reused",
   "complete_unfulfillable_target",
 ]);
-function settlementProblem(outcome: unknown, reportedStatus: string | null) {
+function settlementProblem(outcome: unknown) {
   if (typeof outcome !== "string") return null;
-  if (outcome === "late_status_ignored" && reportedStatus?.toLowerCase() === "refunded")
-    return "refunded_after_completion";
   return SETTLEMENT_PROBLEMS.has(outcome) ? outcome : null;
 }
 /** Records what the database reported, when it needs a person; the
@@ -568,7 +569,7 @@ async function recordSettlement(
   transaction: string | null
 ) {
   const recorded = (outcome as { outcome?: unknown } | null)?.outcome;
-  const reason = settlementProblem(recorded, reportedStatus);
+  const reason = settlementProblem(recorded);
   if (reason)
     await recordPaymentProblem(service, {
       paymentId: pay.id,

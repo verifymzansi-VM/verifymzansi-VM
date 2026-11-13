@@ -886,7 +886,6 @@ describe("payment problems", () => {
     ["conflicting_transaction", "Successful", "conflicting_transaction"],
     ["transaction_reused", "Successful", "transaction_reused"],
     ["complete_unfulfillable_target", "Successful", "complete_unfulfillable_target"],
-    ["late_status_ignored", "Refunded", "refunded_after_completion"],
   ])("a settlement outcome %s is kept for staff at once", async (outcome, status, reason) => {
     machine.mockImplementation(async (name) => ({
       data:
@@ -898,7 +897,7 @@ describe("payment problems", () => {
       error: null,
     }));
     const result = await applyFoundationOzowNotification(
-      { ...notification(), status, format: status === "Refunded" ? "api" : "full" },
+      { ...notification(), status, format: "full" },
       "signed",
       service
     );

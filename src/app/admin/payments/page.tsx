@@ -3,7 +3,10 @@ import Link from "next/link";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readStaffPaymentList, staffPaymentListFilter } from "@/lib/foundation/staff-payments";
 import { PaymentsPanel } from "@/components/admin/commercial/partners-panel";
+import { OzowRefundAttention } from "@/components/admin/commercial/ozow-refund-actions";
 import { PageHeader } from "@/components/layout/page-header";
+import { readStaffOzowRefunds } from "@/lib/foundation/ozow-refunds";
+import { ozowApiRefundsEnabled } from "@/lib/payments/ozow-refunds";
 
 const PAGE_SIZE = 50;
 
@@ -22,14 +25,26 @@ export default async function PaymentsAdminPage({
   const parsedPage = Number(params.page || 1);
   const page =
     Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
-  const { rows, total, needsAttention, awaitingApproval } = await (async () => {
+  const { rows, total, needsAttention, awaitingApproval, ozow } = await (async () => {
     const { api } = await readFoundationServerSession();
     const result = await readStaffPaymentList(api, page, status);
+    // Refunds through Ozow, only while they are switched on.
+    const refunds = ozowApiRefundsEnabled()
+      ? await readStaffOzowRefunds(
+          api,
+          result.items.map((item) => item.id)
+        )
+      : null;
     return {
       rows: result.items,
       total: result.total,
       needsAttention: result.needs_attention,
       awaitingApproval: result.awaiting_approval,
+      ozow: refunds && {
+        refundable: refunds.payments.filter((p) => p.ozow_refundable).map((p) => p.payment_id),
+        records: refunds.records,
+        attention: refunds.attention,
+      },
     };
   })();
 
@@ -99,7 +114,12 @@ export default async function PaymentsAdminPage({
         {total.toLocaleString("en-ZA")} {total === 1 ? "payment" : "payments"}
         {total > PAGE_SIZE && ` · Page ${page} of ${Math.ceil(total / PAGE_SIZE)}`}
       </p>
-      <PaymentsPanel payments={rows} canRefund={canRefund} />
+      {ozow ? <OzowRefundAttention records={ozow.attention} /> : null}
+      <PaymentsPanel
+        payments={rows}
+        canRefund={canRefund}
+        ozow={ozow ? { refundable: ozow.refundable, records: ozow.records } : undefined}
+      />
       {(page > 1 || rows.length === PAGE_SIZE) && (
         <nav aria-label="Payment pages" className="flex gap-4 text-sm">
           {page > 1 && (

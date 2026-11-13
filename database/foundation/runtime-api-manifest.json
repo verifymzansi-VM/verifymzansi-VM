@@ -101,7 +101,10 @@
     },
     {
       "name": "record_payment_problem",
-      "updates": ["updates/20261112080000_payment_problem_alerts.sql"],
+      "updates": [
+        "updates/20261112080000_payment_problem_alerts.sql",
+        "updates/20261113151748_ozow_api_refunds.sql"
+      ],
       "arguments": [
         {
           "name": "p_payment_id",
@@ -136,7 +139,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Service-only record by the website's server of a refused payment notice or status-check transaction or a settlement outcome that needs staff; closed reason and source lists, an existing payment or none, one row per payment and reason, repeats only counted; an alert mark only rises, and after it was emailed another Ozow transaction raises it again at most 5 times; holds no personal data."
+      "authority": "Service-only record by the website's server of a refused payment notice or status-check transaction or a settlement outcome or refund through Ozow that needs staff; closed reason and source lists, an existing payment or none, one row per payment and reason, repeats only counted; an alert mark only rises, and after it was emailed another Ozow transaction raises it again at most 5 times; holds no personal data."
     },
     {
       "name": "claim_payment_alerts",
@@ -433,7 +436,10 @@
     },
     {
       "name": "approve_staff_payment_refund",
-      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "updates": [
+        "updates/20261113021223_staff_payment_fixes.sql",
+        "updates/20261113151748_ozow_api_refunds.sql"
+      ],
       "arguments": [
         {
           "name": "p_request_id",
@@ -448,7 +454,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never the requester's identity (checked again after the lock waits) and never a payment of their own identity; applies a refund waiting for approval (whole payment or one slot), the only reversal allowed while it waits, and records the approver; refuses when the payment changed since it was recorded."
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never the requester's identity (checked again after the lock waits) and never a payment of their own identity; applies a refund waiting for approval (whole payment or one slot), the only reversal allowed while it waits, and records the approver; refuses when the payment changed since it was recorded. A refund through Ozow is approved (not reversed): the server sends it, and it takes effect only when Ozow reports it complete."
     },
     {
       "name": "decline_staff_payment_refund",
@@ -3863,6 +3869,260 @@
         "service_role": false
       },
       "authority": "Current active member and live matching session; notification ownership derived from auth.uid(), no direct table grants"
+    },
+    {
+      "name": "request_staff_ozow_refund",
+      "updates": ["updates/20261113151748_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_line_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason_code",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability (admins) and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity (checked again after the lock waits); a refund through Ozow of a completed Ozow payment (its Ozow transaction id) or one open slot of it, with a reason code from the closed list and no reference; the payment's or slot's own amount for the account that paid; one refund of a payment in flight at a time; above R1,000 returned on the payment it waits for a second, different staff member, otherwise it is approved for the server to send. Nothing is reversed until Ozow reports the refund complete."
+    },
+    {
+      "name": "record_staff_dashboard_refund",
+      "updates": ["updates/20261113151748_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_line_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason_code",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_ozow_refund_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability (admins) and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; records a refund an admin made by hand in the Ozow dashboard for a completed Ozow payment or one open slot, with Ozow's refund id (used once) and a reason code; the same approval rule as every refund (above R1,000 a second, different staff member), otherwise it takes effect at once as today's refunds do."
+    },
+    {
+      "name": "get_staff_ozow_refunds",
+      "updates": ["updates/20261113151748_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability; for up to 50 listed payments, whether each can be refunded through Ozow and their API and dashboard refund records (state, amount, reason code, times, Ozow's refund id and status, whether the caller's identity requested it), plus up to 20 API refunds that need staff (failed or returned in 30 days without a later refund, or approved or sent for more than a day). No contact or identity details."
+    },
+    {
+      "name": "claim_ozow_refund_send",
+      "updates": ["updates/20261113151748_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only; hands an approved API refund to the server's sender once (status sent) with its Idempotency-Key, Ozow transaction, amount and reason code; an unknown send may be handed over again with the same key at most twice more, five minutes apart and within six hours; a payment that changed before the first send fails the record without contacting Ozow and alerts staff."
+    },
+    {
+      "name": "list_ozow_refund_sends_due",
+      "updates": ["updates/20261113151748_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only; up to 20 ids of approved API refunds not sent for two minutes and unknown sends due a retry, oldest first."
+    },
+    {
+      "name": "record_ozow_refund_send",
+      "updates": ["updates/20261113151748_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_result",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only; stores Ozow's answer to a send of an API refund: accepted (Ozow's refund id for this record's transaction and amount, used once, then its status), refused (only a first send fails the record; a refused retry stops retries) or unknown; alerts staff on failure, mismatch or the last unknown attempt."
+    },
+    {
+      "name": "apply_ozow_refund_status",
+      "updates": ["updates/20261113151748_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_event",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only; applies a refund status the server read back from Ozow after a signed refund notice: the record with that Ozow refund id, or the one sent API refund of the same transaction and amount; only Complete reverses the payment or slot, Failed, Error, Invalid or Cancelled fail it and Returned returns it with a staff alert; the same status twice changes nothing; a refund with no record or a different transaction or amount alerts staff."
+    },
+    {
+      "name": "reconcile_ozow_refunds",
+      "updates": ["updates/20261113151748_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_refunds",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only daily check against Ozow's refund list (up to 2,000 refunds); changes no refund and alerts staff for each Ozow refund with no record, each record whose transaction or amount differs, and each API refund approved or sent more than a day ago that has not settled."
+    },
+    {
+      "name": "claim_ozow_refund_checks",
+      "updates": ["updates/20261113151748_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only; hands the 10-minute job up to 20 refunds through Ozow without a final answer ten minutes after they were sent (no send retry still due) and each dashboard refund once, at most every 30 minutes each, to read back from Ozow; never waits for a record another transaction holds; returns record ids, Ozow refund ids, transactions, amounts and send times only."
+    },
+    {
+      "name": "report_ozow_refund_missing",
+      "updates": ["updates/20261113151748_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only; records on an API (still sent) or dashboard refund record that Ozow has no such refund (or none of its transaction fits a lost send) and alerts staff; nothing else changes."
+    },
+    {
+      "name": "close_staff_ozow_refund",
+      "updates": ["updates/20261113151748_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability (admins) and recent authenticator proof; the staff member's own current accepted ID review, never the requester's identity (checked again after the lock waits) and never a payment of their own identity; closes, with a reason, a refund through Ozow that never reached Ozow: approved and never sent, or a send whose answer was lost when the server found no such refund at Ozow more than a day after it was sent. The record fails; nothing else changes."
     }
   ]
 }

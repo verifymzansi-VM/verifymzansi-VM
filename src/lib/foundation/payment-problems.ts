@@ -44,9 +44,17 @@ export const PAYMENT_PROBLEM_REASONS = [
   "refunded_after_completion",
   // The status check found more than one successful transaction.
   "multiple_settlements",
+  // Refunds through Ozow (./ozow-refunds.ts, update 20261113151748): recorded
+  // by the database itself from Ozow's answers and the daily refund check.
+  "refund_failed",
+  "refund_returned",
+  "refund_unmatched",
+  "refund_stuck",
+  "refund_mismatch",
 ] as const;
 export type PaymentProblemReason = (typeof PAYMENT_PROBLEM_REASONS)[number];
-export type PaymentProblemSource = "notice" | "status_check";
+export type PaymentProblemSource =
+  "notice" | "status_check" | "refund_notice" | "refund_check" | "refund_send";
 
 const REASONS: ReadonlySet<string> = new Set(PAYMENT_PROBLEM_REASONS);
 export const isPaymentProblemReason = (value: string): value is PaymentProblemReason =>
@@ -55,13 +63,19 @@ export const isPaymentProblemReason = (value: string): value is PaymentProblemRe
 /** Which kind of money problem a reason is, for the reasons that email staff
  * at once (a wrong amount, a second payment, money received for something that
  * could not be activated, money returned after activation). */
-export type PaymentAnomaly = "wrong_amount" | "paid_twice" | "not_activated" | "refunded";
+export type PaymentAnomaly =
+  "wrong_amount" | "paid_twice" | "not_activated" | "refunded" | "refund_problem";
 const ANOMALIES: Partial<Record<PaymentProblemReason, PaymentAnomaly>> = {
   conflicting_transaction: "paid_twice",
   transaction_reused: "paid_twice",
   multiple_settlements: "paid_twice",
   complete_unfulfillable_target: "not_activated",
   refunded_after_completion: "refunded",
+  refund_failed: "refund_problem",
+  refund_returned: "refund_problem",
+  refund_unmatched: "refund_problem",
+  refund_stuck: "refund_problem",
+  refund_mismatch: "refund_problem",
 };
 
 /** Reasons that need a person only when the bank reports the transaction
@@ -108,6 +122,11 @@ export const PAYMENT_PROBLEM_LABELS: Record<PaymentProblemReason, string> = {
   complete_unfulfillable_target: "Paid, but the plan or add-on could not be activated",
   refunded_after_completion: "Money returned at the bank after the plan was activated",
   multiple_settlements: "Paid twice: the status check found two successful transactions",
+  refund_failed: "A refund through Ozow failed: the money was not returned",
+  refund_returned: "A refund through Ozow came back from the bank: the money was not returned",
+  refund_unmatched: "Ozow made a refund this site has no record of",
+  refund_stuck: "A refund through Ozow has had no final answer from Ozow for a day",
+  refund_mismatch: "Ozow's refund does not match this site's record",
 };
 
 const log = createLogger("PaymentProblems");
