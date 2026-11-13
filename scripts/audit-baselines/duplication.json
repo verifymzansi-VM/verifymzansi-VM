@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "commit": "02115a26f4183ede9c22a13149fad853532d34fa",
-  "rationale": "Existing non-security duplication across expanded src/scripts/workers scope. Exact fragment/file-pair hashes block new findings; no security finding is excused. 2026-11-11: retired database tools removed; their clones left the baseline. Two existing clones in check-supabase-performance-advisor.ts (its usage text and option parsing) were reported against the deleted check-supabase-security-advisor.ts and are now reported against run-supabase-cli.ts: same code, new pair. 2026-11-12: two unreferenced R2 scripts removed with their shared clone; the check now fails when recorded debt is gone but still budgeted, so the budget only goes down. Ignore entries that matched no clone were dropped from .jscpd.json.",
+  "rationale": "Existing non-security duplication across expanded src/scripts/workers scope. Exact fragment/file-pair hashes block new findings; no security finding is excused. 2026-11-11: retired database tools removed; their clones left the baseline. Two existing clones in check-supabase-performance-advisor.ts (its usage text and option parsing) were reported against the deleted check-supabase-security-advisor.ts and are now reported against run-supabase-cli.ts: same code, new pair. 2026-11-12: two unreferenced R2 scripts removed with their shared clone; the check now fails when recorded debt is gone but still budgeted, so the budget only goes down. Ignore entries that matched no clone were dropped from .jscpd.json. 2026-11-13: the touch-screen video card's full-card play target was removed (one tap opens the post), so its clone of the desktop card's play target left the baseline.",
   "roots": ["src", "scripts", "workers"],
   "total": {
-    "clones": 14,
-    "duplicatedLines": 329,
-    "percentage": 0.13
+    "clones": 13,
+    "duplicatedLines": 314,
+    "percentage": 0.12
   },
   "fingerprints": [
     "3oxr8yqcibIdEQAm0GHTQqQtY_nJKJ8cr67MMkMhjrE",
@@ -17,7 +17,6 @@
     "GDjpUkFLUeMUbXaJMX3auZi7-cUF2ttG0EkCDvDnNxY",
     "I2_H1WfKb9K2qfngAuT3w7u68aHvZx22-XX9Ai0NEEQ",
     "PstUiiiBo7Z979l056PqVIpCRDIVW2BDWChwGzRL-QM",
-    "QL1p6otc_yL_CYXCGfdywweghFtIDxVNJI0qrQTe_8Y",
     "UV81aiZ2pVQ7Nv3HA4JwaGe5SSip1k0aonmWcB-SzUk",
     "kRYinUmtBa3KMUE9Tu2BOL1BS1OlXFxO1-SSSwfUMbs",
     "r0ZYczY7i5m24Vj3hGZxoZjbCnqDpdcduC330gIKU7s",
