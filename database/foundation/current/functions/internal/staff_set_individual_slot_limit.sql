@@ -17,9 +17,7 @@ begin
     or (p_slot_limit=4 and p_ends_at is not null) then
     raise exception 'valid slot limit (4 to 25), end date and reason required' using errcode='22023';
   end if;
-  if internal.same_identity(actor, p_account_id) then
-    raise exception 'a different staff member must change this limit' using errcode='42501';
-  end if;
+  perform internal.assert_staff_acts_for_other(actor, p_account_id, 'limit');
   perform internal.lock_evidence_subject(p_account_id);
   fingerprint:=internal.current_verified_identity(p_account_id);
   if fingerprint is null and p_slot_limit>4 then
@@ -35,6 +33,7 @@ begin
   end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
   perform internal.staff_actor('slots:raise_limit'); -- authority after any lock wait
+  perform internal.assert_staff_acts_for_other(actor, p_account_id, 'limit');
   update private.individual_slot_limits set revoked_at=clock_timestamp(), revoked_by=actor, revoke_reason=btrim(p_reason)
     where identity_hmac=fingerprint and revoked_at is null;
   if p_slot_limit>4 then

@@ -823,12 +823,15 @@ What it changes:
   online); a total other than the one the member was shown (PT428); and more
   Individual slots than the person's limit (PT429). The limit is 4 at once per
   ID-reviewed person: it counts every account that has had an accepted ID review
-  with the same identity fingerprint (ended reviews too) and may still use its
-  slots (it has current account access: slots of a closed, banned or suspended
-  account, such as an impostor's, never block the person), and slots in payments
-  still open at Ozow. The free first post, staff grants and sponsored places are
-  not Individual slots and never count. `api.start_checkout` now refuses plans
-  (it still sells add-ons).
+  with the same identity fingerprint (ended reviews too), and slots in payments
+  still open at Ozow. Only an account that lost access for good (closed,
+  deleted, or under an approved permanent ban that was not lifted) stops
+  counting, so an impostor's banned account never blocks the person; an account
+  blocked for a while (an Auth ban with an end, a suspension, an emergency
+  restriction) keeps counting, because its slots come back when the block ends.
+  The free first post, staff grants and sponsored places are not Individual
+  slots and never count. `api.start_checkout` now refuses plans (it still sells
+  add-ons).
 - **Confirmation.** `api.apply_provider_event` gives each open line of a
   confirmed payment its own entitlement, unless the person would then hold more
   Individual slots than their limit (for example a late success of an expired
@@ -852,13 +855,17 @@ What it changes:
   profile or an approved business check); 4 ends the raise, also after the
   person's review lapsed. Rows are an audit trail: a raise is only ever ended.
   No staff screen calls it yet.
-- **Staff never act for themselves.** `internal.same_identity` compares every
-  fingerprint two accounts have had: staff may not raise the limit of, or record
-  a slot or whole-payment reversal on, an account of their own identity (also
-  `api.record_frontend_staff_payment_reversal`).
+- **Staff never act for themselves.** Staff need an accepted ID review of their
+  own to raise a limit or record a slot or whole-payment reversal (also
+  `api.record_frontend_staff_payment_reversal`, for every payment), and
+  `internal.same_identity` compares every fingerprint two accounts have had:
+  staff may not act on an account of their own identity. Both are checked before
+  the lock waits and again after the last authority check (42501).
 - **Commission only for a delivered purchase.** The commission trigger creates
   commission (per slot line) only when the payment is fulfilled: money sent to
-  staff for reconciliation earns none.
+  staff for reconciliation earns none. The trigger fires only on a status
+  change, so a later command that delivers a payment without changing its status
+  must create the commission itself.
 - **One line per payment.** The entitlement's and the commission's line must
   belong to the payment they name (composite foreign keys).
 - **My slots.** New member read `api.get_my_slots()`: every slot the member
@@ -927,9 +934,13 @@ a three-slot order revokes only that slot, ends only its post and reverses only
 its commission, the last slot reversing the payment; a late payment above the
 limit is recorded and sent to staff; `api.get_my_slots`; staff never raising a
 limit for, or reversing a payment of, their own identity (a second account of
-the same fingerprint); no commission for a payment that delivered nothing; slots
-of a banned account not blocking the person; ending a raise after the review
-lapsed; the grants; and that the rollback refuses once a slot was ordered.
+the same fingerprint); staff without an accepted ID review of their own refused,
+and a review that makes staff the same person while they wait seen after the
+wait; no commission for a payment that delivered nothing; a temporary block (an
+Auth ban with an end, an emergency suspension) keeping an account's slots
+counting and a closed account's slots no longer counting; ending a raise after
+the review lapsed; the grants; and that the rollback refuses once a slot was
+ordered.
 
 ## Google sign-ups start with their name, 12 November 2026
 

@@ -31,6 +31,7 @@
 // staff, identity facts, posts and partners are written directly as the
 // database owner. Nothing contacts Ozow.
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
@@ -144,7 +145,42 @@ try {
     q(`select vmtest.verified('${m.id}','${admin.id}','${m.fingerprint}');`);
     return m;
   };
+  // Staff need an accepted ID review of their own to raise limits or record
+  // reversals: the main staff member has one.
+  q(`select vmtest.verified('${admin.id}','${admin2.id}','${fingerprintOf("slot-admin")}');`);
   const post = (owner, kind, area) => q(`select vmtest.post('${owner.id}','${kind}','${area}');`);
+  // A separate psql session, for the lock-wait checks.
+  const session = (sql) =>
+    new Promise((resolve) => {
+      const child = spawn(
+        "docker",
+        [
+          "exec",
+          "-i",
+          database.name,
+          "psql",
+          "-X",
+          "-q",
+          "-A",
+          "-t",
+          "-v",
+          "ON_ERROR_STOP=1",
+          "-U",
+          "postgres",
+          "-d",
+          "postgres",
+        ],
+        { windowsHide: true }
+      );
+      let stdout = "",
+        stderr = "";
+      child.stdout.on("data", (data) => (stdout += data));
+      child.stderr.on("data", (data) => (stderr += data));
+      child.on("close", (status) => resolve({ status, stdout, stderr }));
+      child.stdin.end(`\\set VERBOSITY verbose\n${sql}`);
+    });
+  const sessionAfter = (ms, sql) =>
+    new Promise((resolve) => setTimeout(resolve, ms)).then(() => session(sql));
   const activateSql = (owner, id) => member(owner, `select api.activate_post('${id}');`);
   const activate = (owner, id) => json(activateSql(owner, id));
   const release = (id, reason = "deleted") =>
@@ -720,6 +756,65 @@ try {
     );
   });
 
+  await check("staff without an accepted ID review of their own are refused", () => {
+    const unreviewed = staffUser("slot-admin3", "admin");
+    const buyer = verified("thabo");
+    const order = buy(buyer, P30, 1);
+    const asUnreviewed = [
+      `select api.record_staff_slot_reversal('${lines(order)[0].id}','refunded','Billing error on one slot');`,
+      `select api.record_frontend_staff_payment_reversal('${order}','refunded','Billing error on the order');`,
+      `select api.staff_set_individual_slot_limit('${buyer.id}',4,null,'Business tools launched');`,
+    ];
+    for (const sql of asUnreviewed)
+      fails(staff(unreviewed, sql), "42501", /accepted ID review of their own/);
+    assert.equal(paymentRow(order).status, "complete");
+    // Once their own review is accepted, they may.
+    q(
+      `select vmtest.verified('${unreviewed.id}','${admin.id}','${fingerprintOf("slot-admin3")}');`
+    );
+    assert.equal(json(staff(unreviewed, asUnreviewed[0])).payment_status, "refunded");
+  });
+
+  await check(
+    "a review that makes staff the same person while they wait is seen after the wait",
+    async () => {
+      const waiting = staffUser("slot-admin4", "admin");
+      q(`select vmtest.verified('${waiting.id}','${admin.id}','${fingerprintOf("slot-admin4")}');`);
+      const buyer = verified("sizwe");
+      const order = buy(buyer, P30, 1);
+      // Another transaction holds the buyer's lock and records that the staff
+      // member's account had an accepted review of the buyer's identity.
+      const holdAndLink = `begin;
+      select internal.lock_evidence_subject('${buyer.id}');
+      select set_config('session_replication_role','replica',true);
+      insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by,revoked_at)
+        values('${waiting.id}',gen_random_uuid(),'${buyer.fingerprint}','${admin.id}',now());
+      select set_config('session_replication_role','origin',true);
+      select pg_sleep(2);
+      commit;`;
+      const unlink = () =>
+        q(`select set_config('session_replication_role','replica',false);
+        delete from private.accepted_identity_facts where owner_id='${waiting.id}' and identity_hmac='${buyer.fingerprint}';
+        select set_config('session_replication_role','origin',false);`);
+      for (const command of [
+        `select api.record_staff_slot_reversal('${lines(order)[0].id}','refunded','Billing error on one slot');`,
+        `select api.staff_set_individual_slot_limit('${buyer.id}',4,null,'Business tools launched');`,
+        `select api.record_frontend_staff_payment_reversal('${order}','refunded','Billing error on the order');`,
+      ]) {
+        const [held, waited] = await Promise.all([
+          session(holdAndLink),
+          sessionAfter(700, staff(waiting, command)),
+        ]);
+        assert.equal(held.status, 0, held.stderr);
+        assert.notEqual(waited.status, 0, `${command} succeeded`);
+        assert.match(waited.stderr, /ERROR:\s+42501:.*a different staff member/);
+        unlink();
+      }
+      assert.equal(paymentRow(order).status, "complete");
+      assert.equal(lines(order)[0].status, "open");
+    }
+  );
+
   await check("a whole-payment reversal reverses every slot and its commissions", () => {
     const whole = verified("whole");
     const paymentId = buy(whole, P90, 2);
@@ -778,22 +873,49 @@ try {
     }
   );
 
-  await check("slots of an account that may not use them do not block the person", () => {
-    // amahle's first account holds 4 slots; the person now uses a second
-    // account (moved earlier). Once the first account is banned (for example
-    // an impostor's), its slots no longer count.
-    const second = q(
-      `select f.owner_id from private.accepted_identity_facts f where f.identity_hmac='${fingerprintOf("amahle")}' and f.revoked_at is null;`
-    );
-    const secondMember = json(
-      `select jsonb_build_object('id',u.id,'session',(select s.id from auth.sessions s where s.user_id=u.id limit 1)) from auth.users u where u.id='${second}';`
-    );
-    fails(quoteSql(secondMember, P30, 1), "PT429");
-    q(`update auth.users set banned_until=now()+interval '30 days' where id='${amahle.id}';`);
-    assert.equal(slotsOf(secondMember).individual.held, 0);
-    assert.equal(quote(secondMember, P30, 4).amount_cents, String(4 * 6900));
-    q(`update auth.users set banned_until=null where id='${amahle.id}';`);
-  });
+  await check(
+    "a temporary block keeps an account's slots counting; a closed account's stop",
+    () => {
+      // amahle's first account holds 4 slots; the person now uses a second
+      // account (moved earlier).
+      const second = q(
+        `select f.owner_id from private.accepted_identity_facts f where f.identity_hmac='${fingerprintOf("amahle")}' and f.revoked_at is null;`
+      );
+      const secondMember = json(
+        `select jsonb_build_object('id',u.id,'session',(select s.id from auth.sessions s where s.user_id=u.id limit 1)) from auth.users u where u.id='${second}';`
+      );
+      fails(quoteSql(secondMember, P30, 1), "PT429");
+      // Blocked for a while (an Auth ban that ends, an emergency suspension): the
+      // slots come back when the block ends, so they keep counting.
+      q(`update auth.users set banned_until=now()+interval '7 days' where id='${amahle.id}';`);
+      assert.equal(slotsOf(secondMember).individual.held, 4);
+      fails(quoteSql(secondMember, P30, 1), "PT429");
+      q(`update auth.users set banned_until=null where id='${amahle.id}';`);
+      q(`select set_config('session_replication_role','replica',false);
+      insert into private.frontend_account_restrictions(decision_id,account_id,kind,reason,emergency,starts_at,ends_at)
+        values(gen_random_uuid(),'${amahle.id}','suspension','Emergency suspension while a report is reviewed',true,now(),now()+interval '7 days');
+      select set_config('session_replication_role','origin',false);`);
+      assert.equal(
+        count(`private.current_account_access where id='${amahle.id}'`),
+        0,
+        "the suspension blocks the account"
+      );
+      assert.equal(slotsOf(secondMember).individual.held, 4);
+      fails(quoteSql(secondMember, P30, 1), "PT429");
+      q(`select set_config('session_replication_role','replica',false);
+      delete from private.frontend_account_restrictions where account_id='${amahle.id}';
+      select set_config('session_replication_role','origin',false);`);
+      // Closed for good (for example an impostor's account): its slots stop counting.
+      q(`select set_config('session_replication_role','replica',false);
+      insert into private.account_closures(user_id,evidence_delete_after) values('${amahle.id}',statement_timestamp()+interval '90 days');
+      select set_config('session_replication_role','origin',false);`);
+      assert.equal(slotsOf(secondMember).individual.held, 0);
+      assert.equal(quote(secondMember, P30, 4).amount_cents, String(4 * 6900));
+      q(`select set_config('session_replication_role','replica',false);
+      delete from private.account_closures where user_id='${amahle.id}';
+      select set_config('session_replication_role','origin',false);`);
+    }
+  );
 
   await check("staff can end a raise after the person's review lapsed", () => {
     const lapsing = verified("lapsing");

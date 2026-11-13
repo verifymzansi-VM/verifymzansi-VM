@@ -51,18 +51,19 @@ begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slot_plan(text)')) is distinct from 'c0c1d06dc52122641d02db6b1364be75'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slot_identity(uuid)')) is distinct from '4e4552c83cb629e96f1300060eeff16b'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slot_limit(text)')) is distinct from '90ecd5c02572cc9831468458f3ae0e2d'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slots_counted(text,uuid,uuid)')) is distinct from 'e3ec1bf332a4d2e93760d1a3d68f966b'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slots_counted(text,uuid,uuid)')) is distinct from '1444a238736eac1d4de7dc8a53526e9b'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slot_business_checked(uuid)')) is distinct from 'e4f858e82e99bf3d1a62ea0b0c2d2820'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.start_slot_checkout(uuid,integer,bigint,boolean)')) is distinct from 'dcbb5be85829b017a483c21b91c95602'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.start_slot_checkout(uuid,integer,bigint,boolean)')) is distinct from 'b9089234d615e837ba75d31f42b8f7bf'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_slot_reversal(uuid,text,text)')) is distinct from '44758ca0c94c7fedf9bcbeb0fa5a7736'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_slot_reversal(uuid,text,text)')) is distinct from '1364f8c78e36281bae5f16a4ba5a466c'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.record_staff_slot_reversal(uuid,text,text)')) is distinct from '2a52fbde1bcd5076472a92751af0bedb'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_set_individual_slot_limit(uuid,integer,timestamp with time zone,text)')) is distinct from '1a10c7ba7f8c2c85674fb3c9a0b1026e'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_set_individual_slot_limit(uuid,integer,timestamp with time zone,text)')) is distinct from '16c00a173b5c7497af3ea3d908096a73'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.staff_set_individual_slot_limit(uuid,integer,timestamp with time zone,text)')) is distinct from '92da468af327632f8d1f4cba716642c9'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_my_slots()')) is distinct from '6e3a3149cf2576ae2d66ab085cc8da58'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_my_slots()')) is distinct from '0f06e8bc211c4506dae9744479d4dbdf'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_frontend_staff_payment_reversal(uuid,text,text)')) is distinct from 'd48c969a572d66b0166fd63f92f68fa3'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_frontend_staff_payment_reversal(uuid,text,text)')) is distinct from '6139bbc3a7491f542705cc2d39bad017'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.same_identity(uuid,uuid)')) is distinct from '535e5c87d944edd45bd2b3dce28f98b6'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.assert_staff_acts_for_other(uuid,uuid,text)')) is distinct from 'ed7d0d3df9bdade439b2df65126d5506'
     or to_regclass('private.payment_lines') is null
     or to_regclass('private.individual_slot_limits') is null then
     raise exception 'rollback precondition: the individual slots update is not applied' using errcode='55000';
@@ -492,6 +493,7 @@ drop function internal.start_slot_checkout(uuid,integer,bigint,boolean);
 drop function internal.record_staff_slot_reversal(uuid,text,text);
 drop function internal.get_my_slots();
 drop function internal.same_identity(uuid,uuid);
+drop function internal.assert_staff_acts_for_other(uuid,uuid,text);
 
 alter table private.entitlements drop constraint entitlements_payment_line_source;
 drop index private.entitlements_payment_line_idx;

@@ -17,14 +17,13 @@ begin
   end if;
   select p.owner_id into buyer from private.payment_lines l join private.payments p on p.id=l.payment_id where l.id=p_line_id;
   if buyer is null then raise exception 'slot payment line not found' using errcode='22023'; end if;
-  if internal.same_identity(actor, buyer) then
-    raise exception 'a different staff member must record this reversal' using errcode='42501';
-  end if;
+  perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
   perform internal.lock_evidence_subject(buyer);
   select p.* into pay from private.payments p join private.payment_lines l on l.payment_id=p.id where l.id=p_line_id
     for update of p;
   select * into line from private.payment_lines l where l.id=p_line_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
+  perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
   if line.status='reversed' then
     if line.reversed_by=actor and line.reversal_kind=p_kind and line.reversal_reason=btrim(p_reason) then
       return jsonb_build_object('status',line.reversal_kind,'line_id',line.id,'released_activations',0,
@@ -77,6 +76,7 @@ begin
   insert into private.outbox_events (kind, subject_id, owner_id, dedupe_key)
   values ('payment_reversed', pay.id, pay.owner_id, 'payment_line_reversed:' || line.id);
   perform internal.staff_actor('payments:refund');
+  perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
   return jsonb_build_object('status',p_kind,'line_id',line.id,'released_activations',released,
     'payment_status',case when open_left=0 then p_kind else pay.status end,'repeated',false);
 end;

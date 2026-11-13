@@ -13,9 +13,18 @@ AS $function$
       union
       select f.owner_id from private.accepted_identity_facts f where p_identity is not null and f.identity_hmac=p_identity
     ) o
-    -- Slots of a closed, banned or suspended account cannot be used, so they
-    -- never block the person (for example after an impostor's account is banned).
-    where exists(select 1 from private.current_account_access a where a.id=o.id)
+    -- Slots of an account that lost access for good (closed, deleted, or under
+    -- an approved permanent ban that was not lifted) never block the person,
+    -- for example after an impostor's account is banned. An account blocked for
+    -- a while (an Auth ban with an end, a suspension, an emergency restriction)
+    -- keeps counting: its slots come back when the block ends.
+    where exists(select 1 from auth.users u where u.id=o.id and u.deleted_at is null)
+      and not exists(select 1 from private.account_closures c where c.user_id=o.id)
+      and not exists(select 1 from private.decisions d
+        join private.evidence_cases c on c.id=d.case_id
+        left join private.frontend_account_restrictions x on x.decision_id=d.id and not x.emergency
+        where c.subject_id=o.id and d.status='approved' and d.action='restrict_account'
+          and d.scope_kind in ('native','report_ban') and x.lifted_at is null)
   )
   select jsonb_build_object(
     'held', (select count(*) from private.entitlements e

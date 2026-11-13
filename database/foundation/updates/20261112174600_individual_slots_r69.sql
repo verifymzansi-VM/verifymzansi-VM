@@ -80,15 +80,17 @@
 -- website release deployed before this update (paid slots paused) never
 -- offers a plan, so it is unaffected.
 --
--- Staff never act for themselves: a staff member may not raise the limit of,
--- or record a reversal on, an account that has had an accepted ID review with
--- a fingerprint the staff member's own account has had (internal.same_identity;
--- also applied to api.record_frontend_staff_payment_reversal). Partner
--- commission is created only for a payment whose purchase was delivered
--- (fulfilled): nothing for money sent to staff for reconciliation. Slots count
--- towards the limit only while their account may still use them (it has
--- current account access), so slots of a closed or banned account of the same
--- identity never block the person.
+-- Staff never act for themselves: a staff member needs an accepted ID review of
+-- their own, and may not raise the limit of, or record a reversal on, an
+-- account that has had an accepted ID review with a fingerprint the staff
+-- member's own account has had (internal.assert_staff_acts_for_other, checked
+-- before the lock waits and again after the last authority check; also applied
+-- to api.record_frontend_staff_payment_reversal). Partner commission is created
+-- only for a payment whose purchase was delivered (fulfilled): nothing for
+-- money sent to staff for reconciliation. Slots of an account that has lost
+-- access for good (closed, deleted, or under an approved permanent ban that was
+-- not lifted) stop counting towards the person's limit; slots of an account
+-- that is only blocked for a while keep counting.
 --
 -- ORDER: apply this update after the website release of
 -- 20261112173841_switch_posting_terms_v4.sql is live and that update is
@@ -381,6 +383,32 @@ $function$;
 alter function internal.individual_slot_identity(uuid) owner to postgres;
 revoke all on function internal.individual_slot_identity(uuid) from public, anon, authenticated, service_role;
 
+-- Staff money and limit actions: the staff member needs an accepted ID review
+-- of their own (an account without one cannot be compared with the person it
+-- acts on), and never acts on their own identity (internal.same_identity).
+-- Called before the lock waits and again after the last authority check, so a
+-- review accepted while the command waited is seen.
+CREATE OR REPLACE FUNCTION internal.assert_staff_acts_for_other(p_actor uuid, p_subject uuid, p_kind text)
+ RETURNS void
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+begin
+  if internal.individual_slot_identity(p_actor) is null then
+    raise exception 'staff need an accepted ID review of their own for this' using errcode='42501';
+  end if;
+  if internal.same_identity(p_actor, p_subject) then
+    if p_kind='limit' then
+      raise exception 'a different staff member must change this limit' using errcode='42501';
+    end if;
+    raise exception 'a different staff member must record this reversal' using errcode='42501';
+  end if;
+end;
+$function$;
+alter function internal.assert_staff_acts_for_other(uuid,uuid,text) owner to postgres;
+revoke all on function internal.assert_staff_acts_for_other(uuid,uuid,text) from public, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION internal.individual_slot_limit(p_identity text)
  RETURNS integer
  LANGUAGE sql
@@ -396,8 +424,8 @@ revoke all on function internal.individual_slot_limit(text) from public, anon, a
 -- Individual slots of one person: held (active, not ended) and in payments
 -- still open at Ozow (checkout window running, or created in the last 30
 -- minutes and not yet sent), over the account and every account that has had
--- an accepted ID review with the same fingerprint and may still use its slots.
--- p_exclude leaves out one payment (the one being reused or confirmed).
+-- an accepted ID review with the same fingerprint and has not lost access for
+-- good. p_exclude leaves out one payment (the one being reused or confirmed).
 CREATE OR REPLACE FUNCTION internal.individual_slots_counted(p_identity text, p_owner uuid, p_exclude uuid)
  RETURNS jsonb
  LANGUAGE sql
@@ -410,9 +438,18 @@ AS $function$
       union
       select f.owner_id from private.accepted_identity_facts f where p_identity is not null and f.identity_hmac=p_identity
     ) o
-    -- Slots of a closed, banned or suspended account cannot be used, so they
-    -- never block the person (for example after an impostor's account is banned).
-    where exists(select 1 from private.current_account_access a where a.id=o.id)
+    -- Slots of an account that lost access for good (closed, deleted, or under
+    -- an approved permanent ban that was not lifted) never block the person,
+    -- for example after an impostor's account is banned. An account blocked for
+    -- a while (an Auth ban with an end, a suspension, an emergency restriction)
+    -- keeps counting: its slots come back when the block ends.
+    where exists(select 1 from auth.users u where u.id=o.id and u.deleted_at is null)
+      and not exists(select 1 from private.account_closures c where c.user_id=o.id)
+      and not exists(select 1 from private.decisions d
+        join private.evidence_cases c on c.id=d.case_id
+        left join private.frontend_account_restrictions x on x.decision_id=d.id and not x.emergency
+        where c.subject_id=o.id and d.status='approved' and d.action='restrict_account'
+          and d.scope_kind in ('native','report_ban') and x.lifted_at is null)
   )
   select jsonb_build_object(
     'held', (select count(*) from private.entitlements e
@@ -774,7 +811,10 @@ revoke all on function internal.apply_provider_event(jsonb) from public;
 grant execute on function internal.apply_provider_event(jsonb) to service_role;
 
 -- Commission: one per slot line (one per payment without lines), only for a
--- delivered purchase.
+-- delivered purchase. The trigger (payments_partner_commission) fires only
+-- when a payment's status changes: any later command that marks a payment
+-- fulfilled without changing its status (for example a staff reconciliation
+-- that delivers the slots) must create the commission itself.
 CREATE OR REPLACE FUNCTION internal.payment_partner_commission()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -891,14 +931,13 @@ begin
   end if;
   select p.owner_id into buyer from private.payment_lines l join private.payments p on p.id=l.payment_id where l.id=p_line_id;
   if buyer is null then raise exception 'slot payment line not found' using errcode='22023'; end if;
-  if internal.same_identity(actor, buyer) then
-    raise exception 'a different staff member must record this reversal' using errcode='42501';
-  end if;
+  perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
   perform internal.lock_evidence_subject(buyer);
   select p.* into pay from private.payments p join private.payment_lines l on l.payment_id=p.id where l.id=p_line_id
     for update of p;
   select * into line from private.payment_lines l where l.id=p_line_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
+  perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
   if line.status='reversed' then
     if line.reversed_by=actor and line.reversal_kind=p_kind and line.reversal_reason=btrim(p_reason) then
       return jsonb_build_object('status',line.reversal_kind,'line_id',line.id,'released_activations',0,
@@ -951,6 +990,7 @@ begin
   insert into private.outbox_events (kind, subject_id, owner_id, dedupe_key)
   values ('payment_reversed', pay.id, pay.owner_id, 'payment_line_reversed:' || line.id);
   perform internal.staff_actor('payments:refund');
+  perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
   return jsonb_build_object('status',p_kind,'line_id',line.id,'released_activations',released,
     'payment_status',case when open_left=0 then p_kind else pay.status end,'repeated',false);
 end;
@@ -970,7 +1010,7 @@ alter function api.record_staff_slot_reversal(uuid,text,text) owner to postgres;
 revoke all on function api.record_staff_slot_reversal(uuid,text,text) from public, anon, authenticated, service_role;
 grant execute on function api.record_staff_slot_reversal(uuid,text,text) to authenticated;
 
--- The whole-payment staff reversal: never the buyer's identity either.
+-- The whole-payment staff reversal: the same staff rule.
 CREATE OR REPLACE FUNCTION internal.record_frontend_staff_payment_reversal(p_id uuid, p_kind text, p_reason text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -993,10 +1033,10 @@ begin
     raise exception 'payment already reversed' using errcode='PT409';
   end if;
   select owner_id into owner from private.payments where id=p_id;
-  if owner is not null and internal.same_identity(actor, owner) then
-    raise exception 'a different staff member must record this reversal' using errcode='42501';end if;
+  perform internal.assert_staff_acts_for_other(actor, owner, 'reversal');
   result:=internal.reverse_payment(p_id,p_kind,p_reason);
   perform internal.staff_actor('payments:refund');
+  perform internal.assert_staff_acts_for_other(actor, owner, 'reversal');
   insert into private.frontend_payment_reversals(payment_id,actor_id,kind,reason,released_activations)
     values(p_id,actor,p_kind,p_reason,(result->>'released_activations')::integer);
   return result;
@@ -1022,9 +1062,7 @@ begin
     or (p_slot_limit=4 and p_ends_at is not null) then
     raise exception 'valid slot limit (4 to 25), end date and reason required' using errcode='22023';
   end if;
-  if internal.same_identity(actor, p_account_id) then
-    raise exception 'a different staff member must change this limit' using errcode='42501';
-  end if;
+  perform internal.assert_staff_acts_for_other(actor, p_account_id, 'limit');
   perform internal.lock_evidence_subject(p_account_id);
   fingerprint:=internal.current_verified_identity(p_account_id);
   if fingerprint is null and p_slot_limit>4 then
@@ -1040,6 +1078,7 @@ begin
   end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
   perform internal.staff_actor('slots:raise_limit'); -- authority after any lock wait
+  perform internal.assert_staff_acts_for_other(actor, p_account_id, 'limit');
   update private.individual_slot_limits set revoked_at=clock_timestamp(), revoked_by=actor, revoke_reason=btrim(p_reason)
     where identity_hmac=fingerprint and revoked_at is null;
   if p_slot_limit>4 then

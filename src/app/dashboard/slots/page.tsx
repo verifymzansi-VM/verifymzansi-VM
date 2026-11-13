@@ -1,7 +1,11 @@
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { MySlots } from "@/components/billing/my-slots";
-import { readFoundationServerSession } from "@/lib/foundation/server-session";
-import { readFoundationMySlots } from "@/lib/foundation/billing-runtime";
+import {
+  FoundationServerSessionError,
+  readFoundationServerSession,
+} from "@/lib/foundation/server-session";
+import { FoundationBillingError, readFoundationMySlots } from "@/lib/foundation/billing-runtime";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import {
   individualSlotPlans,
@@ -28,11 +32,18 @@ async function buySlotHref() {
   }
 }
 
-/** The member's slots; null when they cannot be read right now. */
+/** The member's slots; null when they cannot be read right now. A signed-out
+ * visitor goes to sign in; a refused account is an error, not an outage. */
 async function mySlots() {
   try {
     return await readFoundationMySlots((await readFoundationServerSession()).api);
   } catch (error) {
+    if (error instanceof FoundationServerSessionError && error.status === 401) redirect("/login");
+    if (
+      (error instanceof FoundationServerSessionError || error instanceof FoundationBillingError) &&
+      error.status !== 503
+    )
+      throw error;
     logDegradedRead(log, "My slots unavailable", error);
     return null;
   }
