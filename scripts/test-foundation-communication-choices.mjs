@@ -23,8 +23,11 @@ import { readFileSync } from "node:fs";
 import {
   applyStepsBefore,
   assertReadOnlyPreflight,
+  authSignUp,
   createChecks,
+  executeGrants,
   sqlHelpers,
+  sqlLiteral as literal,
   updateCheckViews,
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
@@ -59,24 +62,18 @@ const { check, current, passed } = createChecks();
 const database = await startLintDatabase({ log: (line) => console.log(line) });
 try {
   const { steps, index, step } = applyStepsBefore(database, UPDATE);
-  const views = updateCheckViews(database, current, { preflight: PREFLIGHT });
   const { q, json, fails, member, as, claims, service } = sqlHelpers(database, current);
-  const { fingerprint, bodyMd5: bodyOf } = views;
-  const preflight = views.preflightRows;
-  const literal = (value) => `'${String(value).replaceAll("'", "''")}'`;
-  const jsonb = (value) => (value === null ? "null" : `${literal(JSON.stringify(value))}::jsonb`);
+  const {
+    fingerprint,
+    bodyMd5: bodyOf,
+    preflightRows: preflight,
+  } = updateCheckViews(database, current, { preflight: PREFLIGHT });
 
   // ------------------------------------------------------- synthetic world
   /** An Auth user created as GoTrue would (user and app details on the same
    * insert); returns { id, session } with a live session. */
   const signUp = (meta, app, { anonymous = false } = {}) =>
-    json(`with u as (
-        insert into auth.users(id,email,email_confirmed_at,is_anonymous,raw_user_meta_data,raw_app_meta_data)
-        values(gen_random_uuid(),${anonymous ? "null" : "'signup-'||gen_random_uuid()||'@example.invalid'"},
-          ${anonymous ? "null" : "now()"},${anonymous},${jsonb(meta)},${jsonb(app)})
-        returning id),
-      s as (insert into auth.sessions(id,user_id,aal) select gen_random_uuid(),id,'aal1' from u returning id,user_id)
-      select jsonb_build_object('id',s.user_id,'session',s.id) from s;`);
+    authSignUp(json, meta, { app, anonymous });
   const emailApp = { provider: "email", providers: ["email"] };
   const googleApp = { provider: "google", providers: ["google"] };
   const formSignUp = () =>
@@ -112,10 +109,7 @@ try {
         values('${kind}',gen_random_uuid(),'${user.id}','vmtest:'||gen_random_uuid(),
           ${processed ? "statement_timestamp()" : "null"},${attempts},${processed ? "null" : "'delivery_failed'"})
         returning id;`);
-  const grantsOf = (signatures) =>
-    json(`select jsonb_object_agg(f, (select jsonb_object_agg(r, has_function_privilege(r,f,'execute'))
-        from unnest(array['anon','authenticated','service_role']) r))
-      from unnest(array[${signatures.map(literal).join(",")}]) f;`);
+  const grantsOf = (signatures) => executeGrants(json, signatures);
   const anon = (sql) => `set role anon;\n${sql}`;
 
   // ------------------------------------------------------------ before
