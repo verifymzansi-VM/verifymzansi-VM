@@ -627,6 +627,66 @@ try {
     assert.equal(privacy(intake).identity_verified, false);
   });
 
+  await check("privacy: moderators, late extensions and ineligible assignees are refused", () => {
+    const lerato = user("lerato");
+    const id = record(lerato, "access").id;
+    // Data requests need dsar:manage (governor and admin); a moderator has no
+    // queue and cannot act on a request.
+    fails(
+      staff(moderator, "select api.get_frontend_privacy_queue();"),
+      "42501",
+      /capability not granted/
+    );
+    fails(processAs(moderator, id, 1, "approve"), "42501", /capability not granted/);
+    fails(
+      processAs(moderator, id, 1, "extend", "A moderator must not extend a deadline."),
+      "42501",
+      /capability not granted/
+    );
+    // Only staff who can handle data requests, and never the requester, can
+    // be given a request.
+    for (const who of [moderator, lerato])
+      fails(
+        staff(
+          admin,
+          `select api.process_frontend_privacy_request('${id}',1,'assign',null,'${who.id}');`
+        ),
+        "22023",
+        /eligible staff assignee required/
+      );
+    assert.equal(
+      json(
+        staff(
+          admin,
+          `select api.process_frontend_privacy_request('${id}',1,'assign',null,'${governor.id}');`
+        )
+      ).status,
+      "assigned"
+    );
+    assert.equal(privacy(id).assigned_to, governor.id);
+    // An extension must be given before the deadline passes.
+    q(
+      `update private.privacy_requests set received_at=received_at-interval '31 days',due_by=due_by-interval '31 days' where id='${id}';`
+    );
+    fails(
+      processAs(admin, id, 2, "extend", "Too late to extend this deadline."),
+      "PT409",
+      /deadline cannot be extended/
+    );
+    assert.equal(privacy(id).extended_due_at, null);
+    assert.equal(
+      count(`private.privacy_notice_jobs where request_id='${id}' and kind='extended'`),
+      0
+    );
+    // A request with no extension in its rule (deletion) cannot be extended.
+    const deletion = record(lerato, "deletion").id;
+    fails(
+      processAs(admin, deletion, 1, "extend", "Deletion has no statutory extension."),
+      "PT409",
+      /deadline cannot be extended/
+    );
+  });
+
   // ----------------------------------------- report actions and appeals
   const report = (id) => json(`select to_jsonb(r) from private.reports r where r.id='${id}';`);
   const postRow = (id) =>
