@@ -96,7 +96,7 @@ it("keeps the site's price constants in step with the active Terms", () => {
 it("puts on sale exactly the Individual slots the active Terms state, at the site's prices", () => {
   const content = text(manifest.active_version);
   const sql = readFileSync(
-    "database/foundation/updates/20261112174600_individual_slots_r69.sql",
+    "database/foundation/updates/20261113002421_individual_slots_r69.sql",
     "utf8"
   );
   const insert = sql.slice(sql.indexOf("insert into private.plan_versions"));

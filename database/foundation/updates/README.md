@@ -782,19 +782,22 @@ apply, rollback and re-apply put exactly the same plans back and return the same
 schema fingerprint. The other lifecycle checks that still buy a plan after later
 updates publish a copy of it first (`planOnSale` in
 `scripts/lib/foundation-sql-checks.mjs`); once
-`20261112174600_individual_slots_r69.sql` is applied, `planOnSale` returns the
+`20261113002421_individual_slots_r69.sql` is applied, `planOnSale` returns the
 Individual slot of the same length instead, and the browser test copy's checkout
 specs buy the Individual slots.
 
 ## Individual slots at R69, 12 November 2026
 
-`20261112174600_individual_slots_r69.sql` is not applied yet. Apply it after the
-website release of `20261112173841_switch_posting_terms_v4.sql` is live and that
-update is applied (it refuses with 55000 unless `posting-v4` is current and
-nothing else is on sale), and before the pull request that uses it is merged: a
-merge into `main` is deployed, and that release calls the new commands. It ends
-the pause on paid slots that the switch started: the slots `posting-v4`
-describes go on sale (roadmap Milestone 11, P2, with M3.8).
+`20261113002421_individual_slots_r69.sql` is not applied yet. It was first
+reviewed as `20261112174600_individual_slots_r69.sql` and renamed when
+`20261112181954_google_name_at_signup.sql` was applied before it, so the
+register stays in filename order. Apply it after the website release of
+`20261112173841_switch_posting_terms_v4.sql` is live and that update is applied
+(it refuses with 55000 unless `posting-v4` is current and nothing else is on
+sale), and before the pull request that uses it is merged: a merge into `main`
+is deployed, and that release calls the new commands. It ends the pause on paid
+slots that the switch started: the slots `posting-v4` describes go on sale
+(roadmap Milestone 11, P2, with M3.8).
 
 What it changes:
 
@@ -883,7 +886,7 @@ before it (paid slots paused) keeps working.
 **Applying** (after the switch release is live and `20261112173841` is applied,
 before this pull request is merged):
 
-1. Run `../preflight/20261112174600_individual_slots_r69.check.sql` unchanged in
+1. Run `../preflight/20261113002421_individual_slots_r69.check.sql` unchanged in
    the SQL editor. It is read only. Continue only if its result is the single
    "summary" row reading "individual slots: update not applied (apply before the
    website release that uses it is deployed); current posting terms: posting-v4;
@@ -898,7 +901,7 @@ before this pull request is merged):
    R414 with their checkout links.
 
 The reviewed rollback is
-`../rollback/20261112174600_individual_slots_r69.down.sql`. It works only before
+`../rollback/20261113002421_individual_slots_r69.down.sql`. It works only before
 anyone ordered a slot (it refuses once a payment line or a raised limit exists):
 it takes the three plans off sale, restores the seven earlier function bodies
 and removes everything the update added, back to the paused state of
@@ -2480,12 +2483,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   taken off sale by the update: 17; pending plan payments: 0", with
   internal.set_post_media at the reviewed body (md5 3ff7aba4); production
   fingerprint after it matched the replay through this update
-- `20261112174600_individual_slots_r69.sql`: pending
 - `20261112181954_google_name_at_signup.sql`: applied 2026-11-13 00:20 UTC; time
   approximate, applied by the coordinator with the owner's approval through the
   Supabase query API, from the reviewed file; preflight before "reviewed body,
   update not applied; profiles without a name: 2; of which the update names: 2",
   after the two bodies matched the update's and no profile was left without a
   name; production fingerprint after it matched the full replay
+- `20261113002421_individual_slots_r69.sql`: pending
 
 <!-- applied-register:end -->

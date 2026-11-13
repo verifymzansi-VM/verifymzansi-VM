@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261112174600_individual_slots_r69.sql: Individual
+// Behaviour checks for 20261113002421_individual_slots_r69.sql: Individual
 // slots at R69 (roadmap Milestone 11, P2) and no paid plan before the ID review
 // is accepted (M3.8).
 //
@@ -42,7 +42,7 @@ import {
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 
-const UPDATE = "20261112174600_individual_slots_r69.sql";
+const UPDATE = "20261113002421_individual_slots_r69.sql";
 const companion = (folder, suffix) =>
   readFileSync(`database/foundation/${folder}/${UPDATE.replace(/\.sql$/, suffix)}`, "utf8");
 const PREFLIGHT = companion("preflight", ".check.sql");

@@ -96,8 +96,8 @@
 -- 20261112173841_switch_posting_terms_v4.sql is live and that update is
 -- applied, and BEFORE the pull request that uses this update is merged (a merge
 -- into main is deployed): that release calls the new commands. Read-only
--- preflight: ../preflight/20261112174600_individual_slots_r69.check.sql.
--- Rollback: ../rollback/20261112174600_individual_slots_r69.down.sql.
+-- preflight: ../preflight/20261113002421_individual_slots_r69.check.sql.
+-- Rollback: ../rollback/20261113002421_individual_slots_r69.down.sql.
 begin;
 set local lock_timeout='5s';
 

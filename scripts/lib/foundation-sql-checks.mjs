@@ -124,7 +124,7 @@ export function updateCheckViews(database, current, { preflight }) {
 }
 
 /** A plan version that is on sale: `planId` itself; once the Individual slots
- * are on sale (20261112174600_individual_slots_r69.sql), the Individual slot
+ * are on sale (20261113002421_individual_slots_r69.sql), the Individual slot
  * for the same number of days; between the switch to posting-v4
  * (20261112173841_switch_posting_terms_v4.sql), which takes every plan off
  * sale, and that update, a copy published as the next version of the same plan
@@ -152,7 +152,7 @@ export function planOnSale(q, planId) {
 
 /** The member's quote for one slot of plan `planId`, as the website makes it:
  * with api.start_slot_checkout (the cooling-off consent, the shown total) once
- * 20261112174600_individual_slots_r69.sql is applied, for a member whose ID
+ * 20261113002421_individual_slots_r69.sql is applied, for a member whose ID
  * review is accepted (slotBuyer gives `owner` one); before it with
  * api.start_checkout. */
 export function planQuoteSql(q, member, owner, planId) {

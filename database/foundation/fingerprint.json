@@ -34,7 +34,7 @@
       "triggers": "cbed8a32da7aa1ca298aaa7eca019d1f"
     },
     "pendingApplication": [
-      "20261112174600_individual_slots_r69.sql"
+      "20261113002421_individual_slots_r69.sql"
     ]
   },
   "knownDifferences": [
@@ -42,7 +42,7 @@
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
   "updateCount": 64,
-  "lastUpdate": "20261112181954_google_name_at_signup.sql",
+  "lastUpdate": "20261113002421_individual_slots_r69.sql",
   "categories": {
     "column_grants": {
       "items": 2,

@@ -1,4 +1,4 @@
--- Reviewed rollback for updates/20261112174600_individual_slots_r69.sql.
+-- Reviewed rollback for updates/20261113002421_individual_slots_r69.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so; prefer a forward fix. Run it BEFORE reverting the
 -- website release that uses the update: with the slots off sale that release

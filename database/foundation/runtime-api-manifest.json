@@ -279,7 +279,7 @@
     },
     {
       "name": "start_slot_checkout",
-      "updates": ["updates/20261112174600_individual_slots_r69.sql"],
+      "updates": ["updates/20261113002421_individual_slots_r69.sql"],
       "arguments": [
         {
           "name": "p_plan_id",
@@ -313,7 +313,7 @@
     },
     {
       "name": "get_my_slots",
-      "updates": ["updates/20261112174600_individual_slots_r69.sql"],
+      "updates": ["updates/20261113002421_individual_slots_r69.sql"],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
@@ -326,7 +326,7 @@
     },
     {
       "name": "record_staff_slot_reversal",
-      "updates": ["updates/20261112174600_individual_slots_r69.sql"],
+      "updates": ["updates/20261113002421_individual_slots_r69.sql"],
       "arguments": [
         {
           "name": "p_line_id",
@@ -355,7 +355,7 @@
     },
     {
       "name": "staff_set_individual_slot_limit",
-      "updates": ["updates/20261112174600_individual_slots_r69.sql"],
+      "updates": ["updates/20261113002421_individual_slots_r69.sql"],
       "arguments": [
         {
           "name": "p_account_id",

@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261112174600_individual_slots_r69.sql.
+-- Read-only preflight for updates/20261113002421_individual_slots_r69.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes
