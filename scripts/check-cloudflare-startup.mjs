@@ -137,6 +137,20 @@ try {
     "Built Worker must send the production security headers on HTML pages"
   );
   assert.match(await login.text(), /<html/);
+  // The site-wide link-preview picture is served as stored (M9.9): the main
+  // Worker answers it without carrying the image renderer.
+  const shareImage = await server.fetch("https://runtime-check.invalid/opengraph-image");
+  assert.equal(shareImage.status, 200, "Built Worker must serve the link-preview picture");
+  assert.equal(shareImage.headers.get("content-type"), "image/png");
+  const storedPng = /"([A-Za-z0-9+/=]+)"/.exec(
+    await readFile(path.join(root, "src/lib/sharing/default-share-image-png.ts"), "utf8")
+  )?.[1];
+  assert.ok(storedPng, "Stored link-preview picture is missing");
+  assert.equal(
+    Buffer.from(await shareImage.arrayBuffer()).toString("base64"),
+    storedPng,
+    "Built Worker must serve the stored link-preview picture unchanged"
+  );
   const fingerprint = JSON.parse(
     await readFile(path.join(root, ".open-next/build-fingerprint.json"), "utf8")
   );
