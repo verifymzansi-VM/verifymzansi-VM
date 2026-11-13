@@ -21,3 +21,18 @@ export const SHOW_ENGAGEMENT_TOTALS: boolean = false;
  * something the site did not do.
  */
 export const SHOW_SHOWROOM_PROVINCE_CHIP: boolean = false;
+
+/**
+ * The member "Performance" page (/dashboard/metrics) and the links to it. The
+ * page reads statistics the live backend does not record, so it was broken or
+ * empty. While hidden, its address leads to the dashboard. To be rebuilt
+ * after launch (OD-07).
+ */
+export const SHOW_OWNER_METRICS: boolean = false;
+
+/**
+ * The "Detect province and city" button in the verification location step.
+ * The live backend has no location suggestion, so the button only failed;
+ * members pick their province and city from the list (OD-07).
+ */
+export const SHOW_LOCATION_DETECTION: boolean = false;
