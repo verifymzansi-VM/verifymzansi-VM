@@ -72,9 +72,12 @@ export async function readRestoredPostManager(api: FoundationAuthenticatedApi, a
     PROMOTIONS_EVENTS: "starter",
   };
   const priority = ["month", "quarter", "half_year", "year", "enterprise"];
-  for (const plan of dashboard.paid_plans)
-    if (plan.area && plan.tier && priority.indexOf(plan.tier) > priority.indexOf(tiers[plan.area]))
-      tiers[plan.area] = plan.tier;
+  for (const plan of dashboard.paid_plans) {
+    if (!plan.tier) continue;
+    // An Individual slot (no section) works in every section.
+    for (const area of plan.area ? [plan.area] : (Object.keys(tiers) as MarketplaceArea[]))
+      if (priority.indexOf(plan.tier) > priority.indexOf(tiers[area])) tiers[area] = plan.tier;
+  }
   return {
     responses: [
       { data: rows(listings), error: null },

@@ -46,6 +46,24 @@ const catalogue = z
     return new Set(ids).size === ids.length;
   }, "Duplicate catalogue identity");
 export type FoundationBillingCatalogue = z.infer<typeof catalogue>;
+type FoundationCataloguePlan = FoundationBillingCatalogue["plans"][number];
+
+/** posting-v4's Individual slot: one slot for any posting area, at most 4 at
+ * a time per person (more only with a staff-raised limit). */
+export function isIndividualSlotPlan(
+  plan: Pick<FoundationCataloguePlan, "code" | "area" | "slot_capacity">
+) {
+  return (
+    plan.area === null && plan.slot_capacity === 1 && /^individual_(30|90|180)d$/.test(plan.code)
+  );
+}
+
+/** The Individual slot plans on sale, shortest term first. */
+export function individualSlotPlans(catalogue: FoundationBillingCatalogue) {
+  return catalogue.plans
+    .filter(isIndividualSlotPlan)
+    .sort((a, b) => a.duration_days - b.duration_days);
+}
 
 /** Exact public DTO; decimal cents remain canonical strings across transport. */
 export function parseFoundationBillingCatalogue(input: unknown): FoundationBillingCatalogue {

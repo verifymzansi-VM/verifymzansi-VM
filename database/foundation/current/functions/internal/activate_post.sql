@@ -45,8 +45,11 @@ begin
     select count(*) into used from private.post_activations a where a.entitlement_id = ent.id and a.released_at is null;
     continue when used >= ent.slot_capacity;
     if ent.activations_per_period is not null then
+      -- Posts going live in the period: a new post and an ended post brought
+      -- back each count; a submission that review rejected does not.
       select count(*) into used from private.post_activations a where a.entitlement_id = ent.id
-        and a.activated_at > statement_timestamp() - make_interval(days => ent.activation_period_days);
+        and a.activated_at > statement_timestamp() - make_interval(days => ent.activation_period_days)
+        and a.release_reason is distinct from 'moderation';
       continue when used >= ent.activations_per_period;
     end if;
     insert into private.post_activations (post_id, entitlement_id, owner_id) values (post.id, ent.id, actor)

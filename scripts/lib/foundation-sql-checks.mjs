@@ -123,10 +123,13 @@ export function updateCheckViews(database, current, { preflight }) {
   };
 }
 
-/** A plan version that is on sale: `planId` itself, or, once the switch to
- * posting-v4 (20261112173841_switch_posting_terms_v4.sql) has taken it off
- * sale, a copy published as the next version of the same plan code, as a later
- * catalogue update would. For checks that still buy a plan after later updates. */
+/** A plan version that is on sale: `planId` itself; once the Individual slots
+ * are on sale (20261113002421_individual_slots_r69.sql), the Individual slot
+ * for the same number of days; between the switch to posting-v4
+ * (20261112173841_switch_posting_terms_v4.sql), which takes every plan off
+ * sale, and that update, a copy published as the next version of the same plan
+ * code, as a later catalogue update would. For checks that still buy a plan
+ * after later updates (quote it with planQuoteSql). */
 export function planOnSale(q, planId) {
   if (
     q(
@@ -134,10 +137,55 @@ export function planOnSale(q, planId) {
     ) === "1"
   )
     return planId;
+  const slot = q(`select coalesce((select s.id::text from private.plan_versions s
+      join private.plan_versions p on p.id='${planId}' and p.duration_days=s.duration_days
+    where s.plan_code in ('individual_30d','individual_90d','individual_180d') and s.is_public
+      and s.retired_at is null order by s.version desc limit 1),'');`);
+  if (slot) return slot;
   return q(`insert into private.plan_versions (plan_code, version, area, label, price_cents, currency, duration_days,
       slot_capacity, activations_per_period, activation_period_days, max_photos, max_videos, addon_capabilities)
     select p.plan_code, (select max(x.version)+1 from private.plan_versions x where x.plan_code=p.plan_code), p.area,
       p.label, p.price_cents, p.currency, p.duration_days, p.slot_capacity, p.activations_per_period,
       p.activation_period_days, p.max_photos, p.max_videos, p.addon_capabilities
     from private.plan_versions p where p.id='${planId}' returning id;`).split("\n")[0];
+}
+
+/** The member's quote for one slot of plan `planId`, as the website makes it:
+ * with api.start_slot_checkout (the cooling-off consent, the shown total) once
+ * 20261113002421_individual_slots_r69.sql is applied, for a member whose ID
+ * review is accepted (slotBuyer gives `owner` one); before it with
+ * api.start_checkout. */
+export function planQuoteSql(q, member, owner, planId) {
+  const slots =
+    q(
+      "select to_regprocedure('api.start_slot_checkout(uuid,integer,bigint,boolean)') is not null;"
+    ) === "t";
+  if (!slots) return member(owner, `select api.start_checkout('${planId}',null);`);
+  slotBuyer(q, owner.id);
+  const price = q(`select price_cents from private.plan_versions where id='${planId}';`);
+  return member(owner, `select api.start_slot_checkout('${planId}',1,${price},true);`);
+}
+
+/** Gives `ownerId` an accepted ID review for the slot checkout: a synthetic
+ * identity fingerprint answered by a stand-in internal.current_verified_identity
+ * that keeps the installed body for everyone else (identity review has its own
+ * suites). Installed once per database, only by checks that buy a slot. */
+function slotBuyer(q, ownerId) {
+  if (q("select to_regclass('vmtest_slots.buyers') is null;") === "t") {
+    const installed = q(
+      "select prosrc from pg_proc where oid='internal.current_verified_identity(uuid)'::regprocedure;"
+    )
+      .trim()
+      .replace(/;\s*$/, "");
+    q(`create schema vmtest_slots;
+      create table vmtest_slots.buyers(owner_id uuid primary key, fingerprint text not null);
+      create or replace function internal.current_verified_identity(p_owner uuid) returns text
+        language sql set search_path to 'pg_catalog' as $fn$
+        select coalesce((select b.fingerprint from vmtest_slots.buyers b where b.owner_id=p_owner
+            and exists(select 1 from private.current_account_access a where a.id=p_owner)),
+          (${installed})) $fn$;`);
+  }
+  q(`insert into vmtest_slots.buyers(owner_id,fingerprint) values('${ownerId}',
+      left(translate(encode(sha256(convert_to('slot-buyer-${ownerId}','UTF8')),'base64'),'+/=','-_'),42)||'A')
+    on conflict do nothing;`);
 }
