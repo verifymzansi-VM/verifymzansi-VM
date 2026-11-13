@@ -2,6 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { requireTestData } from "./support/test-data";
 
 const WEBKIT_SKIP = ["webkit", "mobile-safari"];
+// Desktop (reduced motion): the "Play video" button. Touch screens: the small
+// labelled "Preview" button; a tap anywhere else on the card opens the post.
+const CARD_PLAY_BUTTON = /^(Play video$|Preview video)/;
 const WEBKIT_SKIP_MSG =
   "WebKit media playback under headless CI is unreliable for autoplay assertions.";
 
@@ -232,7 +235,7 @@ test.describe("Card video autoplay", () => {
       await card.evaluate((element) => element.scrollIntoView({ block: "center" }));
       const video = card.locator("video");
       const url = page.url();
-      await card.getByRole("button", { name: "Play video", exact: true }).click();
+      await card.getByRole("button", { name: CARD_PLAY_BUTTON }).click();
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
       await page.mouse.move(0, 0);
       await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
@@ -294,7 +297,7 @@ test.describe("Card video autoplay", () => {
             () => (window as Window & { __vmPlayCalls?: number }).__vmPlayCalls ?? 0
           )
         ).toBe(0);
-        await card.getByRole("button", { name: "Play video", exact: true }).click();
+        await card.getByRole("button", { name: CARD_PLAY_BUTTON }).click();
         await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
       } else {
         await assertVisibleCardVideoAutoplays(page);
