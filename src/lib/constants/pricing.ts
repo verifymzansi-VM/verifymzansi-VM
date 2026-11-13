@@ -106,7 +106,8 @@ export const PACKAGES_ON_SALE = false;
 
 const RETAIL_FEATURES: PlanDefinition["features"] = {
   maxPhotos: 10,
-  maxPostsPerMonth: 10,
+  // posting-v4 fair use: at most 4 posts going live per paid slot per 30 days.
+  maxPostsPerMonth: 4,
   videoAllowed: true,
   maxVideos: 1,
   boostAllowed: true,

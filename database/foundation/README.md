@@ -70,15 +70,23 @@ The same command then runs `scripts/test-foundation-staff-rules.mjs`, which
 replays every file into a third throwaway container first and only then checks
 staff rules through the production API commands, as members and staff with
 synthetic sessions (staff with a verified authenticator app) or as
-`service_role`: staff role changes need an independent second staff member and
-nobody can propose or approve a change to their own role; privacy requests get
-their deadline from the rule, one extension at most, identity verification
-before completion or export, and never processing by the requester; report
-warnings, content hides and appeals keep reviewers independent; a stale mail
-outbox lease cannot acknowledge a delivery; and the activation limit per period
-holds with free slots. These checks complement the ones in
-`scripts/test-restored-post-commands.mjs`, which still runs on the older
-prototype fixture with only some of the updates.
+`service_role`: every staff command needs an AAL2 claim (not anonymous, role
+`authenticated`) backed by a live, unexpired AAL2 session of an unsuspended
+account, a verified authenticator app (not a phone factor), a current staff role
+and an authenticator code from the last 12 hours (15 minutes for capabilities
+such as `role:review`); six commands browsers must never call (privacy request
+intake, report intake, mail outbox, enquiries, retention) are refused to `anon`
+and `authenticated` (the full grant set is compared with the manifests by
+`pnpm db:foundation:api-check`); staff role changes need an independent second
+staff member and nobody can propose or approve a change to their own role;
+privacy requests get their deadline from the rule, one extension at most and
+only before the deadline (none for deletion), identity verification before
+completion or export, never processing by the requester, and never by a
+moderator or an ineligible assignee; report warnings, content hides and appeals
+keep reviewers independent; a stale mail outbox lease cannot acknowledge a
+delivery; and the activation limit per period holds with free slots. These
+checks complement the ones in `scripts/test-restored-post-commands.mjs`, which
+still runs on the older prototype fixture with only some of the updates.
 
 An update that backfills existing rows or is hard to undo can come with two
 reviewed companions named after it, which the replay never applies:
