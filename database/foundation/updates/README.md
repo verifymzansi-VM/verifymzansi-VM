@@ -2301,9 +2301,27 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   relations and 0 functions in public and the nine expected unchanged
   supabase_admin rows, after "already applied"; production fingerprint after all
   five updates matched the replay (section No default rights in schema public)
-- `20261112080000_payment_problem_alerts.sql`: pending
-- `20261112122001_publish_posting_terms_v4.sql`: pending
-- `20261112173841_switch_posting_terms_v4.sql`: pending
+- `20261112080000_payment_problem_alerts.sql`: applied 2026-11-12 12:20 UTC;
+  time approximate, applied by the coordinator with the owner's approval through
+  the Supabase query API, from the reviewed file; preflight before "update not
+  applied" with no paid-but-not-activated and no stale pending payment, after
+  "already applied" with all ten bodies matching; production fingerprint after
+  it matched the replay (section Payment problem alerts)
+- `20261112122001_publish_posting_terms_v4.sql`: applied 2026-11-12 22:00 UTC;
+  time approximate, applied by the coordinator with the owner's approval through
+  the Supabase query API, from the reviewed file, before the release; preflight
+  before "current posting-v3; accounts that accepted it: 0; posting-v4 not
+  published", after "posting-v4 published (update already applied)" with
+  posting-v3 still current
+- `20261112173841_switch_posting_terms_v4.sql`: applied 2026-11-12 23:13 UTC;
+  applied by the coordinator with the owner's approval through the Supabase
+  query API, from the reviewed file, after the release of pull request 200 was
+  live; preflight before "current posting-v3 (update not applied); plans on
+  sale: 17; plans taken off sale by the update: 0; pending plan payments: 0",
+  after "current posting-v4 (update already applied); plans on sale: 0; plans
+  taken off sale by the update: 17; pending plan payments: 0", with
+  internal.set_post_media at the reviewed body (md5 3ff7aba4); production
+  fingerprint after it matched the replay through this update
 - `20261112181954_google_name_at_signup.sql`: pending
 
 <!-- applied-register:end -->
