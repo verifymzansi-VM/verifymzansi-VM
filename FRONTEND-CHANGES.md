@@ -997,7 +997,11 @@ rows elsewhere also carry this change (the page and the payments card in group
 20). Text outside the checked scope with the same purpose: the refusal messages
 in `src/lib/foundation/ozow-refunds.ts` and
 `src/lib/foundation/staff-payments.ts` and the route
-`src/app/api/admin/payments/ozow-refunds/route.ts`.
+`src/app/api/admin/payments/ozow-refunds/route.ts`. Once refunds went through
+Ozow, the 'Recorded in the Ozow dashboard' button also shows while sending is
+switched off (typed references no longer refund Ozow payments). Accepted for the
+owner: without the Ozow refund key set, a dashboard record cannot be read back
+from Ozow, so it is only as reliable as the typed reference it replaces.
 
 | File                                                           | Kind   | Reason                                                                                                                                                               | What changes on screen                                                                                                                                                                                                                                                                                                                                                                                                       | Proposed | Owner decision | Date       | Version      |
 | -------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------- | ---------- | ------------ |

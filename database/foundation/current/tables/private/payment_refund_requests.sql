@@ -59,7 +59,7 @@ END),
   constraint payment_refund_requests_channel_rule CHECK (
 CASE channel
     WHEN 'manual'::text THEN (status = ANY (ARRAY['awaiting_approval'::text, 'applied'::text, 'declined'::text])) AND ozow_transaction_id IS NULL AND ozow_refund_id IS NULL AND sent_at IS NULL AND send_attempts = 0 AND send_outcome IS NULL
-    WHEN 'dashboard'::text THEN kind = 'refunded'::text AND (status = ANY (ARRAY['awaiting_approval'::text, 'applied'::text, 'declined'::text])) AND ozow_transaction_id IS NOT NULL AND ozow_refund_id IS NOT NULL AND ozow_reference = ozow_refund_id::text AND sent_at IS NULL AND send_attempts = 0 AND send_outcome IS NULL
+    WHEN 'dashboard'::text THEN kind = 'refunded'::text AND (status = ANY (ARRAY['awaiting_approval'::text, 'applied'::text, 'declined'::text])) AND ozow_transaction_id IS NOT NULL AND ozow_refund_id IS NOT NULL AND ozow_reference = ((ozow_refund_id::text || ':'::text) || id::text) AND sent_at IS NULL AND send_attempts = 0 AND send_outcome IS NULL
     ELSE kind = 'refunded'::text AND ozow_transaction_id IS NOT NULL AND ozow_reference = ('vm-refund-'::text || id::text) AND (sent_at IS NULL OR (status = ANY (ARRAY['sent'::text, 'applied'::text, 'failed'::text, 'returned'::text]))) AND (sent_at IS NOT NULL OR (status <> ALL (ARRAY['sent'::text, 'applied'::text, 'returned'::text]))) AND (status <> ALL (ARRAY['awaiting_approval'::text, 'declined'::text])) = (approved_at IS NOT NULL) AND (status <> 'applied'::text OR ozow_refund_id IS NOT NULL)
 END),
   constraint payment_refund_requests_closed CHECK ((NOT failure_reason IS DISTINCT FROM 'closed_by_staff'::text) = (closed_by IS NOT NULL AND close_reason IS NOT NULL) AND (closed_by IS NULL OR closed_by <> requested_by) AND (close_reason IS NULL OR internal.plain_text_valid(close_reason, 5, 500, true))),
@@ -91,8 +91,8 @@ CREATE INDEX payment_refund_requests_closed_by_idx ON private.payment_refund_req
 CREATE INDEX payment_refund_requests_declined_by_idx ON private.payment_refund_requests USING btree (declined_by) WHERE (declined_by IS NOT NULL);
 CREATE UNIQUE INDEX payment_refund_requests_in_flight_idx ON private.payment_refund_requests USING btree (payment_id) WHERE (status = ANY (ARRAY['awaiting_approval'::text, 'approved'::text, 'sent'::text]));
 CREATE INDEX payment_refund_requests_line_idx ON private.payment_refund_requests USING btree (payment_line_id, payment_id) WHERE (payment_line_id IS NOT NULL);
-CREATE UNIQUE INDEX payment_refund_requests_ozow_key_idx ON private.payment_refund_requests USING btree (lower(COALESCE((ozow_refund_id)::text, ozow_reference)));
-CREATE UNIQUE INDEX payment_refund_requests_ozow_refund_idx ON private.payment_refund_requests USING btree (ozow_refund_id) WHERE (ozow_refund_id IS NOT NULL);
+CREATE UNIQUE INDEX payment_refund_requests_ozow_key_idx ON private.payment_refund_requests USING btree (lower(COALESCE((ozow_refund_id)::text, ozow_reference))) WHERE (status <> 'declined'::text);
+CREATE UNIQUE INDEX payment_refund_requests_ozow_refund_idx ON private.payment_refund_requests USING btree (ozow_refund_id) WHERE ((ozow_refund_id IS NOT NULL) AND (status <> 'declined'::text));
 CREATE INDEX payment_refund_requests_payment_idx ON private.payment_refund_requests USING btree (payment_id);
 CREATE UNIQUE INDEX payment_refund_requests_reference_idx ON private.payment_refund_requests USING btree (lower(ozow_reference));
 CREATE INDEX payment_refund_requests_requested_by_idx ON private.payment_refund_requests USING btree (requested_by);

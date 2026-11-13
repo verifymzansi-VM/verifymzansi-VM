@@ -458,7 +458,9 @@ const checkItem = z.strictObject({
 export async function runOzowRefundJobs(
   service: FoundationServiceApi,
   client: OzowRefundClient,
-  clock = () => Date.now()
+  clock = () => Date.now(),
+  /** False while the switch is off: only read refunds back, never send. */
+  send = true
 ): Promise<{ attempted: number; checked: number; failures: number }> {
   const started = clock();
   const inBudget = () => clock() - started < JOB_BUDGET_MS;
@@ -474,12 +476,9 @@ export async function runOzowRefundJobs(
     });
   };
   try {
-    const due = await call(
-      service,
-      "list_ozow_refund_sends_due",
-      { p_limit: 2 },
-      z.array(z.uuid()).max(20)
-    );
+    const due = send
+      ? await call(service, "list_ozow_refund_sends_due", { p_limit: 2 }, z.array(z.uuid()).max(20))
+      : [];
     for (const id of due) {
       if (!inBudget()) break;
       try {

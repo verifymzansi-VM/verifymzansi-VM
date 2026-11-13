@@ -36,7 +36,7 @@ begin
     -- An Ozow refund id is recorded once, whichever way it was recorded: a
     -- reference record may not name a refund already recorded by its id.
     if new.channel = 'manual' and exists(select 1 from private.payment_refund_requests r
-        where r.ozow_refund_id::text = lower(btrim(new.ozow_reference))) then
+        where r.status <> 'declined' and r.ozow_refund_id::text = lower(btrim(new.ozow_reference))) then
       raise exception 'this Ozow reference was already recorded' using errcode='PT409', detail='ozow_reference_used';
     end if;
     -- Once the server has sent a refund to Ozow, a refund of an Ozow payment is

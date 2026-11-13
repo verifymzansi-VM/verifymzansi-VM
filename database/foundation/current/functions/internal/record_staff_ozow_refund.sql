@@ -43,9 +43,12 @@ begin
   perform internal.assert_staff_payment_actor(actor, buyer);
   -- A repeat of the same request by the same staff member returns its state.
   if p_channel = 'dashboard' then
-    select * into prior from private.payment_refund_requests r where r.ozow_refund_id = p_ozow_refund_id;
+    -- A declined record took no effect, so its refund id may be recorded again.
+    select * into prior from private.payment_refund_requests r
+      where r.ozow_refund_id = p_ozow_refund_id and r.status <> 'declined';
     if not found then
-      select * into prior from private.payment_refund_requests r where lower(r.ozow_reference) = p_ozow_refund_id::text;
+      select * into prior from private.payment_refund_requests r
+        where r.channel = 'manual' and r.status <> 'declined' and lower(r.ozow_reference) = p_ozow_refund_id::text;
     end if;
     if found then
       if prior.channel = 'dashboard' and prior.payment_id = pay.id and prior.payment_line_id is not distinct from line.id
@@ -106,7 +109,7 @@ begin
       ozow_reference, amount_cents, recorded_before_cents, needs_approval, status, requested_by, applied_at,
       released_activations, channel, approved_at, ozow_transaction_id, ozow_refund_id)
     values (new_id, pay.id, line.id, pay.owner_id, 'refunded', p_reason_code, btrim(p_reason),
-      case when p_channel = 'api' then 'vm-refund-' || new_id::text else p_ozow_refund_id::text end,
+      case when p_channel = 'api' then 'vm-refund-' || new_id::text else p_ozow_refund_id::text || ':' || new_id::text end,
       amount, refunded_before, approval,
       case when approval then 'awaiting_approval' when p_channel = 'api' then 'approved' else 'applied' end, actor,
       case when p_channel = 'dashboard' and not approval then statement_timestamp() end,

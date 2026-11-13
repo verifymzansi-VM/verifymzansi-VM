@@ -20,12 +20,15 @@ begin
     checked := checked + 1;
     select * into request from private.payment_refund_requests r
       where r.ozow_refund_id = (item->>'refund_id')::uuid
-        or (r.channel = 'manual' and lower(r.ozow_reference) = item->>'refund_id');
+        or (r.channel = 'manual' and lower(r.ozow_reference) = item->>'refund_id')
+      order by (r.status = 'declined'), r.requested_at desc limit 1;
     if found then
       -- Known, but Ozow's transaction or amount differs, or Ozow paid (or is
       -- paying) a refund whose record was declined or failed.
       if (request.channel <> 'manual' and (request.ozow_transaction_id is distinct from (item->>'transaction_id')::uuid
             or request.amount_cents <> (item->>'amount_cents')::bigint))
+          or (request.channel = 'manual'
+            and internal.ozow_refund_transaction(request.payment_id) is distinct from (item->>'transaction_id')::uuid)
           or (request.status in ('declined', 'failed')
             and item->>'status' not in ('Failed', 'Cancelled', 'Invalid', 'Error')) then
         mismatched := mismatched + 1;

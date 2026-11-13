@@ -11,6 +11,11 @@ begin
   select * into request from private.payment_refund_requests r where r.id = p_request_id;
   outcome := case when p_status = 'Complete' then 'complete' when p_status = 'Returned' then 'returned'
     when p_status in ('Failed', 'Error', 'Invalid', 'Cancelled') then 'failed' else 'pending' end;
+  -- Ozow has this refund after all: an earlier "missing" no longer holds.
+  if request.ozow_missing_at is not null then
+    update private.payment_refund_requests set ozow_missing_at = null where id = request.id
+      returning * into request;
+  end if;
   -- The same status again (a repeated notice, a retried send, the daily
   -- check) was applied before: nothing changes and nobody is alerted twice.
   if request.ozow_status is not distinct from p_status then

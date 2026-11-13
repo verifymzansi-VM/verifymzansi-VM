@@ -31,6 +31,8 @@ const REFUND_SCOPE = "refunds";
 const REQUEST_TIMEOUT_MS = 15_000;
 /** Ozow lists at most 50 refunds a page; the daily check reads 40 pages at most. */
 const LIST_PAGE_LIMIT = 40;
+/** Ozow's largest page; a transaction with this many refunds is not "complete". */
+const TRANSACTION_PAGE_LIMIT = 50;
 
 type Environment = Record<string, string | undefined>;
 
@@ -48,6 +50,16 @@ function refundCredentials(environment: Environment): OzowClientCredentials {
  * staff record refunds as before (Ozow's reference), and no refund request,
  * notice or check reaches Ozow.
  */
+/**
+ * Whether the refund key is set (and Ozow is not mocked): enough to read
+ * refunds back from Ozow (follow-ups, the daily check, dashboard records),
+ * never to send one; sending needs the switch too.
+ */
+export function ozowRefundKeyConfigured(environment: Environment = process.env): boolean {
+  const credentials = refundCredentials(environment);
+  return Boolean(credentials.clientId && credentials.clientSecret) && !isMockOzowEnabled();
+}
+
 export function ozowApiRefundsEnabled(environment: Environment = process.env): boolean {
   const credentials = refundCredentials(environment);
   return (
@@ -334,7 +346,10 @@ export function createOzowRefundClient({
       let response: Response;
       try {
         response = await send(
-          apiUrl(baseUrl, `/v1/transactions/${encodeURIComponent(tx.data)}/refunds`),
+          apiUrl(
+            baseUrl,
+            `/v1/transactions/${encodeURIComponent(tx.data)}/refunds?limit=${TRANSACTION_PAGE_LIMIT}&offset=0`
+          ),
           { method: "GET" }
         );
       } catch {
@@ -352,14 +367,21 @@ export function createOzowRefundClient({
           : null;
       if (!items || items.length > 200)
         throw new OzowRefundUnavailableError("Invalid Ozow refund list");
-      // Only a complete list may say "no such refund": a further page means
-      // the answer is not known.
-      const links =
+      // Only a complete list may say "no such refund": a further page, a full
+      // page or a total larger than what came back means it is not known.
+      const page =
         data && typeof data === "object" && !Array.isArray(data)
-          ? (data as { links?: { next?: unknown } }).links
+          ? (data as { links?: { next?: unknown }; meta?: Record<string, unknown> })
           : undefined;
-      if (links && typeof links.next === "string" && links.next)
-        throw new OzowRefundUnavailableError("Ozow refund list has more pages");
+      const totals = [page?.meta?.totalItems, page?.meta?.total, page?.meta?.count].filter(
+        (value) => value !== undefined
+      );
+      if (
+        (typeof page?.links?.next === "string" && page.links.next) ||
+        items.length >= TRANSACTION_PAGE_LIMIT ||
+        totals.some((value) => typeof value !== "number" || value > items.length)
+      )
+        throw new OzowRefundUnavailableError("Ozow refund list is not complete");
       const facts = items.map(readOzowRefund);
       if (facts.some((fact) => !fact || fact.transactionId !== tx.data))
         throw new OzowRefundUnavailableError("Invalid Ozow refund list item");

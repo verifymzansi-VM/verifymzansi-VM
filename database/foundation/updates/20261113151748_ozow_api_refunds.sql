@@ -67,7 +67,11 @@
 --    again. Once the server has sent a refund to Ozow, a refund of an Ozow
 --    payment can no longer be recorded with a typed reference
 --    (ozow_reference_retired); chargebacks and payments made outside Ozow keep
---    the reference.
+--    the reference. An Ozow refund id is recorded once among the records that
+--    were not declined (a declined record took no effect and its id may be
+--    recorded again); a lost send cannot be closed while an Ozow refund of the
+--    payment is unexplained; a dashboard refund Ozow does not have or did not
+--    pay is never approved.
 -- 4. Payment problems (the staff payment alert emails) gain the reasons
 --    refund_failed, refund_returned, refund_unmatched, refund_stuck and
 --    refund_mismatch and the sources refund_notice, refund_check and
@@ -93,7 +97,7 @@ begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_slot_reversal(uuid,text,text)')) is distinct from '1364f8c78e36281bae5f16a4ba5a466c'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.refund_needs_approval(text,bigint,bigint)')) is distinct from '7f3795506bf5dedfc96e78c6adb0b1ff'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.assert_staff_payment_actor(uuid,uuid)')) is distinct from 'fe81cc39557206e06346fcf5e9f33bfd'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_refund_request_guard()')) not in ('ac76d0b81b37bbfc12ad483e7eadf9cf', 'd37bd25269a7848d43721e1b20b97267')
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_refund_request_guard()')) not in ('ac76d0b81b37bbfc12ad483e7eadf9cf', 'c220af13b94b20251d36a33fe643e427')
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_refunded_before_cents(uuid)')) not in ('deeeb438b3d54710a061b49a4e52e9f5', 'edcb14caf62c8375f0216d828ecc276d')
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.approve_staff_payment_refund(uuid)')) not in ('f757a5e1ac7aa4a199dbcd05f5465083', 'df4585dd0d0c12f4fbf2e76d9e70a553')
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_reversal_waiting_guard()')) not in ('ee9f44cbbc9d2b70cd6db25f90dc7acb', 'd994c95ef0874bb69be72b4e54666ae7')
@@ -132,14 +136,16 @@ alter table private.payment_refund_requests drop constraint if exists payment_re
 alter table private.payment_refund_requests add constraint payment_refund_requests_channel_check
   check (channel in ('manual', 'api', 'dashboard'));
 -- What each channel may be: today's reference records only wait, apply or are
--- declined and carry no Ozow facts; a dashboard record names Ozow's refund id
--- as its reference; an API record's reference is its own Idempotency-Key.
+-- declined and carry no Ozow facts; a dashboard record's reference is Ozow's
+-- refund id and its own id (so a declined record never blocks the refund id);
+-- an API record's reference is its own Idempotency-Key.
 alter table private.payment_refund_requests drop constraint if exists payment_refund_requests_channel_rule;
 alter table private.payment_refund_requests add constraint payment_refund_requests_channel_rule check (case channel
   when 'manual' then status in ('awaiting_approval', 'applied', 'declined') and ozow_transaction_id is null
     and ozow_refund_id is null and sent_at is null and send_attempts = 0 and send_outcome is null
   when 'dashboard' then kind = 'refunded' and status in ('awaiting_approval', 'applied', 'declined')
-    and ozow_transaction_id is not null and ozow_refund_id is not null and ozow_reference = ozow_refund_id::text
+    and ozow_transaction_id is not null and ozow_refund_id is not null
+    and ozow_reference = ozow_refund_id::text || ':' || id::text
     and sent_at is null and send_attempts = 0 and send_outcome is null
   else kind = 'refunded' and ozow_transaction_id is not null and ozow_reference = 'vm-refund-' || id::text
     and (sent_at is null or status in ('sent', 'applied', 'failed', 'returned'))
@@ -179,15 +185,16 @@ alter table private.payment_refund_requests add constraint payment_refund_reques
   case when needs_approval and status not in ('awaiting_approval', 'declined')
     then approved_by is not null and approved_by <> requested_by else approved_by is null end);
 
+-- An Ozow refund is recorded once, whichever way it was recorded (its id, or
+-- a typed reference equal to it). A declined record took no effect: its
+-- refund id may be recorded again (for example on the right slot).
 create unique index if not exists payment_refund_requests_ozow_refund_idx on private.payment_refund_requests
-  (ozow_refund_id) where ozow_refund_id is not null;
+  (ozow_refund_id) where ozow_refund_id is not null and status <> 'declined';
+create unique index if not exists payment_refund_requests_ozow_key_idx on private.payment_refund_requests
+  (lower(coalesce(ozow_refund_id::text, ozow_reference))) where status <> 'declined';
 -- One refund of a payment in flight at a time.
 create unique index if not exists payment_refund_requests_in_flight_idx on private.payment_refund_requests (payment_id)
   where status in ('awaiting_approval', 'approved', 'sent');
--- An Ozow refund is recorded once, whichever way it was recorded (its id, or
--- a typed reference equal to it).
-create unique index if not exists payment_refund_requests_ozow_key_idx on private.payment_refund_requests
-  (lower(coalesce(ozow_refund_id::text, ozow_reference)));
 create index if not exists payment_refund_requests_transaction_idx on private.payment_refund_requests
   (ozow_transaction_id) where ozow_transaction_id is not null;
 create index if not exists payment_refund_requests_send_due_idx on private.payment_refund_requests (status, last_send_at)
@@ -246,7 +253,7 @@ begin
     -- An Ozow refund id is recorded once, whichever way it was recorded: a
     -- reference record may not name a refund already recorded by its id.
     if new.channel = 'manual' and exists(select 1 from private.payment_refund_requests r
-        where r.ozow_refund_id::text = lower(btrim(new.ozow_reference))) then
+        where r.status <> 'declined' and r.ozow_refund_id::text = lower(btrim(new.ozow_reference))) then
       raise exception 'this Ozow reference was already recorded' using errcode='PT409', detail='ozow_reference_used';
     end if;
     -- Once the server has sent a refund to Ozow, a refund of an Ozow payment is
@@ -554,9 +561,12 @@ begin
   perform internal.assert_staff_payment_actor(actor, buyer);
   -- A repeat of the same request by the same staff member returns its state.
   if p_channel = 'dashboard' then
-    select * into prior from private.payment_refund_requests r where r.ozow_refund_id = p_ozow_refund_id;
+    -- A declined record took no effect, so its refund id may be recorded again.
+    select * into prior from private.payment_refund_requests r
+      where r.ozow_refund_id = p_ozow_refund_id and r.status <> 'declined';
     if not found then
-      select * into prior from private.payment_refund_requests r where lower(r.ozow_reference) = p_ozow_refund_id::text;
+      select * into prior from private.payment_refund_requests r
+        where r.channel = 'manual' and r.status <> 'declined' and lower(r.ozow_reference) = p_ozow_refund_id::text;
     end if;
     if found then
       if prior.channel = 'dashboard' and prior.payment_id = pay.id and prior.payment_line_id is not distinct from line.id
@@ -617,7 +627,7 @@ begin
       ozow_reference, amount_cents, recorded_before_cents, needs_approval, status, requested_by, applied_at,
       released_activations, channel, approved_at, ozow_transaction_id, ozow_refund_id)
     values (new_id, pay.id, line.id, pay.owner_id, 'refunded', p_reason_code, btrim(p_reason),
-      case when p_channel = 'api' then 'vm-refund-' || new_id::text else p_ozow_refund_id::text end,
+      case when p_channel = 'api' then 'vm-refund-' || new_id::text else p_ozow_refund_id::text || ':' || new_id::text end,
       amount, refunded_before, approval,
       case when approval then 'awaiting_approval' when p_channel = 'api' then 'approved' else 'applied' end, actor,
       case when p_channel = 'dashboard' and not approval then statement_timestamp() end,
@@ -969,6 +979,11 @@ begin
   select * into request from private.payment_refund_requests r where r.id = p_request_id;
   outcome := case when p_status = 'Complete' then 'complete' when p_status = 'Returned' then 'returned'
     when p_status in ('Failed', 'Error', 'Invalid', 'Cancelled') then 'failed' else 'pending' end;
+  -- Ozow has this refund after all: an earlier "missing" no longer holds.
+  if request.ozow_missing_at is not null then
+    update private.payment_refund_requests set ozow_missing_at = null where id = request.id
+      returning * into request;
+  end if;
   -- The same status again (a repeated notice, a retried send, the daily
   -- check) was applied before: nothing changes and nobody is alerted twice.
   if request.ozow_status is not distinct from p_status then
@@ -1089,7 +1104,7 @@ AS $function$
     and r.ozow_transaction_id = p_transaction and r.amount_cents = p_amount
     and p_requested_at >= r.sent_at - interval '10 minutes'
     and not exists(select 1 from private.payment_refund_requests x
-      where x.ozow_refund_id = p_refund or lower(x.ozow_reference) = p_refund::text);
+      where x.status <> 'declined' and (x.ozow_refund_id = p_refund or lower(x.ozow_reference) = p_refund::text));
 $function$;
 alter function internal.ozow_refund_link_candidate(uuid,uuid,bigint,timestamptz) owner to postgres;
 revoke all on function internal.ozow_refund_link_candidate(uuid,uuid,bigint,timestamptz) from public, anon, authenticated, service_role;
@@ -1130,7 +1145,7 @@ begin
     if (p_result->>'transaction_id')::uuid is distinct from request.ozow_transaction_id
         or (p_result->>'amount_cents')::bigint is distinct from request.amount_cents
         or (request.ozow_refund_id is not null and request.ozow_refund_id <> (p_result->>'refund_id')::uuid)
-        or exists(select 1 from private.payment_refund_requests r where r.id <> request.id
+        or exists(select 1 from private.payment_refund_requests r where r.id <> request.id and r.status <> 'declined'
           and (r.ozow_refund_id = (p_result->>'refund_id')::uuid or lower(r.ozow_reference) = p_result->>'refund_id')) then
       perform internal.ozow_refund_problem(request.payment_id, 'refund_mismatch', 'refund_send', request.id::text);
       return jsonb_build_object('request_id', request.id, 'outcome', 'mismatch', 'status', request.status,
@@ -1201,8 +1216,17 @@ begin
   -- A refund recorded with a typed reference (Ozow's refund id) is known; the
   -- record cannot carry Ozow's status, so only a failure or return alerts.
   select * into request from private.payment_refund_requests r
-    where r.channel = 'manual' and lower(r.ozow_reference) = refund::text;
+    where r.channel = 'manual' and lower(r.ozow_reference) = refund::text
+    order by (r.status = 'declined'), r.requested_at desc limit 1;
   if found then
+    -- Typed on another payment than the one Ozow refunded, or Ozow pays a
+    -- refund whose record was declined: staff must look.
+    if internal.ozow_refund_transaction(request.payment_id) is distinct from transaction
+        or (request.status = 'declined' and p_event->>'status' not in ('Failed', 'Cancelled', 'Invalid', 'Error')) then
+      perform internal.ozow_refund_problem(request.payment_id, 'refund_mismatch', source, request.id::text);
+      return jsonb_build_object('outcome', 'mismatch', 'request_id', request.id, 'status', request.status,
+        'ozow_status', null);
+    end if;
     if p_event->>'status' in ('Failed', 'Cancelled', 'Invalid', 'Error', 'Returned') and request.status = 'applied' then
       perform internal.ozow_refund_problem(request.payment_id,
         case when p_event->>'status' = 'Returned' then 'refund_returned' else 'refund_failed' end, source, request.id::text);
@@ -1212,11 +1236,19 @@ begin
     return jsonb_build_object('outcome', 'recorded', 'request_id', request.id, 'status', request.status,
       'ozow_status', null);
   end if;
-  select r.payment_id into payment from private.payment_refund_requests r where r.ozow_refund_id = refund;
+  -- The record with this id that took effect or may still; else the one lost
+  -- send it fits; else a declined record with this id (Ozow's status then
+  -- only alerts staff).
+  select r.payment_id into payment from private.payment_refund_requests r
+    where r.ozow_refund_id = refund and r.status <> 'declined';
   if payment is null then
     select r.payment_id into payment from private.payment_refund_requests r
       where r.id = internal.ozow_refund_link_candidate(refund, transaction, amount,
         (p_event->>'requested_at')::timestamptz);
+  end if;
+  if payment is null then
+    select r.payment_id into payment from private.payment_refund_requests r
+      where r.ozow_refund_id = refund order by r.requested_at desc limit 1;
   end if;
   if payment is null then
     perform internal.ozow_refund_problem(internal.ozow_transaction_payment(transaction), 'refund_unmatched', source,
@@ -1225,19 +1257,25 @@ begin
   end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('frontend-payment-reversal:'||payment::text, 0));
   perform internal.lock_evidence_subject(p.owner_id) from private.payments p where p.id = payment;
-  select * into request from private.payment_refund_requests r where r.ozow_refund_id = refund for update;
+  select * into request from private.payment_refund_requests r
+    where r.ozow_refund_id = refund and r.status <> 'declined' for update;
   if not found then
     select * into request from private.payment_refund_requests r
       where r.id = internal.ozow_refund_link_candidate(refund, transaction, amount,
         (p_event->>'requested_at')::timestamptz) and r.payment_id = payment
       for update;
+    if found then
+      update private.payment_refund_requests set ozow_refund_id = refund, send_outcome = 'accepted'
+        where id = request.id returning * into request;
+    else
+      select * into request from private.payment_refund_requests r
+        where r.ozow_refund_id = refund and r.payment_id = payment order by r.requested_at desc limit 1 for update;
+    end if;
     if not found then
       perform internal.ozow_refund_problem(internal.ozow_transaction_payment(transaction), 'refund_unmatched', source,
         refund::text);
       return jsonb_build_object('outcome', 'unmatched');
     end if;
-    update private.payment_refund_requests set ozow_refund_id = refund, send_outcome = 'accepted'
-      where id = request.id returning * into request;
   end if;
   if request.ozow_transaction_id is distinct from transaction or request.amount_cents <> amount then
     perform internal.ozow_refund_problem(request.payment_id, 'refund_mismatch', source, request.id::text);
@@ -1290,12 +1328,15 @@ begin
     checked := checked + 1;
     select * into request from private.payment_refund_requests r
       where r.ozow_refund_id = (item->>'refund_id')::uuid
-        or (r.channel = 'manual' and lower(r.ozow_reference) = item->>'refund_id');
+        or (r.channel = 'manual' and lower(r.ozow_reference) = item->>'refund_id')
+      order by (r.status = 'declined'), r.requested_at desc limit 1;
     if found then
       -- Known, but Ozow's transaction or amount differs, or Ozow paid (or is
       -- paying) a refund whose record was declined or failed.
       if (request.channel <> 'manual' and (request.ozow_transaction_id is distinct from (item->>'transaction_id')::uuid
             or request.amount_cents <> (item->>'amount_cents')::bigint))
+          or (request.channel = 'manual'
+            and internal.ozow_refund_transaction(request.payment_id) is distinct from (item->>'transaction_id')::uuid)
           or (request.status in ('declined', 'failed')
             and item->>'status' not in ('Failed', 'Cancelled', 'Invalid', 'Error')) then
         mismatched := mismatched + 1;
@@ -1365,10 +1406,11 @@ begin
           and not (r.ozow_refund_id is null and r.send_outcome = 'unknown' and r.send_attempts < 3
             and r.sent_at > statement_timestamp() - interval '6 hours'))
         or (r.channel = 'dashboard' and r.status in ('awaiting_approval', 'applied')
-          and r.requested_at > statement_timestamp() - interval '30 days'
+          and r.requested_at > statement_timestamp() - interval '30 days' and r.ozow_missing_at is null
           and (r.ozow_status is null or r.ozow_status not in ('Complete', 'Failed', 'Cancelled', 'Returned', 'Invalid',
             'Error'))))
-    order by coalesce(r.ozow_checked_at, r.requested_at), r.id
+    -- Refunds through Ozow first: dashboard records never hold them back.
+    order by (r.channel = 'api') desc, coalesce(r.ozow_checked_at, r.requested_at), r.id
     limit p_limit
     for update skip locked),
   taken as (

@@ -260,7 +260,13 @@ describe("reading refunds back", () => {
     mod = await load();
     await expect(
       mod.createOzowRefundClient({ environment }).transactionRefunds(TX)
-    ).rejects.toThrow(/more pages/);
+    ).rejects.toThrow(/not complete/);
+    // A total larger than what came back: not complete either.
+    fakeFetch(json({ results: [refundBody()], meta: { totalItems: 3 } }));
+    mod = await load();
+    await expect(
+      mod.createOzowRefundClient({ environment }).transactionRefunds(TX)
+    ).rejects.toThrow(/not complete/);
   });
 
   it("lists by date, follows Ozow's next link on Ozow's origin only", async () => {

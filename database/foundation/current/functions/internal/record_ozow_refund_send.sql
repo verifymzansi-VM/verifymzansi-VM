@@ -30,7 +30,7 @@ begin
     if (p_result->>'transaction_id')::uuid is distinct from request.ozow_transaction_id
         or (p_result->>'amount_cents')::bigint is distinct from request.amount_cents
         or (request.ozow_refund_id is not null and request.ozow_refund_id <> (p_result->>'refund_id')::uuid)
-        or exists(select 1 from private.payment_refund_requests r where r.id <> request.id
+        or exists(select 1 from private.payment_refund_requests r where r.id <> request.id and r.status <> 'declined'
           and (r.ozow_refund_id = (p_result->>'refund_id')::uuid or lower(r.ozow_reference) = p_result->>'refund_id')) then
       perform internal.ozow_refund_problem(request.payment_id, 'refund_mismatch', 'refund_send', request.id::text);
       return jsonb_build_object('request_id', request.id, 'outcome', 'mismatch', 'status', request.status,

@@ -879,8 +879,17 @@ Ozow's reference exactly as before.
   gives a final status (30 days at most), and the daily check also alerts for a
   refund recorded as made that Ozow lists as failed or returned. One unique
   index keeps an Ozow refund recorded once, whichever way
-  (`lower(coalesce(ozow_refund_id::text, ozow_reference))`). The dashboard
-  record stays available while refunds through Ozow are switched off.
+  (`lower(coalesce(ozow_refund_id::text, ozow_reference))`, and Ozow's refund
+  id), leaving out declined records, which took no effect: a dashboard record's
+  reference is `<refund id>:<record id>`, so a refund id recorded on the wrong
+  payment and declined can be recorded again. A later read that finds the refund
+  clears an earlier "missing". A typed reference whose payment is not the one
+  Ozow refunded raises `refund_mismatch`. Refunds through Ozow are read back
+  before dashboard records, and a dashboard record Ozow does not have is no
+  longer polled. The dashboard record stays available while refunds through Ozow
+  are switched off, and the 10-minute follow-up and the daily check keep reading
+  refunds back (never sending) whenever the refund key is set; without the key,
+  a dashboard record is not read back from Ozow (accepted, noted for the owner).
 - **Typed references retire for Ozow refunds.** Once the server has sent any
   refund to Ozow, a refund of an Ozow payment can no longer be recorded with a
   typed reference (PT409 `ozow_reference_retired`); chargebacks and payments

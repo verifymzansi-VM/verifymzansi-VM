@@ -20,8 +20,17 @@ begin
   -- A refund recorded with a typed reference (Ozow's refund id) is known; the
   -- record cannot carry Ozow's status, so only a failure or return alerts.
   select * into request from private.payment_refund_requests r
-    where r.channel = 'manual' and lower(r.ozow_reference) = refund::text;
+    where r.channel = 'manual' and lower(r.ozow_reference) = refund::text
+    order by (r.status = 'declined'), r.requested_at desc limit 1;
   if found then
+    -- Typed on another payment than the one Ozow refunded, or Ozow pays a
+    -- refund whose record was declined: staff must look.
+    if internal.ozow_refund_transaction(request.payment_id) is distinct from transaction
+        or (request.status = 'declined' and p_event->>'status' not in ('Failed', 'Cancelled', 'Invalid', 'Error')) then
+      perform internal.ozow_refund_problem(request.payment_id, 'refund_mismatch', source, request.id::text);
+      return jsonb_build_object('outcome', 'mismatch', 'request_id', request.id, 'status', request.status,
+        'ozow_status', null);
+    end if;
     if p_event->>'status' in ('Failed', 'Cancelled', 'Invalid', 'Error', 'Returned') and request.status = 'applied' then
       perform internal.ozow_refund_problem(request.payment_id,
         case when p_event->>'status' = 'Returned' then 'refund_returned' else 'refund_failed' end, source, request.id::text);
@@ -31,11 +40,19 @@ begin
     return jsonb_build_object('outcome', 'recorded', 'request_id', request.id, 'status', request.status,
       'ozow_status', null);
   end if;
-  select r.payment_id into payment from private.payment_refund_requests r where r.ozow_refund_id = refund;
+  -- The record with this id that took effect or may still; else the one lost
+  -- send it fits; else a declined record with this id (Ozow's status then
+  -- only alerts staff).
+  select r.payment_id into payment from private.payment_refund_requests r
+    where r.ozow_refund_id = refund and r.status <> 'declined';
   if payment is null then
     select r.payment_id into payment from private.payment_refund_requests r
       where r.id = internal.ozow_refund_link_candidate(refund, transaction, amount,
         (p_event->>'requested_at')::timestamptz);
+  end if;
+  if payment is null then
+    select r.payment_id into payment from private.payment_refund_requests r
+      where r.ozow_refund_id = refund order by r.requested_at desc limit 1;
   end if;
   if payment is null then
     perform internal.ozow_refund_problem(internal.ozow_transaction_payment(transaction), 'refund_unmatched', source,
@@ -44,19 +61,25 @@ begin
   end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('frontend-payment-reversal:'||payment::text, 0));
   perform internal.lock_evidence_subject(p.owner_id) from private.payments p where p.id = payment;
-  select * into request from private.payment_refund_requests r where r.ozow_refund_id = refund for update;
+  select * into request from private.payment_refund_requests r
+    where r.ozow_refund_id = refund and r.status <> 'declined' for update;
   if not found then
     select * into request from private.payment_refund_requests r
       where r.id = internal.ozow_refund_link_candidate(refund, transaction, amount,
         (p_event->>'requested_at')::timestamptz) and r.payment_id = payment
       for update;
+    if found then
+      update private.payment_refund_requests set ozow_refund_id = refund, send_outcome = 'accepted'
+        where id = request.id returning * into request;
+    else
+      select * into request from private.payment_refund_requests r
+        where r.ozow_refund_id = refund and r.payment_id = payment order by r.requested_at desc limit 1 for update;
+    end if;
     if not found then
       perform internal.ozow_refund_problem(internal.ozow_transaction_payment(transaction), 'refund_unmatched', source,
         refund::text);
       return jsonb_build_object('outcome', 'unmatched');
     end if;
-    update private.payment_refund_requests set ozow_refund_id = refund, send_outcome = 'accepted'
-      where id = request.id returning * into request;
   end if;
   if request.ozow_transaction_id is distinct from transaction or request.amount_cents <> amount then
     perform internal.ozow_refund_problem(request.payment_id, 'refund_mismatch', source, request.id::text);

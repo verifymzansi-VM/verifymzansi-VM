@@ -601,7 +601,8 @@ try {
       const done = json(dashboard(admin, pay.id, refundId));
       assert.equal(done.status, "applied");
       assert.equal(done.channel, "dashboard");
-      assert.equal(record(done.request_id).ozow_reference, refundId);
+      assert.equal(record(done.request_id).ozow_reference, `${refundId}:${done.request_id}`);
+      assert.equal(record(done.request_id).ozow_refund_id, refundId);
       assert.equal(payStatus(pay.id), "refunded");
       assert.equal(json(dashboard(admin, pay.id, refundId)).repeated, true);
       const other = buy(verified("ozow-dashboard-2"), PLANS.days30, 1);
@@ -634,6 +635,46 @@ try {
       );
       assert.equal(approved.status, "applied");
       assert.equal(payStatus(big.id), "refunded");
+      // A declined record took no effect: its refund id can be recorded again
+      // (here on the right payment), and a later read clears "missing".
+      const wrong = buy(verified("ozow-dashboard-wrong"), PLANS.days180, 3);
+      const right = buy(verified("ozow-dashboard-right"), PLANS.days180, 3);
+      const reused = randomUUID();
+      const first = json(dashboard(admin, wrong.id, reused));
+      json(service(`select api.report_ozow_refund_missing('${first.request_id}');`));
+      assert.ok(record(first.request_id).ozow_missing_at);
+      json(
+        staff(
+          admin2,
+          `select api.decline_staff_payment_refund('${first.request_id}','Recorded on the wrong payment');`
+        )
+      );
+      const again = json(dashboard(admin, right.id, reused));
+      assert.equal(again.status, "awaiting_approval");
+      json(service(`select api.report_ozow_refund_missing('${again.request_id}');`));
+      fails(
+        staff(admin2, `select api.approve_staff_payment_refund('${again.request_id}');`),
+        "PT409",
+        /no paid refund/
+      );
+      assert.equal(
+        ozowStatus({
+          refund_id: reused,
+          transaction_id: right.tx,
+          amount_cents: right.cents,
+          status: "Complete",
+          requested_at: null,
+          completed_at: null,
+        }).request_id,
+        again.request_id,
+        "Ozow's status goes to the record that may still take effect"
+      );
+      assert.equal(record(again.request_id).ozow_missing_at, null);
+      assert.equal(
+        json(staff(admin2, `select api.approve_staff_payment_refund('${again.request_id}');`))
+          .status,
+        "applied"
+      );
     }
   );
 
@@ -772,6 +813,7 @@ try {
     "once refunds go through Ozow, a typed reference cannot refund an Ozow payment",
     () => {
       const pay = buy(verified("ozow-retired"), PLANS.days30, 1);
+      const typed = randomUUID();
       fails(
         staff(
           admin,
@@ -783,7 +825,7 @@ try {
       assert.equal(payStatus(pay.id), "complete");
       // Chargebacks keep the reference; a reference may not reuse a recorded refund id.
       const recorded = q(
-        "select ozow_refund_id from private.payment_refund_requests where ozow_refund_id is not null limit 1;"
+        "select ozow_refund_id from private.payment_refund_requests where ozow_refund_id is not null and status <> 'declined' limit 1;"
       );
       fails(
         staff(
@@ -797,11 +839,24 @@ try {
         json(
           staff(
             admin,
-            `select api.record_staff_payment_refund('${pay.id}','chargeback','duplicate','Bank chargeback received','OZ-CB-RETIRED-1');`
+            `select api.record_staff_payment_refund('${pay.id}','chargeback','duplicate','Bank chargeback received','${typed}');`
           )
         ).status,
         "applied"
       );
+      // A typed reference never explains away a refund of another payment.
+      assert.equal(
+        ozowStatus({
+          refund_id: typed,
+          transaction_id: randomUUID(),
+          amount_cents: pay.cents,
+          status: "Complete",
+          requested_at: null,
+          completed_at: null,
+        }).outcome,
+        "mismatch"
+      );
+      assert.equal(problem(pay.id, "refund_mismatch").alert, true);
     }
   );
 

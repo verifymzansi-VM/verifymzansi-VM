@@ -37,7 +37,7 @@ describe("the reason list", () => {
   const sql = readFileSync(`database/foundation/updates/${update}`, "utf8");
 
   it("is exactly the list the database accepts, in the table and in the command", () => {
-    const lists = [...sql.matchAll(/(?<![a-z_])(?:p_)?reason (?:not )?in \(([^)]*)\)/g)].map(
+    const lists = [...sql.matchAll(/(?<![a-z_.])(?:p_)?reason (?:not )?in \(([^)]*)\)/g)].map(
       (match) => [...match[1].matchAll(/'([a-z_]+)'/g)].map((reason) => reason[1])
     );
     expect(lists).toHaveLength(2);

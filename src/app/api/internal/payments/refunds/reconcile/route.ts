@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { runOzowRefundReconciliation } from "@/lib/foundation/ozow-refunds";
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
-import { createOzowRefundClient, ozowApiRefundsEnabled } from "@/lib/payments/ozow-refunds";
+import { createOzowRefundClient, ozowRefundKeyConfigured } from "@/lib/payments/ozow-refunds";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("OzowRefundCheck");
@@ -13,8 +13,8 @@ const log = createLogger("OzowRefundCheck");
  * only reads Ozow's refund list (the last three days) and lets the database
  * raise staff alerts: an Ozow refund with no record of ours, a record whose
  * transaction or amount differs, an API refund stuck for more than a day. It
- * never sends, cancels or changes a refund. While API refunds are off it does
- * nothing.
+ * never sends, cancels or changes a refund. It runs whenever the refund key is
+ * set (also while sending is switched off), and does nothing without it.
  */
 export async function POST(request: Request) {
   const secret = process.env.INTERNAL_JOBS_SECRET;
@@ -23,9 +23,9 @@ export async function POST(request: Request) {
   if (!secret || expected.length !== received.length || !timingSafeEqual(expected, received)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!ozowApiRefundsEnabled())
+  if (!ozowRefundKeyConfigured())
     return NextResponse.json(
-      { skipped: "ozow_api_refunds_off" },
+      { skipped: "ozow_refund_key_not_set" },
       { headers: { "Cache-Control": "no-store" } }
     );
   try {

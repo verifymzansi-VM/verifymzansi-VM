@@ -19,10 +19,11 @@ begin
           and not (r.ozow_refund_id is null and r.send_outcome = 'unknown' and r.send_attempts < 3
             and r.sent_at > statement_timestamp() - interval '6 hours'))
         or (r.channel = 'dashboard' and r.status in ('awaiting_approval', 'applied')
-          and r.requested_at > statement_timestamp() - interval '30 days'
+          and r.requested_at > statement_timestamp() - interval '30 days' and r.ozow_missing_at is null
           and (r.ozow_status is null or r.ozow_status not in ('Complete', 'Failed', 'Cancelled', 'Returned', 'Invalid',
             'Error'))))
-    order by coalesce(r.ozow_checked_at, r.requested_at), r.id
+    -- Refunds through Ozow first: dashboard records never hold them back.
+    order by (r.channel = 'api') desc, coalesce(r.ozow_checked_at, r.requested_at), r.id
     limit p_limit
     for update skip locked),
   taken as (

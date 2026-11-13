@@ -14,7 +14,7 @@ AS $function$
     and r.ozow_transaction_id = p_transaction and r.amount_cents = p_amount
     and p_requested_at >= r.sent_at - interval '10 minutes'
     and not exists(select 1 from private.payment_refund_requests x
-      where x.ozow_refund_id = p_refund or lower(x.ozow_reference) = p_refund::text);
+      where x.status <> 'declined' and (x.ozow_refund_id = p_refund or lower(x.ozow_reference) = p_refund::text));
 $function$;
 alter function internal.ozow_refund_link_candidate(uuid,uuid,bigint,timestamp with time zone) owner to postgres;
 revoke all on function internal.ozow_refund_link_candidate(uuid,uuid,bigint,timestamp with time zone) from public;

@@ -226,6 +226,13 @@ describe("the 10-minute job", () => {
     expect(calls("report_ozow_refund_missing")).toHaveLength(0);
     expect(calls("apply_ozow_refund_status")).toHaveLength(1);
   });
+  it("only reads refunds back, never sends, while switched off", async () => {
+    answer({ claim_ozow_refund_checks: [] });
+    await runOzowRefundJobs(service, client, undefined, false);
+    expect(calls("list_ozow_refund_sends_due")).toHaveLength(0);
+    expect(calls("claim_ozow_refund_checks")).toHaveLength(1);
+    expect(client.create).not.toHaveBeenCalled();
+  });
   it("stops starting Ozow requests when its time is up", async () => {
     let now = 0;
     answer({ list_ozow_refund_sends_due: [REQUEST, REQUEST] });

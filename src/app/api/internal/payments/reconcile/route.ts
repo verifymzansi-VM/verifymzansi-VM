@@ -6,19 +6,29 @@ import {
 } from "@/lib/foundation/billing-runtime";
 import { runOzowRefundJobs } from "@/lib/foundation/ozow-refunds";
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
-import { createOzowRefundClient, ozowApiRefundsEnabled } from "@/lib/payments/ozow-refunds";
+import {
+  createOzowRefundClient,
+  ozowApiRefundsEnabled,
+  ozowRefundKeyConfigured,
+} from "@/lib/payments/ozow-refunds";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("OzowReconciliation");
 
-/** Refunds through Ozow (only while they are on; null otherwise): approved
- * refunds whose own send did not happen, unknown sends due a retry with the
- * same Idempotency-Key, and refunds without a final answer read back from
- * Ozow. Never throws: a failure is logged and counted. */
+/** Refunds through Ozow (null while the refund key is not set): approved
+ * refunds whose own send did not happen and unknown sends due a retry with the
+ * same Idempotency-Key (only while switched on), and refunds without a final
+ * answer read back from Ozow (also while switched off). Never throws: a failure is logged and counted. */
 async function runRefundJobs() {
-  if (!ozowApiRefundsEnabled()) return null;
+  // Reading refunds back needs only the refund key; sending needs the switch.
+  if (!ozowRefundKeyConfigured()) return null;
   try {
-    return await runOzowRefundJobs(createFoundationServiceApi(), createOzowRefundClient());
+    return await runOzowRefundJobs(
+      createFoundationServiceApi(),
+      createOzowRefundClient(),
+      undefined,
+      ozowApiRefundsEnabled()
+    );
   } catch (error) {
     log.error("Ozow refund jobs failed", {
       error: error instanceof Error ? error.name : "unknown",
