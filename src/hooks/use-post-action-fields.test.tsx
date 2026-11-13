@@ -14,8 +14,3 @@ it("keeps a receipt across an uncertain retry and changes it for a new represent
     "Reload your posts"
   );
 });
-it("does not change the source fixture request contract", () => {
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "source");
-  const { result } = renderHook(() => usePostActionFields());
-  expect(result.current("fixture", undefined, "delete", undefined, undefined)).toEqual({});
-});

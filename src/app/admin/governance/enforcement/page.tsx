@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { createLogger } from "@/lib/utils/logger";
 import { formatSaLongDate } from "@/lib/utils/format";
 import { PageHeader } from "@/components/layout/page-header";
@@ -11,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle, Clock } from "lucide-react";
 import { LiftRestrictionButton } from "./lift-restriction-button";
 import { redirect } from "next/navigation";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFrontendEnforcement } from "@/lib/foundation/enforcement";
 import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
@@ -24,83 +21,12 @@ export const metadata = {
 
 const PAGE_SIZE = 50;
 
-async function readSourceEnforcement(userId: string) {
-  const admin = createAdminClient();
-
-  const [restrictionsResult, suspensions, bans, recentResult] = await Promise.all([
-    admin
-      .from("account_restrictions")
-      .select(
-        "id, decision_id, user_id, kind, reason, starts_at, ends_at, emergency, decision_records!account_restrictions_decision_id_fkey(recommender_id, approver_id)",
-        { count: "exact" }
-      )
-      .is("lifted_at", null)
-      .in("kind", ["suspension", "ban"])
-      .order("starts_at", { ascending: false })
-      .limit(PAGE_SIZE),
-    admin
-      .from("account_restrictions")
-      .select("id", { count: "exact", head: true })
-      .is("lifted_at", null)
-      .eq("kind", "suspension"),
-    admin
-      .from("account_restrictions")
-      .select("id", { count: "exact", head: true })
-      .is("lifted_at", null)
-      .eq("kind", "ban"),
-    admin
-      .from("moderation_actions")
-      .select("id, action, target_owner_id, reason, created_at")
-      .order("created_at", { ascending: false })
-      .limit(20),
-  ]);
-
-  if (restrictionsResult.error || suspensions.error || bans.error || recentResult.error)
-    throw new Error("Enforcement source read failed");
-
-  const restrictions = restrictionsResult.data ?? [];
-  const userIds = [...new Set(restrictions.map((r) => r.user_id))];
-  const { data: profiles } = userIds.length
-    ? await admin
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .select("user_id, display_name")
-        .in("user_id", userIds)
-    : { data: [] as Array<{ user_id: string; display_name: string | null }> };
-  const nameById = new Map((profiles ?? []).map((p) => [p.user_id, p.display_name] as const));
-  return {
-    items: restrictions.map((r) => {
-      const decision = Array.isArray(r.decision_records)
-        ? r.decision_records[0]
-        : r.decision_records;
-      return {
-        ...r,
-        account_id: r.user_id,
-        display_name: nameById.get(r.user_id),
-        conflicted: decision?.recommender_id === userId || decision?.approver_id === userId,
-        version: undefined,
-      };
-    }),
-    suspensions: suspensions.count,
-    bans: bans.count,
-    emergency: restrictions.filter((r) => r.emergency).length,
-    total: restrictionsResult.count ?? 0,
-    recent: (recentResult.data ?? []).map((item) => ({
-      ...item,
-      account_id: item.target_owner_id,
-    })),
-  };
-}
-
 export default async function GovernanceEnforcementPage() {
   const { user } = await requireStaff("enforcement:execute");
   let data;
   try {
-    if (getDataBackend() === "foundation") {
-      const { api } = await readFoundationServerSession();
-      data = await readFrontendEnforcement(api, user.id);
-    } else {
-      data = await readSourceEnforcement(user.id);
-    }
+    const { api } = await readFoundationServerSession();
+    data = await readFrontendEnforcement(api, user.id);
   } catch (error) {
     if (error instanceof FoundationStaffCommandError && error.mfaRequired)
       redirect(staffVerifyHref("/staff/two-step", "/admin/governance/enforcement"));

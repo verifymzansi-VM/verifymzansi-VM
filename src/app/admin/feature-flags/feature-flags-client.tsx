@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ToggleLeft } from "lucide-react";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { getDataBackend } from "@/lib/data-backend";
 import { parseFrontendFlagAcknowledgement } from "@/lib/foundation/feature-controls";
 import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
 
@@ -72,37 +71,13 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
         body: JSON.stringify({
           key,
           ...change,
-          ...(getDataBackend() === "foundation" ? { expectedRevision } : {}),
+          expectedRevision,
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to update flag");
-      const nativeFlag =
-        getDataBackend() === "foundation"
-          ? parseFrontendFlagAcknowledgement(data, key, expectedRevision)
-          : null;
-      setFlags((previous) =>
-        previous.map((flag) => {
-          if (flag.key !== key) return flag;
-          if (nativeFlag) return nativeFlag;
-          if ("enabled" in change)
-            return {
-              ...flag,
-              enabled: change.enabled,
-              mode: change.enabled ? "on" : "off",
-              updated_at: new Date().toISOString(),
-            };
-          return {
-            ...flag,
-            mode: change.mode,
-            enabled: change.mode === "on",
-            rollout_percent: change.percent ?? flag.rollout_percent,
-            allowlist_roles: change.allowlist_roles ?? flag.allowlist_roles,
-            updated_at: new Date().toISOString(),
-            updated_reason: change.reason,
-          };
-        })
-      );
+      const nativeFlag = parseFrontendFlagAcknowledgement(data, key, expectedRevision);
+      setFlags((previous) => previous.map((flag) => (flag.key === key ? nativeFlag : flag)));
       toast({ ...success, variant: "success" });
       router.refresh();
     } catch (error) {

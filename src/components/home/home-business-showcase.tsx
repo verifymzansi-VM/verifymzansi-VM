@@ -1,8 +1,5 @@
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
-import { createClient } from "@/lib/supabase/server";
-import { getDataBackend } from "@/lib/data-backend";
 import { restoredHomeCollection } from "@/lib/foundation/marketplace-server";
-import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { BusinessPreviewCard } from "./business-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
@@ -15,9 +12,7 @@ import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
-import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
-import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 function provinceCode(name: string): string {
   return SA_PROVINCES.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.code ?? name;
@@ -28,25 +23,7 @@ export async function HomeBusinessShowcase() {
   const hideFixtures = shouldHidePlaywrightFixtures(
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
-  const supabase = await createClient();
-  const engagementAdmin = getDataBackend() === "foundation" ? null : tryCreateAdminClient();
-  const { data: businesses } =
-    getDataBackend() === "foundation"
-      ? await restoredHomeCollection("businesses")
-      : await applyVisibleExpiryFilter(
-          supabase
-            .from("businesses")
-            // Card fields only; contact details and addresses aren't publicly readable.
-            .select(
-              "id, owner_id, business_name, business_type, description, logo_url, cover_photo, cover_video, video_thumbnail, location_city, location_province, boost_until, featured_until, focal_x, focal_y, media_width, media_height"
-            )
-            .eq("status", "live")
-            .eq("area", "MZANSI_BUSINESS")
-        )
-          // Fair rotation: new posts first for 72 hours, then everyone takes turns.
-          .order("fair_rotation_key", { ascending: true })
-          .order("id", { ascending: true })
-          .limit(16);
+  const { data: businesses } = await restoredHomeCollection("businesses");
 
   const items = (businesses ?? [])
     .filter((business) => !shouldHidePlaywrightFixtureRowWhenEnabled(business, hideFixtures))
@@ -63,13 +40,6 @@ export async function HomeBusinessShowcase() {
       />
     );
   }
-  const businessIds = items.map((business) => business.id as string);
-  const viewCountMap = await getOptionalContentViewCountMap(
-    engagementAdmin,
-    "business",
-    businessIds
-  );
-
   return (
     <HomeShowcaseShell title="Mzansi Business" href="/mzansi-business" tone="blue">
       <AnalyticsImpressions
@@ -88,18 +58,15 @@ export async function HomeBusinessShowcase() {
             <BusinessPreviewCard
               href={`/mzansi-business/${b.id}`}
               businessId={b.id}
-              imageUrl={b.cover_video || b.video_thumbnail || b.cover_photo}
+              imageUrl={(b.cover_video || b.video_thumbnail || b.cover_photo) as string | undefined}
               posterUrl={b.video_thumbnail || b.cover_photo || undefined}
-              logoUrl={b.logo_url}
+              logoUrl={b.logo_url as string | undefined}
               title={b.business_name}
               businessType={(b.business_type || "general_store") as BusinessType}
               city={b.location_city ?? "South Africa"}
               provinceCode={provinceCode(b.location_province ?? "ZA")}
               boosted={b.boost_until ? new Date(b.boost_until) > new Date() : false}
               featured={b.featured_until ? new Date(b.featured_until) > new Date() : false}
-              viewCount={
-                viewCountMap.ok ? (viewCountMap.data.get(b.id as string) ?? undefined) : undefined
-              }
               priority={false}
               focalX={b.focal_x as number | null | undefined}
               focalY={b.focal_y as number | null | undefined}

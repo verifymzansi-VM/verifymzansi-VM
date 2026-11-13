@@ -3,7 +3,6 @@
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { PasswordMfaChallenge } from "@/components/auth/password-mfa-challenge";
 import { useState, useEffect, useRef } from "react";
-import { getDataBackend } from "@/lib/data-backend";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -264,8 +263,7 @@ export default function ProfilePage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      if (getDataBackend() === "foundation" && profileRevision !== null)
-        formData.append("expectedRevision", String(profileRevision));
+      if (profileRevision !== null) formData.append("expectedRevision", String(profileRevision));
 
       const res = await fetch("/api/profile/avatar", {
         method: "POST",
@@ -298,11 +296,8 @@ export default function ProfilePage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
 
-    const nativeProfile = getDataBackend() === "foundation";
     const result = (
-      nativeProfile && isNameLocked
-        ? profileUpdateSchema.omit({ displayName: true })
-        : profileUpdateSchema
+      isNameLocked ? profileUpdateSchema.omit({ displayName: true }) : profileUpdateSchema
     ).safeParse({
       displayName,
       bio: bio || undefined,
@@ -327,7 +322,7 @@ export default function ProfilePage() {
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           ...result.data,
-          ...(nativeProfile ? { expectedRevision: profileRevision } : {}),
+          expectedRevision: profileRevision,
         }),
       });
 

@@ -1,20 +1,12 @@
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { BusinessPreviewCard } from "@/components/home/business-preview-card";
-import { createClient } from "@/lib/supabase/server";
-import { getDataBackend } from "@/lib/data-backend";
 import { restoredHomeCollection } from "@/lib/foundation/marketplace-server";
-import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
 import { HomeShowcaseEmptyState } from "./home-showcase-empty-state";
 import type { BusinessCategory, BusinessType, PromotionType } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
-import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
-import {
-  buildPublicEventPromotionsQuery,
-  buildPublicTourismBusinessesQuery,
-} from "@/lib/promotions/public-tourism-events";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
 import {
@@ -73,27 +65,12 @@ export async function HomePromotionsShowcase() {
   const hideFixtures = shouldHidePlaywrightFixtures(
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
-  const supabase = await createClient();
-  const engagementAdmin = getDataBackend() === "foundation" ? null : tryCreateAdminClient();
   const now = new Date().toISOString();
 
-  const [{ data: eventData }, { data: tourismData }] =
-    getDataBackend() === "foundation"
-      ? await Promise.all([
-          restoredHomeCollection("promotions"),
-          restoredHomeCollection("businesses", true),
-        ])
-      : await Promise.all([
-          buildPublicEventPromotionsQuery(
-            supabase,
-            now,
-            "id, title, price_cents, price_negotiable, photos, videos, video_thumbnail, category, category_key, location_province, location_city, promotion_type, view_count, boost_until, featured_until, media_width, media_height, start_date, end_date, created_at, business_id"
-          ).limit(8),
-          buildPublicTourismBusinessesQuery(
-            supabase,
-            "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until, focal_x, focal_y, media_width, media_height"
-          ).limit(8),
-        ]);
+  const [{ data: eventData }, { data: tourismData }] = await Promise.all([
+    restoredHomeCollection("promotions"),
+    restoredHomeCollection("businesses", true),
+  ]);
 
   const eventRows = (eventData || []) as unknown as PromotionRow[];
 
@@ -107,21 +84,6 @@ export async function HomePromotionsShowcase() {
     .filter((b) => !shouldHidePlaywrightFixtureRowWhenEnabled(b, hideFixtures))
     .filter((b) => !isPlaceholderMarketplaceContent(b.business_name))
     .slice(0, 4);
-  const tourismIds = tourismBusinesses.map((business) => business.id);
-  const promotionIds = promotions.map((promotion) => promotion.id);
-
-  // Fetch business logos for promotions linked to a business
-  const businessIds = [
-    ...new Set(promotions.map((p) => p.business_id).filter(Boolean)),
-  ] as string[];
-  const [promotionViewCountMap, tourismViewCountMap, { data: businesses }] = await Promise.all([
-    getOptionalContentViewCountMap(engagementAdmin, "promotion", promotionIds),
-    getOptionalContentViewCountMap(engagementAdmin, "business", tourismIds),
-    businessIds.length
-      ? supabase.from("businesses").select("id, logo_url").in("id", businessIds)
-      : Promise.resolve({ data: [] as { id: string; logo_url: string | null }[] }),
-  ]);
-  const logoMap = new Map((businesses ?? []).map((b) => [b.id, b.logo_url as string | null]));
 
   // Interleave tourism and events
   const items: ShowcaseItem[] = [];
@@ -186,11 +148,6 @@ export async function HomePromotionsShowcase() {
                     ? new Date(item.data.featured_until) > new Date(now)
                     : false
                 }
-                viewCount={
-                  tourismViewCountMap.ok
-                    ? (tourismViewCountMap.data.get(item.data.id) ?? undefined)
-                    : undefined
-                }
                 priority={false}
                 focalX={item.data.focal_x}
                 focalY={item.data.focal_y}
@@ -218,11 +175,6 @@ export async function HomePromotionsShowcase() {
                 city={item.data.location_city}
                 promotionType={item.data.promotion_type as PromotionType}
                 createdAt={item.data.created_at}
-                viewCount={
-                  promotionViewCountMap.ok
-                    ? (promotionViewCountMap.data.get(item.data.id) ?? undefined)
-                    : undefined
-                }
                 boosted={
                   item.data.boost_until ? new Date(item.data.boost_until) > new Date(now) : false
                 }
@@ -233,7 +185,6 @@ export async function HomePromotionsShowcase() {
                 }
                 startDate={item.data.start_date}
                 endDate={item.data.end_date}
-                logoUrl={item.data.business_id ? logoMap.get(item.data.business_id) : undefined}
                 priority={false}
                 mediaWidth={item.data.media_width}
                 mediaHeight={item.data.media_height}

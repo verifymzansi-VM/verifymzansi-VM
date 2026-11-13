@@ -15,7 +15,6 @@ import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { useRealtime } from "@/hooks/use-realtime";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime, formatSaLongDate } from "@/lib/utils/format";
-import { getDataBackend } from "@/lib/data-backend";
 
 const NOTIFICATION_REFRESH_INTERVAL_MS = 10_000;
 
@@ -71,7 +70,6 @@ export function NotificationBell({ userId }: { userId?: string }) {
   const {
     notifications,
     unreadCount,
-    addNotification,
     hydrateNotifications,
     markRead,
     markAllRead,
@@ -182,15 +180,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
     filterValue: userId,
     enabled: !!userId,
     onEvent: (payload: Record<string, unknown>) => {
-      if (getDataBackend() === "foundation" && payload.eventType === "REVALIDATE") {
-        void refreshNotifications();
-        return;
-      }
-      // Supabase Realtime puts the inserted row in `payload.new`
-      const row = (payload.new ?? payload) as Record<string, unknown>;
-      if (!userId || (row.user_id && row.user_id !== currentUserRef.current)) return;
-      const notification = mapNotificationRow(row);
-      if (notification) addNotification(notification);
+      if (payload.eventType === "REVALIDATE") void refreshNotifications();
     },
   });
 

@@ -1,9 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
-import { ACCOUNT_PROFILE_TABLE, applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 import { LeadsFeed, type LeadRow } from "@/components/dashboard/leads-feed";
-import { getDataBackend } from "@/lib/data-backend";
 import { restoredOwnerEnquiries } from "@/lib/foundation/restored-inbox-server";
 
 export const metadata = {
@@ -17,60 +15,12 @@ export default async function LeadsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  const nativeLeads =
-    getDataBackend() === "foundation" ? await restoredOwnerEnquiries(user.id) : null;
-
-  if (!nativeLeads)
-    await supabase.from(ACCOUNT_PROFILE_TABLE).select("id").eq("user_id", user.id).maybeSingle();
-
-  const leadsOwnerColumn = await getOwnerColumn(supabase, "leads");
-  const leadsQuery = nativeLeads
-    ? Promise.resolve({ data: nativeLeads, error: null })
-    : applyOwnerFilter(
-        supabase
-          .from("leads")
-          .select(
-            `
-      id,
-      target_id,
-      target_type,
-      message,
-      status,
-      buyer_name,
-      buyer_email,
-      email_confirmed,
-      buyer_phone,
-      created_at
-    `
-          )
-          .order("created_at", { ascending: false })
-          .limit(50),
-        leadsOwnerColumn,
-        user.id
-      );
-
-  const { data: leads, error } = await leadsQuery;
-  if (error) throw new Error("Unable to load enquiries. Please try again.");
-  const rows = (leads ?? []) as unknown as LeadRow[];
+  const nativeLeads = await restoredOwnerEnquiries(user.id);
+  const rows = nativeLeads as unknown as LeadRow[];
   const titles = new Map<string, { title: string }>();
-  if (nativeLeads)
-    for (const row of nativeLeads) {
-      if (row.listings) titles.set(`${row.target_type}:${row.target_id}`, row.listings);
-    }
-  if (!nativeLeads)
-    await Promise.all(
-      ["listing", "promotion"].map(async (type) => {
-        const ids = [
-          ...new Set(rows.filter((row) => row.target_type === type).map((row) => row.target_id)),
-        ];
-        if (!ids.length) return;
-        const { data } = await supabase
-          .from(type === "promotion" ? "promotions" : "listings")
-          .select("id, title")
-          .in("id", ids);
-        for (const item of data ?? []) titles.set(`${type}:${item.id}`, { title: item.title });
-      })
-    );
+  for (const row of nativeLeads) {
+    if (row.listings) titles.set(`${row.target_type}:${row.target_id}`, row.listings);
+  }
 
   return (
     <div className="space-y-6">
@@ -85,7 +35,7 @@ export default async function LeadsPage() {
           ...row,
           listings: titles.get(`${row.target_type}:${row.target_id}`) ?? null,
         }))}
-        ownerColumn={leadsOwnerColumn}
+        ownerColumn="owner_id"
         ownerId={user.id}
       />
     </div>

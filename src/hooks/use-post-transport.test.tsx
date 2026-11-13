@@ -43,9 +43,3 @@ it("requires the actually loaded revision for edits without inventing consent", 
     "revision could not be loaded"
   );
 });
-it("keeps the isolated original-interface fixtures independent of native services", () => {
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "source");
-  const { result } = renderHook(() => usePostTransport());
-  expect(result.current.fields()).toEqual({});
-  expect(fetch).not.toHaveBeenCalled();
-});

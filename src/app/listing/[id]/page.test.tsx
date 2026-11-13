@@ -1,17 +1,28 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import ListingDetailPage from "./page";
-import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 
-const { mockCreateClient, mockNotFound } = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
-  mockNotFound: vi.fn(() => {
-    throw new Error("notFound");
-  }),
+const { mockGetUser, mockNotFound, listingDetail, publicDetail, readCollection } = vi.hoisted(
+  () => ({
+    mockGetUser: vi.fn(),
+    mockNotFound: vi.fn(() => {
+      throw new Error("notFound");
+    }),
+    listingDetail: vi.fn(),
+    publicDetail: vi.fn(),
+    readCollection: vi.fn(),
+  })
+);
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({ auth: { getUser: mockGetUser } }),
 }));
-
-vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
-vi.mock("@/lib/supabase/admin", () => ({ tryCreateAdminClient: () => null }));
+vi.mock("@/lib/foundation/marketplace-server", () => ({
+  restoredListingDetail: listingDetail,
+  restoredPublicDetail: publicDetail,
+}));
+vi.mock("@/lib/foundation/marketplace-read", () => ({ readRestoredCollection: readCollection }));
+vi.mock("@/lib/foundation/server-public", () => ({ foundationServerPublicApi: () => "api" }));
 vi.mock("next/navigation", () => ({ notFound: mockNotFound }));
 vi.mock("@/components/layout/header", () => ({
   Header: () => <header>Header</header>,
@@ -46,126 +57,52 @@ vi.mock("@/components/listings/listing-detail-content", () => ({
   ),
 }));
 
-function buildClient(options?: {
-  listing?: Record<string, unknown> | null;
-  seller?: Record<string, unknown> | null;
-  similarListings?: Array<Record<string, unknown>>;
-  similarSellers?: Array<Record<string, unknown>>;
-  user?: { id: string } | null;
-}) {
-  return {
-    auth: {
-      getUser: async () => ({
-        data: { user: options?.user ?? null },
-        error: null,
-      }),
-    },
-    from: (table: string) => {
-      if (table === "listings") {
-        return {
-          select: (query: string) => {
-            // The detail query: explicit public columns, never "*" and never the
-            // private street address.
-            if (query.includes("contact_methods") && !query.includes("location_address")) {
-              return {
-                eq: () => ({
-                  eq: () => ({
-                    single: async () => ({ data: options?.listing ?? null }),
-                  }),
-                }),
-              };
-            }
-
-            return {
-              eq: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    neq: () => ({
-                      order: () => ({
-                        limit: async () => ({ data: options?.similarListings ?? [] }),
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            };
-          },
-        };
-      }
-
-      if (table === ACCOUNT_PROFILE_TABLE) {
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({ data: options?.seller ?? null }),
-            }),
-            in: async () => ({ data: options?.similarSellers ?? [] }),
-          }),
-        };
-      }
-
-      if (table === "listing_views") {
-        return {
-          insert: () => Promise.resolve({ data: null, error: null }),
-        };
-      }
-
-      throw new Error(`Unexpected table ${table}`);
-    },
-  };
-}
-
 describe("ListingDetailPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+  });
+
   it("renders the listing detail content with seller and similar listing context", async () => {
-    mockCreateClient.mockResolvedValue(
-      buildClient({
-        listing: {
-          id: "listing-1",
-          owner_id: "seller-1",
-          title: "Used iPhone 15",
-          description: "Clean phone in excellent condition.",
-          status: "live",
-          price_cents: 150000,
-          price_negotiable: true,
-          category: "electronics",
-          attributes: { brand: "Apple" },
+    listingDetail.mockResolvedValue({
+      id: "listing-1",
+      owner_id: "",
+      title: "Used iPhone 15",
+      description: "Clean phone in excellent condition.",
+      status: "live",
+      price_cents: 150000,
+      price_negotiable: true,
+      category: "electronics",
+      attributes: { brand: "Apple" },
+      photos: [],
+      contact_methods: ["call"],
+      location_province: "Gauteng",
+      location_city: "Johannesburg",
+    });
+    publicDetail.mockResolvedValue({
+      seller: { public_name: "Nomsa Seller", identity_verified: true },
+    });
+    readCollection.mockResolvedValue({
+      rows: [
+        { id: "listing-1", title: "Used iPhone 15" },
+        {
+          id: "listing-2",
+          title: "Samsung Galaxy S24",
+          price_cents: 120000,
+          price_negotiable: false,
+          condition: "used",
           photos: [],
           location_province: "Gauteng",
           location_city: "Johannesburg",
+          category: "electronics",
+          attributes: { brand: "Samsung" },
+          created_at: "2026-03-08T00:00:00.000Z",
+          boost_until: null,
+          featured: false,
         },
-        seller: {
-          display_name: "Nomsa Seller",
-          account_verification_status: "verified",
-          phone: "0821234567",
-          masked_phone_public: "082***4567",
-        },
-        similarListings: [
-          {
-            id: "listing-2",
-            owner_id: "seller-2",
-            title: "Samsung Galaxy S24",
-            price_cents: 120000,
-            price_negotiable: false,
-            condition: "used",
-            photos: [],
-            location_province: "Gauteng",
-            location_city: "Johannesburg",
-            category: "electronics",
-            attributes: { brand: "Samsung" },
-            created_at: "2026-03-08T00:00:00.000Z",
-            boost_until: null,
-            featured: false,
-          },
-        ],
-        similarSellers: [
-          {
-            user_id: "seller-2",
-            display_name: "Tech Store",
-            account_verification_status: "verified",
-          },
-        ],
-      })
-    );
+      ],
+      total: 2,
+    });
 
     render(await ListingDetailPage({ params: Promise.resolve({ id: "listing-1" }) }));
 
@@ -174,16 +111,20 @@ describe("ListingDetailPage", () => {
     // Public names show the first name and surname initial.
     expect(screen.getByText("Nomsa S.")).toBeInTheDocument();
     expect(screen.getByText("Brand Apple")).toBeInTheDocument();
+    // The current post is never offered as similar to itself.
     expect(screen.getByText("Similar count: 1")).toBeInTheDocument();
-    expect(screen.getByText("Similar seller count: 1")).toBeInTheDocument();
+    expect(screen.getByText("Similar seller count: 0")).toBeInTheDocument();
     expect(screen.getByText("Samsung Galaxy S24")).toBeInTheDocument();
+    expect(readCollection).toHaveBeenCalledWith("api", "listings", expect.any(URLSearchParams));
+    expect(String(readCollection.mock.calls[0][2])).toBe("category=electronics&limit=5");
   });
 
   it("calls notFound when the listing is missing", async () => {
-    mockCreateClient.mockResolvedValue(buildClient({ listing: null }));
+    listingDetail.mockResolvedValue(null);
 
     await expect(
       ListingDetailPage({ params: Promise.resolve({ id: "missing-listing" }) })
     ).rejects.toThrow("notFound");
+    expect(readCollection).not.toHaveBeenCalled();
   });
 });

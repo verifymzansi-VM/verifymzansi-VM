@@ -1,7 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/admin";
 import {
   OrganisationActionsForm,
   OrganisationProfileForm,
@@ -11,21 +10,15 @@ import {
 import {
   ApplicationsReview,
   MembersManager,
-  type OrganisationApplicationRow,
-  type OrganisationMemberRow,
 } from "@/components/organisations/organisation-management";
 import {
   PerformanceReport,
   parsePerformanceReport,
 } from "@/components/organisations/performance-report";
-import {
-  OrganisationInvitesCard,
-  type AdminOrganisationInvite,
-} from "@/components/admin/commercial/organisation-invites";
+import { OrganisationInvitesCard } from "@/components/admin/commercial/organisation-invites";
 
 import { z } from "zod";
 import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationOrganisationManagementData } from "@/lib/foundation/organisation-management-data";
 import { foundationMediaUrl } from "@/lib/foundation/public-media-url";
 import { readRestoredStaffAudit } from "@/lib/foundation/restored-staff-audit";
@@ -42,15 +35,6 @@ const date = new Intl.DateTimeFormat("en-ZA", {
   timeStyle: "short",
   timeZone: "Africa/Johannesburg",
 });
-
-/** Report from the pilot start (or the last 90 days) until now. */
-function reportWindow(startedAt: string | null): { from: string; to: string } {
-  const now = new Date();
-  return {
-    from: startedAt ?? new Date(now.getTime() - 90 * 86_400_000).toISOString(),
-    to: now.toISOString(),
-  };
-}
 
 async function readNativeDetail(id: string) {
   try {
@@ -113,89 +97,12 @@ async function readNativeDetail(id: string) {
   }
 }
 
-async function readSourceDetail(id: string, actorId: string) {
-  const admin = createAdminClient();
-  const { data: org, error: orgError } = await admin
-    .from("organisations")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  // A failed read is an error page with a retry, never a misleading "not found".
-  if (orgError) throw new Error(`Organisation could not be loaded: ${orgError.message}`);
-  if (!org) notFound();
-
-  const { from: reportFrom, to: reportTo } = reportWindow(org.trial_starts_at);
-  const [applications, members, admins, notes, programmes, showcases, audit, report, invites] =
-    await Promise.all([
-      admin.rpc("org_list_applications", { p_user: actorId, p_org: id, p_status: null }),
-      admin.rpc("org_list_members", { p_user: actorId, p_org: id }),
-      admin
-        .from("organisation_admins")
-        .select("user_id, role, created_at")
-        .eq("organisation_id", id),
-      admin
-        .from("organisation_notes")
-        .select("id, note, created_at")
-        .eq("organisation_id", id)
-        .order("created_at", { ascending: false })
-        .limit(20),
-      admin
-        .from("organisation_programmes")
-        .select("id, name, slug, active")
-        .eq("organisation_id", id),
-      admin
-        .from("programme_showcases")
-        .select("id, title, placement, enabled, ends_at")
-        .eq("organisation_id", id),
-      admin
-        .from("audit_logs")
-        .select("id, action, actor_role, reason, created_at")
-        .eq("target_id", id)
-        .order("created_at", { ascending: false })
-        .limit(30),
-      admin.rpc("organisation_performance_report", {
-        p_user: actorId,
-        p_org: id,
-        p_from: reportFrom,
-        p_to: reportTo,
-      }),
-      admin
-        .from("organisation_admin_invites")
-        .select("id, email, expires_at, created_at")
-        .eq("organisation_id", id)
-        .is("accepted_at", null)
-        .is("revoked_at", null)
-        .gt("expires_at", new Date().toISOString())
-        .order("created_at", { ascending: false }),
-    ]);
-
-  const adminIds = (admins.data ?? []).map((row) => row.user_id);
-  const adminProfiles = adminIds.length
-    ? await admin.from("account_profiles").select("user_id, display_name").in("user_id", adminIds)
-    : { data: [] as Array<{ user_id: string; display_name: string | null }> };
-  return {
-    org: org as AdminOrganisation,
-    applications: (applications.data ?? []) as OrganisationApplicationRow[],
-    members: (members.data ?? []) as OrganisationMemberRow[],
-    admins: (admins.data ?? []).map((row) => ({
-      ...row,
-      display_name: (adminProfiles.data ?? []).find((p) => p.user_id === row.user_id)?.display_name,
-    })),
-    notes: notes.data ?? [],
-    programmes: programmes.data ?? [],
-    showcases: showcases.data ?? [],
-    audit: (audit.data ?? []).map((row) => ({ ...row, actor_label: row.actor_role })),
-    report: report.data,
-    openInvites: (invites.data ?? []) as AdminOrganisationInvite[],
-  };
-}
-
 export default async function OrganisationAdminDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { user } = await requireStaff("organisations:manage");
+  await requireStaff("organisations:manage");
   const id = (await params).id.toLowerCase();
   if (!z.uuid().safeParse(id).success) notFound();
   const {
@@ -209,10 +116,7 @@ export default async function OrganisationAdminDetailPage({
     audit,
     report,
     openInvites,
-  } =
-    getDataBackend() === "foundation"
-      ? await readNativeDetail(id)
-      : await readSourceDetail(id, user.id);
+  } = await readNativeDetail(id);
   const parsedReport = parsePerformanceReport(report);
   const seatsLeft = Math.max(0, org.admin_limit - admins.length - openInvites.length);
 

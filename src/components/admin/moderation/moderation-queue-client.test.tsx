@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModerationQueueClient } from "./moderation-queue-client";
 import type { ModerationItem } from "./moderation-preview-panel";
+import { QueueClaimsProvider } from "@/components/admin/queue-claims";
+import { claimTypeOf } from "@/lib/admin/moderation-items";
 
 const mockRefresh = vi.fn();
 const mockWithCsrfHeaders = vi.fn((headers?: HeadersInit) => {
@@ -28,11 +30,19 @@ vi.mock("./moderation-preview-panel", () => ({
   ),
 }));
 
+// The claimed review fence each decision sends back to the database.
+const fence = {
+  expectedRevision: 3,
+  claimGeneration: "1",
+  claimNonce: "33333333-3333-4333-8333-333333333333",
+};
+
 const items: ModerationItem[] = [
   {
     id: "listing-1",
     title: "Used iPhone 15",
     status: "pending_moderation",
+    foundation: fence,
     created_at: "2026-03-20T08:00:00.000Z",
     category: "electronics",
     owner_id: "user-1",
@@ -45,6 +55,7 @@ const items: ModerationItem[] = [
     id: "business-1",
     title: "Nomsa Beauty Studio",
     status: "pending_moderation",
+    foundation: fence,
     created_at: "2026-03-20T09:00:00.000Z",
     owner_id: "user-2",
     area: "MZANSI_BUSINESS",
@@ -55,6 +66,7 @@ const items: ModerationItem[] = [
     id: "promotion-1",
     title: "Weekend Sale",
     status: "pending_moderation",
+    foundation: fence,
     created_at: "2026-03-20T10:00:00.000Z",
     owner_id: "user-3",
     area: "PROMOTIONS_EVENTS",
@@ -66,6 +78,7 @@ const items: ModerationItem[] = [
     targetId: "listing-1",
     title: "Used iPhone 15 - updated",
     status: "pending",
+    foundation: fence,
     created_at: "2026-03-20T11:00:00.000Z",
     owner_id: "user-1",
     area: "MZANSI_MARKET",
@@ -90,6 +103,25 @@ const items: ModerationItem[] = [
   },
 ];
 
+// Staff decide only the items they hold a claim on.
+function renderQueue(queueItems: ModerationItem[]) {
+  const claims = Object.fromEntries(
+    queueItems.map((item) => [
+      `${claimTypeOf(item)}:${item.id}`,
+      { mine: true, holderName: "You", expiresAt: "2099-01-01T00:00:00.000Z" },
+    ])
+  );
+  return render(
+    <QueueClaimsProvider claims={claims} mustClaim={false} canFree={false}>
+      <ModerationQueueClient items={queueItems} />
+    </QueueClaimsProvider>
+  );
+}
+
+function sentBody(call: number) {
+  return JSON.parse(vi.mocked(global.fetch).mock.calls[call][1]!.body as string);
+}
+
 describe("ModerationQueueClient", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -103,7 +135,7 @@ describe("ModerationQueueClient", () => {
   });
 
   it("searches the queue and says when nothing matches", () => {
-    render(<ModerationQueueClient items={items} />);
+    renderQueue(items);
     const search = screen.getByRole("searchbox", { name: "Search this queue" });
 
     fireEvent.change(search, { target: { value: "beauty" } });
@@ -115,12 +147,12 @@ describe("ModerationQueueClient", () => {
   });
 
   it("hides the area filter when the queue holds one area", () => {
-    render(<ModerationQueueClient items={items.filter((i) => i.area === "MZANSI_MARKET")} />);
+    renderQueue(items.filter((i) => i.area === "MZANSI_MARKET"));
     expect(screen.queryByRole("button", { name: /^All \(/ })).not.toBeInTheDocument();
   });
 
   it("filters moderation items by area", () => {
-    render(<ModerationQueueClient items={items} />);
+    renderQueue(items);
 
     fireEvent.click(screen.getByRole("button", { name: /Mzansi Business \(1\)/i }));
 
@@ -130,7 +162,7 @@ describe("ModerationQueueClient", () => {
   });
 
   it("requires a rejection reason before submitting", async () => {
-    render(<ModerationQueueClient items={items} />);
+    renderQueue(items);
 
     fireEvent.click(screen.getAllByRole("button", { name: /reject/i })[0]);
     fireEvent.click(screen.getByRole("button", { name: /^Reject$/i }));
@@ -140,7 +172,7 @@ describe("ModerationQueueClient", () => {
   });
 
   it("blocks a miscategorised post with a pre-filled editable reason", async () => {
-    render(<ModerationQueueClient items={items} />);
+    renderQueue(items);
 
     // First card is the electronics listing in Mzansi Market.
     fireEvent.click(screen.getAllByRole("button", { name: /wrong category/i })[0]);
@@ -156,22 +188,21 @@ describe("ModerationQueueClient", () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
         "/api/admin/content/decide",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({
-            itemId: "listing-1",
-            area: "MZANSI_MARKET",
-            decision: "reject",
-            reason:
-              'Blocked: this post is categorised as "Electronics" but does not belong in Mzansi Market. Please resubmit it under the correct category.',
-          }),
-        })
+        expect.objectContaining({ method: "POST" })
       );
+    });
+    expect(sentBody(0)).toEqual({
+      itemId: "listing-1",
+      area: "MZANSI_MARKET",
+      decision: "reject",
+      reason:
+        'Blocked: this post is categorised as "Electronics" but does not belong in Mzansi Market. Please resubmit it under the correct category.',
+      ...fence,
     });
   });
 
   it("submits approve and reject decisions with the exact moderation payload", async () => {
-    render(<ModerationQueueClient items={items} />);
+    renderQueue(items);
 
     fireEvent.click(screen.getAllByRole("button", { name: /approve/i })[2]);
     fireEvent.click(screen.getByRole("button", { name: /^Publish$/i }));
@@ -180,17 +211,14 @@ describe("ModerationQueueClient", () => {
       expect(global.fetch).toHaveBeenNthCalledWith(
         1,
         "/api/admin/content/decide",
-        expect.objectContaining({
-          method: "POST",
-          headers: expect.any(Headers),
-          body: JSON.stringify({
-            itemId: "promotion-1",
-            area: "PROMOTIONS_EVENTS",
-            decision: "approve",
-            reason: undefined,
-          }),
-        })
+        expect.objectContaining({ method: "POST", headers: expect.any(Headers) })
       );
+    });
+    expect(sentBody(0)).toEqual({
+      itemId: "promotion-1",
+      area: "PROMOTIONS_EVENTS",
+      decision: "approve",
+      ...fence,
     });
 
     expect(mockRefresh).toHaveBeenCalledTimes(1);
@@ -208,17 +236,15 @@ describe("ModerationQueueClient", () => {
       expect(global.fetch).toHaveBeenNthCalledWith(
         2,
         "/api/admin/content/decide",
-        expect.objectContaining({
-          method: "POST",
-          headers: expect.any(Headers),
-          body: JSON.stringify({
-            itemId: "business-1",
-            area: "MZANSI_BUSINESS",
-            decision: "reject",
-            reason: "Missing operating hours",
-          }),
-        })
+        expect.objectContaining({ method: "POST", headers: expect.any(Headers) })
       );
+    });
+    expect(sentBody(1)).toEqual({
+      itemId: "business-1",
+      area: "MZANSI_BUSINESS",
+      decision: "reject",
+      reason: "Missing operating hours",
+      ...fence,
     });
 
     expect(mockRefresh).toHaveBeenCalledTimes(2);
@@ -228,7 +254,7 @@ describe("ModerationQueueClient", () => {
   });
 
   it("submits edit review decisions to the content edit endpoint", async () => {
-    render(<ModerationQueueClient items={items} />);
+    renderQueue(items);
 
     fireEvent.click(screen.getAllByRole("button", { name: /approve/i })[3]);
     fireEvent.click(screen.getByRole("button", { name: /^Publish$/i }));
@@ -236,28 +262,21 @@ describe("ModerationQueueClient", () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
         "/api/admin/content-edits/decide",
-        expect.objectContaining({
-          method: "POST",
-          headers: expect.any(Headers),
-          body: JSON.stringify({
-            requestId: "edit-1",
-            decision: "approve",
-            reason: undefined,
-          }),
-        })
+        expect.objectContaining({ method: "POST", headers: expect.any(Headers) })
       );
     });
+    expect(sentBody(0)).toEqual({ requestId: "edit-1", decision: "approve", ...fence });
   });
 
   it("surfaces changed fields on edit request cards", () => {
-    render(<ModerationQueueClient items={items} />);
+    renderQueue(items);
 
     expect(screen.getByText("2 changed")).toBeInTheDocument();
     expect(screen.getByText("Updates: Title, Price")).toBeInTheDocument();
   });
 
   it("uses a horizontally scrollable preview wrapper in the review sheet", () => {
-    render(<ModerationQueueClient items={items} />);
+    renderQueue(items);
 
     fireEvent.click(screen.getAllByRole("button", { name: /review/i })[0]);
 
@@ -269,7 +288,7 @@ describe("ModerationQueueClient", () => {
   });
 
   it("keeps the moderation action row width-constrained so buttons stay visible", () => {
-    render(<ModerationQueueClient items={items} />);
+    renderQueue(items);
 
     const reviewButton = screen.getAllByRole("button", { name: /review/i })[0];
     const actionRow = reviewButton.parentElement;

@@ -1,8 +1,7 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/layout/header";
-import { ACCOUNT_PROFILE_TABLE, applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import {
   DashboardSidebar,
@@ -11,9 +10,7 @@ import {
 import { DashboardMobileNav } from "@/components/dashboard/dashboard-mobile-nav";
 import { createClient } from "@/lib/supabase/client";
 import { useLeadsUnread } from "@/hooks/use-leads-unread";
-import { SuspensionNotice } from "@/components/dashboard/suspension-notice";
 import { signOutBrowserSession } from "@/hooks/use-auth";
-import { getDataBackend } from "@/lib/data-backend";
 import { dashboardVerificationSteps, parseOwnerDashboard } from "@/lib/foundation/owner-dashboard";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -37,92 +34,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         } = await supabase.auth.getUser();
         if (!user) return;
 
-        if (getDataBackend() === "foundation") {
-          const response = await fetch("/api/foundation/dashboard", { cache: "no-store" });
-          if (!response.ok) return;
-          const dashboard = parseOwnerDashboard(await response.json(), user.id);
-          const verificationSummary = summarizeVerification(
-            dashboard.verification.verified ? "verified" : null,
-            dashboardVerificationSteps(dashboard)
-          );
-          setBadges({
-            unreadNotifications: dashboard.unread_notifications,
-            rejectedListings: dashboard.counts.rejected_listings,
-            pendingModeration: dashboard.counts.pending_listings,
-            incompleteVerification:
-              verificationSummary.accountVerificationStatus === "incomplete" ||
-              verificationSummary.accountVerificationStatus === "rejected",
-            pendingReview: verificationSummary.accountVerificationStatus === "pending_review",
-            verificationProgress: {
-              approved: verificationSummary.approvedStepCount,
-              submitted: verificationSummary.submittedStepCount,
-              total: 4,
-            },
-          });
-          return;
-        }
-
-        const [leadOwnerColumn, listingOwnerColumn] = await Promise.all([
-          getOwnerColumn(supabase, "leads"),
-          getOwnerColumn(supabase, "listings"),
-        ]);
-
-        const [
-          unreadLeads,
-          unreadNotifications,
-          rejectedListings,
-          pendingModeration,
-          verificationSteps,
-          accountProfile,
-        ] = await Promise.all([
-          applyOwnerFilter(
-            supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "new"),
-            leadOwnerColumn,
-            user.id
-          ),
-          supabase
-            .from("notifications")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", user.id)
-            .eq("read", false),
-          applyOwnerFilter(
-            supabase
-              .from("listings")
-              .select("id", { count: "exact", head: true })
-              .eq("status", "rejected"),
-            listingOwnerColumn,
-            user.id
-          ),
-          applyOwnerFilter(
-            supabase
-              .from("listings")
-              .select("id", { count: "exact", head: true })
-              .in("status", ["pending_moderation", "flagged_for_review"]),
-            listingOwnerColumn,
-            user.id
-          ),
-          supabase
-            .from("verification_steps")
-            .select("step_type, status, reviewed_at")
-            .eq("user_id", user.id)
-            .in("status", ["approved", "pending", "rejected", "needs_resubmission"]),
-          supabase
-            .from(ACCOUNT_PROFILE_TABLE)
-            .select("account_verification_status")
-            .eq("user_id", user.id)
-            .single(),
-        ]);
-
+        const response = await fetch("/api/foundation/dashboard", { cache: "no-store" });
+        if (!response.ok) return;
+        const dashboard = parseOwnerDashboard(await response.json(), user.id);
         const verificationSummary = summarizeVerification(
-          accountProfile.data?.account_verification_status,
-          verificationSteps.data
+          dashboard.verification.verified ? "verified" : null,
+          dashboardVerificationSteps(dashboard)
         );
-
         setBadges({
-          unreadLeads: unreadLeads.count || 0,
-          unreadNotifications: unreadNotifications.count || 0,
-          rejectedListings: rejectedListings.count || 0,
-          pendingModeration: pendingModeration.count || 0,
+          unreadNotifications: dashboard.unread_notifications,
+          rejectedListings: dashboard.counts.rejected_listings,
+          pendingModeration: dashboard.counts.pending_listings,
           incompleteVerification:
             verificationSummary.accountVerificationStatus === "incomplete" ||
             verificationSummary.accountVerificationStatus === "rejected",
@@ -155,11 +77,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <main id="main-content" className="w-0 min-w-0 max-w-full flex-1 overflow-x-hidden">
           <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
-            {getDataBackend() !== "foundation" && (
-              <Suspense fallback={null}>
-                <SuspensionNotice />
-              </Suspense>
-            )}
             {children}
           </div>
         </main>

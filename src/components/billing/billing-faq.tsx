@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { getDataBackend } from "@/lib/data-backend";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { DEFAULT_COMMERCIAL_SETTINGS, type CommercialSettings } from "@/lib/commercial/settings";
@@ -78,9 +77,10 @@ export function BillingFaq({
 
         <FaqItem question="What happens when my plan ends?">
           <p>
-            {getDataBackend() === "foundation"
-              ? "Your posts are hidden from the public and we email you. You then have 3 days to buy a plan and reactivate a post; after that it is deleted with its photos and videos. If your payment is still being confirmed, we wait up to 24 hours more, and once it is confirmed we keep the post for 3 days from your payment."
-              : "Your posts are hidden from the public but stay saved in your dashboard. Choose a plan again at any time to reactivate them. You won't need to start from scratch."}
+            Your posts are hidden from the public and we email you. You then have 3 days to buy a
+            plan and reactivate a post; after that it is deleted with its photos and videos. If your
+            payment is still being confirmed, we wait up to 24 hours more, and once it is confirmed
+            we keep the post for 3 days from your payment.
           </p>
         </FaqItem>
 
