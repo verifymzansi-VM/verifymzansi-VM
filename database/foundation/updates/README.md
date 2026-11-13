@@ -921,6 +921,67 @@ constraints refused; the account and amount rule; the receipt read against the
 invoice (a two-slot order and an add-on) and its service-only grant; the grants;
 and that the rollback refuses once the commands were used.
 
+## Earlier staff reversal commands retired, 13 November 2026
+
+`20261113085340_retire_old_staff_reversal_commands.sql` is not applied yet. It
+is the contract step of `20261113021223_staff_payment_fixes.sql` (applied 13
+November 2026, pull request 213), recorded in `../contract-steps.json`, and
+refuses (55000) unless that update's replacement commands are present with their
+reviewed bodies.
+
+- **Removed.** The earlier staff commands
+  `api.record_frontend_staff_payment_reversal(p_id, p_kind, p_reason)`,
+  `api.record_staff_slot_reversal(p_line_id, p_kind, p_reason)` and
+  `api.get_frontend_staff_payments(p_page, p_status)` are dropped. They could
+  still reverse a whole payment or one slot without Ozow's reference or a reason
+  code whenever no refund was waiting for approval. The website has called only
+  the replacements since pull request 213: `api.record_staff_payment_refund`,
+  `api.record_staff_slot_refund`, `api.get_staff_payment_list`,
+  `api.approve_staff_payment_refund`, `api.decline_staff_payment_refund` and
+  `api.activate_staff_paid_payment`. Every API command keeps exactly one
+  audience (`../runtime-api-manifest.json` and the native access matrix require
+  it), so a command nobody may call is removed rather than left without a grant.
+- **Closed.** The internal functions behind them
+  (`internal.record_frontend_staff_payment_reversal`,
+  `internal.get_frontend_staff_payments` and
+  `internal.record_staff_slot_reversal`) lose their execute grant to
+  `authenticated`. The single-slot step stays: the slot refund and the approval
+  call it through internal functions that run as their owner. No function body
+  and no data change; the service's `api.reverse_payment` is unchanged.
+
+**Order: merge, then apply.** No website release calls the three commands, and
+the release from this pull request no longer lists them in its runtime manifest.
+Applied before the merge, the deploy preflight of any other release in between
+would find them missing.
+
+**Applying.**
+
+1. Run
+   `../preflight/20261113085340_retire_old_staff_reversal_commands.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "retire old staff reversal commands: update
+   not applied; refunds waiting for approval: N".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "retire old staff reversal commands: already applied;
+   refunds waiting for approval: N" with the same N.
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261113085340_retire_old_staff_reversal_commands.down.sql` (only
+with the owner's decision; prefer a forward fix). It puts back the three
+commands exactly as they were and the internal grants, and changes no data.
+
+`node --import tsx scripts/test-foundation-retire-old-staff-reversals.mjs` (part
+of `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusal without the replacement
+commands' reviewed bodies and with a changed earlier wrapper, changing nothing;
+that afterwards staff cannot call the three commands or the internal functions
+behind them, while a slot refund and an approved refund still reverse one slot
+through the retained internal step; and that apply, rollback and re-apply return
+the same fingerprints.
+
 ## Individual slots at R69, 12 November 2026
 
 `20261113002421_individual_slots_r69.sql` is not applied yet. It was first
@@ -2640,5 +2701,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (all 24 function bodies matched the update's, both new tables, the audit view
   and both waiting triggers present; no problem rows); production fingerprint
   after it matched the full replay
+- `20261113085340_retire_old_staff_reversal_commands.sql`: pending
 
 <!-- applied-register:end -->

@@ -83,4 +83,3 @@ end;
 $function$;
 alter function internal.record_staff_slot_reversal(uuid,text,text) owner to postgres;
 revoke all on function internal.record_staff_slot_reversal(uuid,text,text) from public;
-grant execute on function internal.record_staff_slot_reversal(uuid,text,text) to authenticated;

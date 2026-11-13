@@ -225,59 +225,6 @@
       "authority": "Service-only record that the day's staff payment summary was sent (or logged); only the summary of that lease, once."
     },
     {
-      "name": "get_frontend_staff_payments",
-      "updates": ["updates/20261105201822_restored_staff_payments.sql"],
-      "arguments": [
-        {
-          "name": "p_page",
-          "sqlType": "integer",
-          "optional": false
-        },
-        {
-          "name": "p_status",
-          "sqlType": "text",
-          "optional": true
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Current payment viewing capability and live authenticator session; minimal paged payment fields without provider identifiers or metadata."
-    },
-    {
-      "name": "record_frontend_staff_payment_reversal",
-      "updates": ["updates/20261105201822_restored_staff_payments.sql"],
-      "arguments": [
-        {
-          "name": "p_id",
-          "sqlType": "uuid",
-          "optional": false
-        },
-        {
-          "name": "p_kind",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
-          "name": "p_reason",
-          "sqlType": "text",
-          "optional": false
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Current payment refund capability and recent authenticator proof; only another account's settled payment, local effects and exact audit receipt in one transaction."
-    },
-    {
       "name": "start_slot_checkout",
       "updates": ["updates/20261113002421_individual_slots_r69.sql"],
       "arguments": [
@@ -323,35 +270,6 @@
         "service_role": false
       },
       "authority": "Caller-bound read of the member's own slots (active, or ended in the last 3 days) with the posts in them and the sponsor's name for a sponsored place, and the person's Individual slot count, open-payment slots and limit; no other account's data."
-    },
-    {
-      "name": "record_staff_slot_reversal",
-      "updates": ["updates/20261113002421_individual_slots_r69.sql"],
-      "arguments": [
-        {
-          "name": "p_line_id",
-          "sqlType": "uuid",
-          "optional": false
-        },
-        {
-          "name": "p_kind",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
-          "name": "p_reason",
-          "sqlType": "text",
-          "optional": false
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Current payment refund capability and recent authenticator proof; only one slot line of another account's completed payment: revokes that slot, ends its posts and reverses only its commission, with the staff member, kind and reason on the line; the payment is reversed when its last slot is."
     },
     {
       "name": "staff_set_individual_slot_limit",
