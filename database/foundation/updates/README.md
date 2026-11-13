@@ -2489,6 +2489,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   update not applied; profiles without a name: 2; of which the update names: 2",
   after the two bodies matched the update's and no profile was left without a
   name; production fingerprint after it matched the full replay
-- `20261113002421_individual_slots_r69.sql`: pending
+- `20261113002421_individual_slots_r69.sql`: applied 2026-11-13 01:30 UTC; time
+  approximate, applied by the coordinator with the owner's approval through the
+  Supabase query API, from the reviewed file, before the pull request was
+  merged; preflight before "update not applied; current posting terms:
+  posting-v4; on sale: nothing; plan payments pending: 0", after all 24 function
+  bodies matched the update's and exactly individual_30d, individual_90d and
+  individual_180d were on sale at 6900, 20700 and 41400 cents; production
+  fingerprint after it matched the full replay
 
 <!-- applied-register:end -->
