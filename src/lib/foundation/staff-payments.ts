@@ -38,13 +38,10 @@ export type RefundReasonCode = (typeof REFUND_REASON_CODES)[number];
 export const refundReasonCode = z.enum(REFUND_REASON_CODES);
 
 /** Ozow's refund (or chargeback) reference, as the database accepts it. */
-export const ozowReference = z
+const ozowReference = z
   .string()
   .trim()
   .regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]{3,99}$/);
-
-/** Refunds above this many cents wait for a second staff member. */
-export const REFUND_APPROVAL_ABOVE_CENTS = 100_000;
 
 const cents = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -86,7 +83,6 @@ const staffPaymentItem = z.strictObject({
     })
     .nullable(),
 });
-export type StaffPaymentItem = z.infer<typeof staffPaymentItem>;
 
 /** The staff payments list: delivery status, slots and refunds waiting for approval. */
 export function readStaffPaymentList(
