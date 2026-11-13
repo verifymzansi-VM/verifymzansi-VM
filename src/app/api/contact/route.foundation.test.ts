@@ -28,9 +28,6 @@ vi.mock("@/lib/foundation/server-public", () => ({ foundationServerPublicApi: vi
 vi.mock("@/lib/foundation/public-cards", () => ({ searchFoundationPresentedCards: vi.fn() }));
 vi.mock("@/lib/utils/public-mutation-route", () => ({
   verifyPublicTurnstile: vi.fn(),
-  enforcePublicMutationPrelude: vi.fn(() => {
-    throw new Error("old-backend prelude must not run in foundation mode");
-  }),
 }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: vi.fn(),

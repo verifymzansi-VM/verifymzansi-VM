@@ -1,9 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getDataBackend } from "@/lib/data-backend";
 import { restoredOrganisationDirectory } from "@/lib/foundation/marketplace-server";
 import { publicProvinceLabel } from "@/lib/foundation/marketplace-read";
-import { organisationsPublicEnabled } from "@/lib/commercial/settings";
-import { createClient } from "@/lib/supabase/server";
 import { checkLocalRateLimit, getClientRateLimitKey } from "@/lib/utils/rate-limit";
 
 /**
@@ -18,62 +15,34 @@ export async function GET(request: NextRequest) {
     .replace(/[%_,()]/g, " ")
     .trim()
     .slice(0, 80);
-  if (getDataBackend() === "foundation") {
-    try {
-      const directory = await restoredOrganisationDirectory();
-      const organisations = directory
-        .filter(
-          (org) =>
-            (!q || org.name.toLowerCase().includes(q.toLowerCase())) &&
-            (request.nextUrl.searchParams.get("purpose") === "filter" || org.accepting_applications)
-        )
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .slice(0, 50)
-        .map((org) => ({
-          id: org.id,
-          slug: org.slug,
-          name: org.name,
-          organisation_type: org.organisation_type,
-          service_area: org.service_area,
-          province: org.province ? publicProvinceLabel(org.province) : null,
-          organisation_programmes: org.programmes.map((programme) => ({
-            id: programme.id,
-            name: programme.name,
-            active: true,
-          })),
-        }));
-      return NextResponse.json(
-        { organisations },
-        { headers: { "Cache-Control": "private, no-store" } }
-      );
-    } catch {
-      return NextResponse.json({ error: "Organisations could not be loaded" }, { status: 503 });
-    }
+  try {
+    const directory = await restoredOrganisationDirectory();
+    const organisations = directory
+      .filter(
+        (org) =>
+          (!q || org.name.toLowerCase().includes(q.toLowerCase())) &&
+          (request.nextUrl.searchParams.get("purpose") === "filter" || org.accepting_applications)
+      )
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 50)
+      .map((org) => ({
+        id: org.id,
+        slug: org.slug,
+        name: org.name,
+        organisation_type: org.organisation_type,
+        service_area: org.service_area,
+        province: org.province ? publicProvinceLabel(org.province) : null,
+        organisation_programmes: org.programmes.map((programme) => ({
+          id: programme.id,
+          name: programme.name,
+          active: true,
+        })),
+      }));
+    return NextResponse.json(
+      { organisations },
+      { headers: { "Cache-Control": "private, no-store" } }
+    );
+  } catch {
+    return NextResponse.json({ error: "Organisations could not be loaded" }, { status: 503 });
   }
-  const supabase = await createClient();
-  if (!(await organisationsPublicEnabled(supabase as never))) {
-    return NextResponse.json({ organisations: [] });
-  }
-  let query = supabase
-    .from("organisations")
-    .select(
-      "id, slug, name, organisation_type, service_area, province, organisation_programmes(id, name, active)"
-    )
-    .eq("is_public", true)
-    .in("programme_status", ["founding_trial", "active_paid", "affiliation_only"])
-    .order("name")
-    .limit(50);
-  if (q) query = query.ilike("name", `%${q}%`);
-  // Search filters list every public organisation; affiliation requests only
-  // those currently accepting applications.
-  if (request.nextUrl.searchParams.get("purpose") !== "filter") {
-    query = query.eq("accepting_applications", true);
-  }
-  const { data } = await query;
-  // The filter list is public and identical for everyone: cache it briefly.
-  const cacheable = request.nextUrl.searchParams.get("purpose") === "filter" && !q;
-  return NextResponse.json(
-    { organisations: data ?? [] },
-    cacheable ? { headers: { "Cache-Control": "public, max-age=60, s-maxage=300" } } : undefined
-  );
 }
