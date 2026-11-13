@@ -71,7 +71,6 @@ function request(body: unknown, origin = "https://verifymzansi.com", csrf = true
 }
 
 it("connects the preserved phone form to a signed, owner-bound native challenge", async () => {
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.stubEnv("FOUNDATION_PHONE_OTP_KEY", "0123456789abcdef".repeat(4));
   issue.mockResolvedValue({
     challenge_id: challenge,
@@ -97,7 +96,6 @@ it("connects the preserved phone form to a signed, owner-bound native challenge"
 });
 
 it("does not verify a restored OTP against a different number, owner or altered challenge", async () => {
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.stubEnv("FOUNDATION_PHONE_OTP_KEY", "0123456789abcdef".repeat(4));
   issue.mockResolvedValue({
     challenge_id: challenge,

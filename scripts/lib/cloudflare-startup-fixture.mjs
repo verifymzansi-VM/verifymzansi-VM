@@ -9,7 +9,6 @@ export function createCloudflareStartupFixture(publicSettings = {}) {
     NODE_ENV: "production",
     ENVIRONMENT: "production",
     STRICT_ENV_STARTUP_BLOCK: "1",
-    NEXT_PUBLIC_DATA_BACKEND: "foundation",
     NEXT_PUBLIC_SUPABASE_URL: "https://gntzjtuncsyefujajmjy.supabase.co",
     NEXT_PUBLIC_SUPABASE_ANON_KEY: publicKey,
     FOUNDATION_PROJECT_REF: "gntzjtuncsyefujajmjy",

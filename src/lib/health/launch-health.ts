@@ -4,7 +4,6 @@ import {
 } from "@/lib/config/launch-validation";
 import { checkCriticalEnvVars } from "@/lib/config/env";
 import { createLogger } from "@/lib/utils/logger";
-import { getDataBackend } from "@/lib/data-backend";
 import { verifyFoundationGateway } from "@/lib/foundation/gateway-readiness";
 
 const logger = createLogger("Health");
@@ -67,17 +66,15 @@ function readinessFromEnv(names: readonly string[], detail: string): HealthCheck
 function probeCriticalEnvVars(): HealthCheckStatus {
   try {
     const missing = checkCriticalEnvVars();
-    if (getDataBackend() === "foundation") {
-      missing.push(
-        ...missingEnvCheck([
-          "FOUNDATION_SUPABASE_URL",
-          "FOUNDATION_PROJECT_REF",
-          "FOUNDATION_SUPABASE_PUBLISHABLE_KEY",
-          "FOUNDATION_SUPABASE_SECRET_KEY",
-          "FOUNDATION_PHONE_OTP_KEY",
-        ])
-      );
-    }
+    missing.push(
+      ...missingEnvCheck([
+        "FOUNDATION_SUPABASE_URL",
+        "FOUNDATION_PROJECT_REF",
+        "FOUNDATION_SUPABASE_PUBLISHABLE_KEY",
+        "FOUNDATION_SUPABASE_SECRET_KEY",
+        "FOUNDATION_PHONE_OTP_KEY",
+      ])
+    );
     if (missing.length > 0) {
       return {
         status: "degraded",
@@ -94,43 +91,6 @@ function probeCriticalEnvVars(): HealthCheckStatus {
     return {
       status: "skipped",
       detail: "Critical env var check is unavailable in this runtime",
-    };
-  }
-}
-
-async function probeSupabase(
-  mode: ReturnType<typeof resolveLaunchValidationMode>
-): Promise<HealthCheckStatus> {
-  if (mode !== "production") {
-    return {
-      status: "skipped",
-      detail: "Supabase launch probe is only enforced in production mode",
-    };
-  }
-
-  try {
-    const { createAdminClient } = await import("@/lib/supabase/admin");
-    const supabase = createAdminClient();
-    const { error } = await supabase.from("plans").select("area").limit(1);
-
-    if (error) {
-      logger.error("Supabase health probe failed", { code: error.code, message: error.message });
-      return {
-        status: "degraded",
-        detail: "Supabase launch probe failed",
-      };
-    }
-
-    return {
-      status: "ok",
-      detail: "Supabase query probe succeeded",
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.error("Supabase health probe threw", { error: message });
-    return {
-      status: "degraded",
-      detail: "Supabase launch probe threw before completion",
     };
   }
 }
@@ -383,77 +343,15 @@ async function probeRateLimiter(
   }
 }
 
-/**
- * Probe critical tables to verify the database schema is intact.
- * Checks that core tables (plans, feature_flags, businesses) exist and are queryable.
- */
-async function probeSchema(
-  mode: ReturnType<typeof resolveLaunchValidationMode>
-): Promise<HealthCheckStatus> {
-  if (mode !== "production") {
-    return {
-      status: "skipped",
-      detail: "Schema probe is only enforced in production mode",
-    };
-  }
-
-  try {
-    const { createAdminClient } = await import("@/lib/supabase/admin");
-    const supabase = createAdminClient();
-
-    const probes = [
-      { table: "plans", select: "id" },
-      { table: "feature_flags", select: "id" },
-      { table: "businesses", select: "id" },
-      {
-        table: "account_profiles",
-        select:
-          "id, pending_phone, location_verified_at, legal_name_locked_at, contact_last_phone_change_at, contact_last_email_change_at, pending_email",
-      },
-    ] as const;
-    const results = await Promise.all(
-      probes.map(async (probe) => {
-        const { error } = await supabase.from(probe.table).select(probe.select).limit(1);
-        return { probe, error };
-      })
-    );
-
-    const failures: string[] = [];
-    for (const { probe, error } of results) {
-      if (error) {
-        failures.push(`${probe.table}: ${error.code ?? error.message}`);
-      }
-    }
-
-    if (failures.length > 0) {
-      logger.error("Schema probe found missing/broken tables", { failures });
-      return {
-        status: "degraded",
-        detail: `Schema probe failures: ${failures.join("; ")}`,
-        failedChecks: failures,
-      };
-    }
-
-    return {
-      status: "ok",
-      detail: `All ${probes.length} critical schema probes verified`,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.error("Schema probe threw", { error: message });
-    return {
-      status: "degraded",
-      detail: "Schema probe threw before completion",
-    };
-  }
-}
-
 export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
   const mode = resolveLaunchValidationMode(process.env);
   const configSummary = validateLaunchConfiguration(process.env, { mode });
   const database = async (): Promise<[HealthCheckStatus, HealthCheckStatus]> => {
-    if (mode !== "production" || getDataBackend() !== "foundation")
-      return Promise.all([probeSupabase(mode), probeSchema(mode)]);
+    if (mode !== "production")
+      return [
+        { status: "skipped", detail: "Supabase launch probe is only enforced in production mode" },
+        { status: "skipped", detail: "Schema probe is only enforced in production mode" },
+      ];
     try {
       await verifyFoundationGateway(process.env);
       return [

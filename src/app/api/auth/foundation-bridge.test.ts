@@ -47,7 +47,6 @@ function request(path: string, value: unknown, validCsrf = true) {
 beforeEach(() => {
   vi.clearAllMocks();
   for (const [name, value] of Object.entries({
-    NEXT_PUBLIC_DATA_BACKEND: "foundation",
     FOUNDATION_PASSWORD_AUTH_MODE: "native-captcha",
     FOUNDATION_REGISTRATION_ENABLED: "true",
     FOUNDATION_AUTH_CALLBACK_ENABLED: "true",

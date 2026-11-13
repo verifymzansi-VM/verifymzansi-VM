@@ -23,7 +23,6 @@ const { authenticate, context, respond, readAccount, limit, legacy, logged, hold
   })
 );
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => "foundation" }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: legacy, createPublicClient: legacy }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: legacy }));
 vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: context }));

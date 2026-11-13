@@ -8,7 +8,7 @@ import {
   type DashboardSidebarBadges,
 } from "@/components/dashboard/dashboard-sidebar";
 import { DashboardMobileNav } from "@/components/dashboard/dashboard-mobile-nav";
-import { createClient } from "@/lib/supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 import { useLeadsUnread } from "@/hooks/use-leads-unread";
 import { signOutBrowserSession } from "@/hooks/use-auth";
 import { dashboardVerificationSteps, parseOwnerDashboard } from "@/lib/foundation/owner-dashboard";

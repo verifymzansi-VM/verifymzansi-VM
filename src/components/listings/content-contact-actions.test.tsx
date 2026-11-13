@@ -8,8 +8,10 @@ import { businessContactConfig } from "@/components/listings/contact-action-conf
 const { widgetProps } = vi.hoisted(() => ({
   widgetProps: [] as Array<Record<string, unknown>>,
 }));
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({
+    auth: { getUser: async () => ({ data: { user: null } }) },
+  }),
 }));
 
 vi.mock("@/components/ui/turnstile-widget", () => ({
@@ -27,7 +29,6 @@ describe("seller contact actions", () => {
   });
   afterEach(() => vi.unstubAllEnvs());
   it("requests a fresh challenge before revealing private foundation contact numbers", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(

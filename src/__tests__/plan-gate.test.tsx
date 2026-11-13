@@ -15,8 +15,8 @@ const { fetchPostingAllowance, onAuthStateChange } = vi.hoisted(() => ({
   onAuthStateChange: vi.fn(),
 }));
 vi.mock("@/lib/foundation/posting-allowance-client", () => ({ fetchPostingAllowance }));
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { onAuthStateChange } }),
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({ auth: { onAuthStateChange } }),
 }));
 
 vi.mock("next/link", () => ({

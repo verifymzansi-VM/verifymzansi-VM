@@ -2,8 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const { usage, maybeSingle } = vi.hoisted(() => ({ usage: vi.fn(), maybeSingle: vi.fn() }));
 vi.mock("@/lib/billing/free-posts", () => ({ getActiveFreePostUsage: usage }));
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => {
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => {
     const query = {
       select: () => query,
       eq: () => query,

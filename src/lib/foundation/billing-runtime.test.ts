@@ -550,7 +550,6 @@ const COPY_ENV: Record<string, string> = {
   PLAYWRIGHT_TEST_MODE: "1",
   ENABLE_MOCK_OZOW: "true",
   OZOW_ENV: "staging",
-  NEXT_PUBLIC_DATA_BACKEND: "foundation",
   FOUNDATION_PROJECT_REF: "local-foundation",
   FOUNDATION_SUPABASE_URL: "http://127.0.0.1:55443",
 };

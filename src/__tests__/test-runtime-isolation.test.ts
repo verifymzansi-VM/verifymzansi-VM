@@ -1,9 +1,4 @@
 import { expect, it } from "vitest";
-import { getDataBackend } from "@/lib/data-backend";
-
-it("keeps source fixtures deterministic when the audit runner loads foundation deployment settings", () => {
-  expect(getDataBackend()).toBe("source");
-});
 
 it("removes live foundation service authority before application imports", () => {
   for (const name of [

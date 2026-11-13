@@ -200,31 +200,12 @@ pnpm supabase:migration:list
 pnpm supabase:db:push
 ```
 
-### Free-plan backups
+### Backups
 
-Historical: describes the retired source backend. Production backups are made by
-`.github/workflows/database-backup.yml`
-([docs/RUNBOOK.md](docs/RUNBOOK.md#database-backups)).
-
-Free Supabase projects do not include automated database backups. Before every
-remote migration, use the safe command below; it exports public-table data and
-copies the schema migrations to the ignored `tmp/supabase-backups/` directory.
-
-```bash
-pnpm supabase:db:push:safe
-```
-
-For a routine manual backup without applying a migration:
-
-```bash
-pnpm supabase:db:backup
-```
-
-The backup covers public-table data and the checked-in database migrations. It
-deliberately does not include Auth users, Supabase Storage objects, Cloudflare
-R2 files, or database roles; keep the private R2 KYC bucket private and use its
-own recovery process. Copy production backups to an access-controlled location
-outside the workspace.
+Production backups are made by `.github/workflows/database-backup.yml`
+([docs/RUNBOOK.md](docs/RUNBOOK.md#database-backups)). The former
+`supabase:db:backup` and `supabase:db:push:safe` commands exported the retired
+source schema and were removed.
 
 The former `supabase:advisor:security` command checked the retired source schema
 and was removed. The live schema's structure, grants and row level security are
@@ -350,8 +331,6 @@ pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 | `pnpm safety:ci-review`        | CI-safe review gate (preflight is non-blocking)      |
 | `pnpm safety:release`          | One-command release-readiness gate                   |
 | `pnpm test:e2e`                | Full Playwright suite (foundation test copy)         |
-| `pnpm bootstrap:operator`      | Create or update the first live staff account        |
-| `pnpm reset:launch-data`       | Launch-reset inventory / wipe tool                   |
 | `pnpm supabase:migration:list` | List linked Supabase local vs remote migrations      |
 | `pnpm supabase:db:push`        | Apply pending local migrations to linked Supabase    |
 | `pnpm preflight`               | Local launch checks with development-mode validation |
@@ -563,75 +542,12 @@ It also treats "Spotlight" as Sentry's current
 [Toolbar](https://docs.sentry.io/product/sentry-toolbar/) workflow for
 page-aware local debugging.
 
-## Live Operator Bootstrap
+## Live Operator Bootstrap and Launch Reset
 
-After a launch reset, the linked Supabase project can be left with zero auth
-users. Use the minimal operator bootstrap script to create the first admin or
-moderator without reintroducing any demo or seed data:
-
-```bash
-pnpm bootstrap:operator -- \
-  --email=admin@verifymzansi.com \
-  --password='replace-with-strong-password' \
-  --display-name='VerifyMzansi Admin' \
-  --role=admin \
-  --reason='First admin after launch reset' \
-  --confirm-project=your-project-ref
-```
-
-Notes:
-
-- Roles: `admin`, `governance_controller` or `moderator`. A written `--reason`
-  is required.
-- It creates or updates the auth user, upserts a minimal `account_profiles` row,
-  and grants the role in `staff_roles` (the only source of staff authority) with
-  a role-history row and a `role_provisioned_by_owner` audit entry.
-  `app_metadata.role` is set only as a display hint.
-- Everyday role changes go through Admin → Role Management, where an independent
-  person approves them. Use this script only for the first admins and for
-  recovery; see `docs/runbooks/admin-provisioning.md`.
-- It refuses to run unless `--confirm-project` matches the current
-  `NEXT_PUBLIC_SUPABASE_URL` project ref.
-
-## Launch Reset
-
-Use the launch reset tool in inventory mode first, then only run a destructive
-wipe after reviewing the generated snapshot:
-
-```bash
-pnpm reset:launch-data
-```
-
-For a destructive wipe that keeps exactly one admin account, pass the project
-confirmation flag and an explicit preserve target when needed:
-
-```bash
-pnpm reset:launch-data -- \
-  --execute \
-  --confirm-project=your-project-ref \
-  --preserve-admin-email=admin@verifymzansi.com
-```
-
-Or preserve by auth user id:
-
-```bash
-pnpm reset:launch-data -- \
-  --execute \
-  --confirm-project=your-project-ref \
-  --preserve-admin-user-id=00000000-0000-0000-0000-000000000000
-```
-
-Notes:
-
-- Inventory writes a JSON snapshot to `tmp/` showing auth users, admin users,
-  legal holds, and table counts.
-- Wipe mode now refuses to proceed when multiple admin users exist unless you
-  explicitly choose which admin to preserve.
-- When there is exactly one admin user, wipe mode preserves it automatically.
-- The wipe clears tracked application tables first, then deletes all auth users
-  except the preserved admin.
-- Media and KYC object deletion completes through `r2_cleanup_queue` and the
-  retention worker after the database wipe.
+The former `bootstrap:operator` and `reset:launch-data` scripts worked on the
+retired source schema and were removed. On the foundation backend, the first
+admin is set up with the owner bootstrap procedure in
+[database/foundation/README.md](database/foundation/README.md).
 
 ## Deployment
 

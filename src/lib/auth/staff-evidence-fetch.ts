@@ -1,6 +1,5 @@
 import { staffVerifyHref } from "./staff-mfa-links";
-import { getDataBackend } from "../data-backend";
-import { createClient } from "../supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 
 /** Preserve API error bodies while giving reviewers a safe re-verification path. */
 export async function fetchStaffEvidence(
@@ -20,7 +19,7 @@ export async function handleStaffEvidenceResponse(
   response: Response,
   sensitiveRead = false
 ): Promise<Response> {
-  if (sensitiveRead && response.ok && getDataBackend() === "foundation") {
+  if (sensitiveRead && response.ok) {
     const actor = response.headers.get("X-VerifyMzansi-Actor");
     if (!actor) throw new Error("Evidence authorization could not be confirmed. Reload the queue.");
     const current = await createClient().auth.getUser();

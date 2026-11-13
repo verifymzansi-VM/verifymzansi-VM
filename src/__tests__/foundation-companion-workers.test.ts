@@ -255,8 +255,7 @@ for (const job of timedJobs.slice(1))
     expect(publicFetch).not.toHaveBeenCalled();
   });
 
-it("payment and retention run the foundation path, which passes failures on", () => {
-  // The retired source branches log and return; production must never take them.
+it("payment and retention keep the foundation backend marker their job type requires", () => {
   for (const name of ["payment-cleanup", "retention-cleanup"]) {
     const config = parse(readFileSync(`wrangler.${name}.toml`, "utf8")) as {
       vars: { DATA_BACKEND?: string };

@@ -13,11 +13,7 @@ const { readNativeDisplayFlags, retiredFactory } = vi.hoisted(() => ({
 }));
 vi.mock("./feature-controls-server", () => ({ readNativeDisplayFlags }));
 vi.mock("../supabase/admin", () => ({ createAdminClient: retiredFactory }));
-import {
-  isFeatureEnabled,
-  toggleFeatureFlag,
-  updateFeatureFlagConfig,
-} from "../services/feature-flags";
+import { isFeatureEnabled } from "../services/feature-flags";
 const actor = "11111111-1111-4111-8111-111111111111";
 const flag = {
   id: "22222222-2222-4222-8222-222222222222",
@@ -35,7 +31,6 @@ const rpc = vi.fn(),
   api = { rpc } as unknown as FoundationAuthenticatedApi;
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
 });
 afterEach(() => vi.unstubAllEnvs());
 it("evaluates current native display configuration using the supplied staff context and never falls back to retired storage", async () => {
@@ -50,8 +45,6 @@ it("evaluates current native display configuration using the supplied staff cont
   readNativeDisplayFlags.mockRejectedValue(new Error("unavailable"));
   expect(await isFeatureEnabled(key, { role: "admin" })).toBe(false);
   expect(retiredFactory).not.toHaveBeenCalled();
-  expect((await toggleFeatureFlag(key, false)).success).toBe(false);
-  expect((await updateFeatureFlagConfig(key, { mode: "off" })).success).toBe(false);
 });
 it("does not grant percent-rollout access without an identity and respects the configured endpoints", async () => {
   readNativeDisplayFlags.mockResolvedValue([{ ...flag, mode: "percent", rollout_percent: 100 }]);

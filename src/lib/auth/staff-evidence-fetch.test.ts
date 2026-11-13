@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchStaffEvidence } from "./staff-evidence-fetch";
 const { getUser } = vi.hoisted(() => ({ getUser: vi.fn() }));
-vi.mock("../supabase/client", () => ({ createClient: () => ({ auth: { getUser } }) }));
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({ auth: { getUser } }),
+}));
 describe("staff evidence re-verification", () => {
   afterEach(() => vi.unstubAllGlobals());
   it.each(["mfa_required", "step_up_required"])(
@@ -36,28 +38,25 @@ describe("staff evidence re-verification", () => {
       expect(await response.json()).toMatchObject({ code });
     }
   );
-  it.each([401, 403, 200])(
-    "preserves a non-MFA %i response without redirecting",
-    async (status) => {
-      const assign = vi.fn();
-      vi.stubGlobal("window", { location: { assign } });
-      const original = new Response("synthetic result", { status });
-      const mockFetch = vi.fn().mockResolvedValue(original);
-      vi.stubGlobal("fetch", mockFetch);
-      const init = { method: "POST", headers: { "x-csrf-token": "synthetic" }, body: "synthetic" };
-      expect(await fetchStaffEvidence("/api/admin/verification/evidence", init)).toBe(original);
-      expect(mockFetch).toHaveBeenCalledWith("/api/admin/verification/evidence", init);
-      expect(assign).not.toHaveBeenCalled();
-      expect(await original.text()).toBe("synthetic result");
-    }
-  );
+  // A successful private read is checked by the actor fence below.
+  it.each([401, 403])("preserves a non-MFA %i response without redirecting", async (status) => {
+    const assign = vi.fn();
+    vi.stubGlobal("window", { location: { assign } });
+    const original = new Response("synthetic result", { status });
+    const mockFetch = vi.fn().mockResolvedValue(original);
+    vi.stubGlobal("fetch", mockFetch);
+    const init = { method: "POST", headers: { "x-csrf-token": "synthetic" }, body: "synthetic" };
+    expect(await fetchStaffEvidence("/api/admin/verification/evidence", init)).toBe(original);
+    expect(mockFetch).toHaveBeenCalledWith("/api/admin/verification/evidence", init);
+    expect(assign).not.toHaveBeenCalled();
+    expect(await original.text()).toBe("synthetic result");
+  });
 });
 
 describe("native private evidence actor fence", () => {
   const actor = "11111111-1111-4111-8111-111111111111";
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     getUser.mockResolvedValue({ data: { user: { id: actor } }, error: null });
   });
   afterEach(() => {

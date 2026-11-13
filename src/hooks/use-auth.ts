@@ -4,7 +4,6 @@ import { useEffect, useCallback, useRef } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { hasAuthSessionCookie } from "@/lib/supabase/auth-session-cookie";
-import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 import {
   foundationSessionDisplayName,
@@ -29,8 +28,8 @@ let authRequestVersion = 0;
 
 function getSupabaseClient(): Promise<SupabaseClient> {
   if (!supabaseClientPromise) {
-    supabaseClientPromise = import("@/lib/supabase/client")
-      .then((mod) => mod.createClient())
+    supabaseClientPromise = import("@/lib/foundation/restored-browser-client")
+      .then((mod) => mod.getRestoredFoundationBrowserClient())
       .catch((err) => {
         // Reset so the next attempt retries the download (transient network
         // failure or a chunk mismatch after a deploy) instead of latching
@@ -55,7 +54,7 @@ export function hasBrowserAuthSession(): boolean {
   }
 
   const cookieNames = document.cookie.split(";").map((entry) => entry.split("=", 1)[0].trim());
-  return hasAuthSessionCookie(cookieNames, isPlaywrightSupabaseStubMode());
+  return hasAuthSessionCookie(cookieNames);
 }
 
 /**

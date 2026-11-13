@@ -1,7 +1,7 @@
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import type { AccountVerificationStatus } from "@/types/enums";
 
-export function isVerifiedMember(
+function isVerifiedMember(
   status: AccountVerificationStatus | null | undefined
 ): status is "verified" {
   return status === "verified";
