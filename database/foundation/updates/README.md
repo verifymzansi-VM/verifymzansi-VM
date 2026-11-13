@@ -2632,6 +2632,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   bodies matched the update's and exactly individual_30d, individual_90d and
   individual_180d were on sale at 6900, 20700 and 41400 cents; production
   fingerprint after it matched the full replay
-- `20261113021223_staff_payment_fixes.sql`: pending
+- `20261113021223_staff_payment_fixes.sql`: applied 2026-11-13 07:15 UTC; time
+  approximate, applied by the coordinator with the owner's approval through the
+  Supabase query API, from the reviewed file, before the pull request was
+  merged; preflight before "update not applied; paid but not delivered: 0;
+  refunds waiting for approval: none (table absent)", after "already applied"
+  (all 24 function bodies matched the update's, both new tables, the audit view
+  and both waiting triggers present; no problem rows); production fingerprint
+  after it matched the full replay
 
 <!-- applied-register:end -->
