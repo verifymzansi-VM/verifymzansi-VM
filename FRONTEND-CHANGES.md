@@ -66,6 +66,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 20. Staff fix paid but not delivered (M3.4) |              4 | keep (owner, 2026-11-13)                                                                   | Staff only: delivery status on Payments & Refunds, a 'needs attention' list, 'Activate what was paid for', refunds with Ozow's reference and a reason, one slot refunded alone, a second approver above R1 000                                    |
 | 21. Payment receipt email (M3.7)            | 0 (email only) | keep (owner, 2026-11-13)                                                                   | Members who pay: the 'Payment received' email lists the invoice number, date paid, item, amount in rands and bank reference, and links to 'My slots' (add-ons: the dashboard) instead of Billing                                                  |
 | 22. Hidden until it works, part 2 (M6.2)    |              3 | keep (owner, 2026-11-13)                                                                   | No 'Performance' page or menu entry and no 'Detect province and city' button; a search lists tourism businesses under Businesses again                                                                                                            |
+| 23. Phone-sized photos (M4.3)               |              0 | keep (owner, 2026-11-13)                                                                   | Nothing on screen: the same photos, but a phone downloads a 400, 800 or 1 600 px copy of each new photo instead of the full-size original                                                                                                         |
 | **Total**                                   |        **262** |                                                                                            |                                                                                                                                                                                                                                                   |
 
 Questions for the owner:
@@ -346,6 +347,21 @@ Questions for the owner:
       review notes.
 
     Answered: approved by the owner on 2026-11-13, as shown in the screenshots.
+
+19. **Phone-sized photos (group 23, M4.3).** Nothing changes on screen. Photos
+    uploaded from now on also get 400, 800 and 1 600 px copies, and phones
+    download the copy that fits instead of the full-size photo (in the test, a
+    post page went from about 3.7 MB to about 110 KB of photos). Older photos
+    show their original as before. The copies use the free Cloudflare Images
+    allowance the uploads already use: a large photo now counts 4 of the 5,000
+    free transformations a month instead of 1, so about 1,250 large photos a
+    month can be uploaded before uploads stop until the next month. The setting
+    `MEDIA_PHOTO_VARIANTS=off` turns the copies off; the paid Images plan
+    removes the limit. Do you approve? Before and after pictures are with the
+    review notes.
+
+    Answered: approved by owner 2026-11-13: copies on; MEDIA_PHOTO_VARIANTS=off
+    is the switch if the free 5,000 monthly allowance gets close.
 
 <!-- frontend-ledger:start -->
 
@@ -855,6 +871,28 @@ under Businesses again, as the chosen version did
 | `src/app/dashboard/metrics/page.tsx`                  | wording-behaviour | Hidden until it works (owner rule 2; OD-07). The page reads view, lead and showroom statistics the live backend does not record, so every owner saw zeros. | The 'Performance' page no longer opens: its address leads to the dashboard overview.                                      | keep     | approved by owner 2026-11-13 (M6.2 hidden until it works) | 2026-11-13 | c2528c653e9d |
 | `src/app/help/showroom/page.tsx`                      | wording-behaviour | Hidden until it works (owner rule 2; OD-07). Its button led to the hidden 'Performance' page.                                                              | The 'See your post's turns' button under the 'How the showroom works' heading is gone; the rest of the page is unchanged. | keep     | approved by owner 2026-11-13 (M6.2 hidden until it works) | 2026-11-13 | cfbba856fd84 |
 | `src/components/dashboard/dashboard-sidebar.test.tsx` | test              | Checks that the 'Performance' entry is hidden on the sidebar and the phone strip.                                                                          | Nothing (not part of a page)                                                                                              | keep     | approved by owner 2026-11-13 (M6.2 hidden until it works) | 2026-11-13 | f07f3d5d5c1b |
+
+### 23. Phone-sized photos (roadmap M4.3)
+
+Owner question 19. Decision: approved by owner 2026-11-13 (copies on;
+`MEDIA_PHOTO_VARIANTS=off` is the switch if the free 5,000 monthly allowance
+gets close). No file in the checked scope changes, so this group has no file
+rows; the owner's sign-off covers what visitors download. Photos uploaded from
+now on get 400, 800 and 1 600 px WebP copies beside the original (only widths
+smaller than the original), made at upload with the free Cloudflare Images
+binding that already re-saves every photo. Pages ask for the copy that fits the
+screen; photos uploaded earlier, and any copy that is missing, show the original
+as before. Screenshots before and after (phone and desktop, a showroom and a
+post page) show no difference on screen. Files outside the checked scope:
+`src/lib/image-loader.ts`, `src/lib/media/photo-variants.ts`,
+`src/lib/utils/image-reencode.ts`, `src/lib/foundation/media-upload.ts` and
+`src/app/api/media/serve/[...key]/route.ts`.
+
+Each copy is one Images transformation. Images Free allows 5,000 a month, shared
+with the re-save, so a large photo now uses 4 instead of 1 (about 1,250 large
+photos a month instead of 5,000 before uploads stop until the next month). The
+Worker setting `MEDIA_PHOTO_VARIANTS=off` stops making copies without a code
+change; the paid Images plan (the owner's budget decision) removes the limit.
 
 <!-- frontend-ledger:end -->
 

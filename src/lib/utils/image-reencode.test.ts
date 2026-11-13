@@ -11,7 +11,12 @@ vi.mock("@opennextjs/cloudflare", () => ({
 
 import { isJpegWithExif } from "./exif-strip";
 import { detectMimeFromMagicBytes } from "./file-validation";
-import { ImageReencodeError, isReencodableImageType, reencodeImage } from "./image-reencode";
+import {
+  ImageReencodeError,
+  isReencodableImageType,
+  reencodeImage,
+  resizeImageToWebp,
+} from "./image-reencode";
 
 const latin1 = (bytes: Uint8Array) => Buffer.from(bytes).toString("latin1");
 const ZIP_PAYLOAD = Buffer.concat([
@@ -108,6 +113,29 @@ describe("reencodeImage with sharp (Node)", () => {
   });
 });
 
+describe("resizeImageToWebp with sharp (Node)", () => {
+  it("makes a smaller WebP copy at the asked width, in proportion", async () => {
+    const original = new Uint8Array(await photo(1200, 900).jpeg({ quality: 90 }).toBuffer());
+    const output = await resizeImageToWebp(original, 400);
+    expect(detectMimeFromMagicBytes(output)).toBe("image/webp");
+    expect(await sharp(output).metadata()).toMatchObject({ width: 400, height: 300 });
+  });
+
+  it("never enlarges a narrower photo", async () => {
+    const original = new Uint8Array(await photo(300, 150).jpeg().toBuffer());
+    expect(await sharp(await resizeImageToWebp(original, 800)).metadata()).toMatchObject({
+      width: 300,
+      height: 150,
+    });
+  });
+
+  it("reports bytes that are not an image as undecodable", async () => {
+    await expect(resizeImageToWebp(new Uint8Array([1, 2, 3, 4]), 400)).rejects.toMatchObject({
+      code: "undecodable",
+    });
+  });
+});
+
 describe("reencodeImage with the Cloudflare Images binding (Workers)", () => {
   it("refuses a Worker with a missing binding rather than falling back to Node", async () => {
     cloudflare.inWorker = true;
@@ -165,6 +193,56 @@ describe("reencodeImage with the Cloudflare Images binding (Workers)", () => {
 
     expect(failure).toBeInstanceOf(ImageReencodeError);
     expect((failure as ImageReencodeError).code).toBe(code);
+  });
+
+  it("makes display copies with one binding transformation each, never enlarged", async () => {
+    const webp = await photo(400, 200).webp().toBuffer();
+    const calls: unknown[] = [];
+    cloudflare.inWorker = true;
+    cloudflare.env.IMAGES = {
+      input(stream: ReadableStream<Uint8Array>) {
+        const chain = {
+          transform(options: unknown) {
+            calls.push({ transform: options });
+            return chain;
+          },
+          async output(options: unknown) {
+            calls.push({ output: options });
+            await new Response(stream).arrayBuffer();
+            return { response: () => new Response(new Uint8Array(webp)) };
+          },
+        };
+        return chain;
+      },
+    };
+
+    const output = await resizeImageToWebp(
+      new Uint8Array(await photo(800, 400).jpeg().toBuffer()),
+      400
+    );
+
+    expect(detectMimeFromMagicBytes(output)).toBe("image/webp");
+    expect(calls).toEqual([
+      { transform: { width: 400, fit: "scale-down" } },
+      { output: { format: "image/webp", quality: 80 } },
+    ]);
+  });
+
+  it("refuses a display copy that is not WebP", async () => {
+    const png = await photo().png().toBuffer();
+    cloudflare.inWorker = true;
+    cloudflare.env.IMAGES = {
+      input() {
+        const chain = {
+          transform: () => chain,
+          output: async () => ({ response: () => new Response(new Uint8Array(png)) }),
+        };
+        return chain;
+      },
+    };
+    await expect(
+      resizeImageToWebp(new Uint8Array(await photo().jpeg().toBuffer()), 400)
+    ).rejects.toMatchObject({ code: "unavailable" });
   });
 
   it("refuses output that is not the requested format", async () => {

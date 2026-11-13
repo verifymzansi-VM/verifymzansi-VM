@@ -56,10 +56,13 @@ const CF_RESIZING_ENABLED = process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING === "true"
  * enabled on the zone, so responsive delivery relies on variants generated
  * at upload time. The loader maps a requested width to the nearest variant
  * key; the serve route falls back to the original when the variant object
- * does not exist (uploads through the new backend do not create variants
- * yet, so for now those photos are served at full size).
+ * does not exist (photos uploaded before the copies were made, copies that
+ * failed, and widths not smaller than the original).
  */
 const VARIANT_WIDTHS = [400, 800, 1600] as const;
+
+/** A photo or video key made by the live backend's upload: `media/<uuid>`. */
+const LIVE_MEDIA_KEY = /^media\/[0-9a-f-]{36}$/;
 
 /** Pick the smallest variant width that is >= the requested width. */
 function nearestVariantWidth(requestedWidth: number): number {
@@ -78,10 +81,15 @@ function nearestVariantWidth(requestedWidth: number): number {
 function toVariantProxyPath(path: string, requestedWidth: number): string {
   // Already a variant key — don't double-rewrite.
   if (/\.w\d+\.webp$/.test(path)) return path;
-  if (!isImageSource(path)) return path;
   const servePrefix = "/api/media/serve/";
   if (!path.startsWith(servePrefix)) return path;
   const key = path.slice(servePrefix.length);
+  // Keys made by the live backend (`media/<uuid>`) have no extension; their
+  // copies are `media/<uuid>.w<width>.webp` (src/lib/media/photo-variants.ts).
+  if (LIVE_MEDIA_KEY.test(key)) {
+    return `${servePrefix}${key}.w${nearestVariantWidth(requestedWidth)}.webp`;
+  }
+  if (!isImageSource(path)) return path;
   const dot = key.lastIndexOf(".");
   if (dot <= 0) return path;
   const stem = key.slice(0, dot);
