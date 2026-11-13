@@ -7,11 +7,12 @@ interface VideoAutoplayState {
 }
 
 /**
- * Sticky video playback intent, shared by every card like the global mute
- * button: after the user presses play on any card (showroom carousel or a
- * mobile feed card on home, market, business or tourism/events), cards keep
- * auto-playing as they come into focus; after the user presses pause, no card
- * auto-plays until the user presses play again. Persisted across sessions.
+ * Sticky showroom playback intent, like the global mute button: after the user
+ * presses play on the showroom's centre card, each card that moves to the
+ * centre keeps playing by itself (muted); after the user presses pause, none
+ * does until the user presses play again. Data saver, reduced data and
+ * reduced motion always override it. Feed cards' Preview does not change it.
+ * Persisted across sessions.
  */
 export const useVideoAutoplayStore = create<VideoAutoplayState>()(
   persist(
