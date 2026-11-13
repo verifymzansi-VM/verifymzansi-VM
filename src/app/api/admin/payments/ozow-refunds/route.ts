@@ -4,6 +4,7 @@ import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import {
   approveStaffRefund,
   closeStaffOzowRefund,
+  readStaffOzowRefunds,
   recordStaffDashboardRefund,
   requestStaffOzowRefund,
   sendOzowRefund,
@@ -80,8 +81,8 @@ async function checkDashboardRefund(value: string) {
 
 /**
  * POST /api/admin/payments/ozow-refunds — staff refunds through Ozow, only
- * while OZOW_API_REFUNDS_ENABLED is on (otherwise 404: staff record refunds
- * with Ozow's reference, as before). Same-origin, CSRF, rate limit and a
+ * while OZOW_API_REFUNDS_ENABLED is on (otherwise 404), and the record of a
+ * refund made in the Ozow dashboard (always). Same-origin, CSRF, rate limit and a
  * verified staff session (handleFoundationOwnerRoute); the database checks
  * the staff member, the approval rules and the payment. When the database
  * answers "approved", the server sends the refund to Ozow at once with the
@@ -90,11 +91,6 @@ async function checkDashboardRefund(value: string) {
  */
 export async function POST(request: Request) {
   const next = request instanceof NextRequest ? request : new NextRequest(request);
-  if (!ozowApiRefundsEnabled())
-    return Response.json(
-      { error: "Refunds through Ozow are not switched on." },
-      { status: 404, headers: { "Cache-Control": "private, no-store" } }
-    );
   return handleFoundationOwnerRoute({
     request: next,
     log,
@@ -107,9 +103,17 @@ export async function POST(request: Request) {
     command: async (api, input) => {
       const body = schema.parse(input);
       if (body.action === "refund.dashboard") {
+        // Staff only (payment view, admins) before the server asks Ozow
+        // anything with the refund key; the command checks the refund right.
+        await readStaffOzowRefunds(api, [body.paymentId]);
         await checkDashboardRefund(body.ozowRefundId);
         return { success: true, data: await recordStaffDashboardRefund(api, body) };
       }
+      // Recording a dashboard refund stays open while refunds through Ozow are
+      // switched off (typed references retire once Ozow refunds were used);
+      // sending, approving and closing need the switch.
+      if (!ozowApiRefundsEnabled())
+        throw new FoundationStaffCommandError(404, "Refunds through Ozow are not switched on.");
       if (body.action === "refund.close")
         return {
           success: true,

@@ -30,7 +30,7 @@ with added as (
     ('internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid)', 'a0b442a5376baedc71e8c7c381d8b8e0'),
     ('api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid)', 'ffa1f756f16316681ddce6d0d213db55'),
     ('internal.staff_ozow_refund_view(private.payment_refund_requests,uuid)', 'c4ff0e12f1bfde14f2a0d7d1d5800a9c'),
-    ('internal.get_staff_ozow_refunds(uuid[])', 'f005cccc57c9200cf74b09e225d08b8b'),
+    ('internal.get_staff_ozow_refunds(uuid[])', 'ed9a446630dda6bdda7c78248da278a6'),
     ('api.get_staff_ozow_refunds(uuid[])', '09755b758fde6141a93a2afc7ee43ece'),
     ('internal.claim_ozow_refund_send(uuid)', '54a567cdb0016c98ce2748f222c8e342'),
     ('api.claim_ozow_refund_send(uuid)', '436a4f6cf0ad64bc3c1eabc1bc079b2a'),
@@ -43,14 +43,14 @@ with added as (
     ('api.record_ozow_refund_send(uuid,jsonb)', 'de2a72c4eaf64a58d7c4917b76cb0208'),
     ('internal.apply_ozow_refund_status(jsonb)', '53e0923ed6f59f335b5614d7a152f24b'),
     ('api.apply_ozow_refund_status(jsonb)', 'cb0b3fd2432f28aedac7dcbdf7d1a2cb'),
-    ('internal.reconcile_ozow_refunds(jsonb)', 'b2323652f77f5ba291824daace1b21a9'),
+    ('internal.reconcile_ozow_refunds(jsonb)', '0f2b40a0f709f5e11c9b3e144c07f92a'),
     ('api.reconcile_ozow_refunds(jsonb)', 'ea40cc8571dab987fcb5b49d9f27ba53')
     ,('internal.ozow_refund_link_candidate(uuid,uuid,bigint,timestamp with time zone)', '67ee95cbdd79f6b23b4f6605c686f69e'),
-    ('internal.claim_ozow_refund_checks(integer)', '7534f2201cd70b2b6c341032a65bbe1b'),
+    ('internal.claim_ozow_refund_checks(integer)', 'c8355171aaea86804fc0df3e0538806b'),
     ('api.claim_ozow_refund_checks(integer)', 'af55530f14c06e80b56017c55d407725'),
     ('internal.report_ozow_refund_missing(uuid)', 'b7ae6c2deac0c275b3bad89dec3c81fb'),
     ('api.report_ozow_refund_missing(uuid)', 'dc4ee76940d144ff60fcbca0cc0d1f72'),
-    ('internal.close_staff_ozow_refund(uuid,text)', '38620cdfdc763d6f272344934c7f0aa3'),
+    ('internal.close_staff_ozow_refund(uuid,text)', '5b7a8a8d3f7bd430e0024fb2088338c3'),
     ('api.close_staff_ozow_refund(uuid,text)', '916b8177461b733dbab5060a07f8e5e1')
   ) v(sig, after)
 ),
@@ -60,7 +60,7 @@ replaced as (
   from (values
     ('internal.payment_refund_request_guard()', 'ac76d0b81b37bbfc12ad483e7eadf9cf', 'd37bd25269a7848d43721e1b20b97267'),
     ('internal.payment_refunded_before_cents(uuid)', 'deeeb438b3d54710a061b49a4e52e9f5', 'edcb14caf62c8375f0216d828ecc276d'),
-    ('internal.approve_staff_payment_refund(uuid)', 'f757a5e1ac7aa4a199dbcd05f5465083', '98f8ee6c36b02e7636728bd01f729076'),
+    ('internal.approve_staff_payment_refund(uuid)', 'f757a5e1ac7aa4a199dbcd05f5465083', 'df4585dd0d0c12f4fbf2e76d9e70a553'),
     ('internal.payment_reversal_waiting_guard()', 'ee9f44cbbc9d2b70cd6db25f90dc7acb', 'd994c95ef0874bb69be72b4e54666ae7'),
     ('internal.record_payment_problem(uuid,text,text,boolean,text)', 'cd1051937fb931de8ced633770d8c9b7', '73a0ff98c9e3f2003e76349481435cba')
   ) v(sig, before, after)

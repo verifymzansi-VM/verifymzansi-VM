@@ -46,6 +46,11 @@ begin
     raise exception 'the payment changed since this refund was recorded; decline it and record it again'
       using errcode='PT409', detail='refund_payment_changed';
   end if;
+  -- A dashboard refund Ozow does not have, or did not pay, never takes effect.
+  if request.channel = 'dashboard' and (request.ozow_missing_at is not null
+      or request.ozow_status in ('Failed', 'Cancelled', 'Returned', 'Invalid', 'Error')) then
+    raise exception 'Ozow has no paid refund with this id; decline it' using errcode='PT409', detail='refund_ozow_failed';
+  end if;
   if request.channel = 'api' then
     -- Approved: the server sends it to Ozow; the payment changes only when
     -- Ozow reports the refund complete.

@@ -119,6 +119,10 @@ const REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new Map([
   ],
   ["refund_closer_same", [403, "Another staff member must close this refund: you recorded it."]],
   [
+    "refund_ozow_failed",
+    [409, "Ozow has no paid refund with this id. Decline this record instead of approving it."],
+  ],
+  [
     "refund_not_closable",
     [409, "Only a refund that never reached Ozow can be closed. Reload the page to see its state."],
   ],
@@ -289,6 +293,7 @@ export function readStaffOzowRefunds(api: FoundationAuthenticatedApi, paymentIds
   return settle(
     api.rpc("get_staff_ozow_refunds", { p_payment_ids: paymentIds }, { get: false }),
     z.strictObject({
+      typed_reference_retired: z.boolean(),
       payments: z
         .array(z.strictObject({ payment_id: z.uuid(), ozow_refundable: z.boolean() }))
         .max(50),
@@ -531,18 +536,18 @@ async function checkOzowRefund(
     await applyOzowRefundFact(service, fact, "refund_check");
     return;
   }
-  // A send whose answer was lost: Ozow's refunds of the transaction with the
-  // same amount, requested after it was sent. The database links one only
-  // when exactly one fits and its id is not recorded anywhere else.
-  const sentAt = item.sent_at ? Date.parse(item.sent_at) - 10 * 60 * 1000 : Infinity;
-  const fits = (await client.transactionRefunds(item.transaction_id)).filter(
-    (fact) =>
-      fact.amountCents === item.amount_cents &&
-      fact.requestedAt !== null &&
-      Date.parse(fact.requestedAt) >= sentAt
+  // A send whose answer was lost. "Missing" is reported only when Ozow's full
+  // list of the transaction's refunds has none that could be it: none
+  // requested after (or up to ten minutes before) the send, and none without a
+  // request time, whatever the amount. Every refund that could be it goes to
+  // the database, which links exactly one fit (an id recorded nowhere else) or
+  // raises an unmatched-refund alert, which also blocks closing the record.
+  const sentAt = item.sent_at ? Date.parse(item.sent_at) - 10 * 60 * 1000 : -Infinity;
+  const couldBe = (await client.transactionRefunds(item.transaction_id)).filter(
+    (fact) => fact.requestedAt === null || Date.parse(fact.requestedAt) >= sentAt
   );
-  if (fits.length === 0) return void (await missing());
-  for (const fact of fits) await applyOzowRefundFact(service, fact, "refund_check");
+  if (couldBe.length === 0) return void (await missing());
+  for (const fact of couldBe) await applyOzowRefundFact(service, fact, "refund_check");
 }
 
 const applied = z.looseObject({

@@ -42,6 +42,10 @@ export type OzowRefundRow = {
 
 /** What the payments list needs to offer refunds through Ozow. */
 export type OzowRefundsView = {
+  /** Refunds through Ozow are switched on (OZOW_API_REFUNDS_ENABLED). */
+  api: boolean;
+  /** Typed references no longer refund Ozow payments (Ozow refunds were used). */
+  retired: boolean;
   /** Payments paid through Ozow (only these can be refunded through it). */
   refundable: string[];
   records: OzowRefundRow[];

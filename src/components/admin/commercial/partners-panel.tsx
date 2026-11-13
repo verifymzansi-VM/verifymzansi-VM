@@ -296,7 +296,7 @@ export function PaymentsPanel({
 }: {
   payments: AdminPaymentRow[];
   canRefund: boolean;
-  /** Set only while refunds through Ozow are switched on. */
+  /** Refunds through Ozow: set when the database has them (see the page). */
   ozow?: OzowRefundsView;
 }) {
   const { run, busy, message } = useCommercialAction();
@@ -306,7 +306,7 @@ export function PaymentsPanel({
     <AdminCard
       title="Recent payments"
       description={
-        ozow
+        ozow?.api
           ? "Refunds and chargebacks withdraw the paid visibility, revoke the posting slot, reverse partner commission and are audited. A refund through Ozow is sent to Ozow by the server and takes effect when Ozow confirms it. Record a chargeback with Ozow's reference."
           : "Refunds and chargebacks withdraw the paid visibility, revoke the posting slot, reverse partner commission and are audited. Refund the money in Ozow first, then record it here with Ozow's reference."
       }
@@ -323,8 +323,11 @@ export function PaymentsPanel({
             .filter((line) => line.status === "reversed")
             .reduce((sum, line) => sum + line.amount_cents, 0);
           const ozowRecords = ozow ? ozow.records.filter((r) => r.payment_id === p.id) : [];
-          // Refunds through Ozow: only for payments paid through Ozow.
-          const throughOzow = ozow?.refundable.includes(p.id) === true;
+          // Ozow refund paths, only for payments paid through Ozow: while
+          // switched on, or once typed references retired for them.
+          const throughOzow =
+            ozow !== undefined && (ozow.api || ozow.retired) && ozow.refundable.includes(p.id);
+          const sendThroughOzow = throughOzow && ozow?.api === true;
           const inFlight = ozowRecords.some((r) => r.status === "approved" || r.status === "sent");
           const ozowRequest = request ? ozowRecords.find((r) => r.id === request.id) : undefined;
           const canReverse = canRefund && p.status === "complete" && !request && !inFlight;
@@ -394,22 +397,24 @@ export function PaymentsPanel({
                 <span className={paidNotDelivered ? "flex gap-2" : "ml-auto flex flex-wrap gap-2"}>
                   {throughOzow ? (
                     <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-10"
-                        disabled={busy}
-                        onClick={() =>
-                          openOzow(
-                            "api",
-                            null,
-                            p.amount_cents,
-                            lines.length > 1 ? "the whole order" : "this payment"
-                          )
-                        }
-                      >
-                        Refund through Ozow
-                      </Button>
+                      {sendThroughOzow ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-10"
+                          disabled={busy}
+                          onClick={() =>
+                            openOzow(
+                              "api",
+                              null,
+                              p.amount_cents,
+                              lines.length > 1 ? "the whole order" : "this payment"
+                            )
+                          }
+                        >
+                          Refund through Ozow
+                        </Button>
+                      ) : null}
                       <Button
                         size="sm"
                         variant="ghost"
@@ -469,22 +474,24 @@ export function PaymentsPanel({
                         <span className="ml-auto flex flex-wrap gap-2">
                           {throughOzow ? (
                             <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-10"
-                                disabled={busy}
-                                onClick={() =>
-                                  openOzow(
-                                    "api",
-                                    line.id,
-                                    line.amount_cents,
-                                    `slot ${line.line_number}`
-                                  )
-                                }
-                              >
-                                Refund this slot through Ozow
-                              </Button>
+                              {sendThroughOzow ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-10"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    openOzow(
+                                      "api",
+                                      line.id,
+                                      line.amount_cents,
+                                      `slot ${line.line_number}`
+                                    )
+                                  }
+                                >
+                                  Refund this slot through Ozow
+                                </Button>
+                              ) : null}
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -550,7 +557,7 @@ export function PaymentsPanel({
                   </p>
                   {canRefund ? (
                     <div className="flex flex-wrap items-center gap-2">
-                      {ozowRequest ? (
+                      {ozowRequest?.channel === "api" ? (
                         <OzowApproveButton
                           requestId={request.id}
                           amountCents={request.amount_cents}

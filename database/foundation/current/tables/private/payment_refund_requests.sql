@@ -91,6 +91,7 @@ CREATE INDEX payment_refund_requests_closed_by_idx ON private.payment_refund_req
 CREATE INDEX payment_refund_requests_declined_by_idx ON private.payment_refund_requests USING btree (declined_by) WHERE (declined_by IS NOT NULL);
 CREATE UNIQUE INDEX payment_refund_requests_in_flight_idx ON private.payment_refund_requests USING btree (payment_id) WHERE (status = ANY (ARRAY['awaiting_approval'::text, 'approved'::text, 'sent'::text]));
 CREATE INDEX payment_refund_requests_line_idx ON private.payment_refund_requests USING btree (payment_line_id, payment_id) WHERE (payment_line_id IS NOT NULL);
+CREATE UNIQUE INDEX payment_refund_requests_ozow_key_idx ON private.payment_refund_requests USING btree (lower(COALESCE((ozow_refund_id)::text, ozow_reference)));
 CREATE UNIQUE INDEX payment_refund_requests_ozow_refund_idx ON private.payment_refund_requests USING btree (ozow_refund_id) WHERE (ozow_refund_id IS NOT NULL);
 CREATE INDEX payment_refund_requests_payment_idx ON private.payment_refund_requests USING btree (payment_id);
 CREATE UNIQUE INDEX payment_refund_requests_reference_idx ON private.payment_refund_requests USING btree (lower(ozow_reference));

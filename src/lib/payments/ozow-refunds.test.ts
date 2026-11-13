@@ -255,6 +255,12 @@ describe("reading refunds back", () => {
     await expect(
       mod.createOzowRefundClient({ environment }).transactionRefunds(TX)
     ).rejects.toThrow(/list item/);
+    // A further page means the list is not complete: never "no such refund".
+    fakeFetch(json({ results: [], links: { next: "https://stagingone.ozow.com/v1/x?offset=50" } }));
+    mod = await load();
+    await expect(
+      mod.createOzowRefundClient({ environment }).transactionRefunds(TX)
+    ).rejects.toThrow(/more pages/);
   });
 
   it("lists by date, follows Ozow's next link on Ozow's origin only", async () => {

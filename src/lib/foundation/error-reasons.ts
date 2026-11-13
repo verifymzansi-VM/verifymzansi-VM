@@ -97,6 +97,7 @@ export const FOUNDATION_ERROR_REASONS = {
   refund_not_closable: ["PT409"],
   refund_not_sent: ["PT409"],
   refund_not_waiting: ["PT409"],
+  refund_ozow_failed: ["PT409"],
   refund_payment_changed: ["PT409"],
   refund_reason_code_invalid: ["22023"],
   self_partner: ["42501"],

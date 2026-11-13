@@ -28,23 +28,34 @@ export default async function PaymentsAdminPage({
   const { rows, total, needsAttention, awaitingApproval, ozow } = await (async () => {
     const { api } = await readFoundationServerSession();
     const result = await readStaffPaymentList(api, page, status);
-    // Refunds through Ozow, only while they are switched on.
-    const refunds = ozowApiRefundsEnabled()
-      ? await readStaffOzowRefunds(
-          api,
-          result.items.map((item) => item.id)
-        )
-      : null;
+    // Refunds through Ozow. Read while switched on; while off, only to know
+    // whether typed references retired for Ozow payments (once refunds went
+    // through Ozow). Off and never used, the page is exactly as before; a
+    // failed read while off leaves it as before too.
+    const apiRefunds = ozowApiRefundsEnabled();
+    const refunds = await readStaffOzowRefunds(
+      api,
+      result.items.map((item) => item.id)
+    ).catch((error: unknown) => {
+      if (apiRefunds) throw error;
+      return null;
+    });
+    const view =
+      refunds && (apiRefunds || refunds.typed_reference_retired)
+        ? {
+            api: apiRefunds,
+            retired: refunds.typed_reference_retired,
+            refundable: refunds.payments.filter((p) => p.ozow_refundable).map((p) => p.payment_id),
+            records: refunds.records,
+            attention: refunds.attention,
+          }
+        : null;
     return {
       rows: result.items,
       total: result.total,
       needsAttention: result.needs_attention,
       awaitingApproval: result.awaiting_approval,
-      ozow: refunds && {
-        refundable: refunds.payments.filter((p) => p.ozow_refundable).map((p) => p.payment_id),
-        records: refunds.records,
-        attention: refunds.attention,
-      },
+      ozow: view,
     };
   })();
 
@@ -118,7 +129,16 @@ export default async function PaymentsAdminPage({
       <PaymentsPanel
         payments={rows}
         canRefund={canRefund}
-        ozow={ozow ? { refundable: ozow.refundable, records: ozow.records } : undefined}
+        ozow={
+          ozow
+            ? {
+                api: ozow.api,
+                retired: ozow.retired,
+                refundable: ozow.refundable,
+                records: ozow.records,
+              }
+            : undefined
+        }
       />
       {(page > 1 || rows.length === PAGE_SIZE) && (
         <nav aria-label="Payment pages" className="flex gap-4 text-sm">

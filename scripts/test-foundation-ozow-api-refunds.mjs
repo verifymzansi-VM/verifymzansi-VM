@@ -709,6 +709,66 @@ try {
   });
 
   await check(
+    "an unexplained Ozow refund blocks closing; a missing dashboard refund is never approved",
+    () => {
+      const pay = buy(verified("ozow-close-blocked"), PLANS.days30, 1);
+      const asked = json(request(admin, pay.id));
+      const claimed = claim(asked.request_id);
+      sendResult(asked.request_id, { outcome: "unknown" });
+      backdate(asked.request_id, "sent_at", "2 days");
+      json(service(`select api.report_ozow_refund_missing('${asked.request_id}');`));
+      // Ozow reports a refund of this transaction that matches nothing (here
+      // one without a request time): it may be this send.
+      assert.equal(
+        ozowStatus({ ...fact(claimed, "Complete"), requested_at: null }).outcome,
+        "unmatched"
+      );
+      fails(
+        staff(
+          admin2,
+          `select api.close_staff_ozow_refund('${asked.request_id}','Ozow has no such refund');`
+        ),
+        "PT409",
+        /never reached Ozow/
+      );
+      // A dashboard refund above R1,000 that Ozow does not have.
+      const big = buy(verified("ozow-dashboard-missing"), PLANS.days180, 3);
+      const waiting = json(dashboard(admin, big.id, randomUUID()));
+      json(service(`select api.report_ozow_refund_missing('${waiting.request_id}');`));
+      fails(
+        staff(admin2, `select api.approve_staff_payment_refund('${waiting.request_id}');`),
+        "PT409",
+        /no paid refund/
+      );
+      assert.equal(payStatus(big.id), "complete");
+      // The daily check flags a refund recorded as made that Ozow did not pay.
+      const paid = buy(verified("ozow-dashboard-unpaid"), PLANS.days30, 1);
+      const refundId = randomUUID();
+      json(dashboard(admin, paid.id, refundId));
+      const result = json(
+        service(
+          `select api.reconcile_ozow_refunds(${literal([
+            {
+              refund_id: refundId,
+              transaction_id: paid.tx,
+              amount_cents: paid.cents,
+              status: "Failed",
+              requested_at: null,
+              completed_at: null,
+            },
+          ])});`
+        )
+      );
+      assert.equal(result.mismatched, 1);
+      assert.deepEqual(problem(paid.id, "refund_failed"), {
+        alert: true,
+        source: "refund_check",
+        n: 1,
+      });
+    }
+  );
+
+  await check(
     "once refunds go through Ozow, a typed reference cannot refund an Ozow payment",
     () => {
       const pay = buy(verified("ozow-retired"), PLANS.days30, 1);

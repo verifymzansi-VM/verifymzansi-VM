@@ -30,6 +30,14 @@ begin
             and item->>'status' not in ('Failed', 'Cancelled', 'Invalid', 'Error')) then
         mismatched := mismatched + 1;
         perform internal.ozow_refund_problem(request.payment_id, 'refund_mismatch', 'refund_check', request.id::text);
+      elsif request.status in ('awaiting_approval', 'applied')
+          and item->>'status' in ('Failed', 'Cancelled', 'Invalid', 'Error', 'Returned') then
+        -- A refund recorded as made (or waiting to take effect) that Ozow
+        -- did not pay, or whose money came back.
+        mismatched := mismatched + 1;
+        perform internal.ozow_refund_problem(request.payment_id,
+          case when item->>'status' = 'Returned' then 'refund_returned' else 'refund_failed' end, 'refund_check',
+          request.id::text);
       end if;
     elsif internal.ozow_refund_link_candidate((item->>'refund_id')::uuid, (item->>'transaction_id')::uuid,
         (item->>'amount_cents')::bigint, (item->>'requested_at')::timestamptz) is null then

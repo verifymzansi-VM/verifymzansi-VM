@@ -869,6 +869,18 @@ Ozow's reference exactly as before.
   never sent, or a lost send that Ozow, read more than a day after it was sent,
   does not have (`refund_not_closable` otherwise); the record fails
   (`closed_by_staff`) with the closer and reason.
+- **Closing and dashboard records are guarded.** A lost send cannot be closed
+  while an unmatched or mismatched Ozow refund of the payment has been seen
+  since it was sent (it may be that refund). The server reports "missing" only
+  when Ozow's complete list of the transaction's refunds has none requested
+  after (or ten minutes before) the send and none without a request time. A
+  dashboard refund that Ozow does not have or did not pay is never approved
+  (`refund_ozow_failed`), dashboard refunds are read back from Ozow until Ozow
+  gives a final status (30 days at most), and the daily check also alerts for a
+  refund recorded as made that Ozow lists as failed or returned. One unique
+  index keeps an Ozow refund recorded once, whichever way
+  (`lower(coalesce(ozow_refund_id::text, ozow_reference))`). The dashboard
+  record stays available while refunds through Ozow are switched off.
 - **Typed references retire for Ozow refunds.** Once the server has sent any
   refund to Ozow, a refund of an Ozow payment can no longer be recorded with a
   typed reference (PT409 `ozow_reference_retired`); chargebacks and payments

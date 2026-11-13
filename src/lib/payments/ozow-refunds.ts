@@ -352,6 +352,14 @@ export function createOzowRefundClient({
           : null;
       if (!items || items.length > 200)
         throw new OzowRefundUnavailableError("Invalid Ozow refund list");
+      // Only a complete list may say "no such refund": a further page means
+      // the answer is not known.
+      const links =
+        data && typeof data === "object" && !Array.isArray(data)
+          ? (data as { links?: { next?: unknown } }).links
+          : undefined;
+      if (links && typeof links.next === "string" && links.next)
+        throw new OzowRefundUnavailableError("Ozow refund list has more pages");
       const facts = items.map(readOzowRefund);
       if (facts.some((fact) => !fact || fact.transactionId !== tx.data))
         throw new OzowRefundUnavailableError("Invalid Ozow refund list item");

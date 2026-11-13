@@ -35,7 +35,11 @@ begin
       or (request.status = 'sent' and request.ozow_refund_id is null and request.send_outcome = 'unknown'
         and request.sent_at < statement_timestamp() - interval '1 day'
         and request.ozow_missing_at is not null
-        and request.ozow_missing_at >= request.sent_at + interval '1 day'), false) then
+        and request.ozow_missing_at >= request.sent_at + interval '1 day'
+        -- An Ozow refund of the payment this site could not match, seen since
+        -- the send, may be this one: never close while it is unexplained.
+        and not exists(select 1 from private.payment_problems p where p.payment_id = request.payment_id
+          and p.reason in ('refund_unmatched', 'refund_mismatch') and p.last_seen_at >= request.sent_at)), false) then
     raise exception 'only a refund that never reached Ozow can be closed' using errcode='PT409', detail='refund_not_closable';
   end if;
   update private.payment_refund_requests set status = 'failed', failed_at = statement_timestamp(),

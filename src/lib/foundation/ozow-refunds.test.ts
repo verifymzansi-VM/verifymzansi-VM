@@ -206,6 +206,26 @@ describe("the 10-minute job", () => {
     expect(calls("apply_ozow_refund_status")).toHaveLength(0);
   });
 
+  it("never reports a lost send missing while Ozow has a refund that could be it", async () => {
+    answer({
+      list_ozow_refund_sends_due: [],
+      claim_ozow_refund_checks: [
+        {
+          request_id: REQUEST,
+          ozow_refund_id: null,
+          transaction_id: TX,
+          amount_cents: 6900,
+          sent_at: "2026-11-13T10:00:00.000Z",
+        },
+      ],
+      apply_ozow_refund_status: { outcome: "unmatched" },
+    });
+    // No request time and another amount: it is still handed to the database.
+    client.transactionRefunds.mockResolvedValue([fact({ requestedAt: null, amountCents: 6800 })]);
+    await runOzowRefundJobs(service, client);
+    expect(calls("report_ozow_refund_missing")).toHaveLength(0);
+    expect(calls("apply_ozow_refund_status")).toHaveLength(1);
+  });
   it("stops starting Ozow requests when its time is up", async () => {
     let now = 0;
     answer({ list_ozow_refund_sends_due: [REQUEST, REQUEST] });

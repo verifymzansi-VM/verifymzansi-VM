@@ -14,6 +14,10 @@ begin
     raise exception 'up to 50 payments required' using errcode='22023';
   end if;
   select jsonb_build_object(
+    -- Once a refund was sent through Ozow, Ozow payments are refunded through
+    -- Ozow or recorded from the dashboard, never with a typed reference.
+    'typed_reference_retired', exists(select 1 from private.payment_refund_requests r
+      where r.channel = 'api' and r.send_attempts > 0),
     'payments', coalesce((select jsonb_agg(jsonb_build_object('payment_id', p.id,
         'ozow_refundable', p.status = 'complete' and internal.ozow_refund_transaction(p.id) is not null) order by p.id)
       from private.payments p where p.id = any(p_payment_ids)), '[]'::jsonb),

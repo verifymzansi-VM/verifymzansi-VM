@@ -75,7 +75,7 @@ describe("refunds through Ozow", () => {
       <PaymentsPanel
         canRefund
         payments={[payment]}
-        ozow={{ refundable: [payment.id], records: [] }}
+        ozow={{ api: true, retired: false, refundable: [payment.id], records: [] }}
       />
     );
     expect(screen.queryByRole("button", { name: "Record refund" })).toBeNull();
@@ -103,7 +103,7 @@ describe("refunds through Ozow", () => {
       <PaymentsPanel
         canRefund
         payments={[payment]}
-        ozow={{ refundable: [payment.id], records: [] }}
+        ozow={{ api: true, retired: false, refundable: [payment.id], records: [] }}
       />
     );
     fireEvent.click(screen.getByRole("button", { name: "Recorded in the Ozow dashboard" }));
@@ -123,12 +123,28 @@ describe("refunds through Ozow", () => {
     });
   });
 
+  it("switched off after Ozow refunds were used: only the dashboard record and chargebacks", () => {
+    render(
+      <PaymentsPanel
+        canRefund
+        payments={[payment]}
+        ozow={{ api: false, retired: true, refundable: [payment.id], records: [] }}
+      />
+    );
+    expect(screen.queryByRole("button", { name: "Refund through Ozow" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Record refund" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Recorded in the Ozow dashboard" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Record chargeback" })).toBeInTheDocument();
+  });
+
   it("offers no refund while one is on its way through Ozow, and shows its state", () => {
     render(
       <PaymentsPanel
         canRefund
         payments={[payment]}
-        ozow={{ refundable: [payment.id], records: [record()] }}
+        ozow={{ api: true, retired: false, refundable: [payment.id], records: [record()] }}
       />
     );
     expect(screen.queryByRole("button", { name: "Refund through Ozow" })).toBeNull();

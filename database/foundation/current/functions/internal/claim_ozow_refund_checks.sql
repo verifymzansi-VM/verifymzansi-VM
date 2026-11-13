@@ -18,7 +18,10 @@ begin
       and ((r.channel = 'api' and r.status = 'sent' and r.sent_at <= statement_timestamp() - interval '10 minutes'
           and not (r.ozow_refund_id is null and r.send_outcome = 'unknown' and r.send_attempts < 3
             and r.sent_at > statement_timestamp() - interval '6 hours'))
-        or (r.channel = 'dashboard' and r.ozow_checked_at is null and r.status in ('awaiting_approval', 'applied')))
+        or (r.channel = 'dashboard' and r.status in ('awaiting_approval', 'applied')
+          and r.requested_at > statement_timestamp() - interval '30 days'
+          and (r.ozow_status is null or r.ozow_status not in ('Complete', 'Failed', 'Cancelled', 'Returned', 'Invalid',
+            'Error'))))
     order by coalesce(r.ozow_checked_at, r.requested_at), r.id
     limit p_limit
     for update skip locked),

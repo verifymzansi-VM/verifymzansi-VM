@@ -63,7 +63,7 @@
     },
     "function_bodies": {
       "items": 835,
-      "fingerprint": "3bf5b65074bbff5f589f9af7e1eb0bb6"
+      "fingerprint": "bd4b2ce2fe66d6899e0ca1f0d14255d2"
     },
     "function_grants": {
       "items": 655,
@@ -74,8 +74,8 @@
       "fingerprint": "32ab8918fcd9212c1ff4650eea4bb7b8"
     },
     "indexes": {
-      "items": 466,
-      "fingerprint": "4c30fc3d9c453dafecd7c5e938871f10"
+      "items": 467,
+      "fingerprint": "6d0deddc9647524766593ff75abf3d1a"
     },
     "policies": {
       "items": 1,
