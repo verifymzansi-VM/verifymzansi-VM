@@ -2481,6 +2481,11 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   internal.set_post_media at the reviewed body (md5 3ff7aba4); production
   fingerprint after it matched the replay through this update
 - `20261112174600_individual_slots_r69.sql`: pending
-- `20261112181954_google_name_at_signup.sql`: pending
+- `20261112181954_google_name_at_signup.sql`: applied 2026-11-13 00:20 UTC; time
+  approximate, applied by the coordinator with the owner's approval through the
+  Supabase query API, from the reviewed file; preflight before "reviewed body,
+  update not applied; profiles without a name: 2; of which the update names: 2",
+  after the two bodies matched the update's and no profile was left without a
+  name; production fingerprint after it matched the full replay
 
 <!-- applied-register:end -->
