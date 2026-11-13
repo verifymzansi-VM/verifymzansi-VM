@@ -66,7 +66,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 20. Staff fix paid but not delivered (M3.4) |              4 | keep (owner, 2026-11-13)                                                                   | Staff only: delivery status on Payments & Refunds, a 'needs attention' list, 'Activate what was paid for', refunds with Ozow's reference and a reason, one slot refunded alone, a second approver above R1 000                                    |
 | 21. Payment receipt email (M3.7)            | 0 (email only) | keep (owner, 2026-11-13)                                                                   | Members who pay: the 'Payment received' email lists the invoice number, date paid, item, amount in rands and bank reference, and links to 'My slots' (add-ons: the dashboard) instead of Billing                                                  |
 | 22. Hidden until it works, part 2 (M6.2)    |              3 | keep (owner, 2026-11-13)                                                                   | No 'Performance' page or menu entry and no 'Detect province and city' button; a search lists tourism businesses under Businesses again                                                                                                            |
-| 23. Phone-sized photos (M4.3)               |              0 | keep (awaiting owner)                                                                      | Nothing on screen: the same photos, but a phone downloads a 400, 800 or 1 600 px copy of each new photo instead of the full-size original                                                                                                         |
+| 23. Phone-sized photos (M4.3)               |              0 | keep (owner, 2026-11-13)                                                                   | Nothing on screen: the same photos, but a phone downloads a 400, 800 or 1 600 px copy of each new photo instead of the full-size original                                                                                                         |
 | **Total**                                   |        **262** |                                                                                            |                                                                                                                                                                                                                                                   |
 
 Questions for the owner:
@@ -359,6 +359,9 @@ Questions for the owner:
     `MEDIA_PHOTO_VARIANTS=off` turns the copies off; the paid Images plan
     removes the limit. Do you approve? Before and after pictures are with the
     review notes.
+
+    Answered: approved by owner 2026-11-13: copies on; MEDIA_PHOTO_VARIANTS=off
+    is the switch if the free 5,000 monthly allowance gets close.
 
 <!-- frontend-ledger:start -->
 
@@ -871,15 +874,17 @@ under Businesses again, as the chosen version did
 
 ### 23. Phone-sized photos (roadmap M4.3)
 
-Awaiting owner (owner question 19). No file in the checked scope changes, so
-this group has no file rows; the owner's sign-off covers what visitors download.
-Photos uploaded from now on get 400, 800 and 1 600 px WebP copies beside the
-original (only widths smaller than the original), made at upload with the free
-Cloudflare Images binding that already re-saves every photo. Pages ask for the
-copy that fits the screen; photos uploaded earlier, and any copy that is
-missing, show the original as before. Screenshots before and after (phone and
-desktop, a showroom and a post page) show no difference on screen. Files outside
-the checked scope: `src/lib/image-loader.ts`, `src/lib/media/photo-variants.ts`,
+Owner question 19. Decision: approved by owner 2026-11-13 (copies on;
+`MEDIA_PHOTO_VARIANTS=off` is the switch if the free 5,000 monthly allowance
+gets close). No file in the checked scope changes, so this group has no file
+rows; the owner's sign-off covers what visitors download. Photos uploaded from
+now on get 400, 800 and 1 600 px WebP copies beside the original (only widths
+smaller than the original), made at upload with the free Cloudflare Images
+binding that already re-saves every photo. Pages ask for the copy that fits the
+screen; photos uploaded earlier, and any copy that is missing, show the original
+as before. Screenshots before and after (phone and desktop, a showroom and a
+post page) show no difference on screen. Files outside the checked scope:
+`src/lib/image-loader.ts`, `src/lib/media/photo-variants.ts`,
 `src/lib/utils/image-reencode.ts`, `src/lib/foundation/media-upload.ts` and
 `src/app/api/media/serve/[...key]/route.ts`.
 
