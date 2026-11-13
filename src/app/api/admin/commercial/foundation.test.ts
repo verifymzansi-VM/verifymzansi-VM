@@ -1,160 +1,132 @@
 /** @vitest-environment node */
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { NextRequest, type NextResponse } from "next/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest, NextResponse } from "next/server";
 import { POST } from "./route";
-import { createFoundationRouteContext } from "@/lib/foundation/request-route";
-import { checkRateLimit } from "@/lib/utils/rate-limit";
-vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: vi.fn() }));
-vi.mock("@/lib/foundation/runtime-connection", () => ({
-  readFoundationRuntimeConnection: () => ({}),
-}));
-vi.mock("@/lib/utils/rate-limit", () => ({
-  checkRateLimit: vi.fn(),
-  getClientRateLimitIdentity: () => ({ key: "fixture" }),
-}));
-vi.mock("@/lib/utils/admin-route-guard", () => ({
-  enforceAdminMutationGuard: vi.fn(() => {
-    throw new Error("Retired staff guard used");
-  }),
-}));
-vi.mock("@/lib/services/email", () => ({ sendOrganisationAdminInviteEmail: vi.fn() }));
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { decideRestoredCommission, saveRestoredPartner } from "@/lib/foundation/partners";
+import {
+  inviteFrontendStaffOrganisationAdmin,
+  manageFrontendStaffOrganisation,
+  revokeFrontendStaffOrganisationInvite,
+  saveFrontendStaffOrganisation,
+} from "@/lib/foundation/staff-organisation-commands";
 
-const payment = "11111111-1111-4111-8111-111111111111",
-  line = "22222222-2222-4222-8222-222222222222",
-  csrf = "c".repeat(64),
-  rpc = vi.fn();
-function request(body: unknown) {
-  return new NextRequest("https://verifymzansi.com/api/admin/commercial", {
-    method: "POST",
-    body: JSON.stringify(body),
-    headers: {
-      origin: "https://verifymzansi.com",
-      "content-type": "application/json",
-      cookie: `vm_csrf=${csrf}`,
-      "x-csrf-token": csrf,
-    },
-  });
+vi.mock("@/lib/foundation/owner-route", async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  handleFoundationOwnerRoute: vi.fn(),
+}));
+vi.mock("@/lib/foundation/partners", () => ({
+  decideRestoredCommission: vi.fn(),
+  saveRestoredPartner: vi.fn(),
+}));
+vi.mock("@/lib/foundation/staff-organisation-commands", () => ({
+  inviteFrontendStaffOrganisationAdmin: vi.fn(),
+  manageFrontendStaffOrganisation: vi.fn(),
+  revokeFrontendStaffOrganisationInvite: vi.fn(),
+  saveFrontendStaffOrganisation: vi.fn(),
+}));
+
+type OwnerRouteOptions = Parameters<typeof handleFoundationOwnerRoute>[0];
+
+const id = "00000000-0000-4000-8000-000000000001";
+const reason = "Agreed with finance";
+const done = { done: true };
+const api = { rpc: vi.fn() } as unknown as Parameters<OwnerRouteOptions["command"]>[0];
+
+async function command() {
+  const answer = NextResponse.json({ ok: true });
+  vi.mocked(handleFoundationOwnerRoute).mockResolvedValueOnce(answer);
+  const request = new Request("https://verifymzansi.com/api/admin/commercial", { method: "POST" });
+  expect(await POST(request)).toBe(answer);
+  const options = vi.mocked(handleFoundationOwnerRoute).mock.calls[0][0] as OwnerRouteOptions;
+  expect(options).toMatchObject({ action: "admin:commercial", mutate: true, maxBytes: 16000 });
+  expect(options.request).toBeInstanceOf(NextRequest);
+  return options.command;
 }
-const refundReply = {
-  request_id: line,
-  status: "applied",
-  kind: "refunded",
-  released_activations: 1,
-  payment_status: "refunded",
-  repeated: false,
-};
+
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
-  vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
-  vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
-  vi.mocked(createFoundationRouteContext).mockReturnValue({
-    authenticate: async () => ({ rpc }),
-    respond: (response: NextResponse) => response,
-  } as unknown as ReturnType<typeof createFoundationRouteContext>);
-});
-afterEach(() => vi.unstubAllEnvs());
-
-it("refuses a refund without Ozow's reference before any database call", async () => {
-  const response = await POST(
-    request({
-      action: "payment.reverse",
-      paymentId: payment,
-      kind: "refunded",
-      reasonCode: "billing_error",
-      reason: "Charged twice by mistake",
-    })
-  );
-  expect(response.status).toBe(422);
-  expect(await response.json()).toMatchObject({ error: "Enter Ozow's refund reference." });
-  expect(rpc).not.toHaveBeenCalled();
+  for (const helper of [
+    decideRestoredCommission,
+    saveRestoredPartner,
+    inviteFrontendStaffOrganisationAdmin,
+    manageFrontendStaffOrganisation,
+    revokeFrontendStaffOrganisationInvite,
+    saveFrontendStaffOrganisation,
+  ])
+    vi.mocked(helper).mockResolvedValue(done as never);
 });
 
-it("refuses a refund without a reason code", async () => {
-  const response = await POST(
-    request({
-      action: "payment.reverse",
-      paymentId: payment,
-      kind: "refunded",
-      ozowReference: "OZ-REF-1",
-      reason: "Charged twice by mistake",
-    })
-  );
-  expect(response.status).toBe(422);
-  expect(rpc).not.toHaveBeenCalled();
-});
-
-it("records a whole-payment refund and a slot refund with the new commands", async () => {
-  rpc.mockResolvedValue({ data: refundReply, error: null });
-  const whole = await POST(
-    request({
-      action: "payment.reverse",
-      paymentId: payment.toUpperCase(),
-      kind: "refunded",
-      reasonCode: "duplicate",
-      ozowReference: "OZ-REF-1",
-      reason: "Charged twice by mistake",
-    })
-  );
-  expect(whole.status).toBe(200);
-  expect(rpc).toHaveBeenLastCalledWith(
-    "record_staff_payment_refund",
-    {
-      p_payment_id: payment,
-      p_kind: "refunded",
-      p_reason_code: "duplicate",
-      p_reason: "Charged twice by mistake",
-      p_ozow_reference: "OZ-REF-1",
-    },
-    { get: false }
-  );
-  rpc.mockResolvedValue({ data: { ...refundReply, line_id: line }, error: null });
-  const slot = await POST(
-    request({
-      action: "payment.reverse_slot",
-      lineId: line,
-      kind: "chargeback",
-      reasonCode: "s14_cancellation",
-      ozowReference: "OZ-CB-1",
-      reason: "Bank chargeback on one slot",
-    })
-  );
-  expect(slot.status).toBe(200);
-  expect(rpc).toHaveBeenLastCalledWith(
-    "record_staff_slot_refund",
-    expect.objectContaining({ p_line_id: line, p_kind: "chargeback", p_ozow_reference: "OZ-CB-1" }),
-    { get: false }
-  );
-});
-
-it("activates a paid but undelivered payment and approves a waiting refund", async () => {
-  rpc.mockResolvedValueOnce({
-    data: {
-      payment_id: payment,
-      fulfillment_status: "fulfilled",
-      entitlements: 1,
-      addon_window: false,
-      commissions: 0,
-      repeated: false,
-    },
-    error: null,
+// handleFoundationOwnerRoute owns CSRF, sign-in and body limits; staff
+// commands check the role and two-step policy in the database. Payment
+// commands are covered end to end in payments.test.ts.
+describe("POST /api/admin/commercial on foundation", () => {
+  it("routes organisation actions to the staff organisation commands", async () => {
+    const run = await command();
+    const upsert = { action: "organisation.upsert", values: { name: "Org" }, reason };
+    await run(api, upsert);
+    expect(saveFrontendStaffOrganisation).toHaveBeenCalledWith(api, upsert);
+    const manage = { action: "organisation.manage", organisationId: id, operation: "note", reason };
+    await run(api, manage);
+    expect(manageFrontendStaffOrganisation).toHaveBeenCalledWith(api, { ...manage, values: {} });
+    const invite = {
+      action: "organisation.invite_admin",
+      organisationId: id,
+      email: "admin@example.com",
+      reason,
+    };
+    await run(api, invite);
+    expect(inviteFrontendStaffOrganisationAdmin).toHaveBeenCalledWith(api, invite);
+    await run(api, { action: "organisation.revoke_invite", inviteId: id, reason });
+    expect(revokeFrontendStaffOrganisationInvite).toHaveBeenCalledWith(api, id, reason);
   });
-  const activated = await POST(
-    request({ action: "payment.activate", paymentId: payment, reason: "Paid after cancel" })
-  );
-  expect(activated.status).toBe(200);
-  expect(rpc).toHaveBeenLastCalledWith(
-    "activate_staff_paid_payment",
-    { p_payment_id: payment, p_reason: "Paid after cancel" },
-    { get: false }
-  );
-  rpc.mockResolvedValueOnce({
-    data: null,
-    error: { code: "42501", details: "refund_approver_same", message: "refused" },
+
+  it("saves partners and decides commissions", async () => {
+    const run = await command();
+    await run(api, {
+      action: "partner.manage",
+      userId: id,
+      operation: "rate",
+      values: { commissionBps: 250, notes: "  " },
+      reason,
+    });
+    expect(saveRestoredPartner).toHaveBeenCalledExactlyOnceWith(api, {
+      account_id: id,
+      action: "set_rate",
+      reason,
+      code: undefined,
+      commission_bps: 250,
+      note: undefined,
+    });
+    await run(api, {
+      action: "commission.manage",
+      commissionId: id,
+      operation: "mark_paid",
+      values: { reference: "EFT-1" },
+      reason,
+    });
+    expect(decideRestoredCommission).toHaveBeenCalledExactlyOnceWith(api, {
+      commission_id: id,
+      action: "mark_paid",
+      reason,
+      reference: "EFT-1",
+    });
+    await expect(
+      run(api, {
+        action: "commission.manage",
+        commissionId: id,
+        operation: "approve",
+        values: { amountCents: 100 },
+        reason,
+      })
+    ).rejects.toMatchObject({ status: 422 });
   });
-  const approved = await POST(request({ action: "payment.refund_approve", requestId: line }));
-  expect(approved.status).toBe(403);
-  expect(await approved.json()).toMatchObject({
-    error: "Another staff member must approve this refund: you recorded it.",
+
+  it("refuses actions the foundation backend does not offer, and invalid input", async () => {
+    const run = await command();
+    await expect(
+      run(api, { action: "trial.override", userId: id, kind: "NONE", reason })
+    ).rejects.toMatchObject({ status: 501 });
+    await expect(run(api, { action: "payment.reverse", paymentId: id, reason })).rejects.toThrow();
   });
 });

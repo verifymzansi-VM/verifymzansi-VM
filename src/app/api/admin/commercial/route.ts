@@ -1,21 +1,6 @@
-import { createHash, randomBytes } from "node:crypto";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
-import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
-import type { Capability } from "@/lib/auth/roles";
-import { mapCommercialError } from "@/lib/commercial/errors";
-import {
-  COMMERCIAL_SETTING_SCHEMAS,
-  clearCommercialSettingsCache,
-  isCommercialSettingKey,
-} from "@/lib/commercial/settings";
-import { sendOrganisationAdminInviteEmail } from "@/lib/services/email";
-import { sanitizeAppUrl } from "@/lib/services/email-template";
-import { getDataBackend } from "@/lib/data-backend";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { FoundationStaffCommandError, staffCommandRefusal } from "@/lib/foundation/staff-command";
 import { decideRestoredCommission, saveRestoredPartner } from "@/lib/foundation/partners";
@@ -230,208 +215,6 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("trial_extension.resend"), offerId: uuid }),
 ]);
 
-type Body = z.infer<typeof schema>;
-
-const CAPABILITY: Record<Body["action"], Capability> = {
-  "settings.update": "commercial:manage",
-  "plan.update": "commercial:manage",
-  "programme.grant": "contracts:manage",
-  "contract.manage": "contracts:manage",
-  "trial.override": "trials:manage",
-  "event.allowance": "contracts:manage",
-  "payment.reverse": "payments:refund",
-  "payment.reverse_slot": "payments:refund",
-  "payment.activate": "payments:refund",
-  "payment.refund_approve": "payments:refund",
-  "payment.refund_decline": "payments:refund",
-  "partner.manage": "partners:manage",
-  "commission.manage": "partners:manage",
-  "organisation.upsert": "organisations:manage",
-  "organisation.manage": "organisations:manage",
-  "organisation.invite_admin": "organisations:manage",
-  "organisation.revoke_invite": "organisations:manage",
-  "trial_extension.offer": "trials:manage",
-  "trial_extension.decide": "trials:manage",
-  "trial_extension.withdraw": "trials:manage",
-  "trial_extension.resend": "trials:manage",
-};
-
-function call(body: Exclude<Body, { action: "organisation.invite_admin" }>, actor: string) {
-  const db = createAdminClient();
-  switch (body.action) {
-    case "settings.update":
-      return db.rpc("update_commercial_setting", {
-        p_actor: actor,
-        p_key: body.key,
-        p_value: body.value,
-        p_reason: body.reason,
-      });
-    case "plan.update":
-      return db.rpc("update_plan_pricing", {
-        p_actor: actor,
-        p_plan_id: body.planId,
-        p_values: body.values,
-        p_reason: body.reason,
-      });
-    case "programme.grant":
-      return db.rpc("grant_programme_contract", {
-        p_actor: actor,
-        p_user: body.userId,
-        p_type: body.type,
-        p_values: body.values,
-        p_reason: body.reason,
-        p_override: body.override,
-      });
-    case "contract.manage":
-      return db.rpc("manage_commercial_contract", {
-        p_actor: actor,
-        p_contract: body.contractId,
-        p_action: body.operation,
-        p_values: body.values,
-        p_reason: body.reason,
-      });
-    case "trial.override":
-      return db.rpc("override_trial_entitlement", {
-        p_actor: actor,
-        p_user: body.userId,
-        p_kind: body.kind,
-        p_reason: body.reason,
-      });
-    case "event.allowance":
-      return db.rpc("admin_set_event_allowance", {
-        p_actor: actor,
-        p_user: body.userId,
-        p_values: body.values,
-        p_reason: body.reason,
-      });
-    case "payment.reverse":
-      return db.rpc("reverse_payment", {
-        p_actor: actor,
-        p_payment: body.paymentId,
-        p_kind: body.kind,
-        p_reason: body.reason,
-      });
-    case "payment.reverse_slot":
-    case "payment.activate":
-    case "payment.refund_approve":
-    case "payment.refund_decline":
-      // Slots, activation and the second approval exist only on the new backend.
-      return Promise.resolve({
-        data: null,
-        error: { message: "This action is not available on this backend.", code: "UNSUPPORTED" },
-      });
-    case "partner.manage":
-      return db.rpc("admin_manage_partner", {
-        p_actor: actor,
-        p_user: body.userId,
-        p_action: body.operation,
-        p_values: body.values,
-        p_reason: body.reason,
-      });
-    case "commission.manage":
-      return db.rpc("admin_manage_commission", {
-        p_actor: actor,
-        p_commission: body.commissionId,
-        p_action: body.operation,
-        p_values: body.values,
-        p_reason: body.reason,
-      });
-    case "organisation.upsert":
-      return db.rpc("admin_upsert_organisation", {
-        p_actor: actor,
-        p_id: body.organisationId ?? null,
-        p_values: body.values,
-        p_reason: body.reason,
-      });
-    case "organisation.manage":
-      return db.rpc("admin_manage_organisation", {
-        p_actor: actor,
-        p_org: body.organisationId,
-        p_action: body.operation,
-        p_values: body.values,
-        p_reason: body.reason,
-      });
-    case "organisation.revoke_invite":
-      return db.rpc("admin_revoke_organisation_invite", {
-        p_actor: actor,
-        p_invite: body.inviteId,
-        p_reason: body.reason,
-      });
-    case "trial_extension.offer":
-      return db.rpc("admin_offer_trial_extension", {
-        p_actor: actor,
-        p_type: body.targetType,
-        p_target: body.targetId,
-        p_days: body.days,
-        p_reason: body.reason,
-        p_kind: body.kind,
-      });
-    case "trial_extension.decide":
-      return db.rpc("admin_decide_trial_extension", {
-        p_actor: actor,
-        p_offer: body.offerId,
-        p_approve: body.approve,
-        p_reason: body.reason,
-      });
-    case "trial_extension.withdraw":
-      return db.rpc("admin_withdraw_trial_extension", {
-        p_actor: actor,
-        p_offer: body.offerId,
-        p_reason: body.reason,
-      });
-    case "trial_extension.resend":
-      return db.rpc("admin_resend_trial_extension", { p_actor: actor, p_offer: body.offerId });
-  }
-}
-
-/**
- * Sponsor administrator invitation. The single-use token is generated here,
- * only its SHA-256 hash is stored, and the raw link exists only in the email.
- * If the email cannot be sent the invitation is revoked so no unusable seat
- * stays reserved.
- */
-async function inviteOrganisationAdmin(
-  body: Extract<Body, { action: "organisation.invite_admin" }>,
-  actor: string
-) {
-  const db = createAdminClient();
-  const token = randomBytes(32).toString("base64url");
-  const tokenHash = createHash("sha256").update(token).digest("hex");
-  const { data, error } = await db.rpc("admin_invite_organisation_admin", {
-    p_actor: actor,
-    p_org: body.organisationId,
-    p_email: body.email,
-    p_token_hash: tokenHash,
-    p_reason: body.reason,
-  });
-  if (error) return { data: null, error };
-  const invite = data as { inviteId: string; expiresAt: string; organisationName: string };
-  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  const sent = await sendOrganisationAdminInviteEmail({
-    email: body.email.trim().toLowerCase(),
-    organisationName: invite.organisationName,
-    acceptUrl: `${appUrl}/organisation-invite?token=${encodeURIComponent(token)}`,
-    expiresAt: invite.expiresAt,
-    idempotencyKey: `organisation-invite/${invite.inviteId}`,
-  });
-  if (!sent.success) {
-    await db.rpc("admin_revoke_organisation_invite", {
-      p_actor: actor,
-      p_invite: invite.inviteId,
-      p_reason: "Invitation email could not be delivered",
-    });
-    log.error("Organisation invite email failed", { inviteId: invite.inviteId });
-    return {
-      data: null,
-      error: {
-        message: "The invitation email could not be sent. Please try again.",
-        code: "EMAIL",
-      },
-    };
-  }
-  return { data: { inviteId: invite.inviteId, expiresAt: invite.expiresAt }, error: null };
-}
-
 /**
  * POST /api/admin/commercial
  * Every commercial change (settings, prices, programmes, contracts, trial
@@ -439,137 +222,82 @@ async function inviteOrganisationAdmin(
  * that re-checks the actor's role and writes the audit row atomically.
  */
 export async function POST(request: Request) {
-  if (getDataBackend() === "foundation") {
-    return handleFoundationOwnerRoute({
-      request: request instanceof NextRequest ? request : new NextRequest(request),
-      log,
-      action: "admin:commercial",
-      mutate: true,
-      maxBytes: 16000,
-      signInMessage: "Sign in to manage commercial settings",
-      unavailableMessage: "The change could not be confirmed. Reload before trying again.",
-      refusal: staffCommandRefusal,
-      command: async (api, input) => {
-        const body = schema.parse(input);
-        if (body.action === "payment.reverse")
-          return {
-            success: true,
-            data: await recordStaffPaymentRefund(api, body.paymentId.toLowerCase(), body),
-          };
-        if (body.action === "payment.reverse_slot")
-          return {
-            success: true,
-            data: await recordStaffSlotRefund(api, body.lineId.toLowerCase(), body),
-          };
-        if (body.action === "payment.activate")
-          return {
-            success: true,
-            data: await activateStaffPaidPayment(api, body.paymentId.toLowerCase(), body.reason),
-          };
-        if (body.action === "payment.refund_approve")
-          return {
-            success: true,
-            data: await approveStaffPaymentRefund(api, body.requestId.toLowerCase()),
-          };
-        if (body.action === "payment.refund_decline")
-          return {
-            success: true,
-            data: await declineStaffPaymentRefund(api, body.requestId.toLowerCase(), body.reason),
-          };
-        if (body.action === "organisation.upsert")
-          return { success: true, data: await saveFrontendStaffOrganisation(api, body) };
-        if (body.action === "organisation.manage")
-          return { success: true, data: await manageFrontendStaffOrganisation(api, body) };
-        if (body.action === "organisation.invite_admin")
-          return { success: true, data: await inviteFrontendStaffOrganisationAdmin(api, body) };
-        if (body.action === "organisation.revoke_invite")
-          return {
-            success: true,
-            data: await revokeFrontendStaffOrganisationInvite(api, body.inviteId, body.reason),
-          };
-        if (body.action === "partner.manage") {
-          const data = await saveRestoredPartner(api, {
-            account_id: body.userId,
-            action: body.operation === "rate" ? "set_rate" : body.operation,
-            reason: body.reason,
-            code: body.values.code,
-            commission_bps: body.values.commissionBps ?? undefined,
-            note: body.values.notes?.trim() || undefined,
-          });
-          return { success: true, data };
-        }
-        if (body.action === "commission.manage") {
-          if (body.values.amountCents !== undefined)
-            throw new FoundationStaffCommandError(
-              422,
-              "Commission amounts are fixed by the recorded payment."
-            );
-          const data = await decideRestoredCommission(api, {
-            commission_id: body.commissionId,
-            action: body.operation,
-            reason: body.reason,
-            ...(body.operation === "mark_paid" ? { reference: body.values.reference } : {}),
-          });
-          return { success: true, data };
-        }
-        throw new FoundationStaffCommandError(
-          501,
-          "This action is not yet available on the new backend."
-        );
-      },
-    });
-  }
-  const guard = await enforceAdminMutationGuard({
-    request,
-    logger: log,
-    rateLimitAction: "admin:commercial",
-  });
-  if (!guard.success) return guard.response;
-
-  const parsed = await parseAndValidateJsonRequest(request, schema, {
-    invalidJsonMessage: "Invalid JSON payload",
-    validationErrorMessage: "Invalid request",
-    includeValidationDetails: true,
-  });
-  if (!parsed.success) return parsed.response;
-  const body = parsed.data;
-
-  if (!(await verifyCapabilityFromDb(guard.user, CAPABILITY[body.action]))) {
-    return NextResponse.json(
-      { error: "You do not have permission for this action." },
-      { status: 403 }
-    );
-  }
-
-  if (body.action === "settings.update") {
-    if (!isCommercialSettingKey(body.key)) {
-      return NextResponse.json({ error: "Unknown setting" }, { status: 400 });
-    }
-    const check = COMMERCIAL_SETTING_SCHEMAS[body.key].safeParse(body.value);
-    if (!check.success) {
-      return NextResponse.json(
-        { error: "Invalid setting value", details: check.error.issues.slice(0, 5) },
-        { status: 400 }
+  return handleFoundationOwnerRoute({
+    request: request instanceof NextRequest ? request : new NextRequest(request),
+    log,
+    action: "admin:commercial",
+    mutate: true,
+    maxBytes: 16000,
+    signInMessage: "Sign in to manage commercial settings",
+    unavailableMessage: "The change could not be confirmed. Reload before trying again.",
+    refusal: staffCommandRefusal,
+    command: async (api, input) => {
+      const body = schema.parse(input);
+      if (body.action === "payment.reverse")
+        return {
+          success: true,
+          data: await recordStaffPaymentRefund(api, body.paymentId.toLowerCase(), body),
+        };
+      if (body.action === "payment.reverse_slot")
+        return {
+          success: true,
+          data: await recordStaffSlotRefund(api, body.lineId.toLowerCase(), body),
+        };
+      if (body.action === "payment.activate")
+        return {
+          success: true,
+          data: await activateStaffPaidPayment(api, body.paymentId.toLowerCase(), body.reason),
+        };
+      if (body.action === "payment.refund_approve")
+        return {
+          success: true,
+          data: await approveStaffPaymentRefund(api, body.requestId.toLowerCase()),
+        };
+      if (body.action === "payment.refund_decline")
+        return {
+          success: true,
+          data: await declineStaffPaymentRefund(api, body.requestId.toLowerCase(), body.reason),
+        };
+      if (body.action === "organisation.upsert")
+        return { success: true, data: await saveFrontendStaffOrganisation(api, body) };
+      if (body.action === "organisation.manage")
+        return { success: true, data: await manageFrontendStaffOrganisation(api, body) };
+      if (body.action === "organisation.invite_admin")
+        return { success: true, data: await inviteFrontendStaffOrganisationAdmin(api, body) };
+      if (body.action === "organisation.revoke_invite")
+        return {
+          success: true,
+          data: await revokeFrontendStaffOrganisationInvite(api, body.inviteId, body.reason),
+        };
+      if (body.action === "partner.manage") {
+        const data = await saveRestoredPartner(api, {
+          account_id: body.userId,
+          action: body.operation === "rate" ? "set_rate" : body.operation,
+          reason: body.reason,
+          code: body.values.code,
+          commission_bps: body.values.commissionBps ?? undefined,
+          note: body.values.notes?.trim() || undefined,
+        });
+        return { success: true, data };
+      }
+      if (body.action === "commission.manage") {
+        if (body.values.amountCents !== undefined)
+          throw new FoundationStaffCommandError(
+            422,
+            "Commission amounts are fixed by the recorded payment."
+          );
+        const data = await decideRestoredCommission(api, {
+          commission_id: body.commissionId,
+          action: body.operation,
+          reason: body.reason,
+          ...(body.operation === "mark_paid" ? { reference: body.values.reference } : {}),
+        });
+        return { success: true, data };
+      }
+      throw new FoundationStaffCommandError(
+        501,
+        "This action is not yet available on the new backend."
       );
-    }
-  }
-
-  const { data, error } =
-    body.action === "organisation.invite_admin"
-      ? await inviteOrganisationAdmin(body, guard.user.id)
-      : await call(body, guard.user.id);
-  if (error) {
-    const mapped =
-      error.code === "EMAIL"
-        ? { message: error.message, status: 502 }
-        : mapCommercialError(error.message);
-    log.warn("Commercial change refused", { action: body.action, code: error.code });
-    return NextResponse.json(
-      { error: mapped?.message ?? "The change could not be applied." },
-      { status: mapped?.status ?? 409 }
-    );
-  }
-
-  if (body.action === "settings.update") clearCommercialSettingsCache();
-  return NextResponse.json({ success: true, data: data ?? null });
+    },
+  });
 }

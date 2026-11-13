@@ -751,7 +751,9 @@ export async function getR2ObjectBytes(
 export async function generatePresignedDownloadUrl(
   bucket: string,
   key: string,
-  expiresIn: number = 3600
+  expiresIn: number = 3600,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  maxContentLength?: number
 ): Promise<string> {
   // Clamp expiresIn to safe range: 60s–86400s (1 min–24 hours)
   const safeExpiry = Math.max(60, Math.min(86400, expiresIn));
@@ -861,7 +863,7 @@ export async function downloadKycDocument(key: string): Promise<Buffer> {
   return result.buffer;
 }
 
-export async function downloadKycDocumentWithMetrics(
+async function downloadKycDocumentWithMetrics(
   key: string
 ): Promise<{ buffer: Buffer; downloadMs: number; decryptMs: number }> {
   assertSafeStorageKey(key);
