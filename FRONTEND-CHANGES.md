@@ -69,7 +69,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 21. Payment receipt email (M3.7)            | 0 (email only) | keep (owner, 2026-11-13)                                                                   | Members who pay: the 'Payment received' email lists the invoice number, date paid, item, amount in rands and bank reference, and links to 'My slots' (add-ons: the dashboard) instead of Billing                                                  |
 | 22. Hidden until it works, part 2 (M6.2)    |              3 | keep (owner, 2026-11-13)                                                                   | No 'Performance' page or menu entry and no 'Detect province and city' button; a search lists tourism businesses under Businesses again                                                                                                            |
 | 23. Phone-sized photos (M4.3)               |              0 | keep (owner, 2026-11-13)                                                                   | Nothing on screen: the same photos, but a phone downloads a 400, 800 or 1 600 px copy of each new photo instead of the full-size original                                                                                                         |
-| 25. Communication choices saved (M1.7)      |              1 | awaiting owner                                                                             | Notifications page: no 'Failed to load email activity' message on every visit; the four switches (all off until turned on) stay as set after a reload; the Email tab lists the member's own sent and failed account emails                        |
+| 25. Communication choices saved (M1.7)      |              1 | keep (owner, 2026-11-13)                                                                   | Notifications page: no 'Failed to load email activity' message on every visit; the four switches (all off until turned on) stay as set after a reload; the Email tab lists the member's own sent and failed account emails                        |
 | **Total**                                   |        **295** |                                                                                            |                                                                                                                                                                                                                                                   |
 
 Questions for the owner:
@@ -378,6 +378,13 @@ Questions for the owner:
     switch. Do you approve keeping all four switches visible, or should
     Analytics and Third-party sharing be hidden until something uses them (rule
     2)? Before and after pictures are with the review notes.
+
+    Answered: screens approved by owner 2026-11-13. Open follow-ups, not yet
+    answered: whether the Analytics and Third-party sharing switches stay
+    visible while nothing reads them; adding the new records to the privacy
+    export, the closed-account retention sweep and a staff view of the Terms a
+    member accepted; and whether the line under the Google button is enough to
+    record a Google sign-up's acceptance of the Terms.
 
 <!-- frontend-ledger:start -->
 
@@ -959,9 +966,9 @@ shows on screen. Outside the checked scope: the two routes under
 `src/lib/foundation/registration.ts`. The page component
 (`src/components/dashboard/communication-hub.tsx`) is unchanged.
 
-| File                                       | Kind     | Reason                                                                                                   | What changes on screen                                                                                              | Proposed | Owner decision | Date       | Version      |
-| ------------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------- | -------------- | ---------- | ------------ |
-| `src/app/dashboard/communication/page.tsx` | rewiring | The page reads the signed-in member from the live backend's session check instead of the retired client. | Nothing in its own layout; the page's switches and Email tab now work (see above): no error message on every visit. | keep     | awaiting owner | 2026-11-13 | 7af356e16fc6 |
+| File                                       | Kind     | Reason                                                                                                   | What changes on screen                                                                                              | Proposed | Owner decision                              | Date       | Version      |
+| ------------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------- | ---------- | ------------ |
+| `src/app/dashboard/communication/page.tsx` | rewiring | The page reads the signed-in member from the live backend's session check instead of the retired client. | Nothing in its own layout; the page's switches and Email tab now work (see above): no error message on every visit. | keep     | approved by owner 2026-11-13 (M1.7 screens) | 2026-11-13 | 7af356e16fc6 |
 
 <!-- frontend-ledger:end -->
 

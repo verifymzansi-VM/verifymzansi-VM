@@ -984,8 +984,8 @@ the same fingerprints.
 
 ## Communication choices and Terms accepted at sign-up, 13 November 2026
 
-`20261113134500_communication_choices_and_signup_terms.sql` is not applied yet
-(roadmap M1.7, finding SEC-09). It needs the reviewed member check
+`20261113134500_communication_choices_and_signup_terms.sql` was applied on 13
+November 2026 (roadmap M1.7, finding SEC-09). It needs the reviewed member check
 `internal.price_draft_actor()` and refuses (55000) without it. It only adds: no
 existing command, argument, grant, table or function body changes.
 
@@ -2812,6 +2812,11 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   the pull request was merged; preflight before "update not applied; refunds
   waiting for approval: 0", after "already applied" (no problem rows);
   production fingerprint after it matched the full replay
-- `20261113134500_communication_choices_and_signup_terms.sql`: pending
+- `20261113134500_communication_choices_and_signup_terms.sql`: applied
+  2026-11-13 15:54 UTC; applied with the owner's approval, from the reviewed
+  file, before the pull request was merged; preflight before "update not
+  applied; current terms: posting-v4", after "already applied; current terms:
+  posting-v4; choice changes recorded: 0; sign-up acceptances recorded: 0";
+  production fingerprint after it matched the full replay
 
 <!-- applied-register:end -->
