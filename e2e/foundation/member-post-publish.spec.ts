@@ -341,6 +341,15 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
       `select id from auth.users where email = ${sql(member.email)} and email_confirmed_at is not null;`
     );
     expect(member.id).toMatch(UUID);
+    // The ticked Terms box is recorded with the current Terms version (M1.7).
+    expect(
+      queryTestCopy(
+        `select a.method || ' ' || (a.version = c.version and a.document_hash = v.document_hash) ` +
+          `from private.signup_terms_acceptances a, private.posting_terms_current c ` +
+          `join private.posting_terms_versions v on v.version = c.version ` +
+          `where a.account_id = '${member.id}';`
+      )
+    ).toBe("email_form true");
     // Trusted step, as the seed does: close the invitation once it is used, so
     // this member can never claim it as an owner-admin invitation later.
     queryTestCopy(

@@ -24,8 +24,11 @@ import { readFileSync } from "node:fs";
 import {
   applyStepsBefore,
   assertReadOnlyPreflight,
+  authSignUp,
   createChecks,
+  executeGrants,
   sqlHelpers,
+  sqlJsonb as jsonb,
   updateCheckViews,
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
@@ -49,20 +52,11 @@ try {
   const { q, json, fails, member } = sqlHelpers(database, current);
   const { fingerprint, bodyMd5: bodyOf } = views;
   const preflight = views.preflightRows;
-  const literal = (value) => `'${String(value).replaceAll("'", "''")}'`;
-  const jsonb = (value) => (value === null ? "null" : `${literal(JSON.stringify(value))}::jsonb`);
 
   // ------------------------------------------------------- synthetic world
   /** An Auth user created as GoTrue would; the profile trigger runs on the
    * insert. Returns { id, session } (a live session for member calls). */
-  const signUp = (meta, { anonymous = false, deleted = false } = {}) =>
-    json(`with u as (
-        insert into auth.users(id,email,email_confirmed_at,is_anonymous,deleted_at,raw_user_meta_data)
-        values(gen_random_uuid(),${anonymous ? "null" : "'signup-'||gen_random_uuid()||'@example.invalid'"},
-          ${anonymous ? "null" : "now()"},${anonymous},${deleted ? "now()" : "null"},${jsonb(meta)})
-        returning id),
-      s as (insert into auth.sessions(id,user_id,aal) select gen_random_uuid(),id,'aal1' from u returning id,user_id)
-      select jsonb_build_object('id',s.user_id,'session',s.id) from s;`);
+  const signUp = (meta, options = {}) => authSignUp(json, meta, options);
   const profile = (user) =>
     json(
       `select coalesce((select jsonb_build_object('display_name',display_name,'revision',revision,` +
@@ -74,10 +68,7 @@ try {
     q(`update auth.users set raw_user_meta_data=${jsonb(meta)} where id='${user.id}';`);
   const helper = (meta) =>
     q(`select coalesce(internal.signup_display_name(${jsonb(meta)}),'<null>');`);
-  const grantsOf = (signatures) =>
-    json(`select jsonb_object_agg(f, (select jsonb_object_agg(r, has_function_privilege(r,f,'execute'))
-        from unnest(array['anon','authenticated','service_role']) r))
-      from unnest(array[${signatures.map(literal).join(",")}]) f;`);
+  const grantsOf = (signatures) => executeGrants(json, signatures);
   const google = (full, extra = {}) => ({
     iss: "https://accounts.google.com",
     sub: "1234567890",
