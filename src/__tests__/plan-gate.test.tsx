@@ -39,6 +39,7 @@ vi.mock("@/lib/utils/csrf", () => ({
 
 vi.mock("@/lib/constants/pricing", () => ({
   ENTERPRISE_QUOTE_ABOVE_SLOTS: 100,
+  PACKAGES_ON_SALE: false,
   PLANS: [
     {
       area: "MZANSI_MARKET",

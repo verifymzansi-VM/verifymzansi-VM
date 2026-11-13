@@ -113,9 +113,10 @@ describe("public trust pages", () => {
     expect(screen.getByText(/not a party to any deal between users/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Who we are" })).toBeInTheDocument();
     expect(screen.getByText(/does not guarantee that a user/i)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Payments & billing" })).toBeInTheDocument();
-    expect(screen.getByText(/paid content is rejected/i)).toBeInTheDocument();
-    expect(screen.getByText(/Plans do not auto-renew/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Slots & prices" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Refunds & cancelling" })).toBeInTheDocument();
+    expect(screen.getByText(/A rejected post is not a reason for a refund/i)).toBeInTheDocument();
+    expect(screen.getByText(/nothing renews automatically/i)).toBeInTheDocument();
   });
 
   it("renders the immutable current document after the foundation is explicitly bound", async () => {
@@ -125,7 +126,8 @@ describe("public trust pages", () => {
     );
     render(await TermsPage());
     expect(readCurrentPublishedPostingTerms).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Posting terms · posting-v1")).toBeInTheDocument();
+    expect(screen.getByText("Updated November 2026")).toBeInTheDocument();
+    expect(screen.queryByText(/Posting terms ·/)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "What our checks mean" })).toBeInTheDocument();
   });
 

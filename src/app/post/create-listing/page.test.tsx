@@ -536,16 +536,8 @@ describe("CreateListingPage", () => {
     });
   });
 
-  it("uploads listing videos through the shared direct path with validated fallback", async () => {
+  it("uploads listing videos through the validated upload endpoint only", async () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (input === "/api/media/upload-url") {
-        return {
-          ok: false,
-          status: 410,
-          json: async () => ({ code: "direct_media_uploads_disabled" }),
-        };
-      }
-
       if (input === "/api/media/upload") {
         const area = init?.body instanceof FormData ? init.body.get("area") : null;
         return {
@@ -601,7 +593,7 @@ describe("CreateListingPage", () => {
     });
 
     const calls = fetchMock.mock.calls;
-    expect(calls.some((call) => call[0] === "/api/media/upload-url")).toBe(true);
+    expect(calls.some((call) => String(call[0]).startsWith("/api/media/upload-"))).toBe(false);
     expect(
       calls.some(
         (call) =>
@@ -623,14 +615,6 @@ describe("CreateListingPage", () => {
 
   it("keeps users on the media step with a videos field error when listing video upload fails", async () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (input === "/api/media/upload-url") {
-        return {
-          ok: false,
-          status: 410,
-          json: async () => ({ code: "direct_media_uploads_disabled" }),
-        };
-      }
-
       if (input === "/api/media/upload") {
         const area = init?.body instanceof FormData ? init.body.get("area") : null;
         if (area === "listing_video") {

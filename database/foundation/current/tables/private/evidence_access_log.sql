@@ -20,6 +20,8 @@ create table private.evidence_access_log (
 alter table private.evidence_access_log owner to postgres;
 alter table private.evidence_access_log enable row level security;
 CREATE INDEX evidence_access_audit_time_idx ON private.evidence_access_log USING btree (accessed_at DESC, id DESC);
+CREATE INDEX evidence_access_log_case_id_idx ON private.evidence_access_log USING btree (case_id);
+CREATE INDEX evidence_access_log_staff_id_idx ON private.evidence_access_log USING btree (staff_id);
 CREATE TRIGGER evidence_access_log_append_only BEFORE DELETE OR UPDATE ON private.evidence_access_log FOR EACH ROW EXECUTE FUNCTION internal.append_only_guard();
 CREATE TRIGGER evidence_access_log_no_truncate BEFORE TRUNCATE ON private.evidence_access_log FOR EACH STATEMENT EXECUTE FUNCTION internal.append_only_guard();
 revoke all on private.evidence_access_log from public;

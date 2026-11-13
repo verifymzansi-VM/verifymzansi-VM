@@ -310,6 +310,41 @@ describe("KycPreviewLightbox", () => {
     });
   });
 
+  it("asks for a note to the member before sending a rejection", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        blob: () => Promise.resolve(new Blob(["img"], { type: "image/jpeg" })),
+      })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    await renderOpenLightbox();
+    await waitFor(() => expect(screen.getByText("Reject")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Reject"));
+    fireEvent.change(await screen.findByTitle("Reason code"), {
+      target: { value: "blurry_image" },
+    });
+    fireEvent.click(screen.getByText("Confirm Reject"));
+
+    expect(
+      await screen.findByText("Please write a note telling the member what to fix.")
+    ).toBeInTheDocument();
+    expect(mockFetch).not.toHaveBeenCalledWith("/api/admin/verification/decide", expect.anything());
+
+    fireEvent.change(screen.getByLabelText(/Note to the member/), {
+      target: { value: "Please retake the photo without glare." },
+    });
+    fireEvent.click(screen.getByText("Confirm Reject"));
+    await waitFor(() =>
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/admin/verification/decide",
+        expect.objectContaining({
+          body: expect.stringContaining('"reasonNote":"Please retake the photo without glare."'),
+        })
+      )
+    );
+  });
+
   it("submits approval decision and calls onDecisionComplete", async () => {
     const onDecisionComplete = vi.fn();
     const onOpenChange = vi.fn();

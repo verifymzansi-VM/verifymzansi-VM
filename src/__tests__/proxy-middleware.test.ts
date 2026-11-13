@@ -40,33 +40,29 @@ function createMockRequest(
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
-describe("proxy — immutable posting terms versions", () => {
+describe("proxy — one set of Terms", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it.each([
-    "/terms/versions/not-a-published-version",
-    "/terms/versions/constructor",
-    "/terms/versions/posting-v1/extra",
-    "/terms/versions/posting-v3/extra",
-    "/terms/versions/posting-v4",
     "/terms/versions",
-  ])("rejects unpublished paths before streaming or Auth: %s", async (path) => {
+    "/terms/versions/posting-v1",
+    "/terms/versions/posting-v1?from=terms",
+    "/terms/versions/posting-v3",
+    "/terms/versions/posting-v4",
+    "/terms/versions/posting-v4/extra",
+    "/terms/versions/not-a-published-version",
+  ])("sends former per-version addresses to /terms for good: %s", async (path) => {
     const response = await routeRequest(createMockRequest(path));
-    expect(response.status).toBe(404);
-    expect(await response.text()).toBe("Not found");
+    expect(response.status).toBe(308);
+    expect(new URL(response.headers.get("location")!).pathname).toBe("/terms");
     expect(mockGetUser).not.toHaveBeenCalled();
   });
 
-  it("allows the exact archived document and ignores unrelated path prefixes", async () => {
-    for (const path of [
-      "/terms/versions/posting-v1?from=terms",
-      "/terms/versions/posting-v3",
-      "/terms/versions-extra/example",
-    ])
+  it("ignores unrelated path prefixes", async () => {
+    for (const path of ["/terms", "/terms/versions-extra/example"])
       expect((await routeRequest(createMockRequest(path))).headers.get("x-middleware-next")).toBe(
         "1"
       );
-    expect(mockGetUser).not.toHaveBeenCalled();
   });
 });
 
@@ -166,6 +162,14 @@ describe("proxy security headers", () => {
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
     expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(setCookie).toContain("vm_csrf=");
+  });
+
+  it("passes Cloudflare's request reference to the page as Server-Timing", async () => {
+    const res = await middleware(
+      new NextRequest("http://localhost:3000/", { headers: { "cf-ray": "8f1a2b3c4d5e6f70-JNB" } })
+    );
+    expect(res.headers.get("Server-Timing")).toBe('cfray;desc="8f1a2b3c4d5e6f70-JNB"');
+    expect((await middleware(createMockRequest("/"))).headers.has("Server-Timing")).toBe(false);
   });
 
   it("uses a development-friendly CSP without x-nonce in development", async () => {

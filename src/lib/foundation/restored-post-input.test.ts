@@ -1,4 +1,4 @@
-import { it, expect } from "vitest";
+import { afterEach, it, expect, vi } from "vitest";
 import { buildRestoredPostInput, restoredMediaKey } from "./restored-post-input";
 const id = "11111111-1111-4111-8111-111111111111",
   photo = `https://media.verifymzansi.com/media/${id}`;
@@ -153,4 +153,25 @@ it("maps event activity and true SAST window without converting an event into a 
     trial_days: null,
     presentation: { ticket_price_cents: 1000 },
   });
+});
+
+afterEach(() => vi.unstubAllEnvs());
+it("reads the key after the configured media address's own path, and only there", () => {
+  // Production's media address has no path.
+  vi.stubEnv("NEXT_PUBLIC_MEDIA_URL", "https://media.verifymzansi.com");
+  expect(restoredMediaKey(photo)).toBe(`media/${id}`);
+  expect(() => restoredMediaKey(`https://media.verifymzansi.com/e2e-media/media/${id}`)).toThrow(
+    "older upload"
+  );
+  // The browser-test copy serves media under /e2e-media on its own host.
+  vi.stubEnv("NEXT_PUBLIC_MEDIA_URL", "https://media.verifymzansi.com/e2e-media/");
+  expect(restoredMediaKey(`https://media.verifymzansi.com/e2e-media/media/${id}`)).toBe(
+    `media/${id}`
+  );
+  expect(restoredMediaKey(photo)).toBe(`media/${id}`);
+  expect(() =>
+    restoredMediaKey(`https://media.verifymzansi.com/e2e-media/other/media/${id}`)
+  ).toThrow("older upload");
+  vi.stubEnv("NEXT_PUBLIC_MEDIA_URL", "not a url");
+  expect(restoredMediaKey(photo)).toBe(`media/${id}`);
 });

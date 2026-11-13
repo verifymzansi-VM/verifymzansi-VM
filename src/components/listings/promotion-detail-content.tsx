@@ -31,9 +31,9 @@ import { PromotionContactActions } from "@/components/listings/promotion-contact
 import { BusinessStickers } from "@/components/trust/business-stickers";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { VerifiedPosition } from "@/components/trust/verified-position";
-import { MediaLightbox } from "@/components/ui/media-lightbox";
+import { MediaLightbox } from "@/components/ui/media-lightbox-lazy";
 import { StickyMobileBar } from "@/components/ui/sticky-mobile-bar";
-import { formatRandAmount, formatSaLongDate, formatZAR, formatZARShort } from "@/lib/utils/format";
+import { formatRandAmount, formatSaLongDate, formatZARShort } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
@@ -49,7 +49,12 @@ import type { EventDetails, TicketTier } from "@/types/tourism-details";
 import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
 import { useTrackContentView } from "@/hooks/use-track-content-view";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { humanizeKey } from "@/lib/presentation/listing-facts";
+import { describeListingPrice, humanizeKey } from "@/lib/presentation/listing-facts";
+import {
+  POST_MEDIA_FIRST_SCREEN_HEIGHT,
+  PostMediaCaption,
+  useMediaPlaying,
+} from "@/components/listings/poster-caption";
 import {
   buildEventCalendarUrl,
   EVENT_RAIN_POLICY_LABELS,
@@ -310,6 +315,7 @@ export function PromotionDetailContent({
   const wasPlayingRef = useRef(false);
   const canPrevious = activeMediaIndex > 0;
   const canNext = activeMediaIndex < mediaItems.length - 1;
+  const media = useMediaPlaying(`${activeMediaIndex}:${activeMedia?.url ?? ""}`);
 
   function goTo(index: number) {
     if (index >= 0 && index < mediaItems.length) {
@@ -447,6 +453,14 @@ export function PromotionDetailContent({
         : promotion.event_details?.tickets_url
           ? "Tickets available"
           : null;
+  // The showroom card's price line: the cheapest ticket or "Free entry", else the advert's price.
+  const captionPrice =
+    tierPrices.length > 0
+      ? ticketSummary
+      : promotion.price_cents != null && promotion.price_cents > 0
+        ? describeListingPrice({ category: null, price_cents: promotion.price_cents }).label
+        : null;
+  const captionLogoUrl = promotion.logo_url ?? linkedBusiness?.logo_url ?? null;
 
   const calendarUrl = buildEventCalendarUrl({
     title: promotion.title,
@@ -480,8 +494,15 @@ export function PromotionDetailContent({
               isReviewLayout ? "2xl:max-w-none" : "lg:max-w-none"
             }`}
             {...swipeHandlers}
+            {...media.handlers}
           >
-            <div className={cn("relative aspect-[9/16] overflow-hidden bg-black touch-pan-y")}>
+            <div
+              className={cn(
+                "relative aspect-[9/16] overflow-hidden bg-black touch-pan-y",
+                // The sticky contact bar is public-only; previews keep the full frame.
+                !isReviewLayout && POST_MEDIA_FIRST_SCREEN_HEIGHT
+              )}
+            >
               {activeMedia.kind === "video" ? (
                 <VideoViewTracker
                   targetId={promotion.id}
@@ -534,8 +555,19 @@ export function PromotionDetailContent({
                 )}
               </div>
 
+              <PostMediaCaption
+                eyebrow={captionPrice}
+                title={promotion.title}
+                // The card's place: the town, else the province.
+                location={promotion.location_city || promotion.location_province}
+                logoUrl={captionLogoUrl}
+                overVideo={activeMedia.kind === "video"}
+                playing={media.playing}
+              />
+
+              {/* On phones the logo sits in the caption, as on the showroom card. */}
               {(promotion.logo_url || linkedBusiness?.logo_url) && (
-                <div className="absolute bottom-4 left-4 h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-white shadow-md">
+                <div className="absolute bottom-4 left-4 h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-white shadow-md max-md:hidden">
                   <Image
                     src={normalizeMediaUrl((promotion.logo_url ?? linkedBusiness?.logo_url)!)}
                     alt={`${promotion.title} logo`}
@@ -636,7 +668,7 @@ export function PromotionDetailContent({
               </span>
               {promotion.price_cents != null && promotion.price_cents > 0 && (
                 <span className="font-bold">
-                  {formatZAR(promotion.price_cents)}
+                  {formatZARShort(promotion.price_cents)}
                   {promotion.price_negotiable && (
                     <span className="ml-1 text-xs font-normal text-brand-green">Negotiable</span>
                   )}
@@ -657,9 +689,7 @@ export function PromotionDetailContent({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {whenLabel ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      When
-                    </p>
+                    <p className="text-xs font-semibold text-muted-foreground">When</p>
                     <p className="mt-1 text-sm font-medium">
                       <time dateTime={promotion.start_date ?? undefined}>{whenLabel}</time>
                     </p>
@@ -667,25 +697,19 @@ export function PromotionDetailContent({
                 ) : null}
                 {venueLabel ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Venue
-                    </p>
+                    <p className="text-xs font-semibold text-muted-foreground">Venue</p>
                     <p className="mt-1 text-sm font-medium">{venueLabel}</p>
                   </div>
                 ) : null}
                 {eventTypeLabel ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Event type
-                    </p>
+                    <p className="text-xs font-semibold text-muted-foreground">Event type</p>
                     <p className="mt-1 text-sm font-medium">{eventTypeLabel}</p>
                   </div>
                 ) : null}
                 {ticketSummary ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Tickets
-                    </p>
+                    <p className="text-xs font-semibold text-muted-foreground">Tickets</p>
                     <p className="mt-1 text-sm font-medium">{ticketSummary}</p>
                   </div>
                 ) : null}
@@ -1133,7 +1157,7 @@ export function PromotionDetailContent({
               <CardContent className="space-y-2 p-4">
                 <div className="flex items-baseline gap-2">
                   <span className="font-display text-2xl font-bold">
-                    {formatZAR(promotion.price_cents)}
+                    {formatZARShort(promotion.price_cents)}
                   </span>
                   {promotion.price_negotiable && (
                     <Badge variant="outline" className="text-brand-green">

@@ -32,6 +32,7 @@ alter table private.organisation_affiliations owner to postgres;
 alter table private.organisation_affiliations enable row level security;
 CREATE UNIQUE INDEX organisation_affiliations_active_idx ON private.organisation_affiliations USING btree (organisation_id, post_id) WHERE (status = 'active'::text);
 CREATE INDEX organisation_affiliations_org_idx ON private.organisation_affiliations USING btree (organisation_id, confirmed_at DESC, id DESC);
+CREATE INDEX organisation_affiliations_post_id_post_kind_idx ON private.organisation_affiliations USING btree (post_id, post_kind);
 CREATE INDEX organisation_affiliations_post_idx ON private.organisation_affiliations USING btree (post_id) WHERE (status = 'active'::text);
 CREATE TRIGGER organisation_affiliations_sponsorship_rules AFTER UPDATE OF status ON private.organisation_affiliations FOR EACH ROW WHEN (old.status = 'active'::text AND new.status <> 'active'::text) EXECUTE FUNCTION internal.affiliation_sponsorship_rules();
 revoke all on private.organisation_affiliations from public;

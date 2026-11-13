@@ -55,6 +55,9 @@ CREATE UNIQUE INDEX reports_one_open_duplicate_pair_idx ON private.reports USING
 CREATE UNIQUE INDEX reports_one_open_signed_in_idx ON private.reports USING btree (post_id, reporter_id) WHERE ((report_origin = 'public'::text) AND (status = 'open'::text) AND (reporter_id IS NOT NULL));
 CREATE INDEX reports_open_idx ON private.reports USING btree (severity, created_at) WHERE (status = 'open'::text);
 CREATE INDEX reports_open_post_idx ON private.reports USING btree (post_id) WHERE (status = 'open'::text);
+CREATE INDEX reports_post_id_idx ON private.reports USING btree (post_id) WHERE (post_id IS NOT NULL);
+CREATE INDEX reports_reporter_id_idx ON private.reports USING btree (reporter_id) WHERE (reporter_id IS NOT NULL);
+CREATE INDEX reports_resolved_by_idx ON private.reports USING btree (resolved_by) WHERE (resolved_by IS NOT NULL);
 CREATE INDEX reports_subject_idx ON private.reports USING btree (subject_account_id, status);
 CREATE TRIGGER frontend_report_record_guard BEFORE INSERT OR UPDATE ON private.reports FOR EACH ROW EXECUTE FUNCTION internal.frontend_report_record_guard();
 CREATE TRIGGER reports_identity BEFORE UPDATE ON private.reports FOR EACH ROW EXECUTE FUNCTION internal.report_identity_guard();

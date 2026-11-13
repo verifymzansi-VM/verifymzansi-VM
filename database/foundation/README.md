@@ -70,14 +70,23 @@ The same command then runs `scripts/test-foundation-staff-rules.mjs`, which
 replays every file into a third throwaway container first and only then checks
 staff rules through the production API commands, as members and staff with
 synthetic sessions (staff with a verified authenticator app) or as
-`service_role`: staff role changes need an independent second staff member and
-nobody can propose or approve a change to their own role; privacy requests get
-their deadline from the rule, one extension at most, identity verification
-before completion or export, and never processing by the requester; report
-warnings, content hides and appeals keep reviewers independent; a stale mail
-outbox lease cannot acknowledge a delivery; and the activation limit per period
-holds with free slots. These checks replace ones that earlier ran only on the
-older prototype fixture (`scripts/test-restored-post-commands.mjs`).
+`service_role`: every staff command needs an AAL2 claim (not anonymous, role
+`authenticated`) backed by a live, unexpired AAL2 session of an unsuspended
+account, a verified authenticator app (not a phone factor), a current staff role
+and an authenticator code from the last 12 hours (15 minutes for capabilities
+such as `role:review`); six commands browsers must never call (privacy request
+intake, report intake, mail outbox, enquiries, retention) are refused to `anon`
+and `authenticated` (the full grant set is compared with the manifests by
+`pnpm db:foundation:api-check`); staff role changes need an independent second
+staff member and nobody can propose or approve a change to their own role;
+privacy requests get their deadline from the rule, one extension at most and
+only before the deadline (none for deletion), identity verification before
+completion or export, never processing by the requester, and never by a
+moderator or an ineligible assignee; report warnings, content hides and appeals
+keep reviewers independent; a stale mail outbox lease cannot acknowledge a
+delivery; and the activation limit per period holds with free slots. These
+checks complement the ones in `scripts/test-restored-post-commands.mjs`, which
+still runs on the older prototype fixture with only some of the updates.
 
 An update that backfills existing rows or is hard to undo can come with two
 reviewed companions named after it, which the replay never applies:
@@ -178,16 +187,18 @@ The native suite also runs in CI: the `foundation-native` job
 local stack with the pinned Supabase CLI and runs `pnpm test:foundation:native`
 on an ubuntu-latest runner, then uploads the redacted `results.json` (and the
 staff-read probe record) as the `foundation-native-results` run artifact. It
-runs nightly, on manual dispatch and on every pull request; when a pull request
-does not touch `database/foundation/`, `docs/backend-foundation/prototypes/`,
-`src/lib/`, `src/types/`, `src/app/api/`, the native scripts or the
-dependencies, the job passes without starting Docker. The fixture's Docker guard
-(`localDockerContext` in `scripts/lib/foundation-native-isolation.mjs`, also
-used by the browser test copy through `localDockerEnvironment`) accepts only
-Docker Desktop's local Linux engine pipe on Windows, or the default context on
-the local socket `/var/run/docker.sock` of a GitHub-hosted runner; it refuses
-TCP, SSH and other remote endpoints, other contexts, a `DOCKER_HOST` or
-`DOCKER_CONTEXT` pointing elsewhere, and Linux outside GitHub-hosted CI.
+runs nightly, on manual dispatch, on every pull request and, on `main`, inside
+the CI run as part of the release gate (the deploy waits for it); when a pull
+request does not touch `database/foundation/`,
+`docs/backend-foundation/prototypes/`, `src/lib/`, `src/types/`, `src/app/api/`,
+the native scripts or the dependencies, the job passes without starting Docker.
+The fixture's Docker guard (`localDockerContext` in
+`scripts/lib/foundation-native-isolation.mjs`, also used by the browser test
+copy through `localDockerEnvironment`) accepts only Docker Desktop's local Linux
+engine pipe on Windows, or the default context on the local socket
+`/var/run/docker.sock` of a GitHub-hosted runner; it refuses TCP, SSH and other
+remote endpoints, other contexts, a `DOCKER_HOST` or `DOCKER_CONTEXT` pointing
+elsewhere, and Linux outside GitHub-hosted CI.
 
 What each part of `pnpm test:foundation:native` proves:
 
@@ -196,11 +207,15 @@ What each part of `pnpm test:foundation:native` proves:
   `candidate.sql` was assembled from, plus fixture-only drivers, with **none**
   of the files in `updates/` applied. The suite checks that every installed
   function body matches those prototypes, so its results describe the baseline
-  behaviour, not the bodies production runs after the updates. Behaviour that an
-  update changed is tested on the replayed schema by
+  behaviour, not the bodies production runs after the updates. On the replayed
+  schema (`candidate.sql` plus every update), the CI job `foundation-sql-lint`
+  tests the behaviour of four updates with
   `scripts/test-foundation-lifecycle-guards.mjs`
-  (`pnpm db:foundation:lifecycle-test`, CI job `foundation-sql-lint`), which
-  builds `candidate.sql` plus every update.
+  (`pnpm db:foundation:lifecycle-test`): `20261109073519_post_lifecycle_guards`,
+  `20261109104020_post_expiry_rules`, `20261109224337_fix_post_command_target`
+  and `20261110045944_intro_trial_at_first_approval`. It tests the staff rules
+  listed above with `scripts/test-foundation-staff-rules.mjs`. Other updates are
+  not behaviour-tested on the replayed schema by these two scripts.
 - `scripts/test-restored-post-commands.mjs` applies a fixed list of 44 of the
   update files on top of that prototype fixture inside one transaction, tests
   the restored-frontend commands (posting forms, staff moderation, identity
