@@ -4,7 +4,7 @@ import { roleHasCapability } from "@/lib/auth/admin-access";
 import Link from "next/link";
 import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
-import { readFrontendStaffPayments, staffPaymentFilter } from "@/lib/foundation/staff-payments";
+import { readStaffPaymentList, staffPaymentListFilter } from "@/lib/foundation/staff-payments";
 import { PaymentsPanel, type AdminPaymentRow } from "@/components/admin/commercial/partners-panel";
 import { PageHeader } from "@/components/layout/page-header";
 
@@ -64,7 +64,7 @@ export default async function PaymentsAdminPage({
     ? staff.assignedCapabilities?.includes("payments:refund") === true
     : roleHasCapability(staff.role, "payments:refund");
   const params = await searchParams;
-  const nativeStatus = staffPaymentFilter.safeParse(params.status).data;
+  const nativeStatus = staffPaymentListFilter.safeParse(params.status).data;
   const status = native
     ? nativeStatus
     : params.status && /^[a-z_]{3,20}$/.test(params.status)
@@ -73,13 +73,18 @@ export default async function PaymentsAdminPage({
   const parsedPage = Number(params.page || 1);
   const page =
     Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
-  const { rows, total } = native
+  const { rows, total, needsAttention, awaitingApproval } = native
     ? await (async () => {
         const { api } = await readFoundationServerSession();
-        const result = await readFrontendStaffPayments(api, page, nativeStatus);
-        return { rows: result.items, total: result.total };
+        const result = await readStaffPaymentList(api, page, nativeStatus);
+        return {
+          rows: result.items,
+          total: result.total,
+          needsAttention: result.needs_attention,
+          awaitingApproval: result.awaiting_approval,
+        };
       })()
-    : await readSourcePayments(page, status);
+    : { ...(await readSourcePayments(page, status)), needsAttention: 0, awaitingApproval: 0 };
 
   const hrefFor = (nextPage: number) => {
     const query = new URLSearchParams();
@@ -105,6 +110,12 @@ export default async function PaymentsAdminPage({
             className="mt-1 block rounded-md border bg-background p-2"
           >
             <option value="">All</option>
+            {native ? (
+              <>
+                <option value="needs_attention">needs attention (paid, not delivered)</option>
+                <option value="awaiting_approval">refund waiting for approval</option>
+              </>
+            ) : null}
             {[
               "pending",
               "processing",
@@ -125,6 +136,21 @@ export default async function PaymentsAdminPage({
           Filter
         </button>
       </form>
+      {needsAttention > 0 || awaitingApproval > 0 ? (
+        <p role="status" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          {needsAttention > 0 && status !== "needs_attention" ? (
+            <Link href="/admin/payments?status=needs_attention" className="font-medium underline">
+              {needsAttention.toLocaleString("en-ZA")} paid but not delivered: needs attention
+            </Link>
+          ) : null}
+          {awaitingApproval > 0 && status !== "awaiting_approval" ? (
+            <Link href="/admin/payments?status=awaiting_approval" className="font-medium underline">
+              {awaitingApproval.toLocaleString("en-ZA")}{" "}
+              {awaitingApproval === 1 ? "refund waits" : "refunds wait"} for approval
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
       <p className="text-sm text-muted-foreground">
         {status ? "" : "About "}
         {total.toLocaleString("en-ZA")} {total === 1 ? "payment" : "payments"}
