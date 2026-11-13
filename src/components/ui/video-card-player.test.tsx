@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useVideoAutoplayStore } from "@/stores/video-autoplay-store";
 
@@ -54,6 +54,32 @@ vi.mock("@/hooks/use-global-mute", () => ({
 }));
 
 const { VideoCardPlayer } = await import("./video-card-player");
+
+/** Makes exactly the given media queries match (all others do not). */
+function setMatchingMediaQueries(queries: string[]) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: queries.includes(query),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+/** Turns the browser's Save-Data setting on or off for one test. */
+function setSaveData(saveData: boolean) {
+  Object.defineProperty(navigator, "connection", {
+    configurable: true,
+    value: saveData ? { saveData: true } : undefined,
+  });
+}
 
 describe("VideoCardPlayer", () => {
   it("shows photos before load handlers run and preserves them when carousel controls change", () => {
@@ -449,19 +475,8 @@ describe("VideoCardPlayer", () => {
   });
 
   it("keeps the playback toggle accessible for reduced-motion users and starts paused", () => {
-    Object.defineProperty(window, "matchMedia", {
-      writable: true,
-      value: vi.fn().mockImplementation((query: string) => ({
-        matches: query === "(prefers-reduced-motion: reduce)",
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      })),
-    });
+    setMatchingMediaQueries(["(prefers-reduced-motion: reduce)"]);
+    onTestFinished(() => setMatchingMediaQueries([]));
 
     useVideoVisibilityMock.mockReturnValue({
       videoRef: { current: null },
@@ -660,6 +675,41 @@ describe("VideoCardPlayer", () => {
       expect(useVideoVisibilityMock.mock.calls.at(-1)?.[1]).toBe(false);
     });
 
+    it.each([
+      ["Save-Data is on", () => setSaveData(true)],
+      [
+        "the visitor prefers reduced data",
+        () => setMatchingMediaQueries(["(prefers-reduced-data: reduce)"]),
+      ],
+      [
+        "the visitor prefers reduced motion",
+        () => setMatchingMediaQueries(["(prefers-reduced-motion: reduce)"]),
+      ],
+    ])("never plays the showroom card by itself when %s", (_label, applyPreference) => {
+      onTestFinished(() => {
+        setSaveData(false);
+        setMatchingMediaQueries([]);
+      });
+      useVideoAutoplayStore.setState({ autoplayEnabled: true });
+      applyPreference();
+
+      render(stickyShowroomCard);
+      expect(useVideoVisibilityMock.mock.calls.at(-1)).toEqual([undefined, false, false]);
+
+      // A press on another card does not start it either.
+      act(() => useVideoAutoplayStore.getState().setAutoplayEnabled(false));
+      act(() => useVideoAutoplayStore.getState().setAutoplayEnabled(true));
+      expect(useVideoVisibilityMock.mock.calls.at(-1)).toEqual([undefined, false, false]);
+
+      // An explicit press on Play still works.
+      fireEvent.click(screen.getByRole("button", { name: "Play video" }));
+      expect(useVideoVisibilityMock.mock.calls.at(-1)).toEqual([
+        "https://example.com/clip.mp4",
+        true,
+        true,
+      ]);
+    });
+
     it("does not link non-showroom cards to the sticky intent", () => {
       render(
         <VideoCardPlayer
@@ -674,6 +724,74 @@ describe("VideoCardPlayer", () => {
       fireEvent.click(screen.getByRole("button", { name: "Play video" }));
       expect(useVideoAutoplayStore.getState().autoplayEnabled).toBe(false);
     });
+  });
+});
+
+describe("one tap opens a video card on touch screens", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useHoverCapabilityMock.mockReturnValue(false);
+    useGlobalMuteMock.mockReturnValue({ isMuted: true, toggleMute: vi.fn() });
+  });
+
+  function renderFeedCardInLink(togglePlayback = vi.fn()) {
+    useVideoFeedMock.mockReturnValue({
+      videoRef: { current: null },
+      isPlaying: false,
+      togglePlayback,
+      reducedMotion: true,
+    });
+    const openPost = vi.fn((event: React.MouseEvent) => event.preventDefault());
+    render(
+      <a href="/profile/example" onClick={openPost}>
+        <VideoCardPlayer
+          src="https://example.com/clip.mp4"
+          posterUrl="https://example.com/poster.jpg"
+          alt="Clip"
+          mode="hover"
+          muteControlVisibility="always"
+        />
+      </a>
+    );
+    return { openPost, togglePlayback };
+  }
+
+  it("lets a tap on the card open the post instead of playing", () => {
+    const { openPost, togglePlayback } = renderFeedCardInLink();
+
+    // No card-wide play target any more.
+    expect(screen.queryByRole("button", { name: "Play video" })).toBeNull();
+    fireEvent.click(screen.getByAltText("Clip"));
+    fireEvent.click(document.querySelector("video")!);
+    expect(openPost).toHaveBeenCalledTimes(2);
+    expect(togglePlayback).not.toHaveBeenCalled();
+  });
+
+  it("plays inline from a labelled Preview button of at least 44 px", () => {
+    const { openPost, togglePlayback } = renderFeedCardInLink();
+
+    const preview = screen.getByRole("button", { name: "Preview video: Clip" });
+    expect(preview.tagName).toBe("BUTTON");
+    expect(preview).toHaveTextContent("Preview");
+    expect(preview).toHaveClass("min-h-11", "min-w-11");
+
+    fireEvent.click(preview);
+    expect(togglePlayback).toHaveBeenCalledOnce();
+    expect(openPost).not.toHaveBeenCalled();
+  });
+
+  it("swaps Preview for Pause while the preview plays", () => {
+    const togglePlayback = vi.fn();
+    useVideoFeedMock.mockReturnValue({
+      videoRef: { current: null },
+      isPlaying: true,
+      togglePlayback,
+      reducedMotion: true,
+    });
+    render(<VideoCardPlayer src="https://example.com/clip.mp4" alt="Clip" mode="hover" />);
+    expect(screen.queryByRole("button", { name: /preview/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
+    expect(togglePlayback).toHaveBeenCalledOnce();
   });
 });
 

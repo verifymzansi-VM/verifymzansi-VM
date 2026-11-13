@@ -148,6 +148,27 @@ describe("PosterCardShell", () => {
     );
   });
 
+  it("opens a video post from one tap anywhere on the card, like a photo post", () => {
+    const { container } = render(
+      <PosterCardShell
+        href="/listing/feed"
+        title="Feed video"
+        mediaUrl="/clip.mp4"
+        statusLabel="New"
+        videoDuration={42}
+      />
+    );
+    // One link covers the whole card (media included); there is no second link.
+    const links = container.querySelectorAll('a[href="/listing/feed"]');
+    expect(links).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Open Feed video" })).toHaveClass(
+      "absolute",
+      "inset-0"
+    );
+    // Labels drawn over the media never swallow the tap.
+    expect(screen.getByText("New").parentElement).toHaveClass("pointer-events-none");
+  });
+
   it("keeps hero playback controls outside of the full-card link overlay", () => {
     const { container } = render(
       <PosterCardShell
