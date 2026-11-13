@@ -22,10 +22,22 @@ const envelope = z.looseObject({
 export class RestoredPostInputError extends Error {
   override name = "RestoredPostInputError";
 }
+/** The path part of the public media address. Empty in production
+ * (https://media.verifymzansi.com); the private browser-test copy serves media
+ * under a path (/e2e-media), which upload addresses carry before /media/. */
+function mediaBasePath() {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_MEDIA_URL ?? "").pathname.replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
 export function restoredMediaKey(value: string) {
   if (!isTrustedPlatformMediaUrl(value))
     throw new RestoredPostInputError("Upload the media through this form before submitting");
-  const path = new URL(value).pathname.replace(/^\/api\/media\/serve\//, "/");
+  let path = new URL(value).pathname.replace(/^\/api\/media\/serve\//, "/");
+  const base = mediaBasePath();
+  if (base && path.startsWith(`${base}/`)) path = path.slice(base.length);
   const match = /^\/media\/([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$/.exec(path);
   if (!match)
     throw new RestoredPostInputError("An older upload cannot be used. Upload the file again.");
