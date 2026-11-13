@@ -6,7 +6,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { MultiListingNudge } from "@/components/billing/multi-listing-nudge";
 import { usePathname } from "next/navigation";
-import { AlertTriangle, Loader2, Sparkles, Check, X, Crown, Camera, Video } from "lucide-react";
+import { AlertTriangle, Loader2, Sparkles, Check, X, Camera, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,7 @@ import {
   type PlanDefinition,
 } from "@/lib/constants/pricing";
 import { getEntitlements } from "@/lib/services/entitlements";
+import { PLAN_SALES_PAUSED_NOTE } from "@/lib/billing/plan-sales";
 import { PLAN_TIER_LABELS, type MarketplaceArea, type PlanTier } from "@/types/enums";
 import {
   getActiveFreePostUsage,
@@ -195,6 +196,13 @@ function InlinePlanGrid({
   onSubscribe: (plan: PlanDefinition) => void;
   subscribing: string | null;
 }) {
+  // No plan on sale (paid slots paused): say so instead of an empty grid.
+  if (plans.length === 0)
+    return (
+      <p className="mx-auto max-w-4xl rounded-2xl border border-border/70 bg-muted/40 p-4 text-center text-sm text-muted-foreground">
+        {PLAN_SALES_PAUSED_NOTE}
+      </p>
+    );
   return (
     <div
       className={`grid grid-cols-1 sm:grid-cols-2 ${
@@ -216,23 +224,7 @@ function InlinePlanGrid({
                   : "border-border/70"
             }`}
           >
-            {isPopular && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="gap-1 whitespace-nowrap border-0 bg-brand-green-600 px-2.5 py-0.5 text-xs font-bold text-white hover:bg-brand-green-600 dark:bg-brand-green-500 dark:text-brand-green-950">
-                  <Sparkles className="h-3 w-3" aria-hidden="true" />
-                  {plan.promoLabel ?? "Popular"}
-                </Badge>
-              </div>
-            )}
-            {isPremium && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="gap-1 whitespace-nowrap border-0 bg-brand-gold px-2.5 py-0.5 text-xs font-bold text-brand-gold-950 hover:bg-brand-gold">
-                  <Crown className="h-3 w-3" aria-hidden="true" />
-                  Best value
-                </Badge>
-              </div>
-            )}
-
+            {/* No "Popular" or "Best value" badge: slots have no discounts (posting-v4). */}
             <CardContent className="p-4 pt-5 space-y-3">
               {/* Plan name + price */}
               <div className="text-center">
@@ -692,8 +684,10 @@ export function PlanGate({
                           ? "Free post"
                           : (PLAN_TIER_LABELS[planInfo.tier as PlanTier] ?? "current")}
                       </Badge>{" "}
-                      plan. Mark a sold item, deactivate a post from your dashboard, add another
-                      slot below, or move to multi-listing to keep more posts live at once.
+                      plan.{" "}
+                      {upgradePlans.length > 0
+                        ? "Mark a sold item, deactivate a post from your dashboard, or add another slot below."
+                        : "Mark a sold item or deactivate a post from your dashboard."}
                     </>
                   )}
                 </p>
@@ -706,13 +700,11 @@ export function PlanGate({
 
         <MultiListingNudge emphasis="strong" />
 
-        {upgradePlans.length > 0 && (
-          <InlinePlanGrid
-            plans={upgradePlans}
-            onSubscribe={handleSubscribe}
-            subscribing={subscribing}
-          />
-        )}
+        <InlinePlanGrid
+          plans={upgradePlans}
+          onSubscribe={handleSubscribe}
+          subscribing={subscribing}
+        />
       </div>
     );
   }
@@ -869,7 +861,9 @@ function PlanPickerWithTrial({
                   ? `Each post still uses free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
                   : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
                     ? "Each lasts 30 days from approval."
-                    : `Choose ${trialLength(planInfo.offer, 7)} or ${trialLength(planInfo.offer, 30)} days, once. Starts on approval; standard placement.`}
+                    : planInfo.offer?.thirtyDayAvailable
+                      ? `Choose ${trialLength(planInfo.offer, 7)} or ${trialLength(planInfo.offer, 30)} days, once. Starts on approval; standard placement.`
+                      : `${trialLength(planInfo.offer, 7)} days, once. Starts on approval; standard placement.`}
               </p>
             </div>
             <Button
@@ -899,12 +893,17 @@ function PlanPickerWithTrial({
             Choose how you want to post
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            R50 / 30 days, R140 / 90 days or R250 / 180 days.
+            {areaPlans.length > 0
+              ? areaPlans
+                  .map((plan) => `${formatPlanPrice(plan.priceCents)} / ${plan.durationDays} days`)
+                  .join(", ")
+              : PLAN_SALES_PAUSED_NOTE}
           </p>
         </div>
       )}
 
       {planInfo.offer &&
+        planInfo.offer.thirtyDayAvailable &&
         planInfo.isTrial &&
         !planInfo.postingLimitBypassEnabled &&
         !(planInfo.offer.adminFreePostsRemaining ?? 0) && (

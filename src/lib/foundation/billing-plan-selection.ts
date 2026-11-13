@@ -11,9 +11,11 @@ export function selectFoundationBillingPlan(catalogue: FoundationBillingCatalogu
   if (direct) return direct;
   const selection = getActivePlanSelectionFromToken(id);
   if (!selection || !(selection.tier in days)) return undefined;
+  // A stable section link (section and term) also selects the Individual
+  // slot, which works in every section.
   const matches = catalogue.plans.filter(
     (plan) =>
-      plan.area === foundationArea(selection.area) &&
+      (plan.area === foundationArea(selection.area) || plan.area === null) &&
       plan.slot_capacity === 1 &&
       plan.duration_days === days[selection.tier as keyof typeof days]
   );

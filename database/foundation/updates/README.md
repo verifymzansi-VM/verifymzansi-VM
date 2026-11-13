@@ -651,6 +651,368 @@ previous summary capped at 7 days, the 400-day clean-up); that only
 payment's problems go with it; and that apply, rollback and re-apply return the
 same fingerprints.
 
+## The current Terms (posting-v4) and paid plans paused, 12 November 2026
+
+Two updates, applied in this order. Both are pending.
+
+### 1. Publish the Terms text: `20261112122001_publish_posting_terms_v4.sql`
+
+It publishes posting terms version `posting-v4`
+(`src/lib/legal/terms-documents/posting-v4.json`, canonical hash
+`HnObmeyoZjiuPQSF0z0aUgs_t_st87EUjVQGjDahozg`): it inserts one row into
+`private.posting_terms_versions` and changes no function, table, grant,
+acceptance or current version. It refuses (55000) when the current version is
+not `posting-v3` (or already `posting-v4`), or when `posting-v4` is already
+published with another document, and it checks before committing that the
+current version did not change. `posting-v1` to `posting-v3` are unchanged.
+
+The site has one set of Terms, shown at `/terms` with no version name (owner
+decision of 12 November 2026: there are no members yet). `posting-v4` is only
+the database's and catalogue's id for that text. It states Pricing v2 (roadmap
+Milestone 11, P1): posting slots priced per slot and per 30-day period with no
+discounts; Individual slots at R69 for 30 days, R207 for 90 days or R414 for 180
+days in any posting area; 1 to 4 Individual slots per ID-reviewed person, each
+with its own end date; slots on sale only while the pricing page offers them; at
+most 4 posts going live per paid slot in each 30-day period (a new post or an
+ended post brought back; edits do not count); one video per post, at most 2
+minutes (events 1 minute); prepaid, no automatic renewal, paid time from the
+confirmed payment, renewing early adds the new days after the current end; a
+price change applies only to new purchases; orders of R10,000 or less online,
+more by an invoice issued first and paid by EFT; no payment fees added; the
+cooling-off consent before payment (ECT Act section 42(2)), recorded before an
+invoice is paid; not registered for VAT; the refund and cancellation policy
+(cancelling by writing to billing@verifymzansi.com); a paid slot ends for a
+breach only after written notice and, for an individual, 20 business days to
+remedy it; the unchanged expiry, sold and paused rules with the 3-day grace; the
+free 7-day first post from its approval; and partner referral links.
+
+### 2. Make it current and pause paid plans: `20261112173841_switch_posting_terms_v4.sql`
+
+Owner decision of 12 November 2026: switch at once, sell nothing at the old
+prices, and keep paid plans paused until the R69 checkout (roadmap P2) is built
+and tested. In one transaction the update:
+
+- takes every plan version on sale off sale (sets `retired_at`, the only
+  catalogue column that may change; rows stay as history, prices are never
+  edited) and records each one in the new private table
+  `private.plan_sale_pauses` (row level security on, no API role access), so the
+  rollback can put exactly those plans back;
+- replaces `internal.set_post_media` so that a draft without a slot prepares the
+  free first post's media allowance (10 photos, 1 video,
+  `internal.grant_intro_trial`'s) when no plan is on sale; before, it took the
+  largest allowance of the plans on sale and, with none, refused ("no current
+  media allowance available"), so a free post could not add photos;
+- makes `posting-v4` current. Every member accepts it once before their next
+  submission or edit.
+
+It refuses (55000) unless `posting-v4` is published with the hash above and the
+current version is `posting-v3` (or already `posting-v4`). Run again, it changes
+nothing and never takes off sale a plan published after the switch (the R69
+plans of P2). Entitlements, payments, add-on versions (add-on sales stay paused
+by the website) and the free posting paths (free first post, free events,
+sponsored places, staff grants) are untouched. A plan payment already pending is
+left alone: if it is paid it settles as before.
+
+The website release that goes with it (catalogue `active_version` posting-v4)
+reads what is on sale from the database: with no plan on sale the pricing,
+billing, Advertise and checkout pages show the R69 prices with "Opens soon" and
+"Paid slots open soon", nothing links to checkout, and the checkout route
+refuses with `plan_sales_paused` (403) before it creates a payment.
+Multi-listing and sponsor prices are hidden (`PACKAGES_ON_SALE`). Former
+`/terms/versions/*` addresses redirect to `/terms` (308).
+
+**Order.** The release reads the catalogue on every request, so it is correct on
+either side of the switch: before it, it sells the old plans under the
+posting-v3 Terms as today; after it, it sells nothing. The website deployed
+before this release, however, would show its built-in old prices (R50, R140,
+R250) once the database lists no plan. So:
+
+1. merge, then apply `20261112122001_publish_posting_terms_v4.sql` (any time);
+2. deploy the release;
+3. then apply `20261112173841_switch_posting_terms_v4.sql`.
+
+**Applying.** For each update, run its preflight
+(`../preflight/<update>.check.sql`) unchanged in the SQL editor; it is read
+only. Continue only if the result is the single "summary" row: for the first,
+"current posting-v3; ...; posting-v4 not published (update not applied)"; for
+the switch, "current posting-v3 (update not applied); plans on sale: 17; plans
+taken off sale by the update: 0; pending plan payments: 0". Run the update (it
+waits at most 5 seconds for its rows and stops without changing anything if they
+are busy; run it again), then the preflight again: "posting-v4 published (update
+already applied)", then "current posting-v4 (update already applied); plans on
+sale: 0; plans taken off sale by the update: 17". After the switch, `/terms`
+shows the new text and `/pricing` shows "Opens soon".
+
+**Rollback.** `../rollback/20261112173841_switch_posting_terms_v4.down.sql`
+restores the previous `internal.set_post_media`, makes `posting-v3` current
+again, puts exactly the recorded plans back on sale (switching the catalogue
+guard trigger off for that one statement) and drops the record table. It refuses
+(55000) once a plan published after the switch is on sale, and when
+`internal.set_post_media` is neither the body the switch installed nor the one
+before it (md5 of the body): a later update (such as P2's) changed it, so undo
+that update first; the rollback never silently reverts it. The switch itself
+refuses the same way when the body it replaces is not the reviewed one.
+
+Rollback order: once the switch has run, **never roll back the website alone.**
+The earlier website's terms catalogue has no `posting-v4`, so with `posting-v4`
+current it refuses the current terms (`assertPublishedPostingTerms` throws),
+`/api/foundation/posting-terms` answers 503 and nobody can submit or edit a
+post. Roll back in this order:
+
+1. run the switch rollback above (`posting-v3` current, the old plans on sale);
+2. then revert this pull request and deploy the earlier website, which sells the
+   old plans under `posting-v3`.
+
+The first update's rollback changes nothing (published terms are immutable; the
+row then stays unused, like `posting-v2`) and refuses while `posting-v4` is
+current. Before the switch has run, the website alone can be reverted at any
+time.
+
+**Tests.** `scripts/test-foundation-posting-terms-v4.mjs` and
+`scripts/test-foundation-posting-terms-switch.mjs` (both in
+`pnpm db:foundation:lifecycle-test`) prove on the throwaway database: the
+shipped document's hash is the one inserted; the preflights are read only and
+report each state; refusals change nothing; after the first update `posting-v3`
+stays current and nobody can accept `posting-v4`; after the switch `posting-v4`
+is current, no plan is on sale, the public catalogue lists none, buying an old
+plan is refused, a held slot is untouched, the record table is closed to the API
+roles, members accept `posting-v4` once, a re-run never retires a later plan,
+neither the switch nor its rollback overwrites a later `set_post_media`, and
+apply, rollback and re-apply put exactly the same plans back and return the same
+schema fingerprint. The other lifecycle checks that still buy a plan after later
+updates publish a copy of it first (`planOnSale` in
+`scripts/lib/foundation-sql-checks.mjs`); once
+`20261113002421_individual_slots_r69.sql` is applied, `planOnSale` returns the
+Individual slot of the same length instead, and the browser test copy's checkout
+specs buy the Individual slots.
+
+## Individual slots at R69, 12 November 2026
+
+`20261113002421_individual_slots_r69.sql` is not applied yet. It was first
+reviewed as `20261112174600_individual_slots_r69.sql` and renamed when
+`20261112181954_google_name_at_signup.sql` was applied before it, so the
+register stays in filename order. Apply it after the website release of
+`20261112173841_switch_posting_terms_v4.sql` is live and that update is applied
+(it refuses with 55000 unless `posting-v4` is current and nothing else is on
+sale), and before the pull request that uses it is merged: a merge into `main`
+is deployed, and that release calls the new commands. It ends the pause on paid
+slots that the switch started: the slots `posting-v4` describes go on sale
+(roadmap Milestone 11, P2, with M3.8).
+
+What it changes:
+
+- **Catalogue.** Three new plan versions, the only plans on sale: one Individual
+  slot for any posting area (`area` null) for 30, 90 or 180 days at 6,900,
+  20,700 and 41,400 cents (R69 per slot per 30 days, no discounts), one slot
+  each, at most 4 posts going live per slot per 30 days, 10 photos and 1 video
+  per post. Their ids are fixed in the file (`d6ca48e5-…` 30 days, `6a449457-…`
+  90 days, `ce4ef578-…` 180 days), so the browser test copy and production use
+  the same ones. Earlier plans stay retired, as history.
+- **One payment, one line per slot.** New table `private.payment_lines`. An
+  order is one payment (one Ozow payment for the total); each slot is a line
+  with its own price, its own entitlement once the payment is confirmed
+  (`private.entitlements.payment_line_id`) and its own partner commission
+  (`private.partner_commissions.payment_line_id`). The one-entitlement and
+  one-commission-per-payment unique constraints become partial unique indexes
+  for payments without lines; lines are immutable except for being reversed once
+  (trigger `payment_lines_immutable`).
+- **The slot checkout.** New member command
+  `api.start_slot_checkout(p_plan_id, p_slots, p_expected_total_cents, p_cooling_off_consent)`.
+  The server computes slot price × slots (the plan's price already covers its
+  30-day periods) and refuses: without the cooling-off consent (22023; the
+  consent, its time, the wording and the posting terms version are kept in the
+  payment's snapshot); before the member's ID review is accepted (PT412, M3.8);
+  an order above R10,000, which is paid by invoice (PT413; R10,000 exactly stays
+  online); a total other than the one the member was shown (PT428); and more
+  Individual slots than the person's limit (PT429). The limit is 4 at once per
+  ID-reviewed person: it counts every account that has had an accepted ID review
+  with the same identity fingerprint (ended reviews too), and slots in payments
+  still open at Ozow. Only an account that lost access for good (closed,
+  deleted, or under an approved permanent ban that was not lifted) stops
+  counting, so an impostor's banned account never blocks the person; an account
+  blocked for a while (an Auth ban with an end, a suspension, an emergency
+  restriction) keeps counting, because its slots come back when the block ends.
+  The free first post, staff grants and sponsored places are not Individual
+  slots and never count. `api.start_checkout` now refuses plans (it still sells
+  add-ons).
+- **Confirmation.** `api.apply_provider_event` gives each open line of a
+  confirmed payment its own entitlement, unless the person would then hold more
+  Individual slots than their limit (for example a late success of an expired
+  checkout): the money is recorded and the payment goes to staff
+  (`complete_unfulfillable_target`, alerted by the payment problem job).
+- **One slot refunded alone.** New staff command
+  `api.record_staff_slot_reversal(p_line_id, p_kind, p_reason)` (capability
+  `payments:refund`, never by the buyer's own identity): revokes that slot, ends
+  the posts it paid for as a whole-payment reversal does, and reverses only that
+  slot's commission. When the last open slot of a payment is reversed, the
+  payment becomes refunded or charged back. `api.reverse_payment` marks every
+  open line reversed, and refuses once one slot was reversed. No Ozow partial
+  refund call is made: staff refund the money themselves (Ozow partial refunds
+  are unconfirmed) and record it here.
+- **Staff-raised limit.** New table `private.individual_slot_limits` and staff
+  command
+  `api.staff_set_individual_slot_limit(p_account_id, p_slot_limit, p_ends_at, p_reason)`
+  (new capability `slots:raise_limit`, administrators, recent second factor): 5
+  to 25 Individual slots for one ID-reviewed person until an end date at most
+  366 days away, only when that account has a checked business (a live business
+  profile or an approved business check); 4 ends the raise, also after the
+  person's review lapsed. Rows are an audit trail: a raise is only ever ended.
+  No staff screen calls it yet.
+- **Staff never act for themselves.** Staff need an accepted ID review of their
+  own to raise a limit or record a slot or whole-payment reversal (also
+  `api.record_frontend_staff_payment_reversal`, for every payment), and
+  `internal.same_identity` compares every fingerprint two accounts have had:
+  staff may not act on an account of their own identity. Both are checked before
+  the lock waits and again after the last authority check (42501).
+- **Commission only for a delivered purchase.** The commission trigger creates
+  commission (per slot line) only when the payment is fulfilled: money sent to
+  staff for reconciliation earns none. The trigger fires only on a status
+  change, so a later command that delivers a payment without changing its status
+  must create the commission itself.
+- **One line per payment.** The entitlement's and the commission's line must
+  belong to the payment they name (composite foreign keys).
+- **My slots.** New member read `api.get_my_slots()`: every slot the member
+  holds and every slot that ended in the last 3 days, with the posts in it, the
+  sponsor's name for a sponsored place, and the member's Individual slot count,
+  open-payment slots and limit.
+- **Fair use.** `api.activate_post` no longer counts a submission that review
+  rejected: each paid slot takes at most 4 posts going live per 30 days (a new
+  post and an ended post brought back each count; editing a live post never
+  does).
+
+No existing API command changes its arguments or reply shape, so the release
+before it (paid slots paused) keeps working.
+
+**Applying** (after the switch release is live and `20261112173841` is applied,
+before this pull request is merged):
+
+1. Run `../preflight/20261113002421_individual_slots_r69.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "individual slots: update not applied (apply before the
+   website release that uses it is deployed); current posting terms: posting-v4;
+   on sale: nothing; plan payments pending: 0; slot payment lines: none (table
+   absent)".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "individual slots: already applied; current posting
+   terms: posting-v4; on sale: individual_30d@1 6900 cents, individual_90d@1
+   20700 cents, individual_180d@1 41400 cents; plan payments pending: 0; slot
+   payment lines: 0".
+3. Merge the pull request (its release deploys). `/pricing` shows R69, R207 and
+   R414 with their checkout links.
+
+The reviewed rollback is
+`../rollback/20261113002421_individual_slots_r69.down.sql`. It works only before
+anyone ordered a slot (it refuses once a payment line or a raised limit exists):
+it takes the three plans off sale, restores the seven earlier function bodies
+and removes everything the update added, back to the paused state of
+`20261112173841`. Applying the update again after it is refused while the
+retired plan rows exist: a new update must publish new plan versions. Once slots
+were ordered, stop sales with a new reviewed update that retires the three
+plans, and fix forward.
+
+Rollback order: **run the rollback first, then revert this pull request.** With
+the slots off sale, this release shows paid slots as paused (the checkout page
+and route refuse with the paused message, and My slots says the slots cannot be
+shown right now). Reverting the website alone while the slots are on sale would
+leave `/pricing` linking to slots that the earlier checkout cannot sell
+(`api.start_checkout` refuses them). Roll back `20261112173841` only after this
+rollback.
+
+`node --import tsx scripts/test-foundation-individual-slots.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after; the refusals without `posting-v4` and with another
+plan on sale; apply, rollback and re-apply return the same fingerprints; the
+catalogue; price = 6,900 cents × 30-day periods × slots with one line per slot
+and the consent in the snapshot; a total other than the one shown is refused;
+retired plans and `api.start_checkout` cannot sell a plan; no checkout before an
+accepted ID review or without the consent; a fifth Individual slot is refused,
+also from a second account of the same person and while slots wait in an open
+payment; a pending payment for another number of slots is replaced or returned;
+only administrators raise a limit, only for a checked business, up to 25, with
+an end date, and the audit rows cannot be changed; 25 × 180 days (R10,350) is
+refused online, 24 × 180 days and R10,000 exactly stay online; one slot
+activates a Market, a Business and a Tourism post and its fifth post going live
+in 30 days is refused, a rejected submission not counting; refunding one slot of
+a three-slot order revokes only that slot, ends only its post and reverses only
+its commission, the last slot reversing the payment; a late payment above the
+limit is recorded and sent to staff; `api.get_my_slots`; staff never raising a
+limit for, or reversing a payment of, their own identity (a second account of
+the same fingerprint); staff without an accepted ID review of their own refused,
+and a review that makes staff the same person while they wait seen after the
+wait; no commission for a payment that delivered nothing; a temporary block (an
+Auth ban with an end, an emergency suspension) keeping an account's slots
+counting and a closed account's slots no longer counting; ending a raise after
+the review lapsed; the grants; and that the rollback refuses once a slot was
+ordered.
+
+## Google sign-ups start with their name, 12 November 2026
+
+`20261112181954_google_name_at_signup.sql` is not applied yet. It needs no
+earlier pending update and changes no table, grant or API command.
+
+When an Auth user is created, the trigger `create_account_profile` on
+`auth.users` (`internal.create_account_profile`) creates the member's profile.
+It read only the sign-up detail `display_name`, which the website's email
+sign-up form sends. Google sign-up stores the name as `full_name` and `name`
+(sometimes also `given_name` and `family_name`), so every Google account started
+with no display name: its profile page and public name ("Thando D.") stayed
+empty until the member typed one. From this update:
+
+- **A name from the sign-up details.** New
+  `internal.signup_display_name(details)` returns the first of `display_name`,
+  `full_name`, `name`, and `given_name` + space + `family_name` (only when both
+  are non-empty strings) that, trimmed and NFC-normalised, passes the person
+  name rule (`internal.person_name_valid`) and is not reserved
+  (`internal.person_name_reserved`); otherwise nothing. Sign-up details are
+  written by the member or the sign-in provider, so they give only a display
+  name the member could also have typed: never a legal name, a name lock, a role
+  or a verification. No API role can run it.
+- **New profiles.** `internal.create_account_profile` uses it. Anonymous users
+  are still skipped and an existing profile is left as it is.
+- **Existing profiles, once.** A profile with no display name and no locked
+  legal name, of a non-anonymous Auth user that is not deleted, gets the name
+  from that user's sign-up details, with its revision raised by one as an
+  ordinary profile save does: a page that still holds the earlier revision is
+  refused ("profile changed; reload it") and reloads. Profiles the details give
+  no valid name stay without one. Running the update again names nobody twice.
+
+**Order: any time.** No website release depends on it. Until it is applied and
+recorded, the release preflight lists it as "behind" (a warning; it has no
+command to probe). Apply and record updates in filename order: if an update with
+an earlier name is still pending, apply that one first.
+
+**Applying.**
+
+1. Run `../preflight/20261112181954_google_name_at_signup.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "reviewed body, update not applied". It also counts the
+   profiles without a name and those the update will name.
+2. Run the update, then the preflight again: it must now read "already applied"
+   with "of which the update names: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261112181954_google_name_at_signup.down.sql` (only with the
+owner's decision; prefer a forward fix). It restores the profile trigger byte
+for byte and drops the helper. Names the update gave stay: each passes the
+person name rule, and the member can change it.
+
+`node --import tsx scripts/test-foundation-google-signup-name.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves, on the throwaway database: that
+Google sign-ups got no name before; that the preflight is read only, counts the
+profiles the update will name, and reports a drifted trigger or a helper with
+another body, which the update refuses, as it refuses a premature rollback; that
+the one-time fill names unnamed profiles from `full_name`, `name` or
+`given_name` and `family_name` and leaves named, locked, anonymous, deleted,
+invalid and reserved ones untouched; that a save holding the earlier revision is
+refused; the order of the candidates, fallback past an invalid or reserved one,
+trimming and NFC, and the names refused; that sign-up details set no legal name,
+lock or role; who may run the helper; and that apply, a repeated apply, rollback
+and re-apply return the same fingerprints.
+
 ## The free week starts at the first approved post, 10 November 2026
 
 `20261110045944_intro_trial_at_first_approval.sql` is applied: the coordinator
@@ -2100,6 +2462,40 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   relations and 0 functions in public and the nine expected unchanged
   supabase_admin rows, after "already applied"; production fingerprint after all
   five updates matched the replay (section No default rights in schema public)
-- `20261112080000_payment_problem_alerts.sql`: pending
+- `20261112080000_payment_problem_alerts.sql`: applied 2026-11-12 12:20 UTC;
+  time approximate, applied by the coordinator with the owner's approval through
+  the Supabase query API, from the reviewed file; preflight before "update not
+  applied" with no paid-but-not-activated and no stale pending payment, after
+  "already applied" with all ten bodies matching; production fingerprint after
+  it matched the replay (section Payment problem alerts)
+- `20261112122001_publish_posting_terms_v4.sql`: applied 2026-11-12 22:00 UTC;
+  time approximate, applied by the coordinator with the owner's approval through
+  the Supabase query API, from the reviewed file, before the release; preflight
+  before "current posting-v3; accounts that accepted it: 0; posting-v4 not
+  published", after "posting-v4 published (update already applied)" with
+  posting-v3 still current
+- `20261112173841_switch_posting_terms_v4.sql`: applied 2026-11-12 23:13 UTC;
+  applied by the coordinator with the owner's approval through the Supabase
+  query API, from the reviewed file, after the release of pull request 200 was
+  live; preflight before "current posting-v3 (update not applied); plans on
+  sale: 17; plans taken off sale by the update: 0; pending plan payments: 0",
+  after "current posting-v4 (update already applied); plans on sale: 0; plans
+  taken off sale by the update: 17; pending plan payments: 0", with
+  internal.set_post_media at the reviewed body (md5 3ff7aba4); production
+  fingerprint after it matched the replay through this update
+- `20261112181954_google_name_at_signup.sql`: applied 2026-11-13 00:20 UTC; time
+  approximate, applied by the coordinator with the owner's approval through the
+  Supabase query API, from the reviewed file; preflight before "reviewed body,
+  update not applied; profiles without a name: 2; of which the update names: 2",
+  after the two bodies matched the update's and no profile was left without a
+  name; production fingerprint after it matched the full replay
+- `20261113002421_individual_slots_r69.sql`: applied 2026-11-13 01:30 UTC; time
+  approximate, applied by the coordinator with the owner's approval through the
+  Supabase query API, from the reviewed file, before the pull request was
+  merged; preflight before "update not applied; current posting terms:
+  posting-v4; on sale: nothing; plan payments pending: 0", after all 24 function
+  bodies matched the update's and exactly individual_30d, individual_90d and
+  individual_180d were on sale at 6900, 20700 and 41400 cents; production
+  fingerprint after it matched the full replay
 
 <!-- applied-register:end -->

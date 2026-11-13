@@ -85,7 +85,20 @@ const nextConfig = {
   // TypeScript pass (lint-type-security already runs tsc on the same commit).
   // Never production builds: see scripts/lib/next-typecheck-skip.cjs.
   typescript: { ignoreBuildErrors: shouldSkipNextTypecheck(process.env) },
-  webpack(config) {
+  webpack(config, { webpack, isServer }) {
+    // Cloudflare (OpenNext) builds leave PDF reading and link-preview drawing
+    // to the offload Worker (src/lib/offload/client.ts, M9.9), so pdf.js and
+    // @vercel/og stay out of the main Worker. OpenNext sets
+    // NEXT_PRIVATE_STANDALONE=true just before it runs `next build` (see
+    // scripts/lib/next-typecheck-skip.cjs); Node builds keep doing the work.
+    if (isServer && process.env.NEXT_PRIVATE_STANDALONE === "true") {
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(
+          /[\\/]src[\\/]lib[\\/]offload[\\/]local\.ts$/,
+          require.resolve("./src/lib/offload/local.worker.ts")
+        )
+      );
+    }
     // A patched dependency retains its npm version. Invalidate persistent
     // compiler output when this runtime compatibility patch changes.
     if (config.cache && config.cache.type === "filesystem") {

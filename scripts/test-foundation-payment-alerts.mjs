@@ -27,6 +27,8 @@ import {
   applyStepsBefore,
   assertReadOnlyPreflight,
   createChecks,
+  planOnSale,
+  planQuoteSql,
   sqlHelpers,
   updateCheckViews,
 } from "./lib/foundation-sql-checks.mjs";
@@ -58,14 +60,14 @@ try {
   const as = (role, sql) => `set role ${role};\n${sql}`;
 
   // ------------------------------------------------------- synthetic world
-  const plan = q(
+  let plan = q(
     "select id from private.plan_versions where plan_code='market_30d' and retired_at is null and is_public order by version desc limit 1;"
   );
   assert.match(plan, /^[0-9a-f-]{36}$/);
   /** A pending payment with an attached Ozow request, as the website makes one. */
   const payment = (label) => {
     const owner = user(label);
-    const quoted = json(member(owner, `select api.start_checkout('${plan}',null);`));
+    const quoted = json(planQuoteSql(q, member, owner, plan));
     const id = quoted.payment_id;
     const lease = json(service(`select api.claim_checkout_request('${id}','${owner.id}');`));
     assert.equal(
@@ -610,6 +612,8 @@ try {
   const later = steps.slice(index + 1);
   if (later.length) {
     applySteps(database, later);
+    // The switch to posting-v4 takes the plans off sale: buy a copy instead.
+    plan = planOnSale(q, plan);
     await check("later updates keep the problem record, the alerts and the summary", () => {
       drainAlerts();
       const { wrong } = recording(`later-${randomUUID().slice(0, 8)}`);

@@ -136,7 +136,7 @@ describe("readRestoredPostManager", () => {
     });
   });
 
-  it("shows the longest paid plan per area and ignores plans without an area or tier", async () => {
+  it("shows the longest paid plan per area and ignores plans without a tier", async () => {
     rpc.mockResolvedValueOnce({ data: facts(), error: null });
     vi.mocked(readFoundationOwnerDashboard).mockResolvedValueOnce({
       paid_plans: [
@@ -144,7 +144,6 @@ describe("readRestoredPostManager", () => {
         plan("MZANSI_MARKET", "month", 2),
         plan("MZANSI_BUSINESS", "quarter", 3),
         plan("MZANSI_BUSINESS", "enterprise", 4),
-        plan(null, "enterprise", 5),
         plan("PROMOTIONS_EVENTS", null, 6),
       ],
     } as never);
@@ -153,6 +152,20 @@ describe("readRestoredPostManager", () => {
         MZANSI_MARKET: "year",
         MZANSI_BUSINESS: "enterprise",
         PROMOTIONS_EVENTS: "starter",
+      },
+    });
+  });
+
+  it("counts a plan for any section (an Individual slot) in every area", async () => {
+    rpc.mockResolvedValueOnce({ data: facts(), error: null });
+    vi.mocked(readFoundationOwnerDashboard).mockResolvedValueOnce({
+      paid_plans: [plan(null, "month", 5), plan("MZANSI_MARKET", "half_year", 1)],
+    } as never);
+    await expect(readRestoredPostManager(api, owner)).resolves.toMatchObject({
+      tiers: {
+        MZANSI_MARKET: "half_year",
+        MZANSI_BUSINESS: "month",
+        PROMOTIONS_EVENTS: "month",
       },
     });
   });

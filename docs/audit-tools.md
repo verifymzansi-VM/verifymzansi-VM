@@ -116,19 +116,16 @@ only the retired `supabase/migrations` schema and were retired with it.
 Production's schema is rebuilt and checked by `foundation-replay`,
 `foundation-sql-lint` and `foundation-native`.
 
-`test:browser:isolated` copies the working tree into an isolated build directory
-under `tmp/isolated-browser`, installs the frozen dependencies there, builds and
-runs critical Chromium flows with deterministic providers, and records bundle
-checks at the same 275/325 KB budgets as CI. Desktop and mobile Chrome execute
-the same selected suite. It retains the snapshot and artifacts for review. Skips
-without a passing instance of the same scenario in another project produce
-UNAVAILABLE. KYC browser coverage exercises anonymous/callback boundaries and
-synthetic authenticated ID/selfie submission, private evidence access, queue
-claims, resubmission, final approval and high-risk two-reviewer UI. All three
-authenticated scenarios must pass in both Chrome projects. Local fixtures do not
-establish genuine PostgreSQL RLS/transactions or provider delivery.
-WebKit/mobile-safari remain quarantined and are not inferred covered. The active
-checkout's `.next` directory is not built by this audit runner.
+The release gate's `browser` check runs `test:e2e:foundation`: the browser tests
+of the restored website (`e2e/foundation/`) in Chromium and mobile Chrome
+against the private local foundation test copy, a throwaway Supabase stack on
+the local Docker built only from `database/foundation/`. It needs Docker and the
+Supabase CLI; delete the copy afterwards with `pnpm foundation:e2e:down`. The
+same suite is the required pull request check `e2e-foundation`. The retired stub
+browser suite (`test:browser:isolated`, its synthetic KYC scenarios and the
+`e2e-full-matrix` CI job) was removed on 2026-11-11. WebKit/mobile-safari remain
+quarantined and are not inferred covered. The active checkout's `.next`
+directory is not built by this audit runner.
 
 Lighthouse and k6 remain advisory and cannot replace security or functional
 gates. CodeQL is opt-in through `ENABLE_CODEQL`; a skipped workflow is no

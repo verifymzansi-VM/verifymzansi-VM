@@ -13,6 +13,7 @@ import {
   BarChart3,
   Bell,
   CreditCard,
+  Layers,
   UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ export const DASHBOARD_MANAGE_NAV: DashboardNavItem[] = [
     label: "My posts",
     alsoActiveFor: ["/dashboard/businesses", "/dashboard/tourism-events"],
   },
+  { href: "/dashboard/slots", icon: Layers, label: "My slots" },
   { href: "/dashboard/leads", icon: MessageSquare, label: "Leads" },
   { href: "/dashboard/metrics", icon: BarChart3, label: "Performance" },
 ];

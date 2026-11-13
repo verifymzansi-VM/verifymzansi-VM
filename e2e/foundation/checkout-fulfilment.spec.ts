@@ -28,13 +28,20 @@ import {
   signIn,
   type TestCopy,
 } from "./support/test-copy";
-import { registerVerifiedMember, type VerifiedMember } from "./support/verified-member";
+import {
+  registerUnreviewedMember,
+  registerVerifiedMember,
+  type VerifiedMember,
+} from "./support/verified-member";
 
 // Critical-flow test (M0.9c): the money journey on the restored website in
 // foundation mode against the private test copy. A new verified member per
-// run (no plan, no trial) chooses a plan, pays through mock Ozow, and the
-// signed notification settles it; the plan becomes active and a post uses its
-// slot; a lost notification is settled by the 10-minute status check; a
+// run (no plan, no trial) chooses an Individual slot (Pricing v2 P2), ticks the
+// cooling-off box, pays through mock Ozow, and the signed notification settles
+// it; the slot becomes active and a post uses it; the checkout total equals
+// the pricing page for every package, and a two-slot order is one payment with
+// one slot per line; a member whose ID review is not accepted cannot pay
+// (M3.8); a lost notification is settled by the 10-minute status check; a
 // payment declined at the bank can be paid again; a plan with a pending
 // payment shows the restored Continue and Cancel controls, and Cancel works; a
 // bank attempt cancelled at the provider, whose notice has not arrived, shows
@@ -181,12 +188,14 @@ function paymentRow(id: string) {
   return { status, fulfilment, kind, amount, request, transaction };
 }
 
-/** Every entitlement a payment created: source, area, status, slots, days. */
+/** Every entitlement a payment created: source, area (none: any area),
+ * status, slots, days, and its payment line's number. */
 function entitlementsOf(paymentId: string) {
   return queryTestCopy(
-    "select source, area, status, slot_capacity, " +
-      "round(extract(epoch from ends_at - starts_at) / 86400) from private.entitlements " +
-      `where payment_id = '${paymentId}';`
+    "select e.source, coalesce(e.area, 'any'), e.status, e.slot_capacity, " +
+      "round(extract(epoch from e.ends_at - e.starts_at) / 86400), l.line_number " +
+      "from private.entitlements e join private.payment_lines l on l.id = e.payment_line_id " +
+      `where e.payment_id = '${paymentId}' order by l.line_number;`
   )
     .split("\n")
     .filter(Boolean);
@@ -200,12 +209,18 @@ async function allowance(page: Page, area: "MZANSI_BUSINESS" | "MZANSI_MARKET") 
   }, area);
 }
 
+/** The checkout's cooling-off box (posting-v4): no tick, no payment. */
+async function tickCoolingOff(page: Page) {
+  await page.getByRole("checkbox", { name: /^My slot starts now/ }).check();
+}
+
 /** From the confirmation page to the mock payment page; a new quote each time. */
 async function checkoutToMockPage(page: Page, reply: (path: string) => Reply[], plan: Plan) {
   await page.goto(`/billing/checkout?plan=${plan.id}`);
   await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
   await expect(page.getByText(plan.label, { exact: true })).toBeVisible();
   const before = reply("/api/billing/create-checkout").length;
+  await tickCoolingOff(page);
   await page.getByRole("button", { name: /^Pay .+ securely$/ }).click();
   await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
   await expect(page.getByRole("heading", { name: "Mock Ozow test payment" })).toBeVisible();
@@ -288,13 +303,15 @@ test.describe("checkout to fulfilment", () => {
       if (!plan) throw new Error(`The catalogue has no plan ${code}`);
       return plan;
     };
+    // One Individual slot works in every section (Pricing v2): the flows use
+    // its three terms, one open payment per term at a time.
     plans = {
-      business: byCode("business_30d"),
-      market: byCode("market_30d"),
-      tourism: byCode("tourism_30d"),
-      retry: byCode("business_90d"),
-      pending: byCode("market_90d"),
-      cancelled: byCode("tourism_90d"),
+      business: byCode("individual_30d"),
+      market: byCode("individual_30d"),
+      tourism: byCode("individual_30d"),
+      retry: byCode("individual_90d"),
+      pending: byCode("individual_90d"),
+      cancelled: byCode("individual_180d"),
     };
     const addon = (catalogue.data.addons as Addon[]).find(
       (entry) => entry.kind === "urgent" && entry.days === 7
@@ -362,7 +379,7 @@ test.describe("checkout to fulfilment", () => {
       request: planPayment.requestId,
       transaction: transactionId,
     });
-    expect(entitlementsOf(planPayment.id)).toEqual(["retail_paid|business|active|1|30"]);
+    expect(entitlementsOf(planPayment.id)).toEqual(["retail_paid|any|active|1|30|1"]);
 
     // The plan is active for the member: dashboard shortcut and posting allowance.
     await page.goto("/dashboard");
@@ -541,7 +558,7 @@ test.describe("checkout to fulfilment", () => {
       request: lost.requestId,
       transaction: made[0].transactionId,
     });
-    expect(entitlementsOf(lost.id)).toEqual(["retail_paid|market|active|1|30"]);
+    expect(entitlementsOf(lost.id)).toEqual(["retail_paid|any|active|1|30|1"]);
     // It asked the copy's stand-in about exactly this request, with no
     // credentials, and never Ozow (the fence saw nothing).
     const asked = ozow.lookups
@@ -591,7 +608,7 @@ test.describe("checkout to fulfilment", () => {
     await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${paid.id}`);
     await expect(page.getByRole("heading", { name: "Payment confirmed" })).toBeVisible();
     expect(paymentRow(paid.id)).toMatchObject({ status: "complete", fulfilment: "fulfilled" });
-    expect(entitlementsOf(paid.id)).toEqual(["retail_paid|tourism_events|active|1|30"]);
+    expect(entitlementsOf(paid.id)).toEqual(["retail_paid|any|active|1|30|1"]);
     expect(paymentRow(declined.id).status).toBe("failed");
     expect(failures).toEqual([]);
     expect(outside).toEqual([]);
@@ -617,8 +634,13 @@ test.describe("checkout to fulfilment", () => {
       await page.goto(`/billing/checkout?plan=${plans.pending.id}`);
       await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
       const before = reply("/api/billing/create-checkout").length;
+      await tickCoolingOff(page);
       await page.getByRole("button", { name: /^Pay .+ securely$/ }).click();
-      await expect.poll(() => reply("/api/billing/create-checkout").length).toBe(before + 1);
+      // The reply for an open payment asks the database and the provider; on a
+      // busy test machine it took just over the 5-second default once.
+      await expect
+        .poll(() => reply("/api/billing/create-checkout").length, { timeout: 20_000 })
+        .toBe(before + 1);
       return reply("/api/billing/create-checkout").at(-1) as Reply;
     };
     const answered = await tryAgain();
@@ -634,12 +656,18 @@ test.describe("checkout to fulfilment", () => {
           checkoutUrl,
           statusUrl: `${APP_ORIGIN}/billing/success?payment=${open.id}`,
           canCancel: true,
+          slots: 1,
+          amountCents: Number(plans.pending.price_cents),
         },
       },
     });
     // The restored controls (src/app/billing/checkout/checkout-confirm.tsx),
     // unchanged from the selected frontend.
     await expect(page.getByRole("alert").filter({ hasText: PENDING_NOTICE })).toBeVisible();
+    // Which order is unpaid: its slots and total.
+    await expect(page.getByTestId("unpaid-order")).toHaveText(
+      `Unpaid order: 1 slot, R${Number(plans.pending.price_cents) / 100}`
+    );
     const resume = page.getByRole("link", { name: "Continue payment" });
     await expect(resume).toHaveAttribute("href", checkoutUrl);
     await expect(page.getByRole("link", { name: "Check status" })).toHaveAttribute(
@@ -775,8 +803,13 @@ test.describe("checkout to fulfilment", () => {
     const session = await signIn(copy, member);
     const quote = await call(
       copy,
-      "start_checkout",
-      { p_product_id: plans.retry.id, p_target_post: null },
+      "start_slot_checkout",
+      {
+        p_plan_id: plans.retry.id,
+        p_slots: 1,
+        p_expected_total_cents: Number(plans.retry.price_cents),
+        p_cooling_off_consent: true,
+      },
       session.token
     );
     const failedId = String(quote.payment_id);
@@ -801,6 +834,7 @@ test.describe("checkout to fulfilment", () => {
     await signInBrowser(context, member);
     await page.goto(`/billing/checkout?plan=${plans.retry.id}`);
     await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
+    await tickCoolingOff(page);
     await page.getByRole("button", { name: /^Pay .+ securely$/ }).click();
     await expect.poll(() => reply("/api/billing/create-checkout").length).toBe(1);
     const [created] = reply("/api/billing/create-checkout");
@@ -821,6 +855,123 @@ test.describe("checkout to fulfilment", () => {
     // Close it so it holds nothing for the later steps.
     await page.getByRole("button", { name: "Decline at the test bank" }).click();
     await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${retriedId}`);
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
+  });
+
+  test("the checkout total equals the pricing page for every package", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const mark = readOutboundAttempts().length;
+    const { outside, failures, reply } = await guard(context);
+    // Its own member, so its slots do not change the flows above.
+    const buyer = await registerVerifiedMember("prices");
+    await signInBrowser(context, buyer);
+    const offers = [
+      { tier: "month", plan: plans.business },
+      { tier: "quarter", plan: plans.pending },
+      { tier: "half_year", plan: plans.cancelled },
+    ];
+    for (const [index, { tier, plan }] of offers.entries()) {
+      await page.goto("/pricing");
+      const card = page.getByTestId(`retail-offer-${tier}`);
+      const shown = (await card.getByTestId("retail-offer-price").textContent())?.trim();
+      const rand = (cents: number) => `R${cents / 100}`;
+      // The pricing page shows the database's price for one slot.
+      expect(shown).toBe(rand(Number(plan.price_cents)));
+      await card.getByRole("link", { name: /^Choose / }).click();
+      await page.waitForURL((url) => url.pathname === "/billing/checkout");
+      await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
+      await expect(page.getByTestId("checkout-total")).toHaveText(shown!);
+      // Two slots: slot price x 2, the same total at the provider.
+      await page.getByRole("button", { name: "One slot more" }).click();
+      const total = Number(plan.price_cents) * 2;
+      await expect(page.getByTestId("checkout-total")).toHaveText(rand(total));
+      const before = reply("/api/billing/create-checkout").length;
+      await tickCoolingOff(page);
+      await page.getByRole("button", { name: `Pay ${rand(total)} securely` }).click();
+      await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
+      await expect(page.getByText(`Amount: R ${(total / 100).toFixed(2)}`)).toBeVisible();
+      const created = reply("/api/billing/create-checkout").slice(before);
+      expect(created).toEqual([expect.objectContaining({ status: 200 })]);
+      const id = (created[0].body as { paymentId: string }).paymentId;
+      expect(paymentRow(id)).toMatchObject({
+        status: "pending",
+        kind: "plan",
+        amount: String(total),
+      });
+      expect(
+        queryTestCopy(
+          `select string_agg(amount_cents::text, ',' order by line_number) from private.payment_lines where payment_id = '${id}';`
+        )
+      ).toBe(`${plan.price_cents},${plan.price_cents}`);
+      if (index < offers.length - 1) {
+        await page.getByRole("button", { name: "Cancel at the test bank" }).click();
+        await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${id}`);
+        continue;
+      }
+      // The last one is paid: one payment, two slots, each on its own line.
+      await page.getByRole("button", { name: "Pay with the test bank" }).click();
+      await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${id}`);
+      await expect(page.getByRole("heading", { name: "Payment confirmed" })).toBeVisible();
+      expect(paymentRow(id)).toMatchObject({ status: "complete", fulfilment: "fulfilled" });
+      expect(entitlementsOf(id)).toEqual([
+        "retail_paid|any|active|1|180|1",
+        "retail_paid|any|active|1|180|2",
+      ]);
+      // My slots lists both, empty, with one purchase button for the page.
+      await page.goto("/dashboard/slots");
+      await expect(page.getByRole("heading", { name: "My slots" })).toBeVisible();
+      await expect(page.getByTestId("my-slot")).toHaveCount(2);
+      await expect(page.getByText("2 of 4 Individual slots")).toBeVisible();
+      await expect(page.getByRole("link", { name: "Buy a slot" })).toBeVisible();
+    }
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
+  });
+
+  test("a member whose ID review is not accepted is told why and cannot pay (M3.8)", async ({
+    context,
+    page,
+  }) => {
+    const mark = readOutboundAttempts().length;
+    const { outside, failures } = await guard(context);
+    const unreviewed = await registerUnreviewedMember("unreviewed");
+    await signInBrowser(context, unreviewed);
+    await page.goto(`/billing/checkout?plan=${plans.business.id}`);
+    await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
+    await expect(page.getByTestId("slot-block-id_review")).toContainText(
+      "Your ID review must be accepted before you buy a slot"
+    );
+    await expect(page.getByRole("link", { name: "Go to my ID review" })).toHaveAttribute(
+      "href",
+      "/verification"
+    );
+    await expect(page.getByRole("button", { name: /^Pay .+ securely$/ })).toBeDisabled();
+    // The server says the same to a direct request, before any payment exists.
+    const answered = await page.evaluate(async (planId) => {
+      const token = document.cookie.match(/(?:^|; )vm_csrf=([a-f0-9]{64})/)?.[1] ?? "";
+      const response = await fetch("/api/billing/create-checkout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "x-csrf-token": token },
+        body: JSON.stringify({
+          planId,
+          slots: 1,
+          expectedTotalCents: 6900,
+          coolingOffConsent: true,
+        }),
+      });
+      return { status: response.status, body: await response.json() };
+    }, plans.business.id);
+    expect(answered).toMatchObject({ status: 403, body: { code: "ID_REVIEW_REQUIRED" } });
+    expect(
+      queryTestCopy(`select count(*) from private.payments where owner_id = '${unreviewed.id}';`)
+    ).toBe("0");
     expect(failures).toEqual([]);
     expect(outside).toEqual([]);
     expectNoOutboundSince(mark);

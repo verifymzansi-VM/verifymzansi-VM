@@ -179,6 +179,18 @@ async function main() {
                 ))
             )
               problems.push("APP");
+            // PDF reading and link previews run in the offload Worker (M9.9).
+            if (
+              mainApp &&
+              (!Array.isArray(bindings) ||
+                !bindings.some(
+                  (binding: { name?: unknown; type?: unknown; service?: unknown }) =>
+                    binding.name === "OFFLOAD" &&
+                    binding.type === "service" &&
+                    binding.service === "verifymzansi-offload"
+                ))
+            )
+              problems.push("OFFLOAD");
             if (problems.length) {
               results.push({
                 check: `${name}: ${id}`,

@@ -14,11 +14,12 @@ declare
   outcome text;
   window_start timestamptz;
   vat bigint;
-  ent uuid;
   payment_owner uuid;
   prior private.provider_events;
   target private.posts;
   fulfillable boolean;
+  line_count integer := 0;
+  fingerprint text;
 begin
   if jsonb_typeof(ev) <> 'object' or not (array(select jsonb_object_keys(ev)) <@ array['payload_sha256',
       'merchant_reference', 'provider_request_id', 'provider_transaction_id', 'status', 'amount_cents', 'currency'])
@@ -82,6 +83,18 @@ begin
         fulfillable:=coalesce((snap->'addon_capabilities') ? (snap->>'addon'),false)
           and internal.addon_purchase_entitlement(pay.owner_id,target.id,snap->>'addon') is not null;
       end if;
+    else
+      select count(*) into line_count from private.payment_lines l where l.payment_id = pay.id and l.status = 'open';
+      if line_count > 0 and fulfillable then
+        -- Slots are delivered only within the person's limit (every account
+        -- of the identity); otherwise the money goes to reconciliation.
+        fingerprint := internal.individual_slot_identity(pay.owner_id);
+        if fingerprint is not null then
+          perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
+        end if;
+        fulfillable := (internal.individual_slots_counted(fingerprint, pay.owner_id, pay.id)->>'held')::integer
+          + line_count <= internal.individual_slot_limit(fingerprint);
+      end if;
     end if;
     fulfillable := coalesce(fulfillable,false);
     update private.payments set status = 'complete', completed_at = statement_timestamp(),
@@ -93,15 +106,25 @@ begin
       -- because the old target/account disappeared or became ineligible.
       insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key)
       values('payment_reconciliation_required',pay.id,pay.owner_id,'payment_reconciliation_required:'||pay.id);
+    elsif pay.product_kind = 'plan' and line_count > 0 then
+      -- One entitlement per slot, each with its own line (and so its own refund).
+      insert into private.entitlements (owner_id, source, area, payment_id, payment_line_id, slot_capacity,
+        activations_per_period, activation_period_days, max_photos, max_videos, starts_at, ends_at, addon_capabilities)
+      select pay.owner_id, 'retail_paid', snap->>'area', pay.id, l.id, (snap->>'slot_capacity')::integer,
+        (snap->>'activations_per_period')::integer, (snap->>'activation_period_days')::integer,
+        (snap->>'max_photos')::integer, (snap->>'max_videos')::integer, statement_timestamp(),
+        statement_timestamp() + make_interval(days => (snap->>'duration_days')::integer),
+        array(select jsonb_array_elements_text(coalesce(snap->'addon_capabilities','[]'::jsonb)))
+      from private.payment_lines l where l.payment_id = pay.id and l.status = 'open' order by l.line_number;
     elsif pay.product_kind = 'plan' then
+      -- A plan payment made before slot lines existed: one entitlement.
       insert into private.entitlements (owner_id, source, area, payment_id, slot_capacity, activations_per_period,
         activation_period_days, max_photos, max_videos, starts_at, ends_at, addon_capabilities)
       values (pay.owner_id, 'retail_paid', snap->>'area', pay.id, (snap->>'slot_capacity')::integer,
         (snap->>'activations_per_period')::integer, (snap->>'activation_period_days')::integer,
         (snap->>'max_photos')::integer, (snap->>'max_videos')::integer, statement_timestamp(),
         statement_timestamp() + make_interval(days => (snap->>'duration_days')::integer),
-        array(select jsonb_array_elements_text(coalesce(snap->'addon_capabilities','[]'::jsonb))))
-      returning id into ent;
+        array(select jsonb_array_elements_text(coalesce(snap->'addon_capabilities','[]'::jsonb))));
     else
       -- Stacking: a new window starts when the member's current window of that kind ends.
       select greatest(statement_timestamp(), coalesce(max(w.ends_at), statement_timestamp())) into window_start
@@ -115,7 +138,8 @@ begin
     insert into private.invoices (payment_id, invoice_number, amount_ex_vat_cents, vat_cents, total_cents, description)
     values (pay.id, 'INV-' || to_char(statement_timestamp() at time zone 'Africa/Johannesburg', 'YYYYMMDD') || '-'
         || upper(left(replace(pay.id::text, '-', ''), 10)),
-      pay.amount_cents - vat, vat, pay.amount_cents, coalesce(snap->>'label', initcap(snap->>'addon') || ' ' || (snap->>'days') || ' days'));
+      pay.amount_cents - vat, vat, pay.amount_cents,
+      coalesce(snap->>'invoice_description', snap->>'label', initcap(snap->>'addon') || ' ' || (snap->>'days') || ' days'));
     insert into private.outbox_events (kind, subject_id, owner_id, dedupe_key)
     values ('payment_completed', pay.id, pay.owner_id, 'payment_completed:' || pay.id);
     outcome := case when fulfillable then 'completed' else 'complete_unfulfillable_target' end;

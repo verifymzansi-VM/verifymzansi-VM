@@ -97,7 +97,7 @@ describe("entitlements service", () => {
     it("blocks boost on starter plan", () => {
       const result = canBoost("starter", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("R50");
+      expect(result.reason).toContain("paid plans");
     });
 
     it("allows boost on growth plan", () => {
@@ -115,7 +115,7 @@ describe("entitlements service", () => {
     it("blocks featured on starter plan", () => {
       const result = canFeatured("starter", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("R50");
+      expect(result.reason).toContain("paid plans");
     });
 
     it("blocks featured on growth plan", () => {
@@ -133,7 +133,7 @@ describe("entitlements service", () => {
     it("blocks urgent on starter plan", () => {
       const result = canUrgent("starter", "MZANSI_MARKET");
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("R50");
+      expect(result.reason).toContain("paid plans");
     });
 
     it("blocks urgent on growth plan", () => {

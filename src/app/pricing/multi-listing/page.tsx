@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ArrowRight, LockKeyhole, ReceiptText, Users } from "lucide-react";
 import { BrandSurface } from "@/components/brand";
 import { MultiListingPlans, perPostPer30DaysCents } from "@/components/billing/multi-listing-plans";
@@ -11,6 +12,7 @@ import {
   ENTERPRISE_ADMINS_INCLUDED,
   ENTERPRISE_QUOTE_ABOVE_SLOTS,
   formatPlanPrice,
+  PACKAGES_ON_SALE,
 } from "@/lib/constants/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -48,6 +50,8 @@ async function loadCheckoutEnabled() {
  * pricing and advertise pages: buy a multi-listing plan directly.
  */
 export default async function MultiListingPage() {
+  // Multi-listing is not on sale under posting-v4: hidden until it is.
+  if (!PACKAGES_ON_SALE) notFound();
   const [catalog, checkoutEnabled] = await Promise.all([
     getCommercialCatalog(),
     loadCheckoutEnabled(),

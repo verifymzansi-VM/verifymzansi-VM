@@ -88,7 +88,8 @@ pnpm dev
 Open `http://localhost:3000`.
 
 For Playwright, keep that local dev server separate. `pnpm test:e2e` starts its
-own deterministic app instance on a dedicated port.
+own app instance on a dedicated port, against a private local test copy of the
+database (needs Docker; see "Browser tests" below).
 
 ### Docker development
 
@@ -249,23 +250,21 @@ To use a different env file, pass it through the generic wrapper:
 pnpm supabase:cli -- --env-file=.env.local migration list
 ```
 
-### Playwright / CI smoke
+### Browser tests
 
-- Playwright does not depend on your local `.env.local`
-- `playwright.config.ts` starts the app through
-  `scripts/start-playwright-server.cjs`
-- That script injects deterministic e2e-safe env values and sets
-  `VERIFYMZANSI_RUNTIME_MODE=e2e`
-- By default, Playwright boots its own server on `http://127.0.0.1:3100` so an
-  unrelated local app on `3000` cannot contaminate browser results
-- Set `PLAYWRIGHT_REUSE_SERVER=1` only when you intentionally want Playwright to
-  attach to an already-running app on the configured Playwright port
-- `chromium`, `firefox`, and `mobile-chrome` run the full interaction suite;
-  `webkit` and `mobile-safari` are currently scoped to the stable page-load
-  accessibility coverage because broader Safari automation intermittently
-  renders blank public/auth pages in this app
-- The app still boots through `next start`, but production-only launch rules are
-  relaxed for that explicit e2e mode
+- `pnpm test:e2e` (`playwright.foundation.config.ts`, specs in
+  `e2e/foundation/`) runs the restored website in foundation mode against a
+  private, throwaway test copy: a local Supabase stack on your own Docker whose
+  database is built only from `database/foundation/`. It needs Docker and the
+  Supabase CLI, and refuses any hosted project
+- Playwright does not depend on your local `.env.local`: the copy's website gets
+  fixed test settings (`scripts/lib/foundation-e2e-website.mjs`) with
+  `VERIFYMZANSI_RUNTIME_MODE=e2e` and serves on `http://127.0.0.1:3110`
+- Projects: `chromium` and `mobile-chrome`. CI runs them as the required check
+  `e2e-foundation` (workflow "E2E foundation")
+- Delete the copy afterwards with `pnpm foundation:e2e:down`
+- The old stub browser suite (`playwright.config.ts`, `e2e/*.spec.ts`) was
+  retired on 2026-11-11 (`e2e/foundation/PORTING.md`)
 
 ### Production / Cloudflare
 
@@ -326,45 +325,44 @@ pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 
 ## Key Commands
 
-| Command                                                                                | Purpose                                              |
-| -------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `pnpm dev`                                                                             | Start the local Next.js dev server                   |
-| `pnpm build`                                                                           | Production Next.js build                             |
-| `pnpm brand:assets`                                                                    | Regenerate logo lockups, favicon, and app icons      |
-| `pnpm knip`                                                                            | Dead-code scan for unused files and exports          |
-| `pnpm jscpd`                                                                           | Advisory code-duplication scan with HTML/JSON report |
-| `pnpm jscpd:check`                                                                     | Regression-only duplication budget gate              |
-| `pnpm depcruise`                                                                       | Import-graph check for cycles and test-only leaks    |
-| `pnpm lint`                                                                            | ESLint                                               |
-| `pnpm typecheck`                                                                       | TypeScript typecheck                                 |
-| `pnpm test`                                                                            | Blocking Vitest lane used for launch gating          |
-| `pnpm test:blocking`                                                                   | Explicit blocking Vitest lane                        |
-| `pnpm run stability:check`                                                             | One-command full stabilization gate                  |
-| `pnpm test:coverage`                                                                   | Alias for the core coverage lane                     |
-| `pnpm test:coverage:core`                                                              | Coverage lane focused on core server and domain code |
-| `pnpm test:dev-startup`                                                                | Local dev startup smoke (boot + / + /api/health)     |
-| `pnpm test:launch:flows`                                                               | Billing + OTP + DSAR launch-confidence bundle        |
-| `pnpm test:deep`                                                                       | Core coverage plus Playwright                        |
-| `pnpm test:all`                                                                        | Full validation shortcut                             |
-| `pnpm payments:audit`                                                                  | Paid-flow security and live posture audit            |
-| `pnpm safety:review`                                                                   | One-command code review and security gate            |
-| `pnpm safety:ci-review`                                                                | CI-safe review gate (preflight is non-blocking)      |
-| `pnpm safety:release`                                                                  | One-command release-readiness gate                   |
-| `pnpm test:e2e`                                                                        | Full Playwright suite                                |
-| `pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome` | Launch-path smoke coverage                           |
-| `pnpm bootstrap:operator`                                                              | Create or update the first live staff account        |
-| `pnpm reset:launch-data`                                                               | Launch-reset inventory / wipe tool                   |
-| `pnpm supabase:migration:list`                                                         | List linked Supabase local vs remote migrations      |
-| `pnpm supabase:db:push`                                                                | Apply pending local migrations to linked Supabase    |
-| `pnpm preflight`                                                                       | Local launch checks with development-mode validation |
-| `pnpm preflight:prod`                                                                  | Production launch checks                             |
-| `pnpm validate:launch-env`                                                             | Fail-fast production env validation                  |
-| `pnpm ozow:webhook:secret`                                                             | Fetch Ozow webhook secret(s) via One API             |
-| `pnpm security:audit`                                                                  | Dependency vulnerability gate                        |
-| `pnpm secret-scan`                                                                     | Secret leak scan                                     |
-| `pnpm licenses:check`                                                                  | License policy gate                                  |
-| `pnpm build:cloudflare`                                                                | OpenNext Cloudflare build                            |
-| `pnpm email:domain:check`                                                              | Public DNS check for Gmail-backed domain email       |
+| Command                        | Purpose                                              |
+| ------------------------------ | ---------------------------------------------------- |
+| `pnpm dev`                     | Start the local Next.js dev server                   |
+| `pnpm build`                   | Production Next.js build                             |
+| `pnpm brand:assets`            | Regenerate logo lockups, favicon, and app icons      |
+| `pnpm knip`                    | Dead-code scan for unused files and exports          |
+| `pnpm jscpd`                   | Advisory code-duplication scan with HTML/JSON report |
+| `pnpm jscpd:check`             | Regression-only duplication budget gate              |
+| `pnpm depcruise`               | Import-graph check for cycles and test-only leaks    |
+| `pnpm lint`                    | ESLint                                               |
+| `pnpm typecheck`               | TypeScript typecheck                                 |
+| `pnpm test`                    | Blocking Vitest lane used for launch gating          |
+| `pnpm test:blocking`           | Explicit blocking Vitest lane                        |
+| `pnpm run stability:check`     | One-command full stabilization gate                  |
+| `pnpm test:coverage`           | Alias for the core coverage lane                     |
+| `pnpm test:coverage:core`      | Coverage lane focused on core server and domain code |
+| `pnpm test:dev-startup`        | Local dev startup smoke (boot + / + /api/health)     |
+| `pnpm test:launch:flows`       | Billing + OTP + DSAR launch-confidence bundle        |
+| `pnpm test:deep`               | Core coverage plus Playwright                        |
+| `pnpm test:all`                | Full validation shortcut                             |
+| `pnpm payments:audit`          | Paid-flow security and live posture audit            |
+| `pnpm safety:review`           | One-command code review and security gate            |
+| `pnpm safety:ci-review`        | CI-safe review gate (preflight is non-blocking)      |
+| `pnpm safety:release`          | One-command release-readiness gate                   |
+| `pnpm test:e2e`                | Full Playwright suite (foundation test copy)         |
+| `pnpm bootstrap:operator`      | Create or update the first live staff account        |
+| `pnpm reset:launch-data`       | Launch-reset inventory / wipe tool                   |
+| `pnpm supabase:migration:list` | List linked Supabase local vs remote migrations      |
+| `pnpm supabase:db:push`        | Apply pending local migrations to linked Supabase    |
+| `pnpm preflight`               | Local launch checks with development-mode validation |
+| `pnpm preflight:prod`          | Production launch checks                             |
+| `pnpm validate:launch-env`     | Fail-fast production env validation                  |
+| `pnpm ozow:webhook:secret`     | Fetch Ozow webhook secret(s) via One API             |
+| `pnpm security:audit`          | Dependency vulnerability gate                        |
+| `pnpm secret-scan`             | Secret leak scan                                     |
+| `pnpm licenses:check`          | License policy gate                                  |
+| `pnpm build:cloudflare`        | OpenNext Cloudflare build                            |
+| `pnpm email:domain:check`      | Public DNS check for Gmail-backed domain email       |
 
 ## Domain Email Via Gmail
 
@@ -427,7 +425,7 @@ pnpm secret-scan
 pnpm security:audit
 pnpm licenses:check
 pnpm build
-pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome
+pnpm test:e2e
 ```
 
 To specifically validate local `pnpm dev` startup behavior in one command, run:
@@ -452,9 +450,9 @@ pnpm test:launch:flows
 ```
 
 That bundle runs the billing payment route/library/worker tests, OTP route and
-verification page tests, DSAR submit/admin/page tests, then finishes with
-Chromium Playwright check of the DSAR browser flow (the billing round trip runs
-in the foundation browser suite, `e2e/foundation/checkout-*.spec.ts`).
+verification page tests, DSAR submit/admin/page tests, then finishes with the
+Chromium browser tests for checkout and fulfilment and for staff review
+(including privacy requests) on the foundation test copy.
 
 For automated safety gates, use:
 
@@ -714,7 +712,7 @@ docs/                  runbooks, playbooks, audits, and operator references
 database/foundation/   live backend SQL: baseline, updates and generated API contracts
 supabase/              retired source-backend migrations (historical; never replay on foundation)
 workers/               Cloudflare Workers
-e2e/                   Playwright suites
+e2e/foundation/        Playwright suite (foundation test copy)
 ```
 
 ## Launch Notes

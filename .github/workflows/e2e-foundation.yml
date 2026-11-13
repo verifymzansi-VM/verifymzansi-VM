@@ -9,9 +9,11 @@ name: E2E foundation
 # project or a real provider, and the job needs no secrets.
 #
 # A required check since it passed on 11 consecutive main runs (11 November
-# 2026): `e2e-foundation` is listed in .github/rulesets/protect-main.json.
-# The check to require is the aggregate job `e2e-foundation`, which fails
-# unless every browser project passed; the per-project jobs need not be listed.
+# 2026): `e2e-foundation` is listed in .github/rulesets/protect-main.json, and
+# it replaces the retired stub suite's `e2e-full-matrix` (owner decision,
+# 2026-11-11). The check to require is the aggregate job `e2e-foundation`,
+# which fails unless every browser project passed; the per-project jobs need
+# not be listed.
 #
 # On main this workflow runs inside the CI run (ci.yml calls it through
 # `workflow_call`), so the deploy, which needs the whole main CI run to
@@ -57,7 +59,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
@@ -117,7 +119,7 @@ jobs:
         if: always()
         run: node --import tsx scripts/foundation-e2e.mjs down
 
-  # The single check name for the whole workflow (the one to require): green
+  # The single check name for the whole workflow (the required one): green
   # only when every browser project passed.
   e2e-foundation:
     name: e2e-foundation
