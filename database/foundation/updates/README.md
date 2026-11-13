@@ -2851,7 +2851,11 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (all 24 function bodies matched the update's, both new tables, the audit view
   and both waiting triggers present; no problem rows); production fingerprint
   after it matched the full replay
-- `20261113085340_retire_old_staff_reversal_commands.sql`: pending
+- `20261113085340_retire_old_staff_reversal_commands.sql`: applied 2026-11-13
+  14:37 UTC; applied with the owner's approval, from the reviewed file, after
+  the pull request was merged; preflight before "update not applied; refunds
+  waiting for approval: 0", after "already applied" (no problem rows);
+  production fingerprint after it matched the full replay
 - `20261113133605_staff_invoice_payments.sql`: pending
 
 <!-- applied-register:end -->
