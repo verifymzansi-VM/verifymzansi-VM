@@ -2,10 +2,10 @@
   "$comment": "Ratchet for pnpm check:legacy-surface (roadmap M0.11). Every value may only go down. Lower it with `pnpm check:legacy-surface --update` after removing old-backend code; raising any value needs a reviewed reason. legacyClientImporters is also the frozen import list read by .dependency-cruiser.cjs.",
   "counts": {
     "backendSwitches": 43,
-    "legacyClientImports": 85,
+    "legacyClientImports": 81,
     "retiredCommandNames": 41,
     "retiredCommandCalls": 35,
-    "retiredTableReads": 181
+    "retiredTableReads": 178
   },
   "legacyClientImporters": [
     "src/app/(auth)/auth/callback/route.ts",
@@ -25,8 +25,6 @@
     "src/app/api/admin/ops/jobs/retry/route.ts",
     "src/app/api/admin/trials/route.ts",
     "src/app/api/auth/sign-out/route.ts",
-    "src/app/api/communications/email-activity/route.ts",
-    "src/app/api/communications/preferences/route.ts",
     "src/app/api/feed/_lib/feed-request.ts",
     "src/app/api/mock-ozow/route.ts",
     "src/app/api/organisations/[id]/report/route.ts",
@@ -37,7 +35,6 @@
     "src/app/appeals/new/page.tsx",
     "src/app/appeals/page.tsx",
     "src/app/billing/page.tsx",
-    "src/app/dashboard/communication/page.tsx",
     "src/app/dashboard/complete-profile/page.tsx",
     "src/app/dashboard/layout.tsx",
     "src/app/dashboard/leads/page.tsx",
@@ -77,7 +74,6 @@
     "src/lib/payments/resolve-payment-status.ts",
     "src/lib/promotions/public-tourism-events.ts",
     "src/lib/services/audit.ts",
-    "src/lib/services/consent.ts",
     "src/lib/services/decision-ledger.ts",
     "src/lib/services/feature-flags.ts",
     "src/lib/services/governance-metrics.ts",

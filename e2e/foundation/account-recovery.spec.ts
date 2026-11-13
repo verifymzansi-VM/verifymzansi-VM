@@ -68,7 +68,9 @@ import {
 //     website checks it with a sign-in whose session it ends at once), and
 //     the right one changes it while the browser stays signed in; a session
 //     signed in over 24 hours ago is asked to sign in again first;
-//   - a member saves a communication choice, which stays saved;
+//   - a member saves a communication choice, which stays saved (one history
+//     row per change) and can be turned off again; the email history beside
+//     it shows only the member's own finished emails;
 //   - a member deletes the account and cannot sign in again.
 //
 // The reset page sends only the two password fields. The server remembers,
@@ -87,17 +89,13 @@ import {
 // addresses. Each link returns to the website's callback, which only picks
 // the page to show (the profile's Account tab) and opens no session.
 //
-// Two steps are broken today and are marked test.fail(), each pinned to its
-// exact known symptom (characterise, support/known-break.ts); any other
-// outcome turns the run red:
-// - "... communication choices ...": SEC-09, fixed by M1.7. Saving a choice
-//   writes a table of the retired backend and answers 500 with the database's
-//   own refusal; reading the choices hides the same failure and shows every
-//   choice "off", and the email history beside them fails on every visit.
+// One step is broken today and is marked test.fail(), pinned to its exact
+// known symptom (characterise, support/known-break.ts); any other outcome
+// turns the run red:
 // - "delete my account ...": SEC-02, fixed by M1.6c. The delete route reads a
 //   table of the retired backend after re-checking the password and answers
 //   500; the account stays and can still sign in.
-// The tests run in order; a failure skips the rest, so the marked steps come
+// The tests run in order; a failure skips the rest, so the marked step comes
 // after the working flow.
 //
 // Emails: local Auth sends its own emails (reset links) through its SMTP
@@ -124,7 +122,6 @@ import {
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
-const SEC09 = "SEC-09, fixed by M1.7";
 const SEC02 = "SEC-02, fixed by M1.6c";
 const CAPTCHA_STAND_IN = "local-fixture-captcha-stand-in";
 const RESET_PATH = "/api/auth/reset-password";
@@ -1166,70 +1163,87 @@ test.describe("account recovery and self-service", () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    test.fail(true, SEC09);
-    await characterise(SEC09, async () => {
-      const mark = readOutboundAttempts().length;
-      const guarded = await guard(context);
-      await signInBrowser(context, chooser);
-      // "Analytics": M1.7 may hide the marketing switches until consent can be
-      // stored; this choice is not a marketing one.
-      const openChoice = async () => {
-        await page.goto("/dashboard/communication");
-        await page.getByRole("tab", { name: "Preferences" }).click();
-        return page.getByRole("switch", { name: "Analytics" });
-      };
-      const choice = await openChoice();
-      await expect(choice).toHaveAttribute("aria-checked", "false");
-      await choice.click();
-      await expect
-        .poll(() => guarded.reply(PREFERENCES_PATH, "PATCH").length, { timeout: 20_000 })
-        .toBe(1);
-      const saved = guarded.reply(PREFERENCES_PATH, "PATCH")[0];
-      const allOff = {
+    const mark = readOutboundAttempts().length;
+    // Finished account emails, written as the email job leaves them (already
+    // sent, or failed for good), so the job never picks them up: two of the
+    // chooser's and one of another member's, which must not be shown.
+    const finished = (owner: string, done: "sent" | "failed") =>
+      queryTestCopy(
+        "insert into private.outbox_events(kind, subject_id, owner_id, dedupe_key, processed_at, delivery_attempts) " +
+          `values ('trial_started', gen_random_uuid(), '${owner}', 'fixture-history:' || gen_random_uuid(), ` +
+          `${done === "sent" ? "now(), 1" : "null, 8"}) returning id;`
+      );
+    const own = [finished(chooser.id, "sent"), finished(chooser.id, "failed")];
+    const other = finished(leaver.id, "sent");
+    const historyRows = () =>
+      Number(
+        queryTestCopy(
+          `select count(*) from private.communication_choice_events where account_id = '${chooser.id}';`
+        )
+      );
+    expect(historyRows()).toBe(0);
+    const guarded = await guard(context);
+    await signInBrowser(context, chooser);
+    const openChoice = async () => {
+      await page.goto("/dashboard/communication");
+      await page.getByRole("tab", { name: "Preferences" }).click();
+      return page.getByRole("switch", { name: "Analytics" });
+    };
+    const choice = await openChoice();
+    await expect(choice).toHaveAttribute("aria-checked", "false");
+    // Optional choices start off (opt-in), marketing included.
+    for (const name of ["Marketing email", "Marketing SMS", "Third-party sharing"])
+      await expect(page.getByRole("switch", { name })).toHaveAttribute("aria-checked", "false");
+    await choice.click();
+    await expect
+      .poll(() => guarded.reply(PREFERENCES_PATH, "PATCH").length, { timeout: 20_000 })
+      .toBe(1);
+    expect(guarded.sentTo(PREFERENCES_PATH, "PATCH")[0].fields.join()).toBe("analytics");
+    expect(guarded.reply(PREFERENCES_PATH, "PATCH")[0]).toMatchObject({
+      status: 200,
+      body: {
+        success: true,
         preferences: {
           marketing_email: false,
           marketing_sms: false,
-          analytics: false,
+          analytics: true,
           third_party_sharing: false,
         },
-      };
-      if (
-        saved.status === 500 &&
-        sameJson(saved.body, { error: "Invalid schema: public" }) &&
-        guarded.sentTo(PREFERENCES_PATH, "PATCH")[0].fields.join() === "analytics"
-      ) {
-        // SEC-09 as recorded: the choice goes to a table of the retired
-        // backend and the database's own refusal reaches the member; reading
-        // hides the same failure (every choice "off"), and the email history
-        // fails on every visit.
-        await expect(toast(page, "Unable to update preference")).toBeVisible();
-        const reloaded = await openChoice();
-        await expect(reloaded).toHaveAttribute("aria-checked", "false");
-        await expect.poll(() => guarded.reply(PREFERENCES_PATH, "GET").length).toBe(2);
-        await expect.poll(() => guarded.reply(EMAIL_ACTIVITY_PATH, "GET").length).toBe(2);
-        for (const read of guarded.reply(PREFERENCES_PATH, "GET"))
-          expect(read).toMatchObject({ status: 200, body: allOff });
-        for (const read of guarded.reply(EMAIL_ACTIVITY_PATH, "GET"))
-          expect(read).toMatchObject({
-            status: 500,
-            body: { error: "Failed to load email activity" },
-          });
-        expectContained(guarded);
-        expectNoProviderSince(mark);
-        throw new KnownBreak(
-          `${SEC09}: saving a communication choice fails (500) and every choice reads as off`
-        );
-      }
-      // Promised (M1.7): saved, still on after a reload, and the email
-      // history loads.
-      expect(saved).toMatchObject({ status: 200 });
-      const reloaded = await openChoice();
-      await expect(reloaded).toHaveAttribute("aria-checked", "true");
-      await expect.poll(() => guarded.reply(EMAIL_ACTIVITY_PATH, "GET").length).toBe(2);
-      for (const read of guarded.reply(EMAIL_ACTIVITY_PATH, "GET")) expect(read.status).toBe(200);
-      expectContained(guarded);
-      expectNoProviderSince(mark);
+      },
     });
+    // One history row, with the wording version and the time.
+    expect(historyRows()).toBe(1);
+    expect(
+      queryTestCopy(
+        "select purpose || ' ' || granted || ' ' || wording_version from private.communication_choice_events " +
+          `where account_id = '${chooser.id}';`
+      )
+    ).toBe("analytics true communication-2026-11");
+    const reloaded = await openChoice();
+    await expect(reloaded).toHaveAttribute("aria-checked", "true");
+    // No error on any visit: both reads answer, and the email history shows
+    // only the chooser's own finished emails.
+    await expect.poll(() => guarded.reply(PREFERENCES_PATH, "GET").length).toBe(2);
+    await expect.poll(() => guarded.reply(EMAIL_ACTIVITY_PATH, "GET").length).toBe(2);
+    for (const read of guarded.reply(PREFERENCES_PATH, "GET")) expect(read.status).toBe(200);
+    for (const read of guarded.reply(EMAIL_ACTIVITY_PATH, "GET")) {
+      expect(read.status).toBe(200);
+      const ids = (read.body as { items: { id: string }[] }).items.map((item) => item.id);
+      expect(ids.sort()).toEqual([...own].sort());
+      expect(ids).not.toContain(other);
+    }
+    await expect(toast(page, "Failed to load email activity")).toHaveCount(0);
+    await expect(toast(page, "Failed to load preferences")).toHaveCount(0);
+    // Turning it off again is as easy, and is a second history row.
+    await reloaded.click();
+    await expect
+      .poll(() => guarded.reply(PREFERENCES_PATH, "PATCH").length, { timeout: 20_000 })
+      .toBe(2);
+    expect(guarded.reply(PREFERENCES_PATH, "PATCH")[1]).toMatchObject({ status: 200 });
+    expect(historyRows()).toBe(2);
+    await expect(await openChoice()).toHaveAttribute("aria-checked", "false");
+    expectContained(guarded);
+    expectNoProviderSince(mark);
   });
 
   test("delete my account: the member is signed out and cannot sign in again", async ({

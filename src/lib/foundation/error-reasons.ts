@@ -30,6 +30,8 @@ export const FOUNDATION_ERROR_REASONS = {
   avatar_unavailable: ["22023"],
   bio_invalid: ["22023"],
   business_unavailable: ["PT404"],
+  choice_invalid: ["22023"],
+  choice_limit: ["PT429"],
   commission_invalid: ["22023"],
   commission_state: ["PT409"],
   commission_unavailable: ["PT404"],

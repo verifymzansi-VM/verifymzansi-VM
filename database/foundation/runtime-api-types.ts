@@ -42,6 +42,18 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_my_slots: { Args: Record<never, never>; Returns: Json };
+      get_my_communication_choices: { Args: Record<never, never>; Returns: Json };
+      save_my_communication_choices: {
+        Args: {
+          p_wording: string;
+          p_marketing_email?: boolean;
+          p_marketing_sms?: boolean;
+          p_analytics?: boolean;
+          p_third_party_sharing?: boolean;
+        };
+        Returns: Json;
+      };
+      list_my_email_history: { Args: { p_limit?: number }; Returns: Json };
       staff_set_individual_slot_limit: {
         Args: { p_account_id: string; p_slot_limit: number; p_ends_at: string; p_reason: string };
         Returns: Json;

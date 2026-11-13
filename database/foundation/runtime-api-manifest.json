@@ -494,6 +494,77 @@
       "authority": "Service-only read for the receipt email: one payment's amount, currency, completion time, product kind, label, slot count, status, delivery status, merchant reference, Ozow transaction id and invoice (number, description, issue time), with its owner id; null for an unknown payment. No contact or identity details."
     },
     {
+      "name": "get_my_communication_choices",
+      "updates": ["updates/20261113134500_communication_choices_and_signup_terms.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current active self-only account (confirmed email) and live session; the caller's four optional communication choices (marketing_email, marketing_sms, analytics, third_party_sharing), each off until the caller turns it on. No caller-selected account."
+    },
+    {
+      "name": "save_my_communication_choices",
+      "updates": ["updates/20261113134500_communication_choices_and_signup_terms.sql"],
+      "arguments": [
+        {
+          "name": "p_wording",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_marketing_email",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_marketing_sms",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_analytics",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_third_party_sharing",
+          "sqlType": "boolean",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current active self-only account (confirmed email) and live session, rechecked after a per-account lock; records each real change of the caller's own choices as an append-only row with the wording version and time; at most 40 changes in 24 hours. No caller-selected account."
+    },
+    {
+      "name": "list_my_email_history",
+      "updates": ["updates/20261113134500_communication_choices_and_signup_terms.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current active self-only account (confirmed email) and live session; the caller's own finished account emails (kind, sent or failed, time), at most 50. No address, subject record, provider error or other account."
+    },
+    {
       "name": "get_frontend_staff_organisation_detail",
       "updates": ["updates/20261105200401_restored_staff_organisation_workspace.sql"],
       "arguments": [
