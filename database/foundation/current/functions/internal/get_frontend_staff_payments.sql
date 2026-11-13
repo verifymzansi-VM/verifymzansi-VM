@@ -27,4 +27,3 @@ begin
 end$function$;
 alter function internal.get_frontend_staff_payments(integer,text) owner to postgres;
 revoke all on function internal.get_frontend_staff_payments(integer,text) from public;
-grant execute on function internal.get_frontend_staff_payments(integer,text) to authenticated;

@@ -32,11 +32,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       get_public_frontend_business_affiliations: { Args: { p_post_ids: string[] }; Returns: Json };
       get_frontend_staff_organisation_directory: { Args: Record<never, never>; Returns: Json };
       get_frontend_staff_organisation_detail: { Args: { p_id: string }; Returns: Json };
-      get_frontend_staff_payments: { Args: { p_page: number; p_status?: string }; Returns: Json };
-      record_frontend_staff_payment_reversal: {
-        Args: { p_id: string; p_kind: string; p_reason: string };
-        Returns: Json;
-      };
       start_slot_checkout: {
         Args: {
           p_plan_id: string;
@@ -47,10 +42,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_my_slots: { Args: Record<never, never>; Returns: Json };
-      record_staff_slot_reversal: {
-        Args: { p_line_id: string; p_kind: string; p_reason: string };
-        Returns: Json;
-      };
       staff_set_individual_slot_limit: {
         Args: { p_account_id: string; p_slot_limit: number; p_ends_at: string; p_reason: string };
         Returns: Json;

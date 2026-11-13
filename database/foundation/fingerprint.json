@@ -33,14 +33,16 @@
       "row_level_security": "b7e1c8406fd05fc721233fe5ef48a096",
       "triggers": "80db5fa72d2e7c0b8b8712e3ad15dcfb"
     },
-    "pendingApplication": []
+    "pendingApplication": [
+      "20261113085340_retire_old_staff_reversal_commands.sql"
+    ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 65,
-  "lastUpdate": "20261113021223_staff_payment_fixes.sql",
+  "updateCount": 66,
+  "lastUpdate": "20261113085340_retire_old_staff_reversal_commands.sql",
   "categories": {
     "column_grants": {
       "items": 2,
@@ -59,16 +61,16 @@
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 807,
-      "fingerprint": "c7d5d3008797530b511e4d379e443785"
+      "items": 804,
+      "fingerprint": "5673c64b74d507eb35ab45d57e63862d"
     },
     "function_grants": {
-      "items": 639,
-      "fingerprint": "f4ecdf445f7518eb3bf98be499072fa2"
+      "items": 633,
+      "fingerprint": "6786ff6e567d0146f4324d7ef721242a"
     },
     "function_metadata": {
-      "items": 807,
-      "fingerprint": "1024f55f8b0c1c6b0615cd8a1e851678"
+      "items": 804,
+      "fingerprint": "7a2dd21a5affc96ef046cd89743492c1"
     },
     "indexes": {
       "items": 461,
