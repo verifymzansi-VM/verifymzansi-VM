@@ -1,4 +1,5 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { SHOW_STAFF_TRIALS } from "@/lib/hidden-features";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
@@ -141,7 +142,8 @@ export default async function OrganisationAdminDetailPage({
             ? ` · logo permission recorded (${org.logo_permission_reference ?? "no reference"})`
             : " · no logo permission"}
         </p>
-        {org.programme_status === "founding_trial" ? (
+        {/* Offers are made on Free posts & trials, hidden until it works. */}
+        {SHOW_STAFF_TRIALS && org.programme_status === "founding_trial" ? (
           <p className="mt-1 text-sm">
             <Link className="underline" href={`/admin/trials?offer=organisation_trial:${org.id}`}>
               Offer a pilot extension

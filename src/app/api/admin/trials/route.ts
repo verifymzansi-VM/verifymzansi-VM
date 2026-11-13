@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SHOW_STAFF_TRIALS } from "@/lib/hidden-features";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
@@ -32,6 +33,8 @@ const schema = z.discriminatedUnion("action", [
 ]);
 // Extensions are offers the member must accept: see trial_extension.* in /api/admin/commercial.
 export async function POST(request: Request) {
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_STAFF_TRIALS) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const guard = await enforceAdminMutationGuard({
     request,
     logger: log,

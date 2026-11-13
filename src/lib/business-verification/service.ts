@@ -2,22 +2,6 @@ import { officeToLocation, registeredOfficeSummary } from "@/lib/cipc/address";
 import { looksOriginal } from "@/lib/cipc/screen";
 
 import type { CipcFile } from "./intake";
-import type { RegisteredOfficeView } from "./public";
-
-export const STICKER_TTL_DAYS = 365;
-export const FILE_RETENTION_DAYS = 30;
-
-type OfficeCase = {
-  kind: string;
-  registered_office: RegisteredOfficeView | null;
-  admin_copy: { registeredOffice?: RegisteredOfficeView | null } | null;
-  linked_case_id: string | null;
-};
-
-/** The full registered office a case rests on (staff-corrected, else CIPC's copy). */
-export function caseOffice(row: Pick<OfficeCase, "registered_office" | "admin_copy">) {
-  return row.registered_office ?? row.admin_copy?.registeredOffice ?? null;
-}
 
 /** What the owner sees after we read their document (names only, no IDs). */
 export function ownerPreview(file: CipcFile, ownerHmac: string | null) {

@@ -1,4 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+// The route is hidden until it works (src/lib/hidden-features.ts); these
+// tests switch it on to keep the code behind the switch checked.
+const hiddenFeature = vi.hoisted(() => ({ shown: true }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_TRIAL_PLAN_CHANGES() {
+    return hiddenFeature.shown;
+  },
+}));
 const { guard, rpc } = vi.hoisted(() => ({ guard: vi.fn(), rpc: vi.fn() }));
 vi.mock("@/lib/utils/authenticated-mutation-route", () => ({
   enforceAuthenticatedMutationRequest: guard,
@@ -12,6 +22,21 @@ const request = (body: unknown) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+describe("member trial actions while hidden", () => {
+  it("answers 404 before any other check", async () => {
+    hiddenFeature.shown = false;
+    try {
+      const res = await POST(
+        new Request("https://verifymzansi.com/api/trials", { method: "POST", body: "{}" })
+      );
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: "Not found" });
+    } finally {
+      hiddenFeature.shown = true;
+    }
+  });
+});
+
 describe("member trial actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();

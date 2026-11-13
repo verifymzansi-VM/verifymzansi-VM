@@ -57,7 +57,6 @@ const activity = () => request("/api/communications/email-activity");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
   authenticate.mockResolvedValue({ rpc });

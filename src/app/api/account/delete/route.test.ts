@@ -1,4 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+// The route is hidden until it works (src/lib/hidden-features.ts); these
+// tests switch it on to keep the code behind the switch checked.
+const hiddenFeature = vi.hoisted(() => ({ shown: true }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_ACCOUNT_DELETION() {
+    return hiddenFeature.shown;
+  },
+}));
 import type { NextRequest } from "next/server";
 
 const { mockCreateClient, mockCreateAdminClient, mockCheckRateLimit, mockQueuePublicMediaCleanup } =
@@ -173,6 +183,24 @@ function createSupabaseClientMock(user: unknown, options: { passwordError?: bool
   });
   return { signInWithPassword, signOut };
 }
+
+describe("POST /api/account/delete while hidden", () => {
+  it("answers 404 before any other check", async () => {
+    hiddenFeature.shown = false;
+    try {
+      const res = await POST(
+        new Request("https://verifymzansi.com/api/account/delete", {
+          method: "POST",
+          body: "{}",
+        }) as unknown as NextRequest
+      );
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: "Not found" });
+    } finally {
+      hiddenFeature.shown = true;
+    }
+  });
+});
 
 describe("POST /api/account/delete", () => {
   beforeEach(() => {

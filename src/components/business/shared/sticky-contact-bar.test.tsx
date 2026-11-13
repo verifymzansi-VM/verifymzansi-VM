@@ -8,9 +8,6 @@ import { StickyContactBar } from "./sticky-contact-bar";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 import { businessContactConfig } from "@/components/listings/contact-action-configs";
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
-}));
 vi.mock("@/components/ui/turnstile-widget", () => ({ TurnstileWidget: () => null }));
 
 const enquiry = businessContactConfig("biz-1", "Test", "/mzansi-business/biz-1");
