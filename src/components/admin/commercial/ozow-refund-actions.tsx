@@ -70,7 +70,7 @@ const date = new Intl.DateTimeFormat("en-ZA", {
 });
 
 /** Plain words for each state of an Ozow refund. */
-export const OZOW_REFUND_STATUS_WORDS: Record<OzowRefundRow["status"], string> = {
+const OZOW_REFUND_STATUS_WORDS: Record<OzowRefundRow["status"], string> = {
   awaiting_approval: "waiting for approval",
   approved: "approved, sending to Ozow",
   sent: "sent to Ozow",
@@ -89,8 +89,25 @@ const FAILURE_WORDS: Record<string, string> = {
   closed_by_staff: "closed by staff: it never reached Ozow",
 };
 
+type RefundReply = {
+  error?: string;
+  code?: string;
+  data?: { status?: unknown; answered?: unknown };
+};
+
+/** One POST to the Ozow refunds route (same-origin, CSRF header). */
+async function postRefundAction(payload: Record<string, unknown>) {
+  const response = await fetch("/api/admin/payments/ozow-refunds", {
+    method: "POST",
+    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  const reply = (await response.json().catch(() => ({}))) as RefundReply;
+  return { ok: response.ok, reply };
+}
+
 /** Posts to the Ozow refunds route and refreshes the page. */
-export function useOzowRefundAction() {
+function useOzowRefundAction() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(null);
@@ -101,26 +118,22 @@ export function useOzowRefundAction() {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/admin/payments/ozow-refunds", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(payload),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (body.code === "step_up_required" || body.code === "mfa_required") {
-          router.push(
-            staffVerifyHref("/staff/two-step", window.location.pathname + window.location.search)
-          );
+      const { ok, reply } = await postRefundAction(payload);
+      if (!ok) {
+        // An expired or missing authenticator code: verify again, then return here.
+        const stepUp = reply.code === "step_up_required" || reply.code === "mfa_required";
+        if (stepUp) {
+          const here = window.location.pathname + window.location.search;
+          router.push(staffVerifyHref("/staff/two-step", here));
           return false;
         }
-        setMessage({ tone: "error", text: body.error ?? "The refund could not be recorded." });
+        setMessage({ tone: "error", text: reply.error ?? "The refund could not be recorded." });
         router.refresh();
         return false;
       }
       setMessage({
         tone: "success",
-        text: success(String(body.data?.status ?? ""), body.data?.answered === true),
+        text: success(String(reply.data?.status ?? ""), reply.data?.answered === true),
       });
       router.refresh();
       return true;

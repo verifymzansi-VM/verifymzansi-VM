@@ -71,7 +71,6 @@ const commandResult = z.strictObject({
   payment_status: paymentStatus,
   repeated: z.boolean(),
 });
-export type StaffOzowRefundResult = z.infer<typeof commandResult>;
 
 const approveResult = z.strictObject({
   request_id: z.uuid(),
@@ -286,7 +285,6 @@ const refundRecord = z.strictObject({
   ozow_missing_at: instant.nullable(),
   requested_by_me: z.boolean(),
 });
-export type StaffOzowRefundRecord = z.infer<typeof refundRecord>;
 
 /** API and dashboard refunds of the listed payments, and those needing staff. */
 export function readStaffOzowRefunds(api: FoundationAuthenticatedApi, paymentIds: string[]) {
