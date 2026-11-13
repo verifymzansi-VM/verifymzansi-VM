@@ -79,17 +79,20 @@ describe("CI reports what it ran", () => {
   });
 
   it("fails browser runs in CI on skips that are not documented platform skips", () => {
-    const config = readFileSync("playwright.config.ts", "utf8");
+    const config = readFileSync("playwright.foundation.config.ts", "utf8");
     expect(config).toContain("./e2e/support/skip-guard-reporter.ts");
     const reporter = readFileSync("e2e/support/skip-guard-reporter.ts", "utf8");
     expect(reporter).toContain('return { status: "failed" }');
-    for (const job of ["e2e-full-matrix"]) {
-      const run = ci.jobs[job].steps.map((step) => step.run ?? "").join("\n");
-      // A command-line --reporter would replace the configured skip guard.
-      expect(run).toContain("playwright test");
-      expect(run).not.toContain("--reporter");
-      expect(JSON.stringify(ci.jobs[job])).not.toContain("PLAYWRIGHT_SKIP_GUARD");
-    }
+    const browser = (
+      parse(readFileSync(".github/workflows/e2e-foundation.yml", "utf8")) as {
+        jobs: Record<string, Job>;
+      }
+    ).jobs.browser;
+    const run = browser.steps.map((step) => step.run ?? "").join("\n");
+    // A command-line --reporter would replace the configured skip guard.
+    expect(run).toContain("playwright test --config=playwright.foundation.config.ts");
+    expect(run).not.toContain("--reporter");
+    expect(JSON.stringify(browser)).not.toContain("PLAYWRIGHT_SKIP_GUARD");
   });
 });
 
@@ -99,39 +102,19 @@ describe("CI job graph", () => {
     jobs: Record<string, Job & { "timeout-minutes"?: number }>;
   };
 
-  it("lets browser jobs start after the static checks instead of waiting for unit tests", () => {
-    // They use only the shared browser-test build, never the unit or
-    // Worker build jobs. A merge still needs every required check green.
-    for (const id of ["e2e-full-matrix"])
-      expect([workflow.jobs[id].needs].flat(), id).toEqual(["lint-type-security", "build-e2e"]);
-    // The shared build starts at minute 0.
-    expect(workflow.jobs["build-e2e"].needs).toBeUndefined();
-  });
-
-  it("builds the browser-test site once and serves that build in every browser job", () => {
-    type ArtifactStep = Step & { uses?: string; with?: Record<string, string | boolean | number> };
-    const build = workflow.jobs["build-e2e"].steps as ArtifactStep[];
-    const buildRun = build.map((step) => step.run ?? "").join("\n");
-    expect(buildRun).toContain("node scripts/start-playwright-server.cjs --build-only");
-    // An empty build must fail here, not later as a confusing server error.
-    expect(buildRun).toContain("test -f .next/BUILD_ID");
-    const upload = build.find((step) => step.uses?.startsWith("actions/upload-artifact@"));
-    expect(upload?.with?.["include-hidden-files"]).toBe(true);
-    expect(upload?.with?.["if-no-files-found"]).toBe("error");
-    expect(
-      String(upload?.with?.path)
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-    ).toEqual(expect.arrayContaining([".next", "!.next/cache", "public/vendor"]));
-    const steps = workflow.jobs["e2e-full-matrix"].steps as ArtifactStep[];
-    const download = steps.findIndex((step) => step.uses?.startsWith("actions/download-artifact@"));
-    const tests = steps.findIndex((step) => (step.run ?? "").includes("playwright test"));
-    expect(download).toBeGreaterThan(-1);
-    expect(tests).toBeGreaterThan(download);
-    expect(steps[download].with?.name).toBe(upload?.with?.name);
-    expect(steps[tests].env?.PLAYWRIGHT_SKIP_BUILD).toBe("1");
-    // The picture check builds its own site, for the foundation test copy.
-    expect(JSON.stringify(workflow.jobs["visual-regression"])).not.toContain("download-artifact");
+  it("has no job of the retired stub browser suite", () => {
+    // e2e-foundation (its own workflow) is the browser check; the pictures
+    // build their own site for the foundation test copy.
+    for (const id of ["e2e-full-matrix", "build-e2e"])
+      expect(workflow.jobs[id], id).toBeUndefined();
+    const text = readFileSync(".github/workflows/ci.yml", "utf8");
+    for (const retired of [
+      "start-playwright-server",
+      "check-kyc-browser-report",
+      "PLAYWRIGHT_TEST_MODE",
+      "download-artifact",
+    ])
+      expect(text, retired).not.toContain(retired);
   });
 
   it("compares the pictures on the foundation test copy in the pinned browser image", () => {
@@ -233,48 +216,43 @@ describe("CI job graph", () => {
   });
 
   it("keeps the checks only the removed launch-flows job made", () => {
-    // The smoke subset runs inside the full matrix; these two checks did not.
     const build = workflow.jobs["build-route-verify"].steps;
     const built = build.findIndex((step) => step.run === "pnpm run build:cloudflare");
     const routes = build.findIndex((step) => step.run === "node scripts/check-built-routes.mjs");
     expect(built).toBeGreaterThan(-1);
     expect(routes).toBeGreaterThan(built);
     expect(build[routes].if).toBeUndefined();
-    const matrix = workflow.jobs["e2e-full-matrix"] as Job & {
-      strategy: { matrix: { project: string[] } };
-    };
-    expect(matrix.strategy.matrix.project).toEqual(
-      expect.arrayContaining(["chromium", "mobile-chrome"])
-    );
-    const steps = matrix.steps;
-    const tests = steps.findIndex((step) => (step.run ?? "").includes("playwright test"));
-    expect(tests).toBeGreaterThan(-1);
-    // The stub KYC specs are retired (identity review runs in e2e-foundation),
-    // so nothing may still look for their scenarios.
-    expect(JSON.stringify(steps)).not.toContain("check-kyc-browser-report");
-    expect(steps[tests].env?.PLAYWRIGHT_JSON_REPORT).toBe(
-      "test-results/e2e-full-${{ matrix.project }}.json"
-    );
     expect(Object.keys(workflow.jobs)).not.toEqual(
       expect.arrayContaining(["e2e-smoke", "launch-flows-bundle"])
     );
   });
 
   it("counts tests that passed only on retry in each browser job's summary", () => {
-    for (const id of ["e2e-full-matrix"]) {
-      const steps = workflow.jobs[id].steps;
-      const run = steps.findIndex((step) => (step.run ?? "").includes("playwright test"));
-      const report = steps[run].env?.PLAYWRIGHT_JSON_REPORT ?? "";
-      expect(report, id).toMatch(/^test-results\/.+\$\{\{ matrix\.project \}\}\.json$/);
-      const summary = steps
-        .slice(run + 1)
-        .find((step) => (step.run ?? "").includes("scripts/e2e-foundation-summary.mjs"));
-      expect(summary?.if, id).toBe("always()");
-      expect(summary?.run, id).toContain('"$GITHUB_STEP_SUMMARY"');
-    }
+    const e2e = parse(readFileSync(".github/workflows/e2e-foundation.yml", "utf8")) as {
+      jobs: Record<string, Job & { strategy?: { matrix: { project: string[] } } }>;
+    };
+    const browser = e2e.jobs.browser;
+    expect(browser.strategy?.matrix.project).toEqual(["chromium", "mobile-chrome"]);
+    const steps = browser.steps;
+    const run = steps.findIndex((step) => (step.run ?? "").includes("playwright test"));
+    expect(steps[run].env?.PLAYWRIGHT_JSON_REPORT).toBe(
+      "test-results/foundation-${{ matrix.project }}.json"
+    );
+    const summary = steps
+      .slice(run + 1)
+      .find((step) => (step.run ?? "").includes("scripts/e2e-foundation-summary.mjs"));
+    expect(summary?.if).toBe("always()");
+    expect(summary?.run).toContain('"$GITHUB_STEP_SUMMARY"');
+    // The required aggregate check fails unless every browser project passed.
+    const aggregate = e2e.jobs["e2e-foundation"];
+    expect(aggregate.name).toBe("e2e-foundation");
+    expect(aggregate.needs).toBe("browser");
+    expect(aggregate.if).toBe("${{ !cancelled() }}");
+    expect(aggregate.steps.map((step) => step.run ?? "").join("\n")).toContain(
+      'if [ "$RESULT" != "success" ]'
+    );
   });
 });
-
 describe("scheduled monitoring reports what it checked", () => {
   const load = (name: string) =>
     parse(readFileSync(`.github/workflows/${name}.yml`, "utf8")) as {
