@@ -156,8 +156,8 @@ test.describe("Singleton video playback", () => {
 
     await installSingletonMediaShim(page);
     await stubMarketplaceWithMultipleVideos(page, 3);
-    // The first tap turns autoplay on, so visible cards load their (stub) videos.
-    // The shim tests playback arbitration, not decoding: keep load errors from
+    // Preview loads the card's (stub) video. The shim tests playback
+    // arbitration, not decoding: keep load errors from
     // replacing the cards' controls with the media fallback.
     await page.addInitScript(() => {
       document.addEventListener(
@@ -190,7 +190,7 @@ test.describe("Singleton video playback", () => {
     if (testInfo.project.name === "mobile-chrome") {
       await firstVideo
         .locator("xpath=ancestor::div[@data-card-variant]")
-        .getByRole("button", { name: "Play video", exact: true })
+        .getByRole("button", { name: /^Preview video/ })
         .click();
     } else {
       await firstVideo.evaluate((el) => (el as HTMLVideoElement).play());
@@ -206,7 +206,7 @@ test.describe("Singleton video playback", () => {
     if (testInfo.project.name === "mobile-chrome") {
       await secondVideo
         .locator("xpath=ancestor::div[@data-card-variant]")
-        .getByRole("button", { name: "Play video", exact: true })
+        .getByRole("button", { name: /^Preview video/ })
         .click();
     } else {
       await secondVideo.evaluate((el) => (el as HTMLVideoElement).play());
