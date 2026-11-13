@@ -53,6 +53,7 @@ import {
 import { LocationSelector } from "@/components/ui/location-selector";
 import { CameraCapture } from "@/components/ui/camera-capture";
 import { isValidSaPhone, sanitizeSaPhoneInput } from "@/lib/utils/phone";
+import { SHOW_LOCATION_DETECTION } from "@/lib/hidden-features";
 import {
   FieldGroupHeading,
   HelpLinkCard,
@@ -2099,26 +2100,33 @@ export default function VerificationPage() {
                       </p>
                       {!locationSubmissionLocked && (
                         <>
-                          <Button
-                            onClick={handleDetectLocation}
-                            variant="outline"
-                            disabled={
-                              detectingLocation || manualSubmitting || verificationSubmissionBlocked
-                            }
-                          >
-                            {detectingLocation ? (
-                              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                            ) : (
-                              <Navigation className="h-4 w-4" aria-hidden="true" />
-                            )}
-                            {detectingLocation
-                              ? "Detecting location..."
-                              : "Detect province and city"}
-                          </Button>
-                          <p className="text-sm text-muted-foreground" role="status">
-                            {locationDetectionMessage ||
-                              "Detection is approximate. You can also select your location manually."}
-                          </p>
+                          {/* Hidden until it works (src/lib/hidden-features.ts). */}
+                          {SHOW_LOCATION_DETECTION && (
+                            <>
+                              <Button
+                                onClick={handleDetectLocation}
+                                variant="outline"
+                                disabled={
+                                  detectingLocation ||
+                                  manualSubmitting ||
+                                  verificationSubmissionBlocked
+                                }
+                              >
+                                {detectingLocation ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                ) : (
+                                  <Navigation className="h-4 w-4" aria-hidden="true" />
+                                )}
+                                {detectingLocation
+                                  ? "Detecting location..."
+                                  : "Detect province and city"}
+                              </Button>
+                              <p className="text-sm text-muted-foreground" role="status">
+                                {locationDetectionMessage ||
+                                  "Detection is approximate. You can also select your location manually."}
+                              </p>
+                            </>
+                          )}
                           <LocationSelector
                             value={{ province, city }}
                             onChange={(value) => {

@@ -124,9 +124,9 @@ const nextConfig = {
     // Cloudflare Workers does not support the default Next.js image
     // optimisation endpoint (/_next/image), and the zone has no Cloudflare
     // Image Resizing. The custom loader maps media to 400/800/1600px variant
-    // keys (the media route serves the original when a variant is missing;
-    // uploads through the new backend create none yet) and leaves other
-    // images at their own URL. Nothing is resized on the fly.
+    // keys (made at upload by src/lib/media/photo-variants.ts; the media route
+    // serves the original when a variant is missing) and leaves other images
+    // at their own URL. Nothing is resized on the fly.
     loader: "custom",
     loaderFile: "./src/lib/image-loader.ts",
     // Only the 400/800/1600px media variants can differ and local assets are
