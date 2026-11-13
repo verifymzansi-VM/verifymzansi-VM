@@ -69,6 +69,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 23. Phone-sized photos (M4.3)               |              0 | keep (owner, 2026-11-13)                                                                   | Nothing on screen: the same photos, but a phone downloads a 400, 800 or 1 600 px copy of each new photo instead of the full-size original                                                                                                                                                        |
 | 24. Staff record a bank transfer (P2b)      |              2 | keep (owner, 2026-11-13, with the P2b part of 4 rows elsewhere)                            | Staff only: 'Record a bank transfer' on Payments & Refunds; a second staff member confirms it before the slots start; a confirmed transfer shows its bank reference, and its refund form asks for the bank reference of the transfer back                                                        |
 | 25. Communication choices saved (M1.7)      |              1 | keep (owner, 2026-11-13)                                                                   | Notifications page: no 'Failed to load email activity' message on every visit; the four switches (all off until turned on) stay as set after a reload; the Email tab lists the member's own sent and failed account emails                                                                       |
+| 26. Photo allowance and search pages        |              0 | keep (awaiting owner)                                                                      | Phones get the 800 px photo copy for small images too; when the month's photo processing runs out, 'Photo uploads are paused for now. Please try again later.'; a business search with more than 480 matches counts at most 480 (450 at 50 a page) and has no page that fails                    |
 | 27. Hidden until it works, part 3           |             15 | awaiting owner (with the group 27 part of 7 rows elsewhere)                                | Staff: no Commercial settings, Free posts & trials, Programmes & contracts, Operations health or Intelligence pages (their addresses lead to the staff home). Members: no 'Delete account' (a line points to the data request form) and no organisation 'Performance' tab with its CSV downloads |
 | **Total**                                   |        **309** |                                                                                            |                                                                                                                                                                                                                                                                                                  |
 
@@ -1049,6 +1050,59 @@ shows on screen. Outside the checked scope: the two routes under
 | File                                       | Kind     | Reason                                                                                                   | What changes on screen                                                                                              | Proposed | Owner decision                              | Date       | Version      |
 | ------------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------- | ---------- | ------------ |
 | `src/app/dashboard/communication/page.tsx` | rewiring | The page reads the signed-in member from the live backend's session check instead of the retired client. | Nothing in its own layout; the page's switches and Email tab now work (see above): no error message on every visit. | keep     | approved by owner 2026-11-13 (M1.7 screens) | 2026-11-13 | 7af356e16fc6 |
+
+### 26. Photo allowance and search pages (fixes to M4.3 and the merged business search)
+
+Decision: awaiting owner. No file in the checked scope changes, so this group
+has no file rows.
+
+Photos (group 23 follow-up). Cloudflare Images Free includes 5,000 unique
+transformations a month; past that, new ones fail with error 9422 until the next
+month and nothing is charged
+(https://developers.cloudflare.com/images/pricing/). The re-save every photo
+needs for safety is one of them, so the three copies made since group 23 could
+use up the month and then every photo upload failed. Now:
+
+- only the 800 px WebP copy is made (one transformation instead of three), and
+  only when the original is wider; pages ask for it for every image up to 800 px
+  wide, and wider requests still ask for the 1 600 px copy (photos from group 23
+  have it; newer ones get the original, as before group 23). Nothing looks
+  different, but downloads change: newer photos on desktops and 3x phones load
+  the full original again, and group 23 photos' small images load the 800 px
+  copy instead of the 400 px one;
+- the site keeps a rough monthly count in its existing KV namespace (photo and
+  verification image re-saves and copies) and stops making copies at 3,000
+  (60%), keeping the rest for re-saves; the photo then shows the original, as
+  photos did before group 23. The count can run a little low when many photos
+  are uploaded in the same minute; after the first refused re-save it is set to
+  the full 5,000;
+- a retried upload whose copy is already stored does not make it again;
+- when the month's allowance is used up, nothing is stored and the member sees
+  'Photo uploads are paused for now. Please try again later.' (posting and
+  profile photo; was 'A file could not be uploaded. Check the format and storage
+  allowance.'), and the Worker log carries an `images_allowance_exhausted` alert
+  line.
+
+About 3,500 photos a month can be uploaded (1,500 with a copy, then about 2,000
+more without; fewer when verification images use some), instead of about 1,250
+before uploads stopped. Photos from group 23 keep their 400, 800 and 1 600 px
+copies and media cleanup still deletes them. `MEDIA_PHOTO_VARIANTS=off` still
+stops copies at once. Files outside the checked scope:
+`src/lib/image-loader.ts`, `src/lib/media/photo-variants.ts`,
+`src/lib/media/images-allowance.ts`, `src/lib/utils/image-reencode.ts`,
+`src/lib/foundation/media-upload.ts`,
+`src/lib/foundation/verification-runtime.ts`,
+`src/lib/business-verification/intake.ts`,
+`src/lib/foundation/restored-avatar-route.ts`,
+`src/app/api/media/upload/foundation.ts` and `wrangler.toml` (comments).
+
+Business search. A text search under Businesses also reads tourism businesses
+and merges both lists, reading at most 480 results of each. Its total counted
+everything, so a search with more matches linked to pages that then failed. The
+total is now capped to the whole pages within 480 (480 at 24 a page, 450 at 50 a
+page), so every linked page loads, and a page past that shows no cards instead
+of an error. A search with more matches says '480 businesses found'. File
+outside the checked scope: `src/lib/foundation/marketplace-read.ts`.
 
 ### 27. Hidden until it works, part 3 (retired-backend cleanup)
 

@@ -212,7 +212,9 @@ type PresentedCard = Awaited<ReturnType<typeof searchFoundationPresentedCards>>[
 
 /** The tourism area's business category (stays, restaurants, tours). */
 const TOURISM_BUSINESS_CATEGORY = "tourism_hospitality";
-/** Deepest result a merged search reads from each scope (ten card reads). */
+/** Deepest result a merged search reads from each scope (ten card reads). Its
+ * reported total is capped to the whole pages within this depth, so page links
+ * never point past what can be served. */
 const MERGED_SEARCH_DEPTH = 480;
 
 /** Cards of one search scope from `start`, at most `want` of them, in bounded
@@ -366,8 +368,10 @@ export async function readRestoredCollection(
       ? [input, { ...input, area: "tourism_events", category: TOURISM_BUSINESS_CATEGORY }]
       : [input];
   const merged = scopes.length > 1;
-  if (merged && !organisation && page * limit > MERGED_SEARCH_DEPTH)
-    throw new MarketplaceQueryError("Search page is too deep");
+  const mergedDepth = merged && !organisation ? Math.floor(MERGED_SEARCH_DEPTH / limit) * limit : 0;
+  // A page past the served depth is empty, like any page past the end. Its
+  // total comes from one one-card read per scope.
+  const tooDeep = mergedDepth > 0 && page * limit > mergedDepth;
   for (const scope of scopes) {
     try {
       buildFoundationPostSearch(scope);
@@ -385,11 +389,13 @@ export async function readRestoredCollection(
   for (const scope of scopes) {
     const read = await readCards(api, scope, kind, {
       start: organisation || merged ? 0 : (page - 1) * limit,
-      want: organisation ? Number.POSITIVE_INFINITY : merged ? page * limit : limit,
+      want: organisation ? Number.POSITIVE_INFINITY : tooDeep ? 1 : merged ? page * limit : limit,
     });
     cards.push(...read.cards);
     total += read.total;
   }
+  if (mergedDepth) total = Math.min(total, mergedDepth);
+  if (tooDeep) return { rows: [], total, page, limit };
   if (merged) cards.sort(databaseOrder(input.sort));
   if (organisation) {
     const affiliated = new Set<string>();
