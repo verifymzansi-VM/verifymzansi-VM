@@ -607,7 +607,8 @@ describe("ozow payments", () => {
   });
 
   it("normalizes merchant references to Ozow-safe characters", async () => {
-    const { toOzowMerchantReference, toOzowReferenceField } = await import("./ozow");
+    const { toOzowMerchantReference } = await import("./ozow");
+    const { toOzowReferenceField } = await import("./ozow-reference");
 
     expect(toOzowMerchantReference("11111111-1111-4111-8111-111111111111")).toBe(
       "11111111111141118111111111111111"

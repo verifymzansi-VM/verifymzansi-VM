@@ -64,7 +64,8 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 18. R69 slots (Pricing v2 P2)               |              5 | keep (owner, 2026-11-12 and 2026-11-13)                                                    | Paid slots are on sale at R69 per 30 days: the checkout offers 30, 90 or 180 days, the number of slots and the cooling-off box; a new 'My slots' page in the dashboard                                                                            |
 | 19. One tap opens any post (M10.5)          |              8 | keep (owner, 2026-11-13, with the M10.5 part of 2 rows elsewhere)                          | Phones and tablets: one tap on a video card opens the post, like a photo card; a small 'Preview' button plays the video in place; with data saver on, nothing plays by itself                                                                     |
 | 20. Staff fix paid but not delivered (M3.4) |              4 | keep (owner, 2026-11-13)                                                                   | Staff only: delivery status on Payments & Refunds, a 'needs attention' list, 'Activate what was paid for', refunds with Ozow's reference and a reason, one slot refunded alone, a second approver above R1 000                                    |
-| 21. Phone-sized photos (M4.3)               |              0 | keep (awaiting owner)                                                                      | Nothing on screen: the same photos, but a phone downloads a 400, 800 or 1 600 px copy of each new photo instead of the full-size original                                                                                                         |
+| 21. Payment receipt email (M3.7)            | 0 (email only) | keep (owner, 2026-11-13)                                                                   | Members who pay: the 'Payment received' email lists the invoice number, date paid, item, amount in rands and bank reference, and links to 'My slots' (add-ons: the dashboard) instead of Billing                                                  |
+| 22. Phone-sized photos (M4.3)               |              0 | keep (awaiting owner)                                                                      | Nothing on screen: the same photos, but a phone downloads a 400, 800 or 1 600 px copy of each new photo instead of the full-size original                                                                                                         |
 | **Total**                                   |        **259** |                                                                                            |                                                                                                                                                                                                                                                   |
 
 Questions for the owner:
@@ -314,6 +315,18 @@ Questions for the owner:
     because the service was not delivered as promised), chargebacks above R1 000
     keep waiting for a second person, and activation keeps the refund permission
     (admins only).
+17. **Payment receipt email (group 21, M3.7).** Email only; no page changes.
+    After a payment settles, the 'Payment received' email becomes a receipt:
+    'Thank you. We received your payment. Keep this email as your receipt.',
+    then the invoice number, date paid, item, amount paid (for example 'R
+    69.00') and the bank reference on the member's statement, a line asking
+    questions to be sent by reply with the invoice number, and a 'See your
+    slots' button (add-ons: 'Go to your dashboard'). It no longer sends members
+    to Billing, which lists no payments. It says 'invoice number', never 'tax
+    invoice'. If the details cannot be read, the email says 'We received your
+    payment. Need your invoice? Reply to this email.' and links to the
+    dashboard. Answered: approved by owner 2026-11-13, wording approved as
+    written.
 
 <!-- frontend-ledger:start -->
 
@@ -795,7 +808,17 @@ messages in `src/lib/foundation/staff-payments.ts` and the route
 | `src/components/admin/commercial/payment-actions.tsx`     | visual            | New: the refund and chargeback form of a payment or one slot (M3.4).                                                                                                                                          | Staff only: in the payment's row, 'Refund of <payment or slot>: R… to the account that paid (<account>)' ('Above R1 000 returned on this payment: another staff member must approve it.', for refunds and chargebacks), a 'Reason' list (five reasons), 'Ozow refund reference' (required), 'Reason (audited)', 'Record refund' and 'Cancel'.                                                                                                                                                                                                                                                                                             | keep     | approved by owner 2026-11-13 | 2026-11-13 | fe07d0d3d865 |
 | `src/components/admin/commercial/payments-panel.test.tsx` | test              | Tests for the payments card: activation, the refund form, single-slot refunds and the second approval.                                                                                                        | Nothing (not part of a page)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | keep     | approved by owner 2026-11-13 | 2026-11-13 | 3bae4922c7bb |
 
-### 21. Phone-sized photos (roadmap M4.3)
+### 21. Payment receipt email (roadmap M3.7)
+
+Email only: no file in the checked scope changes, so this group has no file rows
+(Files 0). Owner question 17. Decision: approved by owner 2026-11-13 (wording in
+the pull request, approved as written). Text outside the checked scope: the
+receipt email in `src/lib/services/payment-receipt-email.ts`, the fallback
+'Payment received' notice in `src/lib/services/email.ts`, and the receipt read
+in `src/lib/foundation/payment-receipt.ts`, sent once per settled payment by the
+notification job in `src/lib/foundation/operation-jobs.ts`.
+
+### 22. Phone-sized photos (roadmap M4.3)
 
 Awaiting owner. No file in the checked scope changes, so this group has no file
 rows; the owner's sign-off covers what visitors download. Photos uploaded from
