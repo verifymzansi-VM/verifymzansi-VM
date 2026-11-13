@@ -73,6 +73,17 @@ function nearestVariantWidth(requestedWidth: number): number {
 }
 
 /**
+ * Live-backend photos get only the 800 px copy at upload now (each copy uses
+ * the free monthly Cloudflare Images allowance; src/lib/media/photo-variants.ts),
+ * so small screens ask for it too instead of a 400 px copy that newer photos do
+ * not have. Wider screens still ask for the 1600 px copy, which photos uploaded
+ * while three copies were made have; the others fall back to the original.
+ */
+function liveMediaVariantWidth(requestedWidth: number): number {
+  return requestedWidth <= 800 ? 800 : 1600;
+}
+
+/**
  * Rewrite a media proxy path to its pre-generated variant key for the
  * requested width. `/api/media/serve/media/x.jpg` @ 640 →
  * `/api/media/serve/media/x.w800.webp`. Returns the original path unchanged
@@ -87,7 +98,7 @@ function toVariantProxyPath(path: string, requestedWidth: number): string {
   // Keys made by the live backend (`media/<uuid>`) have no extension; their
   // copies are `media/<uuid>.w<width>.webp` (src/lib/media/photo-variants.ts).
   if (LIVE_MEDIA_KEY.test(key)) {
-    return `${servePrefix}${key}.w${nearestVariantWidth(requestedWidth)}.webp`;
+    return `${servePrefix}${key}.w${liveMediaVariantWidth(requestedWidth)}.webp`;
   }
   if (!isImageSource(path)) return path;
   const dot = key.lastIndexOf(".");

@@ -4,18 +4,25 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationServiceApi } from "./service-api";
-import { putImmutableR2Bytes, type uploadToR2 } from "../services/storage";
+import { getR2ObjectSize, putImmutableR2Bytes, type uploadToR2 } from "../services/storage";
 import { detectMimeFromMagicBytes } from "../utils/file-validation";
 import { scanForMalware } from "../utils/malware-scan";
-import { isReencodableImageType, reencodeImage } from "../utils/image-reencode";
+import {
+  ImageReencodeError,
+  isReencodableImageType,
+  reencodeImage,
+  type ReencodableImageType,
+} from "../utils/image-reencode";
 import { getImageDimensions } from "../utils/image-dimensions";
 import { scrubVideoLocationMetadata } from "../utils/isobmff-metadata";
 import { scrubWebmMetadata } from "../utils/webm-metadata";
 import {
   createPhotoVariants,
   photoVariantsEnabled,
+  variantKeysFor,
   variantWidthsFor,
 } from "../media/photo-variants";
+import { openImagesAllowance, type ImagesAllowance } from "../media/images-allowance";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("FoundationMediaUpload");
@@ -42,12 +49,21 @@ export const foundationUploadedMediaSchema = z.strictObject({
   height: z.number().int().positive().nullable(),
 });
 export type FoundationUploadedMedia = z.infer<typeof foundationUploadedMediaSchema>;
+/** `images_allowance_exhausted`: photos cannot be re-encoded until the next
+ * month (Cloudflare Images error 9422); routes tell the member so. */
+export type FoundationMediaRefusal = "images_allowance_exhausted";
 export class FoundationMediaError extends Error {
   override name = "FoundationMediaError";
-  constructor(readonly status: 400 | 403 | 409 | 429 | 503) {
+  constructor(
+    readonly status: 400 | 403 | 409 | 429 | 503,
+    readonly reason?: FoundationMediaRefusal
+  ) {
     super("Media upload could not be completed");
   }
 }
+/** What a member is told when photo processing has run out for the month. */
+export const IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE =
+  "Photo uploads are paused for now. Please try again later.";
 function refused(error: { code?: string }) {
   throw new FoundationMediaError(
     error.code === "42501"
@@ -68,7 +84,46 @@ function arrayBuffer(bytes: Uint8Array) {
 }
 
 /**
- * Stores the 400/800/1600 px WebP copies of a stored photo beside it
+ * Re-encode an uploaded photo (metadata stripping; never skipped). When the
+ * monthly Cloudflare Images allowance is used up the upload is refused with a
+ * clear reason and an operations alert in the logs; nothing is stored.
+ */
+async function reencodeUploadedPhoto(
+  bytes: Uint8Array,
+  mime: ReencodableImageType,
+  allowance: ImagesAllowance
+) {
+  try {
+    return await reencodeImage(bytes, mime);
+  } catch (error) {
+    if (error instanceof ImageReencodeError && error.code === "exhausted") {
+      log.error("ALERT Cloudflare Images monthly allowance used up: photo uploads refused", {
+        alert: "images_allowance_exhausted",
+      });
+      await allowance.markUsedUp();
+      throw new FoundationMediaError(503, "images_allowance_exhausted");
+    }
+    throw error;
+  }
+}
+
+/**
+ * Whether any of a photo's copies is missing, so a retried upload does not
+ * make them again. When storage cannot say, no copies are made (the media
+ * route serves the original).
+ */
+async function copiesMissing(bucket: string, keys: string[]): Promise<boolean> {
+  try {
+    const sizes = await Promise.all(keys.map((key) => getR2ObjectSize(bucket, key)));
+    return sizes.some((size) => size === null);
+  } catch {
+    log.warn("Photo display copies not checked; none made");
+    return false;
+  }
+}
+
+/**
+ * Stores the WebP display copies of a stored photo beside it
  * (src/lib/media/photo-variants.ts). Best effort: the upload never fails
  * because of a copy, and the media route serves the original when one is
  * missing. Media cleanup deletes the copies with the original
@@ -110,13 +165,30 @@ async function storePhotoVariants(
 
 /** Bytes are inspected before reserving storage. The caller-bound reservation
  * authorizes quota/ownership; only the service role may attest the stored bytes.
- * Every uncertain write remains in the DB journal for bounded cleanup. */
+ * Every uncertain write remains in the DB journal for bounded cleanup. Images
+ * transformations made for a photo are counted with one write at the end. */
 export async function uploadFoundationMedia(
   api: FoundationAuthenticatedApi,
   service: FoundationServiceApi,
   file: File,
   write: typeof uploadToR2 | undefined = undefined,
   environment = process.env
+): Promise<FoundationUploadedMedia> {
+  const usage: { allowance?: ImagesAllowance } = {};
+  try {
+    return await uploadCheckedMedia(api, service, file, write, environment, usage);
+  } finally {
+    await usage.allowance?.save();
+  }
+}
+
+async function uploadCheckedMedia(
+  api: FoundationAuthenticatedApi,
+  service: FoundationServiceApi,
+  file: File,
+  write: typeof uploadToR2 | undefined,
+  environment: NodeJS.ProcessEnv,
+  usage: { allowance?: ImagesAllowance }
 ): Promise<FoundationUploadedMedia> {
   const kind = isReencodableImageType(file.type)
     ? "image"
@@ -131,9 +203,11 @@ export async function uploadFoundationMedia(
     !scanForMalware(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), file.type).safe
   )
     throw new FoundationMediaError(400);
-  if (isReencodableImageType(file.type))
-    bytes = new Uint8Array(await reencodeImage(bytes, file.type));
-  else {
+  if (isReencodableImageType(file.type)) {
+    usage.allowance = await openImagesAllowance();
+    bytes = new Uint8Array(await reencodeUploadedPhoto(bytes, file.type, usage.allowance));
+    usage.allowance.add(1);
+  } else {
     try {
       if (file.type === "video/webm") scrubWebmMetadata(bytes);
       else scrubVideoLocationMetadata(bytes);
@@ -204,15 +278,22 @@ export async function uploadFoundationMedia(
     throw new FoundationMediaError(503);
   }
   // Before completion, so a photo is never shown before its copies exist.
-  // An unfinished upload's copies are deleted with it by media cleanup.
-  if (dimensions && photoVariantsEnabled(environment))
-    await storePhotoVariants(
-      environment.R2_PUBLIC_BUCKET || "verifymzansi-public",
-      reserved.object_key,
-      bytes,
-      dimensions.width,
-      write
-    );
+  // An unfinished upload's copies are deleted with it by media cleanup. Copies
+  // stop at the monthly copy budget, leaving the Images allowance for the
+  // re-encodes, and a retry whose copies were stored does not make them again.
+  const copyKeys = dimensions ? variantKeysFor(reserved.object_key, dimensions.width) : [];
+  const bucket = environment.R2_PUBLIC_BUCKET || "verifymzansi-public";
+  if (
+    dimensions &&
+    copyKeys.length &&
+    photoVariantsEnabled(environment) &&
+    usage.allowance &&
+    (await usage.allowance.allowsCopies(copyKeys.length)) &&
+    (await copiesMissing(bucket, copyKeys))
+  ) {
+    usage.allowance.add(copyKeys.length);
+    await storePhotoVariants(bucket, reserved.object_key, bytes, dimensions.width, write);
+  }
   const completed = await service.rpc("complete_frontend_media_upload", {
     p_object_id: reserved.object_id,
     p_size: bytes.length,
