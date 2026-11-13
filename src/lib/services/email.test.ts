@@ -128,6 +128,43 @@ describe("email service", () => {
     expect(sold.text).toContain("deleted, with its photos and videos, shortly");
     expect(`${expired.text}${sold.text}`).not.toMatch(/3 days|30 days/);
   });
+  it("sends the payment receipt under the outbox key, or a plain notice without one", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "payment_completed",
+      "foundation-outbox/paid",
+      undefined,
+      {
+        receipt: {
+          kind: "plan",
+          invoiceNumber: "INV-20261113-ABCDEF1234",
+          paidAt: "2026-11-13T07:15:00+00:00",
+          item: "Individual slot — 30 days",
+          amountCents: 6900,
+          bankReference: "abcdef12345678",
+        },
+      }
+    );
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "payment_completed",
+      "foundation-outbox/plain"
+    );
+    const [[receipt, receiptOptions], [plain, plainOptions]] = mockSend.mock.calls.slice(-2);
+    expect(receipt.subject).toBe("Payment received");
+    expect(receipt.text).toContain("Invoice number: INV-20261113-ABCDEF1234");
+    expect(receipt.text).toContain("Amount paid: R 69.00");
+    expect(receiptOptions.idempotencyKey).toBe("foundation-outbox/paid");
+    expect(plain.subject).toBe("Payment received");
+    expect(plain.text).toContain(
+      "We received your payment. Need your invoice? Reply to this email."
+    );
+    expect(plain.text).toContain("https://verifymzansi.com/dashboard");
+    expect(`${receipt.text}${plain.text}`).not.toContain("/billing");
+    expect(plainOptions.idempotencyKey).toBe("foundation-outbox/plain");
+    vi.unstubAllEnvs();
+  });
   it("tells a member their ID was sent back and links to verification, without the reason", async () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
     await sendPlatformNotice(

@@ -11,6 +11,7 @@ import { runFoundationPrivacyNotice } from "./privacy-notice-job";
 import { runFoundationPaymentAlerts, type PaymentAlertStep } from "./payment-alerts";
 import { createLogger } from "../utils/logger";
 import { hasDatabaseMessage } from "./error-reasons";
+import { readPaymentReceipt } from "./payment-receipt";
 
 const log = createLogger("FoundationOperationJobs");
 const kind = z.enum([
@@ -118,6 +119,9 @@ const jobSchema = z
     locked_until: z.iso.datetime({ offset: true }),
     attempts: z.number().int().min(1).optional(),
     recipient: z.email().nullable(),
+    // For payment_completed: the payment, and the member who paid.
+    subject_id: z.uuid().nullable().optional(),
+    owner_id: z.uuid().nullable().optional(),
     notice_reason: z.string().min(10).max(500).nullable().optional(),
     deletes_at: z.iso.datetime({ offset: true }).nullable().optional(),
     holds_slot: z.boolean().nullable().optional(),
@@ -286,17 +290,40 @@ export async function runFoundationOperationJobs(
     };
     // An expired lease may already belong to another run: never send or acknowledge it.
     if (leaseLeft <= 0) return giveUp();
-    if (job.recipient && (leaseLeft < LEASE_RESERVE_MS || !timeToSend())) {
-      // Should not happen with one-at-a-time claims; if it does, give the
-      // message back with the usual retry delay rather than send it late.
+    const giveBack = async (reason: "deferred" | "receipt_unavailable") => {
       const back = await call("complete_notification_outbox", {
         p_id: job.id,
         p_claim: job.claim_token,
         p_ok: false,
-        p_error: "deferred",
+        p_error: reason,
       });
       if (back.error) fail("outbox:complete");
       return giveUp();
+    };
+    const tooLate = () => Date.parse(job.locked_until) - now() < LEASE_RESERVE_MS || !timeToSend();
+    // Should not happen with one-at-a-time claims; if it does, give the
+    // message back with the usual retry delay rather than send it late.
+    if (job.recipient && tooLate()) return giveBack("deferred");
+    // A payment receipt shows the details api.get_payment_receipt reads for
+    // the payment. The read must end before the last moment a send may start.
+    let receiptDetails: PostLifecycleDetails | undefined;
+    if (job.recipient && job.kind === "payment_completed" && job.subject_id) {
+      const read = await call("get_payment_receipt", { p_payment_id: job.subject_id }, claimSignal);
+      const receipt = read.error
+        ? null
+        : readPaymentReceipt(read.data, { paymentId: job.subject_id, ownerId: job.owner_id });
+      if (receipt) receiptDetails = { receipt };
+      else {
+        fail("outbox:receipt");
+        // A failed read is retried while attempts remain. On the last
+        // attempt, or when the read does not match the payment, the member
+        // still gets the notice, without the payment details.
+        if (read.error && !isFinal(job.attempts)) return giveBack("receipt_unavailable");
+        log.warn("Payment receipt unavailable; sending the notice without details", {
+          id: job.id,
+        });
+      }
+      if (tooLate()) return giveBack("deferred");
     }
     let success = job.recipient === null;
     // The provider refused a repeat of an earlier request with the same key:
@@ -319,7 +346,9 @@ export async function runFoundationOperationJobs(
                     trialEndsAt: job.trial_ends_at ?? null,
                     trialFundsPost: job.trial_funds_post ?? null,
                   })
-                : deliver(recipient, job.kind, key)
+                : receiptDetails
+                  ? deliver(recipient, job.kind, key, undefined, receiptDetails)
+                  : deliver(recipient, job.kind, key)
         );
         success = result.success;
         unknown = !success && result.outcomeUnknown === true;

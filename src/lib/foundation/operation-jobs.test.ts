@@ -934,3 +934,158 @@ describe("payment alerts", () => {
     expect(sendStaffOperationsEmail).not.toHaveBeenCalled();
   });
 });
+
+describe("payment receipts (M3.7)", () => {
+  const payment = "00000000-0000-4000-8000-0000000000a1";
+  const owner = "00000000-0000-4000-8000-0000000000b2";
+  const row = {
+    payment_id: payment,
+    owner_id: owner,
+    amount_cents: 6900,
+    currency: "ZAR",
+    completed_at: "2026-11-13T07:15:00.123456+00:00",
+    product_kind: "plan",
+    label: "Individual slot — 30 days",
+    slots: 1,
+    invoice_description: "Individual slot — 30 days",
+    invoice_number: "INV-20261113-ABCDEF1234",
+    issued_at: "2026-11-13T07:15:00.123456+00:00",
+    merchant_reference: "abcdef12345678901234567890abcdef",
+    provider_transaction_id: "synthetic-transaction",
+    status: "complete",
+    fulfillment_status: "fulfilled",
+  };
+  const receipt = {
+    kind: "plan",
+    invoiceNumber: "INV-20261113-ABCDEF1234",
+    paidAt: "2026-11-13T07:15:00.123456+00:00",
+    item: "Individual slot — 30 days",
+    amountCents: 6900,
+    bankReference: "abcdef12345678",
+  };
+  const paymentJob = (extra: Record<string, unknown> = {}) =>
+    job({ subject_id: payment, owner_id: owner, ...extra });
+  // Queues the jobs and answers the receipt read with `reply`.
+  function queueWithReceipt(reply: () => unknown, ...items: Array<Record<string, unknown>>) {
+    queue(...items);
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "get_payment_receipt" ? reply() : base(name, args)
+    );
+  }
+
+  it("reads the payment's receipt and sends it under the message's own key", async () => {
+    queueWithReceipt(() => ({ data: row, error: null }), paymentJob());
+    expect(await run()).toMatchObject({ succeeded: 1, retrying: 0, failed: [] });
+    expect(calls("get_payment_receipt")).toEqual([
+      ["get_payment_receipt", { p_payment_id: payment }],
+    ]);
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(
+      "synthetic@example.invalid",
+      "payment_completed",
+      `foundation-outbox/${id}`,
+      undefined,
+      { receipt }
+    );
+  });
+
+  it("sends the same request under the same key when a delivery is retried", async () => {
+    queueWithReceipt(() => ({ data: row, error: null }), paymentJob());
+    deliver.mockResolvedValueOnce({ success: false });
+    expect(await run()).toMatchObject({ succeeded: 0, retrying: 1 });
+    queueWithReceipt(() => ({ data: row, error: null }), paymentJob({ attempts: 2 }));
+    expect(await run()).toMatchObject({ succeeded: 1 });
+    expect(deliver).toHaveBeenCalledTimes(2);
+    expect(deliver.mock.calls[1]).toEqual(deliver.mock.calls[0]);
+  });
+
+  it("gives the message back without sending when the receipt read fails", async () => {
+    queueWithReceipt(() => ({ data: null, error: { message: "unavailable" } }), paymentJob());
+    const error = await run().catch((e) => e);
+    expect(error).toBeInstanceOf(OperationJobsIncompleteError);
+    expect(error.failed).toEqual(["outbox:receipt"]);
+    expect(error.summary).toMatchObject({ succeeded: 0, retrying: 1, lost: 0 });
+    expect(deliver).not.toHaveBeenCalled();
+    expect(calls("complete_notification_outbox")).toEqual([
+      [
+        "complete_notification_outbox",
+        { p_id: id, p_claim: claim, p_ok: false, p_error: "receipt_unavailable" },
+      ],
+    ]);
+  });
+
+  it("sends the notice without details on the last attempt when the read still fails", async () => {
+    queueWithReceipt(
+      () => ({ data: null, error: { message: "unavailable" } }),
+      paymentJob({ attempts: OUTBOX_FINAL_ATTEMPT })
+    );
+    const error = await run().catch((e) => e);
+    expect(error.failed).toEqual(["outbox:receipt"]);
+    expect(error.summary).toMatchObject({ succeeded: 1, lost: 0 });
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(
+      "synthetic@example.invalid",
+      "payment_completed",
+      `foundation-outbox/${id}`
+    );
+  });
+
+  it.each([
+    ["an unknown payment", null],
+    ["another member's payment", { ...row, owner_id: "00000000-0000-4000-8000-0000000000c3" }],
+    ["another payment", { ...row, payment_id: "00000000-0000-4000-8000-0000000000d4" }],
+    ["a payment without an invoice", { ...row, invoice_number: null }],
+    ["a payment in another currency", { ...row, currency: "USD" }],
+  ])("sends the notice without details for %s", async (_name, data) => {
+    queueWithReceipt(() => ({ data, error: null }), paymentJob());
+    const error = await run().catch((e) => e);
+    expect(error.failed).toEqual(["outbox:receipt"]);
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(
+      "synthetic@example.invalid",
+      "payment_completed",
+      `foundation-outbox/${id}`
+    );
+  });
+
+  it("reads no receipt for a removed recipient or another kind", async () => {
+    queueWithReceipt(
+      () => ({ data: row, error: null }),
+      paymentJob({ recipient: null }),
+      paymentJob({ id: "00000000-0000-4000-8000-0000000000e5", kind: "payment_reversed" })
+    );
+    expect(await run()).toMatchObject({ succeeded: 2, failed: [] });
+    expect(calls("get_payment_receipt")).toHaveLength(0);
+  });
+
+  it("gives the message back when the read leaves too little time to send", async () => {
+    let t = 0;
+    queueWithReceipt(() => {
+      t += 20_000;
+      return { data: row, error: null };
+    }, paymentJob());
+    expect(await run({ now: () => t })).toMatchObject({ succeeded: 0, retrying: 1 });
+    expect(deliver).not.toHaveBeenCalled();
+    expect(calls("complete_notification_outbox")).toEqual([
+      [
+        "complete_notification_outbox",
+        { p_id: id, p_claim: claim, p_ok: false, p_error: "deferred" },
+      ],
+    ]);
+  });
+
+  it("matches what the database's claim and receipt read return", () => {
+    const read = (file: string) =>
+      readFileSync(join(process.cwd(), "database/foundation/current/functions", file), "utf8");
+    const claimSql = read("internal/claim_supported_notification_outbox.sql");
+    expect(claimSql).toContain("'subject_id',o.subject_id");
+    expect(claimSql).toContain("'owner_id',o.owner_id");
+    const settle = read("internal/apply_provider_event.sql");
+    expect(settle).toContain(
+      "values ('payment_completed', pay.id, pay.owner_id, 'payment_completed:' || pay.id)"
+    );
+    const receiptSql = read("internal/get_payment_receipt.sql");
+    for (const field of Object.keys(row)) expect(receiptSql).toContain(`'${field}'`);
+    expect(read("api/get_payment_receipt.sql")).toContain(
+      "grant execute on function api.get_payment_receipt(uuid) to service_role;"
+    );
+  });
+});

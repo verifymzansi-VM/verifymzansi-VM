@@ -3,6 +3,7 @@ import { Webhook } from "svix";
 import { env } from "@/lib/config/env";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { testCopyCheckout } from "./checkout-origins";
+import { toOzowReferenceField } from "./ozow-reference";
 import { createLogger } from "@/lib/utils/logger";
 import { fetchWithoutRedirects } from "@/lib/utils/fetch-without-redirects";
 
@@ -56,7 +57,6 @@ type CachedToken = {
 const MAX_CACHED_TOKENS = 20;
 const cachedTokens = new Map<string, CachedToken>();
 const pendingTokenFetches = new Map<string, Promise<string>>();
-const OZOW_REFERENCE_FIELD_MAX_LENGTH = 14;
 const DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE = "payments";
 
 const OZOW_ALLOWED_HOSTS = {
@@ -438,10 +438,6 @@ export function fromOzowMerchantReference(merchantReference: string): string | n
   }
   const m = merchantReference;
   return `${m.slice(0, 8)}-${m.slice(8, 12)}-${m.slice(12, 16)}-${m.slice(16, 20)}-${m.slice(20)}`;
-}
-
-export function toOzowReferenceField(value: string): string {
-  return value.replace(/[^A-Za-z0-9 -]/g, "").slice(0, OZOW_REFERENCE_FIELD_MAX_LENGTH);
 }
 
 export async function createOzowHostedPayment(
