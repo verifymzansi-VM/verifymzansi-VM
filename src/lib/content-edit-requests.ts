@@ -30,35 +30,6 @@ type SupabaseInsertBuilder = {
   };
 };
 
-type CountResult = {
-  count: number | null;
-  error: { message: string } | null;
-};
-
-type CountQuery = PromiseLike<CountResult> & {
-  eq: (column: string, value: unknown) => CountQuery;
-};
-
-export function isEditLimitReached(approvedEditCount: number | null | undefined) {
-  return (approvedEditCount ?? 0) >= MAX_APPROVED_CONTENT_EDITS;
-}
-
-function getRemainingApprovedEdits(approvedEditCount: number | null | undefined) {
-  return Math.max(0, MAX_APPROVED_CONTENT_EDITS - (approvedEditCount ?? 0));
-}
-
-export function editLimitReachedResponse() {
-  return NextResponse.json(
-    {
-      error: "This post has reached the maximum of two approved edits.",
-      code: "edit_limit_reached",
-      editLimitReached: true,
-      editAttemptsRemaining: 0,
-    },
-    { status: 409 }
-  );
-}
-
 function pendingEditExistsResponse() {
   return NextResponse.json(
     {
@@ -68,23 +39,6 @@ function pendingEditExistsResponse() {
     },
     { status: 409 }
   );
-}
-
-export async function hasPendingContentEdit(
-  supabase: QueryableClient,
-  targetType: ContentEditTargetType,
-  targetId: string
-) {
-  const query = (supabase.from("content_edit_requests") as SupabaseInsertBuilder)
-    .select("id", { count: "exact", head: true })
-    .eq("target_type", targetType) as CountQuery;
-  const result = await query.eq("target_id", targetId).eq("status", "pending");
-
-  if (result.error) {
-    throw new Error(result.error.message);
-  }
-
-  return (result.count ?? 0) > 0;
 }
 
 export async function createContentEditRequest({
@@ -137,17 +91,4 @@ export async function createContentEditRequest({
   });
 
   return { response: null, requestId: data.id };
-}
-
-export function contentEditSubmittedResponse(
-  targetId: string,
-  approvedEditCount: number | null | undefined
-) {
-  return NextResponse.json({
-    id: targetId,
-    success: true,
-    pendingReview: true,
-    message: "Edit submitted for admin review",
-    editAttemptsRemaining: getRemainingApprovedEdits(approvedEditCount),
-  });
 }

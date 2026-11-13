@@ -23,14 +23,6 @@ interface NotifyStaffForAdminEventInput {
 }
 
 /**
- * Rollout guard for owner lifecycle notifications.
- * Set ENABLE_OWNER_LIFECYCLE_NOTIFICATIONS=false to disable these messages.
- */
-export function shouldSendOwnerLifecycleNotifications(): boolean {
-  return process.env.ENABLE_OWNER_LIFECYCLE_NOTIFICATIONS !== "false";
-}
-
-/**
  * Insert a notification for a user. Call from server actions, API routes, or webhooks.
  * The Supabase Realtime subscription on the `notifications` table will push
  * the new row to the client's NotificationBell automatically.

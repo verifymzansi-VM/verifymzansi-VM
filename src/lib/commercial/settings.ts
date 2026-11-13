@@ -199,36 +199,6 @@ export function clearCommercialSettingsCache(): void {
   cache = null;
 }
 
-const PLATFORM_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const PLATFORM_MAX_VIDEO_BYTES = 50 * 1024 * 1024;
-
-/** Upload ceilings: admin settings may lower, never raise, the platform limits. */
-export async function getMediaUploadLimits(client: SettingsReader): Promise<{
-  imageBytes: number;
-  videoBytes: number;
-  imageMb: number;
-  videoMb: number;
-  quotaBytes: number;
-  quotaMb: number;
-}> {
-  let media = DEFAULT_COMMERCIAL_SETTINGS.media;
-  try {
-    media = (await getCommercialSettings(client)).media;
-  } catch {
-    // Fall back to platform limits when settings are unavailable.
-  }
-  const imageBytes = Math.min(PLATFORM_MAX_IMAGE_BYTES, media.maxImageMb * 1024 * 1024);
-  const videoBytes = Math.min(PLATFORM_MAX_VIDEO_BYTES, media.maxVideoMb * 1024 * 1024);
-  return {
-    imageBytes,
-    videoBytes,
-    imageMb: Math.round(imageBytes / 1024 / 1024),
-    videoMb: Math.round(videoBytes / 1024 / 1024),
-    quotaBytes: media.storageQuotaMb * 1024 * 1024,
-    quotaMb: media.storageQuotaMb,
-  };
-}
-
 /**
  * Per-account storage quota. Returns an error message when the new upload
  * would exceed it. Unavailable or malformed usage must block uploads rather

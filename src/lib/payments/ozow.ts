@@ -8,7 +8,7 @@ import { fetchWithoutRedirects } from "@/lib/utils/fetch-without-redirects";
 
 const log = createLogger("Ozow");
 
-export class OzowConfigurationError extends Error {
+class OzowConfigurationError extends Error {
   readonly code = "ozow_configuration_error" as const;
 
   constructor(
@@ -21,7 +21,7 @@ export class OzowConfigurationError extends Error {
   }
 }
 
-export class OzowAuthenticationError extends Error {
+class OzowAuthenticationError extends Error {
   readonly code = "ozow_authentication_error" as const;
 
   constructor(
@@ -34,7 +34,7 @@ export class OzowAuthenticationError extends Error {
   }
 }
 
-export class OzowProviderError extends Error {
+class OzowProviderError extends Error {
   readonly code = "ozow_provider_error" as const;
 
   constructor(

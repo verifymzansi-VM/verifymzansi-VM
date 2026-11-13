@@ -46,9 +46,6 @@ Postgres data, RLS, and migrations.
 - `src/app/api/businesses/route.ts` and `src/app/api/promotions/route.ts`:
   business and tourism/events content flows.
 - `src/app/post/*`: user-facing create/edit pages.
-- `src/app/api/listings/_lib/listing-route-helpers.ts`: shared listing route
-  helpers for query filtering, compatibility fallbacks, placeholder filtering,
-  and insert fallback handling.
 - `src/lib/validations/*`: Zod schemas for all major mutation inputs.
 - `src/lib/services/entitlements.ts`, `src/lib/billing/free-posts.ts`: plan
   limits and free-post accounting.
@@ -69,21 +66,21 @@ Postgres data, RLS, and migrations.
 
 ## Payment Flow
 
-- `src/app/api/billing/create-checkout/route.ts`: authenticated checkout
-  creation after profile, email, duplicate entitlement, and duplicate
-  pending-payment checks.
-- `src/lib/payments/checkout.ts`: creates pending payment rows and Ozow hosted
-  checkout sessions.
-- `src/app/api/webhooks/ozow/route.ts`: signed Ozow webhook handler; validates
-  amount/currency/provider IDs, claims processing, fulfills entitlements,
-  finalizes payment state, and sends receipt/failure emails.
-- `src/lib/payments/store.ts` and `src/lib/payments/fulfillment.ts`: payment
-  state transitions and entitlement creation.
+- `src/app/api/billing/create-checkout/route.ts` and the add-on routes
+  (`src/app/api/{listings,businesses,promotions}/[id]/{boost,featured,urgent}`):
+  hand checkout to the foundation billing handler
+  (`src/lib/foundation/billing-route.ts`).
+- `src/app/api/webhooks/ozow/route.ts`: signed Ozow webhook handler; rate
+  limits, checks the webhook secret and signature, normalises the payload, then
+  hands it to the foundation payment runtime.
+- `src/lib/foundation/billing-runtime.ts`: Ozow checkout creation, notification
+  handling and payment reconciliation against the foundation `api.*` commands.
 
 ## Media Flow
 
 - `src/app/api/media/upload/route.ts`: server-mediated media upload path, used
-  for photos and videos (the direct-to-R2 upload routes are retired).
+  for photos and videos (`src/app/api/media/upload/foundation.ts`; the
+  direct-to-R2 upload routes are retired).
 - `src/app/api/media/serve/[...key]/route.ts`: media proxy/serving path.
 - `src/lib/services/storage.ts`: native R2 binding support, S3-compatible R2
   fallback, encrypted KYC upload/download, and safe storage key checks.

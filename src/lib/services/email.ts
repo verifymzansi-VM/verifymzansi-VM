@@ -1177,69 +1177,6 @@ export async function sendOrganisationAdminInviteEmail(params: {
   });
 }
 
-export type TrialExtensionEmailEvent = "offered" | "accepted";
-
-/**
- * Extension offer and confirmation. The offer links to the dashboard and never
- * accepts from a link alone (mail scanners open links).
- */
-export async function sendTrialExtensionEmail(params: {
-  email: string;
-  accountName: string;
-  event: TrialExtensionEmailEvent;
-  label: string;
-  days: number;
-  currentEndsAt: string;
-  proposedEndsAt: string;
-  respondBy: string | null;
-  reviewUrl: string;
-  idempotencyKey?: string;
-}): Promise<SendEmailResult> {
-  const current = formatSast(params.currentEndsAt);
-  const proposed = formatSast(params.proposedEndsAt);
-  const respondBy = params.respondBy ? formatSast(params.respondBy) : null;
-  const offered = params.event === "offered";
-  const subject = offered
-    ? `Your VerifyMzansi free access can be extended by ${params.days} days`
-    : `Your VerifyMzansi free access now ends on ${proposed}`;
-  const body = offered
-    ? `We'd like to extend your free founding access for ${params.label} by ${params.days} days. If you accept, your access will end on ${proposed} instead of ${current}. Nothing is charged and nothing renews automatically. Please accept or decline from your dashboard${respondBy ? ` by ${respondBy}` : ""}. If you do nothing, your access ends on ${current} as planned.`
-    : `Your free access for ${params.label} has been extended by ${params.days} days and now ends on ${proposed}. Nothing is charged and nothing renews automatically.`;
-  const html = brandedEmail({
-    tone: offered ? "info" : "success",
-    eyebrow: "Free access",
-    title: offered ? "Extension offered" : "Extension confirmed",
-    intro: offered
-      ? "VerifyMzansi has offered to extend your free access."
-      : "Your free access has been extended.",
-    bodyHtml: `
-      ${paragraph(`Hi ${params.accountName},`)}
-      ${paragraph(body)}
-      ${detailList([
-        [offered ? "Current end" : "Previous end", `${current} SAST`],
-        [offered ? "New end if you accept" : "New end", `${proposed} SAST`],
-        ...(offered && respondBy
-          ? ([["Respond by", `${respondBy} SAST`]] as Array<[string, string]>)
-          : []),
-      ])}
-    `,
-    cta: { label: offered ? "Review offer" : "Open dashboard", href: params.reviewUrl },
-    reason: "You have free founding or introductory access on VerifyMzansi.",
-  });
-  const text = [
-    `Hi ${params.accountName},`,
-    body,
-    `${offered ? "Review offer" : "Open dashboard"}: ${params.reviewUrl}`,
-  ].join("\n\n");
-  return sendEmail({
-    to: params.email,
-    subject,
-    html,
-    text,
-    idempotencyKey: params.idempotencyKey,
-  });
-}
-
 export type BusinessVerificationEmailKind =
   "approved" | "info_requested" | "message" | "rejected" | "revoked";
 

@@ -1,55 +1,56 @@
+/** @vitest-environment node */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
-const mocks = vi.hoisted(() => ({ admin: vi.fn(), reconcile: vi.fn() }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
-vi.mock("@/lib/payments/reconciliation", () => ({ reconcileOzowPayment: mocks.reconcile }));
+import { runFoundationPaymentReconciliation } from "@/lib/foundation/billing-runtime";
+
+vi.mock("@/lib/foundation/billing-runtime", () => ({
+  runFoundationPaymentReconciliation: vi.fn(),
+  paymentCheckFailureReason: () => "unavailable",
+}));
+
+const SECRET = "internal-jobs-test-secret";
+function request(token = SECRET) {
+  return new Request("https://verifymzansi.com/api/internal/payments/reconcile", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
 
 describe("internal payment reconciliation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubEnv("RATE_LIMITER_API_KEY", "worker-test-key");
+    vi.stubEnv("INTERNAL_JOBS_SECRET", SECRET);
   });
   afterEach(() => vi.unstubAllEnvs());
-  function request(token = "worker-test-key") {
-    return new Request("https://verifymzansi.com/api/internal/payments/reconcile", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  }
-  it.each(["", "wrong-key"])("rejects callers without the worker secret %s", async (token) => {
+
+  it.each(["", "wrong-key"])("rejects callers without the jobs secret %s", async (token) => {
     expect((await POST(request(token))).status).toBe(401);
-    expect(mocks.admin).not.toHaveBeenCalled();
+    expect(runFoundationPaymentReconciliation).not.toHaveBeenCalled();
   });
-  it("fails closed if the worker secret is not configured", async () => {
-    vi.stubEnv("RATE_LIMITER_API_KEY", "");
-    expect((await POST(request())).status).toBe(401);
+
+  it("fails closed if the jobs secret is not configured", async () => {
+    vi.stubEnv("INTERNAL_JOBS_SECRET", "");
+    expect((await POST(request(""))).status).toBe(401);
+    expect(runFoundationPaymentReconciliation).not.toHaveBeenCalled();
   });
-  it("uses a bounded rotating batch and reports lookup failures without aborting other payments", async () => {
-    const query = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      in: vi.fn().mockReturnThis(),
-      not: vi.fn().mockReturnThis(),
-      gte: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi
-        .fn()
-        .mockResolvedValue({ data: [{ id: "payment-1" }, { id: "payment-2" }], error: null }),
-    };
-    const admin = { from: vi.fn(() => query) };
-    mocks.admin.mockReturnValue(admin);
-    mocks.reconcile
-      .mockResolvedValueOnce({ checked: true })
-      .mockRejectedValueOnce(new Error("provider outage"));
+
+  it("returns the run summary and answers 503 when any payment failed", async () => {
+    vi.mocked(runFoundationPaymentReconciliation)
+      .mockResolvedValueOnce({ checked: 2, failures: 0 } as never)
+      .mockResolvedValueOnce({ checked: 1, failures: 1 } as never);
+    const ok = await POST(request());
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("Cache-Control")).toBe("no-store");
+    expect(await ok.json()).toEqual({ checked: 2, failures: 0 });
+    const partial = await POST(request());
+    expect(partial.status).toBe(503);
+    expect(await partial.json()).toEqual({ checked: 1, failures: 1 });
+  });
+
+  it("answers 503 without details when the run throws", async () => {
+    vi.mocked(runFoundationPaymentReconciliation).mockRejectedValueOnce(new Error("db down"));
     const response = await POST(request());
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ checked: 1, failures: 1 });
-    expect(query.limit).toHaveBeenCalledWith(10);
-    expect(query.order).toHaveBeenCalledWith("provider_data->>reconciliation_checked_at", {
-      ascending: true,
-      nullsFirst: true,
-    });
-    expect(query.in).toHaveBeenCalledWith("status", ["pending", "failed", "expired"]);
-    expect(mocks.reconcile).toHaveBeenCalledTimes(2);
+    expect(await response.json()).toEqual({ error: "Payment reconciliation unavailable" });
   });
 });

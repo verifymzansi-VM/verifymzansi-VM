@@ -1,11 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-
 import { FREE_POST_CONFIG, PAID_POST_CONFIG } from "@/lib/constants/pricing";
-import type { MarketplaceArea } from "@/types/enums";
-
-const POST_TERMS_VERSION = "post-terms-2026-09-06";
-
-type ConsentSupabase = Pick<SupabaseClient, "from">;
 
 function getFreePostExpiryDate(from = new Date()): Date {
   return new Date(from.getTime() + FREE_POST_CONFIG.durationDays * 24 * 60 * 60 * 1000);
@@ -69,51 +62,4 @@ export function getApprovedPostExpiryIso(
   const baselineTime = baseline.getTime();
   const safeBaseline = Number.isFinite(baselineTime) ? baseline : approvedAt;
   return new Date(safeBaseline.getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString();
-}
-
-export function hasAcceptedPostTerms(value: unknown): boolean {
-  return value === true;
-}
-
-export async function recordPostTermsAcceptance(
-  client: ConsentSupabase,
-  {
-    userId,
-    area,
-    contentId,
-    trialDays = 7,
-  }: {
-    userId: string;
-    area: MarketplaceArea;
-    contentId: string;
-    trialDays?: 7 | 30;
-  }
-): Promise<void> {
-  const consentTable = client.from("consent_records") as unknown as {
-    insert?: (
-      payload: Record<string, unknown>
-    ) => PromiseLike<{ error: { message: string } | null }>;
-  };
-
-  if (typeof consentTable.insert !== "function") {
-    return;
-  }
-
-  const { error } = await consentTable.insert({
-    user_id: userId,
-    consent_type: "post_creation_terms",
-    version: POST_TERMS_VERSION,
-    granted: true,
-    ip_hash: null,
-    metadata: {
-      area,
-      content_id: contentId,
-      introductory_trial_duration_days: trialDays,
-      introductory_trial_scope: "one_per_verified_identity",
-    },
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
 }
