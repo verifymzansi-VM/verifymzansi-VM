@@ -127,8 +127,8 @@ function WaitingTransfers({
               {t.similar_records > 0 ? (
                 <span className="w-full text-destructive" role="note">
                   Possible duplicate: {t.similar_records} other{" "}
-                  {t.similar_records === 1 ? "record names" : "records name"} this customer, amount
-                  and date under another reference. Check the bank statement.
+                  {t.similar_records === 1 ? "record has" : "records have"} this bank reference and
+                  amount, or this customer, amount and date. Check the bank statement.
                 </span>
               ) : null}
               <span className="w-full text-xs text-muted-foreground">

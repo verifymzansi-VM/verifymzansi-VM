@@ -104,6 +104,9 @@ export const FOUNDATION_ERROR_REASONS = {
   refund_not_waiting: ["PT409"],
   refund_payment_changed: ["PT409"],
   refund_reason_code_invalid: ["22023"],
+  refund_reference_invalid: ["22023"],
+  refund_reference_required: ["22023"],
+  refund_reference_used: ["PT409"],
   self_partner: ["42501"],
   self_sponsorship: ["42501"],
   sender_inactive: ["42501"],
@@ -142,6 +145,11 @@ export const FOUNDATION_ERROR_MESSAGES = {
   ownerApprovedAdministratorInvitationRequired: "owner-approved administrator invitation required",
   staffOwnReviewRequired: "staff need an accepted ID review of their own for this",
   staffSameIdentityReversal: "a different staff member must record this reversal",
+  // Member checks: the session ended, the account is not (or no longer) a
+  // signed-in confirmed member, or the account is restricted.
+  liveSessionRequired: "live session required",
+  signedInMemberRequired: "signed-in member required",
+  activeMemberRequired: "active authenticated member required",
 } as const;
 
 /**

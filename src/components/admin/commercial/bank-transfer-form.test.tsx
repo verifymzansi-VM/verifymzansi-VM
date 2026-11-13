@@ -207,7 +207,11 @@ describe("bank transfers waiting for a second staff member", () => {
   it("lets another staff member confirm, with a duplicate warning", async () => {
     render(<BankTransferPanel canRecord={false} canConfirm waiting={[waiting]} />);
     const list = screen.getByRole("list", { name: "Bank transfers waiting for confirmation" });
-    expect(within(list).getByText(/Possible duplicate: 1 other record names/)).toBeInTheDocument();
+    expect(
+      within(list).getByText(
+        /Possible duplicate: 1 other record has this bank reference and amount, or this customer, amount and date/
+      )
+    ).toBeInTheDocument();
     expect(within(list).getByText(/thandi@example.test/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Record a bank transfer" })).toBeNull();
     fireEvent.click(within(list).getByRole("button", { name: "Confirm transfer" }));

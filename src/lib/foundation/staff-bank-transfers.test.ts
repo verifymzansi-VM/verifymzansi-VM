@@ -117,7 +117,7 @@ describe("bank transfer adapters", () => {
       [
         refused("PT409", "bank_reference_used"),
         409,
-        "That bank reference was already recorded. Check the payments list before recording it.",
+        "A bank transfer with that reference, amount and date is already waiting or confirmed. Check the payments list before recording it.",
       ],
       [
         refused("PT404", "invoice_account_unavailable"),

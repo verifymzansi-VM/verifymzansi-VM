@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION internal.list_my_email_history(p_limit integer DEFAUL
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid:=internal.price_draft_actor(); items jsonb;
+declare actor uuid:=internal.consent_actor(); items jsonb;
 begin
   if p_limit is null or p_limit not between 1 and 50 then
     raise exception 'invalid limit' using errcode='22023';

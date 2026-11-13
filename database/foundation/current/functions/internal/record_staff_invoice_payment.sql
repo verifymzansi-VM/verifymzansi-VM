@@ -57,15 +57,19 @@ begin
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, buyer);
   perform internal.assert_staff_not_referrer(actor, buyer);
+  -- The same bank credit (reference, amount, date cleared) waiting or
+  -- confirmed: the same request again by the same staff member returns it;
+  -- anything else is refused. A declined record does not count.
   select * into prior from private.invoice_transfers t
-    where upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key;
+    where upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key
+      and t.amount_received_cents = p_amount_cents and t.cleared_on = cleared and t.status <> 'declined';
   if found then
     if prior.recorded_by = actor and prior.account_id = buyer and prior.reason = btrim(p_reason)
-        and prior.amount_received_cents = p_amount_cents and prior.cleared_on = cleared and prior.slots = p_slots
+        and prior.slots = p_slots
         and (select v.duration_days from private.plan_versions v where v.id = prior.plan_version_id) = p_term_days then
       return internal.invoice_transfer_dto(prior, actor) || jsonb_build_object('repeated', true);
     end if;
-    raise exception 'that bank reference was already recorded (%)', replace(prior.status, '_', ' ')
+    raise exception 'a bank transfer with that reference, amount and date was already recorded (%)', replace(prior.status, '_', ' ')
       using errcode='PT409', detail='bank_reference_used';
   end if;
   if not exists(select 1 from private.current_account_access a where a.id = buyer) then

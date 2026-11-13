@@ -40,10 +40,12 @@ import {
   P180,
   P30,
   applyAndProveRollback,
+  bankTransferCommands,
   createPaymentWorld,
   fingerprintOf,
+  ozowPurchase,
   psqlSessions,
-  sha,
+  sqlValue,
   updateCheckKit,
 } from "./lib/foundation-staff-payment-world.mjs";
 
@@ -76,66 +78,9 @@ try {
   const { session, sessionAfter } = psqlSessions(database);
 
   /** An Ozow purchase through checkout and the settlement notice. */
-  const buy = (owner, plan, slots) => {
-    const quoted = json(
-      member(
-        owner,
-        `select api.start_slot_checkout('${plan.id}',${slots},${plan.cents * slots},true);`
-      )
-    );
-    const lease = json(
-      service(`select api.claim_checkout_request('${quoted.payment_id}','${owner.id}');`)
-    );
-    q(
-      service(
-        `select api.complete_checkout_request('${quoted.payment_id}','${owner.id}','${lease.claim_token}','req-${quoted.payment_id}','https://one.ozow.com/checkout/req-${quoted.payment_id}');`
-      )
-    );
-    const ref = q(
-      `select merchant_reference from private.payments where id='${quoted.payment_id}';`
-    );
-    const event = {
-      payload_sha256: sha(`event-${quoted.payment_id}`),
-      merchant_reference: ref,
-      provider_request_id: `req-${quoted.payment_id}`,
-      provider_transaction_id: `tx-${quoted.payment_id}`,
-      status: "complete",
-      amount_cents: plan.cents * slots,
-      currency: "ZAR",
-    };
-    assert.equal(
-      json(service(`select api.apply_provider_event($e$${JSON.stringify(event)}$e$::jsonb);`))
-        .outcome,
-      "completed"
-    );
-    return quoted.payment_id;
-  };
-  const literal = (value) =>
-    value === null || value === undefined ? "null" : `'${String(value).replace(/'/g, "''")}'`;
-  /** The record command's SQL, with every argument overridable. */
-  const recordSql = (who, input) => {
-    const a = {
-      email: null,
-      term: 180,
-      slots: 1,
-      amount: null,
-      reference: null,
-      cleared: today,
-      waiver: true,
-      reason: "EFT cleared; customer agreed in writing",
-      ...input,
-    };
-    const amount = a.amount ?? (a.term === 30 ? 6900 : a.term === 90 ? 20700 : 41400) * a.slots;
-    return staff(
-      who,
-      `select api.record_staff_invoice_payment(${literal(a.email)},${a.term === null ? "null" : a.term},${a.slots === null ? "null" : a.slots},${amount},${literal(a.reference)},${literal(a.cleared)},${a.waiver === null ? "null" : a.waiver},${literal(a.reason)});`
-    );
-  };
-  const record = (who, input) => json(recordSql(who, input));
-  const confirmSql = (who, id) => staff(who, `select api.confirm_staff_invoice_payment('${id}');`);
-  const confirm = (who, id) => json(confirmSql(who, id));
-  const declineSql = (who, id, reason = "The bank shows no such transfer") =>
-    staff(who, `select api.decline_staff_invoice_payment('${id}',${literal(reason)});`);
+  const buy = (owner, plan, slots) => ozowPurchase(kit, owner, plan, slots);
+  const literal = sqlValue;
+  const { recordSql, record, confirmSql, confirm, declineSql } = bankTransferCommands(kit, today);
   /** Recorded by `who`, confirmed by the other admin; returns the payment id. */
   const recordAndConfirm = (who, input) => {
     const recorded = record(who, input);

@@ -33,14 +33,16 @@
       "row_level_security": "21b60c97063eb3fa39331921b2c59782",
       "triggers": "8e30899c01c04079ae72d90fde99214d"
     },
-    "pendingApplication": []
+    "pendingApplication": [
+      "20261113223806_bank_transfer_and_consent_fixes.sql"
+    ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 68,
-  "lastUpdate": "20261113162457_staff_invoice_payments.sql",
+  "updateCount": 69,
+  "lastUpdate": "20261113223806_bank_transfer_and_consent_fixes.sql",
   "categories": {
     "column_grants": {
       "items": 2,
@@ -52,27 +54,27 @@
     },
     "constraints": {
       "items": 1066,
-      "fingerprint": "d61c1e06ad5842fba7ef94f4f870e7fc"
+      "fingerprint": "42c040a9105a5812a68c89eabdb9f2ce"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 831,
-      "fingerprint": "a38b22f091a7d993cf5cc8d01c655a5a"
+      "items": 834,
+      "fingerprint": "c82d2f792717c148d60d0c522a67d29d"
     },
     "function_grants": {
       "items": 651,
       "fingerprint": "757f891f3cf492274f8752ddd1969c13"
     },
     "function_metadata": {
-      "items": 831,
-      "fingerprint": "2ff1f6a04581f4caaa78ee520017b2b5"
+      "items": 834,
+      "fingerprint": "8c8df377565d4a4093e40382f9fe6692"
     },
     "indexes": {
       "items": 475,
-      "fingerprint": "25feb79228dd538d71b44b650c1d9061"
+      "fingerprint": "662f4b47288385e5a72298b03d752e7e"
     },
     "policies": {
       "items": 1,
@@ -87,8 +89,8 @@
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 107,
-      "fingerprint": "8e30899c01c04079ae72d90fde99214d"
+      "items": 108,
+      "fingerprint": "ef0e4012174d8dae1f53b675ba1c74f9"
     }
   }
 }

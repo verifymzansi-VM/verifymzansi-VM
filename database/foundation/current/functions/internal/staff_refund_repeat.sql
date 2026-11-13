@@ -17,6 +17,9 @@ begin
       'released_activations', prior.released_activations,
       'payment_status', (select p.status from private.payments p where p.id = prior.payment_id), 'repeated', true);
   end if;
+  if exists(select 1 from private.payments p where p.id = p_payment_id and p.provider = 'invoice') then
+    raise exception 'this refund reference was already recorded' using errcode='PT409', detail='refund_reference_used';
+  end if;
   raise exception 'this Ozow reference was already recorded' using errcode='PT409', detail='ozow_reference_used';
 end;
 $function$;

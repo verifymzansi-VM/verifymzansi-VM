@@ -25,28 +25,55 @@ const receiptRow = z.object({
   // customer's transfer; older reads have neither field (an Ozow payment).
   payment_method: z.enum(["ozow", "invoice"]).optional(),
   bank_reference: z.string().trim().min(4).max(60).nullable().optional(),
+  // The date the money of a bank transfer cleared (South African date), from
+  // 20261113223806_bank_transfer_and_consent_fixes.sql; absent before it.
+  cleared_on: z.iso.date().nullable().optional(),
+  // The payment's status now: a payment refunded or charged back before its
+  // receipt went out is no longer "received".
+  status: z.string().max(40).optional(),
 });
+
+type Expected = { paymentId: string; ownerId: string | null | undefined };
+
+/**
+ * True when the read describes that payment of that member and the payment is
+ * no longer complete (refunded or charged back before the receipt went out):
+ * the receipt, with or without details, must not be sent.
+ */
+export function paymentNoLongerComplete(data: unknown, expected: Expected): boolean {
+  const row = receiptRow.safeParse(data);
+  return (
+    row.success &&
+    row.data.payment_id === expected.paymentId &&
+    row.data.owner_id === expected.ownerId &&
+    row.data.status !== undefined &&
+    row.data.status !== "complete"
+  );
+}
 
 /**
  * The receipt for a settled payment, or null when the read does not describe
  * that payment of that member with an invoice (an unknown payment reads as
- * null). The caller then sends the notice without payment details.
+ * null), or the payment is no longer complete. The caller then sends the
+ * notice without payment details, unless paymentNoLongerComplete says no
+ * receipt is due at all.
  */
-export function readPaymentReceipt(
-  data: unknown,
-  expected: { paymentId: string; ownerId: string | null | undefined }
-): PaymentReceipt | null {
+export function readPaymentReceipt(data: unknown, expected: Expected): PaymentReceipt | null {
   const row = receiptRow.safeParse(data);
   if (!row.success) return null;
   const r = row.data;
-  const paidAt = r.completed_at ?? r.issued_at;
-  const bankReference =
-    r.payment_method === "invoice"
-      ? (r.bank_reference ?? "")
-      : toOzowReferenceField(r.merchant_reference);
+  const bank = r.payment_method === "invoice";
+  // A bank transfer was paid the day its money cleared, not when a second
+  // staff member confirmed it (noon, so the South African date always shows).
+  const paidAt =
+    bank && r.cleared_on ? `${r.cleared_on}T12:00:00+02:00` : (r.completed_at ?? r.issued_at);
+  const bankReference = bank
+    ? (r.bank_reference ?? "")
+    : toOzowReferenceField(r.merchant_reference);
   if (
     r.payment_id !== expected.paymentId ||
     r.owner_id !== expected.ownerId ||
+    (r.status !== undefined && r.status !== "complete") ||
     !r.invoice_number ||
     !paidAt ||
     !bankReference

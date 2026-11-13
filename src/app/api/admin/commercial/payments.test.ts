@@ -49,7 +49,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 
-it("refuses a refund without Ozow's reference before any database call", async () => {
+it("refuses a refund without a reference before any database call", async () => {
   const response = await POST(
     request({
       action: "payment.reverse",
@@ -60,7 +60,7 @@ it("refuses a refund without Ozow's reference before any database call", async (
     })
   );
   expect(response.status).toBe(422);
-  expect(await response.json()).toMatchObject({ error: "Enter Ozow's refund reference." });
+  expect(await response.json()).toMatchObject({ error: "Enter the refund reference." });
   expect(rpc).not.toHaveBeenCalled();
 });
 

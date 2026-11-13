@@ -41,7 +41,7 @@ END),
   constraint payment_refund_requests_declined_by_fkey FOREIGN KEY (declined_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint payment_refund_requests_kind_check CHECK (kind = ANY (ARRAY['refunded'::text, 'chargeback'::text])),
   constraint payment_refund_requests_line_fkey FOREIGN KEY (payment_line_id, payment_id) REFERENCES private.payment_lines(id, payment_id) ON DELETE CASCADE,
-  constraint payment_refund_requests_ozow_reference_check CHECK (ozow_reference ~ '^[A-Za-z0-9][A-Za-z0-9._:/-]{3,99}$'::text),
+  constraint payment_refund_requests_ozow_reference_check CHECK (ozow_reference ~ '^[A-Za-z0-9][A-Za-z0-9 ._:/-]{3,99}$'::text AND ozow_reference = btrim(ozow_reference) AND ozow_reference !~~ '%  %'::text),
   constraint payment_refund_requests_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES private.payments(id) ON DELETE CASCADE,
   constraint payment_refund_requests_pkey PRIMARY KEY (id),
   constraint payment_refund_requests_reason_check CHECK (internal.plain_text_valid(reason, 5, 500, true)),
@@ -62,4 +62,5 @@ CREATE UNIQUE INDEX payment_refund_requests_reference_idx ON private.payment_ref
 CREATE INDEX payment_refund_requests_requested_by_idx ON private.payment_refund_requests USING btree (requested_by);
 CREATE UNIQUE INDEX payment_refund_requests_waiting_idx ON private.payment_refund_requests USING btree (payment_id) WHERE (status = 'awaiting_approval'::text);
 CREATE TRIGGER payment_refund_requests_guard BEFORE INSERT OR UPDATE ON private.payment_refund_requests FOR EACH ROW EXECUTE FUNCTION internal.payment_refund_request_guard();
+CREATE TRIGGER payment_refund_requests_reference_rule BEFORE INSERT ON private.payment_refund_requests FOR EACH ROW EXECUTE FUNCTION internal.payment_refund_reference_rule();
 revoke all on private.payment_refund_requests from public;

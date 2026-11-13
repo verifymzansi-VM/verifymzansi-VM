@@ -16,8 +16,10 @@ AS $function$
     'merchant_reference', p.merchant_reference, 'provider_transaction_id', p.provider_transaction_id,
     'status', p.status, 'fulfillment_status', p.fulfillment_status,
     'payment_method', p.provider,
-    'bank_reference', (select t.bank_reference from private.invoice_transfers t where t.payment_id = p.id))
+    'bank_reference', t.bank_reference,
+    'cleared_on', to_char(t.cleared_on::timestamp, 'YYYY-MM-DD'))
   from private.payments p left join private.invoices i on i.payment_id = p.id
+    left join private.invoice_transfers t on t.payment_id = p.id
   where p.id = p_payment_id;
 $function$;
 alter function internal.get_payment_receipt(uuid) owner to postgres;

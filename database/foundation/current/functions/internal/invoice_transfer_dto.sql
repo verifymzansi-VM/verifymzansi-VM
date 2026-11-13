@@ -10,8 +10,10 @@ AS $function$
   select jsonb_build_object('transfer_id', t.id, 'status', t.status, 'account_id', t.account_id,
     'customer_email', (select u.email from auth.users u where u.id = t.account_id),
     'similar_records', (select count(*) from private.invoice_transfers x where x.id <> t.id
-      and x.account_id = t.account_id and x.amount_received_cents = t.amount_received_cents
-      and x.cleared_on = t.cleared_on and x.status <> 'declined'),
+      and x.status <> 'declined' and x.amount_received_cents = t.amount_received_cents
+      and (upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
+          = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g'))
+        or (x.account_id = t.account_id and x.cleared_on = t.cleared_on))),
     'customer_name', internal.profile_public_name((select f.display_name from private.profiles f where f.account_id = t.account_id)),
     'term_days', (select v.duration_days from private.plan_versions v where v.id = t.plan_version_id),
     'slots', t.slots, 'amount_received_cents', t.amount_received_cents, 'bank_reference', t.bank_reference,
