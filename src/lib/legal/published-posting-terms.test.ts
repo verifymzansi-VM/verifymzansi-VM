@@ -3,7 +3,9 @@ import { getPublishedPostingTerms, assertPublishedPostingTerms } from "./publish
 import { buildTermsTextSections } from "./terms-text";
 import manifest from "./terms-documents/catalogue.json";
 import { ENTERPRISE_PLANS, PACKAGES_ON_SALE, RETAIL_OFFERS } from "@/lib/constants/pricing";
-import { buildCommercialCatalog } from "@/lib/commercial/plans";
+import { buildCommercialCatalog, buildFoundationCommercialCatalog } from "@/lib/commercial/plans";
+import { ONLINE_ORDER_LIMIT_CENTS, POSTS_PER_SLOT_PER_30_DAYS } from "@/lib/billing/slot-checkout";
+import { readFileSync } from "node:fs";
 
 const text = (version: string) =>
   getPublishedPostingTerms(version)!
@@ -87,6 +89,78 @@ it("keeps the site's price constants in step with the active Terms", () => {
     ).toBe(true);
   // With no plan on sale in the database, nothing links to checkout.
   expect(buildCommercialCatalog([]).onSale).toBe(false);
+});
+
+// What the database puts on sale (the reviewed update that sells the R69
+// slots) must be what the Terms in force state and what the site shows.
+it("puts on sale exactly the Individual slots the active Terms state, at the site's prices", () => {
+  const content = text(manifest.active_version);
+  const sql = readFileSync(
+    "database/foundation/updates/20261113002421_individual_slots_r69.sql",
+    "utf8"
+  );
+  const insert = sql.slice(sql.indexOf("insert into private.plan_versions"));
+  const rows = [
+    ...insert
+      .slice(0, insert.indexOf("on conflict"))
+      .matchAll(
+        /\('([0-9a-f-]{36})', '(individual_\d+d)', 1, null, '([^']+)', (\d+), (\d+), (\d+), (\d+), (\d+), (\d+), (\d+),/g
+      ),
+  ].map(([, id, code, label, price, days, slots, activations, period, photos, videos]) => ({
+    id,
+    code,
+    label,
+    price: Number(price),
+    days: Number(days),
+    slots: Number(slots),
+    activations: Number(activations),
+    period: Number(period),
+    photos: Number(photos),
+    videos: Number(videos),
+  }));
+  expect(rows.map((row) => [row.code, row.price, row.days])).toEqual(
+    RETAIL_OFFERS.map((offer) => [
+      `individual_${offer.durationDays}d`,
+      offer.priceCents,
+      offer.durationDays,
+    ])
+  );
+  const rand = (cents: number) => `R${(cents / 100).toLocaleString("en-US")}`;
+  for (const row of rows) {
+    // R69 per slot for each 30 days, no discounts.
+    expect(row.price).toBe(6900 * (row.days / 30));
+    expect(content).toContain(`${rand(row.price)} for ${row.days} days`);
+    expect([row.slots, row.period, row.photos, row.videos]).toEqual([1, 30, 10, 1]);
+    expect(row.activations).toBe(POSTS_PER_SLOT_PER_30_DAYS);
+  }
+  expect(content).toContain(
+    `each paid slot can take at most ${POSTS_PER_SLOT_PER_30_DAYS} posts going live in each 30-day period`
+  );
+  expect(content).toContain("You may hold 1 to 4 Individual slots at a time");
+  expect(content).toContain(`Orders of ${rand(ONLINE_ORDER_LIMIT_CENTS)} or less are paid online`);
+  // The pricing page sells those plans, in every section, at those prices.
+  const catalogue = buildFoundationCommercialCatalog({
+    plans: rows.map((row) => ({
+      id: row.id,
+      code: row.code,
+      label: row.label,
+      area: null,
+      price_cents: String(row.price),
+      currency: "ZAR" as const,
+      duration_days: row.days,
+      activation_period_days: row.period,
+      activations_per_period: row.activations,
+      slot_capacity: row.slots,
+      max_photos: row.photos,
+      max_videos: row.videos,
+      addon_capabilities: [],
+    })),
+    addons: [],
+  });
+  expect(catalogue.onSale).toBe(true);
+  expect(
+    catalogue.retail.map((offer) => [offer.priceCents, new Set(Object.values(offer.planIds)).size])
+  ).toEqual(rows.map((row) => [row.price, 1]));
 });
 
 it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {

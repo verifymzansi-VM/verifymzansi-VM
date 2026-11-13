@@ -35,12 +35,15 @@ function buildValidationErrorResponse(
 }
 
 function coerceEntriesToObject(source: KeyValueEntrySource): Record<string, unknown> {
-  const data: Record<string, unknown> = {};
+  // Collect in a Map and build the object with Object.fromEntries, which
+  // defines own properties: a field named "__proto__" or "constructor" can
+  // never reach or replace the result's prototype.
+  const entries = new Map<string, unknown>();
 
   for (const [key, value] of source.entries()) {
-    const existing = data[key];
+    const existing = entries.get(key);
     if (existing === undefined) {
-      data[key] = value;
+      entries.set(key, value);
       continue;
     }
 
@@ -49,10 +52,10 @@ function coerceEntriesToObject(source: KeyValueEntrySource): Record<string, unkn
       continue;
     }
 
-    data[key] = [existing, value];
+    entries.set(key, [existing, value]);
   }
 
-  return data;
+  return Object.fromEntries(entries);
 }
 
 /**

@@ -5,7 +5,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { MultiListingNudge } from "@/components/billing/multi-listing-nudge";
 import { usePathname } from "next/navigation";
-import { AlertTriangle, Loader2, Sparkles, Check, X, Crown, Camera, Video } from "lucide-react";
+import { AlertTriangle, Loader2, Sparkles, Check, X, Camera, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -156,23 +156,7 @@ function InlinePlanGrid({
                   : "border-border/70"
             }`}
           >
-            {isPopular && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="gap-1 whitespace-nowrap border-0 bg-brand-green-600 px-2.5 py-0.5 text-xs font-bold text-white hover:bg-brand-green-600 dark:bg-brand-green-500 dark:text-brand-green-950">
-                  <Sparkles className="h-3 w-3" aria-hidden="true" />
-                  {plan.promoLabel ?? "Popular"}
-                </Badge>
-              </div>
-            )}
-            {isPremium && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="gap-1 whitespace-nowrap border-0 bg-brand-gold px-2.5 py-0.5 text-xs font-bold text-brand-gold-950 hover:bg-brand-gold">
-                  <Crown className="h-3 w-3" aria-hidden="true" />
-                  Best value
-                </Badge>
-              </div>
-            )}
-
+            {/* No "Popular" or "Best value" badge: slots have no discounts (posting-v4). */}
             <CardContent className="p-4 pt-5 space-y-3">
               {/* Plan name + price */}
               <div className="text-center">
