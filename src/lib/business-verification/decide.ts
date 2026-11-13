@@ -91,7 +91,7 @@ const fail = (status: number, code: string, error: string): DecisionResult => ({
 });
 
 /** Case checks without a pending exception (new evidence voids a proposal). */
-export function withoutException(checks: Record<string, unknown> | null | undefined) {
+function withoutException(checks: Record<string, unknown> | null | undefined) {
   if (!checks?.exception) return checks ?? null;
   const { exception: _dropped, ...rest } = checks;
   return rest;
@@ -240,7 +240,7 @@ export async function approvalEvidence(admin: Admin, row: CaseRow): Promise<Evid
 }
 
 /** In-app notice and email to the owner. Failures are logged, never thrown. */
-export async function notifyOwner(
+async function notifyOwner(
   admin: Admin,
   row: Pick<CaseRow, "id" | "owner_id" | "business_id" | "kind">,
   kind: BusinessVerificationEmailKind,

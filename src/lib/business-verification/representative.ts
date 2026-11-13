@@ -27,9 +27,6 @@ export type RepresentativeState = {
   confirmed?: boolean;
 };
 
-export const CODE_TTL_MINUTES = 15;
-export const MAX_CODE_ATTEMPTS = 5;
-
 /** Free and ISP mailboxes don't prove anything about a company. */
 const FREE_MAIL_DOMAINS = new Set([
   "gmail.com",

@@ -44,32 +44,12 @@ async function countRpc(fn: string, args: Record<string, unknown>): Promise<numb
   return typeof data === "number" ? data : 0;
 }
 
-export const renewClaims = (actorId: string) =>
-  countRpc("renew_queue_claims", { p_actor: actorId });
-
-export const releaseClaims = (actorId: string, item?: { type: ClaimItemType; id: string }) =>
+const releaseClaims = (actorId: string, item?: { type: ClaimItemType; id: string }) =>
   countRpc("release_queue_claims", {
     p_actor: actorId,
     p_item_type: item?.type ?? null,
     p_item_id: item?.id ?? null,
   });
-
-export async function reassignClaim(
-  actorId: string,
-  item: { type: ClaimItemType; id: string },
-  to: string | null,
-  reason: string
-) {
-  const { data, error } = await createAdminClient().rpc("reassign_queue_claim", {
-    p_actor: actorId,
-    p_item_type: item.type,
-    p_item_id: item.id,
-    p_to: to,
-    p_reason: reason,
-  });
-  if (error) throw new Error(`reassign_queue_claim failed: ${error.message}`);
-  return data as { ok: true; status: string } | { ok: false; error: string };
-}
 
 const CLAIM_REFUSALS: Record<string, [number, string]> = {
   claim_required: [409, "Claim this item from the queue before deciding it."],
@@ -81,7 +61,7 @@ const CLAIM_REFUSALS: Record<string, [number, string]> = {
   invalid_assignee: [400, "Choose a moderator or admin who can work this queue."],
 };
 
-export function claimRefusalResponse(error: string): NextResponse {
+function claimRefusalResponse(error: string): NextResponse {
   const [status, message] = CLAIM_REFUSALS[error] ?? [
     409,
     "This item cannot be decided right now.",
