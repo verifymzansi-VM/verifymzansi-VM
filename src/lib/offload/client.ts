@@ -76,8 +76,9 @@ export async function readPdf(bytes: Uint8Array): Promise<ExtractedPdf | null> {
     headers: { "Content-Type": "application/pdf" },
     body: new Uint8Array(bytes),
   });
-  const reply = (await response.json().catch(() => null)) as { result?: unknown } | null;
-  if (!reply || !("result" in reply)) throw new OffloadUnavailableError("Malformed PDF reply");
+  const reply: unknown = await response.json().catch(() => null);
+  if (!reply || typeof reply !== "object" || !("result" in reply))
+    throw new OffloadUnavailableError("Malformed PDF reply");
   if (reply.result === null) return null;
   if (!isExtractedPdf(reply.result)) throw new OffloadUnavailableError("Malformed PDF reply");
   return reply.result;
