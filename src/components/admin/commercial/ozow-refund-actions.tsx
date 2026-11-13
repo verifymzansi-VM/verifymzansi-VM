@@ -163,6 +163,33 @@ function outcomeText(status: string, answered: boolean) {
   return "Refund approved. It is sent to Ozow within 10 minutes.";
 }
 
+const REASON_OPTIONS = Object.entries(REFUND_REASON_LABELS);
+
+/** The closed list of reasons (the same labels as the reference form). */
+function ReasonCodeField() {
+  const options = REASON_OPTIONS.map(([code, label]) => (
+    <option value={code} key={code}>
+      {label}
+    </option>
+  ));
+  return (
+    <label className="block text-sm">
+      <span className="font-medium">Reason</span>
+      <select
+        required
+        name="reasonCode"
+        className="mt-1 block w-full rounded-md border bg-background p-2"
+        defaultValue=""
+      >
+        <option disabled value="">
+          Choose a reason
+        </option>
+        {options}
+      </select>
+    </label>
+  );
+}
+
 /** The refund form for a refund through Ozow, or one made in the dashboard. */
 export function OzowRefundForm({
   target,
@@ -228,24 +255,7 @@ export function OzowRefundForm({
             : " The server sends it to Ozow; Ozow pays it to the account or card the payment came from."}
         </span>
       </p>
-      <label className="block text-sm">
-        <span className="font-medium">Reason</span>
-        <select
-          name="reasonCode"
-          required
-          defaultValue=""
-          className="mt-1 block w-full rounded-md border bg-background p-2"
-        >
-          <option value="" disabled>
-            Choose a reason
-          </option>
-          {Object.entries(REFUND_REASON_LABELS).map(([code, label]) => (
-            <option key={code} value={code}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <ReasonCodeField />
       {dashboard ? (
         <label className="block text-sm">
           <span className="font-medium">Ozow refund id</span>
