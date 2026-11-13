@@ -32,4 +32,5 @@ alter table private.payment_lines enable row level security;
 CREATE INDEX payment_lines_plan_version_idx ON private.payment_lines USING btree (plan_version_id);
 CREATE INDEX payment_lines_reversed_by_idx ON private.payment_lines USING btree (reversed_by) WHERE (reversed_by IS NOT NULL);
 CREATE TRIGGER payment_lines_immutable BEFORE UPDATE ON private.payment_lines FOR EACH ROW EXECUTE FUNCTION internal.payment_line_guard();
+CREATE TRIGGER payment_lines_refund_waiting BEFORE UPDATE OF status ON private.payment_lines FOR EACH ROW WHEN (new.status = 'reversed'::text AND old.status = 'open'::text) EXECUTE FUNCTION internal.payment_reversal_waiting_guard();
 revoke all on private.payment_lines from public;

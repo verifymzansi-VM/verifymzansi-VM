@@ -58,4 +58,5 @@ CREATE INDEX payments_staff_status_recent_idx ON private.payments USING btree (s
 CREATE TRIGGER payments_invoice_snapshot BEFORE INSERT ON private.payments FOR EACH ROW EXECUTE FUNCTION internal.payment_invoice_snapshot();
 CREATE TRIGGER payments_partner_commission AFTER UPDATE OF status ON private.payments FOR EACH ROW WHEN (old.status IS DISTINCT FROM new.status) EXECUTE FUNCTION internal.payment_partner_commission();
 CREATE TRIGGER payments_quote_immutable BEFORE UPDATE ON private.payments FOR EACH ROW EXECUTE FUNCTION internal.payment_quote_guard();
+CREATE TRIGGER payments_refund_waiting BEFORE UPDATE OF status ON private.payments FOR EACH ROW WHEN ((new.status = ANY (ARRAY['refunded'::text, 'chargeback'::text])) AND old.status IS DISTINCT FROM new.status) EXECUTE FUNCTION internal.payment_reversal_waiting_guard();
 revoke all on private.payments from public;

@@ -255,3 +255,39 @@ export async function registerVerifiedMember(label: string): Promise<VerifiedMem
   await acceptPostingTerms(member);
   return member;
 }
+
+/**
+ * A fixture staff person's own identity review, as for any member: the legal
+ * name, a verified phone, ID and selfie evidence accepted by the fixture
+ * admin, and the area (staff money commands need a current review of the
+ * staff member's own). Once per copy: skipped when the person already holds a
+ * current accepted review. Not for the admin, who cannot review themselves.
+ */
+export async function reviewStaffIdentity(
+  copy: TestCopy,
+  person: "moderator",
+  id: string,
+  name = { first: "Sipho", last: "Fixture" }
+) {
+  if (!UUID.test(id)) throw new Error("Unexpected staff id");
+  const current = queryTestCopy(
+    `select count(*) from private.accepted_identity_facts where owner_id = '${id}' and revoked_at is null;`
+  );
+  if (current !== "0") return;
+  const session = await signIn(copy, person);
+  const profile = await call(copy, "get_my_profile", {}, session.token);
+  await call(
+    copy,
+    "save_my_legal_name",
+    { p_expected_revision: profile.revision, p_first_name: name.first, p_last_name: name.last },
+    session.token
+  );
+  await verifyPhone(id);
+  await verifyIdentity(copy, id, session.token);
+  await call(
+    copy,
+    "confirm_verification_locality",
+    { p_province: "gp", p_city: "gp_johannesburg" },
+    session.token
+  );
+}

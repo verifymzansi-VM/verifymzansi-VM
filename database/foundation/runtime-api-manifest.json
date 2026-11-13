@@ -388,6 +388,194 @@
       "authority": "Current slot limit capability (administrators) and recent authenticator proof; only another account with an accepted ID review; more than 4 (at most 25, until an end date within 366 days) only with a checked business; every raise and end kept with the staff member and reason."
     },
     {
+      "name": "get_staff_payment_list",
+      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "arguments": [
+        {
+          "name": "p_page",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_filter",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability; the staff payments list (50 a page) with each payment's delivery status, slot lines, the refund waiting for approval (whether the caller's identity requested it) and the staff activation time; filters by status, 'needs_attention' (complete and needs_reconciliation) or 'awaiting_approval', with both counts. No contact or identity details."
+    },
+    {
+      "name": "activate_staff_paid_payment",
+      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; only a complete, needs_reconciliation payment of an account with current access and no refund waiting: delivers one slot per open line within the person's Individual slot limit (one entitlement for a plan payment without lines) or the add-on window while the post can carry it, marks it fulfilled, creates the partner commission it earns and records the audit row."
+    },
+    {
+      "name": "record_staff_payment_refund",
+      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_kind",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason_code",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_ozow_reference",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; only with Ozow's reference (used once, any letter case) and a reason code from the closed list; the payment's own amount for the account that paid; when the money returned on the payment would exceed R1,000 the record waits for a second, different staff member (chargebacks too while internal.chargebacks_need_approval is true), otherwise it takes effect at once as a whole-payment reversal."
+    },
+    {
+      "name": "record_staff_slot_refund",
+      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "arguments": [
+        {
+          "name": "p_line_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_kind",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason_code",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_ozow_reference",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; one open slot line of a completed payment, only with Ozow's reference (used once, any letter case) and a reason code from the closed list; the slot's own amount for the account that paid; when the money returned on the payment would exceed R1,000 it waits for a second staff member, otherwise it revokes that slot as the single-slot reversal does."
+    },
+    {
+      "name": "approve_staff_payment_refund",
+      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never the requester's identity (checked again after the lock waits) and never a payment of their own identity; applies a refund waiting for approval (whole payment or one slot), the only reversal allowed while it waits, and records the approver; refuses when the payment changed since it was recorded."
+    },
+    {
+      "name": "decline_staff_payment_refund",
+      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; declines (or, for the requester, withdraws) a refund waiting for approval, with a reason; nothing else changes."
+    },
+    {
+      "name": "get_payment_receipt",
+      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only read for the receipt email: one payment's amount, currency, completion time, product kind, label, slot count, status, delivery status, merchant reference, Ozow transaction id and invoice (number, description, issue time), with its owner id; null for an unknown payment. No contact or identity details."
+    },
+    {
       "name": "get_frontend_staff_organisation_detail",
       "updates": ["updates/20261105200401_restored_staff_organisation_workspace.sql"],
       "arguments": [
