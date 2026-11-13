@@ -64,7 +64,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 18. R69 slots (Pricing v2 P2)               |              5 | keep (owner, 2026-11-12 and 2026-11-13)                                                    | Paid slots are on sale at R69 per 30 days: the checkout offers 30, 90 or 180 days, the number of slots and the cooling-off box; a new 'My slots' page in the dashboard                                                                            |
 | 19. One tap opens any post (M10.5)          |              8 | keep (owner, 2026-11-13, with the M10.5 part of 2 rows elsewhere)                          | Phones and tablets: one tap on a video card opens the post, like a photo card; a small 'Preview' button plays the video in place; with data saver on, nothing plays by itself                                                                     |
 | 20. Staff fix paid but not delivered (M3.4) |              4 | keep (owner, 2026-11-13)                                                                   | Staff only: delivery status on Payments & Refunds, a 'needs attention' list, 'Activate what was paid for', refunds with Ozow's reference and a reason, one slot refunded alone, a second approver above R1 000                                    |
-| 21. Payment receipt email (M3.7)            | 0 (email only) | keep; awaiting owner                                                                       | Members who pay: the 'Payment received' email lists the invoice number, date paid, item, amount in rands and bank reference, and links to 'My slots' (add-ons: the dashboard) instead of Billing                                                  |
+| 21. Payment receipt email (M3.7)            | 0 (email only) | keep (owner, 2026-11-13)                                                                   | Members who pay: the 'Payment received' email lists the invoice number, date paid, item, amount in rands and bank reference, and links to 'My slots' (add-ons: the dashboard) instead of Billing                                                  |
 | **Total**                                   |        **259** |                                                                                            |                                                                                                                                                                                                                                                   |
 
 Questions for the owner:
@@ -324,7 +324,8 @@ Questions for the owner:
     to Billing, which lists no payments. It says 'invoice number', never 'tax
     invoice'. If the details cannot be read, the email says 'We received your
     payment. Need your invoice? Reply to this email.' and links to the
-    dashboard. Awaiting your approval of the wording (in the pull request).
+    dashboard. Answered: approved by owner 2026-11-13, wording approved as
+    written.
 
 <!-- frontend-ledger:start -->
 
@@ -809,11 +810,11 @@ messages in `src/lib/foundation/staff-payments.ts` and the route
 ### 21. Payment receipt email (roadmap M3.7)
 
 Email only: no file in the checked scope changes, so this group has no file rows
-(Files 0). Owner question 17. Decision: awaiting owner (wording in the pull
-request). Text outside the checked scope: the receipt email in
-`src/lib/services/payment-receipt-email.ts`, the fallback 'Payment received'
-notice in `src/lib/services/email.ts`, and the receipt read in
-`src/lib/foundation/payment-receipt.ts`, sent once per settled payment by the
+(Files 0). Owner question 17. Decision: approved by owner 2026-11-13 (wording in
+the pull request, approved as written). Text outside the checked scope: the
+receipt email in `src/lib/services/payment-receipt-email.ts`, the fallback
+'Payment received' notice in `src/lib/services/email.ts`, and the receipt read
+in `src/lib/foundation/payment-receipt.ts`, sent once per settled payment by the
 notification job in `src/lib/foundation/operation-jobs.ts`.
 
 <!-- frontend-ledger:end -->
