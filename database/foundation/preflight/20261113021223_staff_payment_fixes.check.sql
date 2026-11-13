@@ -7,8 +7,10 @@
 -- summary is the only row and reads "update not applied".
 --
 -- The summary says whether the update is absent (its 24 functions and two
--- tables are absent and the staff audit view does not list activations) or
--- applied (every body is the update's), and counts the payments that are paid
+-- tables are absent, the staff audit view does not list activations and the
+-- triggers payments_refund_waiting and payment_lines_refund_waiting are
+-- absent) or applied (every body is the update's and both triggers are on
+-- private.payments and private.payment_lines), and counts the payments that are paid
 -- but not delivered (complete and needs_reconciliation) and, once applied,
 -- the refunds waiting for a second staff member. A problem row is shown when
 -- 20261113002421_individual_slots_r69.sql is not applied with its reviewed
@@ -21,7 +23,7 @@ with added as (
     (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)) as body
   from (values
     ('internal.payment_activation_guard()', '17f0db127d434686154ba2db29b4e244'),
-    ('internal.payment_refund_request_guard()', '6af0f7c33d649e537fce88a6831b5a2a'),
+    ('internal.payment_refund_request_guard()', 'ac76d0b81b37bbfc12ad483e7eadf9cf'),
     ('internal.payment_delivery_commission(uuid)', '173b97b47147f69d097daba72def56d9'),
     ('internal.get_staff_payment_list(integer,text)', '7511534bec5595b3641450e9a88ccfdb'),
     ('api.get_staff_payment_list(integer,text)', 'a96efb8aa9552502327936ecf4e05d5f'),
@@ -37,11 +39,11 @@ with added as (
     ('api.record_staff_payment_refund(uuid,text,text,text,text)', 'c88c371f4398b69da822669fe832dac9'),
     ('internal.record_staff_slot_refund(uuid,text,text,text,text)', 'a315072d628da2b6f164491cbc1a0076'),
     ('api.record_staff_slot_refund(uuid,text,text,text,text)', '74bae46217113296da99631b7a316e76'),
-    ('internal.approve_staff_payment_refund(uuid)', '3ab93e11833cd0faa37ac45122aaa413'),
+    ('internal.approve_staff_payment_refund(uuid)', 'f757a5e1ac7aa4a199dbcd05f5465083'),
     ('api.approve_staff_payment_refund(uuid)', 'c940eeb3f76b9bdd82e4377909b97cc0'),
     ('internal.decline_staff_payment_refund(uuid,text)', '494408ef422ce9389cd096722ea8d63a'),
     ('api.decline_staff_payment_refund(uuid,text)', 'e05112535fb4c6e13589f4f339a74dec'),
-    ('internal.payment_reversal_waiting_guard()', 'ffa0a62683e2e1b9360be710a6a44493'),
+    ('internal.payment_reversal_waiting_guard()', 'ee9f44cbbc9d2b70cd6db25f90dc7acb'),
     ('internal.get_payment_receipt(uuid)', '1c8ef468ae622086d57af8b8c16fb886'),
     ('api.get_payment_receipt(uuid)', '245869d4f4c606db44bc43c0cea8c4e3')
   ) v(sig, after)
@@ -66,13 +68,22 @@ audit_view as (
   select coalesce(pg_get_viewdef('private.frontend_staff_audit_events'::regclass) like '%payment_activations%', false)
     as lists_activations
 ),
+waiting_triggers as (
+  select v.name, exists (select 1 from pg_trigger t where t.tgname = v.name and not t.tgisinternal
+      and t.tgrelid = to_regclass(v.rel)) as present
+  from (values ('payments_refund_waiting', 'private.payments'),
+    ('payment_lines_refund_waiting', 'private.payment_lines')) v(name, rel)
+),
 state as (
   select
     (select count(*) from added where body is null) + (select count(*) from tables where not present)
-      + (select count(*) from audit_view where not lists_activations) as absent,
+      + (select count(*) from audit_view where not lists_activations)
+      + (select count(*) from waiting_triggers where not present) as absent,
     (select count(*) from added where body = after) + (select count(*) from tables where present)
-      + (select count(*) from audit_view where lists_activations) as updated,
-    (select count(*) from added) + (select count(*) from tables) + 1 as total
+      + (select count(*) from audit_view where lists_activations)
+      + (select count(*) from waiting_triggers where present) as updated,
+    (select count(*) from added) + (select count(*) from tables) + 1
+      + (select count(*) from waiting_triggers) as total
 ),
 problems as (
   select 'problem' as kind, sig || ' is not the update''s body (md5 ' || body || '); do not apply the update' as detail

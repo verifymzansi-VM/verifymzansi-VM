@@ -8,8 +8,9 @@ CREATE OR REPLACE FUNCTION internal.payment_refund_request_guard()
 AS $function$
 begin
   -- The request, its reference, amount and account never change; a request
-  -- waiting for approval is applied or declined once, and the account is
-  -- always the one that paid.
+  -- waiting for approval is applied or declined once (an approval then stores
+  -- the released activations once), and the account is always the one that
+  -- paid.
   if tg_op = 'INSERT' then
     if new.account_id is distinct from (select p.owner_id from private.payments p where p.id = new.payment_id)
       or new.amount_cents is distinct from coalesce(
@@ -17,6 +18,11 @@ begin
         case when new.payment_line_id is null then (select p.amount_cents from private.payments p where p.id = new.payment_id) end) then
       raise exception 'a refund is the paid amount, for the account that paid' using errcode='23514';
     end if;
+    return new;
+  end if;
+  if old.status = 'applied' and new.status = 'applied' and old.released_activations is null
+      and new.released_activations is not null
+      and (to_jsonb(new) - 'released_activations') = (to_jsonb(old) - 'released_activations') then
     return new;
   end if;
   if (to_jsonb(new) - array['status','approved_by','applied_at','released_activations','declined_by','declined_at','decline_reason'])

@@ -168,9 +168,18 @@ create table if not exists private.payment_refund_requests (
   decline_reason text check (decline_reason is null or internal.plain_text_valid(decline_reason, 5, 500, true)),
   constraint payment_refund_requests_line_fkey foreign key (payment_line_id, payment_id)
     references private.payment_lines (id, payment_id) on delete cascade,
-  constraint payment_refund_requests_approval_rule check (not needs_approval
-    or recorded_before_cents + amount_cents > 100000),
-  constraint payment_refund_requests_applied check ((status = 'applied') = (applied_at is not null and released_activations is not null)),
+  -- A refund needs a second staff member exactly when the money returned on
+  -- the payment, this record included, exceeds R1,000. A chargeback may need
+  -- one only above that amount: whether it does is the switch
+  -- internal.chargebacks_need_approval(), which a constraint must not call
+  -- (changing the switch would make stored rows fail a later restore).
+  constraint payment_refund_requests_approval_rule check (case when kind = 'refunded'
+    then needs_approval = (recorded_before_cents + amount_cents > 100000)
+    else not needs_approval or recorded_before_cents + amount_cents > 100000 end),
+  -- The approval marks the record applied first and stores the released
+  -- activations after the reversal, in the same transaction.
+  constraint payment_refund_requests_applied check ((status = 'applied') = (applied_at is not null)
+    and (released_activations is null or status = 'applied')),
   constraint payment_refund_requests_declined check ((status = 'declined')
     = (declined_at is not null and declined_by is not null and decline_reason is not null)),
   constraint payment_refund_requests_approver check (case when status = 'applied' and needs_approval
@@ -216,8 +225,9 @@ CREATE OR REPLACE FUNCTION internal.payment_refund_request_guard()
 AS $function$
 begin
   -- The request, its reference, amount and account never change; a request
-  -- waiting for approval is applied or declined once, and the account is
-  -- always the one that paid.
+  -- waiting for approval is applied or declined once (an approval then stores
+  -- the released activations once), and the account is always the one that
+  -- paid.
   if tg_op = 'INSERT' then
     if new.account_id is distinct from (select p.owner_id from private.payments p where p.id = new.payment_id)
       or new.amount_cents is distinct from coalesce(
@@ -225,6 +235,11 @@ begin
         case when new.payment_line_id is null then (select p.amount_cents from private.payments p where p.id = new.payment_id) end) then
       raise exception 'a refund is the paid amount, for the account that paid' using errcode='23514';
     end if;
+    return new;
+  end if;
+  if old.status = 'applied' and new.status = 'applied' and old.released_activations is null
+      and new.released_activations is not null
+      and (to_jsonb(new) - 'released_activations') = (to_jsonb(old) - 'released_activations') then
     return new;
   end if;
   if (to_jsonb(new) - array['status','approved_by','applied_at','released_activations','declined_by','declined_at','decline_reason'])
@@ -780,9 +795,11 @@ begin
     raise exception 'the payment changed since this refund was recorded; decline it and record it again'
       using errcode='PT409', detail='refund_payment_changed';
   end if;
-  -- Only this approval may reverse the payment while the refund waits
-  -- (internal.payment_reversal_waiting_guard).
-  perform set_config('vm.refund_approval', request.id::text, true);
+  -- The record leaves "waiting" first, so the reversal below is no longer held
+  -- back by internal.payment_reversal_waiting_guard; it is one transaction, so
+  -- a failed reversal puts the record back to waiting.
+  update private.payment_refund_requests set status = 'applied', approved_by = actor, applied_at = statement_timestamp()
+    where id = request.id;
   if request.payment_line_id is null then
     result := internal.reverse_payment(pay.id, request.kind, request.reason);
     insert into private.frontend_payment_reversals(payment_id, actor_id, kind, reason, released_activations)
@@ -790,11 +807,9 @@ begin
   else
     result := internal.record_staff_slot_reversal(request.payment_line_id, request.kind, request.reason);
   end if;
-  perform set_config('vm.refund_approval', '', true);
   perform internal.staff_actor('payments:refund');
   perform internal.assert_staff_payment_actor(actor, request.account_id);
-  update private.payment_refund_requests set status = 'applied', approved_by = actor, applied_at = statement_timestamp(),
-    released_activations = (result->>'released_activations')::integer
+  update private.payment_refund_requests set released_activations = (result->>'released_activations')::integer
     where id = request.id returning * into request;
   return jsonb_build_object('request_id', request.id, 'status', request.status, 'kind', request.kind,
     'released_activations', request.released_activations,
@@ -866,9 +881,8 @@ grant execute on function api.decline_staff_payment_refund(uuid,text) to authent
 -- While a refund or chargeback of a payment waits for a second staff member,
 -- nothing else may reverse that payment or one of its slots (the earlier
 -- commands api.record_frontend_staff_payment_reversal and
--- api.record_staff_slot_reversal, or the service's api.reverse_payment): only
--- its approval, which names the request in the transaction setting
--- vm.refund_approval while it applies it.
+-- api.record_staff_slot_reversal, or the service's api.reverse_payment). Its
+-- approval marks the record applied before it reverses, so it passes.
 CREATE OR REPLACE FUNCTION internal.payment_reversal_waiting_guard()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -878,8 +892,7 @@ declare payment uuid := (case when tg_table_name = 'payments' then to_jsonb(new)
   else to_jsonb(new)->>'payment_id' end)::uuid;
 begin
   if exists(select 1 from private.payment_refund_requests r
-      where r.payment_id = payment and r.status = 'awaiting_approval'
-        and r.id::text is distinct from nullif(current_setting('vm.refund_approval', true), '')) then
+      where r.payment_id = payment and r.status = 'awaiting_approval') then
     raise exception 'a refund of this payment is waiting for approval' using errcode='PT409', detail='refund_awaiting_approval';
   end if;
   return new;

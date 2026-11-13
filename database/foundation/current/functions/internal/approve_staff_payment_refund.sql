@@ -44,9 +44,11 @@ begin
     raise exception 'the payment changed since this refund was recorded; decline it and record it again'
       using errcode='PT409', detail='refund_payment_changed';
   end if;
-  -- Only this approval may reverse the payment while the refund waits
-  -- (internal.payment_reversal_waiting_guard).
-  perform set_config('vm.refund_approval', request.id::text, true);
+  -- The record leaves "waiting" first, so the reversal below is no longer held
+  -- back by internal.payment_reversal_waiting_guard; it is one transaction, so
+  -- a failed reversal puts the record back to waiting.
+  update private.payment_refund_requests set status = 'applied', approved_by = actor, applied_at = statement_timestamp()
+    where id = request.id;
   if request.payment_line_id is null then
     result := internal.reverse_payment(pay.id, request.kind, request.reason);
     insert into private.frontend_payment_reversals(payment_id, actor_id, kind, reason, released_activations)
@@ -54,11 +56,9 @@ begin
   else
     result := internal.record_staff_slot_reversal(request.payment_line_id, request.kind, request.reason);
   end if;
-  perform set_config('vm.refund_approval', '', true);
   perform internal.staff_actor('payments:refund');
   perform internal.assert_staff_payment_actor(actor, request.account_id);
-  update private.payment_refund_requests set status = 'applied', approved_by = actor, applied_at = statement_timestamp(),
-    released_activations = (result->>'released_activations')::integer
+  update private.payment_refund_requests set released_activations = (result->>'released_activations')::integer
     where id = request.id returning * into request;
   return jsonb_build_object('request_id', request.id, 'status', request.status, 'kind', request.kind,
     'released_activations', request.released_activations,

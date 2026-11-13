@@ -841,12 +841,15 @@ function body changes (roadmap M3.4, with the receipt read for M3.7).
   it**: new triggers `payments_refund_waiting` and
   `payment_lines_refund_waiting` refuse (PT409 `refund_awaiting_approval`) any
   reversal of that payment or its slots, including the earlier staff commands
-  and the service's `api.reverse_payment`, except the approval itself (which
-  names the request in the transaction setting `vm.refund_approval`). An
-  approval finds the payment changed (for example after an owner SQL fix) and
-  refuses with PT409 `refund_payment_changed`; the record can still be declined.
-  Records are kept in `private.payment_refund_requests` (immutable except for
-  the one approval or decline) and listed in the staff audit trail. The earlier
+  and the service's `api.reverse_payment`. The approval marks the record applied
+  before it reverses, in one transaction (a failed reversal leaves it waiting).
+  An approval that finds the payment changed (for example after an owner SQL
+  fix) refuses with PT409 `refund_payment_changed`; the record can still be
+  declined. A refund record needs approval exactly when the total exceeds R1,000
+  (a constraint); for chargebacks the constraint only allows approval above that
+  amount, because the switch must not live in a constraint. Records are kept in
+  `private.payment_refund_requests` (immutable except for the one approval or
+  decline) and listed in the staff audit trail. The earlier
   `api.record_frontend_staff_payment_reversal` and
   `api.record_staff_slot_reversal` stay until a later contract step; the website
   release in the same pull request no longer calls them.

@@ -30,7 +30,7 @@ do $$
 declare activations bigint; requests bigint;
 begin
     if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_activation_guard()')) is distinct from '17f0db127d434686154ba2db29b4e244'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_refund_request_guard()')) is distinct from '6af0f7c33d649e537fce88a6831b5a2a'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_refund_request_guard()')) is distinct from 'ac76d0b81b37bbfc12ad483e7eadf9cf'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_delivery_commission(uuid)')) is distinct from '173b97b47147f69d097daba72def56d9'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_staff_payment_list(integer,text)')) is distinct from '7511534bec5595b3641450e9a88ccfdb'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_payment_list(integer,text)')) is distinct from 'a96efb8aa9552502327936ecf4e05d5f'
@@ -46,11 +46,11 @@ begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.record_staff_payment_refund(uuid,text,text,text,text)')) is distinct from 'c88c371f4398b69da822669fe832dac9'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_slot_refund(uuid,text,text,text,text)')) is distinct from 'a315072d628da2b6f164491cbc1a0076'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.record_staff_slot_refund(uuid,text,text,text,text)')) is distinct from '74bae46217113296da99631b7a316e76'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.approve_staff_payment_refund(uuid)')) is distinct from '3ab93e11833cd0faa37ac45122aaa413'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.approve_staff_payment_refund(uuid)')) is distinct from 'f757a5e1ac7aa4a199dbcd05f5465083'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.approve_staff_payment_refund(uuid)')) is distinct from 'c940eeb3f76b9bdd82e4377909b97cc0'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.decline_staff_payment_refund(uuid,text)')) is distinct from '494408ef422ce9389cd096722ea8d63a'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.decline_staff_payment_refund(uuid,text)')) is distinct from 'e05112535fb4c6e13589f4f339a74dec'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_reversal_waiting_guard()')) is distinct from 'ffa0a62683e2e1b9360be710a6a44493'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.payment_reversal_waiting_guard()')) is distinct from 'ee9f44cbbc9d2b70cd6db25f90dc7acb'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_payment_receipt(uuid)')) is distinct from '1c8ef468ae622086d57af8b8c16fb886'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_payment_receipt(uuid)')) is distinct from '245869d4f4c606db44bc43c0cea8c4e3'
     or to_regclass('private.payment_activations') is null

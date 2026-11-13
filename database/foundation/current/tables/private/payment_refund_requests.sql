@@ -24,8 +24,12 @@ create table private.payment_refund_requests (
   decline_reason text,
   constraint payment_refund_requests_account_id_fkey FOREIGN KEY (account_id) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint payment_refund_requests_amount_cents_check CHECK (amount_cents > 0),
-  constraint payment_refund_requests_applied CHECK ((status = 'applied'::text) = (applied_at IS NOT NULL AND released_activations IS NOT NULL)),
-  constraint payment_refund_requests_approval_rule CHECK (NOT needs_approval OR (recorded_before_cents + amount_cents) > 100000),
+  constraint payment_refund_requests_applied CHECK ((status = 'applied'::text) = (applied_at IS NOT NULL) AND (released_activations IS NULL OR status = 'applied'::text)),
+  constraint payment_refund_requests_approval_rule CHECK (
+CASE
+    WHEN kind = 'refunded'::text THEN needs_approval = ((recorded_before_cents + amount_cents) > 100000)
+    ELSE NOT needs_approval OR (recorded_before_cents + amount_cents) > 100000
+END),
   constraint payment_refund_requests_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint payment_refund_requests_approver CHECK (
 CASE

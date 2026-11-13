@@ -840,6 +840,69 @@ try {
     }
   );
 
+  await check("approval and decline at the same time: one wins, and only once", async () => {
+    const nomvula = verified("nomvula");
+    const order = buy(nomvula, P180, 4);
+    const waiting = json(refundSql(admin, order, "OZ-RACE-2"));
+    const approving = session(
+      staff(
+        admin2,
+        `begin; select api.approve_staff_payment_refund('${waiting.request_id}'); select pg_sleep(2); commit;`
+      )
+    );
+    const declining = sessionAfter(
+      500,
+      staff(
+        admin,
+        `select api.decline_staff_payment_refund('${waiting.request_id}','Declined at the same time');`
+      )
+    );
+    const [a, d] = await Promise.all([approving, declining]);
+    assert.equal(a.status, 0, a.stderr);
+    assert.notEqual(d.status, 0, "the decline succeeded after the approval");
+    assert.match(d.stderr, /DETAIL:\s+refund_not_waiting/);
+    assert.deepEqual(request(waiting.request_id).status, "applied");
+    assert.deepEqual(paymentRow(order), { status: "refunded", fulfillment: "reversed" });
+    assert.equal(
+      q(
+        `select released_activations from private.payment_refund_requests where id='${waiting.request_id}';`
+      ),
+      "0"
+    );
+  });
+
+  await check("the refund approval rule is a constraint; the preflight sees both triggers", () => {
+    const owner = verified("constraint");
+    const order = buy(owner, P180, 4);
+    // A refund above R1,000 stored without approval, or one below with it, is refused.
+    fails(
+      `insert into private.payment_refund_requests(payment_id,account_id,kind,reason_code,reason,ozow_reference,amount_cents,
+         recorded_before_cents,needs_approval,status,requested_by)
+       values('${order}','${owner.id}','refunded','billing_error','Constraint probe','OZ-CON-big',165600,0,false,
+         'awaiting_approval','${admin.id}');`,
+      "23514",
+      /payment_refund_requests_approval_rule/
+    );
+    const slot = lines(buy(verified("constraintb"), P30, 1));
+    fails(
+      `insert into private.payment_refund_requests(payment_id,payment_line_id,account_id,kind,reason_code,reason,ozow_reference,
+         amount_cents,recorded_before_cents,needs_approval,status,requested_by)
+       select l.payment_id,l.id,p.owner_id,'refunded','billing_error','Constraint probe','OZ-CON-small',6900,0,true,
+         'awaiting_approval','${admin.id}' from private.payment_lines l join private.payments p on p.id=l.payment_id
+       where l.id='${slot[0].id}';`,
+      "23514",
+      /payment_refund_requests_approval_rule/
+    );
+    // The preflight reads "unexpected state" while one trigger is missing.
+    const definition = q(
+      "select pg_get_triggerdef(oid) from pg_trigger where tgname='payments_refund_waiting';"
+    );
+    q("drop trigger payments_refund_waiting on private.payments;");
+    assert.match(preflight()[0][1], /^staff payment fixes: unexpected state;/);
+    q(`${definition};`);
+    assert.match(preflight()[0][1], /^staff payment fixes: already applied;/);
+  });
+
   // ------------------------------------------------------------- receipt
   await check("the receipt read matches the invoice, for the service only", () => {
     const zola = verified("zola");
