@@ -16,7 +16,7 @@ export type PaymentReceipt = {
   bankReference: string;
 };
 
-export const PAYMENT_RECEIPT_SUBJECT = "Payment received";
+const PAYMENT_RECEIPT_SUBJECT = "Payment received";
 
 function paidOn(iso: string): string {
   return new Date(iso).toLocaleDateString("en-ZA", {
