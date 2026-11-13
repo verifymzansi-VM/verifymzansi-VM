@@ -231,7 +231,9 @@ test.describe("staff fix paid but not delivered", () => {
       const memberPage = await memberContext.newPage();
       await memberPage.goto("/dashboard/slots");
       await expect(
-        memberPage.getByRole("list", { name: "Your slots" }).getByText("Paid slot").first()
+        memberPage
+          .getByRole("list", { name: "Your slots" })
+          .getByText("Individual slot", { exact: true })
       ).toBeVisible();
       expect(memberOutside).toEqual([]);
     } finally {
@@ -246,8 +248,8 @@ test.describe("staff fix paid but not delivered", () => {
     const row = paymentRow(page);
     await row.getByRole("button", { name: "Record refund" }).click();
     const form = page.getByRole("form", { name: "Refund of this payment" });
-    await form.getByLabel("Reason", { exact: true }).selectOption("billing_error");
-    await form.getByLabel("Reason (audited)").fill("Refund without a reference");
+    await form.locator("select[name=reasonCode]").selectOption("billing_error");
+    await form.locator("input[name=reason]").fill("Refund without a reference");
     const sent: string[] = [];
     page.on("request", (request) => {
       if (new URL(request.url()).pathname === "/api/admin/commercial") sent.push(request.method());
