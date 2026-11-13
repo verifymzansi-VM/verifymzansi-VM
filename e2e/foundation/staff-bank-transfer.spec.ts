@@ -162,7 +162,9 @@ test.describe("staff record a cleared bank transfer", () => {
     const form = await fillTransfer(page, "69", "1");
     page.on("dialog", (dialog) => dialog.accept());
     await form.getByRole("button", { name: "Record bank transfer" }).click();
-    await expect(page.getByRole("alert")).toHaveText(
+    await expect(
+      page.getByRole("alert").filter({ hasText: "That bank reference was already recorded" })
+    ).toHaveText(
       "That bank reference was already recorded. Check the payments list before recording it."
     );
     expect(

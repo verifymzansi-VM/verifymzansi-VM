@@ -353,7 +353,7 @@ export const BANK_TRANSFER_TERMS = [30, 90, 180] as const;
 export type BankTransferTerm = (typeof BANK_TRANSFER_TERMS)[number];
 /** Bank transfers above R50 000 are refused for now (a second staff member's
  * check above that amount is not built yet). The database decides. */
-export const BANK_TRANSFER_LIMIT_CENTS = 5_000_000;
+const BANK_TRANSFER_LIMIT_CENTS = 5_000_000;
 
 /** A bank reference as the database stores it: spaces collapsed, 4 to 60
  * letters, digits, spaces or . _ : / -, with at least four letters or digits. */

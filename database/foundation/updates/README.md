@@ -1037,6 +1037,12 @@ It only adds: no API command, argument or grant is removed or changed.
   account with that email, its public name, whether its ID review is accepted
   and it can use slots, the Individual slots it holds and the person's limit, so
   the form shows whose account will get the slots before anything is recorded.
+- **Room for a second person.** Recording is one step today. A later update can
+  add a second staff member's confirmation without changing this record: the
+  command would store the record as waiting (a new status column, as
+  `private.payment_refund_requests` has) and create the payment, slots, invoice,
+  receipt event and commission only when another staff member confirms, with the
+  same bank-reference lock and checks.
 - **Dates.** The payment, its invoice and the receipt carry the time staff
   recorded it; the date the money cleared is kept in the record and in the
   payment snapshot (`cleared_on`).

@@ -31,125 +31,46 @@
 // staff, identity facts and partners are written directly as the database
 // owner. Nothing contacts Ozow or a bank.
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import {
-  applyStepsBefore,
-  assertReadOnlyPreflight,
-  createChecks,
-  sqlHelpers,
-} from "./lib/foundation-sql-checks.mjs";
+import { assertReadOnlyPreflight, createChecks } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
+import {
+  P180,
+  P30,
+  applyAndProveRollback,
+  createPaymentWorld,
+  fingerprintOf,
+  psqlSessions,
+  sha,
+  updateCheckKit,
+} from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261113133605_staff_invoice_payments.sql";
-const companion = (folder, suffix) =>
-  readFileSync(`database/foundation/${folder}/${UPDATE.replace(/\.sql$/, suffix)}`, "utf8");
-const PREFLIGHT = companion("preflight", ".check.sql");
-const ROLLBACK = companion("rollback", ".down.sql");
-const FINGERPRINT = readFileSync("database/foundation/fingerprint.sql", "utf8");
-const P30 = { id: "d6ca48e5-43be-40df-8d8c-72c98a6fda96", cents: 6900 };
-const P180 = { id: "ce4ef578-344a-4816-ab6a-6961bec46621", cents: 41400 };
 const RECORD =
   "api.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)";
-const sha = (text) => createHash("sha256").update(text).digest("hex");
-const fingerprintOf = (label) =>
-  `${createHash("sha256").update(`person-${label}`).digest("base64url").slice(0, 42)}A`;
 
 const { check, current, passed: checks } = createChecks();
 
 const started = Date.now();
 const database = await startLintDatabase({ log: (line) => console.log(line) });
 try {
-  const { steps, index, step } = applyStepsBefore(database, UPDATE);
-  const { q, json, fails, member, staff, service } = sqlHelpers(database, current);
-  const asRole = (role, sql) => `set role ${role};\n${sql}`;
-  const fingerprint = () => q(`set search_path to pg_catalog;\n${FINGERPRINT}`);
-  const preflight = () =>
-    q(PREFLIGHT)
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => line.split("|"));
-  const count = (sql) => Number(q(`select count(*) from ${sql};`));
-
-  // ------------------------------------------------------- synthetic world
-  q(`create schema vmtest;
-    create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
-    declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); mail text; begin
-      mail:=p_label||'-'||left(uid::text,8)||'@example.invalid';
-      insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
-        values(uid,mail,now(),jsonb_build_object('display_name','Fixture '||p_label));
-      insert into auth.sessions(id,user_id,aal) values(sid,uid,'aal1');
-      return jsonb_build_object('id',uid,'session',sid,'email',mail);
-    end$$;
-    create function vmtest.staff(p_label text,p_role text) returns jsonb language plpgsql as $$
-    declare m jsonb:=vmtest.member(p_label); begin
-      update auth.sessions set aal='aal2' where id=(m->>'session')::uuid;
-      insert into auth.mfa_factors(user_id,factor_type,status) values((m->>'id')::uuid,'totp','verified');
-      insert into private.staff_roles(user_id,role) values((m->>'id')::uuid,p_role);
-      return m;
-    end$$;
-    create function vmtest.verified(p_owner uuid,p_staff uuid,p_fp text) returns void language plpgsql as $$
-    begin
-      perform set_config('session_replication_role','replica',true);
-      insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
-        values(p_owner,gen_random_uuid(),p_fp,p_staff);
-      insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
-        values(p_owner,gen_random_uuid(),'+2782'||lpad((abs(hashtext(p_owner::text))%10000000)::text,7,'0'));
-      insert into private.verification_localities(owner_id,province_id,city_id) values(p_owner,'gp','gp_johannesburg');
-      perform set_config('session_replication_role','origin',true);
-    end$$;
-    -- An ended accepted review: the account was once reviewed as that person.
-    create function vmtest.past_identity(p_owner uuid,p_staff uuid,p_fp text) returns void language plpgsql as $$
-    begin
-      perform set_config('session_replication_role','replica',true);
-      insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by,revoked_at)
-        values(p_owner,gen_random_uuid(),p_fp,p_staff,now());
-      perform set_config('session_replication_role','origin',true);
-    end$$;
-    create or replace function internal.current_verified_identity(p_owner uuid) returns text
-      language sql set search_path to 'pg_catalog' as $fn$
-      select f.identity_hmac from private.accepted_identity_facts f where f.owner_id=p_owner and f.revoked_at is null
-        and exists(select 1 from private.current_account_access a where a.id=p_owner) $fn$;`);
-  const user = (label) => json(`select vmtest.member('${label}');`);
-  const staffUser = (label, role) => json(`select vmtest.staff('${label}','${role}');`);
+  // The replay before this update, its companions and the synthetic world.
+  const kit = updateCheckKit(database, UPDATE, current);
+  const world = createPaymentWorld(kit);
+  const { q, json, fails, member, staff, service, asRole, fingerprint, preflight, count } = kit;
+  const { steps, index, step, preflightSql: PREFLIGHT, rollbackSql: ROLLBACK } = kit;
+  const { user, staffUser } = world;
   const admin = staffUser("eft-admin", "admin");
   const admin2 = staffUser("eft-admin2", "admin");
   const unreviewedAdmin = staffUser("eft-admin3", "admin");
   const moderator = staffUser("eft-moderator", "moderator");
-  const verified = (label) => {
-    const m = user(label);
-    m.fingerprint = fingerprintOf(label);
-    q(`select vmtest.verified('${m.id}','${admin.id}','${m.fingerprint}');`);
-    return m;
-  };
-  q(`select vmtest.verified('${admin.id}','${admin2.id}','${fingerprintOf("eft-admin")}');`);
-  q(`select vmtest.verified('${admin2.id}','${admin.id}','${fingerprintOf("eft-admin2")}');`);
+  const verified = (label) => world.verified(label, admin);
+  world.review(admin, admin2, "eft-admin");
+  world.review(admin2, admin, "eft-admin2");
   const today = q("select to_char((now() at time zone 'Africa/Johannesburg')::date,'YYYY-MM-DD');");
   const daysAgo = (n) =>
     q(`select to_char((now() at time zone 'Africa/Johannesburg')::date - ${n},'YYYY-MM-DD');`);
   // A separate psql session, for the concurrency check.
-  const session = (sql) =>
-    new Promise((resolve) => {
-      const child = spawn(
-        "docker",
-        ["exec", "-i", database.name, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"].concat([
-          "-U",
-          "postgres",
-          "-d",
-          "postgres",
-        ]),
-        { windowsHide: true }
-      );
-      let stdout = "",
-        stderr = "";
-      child.stdout.on("data", (data) => (stdout += data));
-      child.stderr.on("data", (data) => (stderr += data));
-      child.on("close", (status) => resolve({ status, stdout, stderr }));
-      child.stdin.end(`\\set VERBOSITY verbose\n${sql}`);
-    });
-  const sessionAfter = (ms, sql) =>
-    new Promise((resolve) => setTimeout(resolve, ms)).then(() => session(sql));
+  const { session, sessionAfter } = psqlSessions(database);
 
   /** An Ozow purchase through checkout and the settlement notice. */
   const buy = (owner, plan, slots) => {
@@ -167,7 +88,9 @@ try {
         `select api.complete_checkout_request('${quoted.payment_id}','${owner.id}','${lease.claim_token}','req-${quoted.payment_id}','https://one.ozow.com/checkout/req-${quoted.payment_id}');`
       )
     );
-    const ref = q(`select merchant_reference from private.payments where id='${quoted.payment_id}';`);
+    const ref = q(
+      `select merchant_reference from private.payments where id='${quoted.payment_id}';`
+    );
     const event = {
       payload_sha256: sha(`event-${quoted.payment_id}`),
       merchant_reference: ref,
@@ -251,10 +174,7 @@ try {
     );
     q(`create or replace function internal.individual_slot_limit(p_identity text) returns integer
       language sql stable set search_path to 'pg_catalog' as $fn$ select 100 $fn$;`);
-    assert.match(
-      fails(step.sql, "55000"),
-      /apply 20261113021223_staff_payment_fixes\.sql first/
-    );
+    assert.match(fails(step.sql, "55000"), /apply 20261113021223_staff_payment_fixes\.sql first/);
     assert.match(
       preflight()
         .map((r) => r[1])
@@ -269,10 +189,7 @@ try {
       bank_reference text not null, amount_received_cents bigint not null, cleared_on date not null,
       cooling_off_waiver_confirmed boolean not null, reason text not null, recorded_by uuid not null,
       recorded_at timestamptz not null);`);
-    assert.match(
-      fails(step.sql, "55000"),
-      /constraint or index drift: private\.invoice_payments/
-    );
+    assert.match(fails(step.sql, "55000"), /constraint or index drift: private\.invoice_payments/);
     q("drop table private.invoice_payments;");
     q(`alter table private.payments drop constraint payments_provider_check;
        alter table private.payments add constraint payments_provider_check check (provider in ('ozow','card'));`);
@@ -287,29 +204,14 @@ try {
   const earlyPayment = buy(early, P30, 1);
 
   // ------------------------------------------------------------- apply
-  const before = fingerprint();
-  applySteps(database, [step]);
-  const after = fingerprint();
-
-  await check("apply, roll back and apply again are clean", () => {
-    assert.notEqual(after, before);
-    assert.deepEqual(
-      preflight().map((r) => r[0]),
-      ["summary"]
-    );
-    assert.match(
-      preflight()[0][1],
-      /^staff invoice payments: already applied; payments recorded by bank transfer: 0$/
-    );
-    applySteps(database, [{ label: "staff invoice payments rollback", sql: ROLLBACK }]);
-    assert.equal(fingerprint(), before, "the rollback leaves the pre-update schema");
-    assert.match(preflight()[0][1], /^staff invoice payments: update not applied/);
-    applySteps(database, [step]);
-    assert.equal(fingerprint(), after, "re-applying gives the same schema");
-    applySteps(database, [step]);
-    assert.equal(fingerprint(), after, "a repeated run changes nothing");
-    assert.equal(payment(earlyPayment).provider, "ozow");
+  await applyAndProveRollback(kit, database, check, {
+    label: "staff invoice payments",
+    applied: /^staff invoice payments: already applied; payments recorded by bank transfer: 0$/,
+    notApplied: /^staff invoice payments: update not applied/,
   });
+  await check("an Ozow payment from before the update keeps its method", () =>
+    assert.equal(payment(earlyPayment).provider, "ozow")
+  );
 
   // A partner who referred two customers: one pays by Ozow, one by bank transfer.
   const partner = user("eft-partner");
@@ -428,10 +330,7 @@ try {
         ),
         "22023"
       );
-      fails(
-        staff(admin, `select api.get_staff_invoice_payments(array[null]::uuid[]);`),
-        "22023"
-      );
+      fails(staff(admin, `select api.get_staff_invoice_payments(array[null]::uuid[]);`), "22023");
       const receipt = json(service(`select api.get_payment_receipt('${thandiPayment}');`));
       assert.deepEqual(
         [receipt.payment_method, receipt.bank_reference, receipt.slots, receipt.amount_cents],
@@ -439,10 +338,7 @@ try {
       );
       assert.ok(receipt.invoice_number);
       const ozowReceipt = json(service(`select api.get_payment_receipt('${earlyPayment}');`));
-      assert.deepEqual(
-        [ozowReceipt.payment_method, ozowReceipt.bank_reference],
-        ["ozow", null]
-      );
+      assert.deepEqual([ozowReceipt.payment_method, ozowReceipt.bank_reference], ["ozow", null]);
     }
   );
 
@@ -503,37 +399,113 @@ try {
     const unverified = user("unverified");
     const ok = { email: zola.email, term: 30, slots: 1 };
     const refusals = [
-      [member(zola, `select ${RECORD.replace(/\(.*$/, "")}('${zola.email}',30,1,6900,'REF-MEMBER','${today}',true,'Recording my own');`), "42501", /second factor required/],
+      [
+        member(
+          zola,
+          `select ${RECORD.replace(/\(.*$/, "")}('${zola.email}',30,1,6900,'REF-MEMBER','${today}',true,'Recording my own');`
+        ),
+        "42501",
+        /second factor required/,
+      ],
       [recordSql(moderator, { ...ok, reference: "REF-MOD-1" }), "42501", /capability not granted/],
-      [recordSql(unreviewedAdmin, { ...ok, reference: "REF-UNREV-1" }), "42501", /accepted ID review of their own/],
-      [recordSql(admin, { ...ok, email: admin.email, reference: "REF-SELF-1" }), "42501", /different staff member/],
-      [recordSql(admin, { ...ok, amount: 6800, reference: "REF-AMOUNT-1" }), "PT428", /not the order total of 6900 cents/],
-      [recordSql(admin, { ...ok, amount: 5000001, reference: "REF-BIG-1" }), "PT413", /above R50,000/],
-      [recordSql(admin, { ...ok, email: "nobody@example.invalid", reference: "REF-NONE-1" }), "PT404", /no confirmed account/],
-      [recordSql(admin, { ...ok, email: unverified.email, reference: "REF-UNVER-1" }), "PT412", /ID review must be accepted/],
-      [recordSql(admin, { ...ok, waiver: false, reference: "REF-WAIVE-1" }), "22023", /cooling-off waiver/],
-      [recordSql(admin, { ...ok, waiver: null, reference: "REF-WAIVE-2" }), "22023", /cooling-off waiver/],
+      [
+        recordSql(unreviewedAdmin, { ...ok, reference: "REF-UNREV-1" }),
+        "42501",
+        /accepted ID review of their own/,
+      ],
+      [
+        recordSql(admin, { ...ok, email: admin.email, reference: "REF-SELF-1" }),
+        "42501",
+        /different staff member/,
+      ],
+      [
+        recordSql(admin, { ...ok, amount: 6800, reference: "REF-AMOUNT-1" }),
+        "PT428",
+        /not the order total of 6900 cents/,
+      ],
+      [
+        recordSql(admin, { ...ok, amount: 5000001, reference: "REF-BIG-1" }),
+        "PT413",
+        /above R50,000/,
+      ],
+      [
+        recordSql(admin, { ...ok, email: "nobody@example.invalid", reference: "REF-NONE-1" }),
+        "PT404",
+        /no confirmed account/,
+      ],
+      [
+        recordSql(admin, { ...ok, email: unverified.email, reference: "REF-UNVER-1" }),
+        "PT412",
+        /ID review must be accepted/,
+      ],
+      [
+        recordSql(admin, { ...ok, waiver: false, reference: "REF-WAIVE-1" }),
+        "22023",
+        /cooling-off waiver/,
+      ],
+      [
+        recordSql(admin, { ...ok, waiver: null, reference: "REF-WAIVE-2" }),
+        "22023",
+        /cooling-off waiver/,
+      ],
       [recordSql(admin, { ...ok, reference: null }), "22023", /bank reference required/],
       [recordSql(admin, { ...ok, reference: "  " }), "22023", /bank reference required/],
       [recordSql(admin, { ...ok, reference: "A-1" }), "22023", /4 to 60 letters/],
       [recordSql(admin, { ...ok, reference: "R--1--2" }), "22023", /4 to 60 letters/],
       [recordSql(admin, { ...ok, reference: "REF;DROP" }), "22023", /4 to 60 letters/],
       [recordSql(admin, { ...ok, reference: "X".repeat(61) }), "22023", /4 to 60 letters/],
-      [recordSql(admin, { ...ok, reference: "REF-DATE-1", cleared: daysAgo(-1) }), "22023", /last 90 days/],
-      [recordSql(admin, { ...ok, reference: "REF-DATE-2", cleared: daysAgo(91) }), "22023", /last 90 days/],
-      [recordSql(admin, { ...ok, reference: "REF-DATE-3", cleared: "2026-02-30" }), "22023", /date the money cleared/],
-      [recordSql(admin, { ...ok, reference: "REF-DATE-4", cleared: "13/11/2026" }), "22023", /date the money cleared/],
-      [recordSql(admin, { ...ok, reference: "REF-TERM-1", term: 60, amount: 13800 }), "22023", /slot term/],
-      [recordSql(admin, { ...ok, reference: "REF-SLOTS-1", slots: 26 }), "22023", /number of slots/],
-      [recordSql(admin, { ...ok, reference: "REF-SLOTS-2", slots: 0, amount: 6900 }), "22023", /number of slots/],
-      [recordSql(admin, { ...ok, reference: "REF-REASON-1", reason: "no" }), "22023", /audit reason/],
+      [
+        recordSql(admin, { ...ok, reference: "REF-DATE-1", cleared: daysAgo(-1) }),
+        "22023",
+        /last 90 days/,
+      ],
+      [
+        recordSql(admin, { ...ok, reference: "REF-DATE-2", cleared: daysAgo(91) }),
+        "22023",
+        /last 90 days/,
+      ],
+      [
+        recordSql(admin, { ...ok, reference: "REF-DATE-3", cleared: "2026-02-30" }),
+        "22023",
+        /date the money cleared/,
+      ],
+      [
+        recordSql(admin, { ...ok, reference: "REF-DATE-4", cleared: "13/11/2026" }),
+        "22023",
+        /date the money cleared/,
+      ],
+      [
+        recordSql(admin, { ...ok, reference: "REF-TERM-1", term: 60, amount: 13800 }),
+        "22023",
+        /slot term/,
+      ],
+      [
+        recordSql(admin, { ...ok, reference: "REF-SLOTS-1", slots: 26 }),
+        "22023",
+        /number of slots/,
+      ],
+      [
+        recordSql(admin, { ...ok, reference: "REF-SLOTS-2", slots: 0, amount: 6900 }),
+        "22023",
+        /number of slots/,
+      ],
+      [
+        recordSql(admin, { ...ok, reference: "REF-REASON-1", reason: "no" }),
+        "22023",
+        /audit reason/,
+      ],
     ];
     for (const [sql, state, message] of refusals) fails(sql, state, message);
     // Money cleared 90 days ago is still accepted.
     const ninety = record(admin, { ...ok, reference: "REF-DATE-OK", cleared: daysAgo(90) });
     assert.equal(ninety.repeated, false);
     assert.equal(transfers(), 2);
-    assert.equal(count("private.invoice_payments where bank_reference like 'REF-%' and bank_reference <> 'REF-DATE-OK'"), 0);
+    assert.equal(
+      count(
+        "private.invoice_payments where bank_reference like 'REF-%' and bank_reference <> 'REF-DATE-OK'"
+      ),
+      0
+    );
   });
 
   await check("the Individual slot limit applies to bank transfers too", () => {
@@ -553,7 +525,9 @@ try {
     );
     // The staff member cannot record for another account of their own identity either.
     const mirror = user("admin-second-account");
-    q(`select vmtest.past_identity('${mirror.id}','${admin2.id}','${fingerprintOf("eft-admin")}');`);
+    q(
+      `select vmtest.past_identity('${mirror.id}','${admin2.id}','${fingerprintOf("eft-admin")}');`
+    );
     fails(
       recordSql(admin, { email: mirror.email, term: 30, slots: 1, reference: "MIRROR-0001" }),
       "42501",
@@ -675,11 +649,15 @@ try {
     assert.equal(refund(smallPayment, "EFT-OUT-0003").status, "applied");
     assert.deepEqual(payment(smallPayment).status, "refunded");
     assert.equal(
-      q(`select string_agg(status,',') from private.entitlements where payment_id='${smallPayment}';`),
+      q(
+        `select string_agg(status,',') from private.entitlements where payment_id='${smallPayment}';`
+      ),
       "revoked"
     );
     assert.equal(
-      q(`select string_agg(status,',') from private.partner_commissions where payment_id='${smallPayment}';`),
+      q(
+        `select string_agg(status,',') from private.partner_commissions where payment_id='${smallPayment}';`
+      ),
       "reversed"
     );
     // The bank reference of a refunded transfer stays used; repeating the
@@ -777,8 +755,14 @@ try {
       ),
       "f"
     );
-    fails(asRole("anon", `select ${RECORD.replace(/\(.*$/, "")}(null,30,1,6900,null,null,true,null);`), "42501");
-    fails(asRole("service_role", `select api.get_staff_invoice_payments(array[]::uuid[]);`), "42501");
+    fails(
+      asRole("anon", `select ${RECORD.replace(/\(.*$/, "")}(null,30,1,6900,null,null,true,null);`),
+      "42501"
+    );
+    fails(
+      asRole("service_role", `select api.get_staff_invoice_payments(array[]::uuid[]);`),
+      "42501"
+    );
   });
 
   await check("the rollback refuses once a transfer was recorded", () => {
@@ -796,10 +780,7 @@ try {
     applySteps(database, later);
     await check("later updates keep the bank transfer command", () => {
       assert.ok(transfers() > 0);
-      assert.equal(
-        q(`select has_function_privilege('authenticated','${RECORD}','execute');`),
-        "t"
-      );
+      assert.equal(q(`select has_function_privilege('authenticated','${RECORD}','execute');`), "t");
     });
   }
 } catch (error) {
