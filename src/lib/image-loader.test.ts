@@ -59,6 +59,38 @@ describe("cloudflareImageLoader", () => {
     expect(result).toBe("/api/media/serve/media/listing/hero.w800.webp");
   });
 
+  it.each([
+    [320, 400],
+    [400, 400],
+    [640, 800],
+    [1080, 1600],
+    [3840, 1600],
+  ])(
+    "maps a live-backend key (no extension) at %i px to its %i px copy",
+    async (width, variant) => {
+      vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+      const { default: loader } = await import("./image-loader");
+      const key = "media/0f6c2a8e-1b7d-4e0a-9a51-3c2d9e7b1a01";
+      expect(loader({ src: `/api/media/serve/${key}`, width })).toBe(
+        `/api/media/serve/${key}.w${variant}.webp`
+      );
+      expect(loader({ src: `https://verifymzansi.com/api/media/serve/${key}`, width })).toBe(
+        `/api/media/serve/${key}.w${variant}.webp`
+      );
+    }
+  );
+
+  it("leaves other extensionless media proxy paths unchanged", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+    const { default: loader } = await import("./image-loader");
+    expect(loader({ src: "/api/media/serve/media/listing/clip", width: 400 })).toBe(
+      "/api/media/serve/media/listing/clip"
+    );
+    expect(
+      loader({ src: "/api/media/serve/listings/0f6c2a8e-1b7d-4e0a-9a51-3c2d9e7b1a01", width: 400 })
+    ).toBe("/api/media/serve/listings/0f6c2a8e-1b7d-4e0a-9a51-3c2d9e7b1a01");
+  });
+
   it("leaves media proxy videos on the original key", async () => {
     vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "false");
     const { default: loader } = await import("./image-loader");

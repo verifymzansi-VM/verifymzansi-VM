@@ -11,6 +11,15 @@ import { isReencodableImageType, reencodeImage } from "../utils/image-reencode";
 import { getImageDimensions } from "../utils/image-dimensions";
 import { scrubVideoLocationMetadata } from "../utils/isobmff-metadata";
 import { scrubWebmMetadata } from "../utils/webm-metadata";
+import {
+  createPhotoVariants,
+  photoVariantsEnabled,
+  variantWidthsFor,
+} from "../media/photo-variants";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("FoundationMediaUpload");
+const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
 
 const intent = z.strictObject({
   object_id: z.uuid(),
@@ -56,6 +65,47 @@ function arrayBuffer(bytes: Uint8Array) {
   const copy = new Uint8Array(bytes.length);
   copy.set(bytes);
   return copy.buffer;
+}
+
+/**
+ * Stores the 400/800/1600 px WebP copies of a stored photo beside it
+ * (src/lib/media/photo-variants.ts). Best effort: the upload never fails
+ * because of a copy, and the media route serves the original when one is
+ * missing. Media cleanup deletes the copies with the original
+ * (src/lib/foundation/retention-jobs.ts).
+ */
+async function storePhotoVariants(
+  bucket: string,
+  objectKey: string,
+  bytes: Uint8Array,
+  width: number,
+  write: typeof uploadToR2 | undefined
+): Promise<void> {
+  try {
+    const variants = await createPhotoVariants(objectKey, bytes, width);
+    const stored = await Promise.allSettled(
+      variants.map((variant) =>
+        write
+          ? write({
+              bucket,
+              key: variant.key,
+              file: new Blob([arrayBuffer(variant.bytes)], { type: "image/webp" }),
+              contentType: "image/webp",
+            })
+          : putImmutableR2Bytes(
+              bucket,
+              variant.key,
+              Buffer.from(variant.bytes.buffer, variant.bytes.byteOffset, variant.bytes.byteLength),
+              { contentType: "image/webp", cacheControl: IMMUTABLE_CACHE }
+            )
+      )
+    );
+    const saved = stored.filter((result) => result.status === "fulfilled").length;
+    const wanted = variantWidthsFor(width).length;
+    if (saved < wanted) log.warn("Some photo display copies were not stored", { saved, wanted });
+  } catch {
+    log.warn("Photo display copies were not stored", { saved: 0 });
+  }
 }
 
 /** Bytes are inspected before reserving storage. The caller-bound reservation
@@ -139,7 +189,7 @@ export async function uploadFoundationMedia(
         environment.R2_PUBLIC_BUCKET || "verifymzansi-public",
         reserved.object_key,
         Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
-        { contentType: file.type, cacheControl: "public, max-age=31536000, immutable" }
+        { contentType: file.type, cacheControl: IMMUTABLE_CACHE }
       );
       if (
         actual.length !== bytes.length ||
@@ -153,6 +203,16 @@ export async function uploadFoundationMedia(
     // intent so the explicit retry resolves the immutable winner safely.
     throw new FoundationMediaError(503);
   }
+  // Before completion, so a photo is never shown before its copies exist.
+  // An unfinished upload's copies are deleted with it by media cleanup.
+  if (dimensions && photoVariantsEnabled(environment))
+    await storePhotoVariants(
+      environment.R2_PUBLIC_BUCKET || "verifymzansi-public",
+      reserved.object_key,
+      bytes,
+      dimensions.width,
+      write
+    );
   const completed = await service.rpc("complete_frontend_media_upload", {
     p_object_id: reserved.object_id,
     p_size: bytes.length,

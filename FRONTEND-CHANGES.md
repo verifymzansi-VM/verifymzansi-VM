@@ -64,6 +64,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 18. R69 slots (Pricing v2 P2)               |              5 | keep (owner, 2026-11-12 and 2026-11-13)                                                    | Paid slots are on sale at R69 per 30 days: the checkout offers 30, 90 or 180 days, the number of slots and the cooling-off box; a new 'My slots' page in the dashboard                                                                            |
 | 19. One tap opens any post (M10.5)          |              8 | keep (owner, 2026-11-13, with the M10.5 part of 2 rows elsewhere)                          | Phones and tablets: one tap on a video card opens the post, like a photo card; a small 'Preview' button plays the video in place; with data saver on, nothing plays by itself                                                                     |
 | 20. Staff fix paid but not delivered (M3.4) |              4 | keep (owner, 2026-11-13)                                                                   | Staff only: delivery status on Payments & Refunds, a 'needs attention' list, 'Activate what was paid for', refunds with Ozow's reference and a reason, one slot refunded alone, a second approver above R1 000                                    |
+| 21. Phone-sized photos (M4.3)               |              0 | keep (awaiting owner)                                                                      | Nothing on screen: the same photos, but a phone downloads a 400, 800 or 1 600 px copy of each new photo instead of the full-size original                                                                                                         |
 | **Total**                                   |        **259** |                                                                                            |                                                                                                                                                                                                                                                   |
 
 Questions for the owner:
@@ -793,6 +794,26 @@ messages in `src/lib/foundation/staff-payments.ts` and the route
 | `src/components/admin/commercial/partners-panel.tsx`      | wording-behaviour | Hides a sentence that does not apply when only retail plans are sold; the payments card shows delivery status, activation, refunds with Ozow's reference, single-slot refunds and the second approval (M3.4). | Staff only: the institutional-payments sentence is hidden when only retail plans are sold. Each payment: 'delivered' or 'not delivered' badge, 'Ref <merchant reference>', 'Activated by staff <date>'; 'Activate what was paid for' on a paid but undelivered payment; 'Record refund' / 'Record chargeback' open the refund form; an order of several slots lists 'Slot n · R69' with 'Refund this slot' and 'Slot chargeback'; a refund waiting for approval shows 'Approve refund' (greyed out for its requester) and 'Decline' / 'Withdraw'. Card text: 'Refund the money in Ozow first, then record it here with Ozow's reference.' | keep     | approved by owner 2026-11-13 | 2026-11-13 | 12234fd1eef3 |
 | `src/components/admin/commercial/payment-actions.tsx`     | visual            | New: the refund and chargeback form of a payment or one slot (M3.4).                                                                                                                                          | Staff only: in the payment's row, 'Refund of <payment or slot>: R… to the account that paid (<account>)' ('Above R1 000 returned on this payment: another staff member must approve it.', for refunds and chargebacks), a 'Reason' list (five reasons), 'Ozow refund reference' (required), 'Reason (audited)', 'Record refund' and 'Cancel'.                                                                                                                                                                                                                                                                                             | keep     | approved by owner 2026-11-13 | 2026-11-13 | fe07d0d3d865 |
 | `src/components/admin/commercial/payments-panel.test.tsx` | test              | Tests for the payments card: activation, the refund form, single-slot refunds and the second approval.                                                                                                        | Nothing (not part of a page)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | keep     | approved by owner 2026-11-13 | 2026-11-13 | 3bae4922c7bb |
+
+### 21. Phone-sized photos (roadmap M4.3)
+
+Awaiting owner. No file in the checked scope changes, so this group has no file
+rows; the owner's sign-off covers what visitors download. Photos uploaded from
+now on get 400, 800 and 1 600 px WebP copies beside the original (only widths
+smaller than the original), made at upload with the free Cloudflare Images
+binding that already re-saves every photo. Pages ask for the copy that fits the
+screen; photos uploaded earlier, and any copy that is missing, show the original
+as before. Screenshots before and after (phone and desktop, a showroom and a
+post page) show no difference on screen. Files outside the checked scope:
+`src/lib/image-loader.ts`, `src/lib/media/photo-variants.ts`,
+`src/lib/utils/image-reencode.ts`, `src/lib/foundation/media-upload.ts` and
+`src/app/api/media/serve/[...key]/route.ts`.
+
+Each copy is one Images transformation. Images Free allows 5,000 a month, shared
+with the re-save, so a large photo now uses 4 instead of 1 (about 1,250 large
+photos a month instead of 5,000 before uploads stop until the next month). The
+Worker setting `MEDIA_PHOTO_VARIANTS=off` stops making copies without a code
+change; the paid Images plan (the owner's budget decision) removes the limit.
 
 <!-- frontend-ledger:end -->
 

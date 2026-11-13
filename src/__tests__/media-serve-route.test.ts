@@ -311,6 +311,40 @@ describe("GET /api/media/serve/[...key]", () => {
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=300, s-maxage=300");
   });
 
+  it("serves a live-backend photo without its copy from its own extensionless key", async () => {
+    const stem = "media/0f6c2a8e-1b7d-4e0a-9a51-3c2d9e7b1a01";
+    const asked: string[] = [];
+    mockSend.mockImplementation(async (command: { input: { Key: string } }) => {
+      asked.push(command.input.Key);
+      if (command.input.Key === stem) {
+        return {
+          ContentType: "image/jpeg",
+          Body: {
+            transformToWebStream: () =>
+              new ReadableStream({
+                start(controller) {
+                  controller.enqueue(new Uint8Array([1, 2, 3]));
+                  controller.close();
+                },
+              }),
+          },
+        };
+      }
+      throw Object.assign(new Error("missing"), { name: "NoSuchKey" });
+    });
+
+    const res = await GET(createRequest(), {
+      params: Promise.resolve({ key: ["media", "0f6c2a8e-1b7d-4e0a-9a51-3c2d9e7b1a01.w800.webp"] }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/jpeg");
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=86400, s-maxage=86400");
+    // Only the copy and the extensionless original are looked up.
+    expect(asked).toEqual([`${stem}.w800.webp`, stem]);
+    await res.body?.cancel();
+  });
+
   it("redirects to R2_PUBLIC_URL when credentials are missing", async () => {
     delete process.env.R2_ACCESS_KEY_ID;
     delete process.env.R2_SECRET_ACCESS_KEY;
