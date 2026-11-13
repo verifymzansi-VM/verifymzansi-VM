@@ -4,7 +4,14 @@ import { createLogger } from "@/lib/utils/logger";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { FoundationStaffCommandError, staffCommandRefusal } from "@/lib/foundation/staff-command";
 import { decideRestoredCommission, saveRestoredPartner } from "@/lib/foundation/partners";
-import { recordFrontendStaffPaymentReversal } from "@/lib/foundation/staff-payments";
+import {
+  activateStaffPaidPayment,
+  approveStaffPaymentRefund,
+  declineStaffPaymentRefund,
+  recordStaffPaymentRefund,
+  recordStaffSlotRefund,
+  refundReasonCode,
+} from "@/lib/foundation/staff-payments";
 import {
   inviteFrontendStaffOrganisationAdmin,
   manageFrontendStaffOrganisation,
@@ -104,12 +111,27 @@ const schema = z.discriminatedUnion("action", [
       }),
     reason,
   }),
+  // A refund or chargeback names Ozow's reference and a reason code; an empty
+  // reference reaches the command, which refuses it with a plain message.
   z.object({
     action: z.literal("payment.reverse"),
     paymentId: uuid,
     kind: z.enum(["refunded", "chargeback"]),
+    reasonCode: refundReasonCode,
+    ozowReference: z.string().max(200).default(""),
     reason,
   }),
+  z.object({
+    action: z.literal("payment.reverse_slot"),
+    lineId: uuid,
+    kind: z.enum(["refunded", "chargeback"]),
+    reasonCode: refundReasonCode,
+    ozowReference: z.string().max(200).default(""),
+    reason,
+  }),
+  z.object({ action: z.literal("payment.activate"), paymentId: uuid, reason }),
+  z.object({ action: z.literal("payment.refund_approve"), requestId: uuid }),
+  z.object({ action: z.literal("payment.refund_decline"), requestId: uuid, reason }),
   z.object({
     action: z.literal("partner.manage"),
     userId: uuid,
@@ -214,12 +236,27 @@ export async function POST(request: Request) {
       if (body.action === "payment.reverse")
         return {
           success: true,
-          data: await recordFrontendStaffPaymentReversal(
-            api,
-            body.paymentId.toLowerCase(),
-            body.kind,
-            body.reason
-          ),
+          data: await recordStaffPaymentRefund(api, body.paymentId.toLowerCase(), body),
+        };
+      if (body.action === "payment.reverse_slot")
+        return {
+          success: true,
+          data: await recordStaffSlotRefund(api, body.lineId.toLowerCase(), body),
+        };
+      if (body.action === "payment.activate")
+        return {
+          success: true,
+          data: await activateStaffPaidPayment(api, body.paymentId.toLowerCase(), body.reason),
+        };
+      if (body.action === "payment.refund_approve")
+        return {
+          success: true,
+          data: await approveStaffPaymentRefund(api, body.requestId.toLowerCase()),
+        };
+      if (body.action === "payment.refund_decline")
+        return {
+          success: true,
+          data: await declineStaffPaymentRefund(api, body.requestId.toLowerCase(), body.reason),
         };
       if (body.action === "organisation.upsert")
         return { success: true, data: await saveFrontendStaffOrganisation(api, body) };

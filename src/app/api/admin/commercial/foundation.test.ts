@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { POST } from "./route";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { decideRestoredCommission, saveRestoredPartner } from "@/lib/foundation/partners";
-import { recordFrontendStaffPaymentReversal } from "@/lib/foundation/staff-payments";
 import {
   inviteFrontendStaffOrganisationAdmin,
   manageFrontendStaffOrganisation,
@@ -19,9 +18,6 @@ vi.mock("@/lib/foundation/owner-route", async (original) => ({
 vi.mock("@/lib/foundation/partners", () => ({
   decideRestoredCommission: vi.fn(),
   saveRestoredPartner: vi.fn(),
-}));
-vi.mock("@/lib/foundation/staff-payments", () => ({
-  recordFrontendStaffPaymentReversal: vi.fn(),
 }));
 vi.mock("@/lib/foundation/staff-organisation-commands", () => ({
   inviteFrontendStaffOrganisationAdmin: vi.fn(),
@@ -53,7 +49,6 @@ beforeEach(() => {
   for (const helper of [
     decideRestoredCommission,
     saveRestoredPartner,
-    recordFrontendStaffPaymentReversal,
     inviteFrontendStaffOrganisationAdmin,
     manageFrontendStaffOrganisation,
     revokeFrontendStaffOrganisationInvite,
@@ -63,21 +58,9 @@ beforeEach(() => {
 });
 
 // handleFoundationOwnerRoute owns CSRF, sign-in and body limits; staff
-// commands check the role and two-step policy in the database.
+// commands check the role and two-step policy in the database. Payment
+// commands are covered end to end in payments.test.ts.
 describe("POST /api/admin/commercial on foundation", () => {
-  it("records a payment reversal", async () => {
-    const run = await command();
-    await expect(
-      run(api, { action: "payment.reverse", paymentId: id.toUpperCase(), kind: "refunded", reason })
-    ).resolves.toEqual({ success: true, data: done });
-    expect(recordFrontendStaffPaymentReversal).toHaveBeenCalledExactlyOnceWith(
-      api,
-      id,
-      "refunded",
-      reason
-    );
-  });
-
   it("routes organisation actions to the staff organisation commands", async () => {
     const run = await command();
     const upsert = { action: "organisation.upsert", values: { name: "Org" }, reason };
