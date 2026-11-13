@@ -371,11 +371,19 @@ export function createOzowRefundClient({
       // page or a total larger than what came back means it is not known.
       const page =
         data && typeof data === "object" && !Array.isArray(data)
-          ? (data as { links?: { next?: unknown }; meta?: Record<string, unknown> })
+          ? (data as Record<string, unknown> & {
+              links?: { next?: unknown };
+              meta?: Record<string, unknown>;
+            })
           : undefined;
-      const totals = [page?.meta?.totalItems, page?.meta?.total, page?.meta?.count].filter(
-        (value) => value !== undefined
-      );
+      const totals = [
+        page?.meta?.totalItems,
+        page?.meta?.total,
+        page?.meta?.count,
+        page?.totalItems,
+        page?.total,
+        page?.count,
+      ].filter((value) => value !== undefined);
       if (
         (typeof page?.links?.next === "string" && page.links.next) ||
         items.length >= TRANSACTION_PAGE_LIMIT ||

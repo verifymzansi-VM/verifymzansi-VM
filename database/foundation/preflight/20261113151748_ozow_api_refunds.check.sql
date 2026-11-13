@@ -41,7 +41,7 @@ with added as (
     ('internal.ozow_transaction_payment(uuid)', 'bfeb28fb4e3eea65fd4b51c3e3e2a0fa'),
     ('internal.record_ozow_refund_send(uuid,jsonb)', '9e3bafab54e36843cc570cf196e9babf'),
     ('api.record_ozow_refund_send(uuid,jsonb)', 'de2a72c4eaf64a58d7c4917b76cb0208'),
-    ('internal.apply_ozow_refund_status(jsonb)', 'cbbc17f3e70270baf0b501eb46721cff'),
+    ('internal.apply_ozow_refund_status(jsonb)', '11d425d5feb78204959f069cb5e044ae'),
     ('api.apply_ozow_refund_status(jsonb)', 'cb0b3fd2432f28aedac7dcbdf7d1a2cb'),
     ('internal.reconcile_ozow_refunds(jsonb)', '218a119128346ee7df387e651494eef1'),
     ('api.reconcile_ozow_refunds(jsonb)', 'ea40cc8571dab987fcb5b49d9f27ba53')

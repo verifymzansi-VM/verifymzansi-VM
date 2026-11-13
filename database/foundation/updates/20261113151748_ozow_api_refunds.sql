@@ -1204,7 +1204,7 @@ CREATE OR REPLACE FUNCTION internal.apply_ozow_refund_status(p_event jsonb)
  SET search_path TO 'pg_catalog'
 AS $function$
 declare refund uuid; transaction uuid; amount bigint; request private.payment_refund_requests;
-  payment uuid; outcome text; source text;
+  payment uuid; outcome text; source text; typed boolean := false;
 begin
   source := p_event->>'source';
   if not internal.valid_ozow_refund_fact(p_event) or source is null or source not in ('refund_notice', 'refund_check') then
@@ -1213,14 +1213,38 @@ begin
   refund := (p_event->>'refund_id')::uuid;
   transaction := (p_event->>'transaction_id')::uuid;
   amount := (p_event->>'amount_cents')::bigint;
-  -- A refund recorded with a typed reference (Ozow's refund id) is known; the
-  -- record cannot carry Ozow's status, so only a failure or return alerts.
-  select * into request from private.payment_refund_requests r
-    where r.channel = 'manual' and lower(r.ozow_reference) = refund::text
-    order by (r.status = 'declined'), r.requested_at desc limit 1;
-  if found then
-    -- Typed on another payment than the one Ozow refunded, or Ozow pays a
-    -- refund whose record was declined: staff must look.
+  -- Which record Ozow's refund belongs to, in this order: a record holding the
+  -- id that was not declined; else a typed reference equal to the id that was
+  -- not declined; else the one lost send it fits; else a declined record with
+  -- the id; else a declined typed reference (the last two only alert staff).
+  select r.payment_id into payment from private.payment_refund_requests r
+    where r.ozow_refund_id = refund and r.status <> 'declined';
+  if payment is null then
+    select * into request from private.payment_refund_requests r
+      where r.channel = 'manual' and r.status <> 'declined' and lower(r.ozow_reference) = refund::text
+      order by r.requested_at desc limit 1;
+    typed := found;
+    if not typed then
+      select r.payment_id into payment from private.payment_refund_requests r
+        where r.id = internal.ozow_refund_link_candidate(refund, transaction, amount,
+          (p_event->>'requested_at')::timestamptz);
+      if payment is null then
+        select r.payment_id into payment from private.payment_refund_requests r
+          where r.ozow_refund_id = refund order by r.requested_at desc limit 1;
+      end if;
+      if payment is null then
+        select * into request from private.payment_refund_requests r
+          where r.channel = 'manual' and lower(r.ozow_reference) = refund::text
+          order by r.requested_at desc limit 1;
+        typed := found;
+      end if;
+    end if;
+  end if;
+  if typed then
+    -- A refund recorded with a typed reference (Ozow's refund id); the record
+    -- cannot carry Ozow's status. Typed on another payment than the one Ozow
+    -- refunded, or Ozow pays a refund whose record was declined: staff must
+    -- look. A failure or return of a refund recorded as made alerts too.
     if internal.ozow_refund_transaction(request.payment_id) is distinct from transaction
         or (request.status = 'declined' and p_event->>'status' not in ('Failed', 'Cancelled', 'Invalid', 'Error')) then
       perform internal.ozow_refund_problem(request.payment_id, 'refund_mismatch', source, request.id::text);
@@ -1235,20 +1259,6 @@ begin
     end if;
     return jsonb_build_object('outcome', 'recorded', 'request_id', request.id, 'status', request.status,
       'ozow_status', null);
-  end if;
-  -- The record with this id that took effect or may still; else the one lost
-  -- send it fits; else a declined record with this id (Ozow's status then
-  -- only alerts staff).
-  select r.payment_id into payment from private.payment_refund_requests r
-    where r.ozow_refund_id = refund and r.status <> 'declined';
-  if payment is null then
-    select r.payment_id into payment from private.payment_refund_requests r
-      where r.id = internal.ozow_refund_link_candidate(refund, transaction, amount,
-        (p_event->>'requested_at')::timestamptz);
-  end if;
-  if payment is null then
-    select r.payment_id into payment from private.payment_refund_requests r
-      where r.ozow_refund_id = refund order by r.requested_at desc limit 1;
   end if;
   if payment is null then
     perform internal.ozow_refund_problem(internal.ozow_transaction_payment(transaction), 'refund_unmatched', source,

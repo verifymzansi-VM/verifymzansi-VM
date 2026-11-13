@@ -262,7 +262,7 @@ describe("reading refunds back", () => {
       mod.createOzowRefundClient({ environment }).transactionRefunds(TX)
     ).rejects.toThrow(/not complete/);
     // A total larger than what came back: not complete either.
-    fakeFetch(json({ results: [refundBody()], meta: { totalItems: 3 } }));
+    fakeFetch(json({ results: [refundBody()], total: 3 }));
     mod = await load();
     await expect(
       mod.createOzowRefundClient({ environment }).transactionRefunds(TX)

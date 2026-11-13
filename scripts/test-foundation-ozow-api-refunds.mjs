@@ -857,6 +857,34 @@ try {
         "mismatch"
       );
       assert.equal(problem(pay.id, "refund_mismatch").alert, true);
+      // A declined typed reference never shadows a live record of the same id.
+      const shadow = randomUUID();
+      const cb = buy(verified("ozow-shadow-cb"), PLANS.days180, 3);
+      const typedWaiting = json(
+        staff(
+          admin,
+          `select api.record_staff_payment_refund('${cb.id}','chargeback','duplicate','Bank chargeback received','${shadow}');`
+        )
+      );
+      assert.equal(typedWaiting.status, "awaiting_approval");
+      json(
+        staff(
+          admin2,
+          `select api.decline_staff_payment_refund('${typedWaiting.request_id}','Wrong reference typed');`
+        )
+      );
+      const live = buy(verified("ozow-shadow-live"), PLANS.days180, 3);
+      const liveRecord = json(dashboard(admin, live.id, shadow));
+      const applied = ozowStatus({
+        refund_id: shadow,
+        transaction_id: live.tx,
+        amount_cents: live.cents,
+        status: "Complete",
+        requested_at: null,
+        completed_at: null,
+      });
+      assert.equal(applied.request_id, liveRecord.request_id);
+      assert.equal(record(liveRecord.request_id).ozow_status, "Complete");
     }
   );
 

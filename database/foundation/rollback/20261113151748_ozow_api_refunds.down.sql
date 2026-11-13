@@ -50,7 +50,7 @@ begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.claim_ozow_refund_send(uuid)')) is distinct from '54a567cdb0016c98ce2748f222c8e342'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.list_ozow_refund_sends_due(integer)')) is distinct from '64ead03337cca707f3dd17c50b62bec8'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_ozow_refund_send(uuid,jsonb)')) is distinct from '9e3bafab54e36843cc570cf196e9babf'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.apply_ozow_refund_status(jsonb)')) is distinct from 'cbbc17f3e70270baf0b501eb46721cff'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.apply_ozow_refund_status(jsonb)')) is distinct from '11d425d5feb78204959f069cb5e044ae'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.reconcile_ozow_refunds(jsonb)')) is distinct from '218a119128346ee7df387e651494eef1'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.apply_ozow_refund_state(uuid,text,timestamptz,timestamptz,text)')) is distinct from '431e2541a83cf8e892efd61aa5cacd4d'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.valid_ozow_refund_fact(jsonb)')) is distinct from '023cde0ed9da4adc588737b40751899d'
