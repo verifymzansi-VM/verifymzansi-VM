@@ -15,6 +15,7 @@ import {
   paragraph,
   sanitizeAppUrl,
 } from "@/lib/services/email-template";
+import { buildPaymentReceiptEmail, type PaymentReceipt } from "./payment-receipt-email";
 
 const log = createLogger("Email");
 
@@ -56,9 +57,11 @@ const platformNotices = {
     "Your appeal has been decided",
     "An independent reviewer has decided your appeal. Sign in to read the outcome.",
   ],
+  // Sent only when the receipt details cannot be read; the receipt itself is
+  // built in ./payment-receipt-email.ts.
   payment_completed: [
     "Payment received",
-    "Your payment has been recorded. View your posting allowance and invoice in Billing.",
+    "We received your payment. Need your invoice? Reply to this email.",
   ],
   payment_reversed: [
     "Payment update",
@@ -121,12 +124,14 @@ const platformNotices = {
 export type PlatformNoticeKind = keyof typeof platformNotices;
 /** What the notification job knows about the post a lifecycle notice is about,
  * or, for trial_started, when the introductory trial ends and whether it
- * already pays for a post (a staff or service grant does not). */
+ * already pays for a post (a staff or service grant does not), or, for
+ * payment_completed, the payment's receipt. */
 export type PostLifecycleDetails = {
   deletesAt?: string | null;
   holdsSlot?: boolean | null;
   trialEndsAt?: string | null;
   trialFundsPost?: boolean | null;
+  receipt?: PaymentReceipt;
 };
 function deletionTime(iso: string | null | undefined): string | null {
   const ms = iso ? Date.parse(iso) : Number.NaN;
@@ -172,6 +177,8 @@ export async function sendPlatformNotice(
     (!noticeReason || noticeReason.length < 10 || noticeReason.length > 500)
   )
     throw new Error("Account warning details unavailable");
+  if (kind === "payment_completed" && details?.receipt)
+    return sendEmail({ to, idempotencyKey, ...buildPaymentReceiptEmail(details.receipt) });
   const [subject, fallbackIntro] = platformNotices[kind];
   const intro = postLifecycleIntro(kind, details) ?? fallbackIntro;
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
@@ -186,15 +193,17 @@ export async function sendPlatformNotice(
       ? "/dashboard/businesses"
       : moderation
         ? "/appeals"
-        : kind.startsWith("payment_")
-          ? "/billing"
-          : kind === "enquiry_received"
-            ? "/dashboard/leads"
-            : kind === "identity_accepted" ||
-                kind === "verification_phone_confirmed" ||
-                kind === "verification_returned"
-              ? "/verification"
-              : "/dashboard";
+        : kind === "payment_completed"
+          ? "/dashboard"
+          : kind.startsWith("payment_")
+            ? "/billing"
+            : kind === "enquiry_received"
+              ? "/dashboard/leads"
+              : kind === "identity_accepted" ||
+                  kind === "verification_phone_confirmed" ||
+                  kind === "verification_returned"
+                ? "/verification"
+                : "/dashboard";
   return sendEmail({
     to,
     subject,
