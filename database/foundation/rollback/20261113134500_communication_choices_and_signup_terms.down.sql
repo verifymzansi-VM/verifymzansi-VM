@@ -13,7 +13,7 @@
 --   select * from private.signup_terms_acceptances order by accepted_at;
 -- and keep the export with the decision record.
 --
--- The rollback removes the trigger record_signup_terms on auth.users, the 9
+-- The rollback removes the trigger record_signup_terms on auth.users, the 10
 -- functions, the two tables and the outbox index the update added. Nothing
 -- else changed, so nothing is restored.
 begin;
@@ -22,7 +22,7 @@ set local lock_timeout='5s';
 do $$begin
   if exists(select 1 from (values
         ('internal.record_signup_terms()', '24cf49d6570a6ca066cbde45173a3ed9'),
-        ('internal.save_my_communication_choices(text,boolean,boolean,boolean,boolean)', '62a40e158af34da3ab5cbcaf84753ab3')) v(sig, body)
+        ('internal.save_my_communication_choices(text,boolean,boolean,boolean,boolean)', '4d5daa0c4ec09f17833326c54dd77f14')) v(sig, body)
       where (select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)) is distinct from v.body)
     or to_regclass('private.communication_choice_events') is null
     or to_regclass('private.signup_terms_acceptances') is null then
@@ -42,5 +42,6 @@ drop function internal.record_signup_terms();
 drop table private.communication_choice_events;
 drop table private.signup_terms_acceptances;
 drop function internal.guard_consent_record();
+drop function internal.consent_actor();
 drop index if exists private.outbox_owner_history_idx;
 commit;

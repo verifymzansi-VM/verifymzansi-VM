@@ -16,5 +16,5 @@ create table private.communication_choice_events (
 alter table private.communication_choice_events owner to postgres;
 alter table private.communication_choice_events enable row level security;
 CREATE INDEX communication_choice_events_account_idx ON private.communication_choice_events USING btree (account_id, purpose, recorded_at DESC);
-CREATE TRIGGER communication_choice_events_immutable BEFORE UPDATE ON private.communication_choice_events FOR EACH ROW EXECUTE FUNCTION internal.guard_consent_record();
+CREATE TRIGGER communication_choice_events_immutable BEFORE DELETE OR UPDATE ON private.communication_choice_events FOR EACH ROW EXECUTE FUNCTION internal.guard_consent_record();
 revoke all on private.communication_choice_events from public;

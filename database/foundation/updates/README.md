@@ -994,17 +994,21 @@ existing command, argument, grant, table or function body changes.
   optional choice on or off (`marketing_email`, `marketing_sms`, `analytics`,
   `third_party_sharing`), with the version of the switch wording the member saw
   (`wording_version`, set by the website: `communication-2026-11`) and the time.
-  Rows never change (trigger `communication_choice_events_immutable`) and go
-  with the Auth user. The current choice is the latest row of its purpose; with
-  none it is off, so everything optional starts off (opt-in) and turning a
-  choice off is as easy as turning it on.
+  Rows never change and are deleted only with the Auth user or by the retention
+  job (`vm.retention`), never one by one (trigger
+  `communication_choice_events_immutable`). The current choice is the latest row
+  of its purpose; with none it is off, so everything optional starts off
+  (opt-in) and turning a choice off is as easy as turning it on.
 - **Member commands.** `api.get_my_communication_choices()` and
   `api.save_my_communication_choices(p_wording, p_marketing_email, p_marketing_sms, p_analytics, p_third_party_sharing)`
   (a null choice stays as it is; at least one is needed, 22023
   `choice_invalid`). Only a real change adds a row, so repeating a save adds
-  nothing. At most 40 changes per account in 24 hours (PT429 `choice_limit`).
-  Signed-in members with a confirmed email and a live session only, each for
-  their own account.
+  nothing. Reading and turning a choice off need only a signed-in, confirmed,
+  not deleted account with a live session (new `internal.consent_actor()`), so a
+  restricted member can still withdraw, and withdrawals are never limited.
+  Turning a choice on also needs an active account
+  (`internal.price_draft_actor()`) and is limited to 20 a day per account (PT429
+  `choice_limit`). Each account only ever reaches its own choices.
 - **Email history.** `api.list_my_email_history(p_limit)` (1 to 50, default 20):
   the caller's own finished account emails from `private.outbox_events`, sent,
   or failed for good after the email job's 8 attempts, with the message kind and
@@ -1020,13 +1024,19 @@ existing command, argument, grant, table or function body changes.
   whose button says that continuing accepts the Terms. The version is always
   read in the database, never taken from the sign-up details. Anonymous users,
   other sign-ups and accounts created before the update get no row; the trigger
-  never refuses a sign-up. The acceptance asked for before a first post
+  never refuses a sign-up. `email_form` means the sign-up said the box was
+  ticked: someone signing up straight at Auth can claim it for their own new
+  account only. A repeated sign-up of an address Auth already holds (not yet
+  confirmed) creates no user, so it keeps the first sign-up's record, or none.
+  The acceptance asked for before a first post
   (`private.posting_terms_acceptances`) is separate and unchanged.
 
-Both tables are closed to every API role. Not yet included: the privacy export
-(`internal.frontend_privacy_export_data`, whose dataset count the website
-checks) and the closed-account retention sweep; both tables are kept, like the
-profile, until the Auth user is deleted.
+Both tables are closed to every API role. Not yet included (needed before public
+sign-up): the privacy export (`internal.frontend_privacy_export_data`, whose
+dataset count the website checks), a staff read of a member's recorded Terms,
+and the closed-account retention sweep; both tables are kept, like the profile,
+until the Auth user is deleted. An email the job finished without a recipient
+(an unconfirmed address at the time) also shows as sent.
 
 **Order: apply first, then merge.** The website release from the same pull
 request calls the three new commands and the deploy preflight probes every
@@ -1065,15 +1075,18 @@ preflight before and after, read only; refusals for a drifted command, member
 check or table, and a premature rollback, changing nothing; accounts made before
 the update get no acceptance; the website form and Google sign-ups record the
 current version (never one named in the sign-up details); no row without the
-ticked box (also `"true"` as text) or for anonymous users; rows never change and
-go with the Auth user; no API role reads or writes either table; choices start
-off, save only for the caller, add a row only on a change, record the wording
-version, and the latest row decides; invalid saves record nothing; the 40-a-day
-limit (also two changes with one place left); anon, `service_role`, an ended
-session, an anonymous claim and an unconfirmed email are refused; the email
-history lists only the caller's sent and failed emails, with exactly id, kind,
-status and time; the grants and owners; and that apply, rollback and re-apply
-return the same fingerprints.
+ticked box (also `"true"` as text) or for anonymous users; rows never change,
+are not deleted one by one and go with the Auth user (or the retention job); no
+API role reads or writes either table; choices start off, save only for the
+caller, add a row only on a change, record the wording version, and the latest
+row decides; invalid saves record nothing; the limit of 20 choices turned on a
+day (also two with one place left), while turning off stays possible at the
+limit; a restricted member reads and withdraws but cannot opt in, and a deleted
+one is refused; anon, `service_role`, an ended session, an anonymous claim and
+an unconfirmed email are refused; the email history lists only the caller's sent
+and failed emails (not a last attempt still running or of unknown outcome), with
+exactly id, kind, status and time; the grants and owners; and that apply,
+rollback and re-apply return the same fingerprints.
 
 ## Individual slots at R69, 12 November 2026
 

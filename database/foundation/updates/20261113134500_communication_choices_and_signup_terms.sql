@@ -10,35 +10,41 @@
 --    turns an optional choice on or off (purposes marketing_email,
 --    marketing_sms, analytics, third_party_sharing), with the version of the
 --    switch wording the member saw and when. Rows are history and never
---    change (trigger communication_choice_events_immutable); they go with the
---    Auth user. A member's current choice is the latest row of that purpose;
+--    change and are deleted only with the Auth user (or by the retention job)
+--    (trigger communication_choice_events_immutable). A member's current choice is the latest row of that purpose;
 --    with no row the choice is off, so everything optional starts off
 --    (opt-in).
 -- 2. New member read api.get_my_communication_choices() and member command
 --    api.save_my_communication_choices(p_wording, p_marketing_email,
 --    p_marketing_sms, p_analytics, p_third_party_sharing): a null choice stays
 --    as it is, at least one must be given, and only a real change adds a row
---    (repeating a save adds nothing). At most 40 changes per account in 24
---    hours (PT429, detail choice_limit). Both return the four current choices.
---    Signed-in members only (internal.price_draft_actor: active account,
---    confirmed email, live session), each only ever for their own account.
+--    (repeating a save adds nothing). Turning a choice on needs an active
+--    account (internal.price_draft_actor) and is limited to 20 a day per
+--    account (PT429, detail choice_limit). Reading and turning a choice off
+--    need only a signed-in, confirmed, not deleted account with a live session
+--    (new internal.consent_actor), so a restricted member can still withdraw,
+--    and a withdrawal is never limited. Both return the four current choices,
+--    each only ever for the caller's own account.
 -- 3. New member read api.list_my_email_history(p_limit): the member's own
 --    queued account emails (private.outbox_events of their account) that are
---    finished: sent, or failed for good after the email job's 8 attempts. It
+--    finished: sent, or failed for good after the email job's 8 attempts
+--    (not one whose last outcome is unknown or still running). It
 --    gives the message kind, sent or failed, and when; never the address,
 --    the subject record or the provider's error. A new index
 --    outbox_owner_history_idx serves it.
 -- 4. New table private.signup_terms_acceptances: which Terms (version and
 --    document hash of the current private.posting_terms_versions row, the
 --    single set of Terms shown at /terms) a new account accepted at sign-up,
---    how, and when. One row per account, never changed (trigger
---    signup_terms_acceptances_immutable). A new trigger record_signup_terms
+--    how, and when. One row per account, never changed and deleted only with
+--    the Auth user (trigger signup_terms_acceptances_immutable). A new trigger record_signup_terms
 --    on auth.users fills it when the Auth user is created: method
 --    'email_form' when the website's sign-up form, whose Terms box must be
 --    ticked, sent the sign-up detail terms_accepted = true; method 'google'
 --    for a Google sign-up, whose button says that continuing accepts the
 --    Terms. Anonymous users and other sign-ups get no row. The trigger never
---    refuses a sign-up. The acceptance asked for before a first post
+--    refuses a sign-up. 'email_form' means the sign-up said the box was
+--    ticked; a sign-up straight at Auth can claim it for its own new account
+--    only. The acceptance asked for before a first post
 --    (private.posting_terms_acceptances) is separate and unchanged.
 --
 -- ORDER: apply this update before the pull request that uses it is merged (a
@@ -65,7 +71,7 @@ begin
   end if;
   for shape in
     select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)),'absent')
-    from (values ('internal.guard_consent_record()'),('internal.communication_choices_dto(uuid)'),
+    from (values ('internal.guard_consent_record()'),('internal.consent_actor()'),('internal.communication_choices_dto(uuid)'),
       ('internal.get_my_communication_choices()'),('api.get_my_communication_choices()'),
       ('internal.save_my_communication_choices(text,boolean,boolean,boolean,boolean)'),
       ('api.save_my_communication_choices(text,boolean,boolean,boolean,boolean)'),
@@ -73,15 +79,16 @@ begin
       ('internal.record_signup_terms()')) v(sig)
   loop
     if shape not in (
-        'internal.guard_consent_record() absent','internal.guard_consent_record() 867770c2b9c516fdd2b4e18ef6bd200c',
+        'internal.guard_consent_record() absent','internal.guard_consent_record() 0efc7c208cfc205c057c1015781cfd71',
+        'internal.consent_actor() absent','internal.consent_actor() 099a58b1b468c01729de1ee233a6de84',
         'internal.communication_choices_dto(uuid) absent','internal.communication_choices_dto(uuid) 467064c26e0c111e1968f2fe6f58a649',
-        'internal.get_my_communication_choices() absent','internal.get_my_communication_choices() 2437caf42b1e564d00c2678310dc3c1c',
+        'internal.get_my_communication_choices() absent','internal.get_my_communication_choices() 9379aa1f7b0295c9f2f76c60f119f05a',
         'api.get_my_communication_choices() absent','api.get_my_communication_choices() d19281f3b9241ccde77292cee7e7776a',
         'internal.save_my_communication_choices(text,boolean,boolean,boolean,boolean) absent',
-        'internal.save_my_communication_choices(text,boolean,boolean,boolean,boolean) 62a40e158af34da3ab5cbcaf84753ab3',
+        'internal.save_my_communication_choices(text,boolean,boolean,boolean,boolean) 4d5daa0c4ec09f17833326c54dd77f14',
         'api.save_my_communication_choices(text,boolean,boolean,boolean,boolean) absent',
         'api.save_my_communication_choices(text,boolean,boolean,boolean,boolean) 837c81b75ddfcf8c8b0042e50b3dcb6f',
-        'internal.list_my_email_history(integer) absent','internal.list_my_email_history(integer) 4438f1596c1cc4e1dc0eca7139e17251',
+        'internal.list_my_email_history(integer) absent','internal.list_my_email_history(integer) 4b43516e282fc258bf747c427f4c18e0',
         'api.list_my_email_history(integer) absent','api.list_my_email_history(integer) 00fcc1a073dc0bdbf0b19e6b80e10144',
         'internal.record_signup_terms() absent','internal.record_signup_terms() 24cf49d6570a6ca066cbde45173a3ed9') then
       raise exception 'communication choices function drift: %', shape using errcode='55000';
@@ -125,14 +132,24 @@ begin
   end if;
 end$$;
 
--- History rows never change. Deleting stays possible: they go with the Auth
--- user (on delete cascade), as the profile does.
+-- 3. (first, so the tables below hold their lock on auth.users only briefly)
+-- The member's own email history, newest first.
+create index if not exists outbox_owner_history_idx on private.outbox_events (owner_id, created_at desc);
+
+-- History rows never change. A row is deleted only with its Auth user (on
+-- delete cascade: the user is already gone when the row goes) or by the
+-- retention job (vm.retention), never one by one.
 CREATE OR REPLACE FUNCTION internal.guard_consent_record()
  RETURNS trigger
  LANGUAGE plpgsql
+ SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
 begin
+  if tg_op = 'DELETE' and (pg_catalog.current_setting('vm.retention', true) = 'on'
+      or not exists (select 1 from auth.users u where u.id = old.account_id)) then
+    return old;
+  end if;
   raise exception 'consent records are history; record a new choice instead' using errcode='23514';
 end;
 $function$;
@@ -153,7 +170,7 @@ revoke all on table private.communication_choice_events from public, anon, authe
 create index if not exists communication_choice_events_account_idx
   on private.communication_choice_events (account_id, purpose, recorded_at desc);
 drop trigger if exists communication_choice_events_immutable on private.communication_choice_events;
-create trigger communication_choice_events_immutable before update on private.communication_choice_events
+create trigger communication_choice_events_immutable before update or delete on private.communication_choice_events
   for each row execute function internal.guard_consent_record();
 
 -- 4. The Terms accepted at sign-up, one row per account.
@@ -171,11 +188,8 @@ revoke all on table private.signup_terms_acceptances from public, anon, authenti
 create index if not exists signup_terms_acceptances_document_idx
   on private.signup_terms_acceptances (version, document_hash);
 drop trigger if exists signup_terms_acceptances_immutable on private.signup_terms_acceptances;
-create trigger signup_terms_acceptances_immutable before update on private.signup_terms_acceptances
+create trigger signup_terms_acceptances_immutable before update or delete on private.signup_terms_acceptances
   for each row execute function internal.guard_consent_record();
-
--- 3. The member's own email history.
-create index if not exists outbox_owner_history_idx on private.outbox_events (owner_id, created_at desc);
 
 -- The four current choices of one account; a purpose without a row is off.
 CREATE OR REPLACE FUNCTION internal.communication_choices_dto(p_account uuid)
@@ -197,14 +211,41 @@ $function$;
 alter function internal.communication_choices_dto(uuid) owner to postgres;
 revoke all on function internal.communication_choices_dto(uuid) from public, anon, authenticated, service_role;
 
--- 2. Read and save the caller's own choices.
+-- 2. Read and save the caller's own choices. Reading and withdrawing need
+-- only a signed-in account that is still there: a confirmed, not deleted,
+-- not anonymous Auth user with a live session. Restrictions do not stop a
+-- member from turning a choice off.
+CREATE OR REPLACE FUNCTION internal.consent_actor()
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid:=auth.uid(); claims jsonb:=auth.jwt();
+begin
+  if actor is null or claims->>'role' is distinct from 'authenticated'
+    or coalesce((claims->>'is_anonymous')::boolean,false)
+    or not exists(select 1 from auth.users u where u.id=actor and u.is_anonymous is false
+      and u.deleted_at is null and u.email_confirmed_at is not null) then
+    raise exception 'signed-in member required' using errcode='42501';
+  end if;
+  if not exists(select 1 from auth.sessions s where s.id::text=claims->>'session_id'
+    and s.user_id=actor and (s.not_after is null or s.not_after>clock_timestamp())) then
+    raise exception 'live session required' using errcode='42501';
+  end if;
+  return actor;
+end;
+$function$;
+alter function internal.consent_actor() owner to postgres;
+revoke all on function internal.consent_actor() from public, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION internal.get_my_communication_choices()
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid:=internal.price_draft_actor();
+declare actor uuid:=internal.consent_actor();
 begin
   return internal.communication_choices_dto(actor);
 end;
@@ -230,7 +271,7 @@ CREATE OR REPLACE FUNCTION internal.save_my_communication_choices(p_wording text
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid:=internal.price_draft_actor(); current_choices jsonb; wanted jsonb; changes integer; recent integer;
+declare actor uuid:=internal.consent_actor(); current_choices jsonb; wanted jsonb; grants integer; recent integer;
 begin
   if p_wording is null or p_wording !~ '^[a-z0-9][a-z0-9-]{0,39}$' then
     raise exception 'invalid wording version' using errcode='22023', detail='choice_invalid';
@@ -238,19 +279,25 @@ begin
   if num_nonnulls(p_marketing_email, p_marketing_sms, p_analytics, p_third_party_sharing) = 0 then
     raise exception 'no choice given' using errcode='22023', detail='choice_invalid';
   end if;
-  -- One save at a time per account, then the member check again after the wait.
+  -- One save at a time per account, then the caller check again after the wait.
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text, 1707));
-  perform internal.price_draft_actor();
+  perform internal.consent_actor();
   current_choices:=internal.communication_choices_dto(actor);
   wanted:=jsonb_strip_nulls(jsonb_build_object('marketing_email', p_marketing_email,
     'marketing_sms', p_marketing_sms, 'analytics', p_analytics, 'third_party_sharing', p_third_party_sharing));
-  select count(*) into changes from jsonb_each(wanted) w where w.value is distinct from current_choices -> w.key;
-  if changes > 0 then
+  -- Turning a choice on needs an active account and counts towards the daily
+  -- limit; turning one off never does.
+  select count(*) into grants from jsonb_each(wanted) w
+    where w.value is distinct from current_choices -> w.key and w.value = 'true'::jsonb;
+  if grants > 0 then
+    perform internal.price_draft_actor();
     select count(*) into recent from private.communication_choice_events e
-      where e.account_id = actor and e.recorded_at > statement_timestamp() - interval '24 hours';
-    if recent + changes > 40 then
+      where e.account_id = actor and e.granted and e.recorded_at > statement_timestamp() - interval '24 hours';
+    if recent + grants > 20 then
       raise exception 'too many changes today; try again tomorrow' using errcode='PT429', detail='choice_limit';
     end if;
+  end if;
+  if exists(select 1 from jsonb_each(wanted) w where w.value is distinct from current_choices -> w.key) then
     insert into private.communication_choice_events (account_id, purpose, granted, wording_version)
       select actor, w.key, w.value::boolean, p_wording from jsonb_each(wanted) w
       where w.value is distinct from current_choices -> w.key
@@ -275,7 +322,8 @@ revoke all on function api.save_my_communication_choices(text,boolean,boolean,bo
 grant execute on function api.save_my_communication_choices(text,boolean,boolean,boolean,boolean) to authenticated;
 
 -- 3. Finished account emails of the caller: sent, or failed for good (the
--- email job stops after 8 attempts). Nothing that identifies a recipient,
+-- email job stops after 8 attempts; a last attempt still running or whose
+-- outcome is unknown is not shown). Nothing that identifies a recipient,
 -- record or provider error leaves the database.
 CREATE OR REPLACE FUNCTION internal.list_my_email_history(p_limit integer DEFAULT 20)
  RETURNS jsonb
@@ -295,7 +343,9 @@ begin
       case when o.processed_at is not null then 'sent' else 'failed' end as status,
       coalesce(o.processed_at, o.created_at) as at
     from private.outbox_events o
-    where o.owner_id = actor and (o.processed_at is not null or o.delivery_attempts >= 8)
+    where o.owner_id = actor and (o.processed_at is not null
+      or (o.delivery_attempts >= 8 and o.delivery_error is distinct from 'outcome_unknown'
+        and (o.delivery_until is null or o.delivery_until < statement_timestamp())))
     order by o.created_at desc, o.id
     limit p_limit) x;
   return jsonb_build_object('items', items);

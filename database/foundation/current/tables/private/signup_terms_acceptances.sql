@@ -15,5 +15,5 @@ create table private.signup_terms_acceptances (
 alter table private.signup_terms_acceptances owner to postgres;
 alter table private.signup_terms_acceptances enable row level security;
 CREATE INDEX signup_terms_acceptances_document_idx ON private.signup_terms_acceptances USING btree (version, document_hash);
-CREATE TRIGGER signup_terms_acceptances_immutable BEFORE UPDATE ON private.signup_terms_acceptances FOR EACH ROW EXECUTE FUNCTION internal.guard_consent_record();
+CREATE TRIGGER signup_terms_acceptances_immutable BEFORE DELETE OR UPDATE ON private.signup_terms_acceptances FOR EACH ROW EXECUTE FUNCTION internal.guard_consent_record();
 revoke all on private.signup_terms_acceptances from public;

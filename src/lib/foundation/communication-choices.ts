@@ -7,9 +7,13 @@ import { hasDatabaseReason } from "./error-reasons";
 /**
  * The version of the switch wording on the communication page. Every saved
  * choice records it, so the record shows what the member agreed to. Change it
- * whenever a switch's label or description changes.
+ * whenever a switch's label or description changes: the test of this file
+ * compares COMMUNICATION_WORDING_SHA256 with the page's wording and fails
+ * until both are updated together.
  */
 export const COMMUNICATION_WORDING_VERSION = "communication-2026-11";
+/** SHA-256 (base64url) of the four switches' labels and descriptions (see the test). */
+export const COMMUNICATION_WORDING_SHA256 = "MkPrw-j1TTgkOkvREpa8Fm5FgB33C-9HqzFk-xMQVRs";
 
 /** The member's four optional choices. Each is off until turned on. */
 export const communicationChoicesSchema = z.strictObject({
@@ -48,7 +52,7 @@ export type RestoredEmailActivityItem = {
 
 export class FoundationCommunicationError extends Error {
   override name = "FoundationCommunicationError";
-  constructor(readonly reason: "invalid" | "limited" | "unavailable") {
+  constructor(readonly reason: "invalid" | "limited" | "forbidden" | "unavailable") {
     super(reason);
   }
 }
@@ -58,6 +62,9 @@ function refused(error: { code?: string | null; details?: string | null } | null
     throw new FoundationCommunicationError("limited");
   if (error?.code === "22023" && hasDatabaseReason(error, "choice_invalid"))
     throw new FoundationCommunicationError("invalid");
+  // The database refused this account (restricted, or no longer active):
+  // opting in needs an active account; reading and withdrawing do not.
+  if (error?.code === "42501") throw new FoundationCommunicationError("forbidden");
   throw new FoundationCommunicationError("unavailable");
 }
 

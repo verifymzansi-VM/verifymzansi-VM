@@ -6,7 +6,7 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and reads "update not applied".
 --
--- The summary says whether the update is absent (its 9 functions, 2 tables,
+-- The summary says whether the update is absent (its 10 functions, 2 tables,
 -- the outbox index and the trigger record_signup_terms on auth.users are
 -- absent) or applied (every body is the update's and the trigger is on
 -- auth.users), names the current Terms version that sign-ups will record, and
@@ -21,13 +21,14 @@ with added as (
   select v.sig, v.after,
     (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)) as body
   from (values
-    ('internal.guard_consent_record()', '867770c2b9c516fdd2b4e18ef6bd200c'),
+    ('internal.guard_consent_record()', '0efc7c208cfc205c057c1015781cfd71'),
+    ('internal.consent_actor()', '099a58b1b468c01729de1ee233a6de84'),
     ('internal.communication_choices_dto(uuid)', '467064c26e0c111e1968f2fe6f58a649'),
-    ('internal.get_my_communication_choices()', '2437caf42b1e564d00c2678310dc3c1c'),
+    ('internal.get_my_communication_choices()', '9379aa1f7b0295c9f2f76c60f119f05a'),
     ('api.get_my_communication_choices()', 'd19281f3b9241ccde77292cee7e7776a'),
-    ('internal.save_my_communication_choices(text,boolean,boolean,boolean,boolean)', '62a40e158af34da3ab5cbcaf84753ab3'),
+    ('internal.save_my_communication_choices(text,boolean,boolean,boolean,boolean)', '4d5daa0c4ec09f17833326c54dd77f14'),
     ('api.save_my_communication_choices(text,boolean,boolean,boolean,boolean)', '837c81b75ddfcf8c8b0042e50b3dcb6f'),
-    ('internal.list_my_email_history(integer)', '4438f1596c1cc4e1dc0eca7139e17251'),
+    ('internal.list_my_email_history(integer)', '4b43516e282fc258bf747c427f4c18e0'),
     ('api.list_my_email_history(integer)', '00fcc1a073dc0bdbf0b19e6b80e10144'),
     ('internal.record_signup_terms()', '24cf49d6570a6ca066cbde45173a3ed9')
   ) v(sig, after)

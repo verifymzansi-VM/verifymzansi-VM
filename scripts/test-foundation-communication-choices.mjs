@@ -37,6 +37,7 @@ const ROLLBACK = companion("rollback", ".down.sql");
 const WORDING = "communication-2026-11";
 const FUNCTIONS = [
   "internal.guard_consent_record()",
+  "internal.consent_actor()",
   "internal.communication_choices_dto(uuid)",
   "internal.get_my_communication_choices()",
   "api.get_my_communication_choices()",
@@ -213,7 +214,8 @@ try {
       ["a number", { terms_accepted: 1 }, emailApp],
       ["another provider", {}, { provider: "github" }],
     ];
-    for (const [label, meta, app] of cases) assert.equal(acceptance(signUp(meta, app)), null, label);
+    for (const [label, meta, app] of cases)
+      assert.equal(acceptance(signUp(meta, app)), null, label);
     const anonymous = signUp({ terms_accepted: true }, googleApp, { anonymous: true });
     assert.equal(acceptance(anonymous), null);
     // Sign-up details cannot pick the version.
@@ -289,10 +291,17 @@ try {
   await check("invalid saves are refused and record nothing", () => {
     const a = early.a;
     const count = events(a).length;
-    fails(member(a, `select api.save_my_communication_choices('${WORDING}');`), "22023", /no choice/);
+    fails(
+      member(a, `select api.save_my_communication_choices('${WORDING}');`),
+      "22023",
+      /no choice/
+    );
     for (const wording of ["", "Communication", "x".repeat(41), "a b", "-start"])
       fails(
-        member(a, `select api.save_my_communication_choices(${literal(wording)},p_analytics=>true);`),
+        member(
+          a,
+          `select api.save_my_communication_choices(${literal(wording)},p_analytics=>true);`
+        ),
         "22023",
         /invalid wording version/
       );
@@ -303,7 +312,7 @@ try {
     );
     assert.equal(events(a).length, count);
   });
-  await check("at most 40 changes a day per account", () => {
+  await check("at most 20 choices turned on a day; turning off is never limited", () => {
     const user = formSignUp();
     for (let n = 0; n < 20; n++) {
       save(user, { analytics: true });
@@ -317,9 +326,11 @@ try {
     );
     // A save that changes nothing still answers.
     assert.deepEqual(save(user, { analytics: false }), ALL_OFF);
-    // Two changes when one place is left: both refused, nothing recorded.
-    q(`delete from private.communication_choice_events where id=(select id from private.communication_choice_events
-        where account_id='${user.id}' order by recorded_at limit 1);`);
+    // Two grants when one place is left: both refused, nothing recorded.
+    q(`set session_replication_role=replica;
+      delete from private.communication_choice_events where id=(select id from private.communication_choice_events
+        where account_id='${user.id}' and granted order by recorded_at limit 1);
+      set session_replication_role=origin;`);
     fails(
       member(
         user,
@@ -328,22 +339,84 @@ try {
       "PT429"
     );
     assert.equal(events(user).length, 39);
-    assert.deepEqual(save(user, { analytics: true }), { ...ALL_OFF, analytics: true });
+    assert.deepEqual(save(user, { marketing_email: true }), { ...ALL_OFF, marketing_email: true });
+    // At the limit, withdrawing still works at once.
+    fails(
+      member(user, `select api.save_my_communication_choices('${WORDING}',p_analytics=>true);`),
+      "PT429"
+    );
+    assert.deepEqual(save(user, { marketing_email: false }), ALL_OFF);
+    assert.deepEqual(events(user).at(-1), ["marketing_email", false, WORDING]);
   });
-  await check("history rows never change", () => {
+  await check("a restricted member can read and withdraw, but not opt in", () => {
+    const user = formSignUp();
+    save(user, { marketing_sms: true, analytics: true });
+    q(`update auth.users set banned_until=now()+interval '30 days' where id='${user.id}';`);
+    assert.deepEqual(choices(user), { ...ALL_OFF, marketing_sms: true, analytics: true });
+    assert.deepEqual(save(user, { marketing_sms: false }), { ...ALL_OFF, analytics: true });
+    fails(
+      member(
+        user,
+        `select api.save_my_communication_choices('${WORDING}',p_marketing_email=>true);`
+      ),
+      "42501",
+      /active authenticated member required/
+    );
+    // A withdrawal and a grant together are refused as a whole.
+    fails(
+      member(
+        user,
+        `select api.save_my_communication_choices('${WORDING}',p_analytics=>false,p_marketing_email=>true);`
+      ),
+      "42501"
+    );
+    assert.deepEqual(choices(user), { ...ALL_OFF, analytics: true });
+    // A deleted account cannot use the commands at all.
+    q(`update auth.users set deleted_at=now() where id='${user.id}';`);
+    fails(
+      member(user, `select api.get_my_communication_choices();`),
+      "42501",
+      /signed-in member required/
+    );
+  });
+  await check("history rows never change and are not deleted one by one", () => {
     fails(
       `update private.communication_choice_events set granted=not granted where account_id='${early.a.id}';`,
       "23514",
       /consent records are history/
     );
+    fails(
+      `delete from private.communication_choice_events where account_id='${early.a.id}';`,
+      "23514",
+      /consent records are history/
+    );
+    fails(
+      `delete from private.signup_terms_acceptances where account_id='${early.a.id}';`,
+      "23514",
+      /consent records are history/
+    );
+    // The retention job may.
+    const user = formSignUp();
+    save(user, { analytics: true });
+    q(`begin; select set_config('vm.retention','on',true);
+      delete from private.communication_choice_events where account_id='${user.id}';
+      delete from private.signup_terms_acceptances where account_id='${user.id}'; commit;`);
+    assert.deepEqual(events(user), []);
+    assert.equal(acceptance(user), null);
   });
   await check("only signed-in members with a live session", () => {
     const a = early.a;
     fails(anon(`select api.get_my_communication_choices();`), "42501");
-    fails(anon(`select api.save_my_communication_choices('${WORDING}',p_analytics=>true);`), "42501");
+    fails(
+      anon(`select api.save_my_communication_choices('${WORDING}',p_analytics=>true);`),
+      "42501"
+    );
     fails(anon(`select api.list_my_email_history(20);`), "42501");
     fails(service(`select api.get_my_communication_choices();`), "42501");
-    fails(service(`select api.save_my_communication_choices('${WORDING}',p_analytics=>true);`), "42501");
+    fails(
+      service(`select api.save_my_communication_choices('${WORDING}',p_analytics=>true);`),
+      "42501"
+    );
     fails(service(`select api.list_my_email_history(20);`), "42501");
     // An ended session, an anonymous claim and an unconfirmed email are refused.
     const ended = { ...a, session: "00000000-0000-4000-8000-000000000000" };
@@ -355,7 +428,10 @@ try {
     const unconfirmed = formSignUp();
     q(`update auth.users set email_confirmed_at=null where id='${unconfirmed.id}';`);
     fails(
-      member(unconfirmed, `select api.save_my_communication_choices('${WORDING}',p_analytics=>true);`),
+      member(
+        unconfirmed,
+        `select api.save_my_communication_choices('${WORDING}',p_analytics=>true);`
+      ),
       "42501"
     );
     assert.deepEqual(events(unconfirmed), []);
@@ -366,6 +442,12 @@ try {
     const failed = queue(a, "post_expired", { attempts: 8 });
     queue(a, "trial_started", { attempts: 3 }); // still retrying: not shown
     queue(a, "identity_accepted", { attempts: 0 }); // not yet sent: not shown
+    // A last attempt whose outcome is unknown, or still running: not shown.
+    q(
+      `update private.outbox_events set delivery_error='outcome_unknown' where id='${queue(a, "post_deleted", { attempts: 8 })}';`
+    );
+    q(`update private.outbox_events set delivery_error=null,delivery_claim=gen_random_uuid(),
+        delivery_until=now()+interval '60 seconds' where id='${queue(a, "post_kept", { attempts: 8 })}';`);
     queue(b, "payment_completed", { processed: true });
     const items = history(a).items;
     assert.deepEqual(
@@ -375,7 +457,8 @@ try {
         [sent, "payment_completed", "sent"],
       ].sort()
     );
-    for (const item of items) assert.deepEqual(Object.keys(item).sort(), ["at", "id", "kind", "status"]);
+    for (const item of items)
+      assert.deepEqual(Object.keys(item).sort(), ["at", "id", "kind", "status"]);
     assert.equal(history(b).items.length, 1);
     assert.deepEqual(history(formSignUp()), { items: [] });
     assert.equal(history(a, 1).items.length, 1);
@@ -388,6 +471,7 @@ try {
     const members = { anon: false, authenticated: true, service_role: false };
     assert.deepEqual(grantsOf(FUNCTIONS), {
       "internal.guard_consent_record()": nobody,
+      "internal.consent_actor()": nobody,
       "internal.communication_choices_dto(uuid)": nobody,
       "internal.get_my_communication_choices()": members,
       "api.get_my_communication_choices()": members,
@@ -397,7 +481,8 @@ try {
       "api.list_my_email_history(integer)": members,
       "internal.record_signup_terms()": nobody,
     });
-    const meta = json(`select jsonb_object_agg(oid::regprocedure::text, jsonb_build_object('definer',prosecdef,
+    const meta =
+      json(`select jsonb_object_agg(oid::regprocedure::text, jsonb_build_object('definer',prosecdef,
         'owner',proowner::regrole::text,'config',proconfig))
       from pg_proc where oid=any(array[${FUNCTIONS.map((f) => `'${f}'::regprocedure`).join(",")}]);`);
     for (const signature of FUNCTIONS) {
@@ -410,9 +495,7 @@ try {
       assert.equal(
         entry.definer,
         signature.startsWith("internal.") &&
-          !["internal.guard_consent_record()", "internal.communication_choices_dto(uuid)"].includes(
-            signature
-          ),
+          signature !== "internal.communication_choices_dto(uuid)",
         signature
       );
     }

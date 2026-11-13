@@ -69,7 +69,8 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 21. Payment receipt email (M3.7)            | 0 (email only) | keep (owner, 2026-11-13)                                                                   | Members who pay: the 'Payment received' email lists the invoice number, date paid, item, amount in rands and bank reference, and links to 'My slots' (add-ons: the dashboard) instead of Billing                                                  |
 | 22. Hidden until it works, part 2 (M6.2)    |              3 | keep (owner, 2026-11-13)                                                                   | No 'Performance' page or menu entry and no 'Detect province and city' button; a search lists tourism businesses under Businesses again                                                                                                            |
 | 23. Phone-sized photos (M4.3)               |              0 | keep (owner, 2026-11-13)                                                                   | Nothing on screen: the same photos, but a phone downloads a 400, 800 or 1 600 px copy of each new photo instead of the full-size original                                                                                                         |
-| **Total**                                   |        **294** |                                                                                            |                                                                                                                                                                                                                                                   |
+| 24. Communication choices saved (M1.7)      |              1 | awaiting owner                                                                             | Notifications page: no 'Failed to load email activity' message on every visit; the four switches (all off until turned on) stay as set after a reload; the Email tab lists the member's own sent and failed account emails                        |
+| **Total**                                   |        **295** |                                                                                            |                                                                                                                                                                                                                                                   |
 
 Questions for the owner:
 
@@ -364,6 +365,19 @@ Questions for the owner:
 
     Answered: approved by owner 2026-11-13: copies on; MEDIA_PHOTO_VARIANTS=off
     is the switch if the free 5,000 monthly allowance gets close.
+
+20. **Communication choices saved (group 24, M1.7).** The Notifications page
+    looks the same, but it now works: the 'Failed to load email activity'
+    message no longer appears on every visit, a switch you turn on or off stays
+    that way after a reload (before, saving failed and every switch read off),
+    and the Email tab lists your own account emails that were sent or failed.
+    All four switches (Marketing email, Marketing SMS, Analytics, Third-party
+    sharing) start off and each change is recorded with its time and the switch
+    wording. Nothing reads the switches yet: no marketing is sent, and
+    Cloudflare's cookie-free visitor counting does not follow the Analytics
+    switch. Do you approve keeping all four switches visible, or should
+    Analytics and Third-party sharing be hidden until something uses them (rule
+    2)? Before and after pictures are with the review notes.
 
 <!-- frontend-ledger:start -->
 
@@ -927,6 +941,27 @@ with the re-save, so a large photo now uses 4 instead of 1 (about 1,250 large
 photos a month instead of 5,000 before uploads stop until the next month). The
 Worker setting `MEDIA_PHOTO_VARIANTS=off` stops making copies without a code
 change; the paid Images plan (the owner's budget decision) removes the limit.
+
+### 24. Communication choices saved (roadmap M1.7)
+
+Owner question 20. The Notifications page (`/dashboard/communication`) keeps its
+design; it now reads and saves through the live backend. Before, every visit
+showed 'Failed to load email activity', saving a switch failed with 'Unable to
+update preference' and every switch read off after a reload. Now the four
+switches start off, stay as the member set them, and each change is kept with
+its time and the switch wording (`communication-2026-11`); the Email tab lists
+the member's own sent and failed account emails. Database update
+`20261113134500_communication_choices_and_signup_terms.sql` also records which
+Terms a new account accepted at sign-up (form or Google); nothing about that
+shows on screen. Outside the checked scope: the two routes under
+`src/app/api/communications/`, `src/lib/foundation/communication-choices.ts`,
+`src/lib/foundation/restored-communication-route.ts` and
+`src/lib/foundation/registration.ts`. The page component
+(`src/components/dashboard/communication-hub.tsx`) is unchanged.
+
+| File                                       | Kind     | Reason                                                                                                   | What changes on screen                                                                                              | Proposed | Owner decision | Date       | Version      |
+| ------------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------- | -------------- | ---------- | ------------ |
+| `src/app/dashboard/communication/page.tsx` | rewiring | The page reads the signed-in member from the live backend's session check instead of the retired client. | Nothing in its own layout; the page's switches and Email tab now work (see above): no error message on every visit. | keep     | awaiting owner | 2026-11-13 | 7af356e16fc6 |
 
 <!-- frontend-ledger:end -->
 

@@ -19,7 +19,9 @@ begin
       case when o.processed_at is not null then 'sent' else 'failed' end as status,
       coalesce(o.processed_at, o.created_at) as at
     from private.outbox_events o
-    where o.owner_id = actor and (o.processed_at is not null or o.delivery_attempts >= 8)
+    where o.owner_id = actor and (o.processed_at is not null
+      or (o.delivery_attempts >= 8 and o.delivery_error is distinct from 'outcome_unknown'
+        and (o.delivery_until is null or o.delivery_until < statement_timestamp())))
     order by o.created_at desc, o.id
     limit p_limit) x;
   return jsonb_build_object('items', items);

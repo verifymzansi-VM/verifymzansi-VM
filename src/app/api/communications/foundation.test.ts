@@ -157,14 +157,25 @@ describe("communication choices", () => {
     expect(response.status).toBe(429);
     expect(await response.json()).toMatchObject({ reason: "limited" });
 
+    // A restricted account opting in: refused, without the database's words.
     rpc.mockResolvedValueOnce({
       data: null,
-      error: { code: "42501", details: null, message: "permission denied for schema private" },
+      error: { code: "42501", details: null, message: "active authenticated member required" },
+    });
+    response = await savePreferences(preferences("PATCH", { analytics: true }));
+    expect(response.status).toBe(403);
+    let body = await response.json();
+    expect(JSON.stringify(body)).not.toContain("active authenticated");
+    expect(body).toMatchObject({ reason: "forbidden" });
+
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "XX000", details: null, message: "relation private.x does not exist" },
     });
     response = await savePreferences(preferences("PATCH", { analytics: true }));
     expect(response.status).toBe(503);
-    const body = await response.json();
-    expect(JSON.stringify(body)).not.toContain("permission denied");
+    body = await response.json();
+    expect(JSON.stringify(body)).not.toContain("relation");
     expect(body).toMatchObject({ reason: "unavailable" });
   });
 

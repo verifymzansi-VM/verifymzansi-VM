@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION internal.get_my_communication_choices()
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid:=internal.price_draft_actor();
+declare actor uuid:=internal.consent_actor();
 begin
   return internal.communication_choices_dto(actor);
 end;

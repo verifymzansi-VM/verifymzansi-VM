@@ -15,6 +15,7 @@ const log = createLogger("RestoredCommunication");
 const refusals: Record<FoundationCommunicationError["reason"], [number, string]> = {
   invalid: [400, "Check the details and try again"],
   limited: [429, "Too many changes today; try again tomorrow"],
+  forbidden: [403, "Your account can't turn this on right now"],
   unavailable: [503, "Communication settings are temporarily unavailable"],
 };
 
