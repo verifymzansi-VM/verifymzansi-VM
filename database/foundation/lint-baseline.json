@@ -4,13 +4,6 @@
   "knownErrors": [],
   "warnings": [
     {
-      "function": "internal.apply_provider_event(jsonb)",
-      "level": "warning extra",
-      "sqlstate": "00000",
-      "message": "never read variable \"ent\"",
-      "count": 1
-    },
-    {
       "function": "internal.assess_identity_upload(uuid,text,text,text)",
       "level": "warning",
       "sqlstate": "00000",

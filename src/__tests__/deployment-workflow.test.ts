@@ -114,18 +114,14 @@ describe("production deployment wiring", () => {
 });
 
 describe("CI browser installation", () => {
-  const workflow = parse(readFileSync(".github/workflows/ci.yml", "utf8"));
-  it("keeps every browser test lane and installs its dependencies without the former installer cutoff", () => {
-    // e2e-smoke and launch-flows-bundle repeated subsets of the full matrix.
-    for (const name of ["e2e-full-matrix"]) {
-      const job = workflow.jobs[name];
-      const install = job.steps.find(
-        (step: { uses?: string }) => step.uses === "./.github/actions/install-browsers"
-      );
-      expect(install).toBeDefined();
-      expect(install["timeout-minutes"]).toBeUndefined();
-    }
-    expect(workflow.jobs["e2e-full-matrix"].strategy.matrix.project).toContain("firefox");
+  it("installs the browser test lane's dependencies without the former installer cutoff", () => {
+    // The stub suite's e2e-full-matrix was retired; e2e-foundation is the browser lane.
+    const job = parse(readFileSync(".github/workflows/e2e-foundation.yml", "utf8")).jobs.browser;
+    const install = job.steps.find(
+      (step: { uses?: string }) => step.uses === "./.github/actions/install-browsers"
+    );
+    expect(install).toBeDefined();
+    expect(install["timeout-minutes"]).toBeUndefined();
     const action = parse(readFileSync(".github/actions/install-browsers/action.yml", "utf8"));
     expect(action.runs.steps.map((step: { run?: string }) => step.run).join("\n")).toContain(
       "https://archive.ubuntu.com/ubuntu"

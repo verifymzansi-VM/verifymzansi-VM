@@ -28,6 +28,7 @@ import {
   assertReadOnlyPreflight,
   createChecks,
   planOnSale,
+  planQuoteSql,
   sqlHelpers,
   updateCheckViews,
 } from "./lib/foundation-sql-checks.mjs";
@@ -66,7 +67,7 @@ try {
   /** A pending payment with an attached Ozow request, as the website makes one. */
   const payment = (label) => {
     const owner = user(label);
-    const quoted = json(member(owner, `select api.start_checkout('${plan}',null);`));
+    const quoted = json(planQuoteSql(q, member, owner, plan));
     const id = quoted.payment_id;
     const lease = json(service(`select api.claim_checkout_request('${id}','${owner.id}');`));
     assert.equal(

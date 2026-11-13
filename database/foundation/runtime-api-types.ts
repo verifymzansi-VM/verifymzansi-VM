@@ -37,6 +37,24 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_id: string; p_kind: string; p_reason: string };
         Returns: Json;
       };
+      start_slot_checkout: {
+        Args: {
+          p_plan_id: string;
+          p_slots: number;
+          p_expected_total_cents: number;
+          p_cooling_off_consent: boolean;
+        };
+        Returns: Json;
+      };
+      get_my_slots: { Args: Record<never, never>; Returns: Json };
+      record_staff_slot_reversal: {
+        Args: { p_line_id: string; p_kind: string; p_reason: string };
+        Returns: Json;
+      };
+      staff_set_individual_slot_limit: {
+        Args: { p_account_id: string; p_slot_limit: number; p_ends_at: string; p_reason: string };
+        Returns: Json;
+      };
       save_frontend_organisation_profile: {
         Args: {
           p_slug: string;

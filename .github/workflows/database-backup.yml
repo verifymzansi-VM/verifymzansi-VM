@@ -52,7 +52,7 @@ jobs:
           # Session mode (port 5432) supports pg_dump; the transaction pooler does not.
           echo "DB_URL=postgresql://postgres.${SUPABASE_PROJECT_REF}:${encoded}@${SUPABASE_POOLER_HOST}:5432/postgres" >> "$GITHUB_ENV"
 
-      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+      - uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0
         with:
           version: 2.120.0
 

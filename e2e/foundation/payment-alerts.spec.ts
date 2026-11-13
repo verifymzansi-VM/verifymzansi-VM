@@ -8,7 +8,6 @@ import {
   LOCAL_PAYMENT_ALERT_EMAIL,
 } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { MOCK_PAYMENT_ORIGIN, MockOzow } from "./support/mock-ozow";
-import { closeTestPlanSales, openTestPlanSales } from "./support/plan-sales";
 import {
   latestMailTo,
   queryTestCopy,
@@ -63,8 +62,13 @@ async function pendingPayment(plan: Plan): Promise<Payment> {
   const session = await signIn(copy, member);
   const quote = await rpc(
     copy,
-    "start_checkout",
-    { p_product_id: plan.id, p_target_post: null },
+    "start_slot_checkout",
+    {
+      p_plan_id: plan.id,
+      p_slots: 1,
+      p_expected_total_cents: Number(plan.price_cents),
+      p_cooling_off_consent: true,
+    },
     session.token
   );
   expect(quote.status).toBe(200);
@@ -163,8 +167,6 @@ test.describe("payment problems reach staff", () => {
   test.beforeAll(async () => {
     test.setTimeout(120_000);
     copy = readTestCopy();
-    // Paid plans are paused; this spec buys copies put on sale for it.
-    openTestPlanSales();
     const catalogue = await rpc(copy, "billing_catalogue", {});
     expect(catalogue.status).toBe(200);
     const byCode = (code: string) => {
@@ -172,7 +174,8 @@ test.describe("payment problems reach staff", () => {
       if (!plan) throw new Error(`The catalogue has no plan ${code}`);
       return plan;
     };
-    plans = ["market_30d", "business_30d", "tourism_30d"].map(byCode);
+    // One open payment per plan and member: one Individual slot per term.
+    plans = ["individual_30d", "individual_90d", "individual_180d"].map(byCode);
     member = await registerVerifiedMember("alerts");
     await ozow.start();
     // Earlier problems in this copy are already emailed or not ours to wait on.
@@ -191,7 +194,6 @@ test.describe("payment problems reach staff", () => {
           `update private.payments set created_at = now() - interval '15 days' where id = '${id}' and status = 'pending';`
         );
     } finally {
-      closeTestPlanSales();
       await ozow.stop();
     }
   });
