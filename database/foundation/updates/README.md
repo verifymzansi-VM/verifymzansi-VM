@@ -1090,9 +1090,9 @@ rollback and re-apply return the same fingerprints.
 
 ## Staff record a cleared bank transfer; a second staff member confirms it, 13 November 2026
 
-`20261113162457_staff_invoice_payments.sql` is not applied yet. It needs
-`20261113021223_staff_payment_fixes.sql` and the Individual slot rules with
-their reviewed bodies and refuses (55000) without them, or when the payment
+`20261113162457_staff_invoice_payments.sql` was applied on 13 November 2026. It
+needs `20261113021223_staff_payment_fixes.sql` and the Individual slot rules
+with their reviewed bodies and refuses (55000) without them, or when the payment
 rules, its new table or the new capability differ from the reviewed ones
 (roadmap P2b, first slice; the manual fallback to the Ozow payment link that a
 later slice puts on each invoice). It only adds: no API command, argument or
@@ -2970,6 +2970,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   posting-v4; choice changes recorded: 0; sign-up acceptances recorded: 0";
   production fingerprint after it matched the full replay
 
-- `20261113162457_staff_invoice_payments.sql`: pending
+- `20261113162457_staff_invoice_payments.sql`: applied 2026-11-13 19:05 UTC;
+  applied with the owner's approval, from the reviewed file, before the pull
+  request was merged; preflight before "update not applied (apply before the
+  website release that uses it is deployed); bank transfers waiting for
+  confirmation: none (table absent); payments confirmed from a bank transfer:
+  0", after "already applied; bank transfers waiting for confirmation: 0;
+  payments confirmed from a bank transfer: 0"; production fingerprint after it
+  matched the full replay
 
 <!-- applied-register:end -->
