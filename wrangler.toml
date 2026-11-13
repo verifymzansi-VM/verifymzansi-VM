@@ -124,8 +124,11 @@ new_classes = ["RateLimiterDO"]
 
 # ────────────────────────────────────────────────────────────────────────────
 # KV Namespace for OTP Rate Limiting
-# Exists only to satisfy the RateLimiterDO re-export in
-# workers/open-next-entry.mjs — see the [durable_objects] note above.
+# Exists to satisfy the RateLimiterDO re-export in
+# workers/open-next-entry.mjs — see the [durable_objects] note above. The site
+# also keeps its rough monthly Cloudflare Images count here (one key per
+# month, `images-transformations:YYYY-MM`; src/lib/media/images-allowance.ts),
+# which stops photo copies before they use the allowance re-encodes need.
 # ────────────────────────────────────────────────────────────────────────────
 [[kv_namespaces]]
 binding = "OTP_RATE_LIMITS"
@@ -136,7 +139,9 @@ id = "247144b6d9b1406093351378a57c62fa"
 # sharp cannot load in Workers, so src/lib/utils/image-reencode.ts uses this
 # binding to re-save photos (dropping metadata and hidden content). Without it
 # photo uploads are refused. Images Free: 5,000 unique transformations a
-# month; over that, uploads fail until the next month (no charge).
+# month; over that, new ones fail (error 9422) until the next month (no
+# charge), so photo uploads are refused with a clear message. The 800 px
+# display copy stops at 60% of the month (src/lib/media/images-allowance.ts).
 # Bindings are not inherited: keep [env.*.images] below in step.
 # ────────────────────────────────────────────────────────────────────────────
 [images]

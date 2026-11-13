@@ -443,16 +443,56 @@ describe("restored marketplace reads", () => {
       expect(areas).toEqual(["business", "tourism_events"]);
     });
 
-    it("refuses a merged search page deeper than its bound before reading", async () => {
-      const rpc = searchApi([], []);
-      await expect(
-        readRestoredCollection(
+    describe("a merged search's total covers only the pages it can serve", () => {
+      const many = (from: number, count: number, make: typeof business) =>
+        Array.from({ length: count }, (_, index) =>
+          make(from + index, (0.999 - index / 1000).toFixed(3))
+        );
+      const searches = (rpc: ReturnType<typeof searchApi>) =>
+        rpc.mock.calls.filter(([name]) => name === "search_post_cards").map(([, args]) => args);
+
+      it.each([
+        [50, 450, 9],
+        [48, 480, 10],
+        [24, 480, 20],
+      ])("at %i cards a page: total %i, last page %i served", async (limit, capped, last) => {
+        const rpc = searchApi(many(1, 300, business), many(1001, 300, tourism));
+        const params = (page: number) =>
+          new URLSearchParams({ q: "lodge", page: String(page), limit: String(limit) });
+        const first = await readRestoredCollection(apiWith(rpc), "businesses", params(1));
+        expect(first.total).toBe(capped);
+        expect(Math.ceil(first.total / limit)).toBe(last);
+        const end = await readRestoredCollection(apiWith(rpc), "businesses", params(last));
+        expect(end.total).toBe(capped);
+        expect(end.rows).toHaveLength(limit);
+        // Never more than ten bounded reads per scope.
+        expect(searches(rpc).length).toBeLessThanOrEqual(2 + 20);
+      });
+
+      it("answers a page past the served depth with no cards and two one-card reads", async () => {
+        const rpc = searchApi(many(1, 300, business), many(1001, 300, tourism));
+        const result = await readRestoredCollection(
           apiWith(rpc),
           "businesses",
-          new URLSearchParams({ q: "lodge", page: "11", limit: "48" })
-        )
-      ).rejects.toThrow(MarketplaceQueryError);
-      expect(rpc).not.toHaveBeenCalled();
+          new URLSearchParams({ q: "lodge", page: "10", limit: "50" })
+        );
+        expect(result).toEqual({ rows: [], total: 450, page: 10, limit: 50 });
+        expect(searches(rpc).map((args) => args.p_request)).toEqual([
+          expect.objectContaining({ area: "business", offset: 0, limit: 1 }),
+          expect.objectContaining({ area: "tourism_events", offset: 0, limit: 1 }),
+        ]);
+      });
+
+      it("reports the real total when it is within the served depth", async () => {
+        const rpc = searchApi(many(1, 30, business), many(1001, 20, tourism));
+        const result = await readRestoredCollection(
+          apiWith(rpc),
+          "businesses",
+          new URLSearchParams({ q: "lodge", limit: "50" })
+        );
+        expect(result.total).toBe(50);
+        expect(result.rows).toHaveLength(50);
+      });
     });
   });
 });
