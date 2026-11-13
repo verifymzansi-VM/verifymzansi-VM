@@ -86,6 +86,7 @@ it("maps the preserved registration form and forwards the CAPTCHA only to native
     first_name: "Synthetic",
     last_name: "Member",
     phone: "+27821234567",
+    terms_accepted: true,
   });
   expect(sent.gotrue_meta_security.captcha_token).toBe(body.turnstileToken);
   expect(sent.data).not.toHaveProperty("phone_verified");

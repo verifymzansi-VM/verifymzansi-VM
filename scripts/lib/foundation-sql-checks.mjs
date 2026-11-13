@@ -61,6 +61,36 @@ export function sqlHelpers(database, current) {
   return { run, q, json, fails, claims, as, member, staff, service };
 }
 
+/** An SQL string literal (quotes doubled). */
+export const sqlLiteral = (value) => `'${String(value).replaceAll("'", "''")}'`;
+
+/** A jsonb literal, or SQL null for null. */
+export const sqlJsonb = (value) =>
+  value === null || value === undefined ? "null" : `${sqlLiteral(JSON.stringify(value))}::jsonb`;
+
+/**
+ * An Auth user created as GoTrue would (user details, and app details when
+ * given, on the same insert, so triggers on auth.users see them), with a live
+ * session. `json` is sqlHelpers' json. Returns { id, session }.
+ */
+export function authSignUp(json, meta, { app, anonymous = false, deleted = false } = {}) {
+  return json(`with u as (
+      insert into auth.users(id,email,email_confirmed_at,is_anonymous,deleted_at,raw_user_meta_data,raw_app_meta_data)
+      values(gen_random_uuid(),${anonymous ? "null" : "'signup-'||gen_random_uuid()||'@example.invalid'"},
+        ${anonymous ? "null" : "now()"},${anonymous},${deleted ? "now()" : "null"},${sqlJsonb(meta)},${sqlJsonb(app)})
+      returning id),
+    s as (insert into auth.sessions(id,user_id,aal) select gen_random_uuid(),id,'aal1' from u returning id,user_id)
+    select jsonb_build_object('id',s.user_id,'session',s.id) from s;`);
+}
+
+/** For each function signature, whether anon, authenticated and
+ * service_role may execute it. */
+export function executeGrants(json, signatures) {
+  return json(`select jsonb_object_agg(f, (select jsonb_object_agg(r, has_function_privilege(r,f,'execute'))
+      from unnest(array['anon','authenticated','service_role']) r))
+    from unnest(array[${signatures.map(sqlLiteral).join(",")}]) f;`);
+}
+
 /** Replays prelude, candidate.sql and every update before `update` into
  * `database`; returns the replay steps, the update's index and its step. */
 export function applyStepsBefore(database, update) {
