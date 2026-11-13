@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261113133605_staff_invoice_payments.sql: staff record
+// Behaviour checks for 20261113162457_staff_invoice_payments.sql: staff record
 // a cleared bank transfer (EFT), a second staff member confirms it, and only
 // then it becomes an ordinary payment with the method 'invoice' (roadmap P2b,
 // first slice).
@@ -47,7 +47,7 @@ import {
   updateCheckKit,
 } from "./lib/foundation-staff-payment-world.mjs";
 
-const UPDATE = "20261113133605_staff_invoice_payments.sql";
+const UPDATE = "20261113162457_staff_invoice_payments.sql";
 const RECORD =
   "api.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)";
 

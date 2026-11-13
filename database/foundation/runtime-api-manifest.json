@@ -478,7 +478,7 @@
       "name": "get_payment_receipt",
       "updates": [
         "updates/20261113021223_staff_payment_fixes.sql",
-        "updates/20261113133605_staff_invoice_payments.sql"
+        "updates/20261113162457_staff_invoice_payments.sql"
       ],
       "arguments": [
         {
@@ -498,7 +498,7 @@
     },
     {
       "name": "record_staff_invoice_payment",
-      "updates": ["updates/20261113133605_staff_invoice_payments.sql"],
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
       "arguments": [
         {
           "name": "p_account_email",
@@ -552,7 +552,7 @@
     },
     {
       "name": "confirm_staff_invoice_payment",
-      "updates": ["updates/20261113133605_staff_invoice_payments.sql"],
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
       "arguments": [
         {
           "name": "p_transfer_id",
@@ -571,7 +571,7 @@
     },
     {
       "name": "decline_staff_invoice_payment",
-      "updates": ["updates/20261113133605_staff_invoice_payments.sql"],
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
       "arguments": [
         {
           "name": "p_transfer_id",
@@ -595,7 +595,7 @@
     },
     {
       "name": "get_staff_invoice_transfers",
-      "updates": ["updates/20261113133605_staff_invoice_payments.sql"],
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
@@ -608,7 +608,7 @@
     },
     {
       "name": "get_staff_invoice_customer",
-      "updates": ["updates/20261113133605_staff_invoice_payments.sql"],
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
       "arguments": [
         {
           "name": "p_account_email",
@@ -627,7 +627,7 @@
     },
     {
       "name": "get_staff_invoice_payments",
-      "updates": ["updates/20261113133605_staff_invoice_payments.sql"],
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
       "arguments": [
         {
           "name": "p_payment_ids",
@@ -643,6 +643,77 @@
         "service_role": false
       },
       "authority": "Current payment view capability and recent authenticator proof: the bank transfer details (reference, date cleared, amount, reason, recorded time and whether the caller's identity recorded or confirmed it) of up to 50 listed payments confirmed from a recorded bank transfer."
+    },
+    {
+      "name": "get_my_communication_choices",
+      "updates": ["updates/20261113134500_communication_choices_and_signup_terms.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Signed-in, confirmed, not deleted self-only account and live session (restrictions do not hide the caller's own choices); the caller's four optional communication choices (marketing_email, marketing_sms, analytics, third_party_sharing), each off until the caller turns it on. No caller-selected account."
+    },
+    {
+      "name": "save_my_communication_choices",
+      "updates": ["updates/20261113134500_communication_choices_and_signup_terms.sql"],
+      "arguments": [
+        {
+          "name": "p_wording",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_marketing_email",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_marketing_sms",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_analytics",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_third_party_sharing",
+          "sqlType": "boolean",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Signed-in, confirmed, not deleted self-only account and live session, rechecked after a per-account lock; turning a choice on also needs an active account and at most 20 in 24 hours, turning one off never is limited; each real change is an append-only row with the wording version and time. No caller-selected account."
+    },
+    {
+      "name": "list_my_email_history",
+      "updates": ["updates/20261113134500_communication_choices_and_signup_terms.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current active self-only account (confirmed email) and live session; the caller's own finished account emails (kind, sent or failed, time), at most 50. No address, subject record, provider error or other account."
     },
     {
       "name": "get_frontend_staff_organisation_detail",

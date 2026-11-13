@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261113133605_staff_invoice_payments.sql.
+-- Read-only preflight for updates/20261113162457_staff_invoice_payments.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes

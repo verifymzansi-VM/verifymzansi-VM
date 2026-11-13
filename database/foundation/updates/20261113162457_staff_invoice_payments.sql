@@ -65,8 +65,8 @@
 --
 -- ORDER: apply this update before the pull request that uses it is merged (a
 -- merge into main is deployed, and that release calls the new commands).
--- Read-only preflight: ../preflight/20261113133605_staff_invoice_payments.check.sql.
--- Rollback: ../rollback/20261113133605_staff_invoice_payments.down.sql.
+-- Read-only preflight: ../preflight/20261113162457_staff_invoice_payments.check.sql.
+-- Rollback: ../rollback/20261113162457_staff_invoice_payments.down.sql.
 begin;
 set local lock_timeout='5s';
 

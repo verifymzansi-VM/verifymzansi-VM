@@ -982,9 +982,115 @@ behind them, while a slot refund and an approved refund still reverse one slot
 through the retained internal step; and that apply, rollback and re-apply return
 the same fingerprints.
 
+## Communication choices and Terms accepted at sign-up, 13 November 2026
+
+`20261113134500_communication_choices_and_signup_terms.sql` was applied on 13
+November 2026 (roadmap M1.7, finding SEC-09). It needs the reviewed member check
+`internal.price_draft_actor()` and refuses (55000) without it. It only adds: no
+existing command, argument, grant, table or function body changes.
+
+- **Communication choices are saved, with their history.** New table
+  `private.communication_choice_events`: one row each time a member turns an
+  optional choice on or off (`marketing_email`, `marketing_sms`, `analytics`,
+  `third_party_sharing`), with the version of the switch wording the member saw
+  (`wording_version`, set by the website: `communication-2026-11`) and the time.
+  Rows never change and are deleted only with the Auth user or by the retention
+  job (`vm.retention`), never one by one (trigger
+  `communication_choice_events_immutable`). The current choice is the latest row
+  of its purpose; with none it is off, so everything optional starts off
+  (opt-in) and turning a choice off is as easy as turning it on.
+- **Member commands.** `api.get_my_communication_choices()` and
+  `api.save_my_communication_choices(p_wording, p_marketing_email, p_marketing_sms, p_analytics, p_third_party_sharing)`
+  (a null choice stays as it is; at least one is needed, 22023
+  `choice_invalid`). Only a real change adds a row, so repeating a save adds
+  nothing. Reading and turning a choice off need only a signed-in, confirmed,
+  not deleted account with a live session (new `internal.consent_actor()`), so a
+  restricted member can still withdraw, and withdrawals are never limited.
+  Turning a choice on also needs an active account
+  (`internal.price_draft_actor()`) and is limited to 20 a day per account (PT429
+  `choice_limit`). Each account only ever reaches its own choices.
+- **Email history.** `api.list_my_email_history(p_limit)` (1 to 50, default 20):
+  the caller's own finished account emails from `private.outbox_events`, sent,
+  or failed for good after the email job's 8 attempts, with the message kind and
+  time; never the address, the record it was about or the provider's error. New
+  index `outbox_owner_history_idx` (owner, newest first).
+- **Terms accepted at sign-up.** New table `private.signup_terms_acceptances`
+  (one row per account, never changed): the version and document hash of the
+  current Terms (`private.posting_terms_current`, the single set shown at
+  `/terms`), how (`email_form` or `google`) and when. New trigger
+  `record_signup_terms` on `auth.users` fills it as the Auth user is created:
+  `email_form` when the website's sign-up form, whose Terms box must be ticked,
+  sent the sign-up detail `terms_accepted: true`; `google` for a Google sign-up,
+  whose button says that continuing accepts the Terms. The version is always
+  read in the database, never taken from the sign-up details. Anonymous users,
+  other sign-ups and accounts created before the update get no row; the trigger
+  never refuses a sign-up. `email_form` means the sign-up said the box was
+  ticked: someone signing up straight at Auth can claim it for their own new
+  account only. A repeated sign-up of an address Auth already holds (not yet
+  confirmed) creates no user, so it keeps the first sign-up's record, or none.
+  The acceptance asked for before a first post
+  (`private.posting_terms_acceptances`) is separate and unchanged.
+
+Both tables are closed to every API role. Not yet included (needed before public
+sign-up): the privacy export (`internal.frontend_privacy_export_data`, whose
+dataset count the website checks), a staff read of a member's recorded Terms,
+and the closed-account retention sweep; both tables are kept, like the profile,
+until the Auth user is deleted. An email the job finished without a recipient
+(an unconfirmed address at the time) also shows as sent.
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the three new commands and the deploy preflight probes every
+command in `../runtime-api-manifest.json`, so a deploy without the update stops
+there. Earlier releases do not use them and keep working with the update
+applied; sign-ups through them record their Terms too (the form already sends
+the ticked box only from that release on, so earlier releases record Google
+sign-ups only).
+
+**Applying.**
+
+1. Run
+   `../preflight/20261113134500_communication_choices_and_signup_terms.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "communication choices and signup terms:
+   update not applied; current terms: posting-v4".
+2. Run the update. It waits at most 5 seconds for any lock (it adds a trigger to
+   `auth.users` and an index to `private.outbox_events`). Run the preflight
+   again: it must read "communication choices and signup terms: already applied;
+   current terms: posting-v4; choice changes recorded: 0; sign-up acceptances
+   recorded: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261113134500_communication_choices_and_signup_terms.down.sql`
+(only with the owner's decision; prefer a forward fix). Revert and deploy the
+website release first: the rollback removes the commands that release calls. It
+deletes both tables, which are the record of what members agreed to: export them
+first, as the file says.
+
+`node --import tsx scripts/test-foundation-communication-choices.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; refusals for a drifted command, member
+check or table, and a premature rollback, changing nothing; accounts made before
+the update get no acceptance; the website form and Google sign-ups record the
+current version (never one named in the sign-up details); no row without the
+ticked box (also `"true"` as text) or for anonymous users; rows never change,
+are not deleted one by one and go with the Auth user (or the retention job); no
+API role reads or writes either table; choices start off, save only for the
+caller, add a row only on a change, record the wording version, and the latest
+row decides; invalid saves record nothing; the limit of 20 choices turned on a
+day (also two with one place left), while turning off stays possible at the
+limit; a restricted member reads and withdraws but cannot opt in, and a deleted
+one is refused; anon, `service_role`, an ended session, an anonymous claim and
+an unconfirmed email are refused; the email history lists only the caller's sent
+and failed emails (not a last attempt still running or of unknown outcome), with
+exactly id, kind, status and time; the grants and owners; and that apply,
+rollback and re-apply return the same fingerprints.
+
 ## Staff record a cleared bank transfer; a second staff member confirms it, 13 November 2026
 
-`20261113133605_staff_invoice_payments.sql` is not applied yet. It needs
+`20261113162457_staff_invoice_payments.sql` is not applied yet. It needs
 `20261113021223_staff_payment_fixes.sql` and the Individual slot rules with
 their reviewed bodies and refuses (55000) without them, or when the payment
 rules, its new table or the new capability differ from the reviewed ones
@@ -1080,11 +1186,12 @@ request calls the new commands and the deploy preflight probes every command in
 `../runtime-api-manifest.json`, so a deploy without the update stops there.
 Earlier releases do not call them and keep working with the update applied
 (`api.get_staff_payment_list` is unchanged; the receipt read only gains fields).
-It is recorded after `20261113085340_retire_old_staff_reversal_commands.sql`.
+It is recorded after
+`20261113134500_communication_choices_and_signup_terms.sql`.
 
 **Applying.**
 
-1. Run `../preflight/20261113133605_staff_invoice_payments.check.sql` unchanged
+1. Run `../preflight/20261113162457_staff_invoice_payments.check.sql` unchanged
    in the SQL editor. It is read only. Continue only if its result is the single
    "summary" row reading "staff invoice payments: update not applied (apply
    before the website release that uses it is deployed); bank transfers waiting
@@ -1099,7 +1206,7 @@ It is recorded after `20261113085340_retire_old_staff_reversal_commands.sql`.
    above.
 
 The reviewed rollback is
-`../rollback/20261113133605_staff_invoice_payments.down.sql` (only with the
+`../rollback/20261113162457_staff_invoice_payments.down.sql` (only with the
 owner's decision; prefer a forward fix). Revert and deploy the website release
 first: the rollback removes the commands that release calls. It refuses once a
 bank transfer was recorded (waiting, confirmed or declined: payment and audit
@@ -2856,6 +2963,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   the pull request was merged; preflight before "update not applied; refunds
   waiting for approval: 0", after "already applied" (no problem rows);
   production fingerprint after it matched the full replay
-- `20261113133605_staff_invoice_payments.sql`: pending
+- `20261113134500_communication_choices_and_signup_terms.sql`: applied
+  2026-11-13 15:54 UTC; applied with the owner's approval, from the reviewed
+  file, before the pull request was merged; preflight before "update not
+  applied; current terms: posting-v4", after "already applied; current terms:
+  posting-v4; choice changes recorded: 0; sign-up acceptances recorded: 0";
+  production fingerprint after it matched the full replay
+
+- `20261113162457_staff_invoice_payments.sql`: pending
 
 <!-- applied-register:end -->

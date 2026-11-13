@@ -1,4 +1,4 @@
--- Reviewed rollback for updates/20261113133605_staff_invoice_payments.sql.
+-- Reviewed rollback for updates/20261113162457_staff_invoice_payments.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so; prefer a forward fix. Revert and deploy the website
 -- release that uses the update FIRST: this rollback removes the commands that

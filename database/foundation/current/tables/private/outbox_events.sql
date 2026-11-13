@@ -23,4 +23,5 @@ create table private.outbox_events (
 alter table private.outbox_events owner to postgres;
 alter table private.outbox_events enable row level security;
 CREATE INDEX outbox_delivery_due_idx ON private.outbox_events USING btree (delivery_after, created_at) WHERE (processed_at IS NULL);
+CREATE INDEX outbox_owner_history_idx ON private.outbox_events USING btree (owner_id, created_at DESC);
 revoke all on private.outbox_events from public;
