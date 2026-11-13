@@ -63,41 +63,51 @@ export interface RetailOffer {
 }
 
 /**
- * Group 1: one price ladder for Market, Business and Tourism (Document 03 §2).
- * Every term is a fixed number of days from activation, never calendar months.
+ * Individual slots (posting terms posting-v4, Pricing v2): R69 per slot for
+ * each 30 days, in any section, with no discount for longer terms. Every term
+ * is a fixed number of days from the confirmed payment, never calendar months.
+ * The database catalogue decides what is on sale; these are the prices shown
+ * while nothing is (and the display fallback).
  */
 export const RETAIL_OFFERS: readonly RetailOffer[] = [
   {
     tier: "month",
     planCode: "RETAIL_30D",
     label: "30 Days",
-    priceCents: 5000,
+    priceCents: 6900,
     durationDays: 30,
-    promoLabel: "Flexible",
+    promoLabel: "",
   },
   {
     tier: "quarter",
     planCode: "RETAIL_90D",
     label: "90 Days",
-    priceCents: 14000,
+    priceCents: 20700,
     durationDays: 90,
-    promoLabel: "Popular",
-    compareAtCents: 15000,
+    promoLabel: "",
   },
   {
     tier: "half_year",
     planCode: "RETAIL_180D",
     label: "180 Days",
-    priceCents: 25000,
+    priceCents: 41400,
     durationDays: 180,
-    promoLabel: "Best value",
-    compareAtCents: 30000,
+    promoLabel: "",
   },
 ];
 
+/**
+ * Multi-listing and Business Sponsor packages are not sold under posting-v4
+ * (Pricing v2: their prices are published only with a terms version that
+ * states them). While false, the pricing, multi-listing and Advertise pages
+ * and the posting flow show no multi-listing plans and no sponsor fees.
+ */
+export const PACKAGES_ON_SALE = false;
+
 const RETAIL_FEATURES: PlanDefinition["features"] = {
   maxPhotos: 10,
-  maxPostsPerMonth: 10,
+  // posting-v4 fair use: at most 4 posts going live per paid slot per 30 days.
+  maxPostsPerMonth: 4,
   videoAllowed: true,
   maxVideos: 1,
   boostAllowed: true,
@@ -376,7 +386,7 @@ export function formatDurationDays(days: number): string {
   return days === 1 ? "1 day" : `${days} days`;
 }
 
-/** 30-day equivalent of a longer term (Document 03), e.g. R250 / 180 days → "R41.67". */
+/** 30-day equivalent of a longer term, e.g. R414 / 180 days → "R69". */
 export function formatThirtyDayEquivalent(priceCents: number, durationDays: number): string | null {
   if (durationDays <= 30) return null;
   return formatPlanPrice(Math.round((priceCents * 30) / durationDays));

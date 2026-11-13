@@ -21,6 +21,7 @@ create table private.entitlements (
   status text default 'active'::text not null,
   revoked_reason text,
   created_at timestamp with time zone default statement_timestamp() not null,
+  payment_line_id uuid,
   constraint entitlements_activation_period_days_check CHECK (activation_period_days >= 1 AND activation_period_days <= 366),
   constraint entitlements_activations_per_period_check CHECK (activations_per_period >= 1 AND activations_per_period <= 10000),
   constraint entitlements_addon_capabilities_check CHECK (
@@ -41,7 +42,8 @@ END),
   constraint entitlements_max_videos_check CHECK (max_videos >= 0 AND max_videos <= 10),
   constraint entitlements_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint entitlements_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES private.payments(id) ON DELETE RESTRICT,
-  constraint entitlements_payment_id_key UNIQUE (payment_id),
+  constraint entitlements_payment_line_id_fkey FOREIGN KEY (payment_line_id, payment_id) REFERENCES private.payment_lines(id, payment_id) ON DELETE RESTRICT,
+  constraint entitlements_payment_line_source CHECK (payment_line_id IS NULL OR source = 'retail_paid'::text AND payment_id IS NOT NULL),
   constraint entitlements_pkey PRIMARY KEY (id),
   constraint entitlements_slot_capacity_check CHECK (slot_capacity >= 1 AND slot_capacity <= 1000),
   constraint entitlements_source_check CHECK (source = ANY (ARRAY['retail_paid'::text, 'intro_trial'::text, 'sponsorship'::text, 'contract'::text, 'staff_grant'::text])),
@@ -52,5 +54,9 @@ alter table private.entitlements enable row level security;
 CREATE INDEX entitlements_granted_by_idx ON private.entitlements USING btree (granted_by) WHERE (granted_by IS NOT NULL);
 CREATE INDEX entitlements_owner_id_idx ON private.entitlements USING btree (owner_id);
 CREATE INDEX entitlements_owner_usable_idx ON private.entitlements USING btree (owner_id, ends_at) WHERE (status = 'active'::text);
+CREATE INDEX entitlements_payment_id_idx ON private.entitlements USING btree (payment_id) WHERE (payment_id IS NOT NULL);
+CREATE UNIQUE INDEX entitlements_payment_line_idx ON private.entitlements USING btree (payment_line_id) WHERE (payment_line_id IS NOT NULL);
+CREATE INDEX entitlements_payment_line_payment_idx ON private.entitlements USING btree (payment_line_id, payment_id) WHERE (payment_line_id IS NOT NULL);
+CREATE UNIQUE INDEX entitlements_payment_unlined_idx ON private.entitlements USING btree (payment_id) WHERE ((payment_id IS NOT NULL) AND (payment_line_id IS NULL));
 CREATE TRIGGER entitlement_capabilities_immutable BEFORE UPDATE OF addon_capabilities ON private.entitlements FOR EACH ROW EXECUTE FUNCTION internal.entitlement_capability_guard();
 revoke all on private.entitlements from public;

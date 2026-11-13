@@ -21,8 +21,7 @@
 // Needs a local Docker daemon; it takes no connection settings at all.
 // Fixtures are written directly as the database owner: members, staff roles,
 // live event posts and plan entitlements. Time is simulated by moving clock
-// columns back. auth.users gains phone_confirmed_at, a Supabase Auth column
-// the replay prelude leaves out. The only stand-in is internal.current_verified_identity, which
+// columns back. The only stand-in is internal.current_verified_identity, which
 // answers for the members listed in vmtest.verified and runs the production
 // body for everyone else (identity review has its own suites); it lets a
 // released content hold restore the post as it does for a verified owner.
@@ -31,6 +30,9 @@ import { replaySteps } from "./lib/foundation-replay.mjs";
 import { createChecks, sqlHelpers } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 
+// md5 of the full production definition of internal.current_verified_identity
+// (body, volatility, security, search_path) after every update.
+const VERIFIED_IDENTITY_BODY_MD5 = "531b85ac1fa89349a8a0460a69e4255d";
 const { check, current, passed: checks } = createChecks();
 
 const started = Date.now();
@@ -41,7 +43,7 @@ try {
   console.log(`Replayed candidate.sql and ${updates.length} updates.`);
 
   // ---------------------------------------------------------------- helpers
-  const { q, json, fails, member, staff, service } = sqlHelpers(database, current);
+  const { run, q, json, fails, claims, as, member, staff, service } = sqlHelpers(database, current);
   const scalar = (sql) => q(sql);
   const count = (sql) => Number(scalar(`select count(*) from ${sql};`));
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -51,10 +53,17 @@ try {
     "select pg_get_functiondef('internal.current_verified_identity(uuid)'::regprocedure);"
   );
   assert.match(original, /accepted_identity_facts/);
-  // Supabase Auth has this column; the replay prelude's auth.users stand-in
-  // does not, and the privacy export reads it.
-  q(`alter table auth.users add column phone_confirmed_at timestamptz;
-    create schema vmtest;
+  // The stand-in below copies the production body by hand for members not in
+  // vmtest.verified. Pin the production body so a later update that changes it
+  // fails here until the stand-in is reviewed and copied again.
+  assert.equal(
+    scalar(
+      "select md5(replace(pg_get_functiondef('internal.current_verified_identity(uuid)'::regprocedure),chr(13)||chr(10),chr(10)));"
+    ),
+    VERIFIED_IDENTITY_BODY_MD5,
+    "internal.current_verified_identity changed: review and update this script's stand-in, then the pinned hash"
+  );
+  q(`create schema vmtest;
     create table vmtest.verified(owner_id uuid primary key);
     create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
     declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); begin
@@ -127,6 +136,169 @@ try {
     admin2 = staffUser("admin2", "admin"),
     governor = staffUser("governor", "governor"),
     moderator = staffUser("moderator", "moderator");
+
+  // --------------------------------------------------------- staff sessions
+  // internal.staff_actor guards every staff command: an AAL2 claim backed by a
+  // live AAL2 session row, a verified authenticator app, an authenticator code
+  // from the last 12 hours for every capability, and from the last 15 minutes
+  // for capabilities marked requires_recent_mfa (role:review among them).
+  // Times come from the database clock (the one staff_actor reads), so the
+  // windows can be tested to within a few seconds whatever the host clock says.
+  const nowSeconds = () => Number(scalar("select extract(epoch from clock_timestamp())::bigint;"));
+  // queue:view does not need recent verification; role:review does.
+  const queueView = "select api.get_frontend_staff_claims();";
+  const roleReview = "select api.get_frontend_staff_role_review(1);";
+  const totp = (at) => ({ method: "totp", timestamp: at });
+
+  await check("staff sessions: an authenticator code older than 12 hours is refused", () => {
+    fails(
+      staff(moderator, queueView, nowSeconds() - 12 * 3600 - 5),
+      "42501",
+      /staff second-factor verification expired/
+    );
+    // Just inside the window, a capability without the recent rule still works.
+    assert.equal(json(staff(moderator, queueView, nowSeconds() - 12 * 3600 + 30)).own_count, 0);
+    // An admin's role review is refused for the 12-hour rule first.
+    fails(
+      staff(admin, roleReview, nowSeconds() - 12 * 3600 - 5),
+      "42501",
+      /staff second-factor verification expired/
+    );
+  });
+
+  await check("staff sessions: role review needs a code from the last 15 minutes", () => {
+    for (const who of [admin, governor]) {
+      fails(
+        staff(who, roleReview, nowSeconds() - 15 * 60 - 5),
+        "42501",
+        /recent second-factor verification required/
+      );
+      assert.equal(json(staff(who, roleReview, nowSeconds() - 15 * 60 + 30)).actor_id, who.id);
+    }
+    // The same 16-minute-old code still opens a capability without the rule.
+    assert.equal(json(staff(admin, queueView, nowSeconds() - 16 * 60)).own_count, 0);
+    // The newest code in the session counts, wherever it is listed.
+    assert.equal(
+      json(
+        as(
+          {
+            ...claims(admin),
+            aal: "aal2",
+            amr: [totp(nowSeconds()), totp(nowSeconds() - 13 * 3600)],
+          },
+          roleReview
+        )
+      ).actor_id,
+      admin.id
+    );
+  });
+
+  await check("staff sessions: no second factor, no live AAL2 session, no app", () => {
+    // An AAL1 claim, even with a recent code listed.
+    fails(
+      as({ ...claims(moderator), amr: [totp(nowSeconds())] }, queueView),
+      "42501",
+      /staff session with second factor required/
+    );
+    // An anonymous session, or a claim for another role.
+    for (const extra of [{ is_anonymous: true }, { role: "anon" }])
+      fails(
+        as({ ...claims(moderator), aal: "aal2", amr: [totp(nowSeconds())], ...extra }, queueView),
+        "42501",
+        /staff session with second factor required/
+      );
+    // An AAL2 claim whose session row is still AAL1.
+    const lindiwe = staffUser("lindiwe", "moderator");
+    q(`update auth.sessions set aal='aal1' where id='${lindiwe.session}';`);
+    fails(staff(lindiwe, queueView), "42501", /live staff session required/);
+    // An AAL2 claim naming another account's session.
+    fails(
+      as(
+        { ...claims(moderator), session_id: admin.session, aal: "aal2", amr: [totp(nowSeconds())] },
+        queueView
+      ),
+      "42501",
+      /live staff session required/
+    );
+    // A session past its end.
+    const thabo = staffUser("thabo", "moderator");
+    assert.equal(json(staff(thabo, queueView)).own_count, 0);
+    q(`update auth.sessions set not_after=now()-interval '1 minute' where id='${thabo.session}';`);
+    fails(staff(thabo, queueView), "42501", /live staff session required/);
+    // A suspended account.
+    const ayanda = staffUser("ayanda", "moderator");
+    q(`update auth.users set banned_until=now()+interval '1 day' where id='${ayanda.id}';`);
+    fails(staff(ayanda, queueView), "42501", /account suspended/);
+    // An AAL2 session whose authenticator app is no longer verified.
+    const sipho = staffUser("sipho", "moderator");
+    assert.equal(json(staff(sipho, queueView)).own_count, 0);
+    q(`update auth.mfa_factors set status='unverified' where user_id='${sipho.id}';`);
+    fails(staff(sipho, queueView), "42501", /verified authenticator app required/);
+    // A verified phone factor is not an authenticator app.
+    const naledi = staffUser("naledi", "moderator");
+    q(`update auth.mfa_factors set factor_type='phone' where user_id='${naledi.id}';`);
+    fails(staff(naledi, queueView), "42501", /verified authenticator app required/);
+    // A code from another method, or a malformed list, is no code at all.
+    for (const amr of [
+      [{ method: "password", timestamp: nowSeconds() }],
+      [{ method: "totp", timestamp: String(nowSeconds()) + ".5" }],
+      totp(nowSeconds()),
+    ]) {
+      fails(
+        as({ ...claims(moderator), aal: "aal2", amr }, queueView),
+        "42501",
+        /staff second-factor verification expired/
+      );
+    }
+    // A member with an AAL2 session and an app but no staff role, and staff
+    // whose role was revoked.
+    const zola = user("zola");
+    q(`select vmtest.second_factor('${zola.id}','${zola.session}');`);
+    fails(staff(zola, queueView), "42501", /capability not granted/);
+    const kagiso = staffUser("kagiso", "moderator");
+    assert.equal(json(staff(kagiso, queueView)).own_count, 0);
+    q(
+      `update private.staff_roles set revoked_at=now(),revoked_by='${admin.id}' where user_id='${kagiso.id}';`
+    );
+    fails(staff(kagiso, queueView), "42501", /capability not granted/);
+  });
+
+  // ----------------------------------------------- service-only API commands
+  // The full grant set is compared with both manifests by
+  // `pnpm db:foundation:api-check`; this pins the commands browsers must never
+  // call and proves the database refuses them.
+  await check("service-only commands: refused to anon and authenticated", () => {
+    const stranger = user("stranger");
+    for (const name of [
+      "record_frontend_privacy_request",
+      "submit_frontend_report",
+      "complete_notification_outbox",
+      "claim_supported_notification_outbox",
+      "submit_enquiry",
+      "run_retention",
+    ]) {
+      const fn =
+        json(`select jsonb_build_object('grants',(select string_agg(has_function_privilege(r,p.oid,'execute')::text,',' order by r)
+          from unnest(array['anon','authenticated','service_role']) r),
+        'call',format('select api.%I(%s);',p.proname,(select coalesce(string_agg('null::'||format_type(t,null),',' order by o),'')
+          from unnest(p.proargtypes) with ordinality a(t,o))))
+        from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+        where n.nspname='api' and p.proname='${name}';`);
+      assert.equal(fn.grants, "false,false,true", `api.${name} is service-only`);
+      for (const [principal, sql] of [
+        ["anon", `set role anon;\n${fn.call}`],
+        ["authenticated", member(stranger, fn.call)],
+      ]) {
+        const refused = run(sql);
+        assert.notEqual(refused.status, 0, `${principal} could call api.${name}`);
+        assert.match(
+          refused.stderr,
+          /ERROR:\s+42501: permission denied for function/,
+          `${principal} on api.${name}: ${refused.stderr}`
+        );
+      }
+    }
+  });
 
   // ----------------------------------------------------------- staff roles
   await check("staff roles: nobody can propose a change to their own role", () => {
@@ -453,6 +625,66 @@ try {
       /another staff member must process your request/
     );
     assert.equal(privacy(intake).identity_verified, false);
+  });
+
+  await check("privacy: moderators, late extensions and ineligible assignees are refused", () => {
+    const lerato = user("lerato");
+    const id = record(lerato, "access").id;
+    // Data requests need dsar:manage (governor and admin); a moderator has no
+    // queue and cannot act on a request.
+    fails(
+      staff(moderator, "select api.get_frontend_privacy_queue();"),
+      "42501",
+      /capability not granted/
+    );
+    fails(processAs(moderator, id, 1, "approve"), "42501", /capability not granted/);
+    fails(
+      processAs(moderator, id, 1, "extend", "A moderator must not extend a deadline."),
+      "42501",
+      /capability not granted/
+    );
+    // Only staff who can handle data requests, and never the requester, can
+    // be given a request.
+    for (const who of [moderator, lerato])
+      fails(
+        staff(
+          admin,
+          `select api.process_frontend_privacy_request('${id}',1,'assign',null,'${who.id}');`
+        ),
+        "22023",
+        /eligible staff assignee required/
+      );
+    assert.equal(
+      json(
+        staff(
+          admin,
+          `select api.process_frontend_privacy_request('${id}',1,'assign',null,'${governor.id}');`
+        )
+      ).status,
+      "assigned"
+    );
+    assert.equal(privacy(id).assigned_to, governor.id);
+    // An extension must be given before the deadline passes.
+    q(
+      `update private.privacy_requests set received_at=received_at-interval '31 days',due_by=due_by-interval '31 days' where id='${id}';`
+    );
+    fails(
+      processAs(admin, id, 2, "extend", "Too late to extend this deadline."),
+      "PT409",
+      /deadline cannot be extended/
+    );
+    assert.equal(privacy(id).extended_due_at, null);
+    assert.equal(
+      count(`private.privacy_notice_jobs where request_id='${id}' and kind='extended'`),
+      0
+    );
+    // A request with no extension in its rule (deletion) cannot be extended.
+    const deletion = record(lerato, "deletion").id;
+    fails(
+      processAs(admin, deletion, 1, "extend", "Deletion has no statutory extension."),
+      "PT409",
+      /deadline cannot be extended/
+    );
   });
 
   // ----------------------------------------- report actions and appeals

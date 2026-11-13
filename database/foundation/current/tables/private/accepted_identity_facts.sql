@@ -26,6 +26,7 @@ create table private.accepted_identity_facts (
 );
 alter table private.accepted_identity_facts owner to postgres;
 alter table private.accepted_identity_facts enable row level security;
+CREATE INDEX accepted_identity_facts_identity_idx ON private.accepted_identity_facts USING btree (identity_hmac);
 CREATE INDEX accepted_identity_facts_reviewed_by_idx ON private.accepted_identity_facts USING btree (reviewed_by);
 CREATE INDEX accepted_identity_facts_second_reviewer_idx ON private.accepted_identity_facts USING btree (second_reviewer) WHERE (second_reviewer IS NOT NULL);
 CREATE UNIQUE INDEX accepted_identity_fingerprint_active_idx ON private.accepted_identity_facts USING btree (identity_hmac) WHERE (revoked_at IS NULL);

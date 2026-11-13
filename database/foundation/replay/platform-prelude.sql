@@ -28,6 +28,7 @@ create table auth.users (
   raw_user_meta_data jsonb,
   raw_app_meta_data jsonb,
   phone text,
+  phone_confirmed_at timestamptz,
   is_sso_user boolean not null default false
 );
 create table auth.sessions (
