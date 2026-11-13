@@ -263,6 +263,8 @@ export interface AdminPaymentRow {
   fulfillment_status?: string;
   merchant_reference?: string;
   activated_at?: string | null;
+  /** Set when staff recorded this payment from a cleared bank transfer. */
+  bank_transfer?: { bank_reference: string; cleared_on: string } | null;
   lines?: {
     id: string;
     line_number: number;
@@ -325,7 +327,11 @@ export function PaymentsPanel({
               ) : null}
               <span className="text-xs text-muted-foreground">
                 {date.format(new Date(p.created_at))} · {p.user_id}
-                {p.merchant_reference ? ` · Ref ${p.merchant_reference}` : ""}
+                {p.bank_transfer
+                  ? ` · Bank transfer ${p.bank_transfer.bank_reference}, cleared ${p.bank_transfer.cleared_on}`
+                  : p.merchant_reference
+                    ? ` · Ref ${p.merchant_reference}`
+                    : ""}
                 {p.activated_at
                   ? ` · Activated by staff ${date.format(new Date(p.activated_at))}`
                   : ""}
@@ -373,6 +379,7 @@ export function PaymentsPanel({
                           priorCents,
                           label: lines.length > 1 ? `the whole order` : "this payment",
                           accountId: p.user_id,
+                          method: p.bank_transfer ? "invoice" : "ozow",
                         })
                       }
                     >
@@ -409,6 +416,7 @@ export function PaymentsPanel({
                                   priorCents,
                                   label: `slot ${line.line_number}`,
                                   accountId: p.user_id,
+                                  method: p.bank_transfer ? "invoice" : "ozow",
                                 })
                               }
                             >
@@ -429,7 +437,8 @@ export function PaymentsPanel({
                       {formatPlanPrice(request.amount_cents)} waiting for approval
                     </span>{" "}
                     <span className="text-muted-foreground">
-                      · {REFUND_REASON_LABELS[request.reason_code]} · Ozow {request.ozow_reference}
+                      · {REFUND_REASON_LABELS[request.reason_code]} ·{" "}
+                      {p.bank_transfer ? "Bank" : "Ozow"} {request.ozow_reference}
                     </span>
                   </p>
                   {canRefund ? (

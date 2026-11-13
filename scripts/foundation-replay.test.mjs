@@ -18,22 +18,19 @@ test("the recorded fingerprint keeps the production-matched values", () => {
   // below. Reviewed updates after it are listed as pending until the owner has
   // applied them and production is captured again.
   const check = recorded.productionCheck;
-  assert.equal(
-    check.matchedThroughUpdate,
-    "20261113134500_communication_choices_and_signup_terms.sql"
-  );
+  assert.equal(check.matchedThroughUpdate, "20261113162457_staff_invoice_payments.sql");
   assert.deepEqual(check.matchedFingerprints, {
     column_grants: "11724f805587a82326eae936e0200f0c",
-    columns: "f1c12071290db3553b5cc313f647d226",
-    constraints: "ebc069500a2e016f13f556dbf212a6d6",
+    columns: "e5fe6e9bdc62c78cd919963f507b9095",
+    constraints: "d61c1e06ad5842fba7ef94f4f870e7fc",
     event_triggers: "821f7d069c595c075754fad9309136ac",
-    function_bodies: "442114d63e690a145a972e94a6625ec4",
-    function_grants: "784dbad84075c3ac0209df6980a5f721",
-    function_metadata: "49383ca73bf143a415d07bb4f4536270",
-    indexes: "78a7d88f909203970a05d193b820e627",
+    function_bodies: "a38b22f091a7d993cf5cc8d01c655a5a",
+    function_grants: "757f891f3cf492274f8752ddd1969c13",
+    function_metadata: "2ff1f6a04581f4caaa78ee520017b2b5",
+    indexes: "25feb79228dd538d71b44b650c1d9061",
     policies: "2c1b773d5ffe29f172271087b1f36e04",
-    row_level_security: "c210cbc0c46d8c01f218ba490cdd1344",
-    triggers: "5142361ae47c510fa395a36be0696ebb",
+    row_level_security: "21b60c97063eb3fa39331921b2c59782",
+    triggers: "8e30899c01c04079ae72d90fde99214d",
   });
   const pending = listUpdates().filter((update) => update > check.matchedThroughUpdate);
   assert.deepEqual(check.pendingApplication, pending);

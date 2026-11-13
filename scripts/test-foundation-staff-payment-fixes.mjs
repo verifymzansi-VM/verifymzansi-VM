@@ -30,144 +30,48 @@
 // staff, identity facts, posts and partners are written directly as the
 // database owner. Nothing contacts Ozow.
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import {
-  applyStepsBefore,
-  assertReadOnlyPreflight,
-  createChecks,
-  sqlHelpers,
-} from "./lib/foundation-sql-checks.mjs";
+import { assertReadOnlyPreflight, createChecks } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
+import {
+  P180,
+  P30,
+  applyAndProveRollback,
+  createPaymentWorld,
+  fingerprintOf,
+  psqlSessions,
+  sha,
+  updateCheckKit,
+} from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261113021223_staff_payment_fixes.sql";
-const companion = (folder, suffix) =>
-  readFileSync(`database/foundation/${folder}/${UPDATE.replace(/\.sql$/, suffix)}`, "utf8");
-const PREFLIGHT = companion("preflight", ".check.sql");
-const ROLLBACK = companion("rollback", ".down.sql");
-const FINGERPRINT = readFileSync("database/foundation/fingerprint.sql", "utf8");
-const P30 = { id: "d6ca48e5-43be-40df-8d8c-72c98a6fda96", cents: 6900 };
-const P180 = { id: "ce4ef578-344a-4816-ab6a-6961bec46621", cents: 41400 };
-const sha = (text) => createHash("sha256").update(text).digest("hex");
-const fingerprintOf = (label) =>
-  `${createHash("sha256").update(`person-${label}`).digest("base64url").slice(0, 42)}A`;
 
 const { check, current, passed: checks } = createChecks();
 
 const started = Date.now();
 const database = await startLintDatabase({ log: (line) => console.log(line) });
 try {
-  const { steps, index, step } = applyStepsBefore(database, UPDATE);
-  const { q, json, fails, member, staff, service } = sqlHelpers(database, current);
-  const asRole = (role, sql) => `set role ${role};\n${sql}`;
-  const fingerprint = () => q(`set search_path to pg_catalog;\n${FINGERPRINT}`);
-  const preflight = () =>
-    q(PREFLIGHT)
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => line.split("|"));
-  const count = (sql) => Number(q(`select count(*) from ${sql};`));
+  const kit = updateCheckKit(database, UPDATE, current);
+  const { steps, index, step, q, json, fails, member, staff, service } = kit;
+  const { asRole, fingerprint, preflight, count } = kit;
+  const PREFLIGHT = kit.preflightSql;
+  const ROLLBACK = kit.rollbackSql;
 
   // ------------------------------------------------------- synthetic world
-  q(`create schema vmtest;
-    create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
-    declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); begin
-      insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
-        values(uid,p_label||'-'||uid||'@example.invalid',now(),jsonb_build_object('display_name','Fixture '||p_label));
-      insert into auth.sessions(id,user_id,aal) values(sid,uid,'aal1');
-      return jsonb_build_object('id',uid,'session',sid);
-    end$$;
-    create function vmtest.staff(p_label text,p_role text) returns jsonb language plpgsql as $$
-    declare m jsonb:=vmtest.member(p_label); begin
-      update auth.sessions set aal='aal2' where id=(m->>'session')::uuid;
-      insert into auth.mfa_factors(user_id,factor_type,status) values((m->>'id')::uuid,'totp','verified');
-      insert into private.staff_roles(user_id,role) values((m->>'id')::uuid,p_role);
-      return m;
-    end$$;
-    create function vmtest.verified(p_owner uuid,p_staff uuid,p_fp text) returns void language plpgsql as $$
-    begin
-      perform set_config('session_replication_role','replica',true);
-      insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
-        values(p_owner,gen_random_uuid(),p_fp,p_staff);
-      insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
-        values(p_owner,gen_random_uuid(),'+2782'||lpad((abs(hashtext(p_owner::text))%10000000)::text,7,'0'));
-      insert into private.verification_localities(owner_id,province_id,city_id) values(p_owner,'gp','gp_johannesburg');
-      perform set_config('session_replication_role','origin',true);
-    end$$;
-    -- An ended accepted review: the staff member was once reviewed as that person.
-    create function vmtest.past_identity(p_owner uuid,p_staff uuid,p_fp text) returns void language plpgsql as $$
-    begin
-      perform set_config('session_replication_role','replica',true);
-      insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by,revoked_at)
-        values(p_owner,gen_random_uuid(),p_fp,p_staff,now());
-      perform set_config('session_replication_role','origin',true);
-    end$$;
-    create function vmtest.post(p_owner uuid,p_kind text,p_area text) returns uuid language plpgsql as $$
-    declare pid uuid:=gen_random_uuid(); cat text; begin
-      select c.category_key into cat from private.post_category_contracts c
-        where c.kind=p_kind and c.area=p_area order by c.category_key limit 1;
-      insert into private.posts(id,owner_id,kind,area,category_key,activity_key,title,description,province_id,city_id)
-        values(pid,p_owner,p_kind,p_area,cat,(select a.key from private.category_activities a join private.categories c on c.key=a.category_key
-          where a.category_key=cat and c.activity_required order by a.key limit 1),
-          'Fixture '||p_kind||' '||left(pid::text,8),'A synthetic description long enough for every rule.','gp','gp_johannesburg');
-      if p_kind='listing' then insert into private.listing_details(post_id,price_mode,price_cents) values(pid,'amount',12000);
-      elsif p_kind='business' then insert into private.business_details(post_id) values(pid); end if;
-      return pid;
-    end$$;
-    create or replace function internal.current_verified_identity(p_owner uuid) returns text
-      language sql set search_path to 'pg_catalog' as $fn$
-      select f.identity_hmac from private.accepted_identity_facts f where f.owner_id=p_owner and f.revoked_at is null
-        and exists(select 1 from private.current_account_access a where a.id=p_owner) $fn$;`);
-  const user = (label) => json(`select vmtest.member('${label}');`);
-  const staffUser = (label, role) => json(`select vmtest.staff('${label}','${role}');`);
+  const world = createPaymentWorld(kit);
+  const { user, staffUser, post } = world;
   const admin = staffUser("pay-admin", "admin");
   const admin2 = staffUser("pay-admin2", "admin");
   const unreviewedAdmin = staffUser("pay-admin3", "admin");
   const moderator = staffUser("pay-moderator", "moderator");
-  const verified = (label) => {
-    const m = user(label);
-    m.fingerprint = fingerprintOf(label);
-    q(`select vmtest.verified('${m.id}','${admin.id}','${m.fingerprint}');`);
-    return m;
-  };
+  const verified = (label) => world.verified(label, admin);
   // Staff with an accepted ID review of their own (the third admin has none;
   // the fourth only one that has ended).
-  q(`select vmtest.verified('${admin.id}','${admin2.id}','${fingerprintOf("pay-admin")}');`);
-  q(`select vmtest.verified('${admin2.id}','${admin.id}','${fingerprintOf("pay-admin2")}');`);
+  world.review(admin, admin2, "pay-admin");
+  world.review(admin2, admin, "pay-admin2");
   const revokedAdmin = staffUser("pay-admin4", "admin");
-  q(
-    `select vmtest.past_identity('${revokedAdmin.id}','${admin.id}','${fingerprintOf("pay-admin4")}');`
-  );
-  const post = (owner, kind, area) => q(`select vmtest.post('${owner.id}','${kind}','${area}');`);
+  world.pastIdentity(revokedAdmin, admin, fingerprintOf("pay-admin4"));
   // A separate psql session, for the concurrency check.
-  const session = (sql) =>
-    new Promise((resolve) => {
-      const child = spawn(
-        "docker",
-        [
-          "exec",
-          "-i",
-          database.name,
-          "psql",
-          "-X",
-          "-q",
-          "-A",
-          "-t",
-          "-v",
-          "ON_ERROR_STOP=1",
-        ].concat(["-U", "postgres", "-d", "postgres"]),
-        { windowsHide: true }
-      );
-      let stdout = "",
-        stderr = "";
-      child.stdout.on("data", (data) => (stdout += data));
-      child.stderr.on("data", (data) => (stderr += data));
-      child.on("close", (status) => resolve({ status, stdout, stderr }));
-      child.stdin.end(`\\set VERBOSITY verbose\n${sql}`);
-    });
-  const sessionAfter = (ms, sql) =>
-    new Promise((resolve) => setTimeout(resolve, ms)).then(() => session(sql));
+  const { session, sessionAfter } = psqlSessions(database);
 
   const quote = (owner, plan, slots) =>
     json(
@@ -308,27 +212,11 @@ try {
   assert.match(preflight()[0][1], /paid but not delivered: 1;/);
 
   // ------------------------------------------------------------- apply
-  const before = fingerprint();
-  applySteps(database, [step]);
-  const after = fingerprint();
-
-  await check("apply, roll back and apply again are clean", () => {
-    assert.notEqual(after, before);
-    assert.deepEqual(
-      preflight().map((r) => r[0]),
-      ["summary"]
-    );
-    assert.match(
-      preflight()[0][1],
-      /^staff payment fixes: already applied; paid but not delivered: 1; refunds waiting for approval: 0$/
-    );
-    applySteps(database, [{ label: "staff payment fixes rollback", sql: ROLLBACK }]);
-    assert.equal(fingerprint(), before, "the rollback leaves the pre-update schema");
-    assert.match(preflight()[0][1], /^staff payment fixes: update not applied/);
-    applySteps(database, [step]);
-    assert.equal(fingerprint(), after, "re-applying gives the same schema");
-    applySteps(database, [step]);
-    assert.equal(fingerprint(), after, "a repeated run changes nothing");
+  await applyAndProveRollback(kit, database, check, {
+    label: "staff payment fixes",
+    applied:
+      /^staff payment fixes: already applied; paid but not delivered: 1; refunds waiting for approval: 0$/,
+    notApplied: /^staff payment fixes: update not applied/,
   });
 
   // ------------------------------------------------------- needs attention

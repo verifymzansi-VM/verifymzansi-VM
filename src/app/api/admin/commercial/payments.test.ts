@@ -152,3 +152,116 @@ it("activates a paid but undelivered payment and approves a waiting refund", asy
     error: "Another staff member must approve this refund: you recorded it.",
   });
 });
+
+const transfer = {
+  action: "payment.record_transfer",
+  accountEmail: "thandi@example.test",
+  termDays: 30,
+  slots: 2,
+  amountCents: 13800,
+  bankReference: "FNB 2026-11 A1",
+  clearedOn: "2026-11-13",
+  coolingOffWaiver: true,
+  reason: "EFT cleared; written waiver on file",
+};
+
+const waitingRecord = {
+  transfer_id: line,
+  status: "awaiting_confirmation",
+  account_id: payment,
+  customer_email: "thandi@example.test",
+  similar_records: 0,
+  customer_name: "Thandi D.",
+  term_days: 30,
+  slots: 2,
+  amount_received_cents: 13800,
+  bank_reference: "FNB 2026-11 A1",
+  cleared_on: "2026-11-13",
+  reason: "EFT cleared; written waiver on file",
+  recorded_at: "2026-11-13T10:00:00.000+00:00",
+  recorded_by_me: true,
+  recorded_by_name: null,
+  payment_id: null,
+};
+
+it("confirms a waiting transfer, and refuses the recorder in plain words", async () => {
+  rpc.mockResolvedValueOnce({
+    data: {
+      ...waitingRecord,
+      status: "confirmed",
+      recorded_by_me: false,
+      payment_id: payment,
+      commissions: 0,
+      slots_started: 2,
+      ends_at: "2026-12-13T10:00:00.000+00:00",
+      repeated: false,
+    },
+    error: null,
+  });
+  const confirmed = await POST(request({ action: "payment.transfer_confirm", transferId: line }));
+  expect(confirmed.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "confirm_staff_invoice_payment",
+    { p_transfer_id: line },
+    { get: false }
+  );
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: { code: "42501", details: "transfer_confirmer_same", message: "refused" },
+  });
+  const own = await POST(request({ action: "payment.transfer_confirm", transferId: line }));
+  expect(own.status).toBe(403);
+  expect(await own.json()).toMatchObject({
+    error: "Another staff member must confirm this bank transfer: you recorded it.",
+  });
+  rpc.mockResolvedValueOnce({
+    data: { ...waitingRecord, status: "declined", repeated: false },
+    error: null,
+  });
+  const declined = await POST(
+    request({
+      action: "payment.transfer_decline",
+      transferId: line,
+      reason: "The bank shows no such transfer",
+    })
+  );
+  expect(declined.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "decline_staff_invoice_payment",
+    { p_transfer_id: line, p_reason: "The bank shows no such transfer" },
+    { get: false }
+  );
+});
+
+it("records a cleared bank transfer with the staff command", async () => {
+  rpc.mockResolvedValueOnce({ data: { ...waitingRecord, repeated: false }, error: null });
+  const response = await POST(request(transfer));
+  expect(response.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "record_staff_invoice_payment",
+    {
+      p_account_email: "thandi@example.test",
+      p_term_days: 30,
+      p_slots: 2,
+      p_amount_cents: 13800,
+      p_bank_reference: "FNB 2026-11 A1",
+      p_cleared_on: "2026-11-13",
+      p_cooling_off_waiver: true,
+      p_reason: "EFT cleared; written waiver on file",
+    },
+    { get: false }
+  );
+});
+
+it("refuses a bank transfer without the written waiver or with a bad term before any call", async () => {
+  const unticked = await POST(request({ ...transfer, coolingOffWaiver: false }));
+  expect(unticked.status).toBe(422);
+  expect(await unticked.json()).toMatchObject({
+    error: "Confirm the customer agreed in writing to the cooling-off waiver.",
+  });
+  const term = await POST(request({ ...transfer, termDays: 60 }));
+  expect(term.status).toBe(422);
+  const date = await POST(request({ ...transfer, clearedOn: "13/11/2026" }));
+  expect(date.status).toBe(422);
+  expect(rpc).not.toHaveBeenCalled();
+});

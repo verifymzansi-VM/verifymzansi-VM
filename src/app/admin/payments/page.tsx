@@ -1,9 +1,18 @@
 import { requireStaff } from "@/lib/auth/require-staff";
 import Link from "next/link";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
-import { readStaffPaymentList, staffPaymentListFilter } from "@/lib/foundation/staff-payments";
+import {
+  readStaffBankTransfers,
+  readStaffBankTransfersWaiting,
+  readStaffPaymentList,
+  staffPaymentListFilter,
+} from "@/lib/foundation/staff-payments";
+import { BankTransferPanel } from "@/components/admin/commercial/bank-transfer-form";
 import { PaymentsPanel } from "@/components/admin/commercial/partners-panel";
 import { PageHeader } from "@/components/layout/page-header";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("AdminPayments");
 
 const PAGE_SIZE = 50;
 
@@ -22,16 +31,55 @@ export default async function PaymentsAdminPage({
   const parsedPage = Number(params.page || 1);
   const page =
     Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
-  const { rows, total, needsAttention, awaitingApproval } = await (async () => {
-    const { api } = await readFoundationServerSession();
-    const result = await readStaffPaymentList(api, page, status);
-    return {
-      rows: result.items,
-      total: result.total,
-      needsAttention: result.needs_attention,
-      awaitingApproval: result.awaiting_approval,
-    };
-  })();
+  const canConfirm = staff.assignedCapabilities?.includes("payments:confirm_transfer") === true;
+  const { rows, total, needsAttention, awaitingApproval, transfersUnavailable, waiting } =
+    await (async () => {
+      const { api } = await readFoundationServerSession();
+      const result = await readStaffPaymentList(api, page, status);
+      // Payments confirmed from a bank transfer show its reference, and the
+      // transfers waiting for a second staff member are listed; the payments
+      // list still loads if these reads fail, with a warning.
+      let unavailable = false;
+      const missing = (error: unknown) => {
+        log.warn("Bank transfer details unavailable", { error });
+        unavailable = true;
+      };
+      const [details, waitingTransfers] = await Promise.all([
+        readStaffBankTransfers(
+          api,
+          result.items.map((item) => item.id)
+        ).catch((error: unknown) => {
+          missing(error);
+          return [];
+        }),
+        readStaffBankTransfersWaiting(api)
+          .then((read) => read.items)
+          .catch((error: unknown) => {
+            missing(error);
+            return [];
+          }),
+      ]);
+      const transfers = new Map(details.map((transfer) => [transfer.payment_id, transfer]));
+      return {
+        transfersUnavailable: unavailable,
+        waiting: waitingTransfers,
+        rows: result.items.map((item) => {
+          const transfer = transfers.get(item.id);
+          return transfer
+            ? {
+                ...item,
+                bank_transfer: {
+                  bank_reference: transfer.bank_reference,
+                  cleared_on: transfer.cleared_on,
+                },
+              }
+            : item;
+        }),
+        total: result.total,
+        needsAttention: result.needs_attention,
+        awaitingApproval: result.awaiting_approval,
+      };
+    })();
 
   const hrefFor = (nextPage: number) => {
     const query = new URLSearchParams();
@@ -99,6 +147,14 @@ export default async function PaymentsAdminPage({
         {total.toLocaleString("en-ZA")} {total === 1 ? "payment" : "payments"}
         {total > PAGE_SIZE && ` · Page ${page} of ${Math.ceil(total / PAGE_SIZE)}`}
       </p>
+      {transfersUnavailable ? (
+        <p role="alert" className="text-sm text-destructive">
+          Bank transfer details could not be loaded. Reload before refunding a payment.
+        </p>
+      ) : null}
+      {canRefund || canConfirm || waiting.length > 0 ? (
+        <BankTransferPanel canRecord={canRefund} canConfirm={canConfirm} waiting={waiting} />
+      ) : null}
       <PaymentsPanel payments={rows} canRefund={canRefund} />
       {(page > 1 || rows.length === PAGE_SIZE) && (
         <nav aria-label="Payment pages" className="flex gap-4 text-sm">
