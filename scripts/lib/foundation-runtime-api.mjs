@@ -66,7 +66,7 @@ export async function probeFoundationRuntimeApi(
     for (const arg of fn.arguments) {
       assert.match(arg.name, /^p_[a-z][a-z0-9_]{0,79}$/);
       if (arg.optional) continue;
-      if (arg.sqlType === "integer") args[arg.name] = 1;
+      if (arg.sqlType === "integer" || arg.sqlType === "bigint") args[arg.name] = 1;
       else if (arg.sqlType === "boolean") args[arg.name] = true;
       else if (["text[]", "uuid[]"].includes(arg.sqlType)) args[arg.name] = [];
       else if (arg.sqlType === "timestamp with time zone") args[arg.name] = "2000-01-01T00:00:00Z";

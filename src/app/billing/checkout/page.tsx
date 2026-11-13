@@ -9,6 +9,8 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationCheckoutSummary } from "@/lib/foundation/checkout-summary";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readFoundationMySlots } from "@/lib/foundation/billing-runtime";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { createLogger } from "@/lib/utils/logger";
 import { logDegradedRead } from "@/lib/utils/request-failure";
@@ -25,8 +27,30 @@ const AREA_LABELS: Record<string, string> = {
 
 const log = createLogger("CheckoutPage");
 
+/** The member's Individual slots, so the checkout offers only what the
+ * database would accept (ID review, limit). Without it the database still
+ * refuses, and the page shows its answer. */
+async function loadSlotStatus() {
+  try {
+    const { individual } = await readFoundationMySlots((await readFoundationServerSession()).api);
+    return {
+      verified: individual.verified,
+      held: individual.held,
+      pending: individual.pending,
+      limit: individual.limit,
+    };
+  } catch (error) {
+    logDegradedRead(log, "Checkout slot status unavailable", error);
+    return null;
+  }
+}
+
 async function loadSummary(planId: string): Promise<CheckoutSummary | null> {
-  if (getDataBackend() === "foundation") return readFoundationCheckoutSummary(planId);
+  if (getDataBackend() === "foundation") {
+    const summary = await readFoundationCheckoutSummary(planId);
+    if (!summary?.slotTerms) return summary;
+    return { ...summary, slotStatus: await loadSlotStatus() };
+  }
   const { plan } = await resolveBillingPlanSelection(createAdminClient() as never, planId, {
     requireActive: true,
   });
