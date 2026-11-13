@@ -288,8 +288,9 @@ test.describe("verification wizard with the camera", () => {
 
     await page.locator("#province").selectOption("Gauteng");
     await page.locator("#city").selectOption("Johannesburg");
-    await page.getByRole("button", { name: /detect province and city/i }).click();
-    await expect(page.getByText(/could not detect|detection is unavailable/i)).toBeVisible();
+    // "Detect province and city" is hidden until it works (src/lib/hidden-features.ts).
+    await expect(page.getByRole("button", { name: /detect province and city/i })).toHaveCount(0);
+    await expect(page.getByText(/detection is approximate/i)).toHaveCount(0);
     await expect(page.locator("#province")).toHaveValue("Gauteng");
     await expect(page.locator("#city")).toHaveValue("Johannesburg");
     await expect(page.locator("#town")).toHaveCount(0);
