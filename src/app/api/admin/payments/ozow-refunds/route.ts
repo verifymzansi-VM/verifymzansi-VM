@@ -3,8 +3,9 @@ import { z } from "zod";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import {
   approveStaffRefund,
+  assertStaffRefundApprovable,
   closeStaffOzowRefund,
-  readStaffOzowRefunds,
+  readStaffRefundPayment,
   recordStaffDashboardRefund,
   requestStaffOzowRefund,
   sendOzowRefund,
@@ -17,6 +18,8 @@ import {
   OzowRefundNotFoundError,
   OzowRefundUnavailableError,
   ozowApiRefundsEnabled,
+  ozowRefundKeyConfigured,
+  type OzowRefundFact,
 } from "@/lib/payments/ozow-refunds";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -53,21 +56,25 @@ const refundId = z
   .regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/);
 
 /**
- * A refund id typed from the Ozow dashboard is read back from Ozow first: it
- * must exist and must not have failed. When Ozow cannot be asked (the reason
- * for this path), it is recorded and the 10-minute job reads it later and
- * alerts staff when Ozow's transaction or amount differs.
+ * A refund id typed from the Ozow dashboard is read back from Ozow first,
+ * whenever the refund key is set: it must exist, must not have failed, and
+ * must be a refund of this payment's Ozow transaction for its amount (the
+ * database checks the last two again). When Ozow cannot be asked, nothing is
+ * recorded. Without the refund key nothing can be read: null.
  */
-async function checkDashboardRefund(value: string) {
+async function readDashboardRefund(
+  value: string,
+  payment: { ozow_transaction_id: string | null; amount_cents: number }
+): Promise<OzowRefundFact | null> {
   const id = refundId.safeParse(value);
-  if (!id.success) return; // the adapter refuses it in plain words
+  if (!id.success) return null; // the adapter refuses it in plain words
+  if (!ozowRefundKeyConfigured()) {
+    log.warn("Dashboard refund recorded without the refund key to read it from Ozow");
+    return null;
+  }
+  let fact: OzowRefundFact;
   try {
-    const fact = await createOzowRefundClient().get(id.data.toLowerCase());
-    if (["Failed", "Cancelled", "Invalid", "Error", "Returned"].includes(fact.status))
-      throw new FoundationStaffCommandError(
-        409,
-        `Ozow reports this refund as '${fact.status.toLowerCase()}': no money went back. Do not record it.`
-      );
+    fact = await createOzowRefundClient().get(id.data.toLowerCase());
   } catch (error) {
     if (error instanceof OzowRefundNotFoundError)
       throw new FoundationStaffCommandError(
@@ -75,14 +82,32 @@ async function checkDashboardRefund(value: string) {
         "Ozow has no refund with that id. Copy the refund id from the refund in the Ozow dashboard."
       );
     if (!(error instanceof OzowRefundUnavailableError)) throw error;
-    log.warn("Dashboard refund recorded without reading it back from Ozow");
+    throw new FoundationStaffCommandError(
+      503,
+      "Ozow could not be asked about this refund, so it was not recorded. Try again in a few minutes."
+    );
   }
+  if (["Failed", "Cancelled", "Invalid", "Error", "Returned"].includes(fact.status))
+    throw new FoundationStaffCommandError(
+      409,
+      `Ozow reports this refund as '${fact.status.toLowerCase()}': no money went back. Do not record it.`
+    );
+  if (
+    fact.transactionId !== payment.ozow_transaction_id ||
+    fact.amountCents !== payment.amount_cents
+  )
+    throw new FoundationStaffCommandError(
+      409,
+      "This Ozow refund is for another payment or amount. Check the refund id in the Ozow dashboard."
+    );
+  return fact;
 }
 
 /**
- * POST /api/admin/payments/ozow-refunds — staff refunds through Ozow, only
- * while OZOW_API_REFUNDS_ENABLED is on (otherwise 404), and the record of a
- * refund made in the Ozow dashboard (always). Same-origin, CSRF, rate limit and a
+ * POST /api/admin/payments/ozow-refunds — staff refunds through Ozow (asking
+ * for one and approving one only while OZOW_API_REFUNDS_ENABLED is on; closing
+ * one that never reached Ozow always), and the record of a refund made in the
+ * Ozow dashboard (always). Same-origin, CSRF, rate limit and a
  * verified staff session (handleFoundationOwnerRoute); the database checks
  * the staff member, the approval rules and the payment. When the database
  * answers "approved", the server sends the refund to Ozow at once with the
@@ -103,22 +128,27 @@ export async function POST(request: Request) {
     command: async (api, input) => {
       const body = schema.parse(input);
       if (body.action === "refund.dashboard") {
-        // Staff only (payment view, admins) before the server asks Ozow
-        // anything with the refund key; the command checks the refund right.
-        await readStaffOzowRefunds(api, [body.paymentId]);
-        await checkDashboardRefund(body.ozowRefundId);
-        return { success: true, data: await recordStaffDashboardRefund(api, body) };
+        // The refund right (admins, recent second factor) is checked before
+        // the server asks Ozow anything with the refund key.
+        const payment = await readStaffRefundPayment(api, body.paymentId, body.lineId);
+        if (!payment) throw new FoundationStaffCommandError(404, "This payment was not found.");
+        const ozowFact = await readDashboardRefund(body.ozowRefundId, payment);
+        return {
+          success: true,
+          data: await recordStaffDashboardRefund(api, { ...body, ozowFact }),
+        };
       }
-      // Recording a dashboard refund stays open while refunds through Ozow are
-      // switched off (typed references retire once Ozow refunds were used);
-      // sending, approving and closing need the switch.
-      if (!ozowApiRefundsEnabled())
-        throw new FoundationStaffCommandError(404, "Refunds through Ozow are not switched on.");
+      // Recording a dashboard refund and closing a refund that never reached
+      // Ozow stay open while refunds through Ozow are switched off, so no
+      // record is stranded; asking for one and approving one need the switch.
       if (body.action === "refund.close")
         return {
           success: true,
           data: await closeStaffOzowRefund(api, body.requestId, body.reason),
         };
+      if (body.action === "refund.request" && !ozowApiRefundsEnabled())
+        throw new FoundationStaffCommandError(404, "Refunds through Ozow are not switched on.");
+      if (body.action === "refund.approve") await assertStaffRefundApprovable(api, body.requestId);
       const recorded =
         body.action === "refund.request"
           ? await requestStaffOzowRefund(api, body)

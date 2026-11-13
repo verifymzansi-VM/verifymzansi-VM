@@ -1,7 +1,7 @@
 -- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
 -- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
 
-CREATE OR REPLACE FUNCTION internal.record_staff_ozow_refund(p_channel text, p_payment_id uuid, p_line_id uuid, p_reason_code text, p_reason text, p_ozow_refund_id uuid)
+CREATE OR REPLACE FUNCTION internal.record_staff_ozow_refund(p_channel text, p_payment_id uuid, p_line_id uuid, p_reason_code text, p_reason text, p_ozow_refund_id uuid, p_ozow_fact jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
  SET search_path TO 'pg_catalog'
@@ -17,6 +17,14 @@ begin
   end if;
   if p_channel = 'dashboard' and p_ozow_refund_id is null then
     raise exception 'Ozow refund id required' using errcode='22023', detail='ozow_refund_id_required';
+  end if;
+  -- The refund as the website read it from Ozow (transaction, amount and
+  -- status), when it could: it must be this payment's and this amount. It
+  -- only refuses: Ozow's status is stored only when the server's own
+  -- follow-up reads the refund back (internal.apply_ozow_refund_status).
+  if p_ozow_fact is not null and (p_channel <> 'dashboard' or not internal.valid_ozow_refund_fact(p_ozow_fact)
+      or p_ozow_fact->>'refund_id' is distinct from p_ozow_refund_id::text) then
+    raise exception 'valid Ozow refund required' using errcode='22023';
   end if;
   if p_reason_code is null or p_reason_code not in ('billing_error', 'duplicate', 'our_failure_after_fix_offered',
       's14_cancellation', 'breach_credit') then
@@ -90,6 +98,15 @@ begin
     raise exception 'a refund of this payment is on its way through Ozow' using errcode='PT409', detail='refund_in_flight';
   end if;
   amount := coalesce(line.amount_cents, pay.amount_cents);
+  if p_ozow_fact is not null then
+    if (p_ozow_fact->>'transaction_id')::uuid is distinct from transaction
+        or (p_ozow_fact->>'amount_cents')::bigint is distinct from amount then
+      raise exception 'this Ozow refund is for another payment or amount' using errcode='PT409', detail='ozow_refund_mismatch';
+    end if;
+    if p_ozow_fact->>'status' in ('Failed', 'Cancelled', 'Returned', 'Invalid', 'Error') then
+      raise exception 'Ozow has no paid refund with this id' using errcode='PT409', detail='refund_ozow_failed';
+    end if;
+  end if;
   refunded_before := internal.payment_refunded_before_cents(pay.id);
   approval := internal.refund_needs_approval('refunded', refunded_before, amount);
   if p_channel = 'dashboard' and not approval then
@@ -123,5 +140,5 @@ begin
     'payment_status', (select p.status from private.payments p where p.id = pay.id), 'repeated', false);
 end;
 $function$;
-alter function internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid) owner to postgres;
-revoke all on function internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid) from public;
+alter function internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid,jsonb) owner to postgres;
+revoke all on function internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid,jsonb) from public;

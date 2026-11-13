@@ -4154,6 +4154,11 @@
           "name": "p_ozow_refund_id",
           "sqlType": "uuid",
           "optional": false
+        },
+        {
+          "name": "p_ozow_fact",
+          "sqlType": "jsonb",
+          "optional": false
         }
       ],
       "returns": "jsonb",
@@ -4163,7 +4168,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment refund capability (admins) and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; records a refund an admin made by hand in the Ozow dashboard for a completed Ozow payment or one open slot, with Ozow's refund id (used once) and a reason code; the same approval rule as every refund (above R1,000 a second, different staff member), otherwise it takes effect at once as today's refunds do."
+      "authority": "Current payment refund capability (admins) and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; records a refund an admin made by hand in the Ozow dashboard for a completed Ozow payment or one open slot, with Ozow's refund id (used once) and a reason code, and with the refund as the website read it from Ozow when it could (that id, this payment's Ozow transaction and amount, and not failed, cancelled, returned, invalid or in error; it only refuses, Ozow's status is stored only by the server's read-back); the same approval rule as every refund (above R1,000 a second, different staff member), otherwise it takes effect at once as today's refunds do."
     },
     {
       "name": "get_staff_ozow_refunds",
@@ -4201,7 +4206,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Service-only; hands an approved API refund to the server's sender once (status sent) with its Idempotency-Key, Ozow transaction, amount and reason code; an unknown send may be handed over again with the same key at most twice more, five minutes apart and within six hours; a payment that changed before the first send fails the record without contacting Ozow and alerts staff."
+      "authority": "Service-only; hands an approved API refund to the server's sender once (status sent) with its Idempotency-Key, Ozow transaction, amount and reason code; an unknown send may be handed over again with the same key at most twice more, 30 minutes apart and within six hours; a payment that changed before the first send fails the record without contacting Ozow and alerts staff."
     },
     {
       "name": "list_ozow_refund_sends_due",
@@ -4345,6 +4350,35 @@
         "service_role": false
       },
       "authority": "Current payment refund capability (admins) and recent authenticator proof; the staff member's own current accepted ID review, never the requester's identity (checked again after the lock waits) and never a payment of their own identity; closes, with a reason, a refund through Ozow that never reached Ozow: approved and never sent, or a send whose answer was lost when the server found no such refund at Ozow more than a day after it was sent. The record fails; nothing else changes."
+    },
+    {
+      "name": "get_staff_refund_context",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_line_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability (admins) and recent authenticator proof, checked before the website asks Ozow anything for staff; for a payment (or one of its slots), its Ozow transaction id and the amount a refund of it is; for a refund record, its channel, status and whether Ozow's status of it was read or it was seen missing. No account, contact or audit details."
     }
   ]
 }

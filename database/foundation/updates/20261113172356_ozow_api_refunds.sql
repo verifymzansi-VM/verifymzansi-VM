@@ -39,7 +39,7 @@
 -- 3. New service commands for the website's server (service_role only):
 --    api.claim_ozow_refund_send(p_request_id) hands an approved API refund to
 --    the sender once ("sent"); a send whose outcome is unknown may be retried
---    with the same Idempotency-Key at most twice more, five minutes apart and
+--    with the same Idempotency-Key at most twice more, 30 minutes apart and
 --    within six hours. api.list_ozow_refund_sends_due(p_limit) lists approved
 --    refunds the server has not sent and unknown sends due a retry.
 --    api.record_ozow_refund_send(p_request_id, p_result) stores Ozow's answer:
@@ -519,7 +519,7 @@ revoke all on function internal.ozow_refund_problem(uuid,text,text,text) from pu
 
 -- 3. Staff commands. The shared rules of an API or dashboard refund record.
 CREATE OR REPLACE FUNCTION internal.record_staff_ozow_refund(p_channel text, p_payment_id uuid, p_line_id uuid,
-  p_reason_code text, p_reason text, p_ozow_refund_id uuid)
+  p_reason_code text, p_reason text, p_ozow_refund_id uuid, p_ozow_fact jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
  SET search_path TO 'pg_catalog'
@@ -535,6 +535,14 @@ begin
   end if;
   if p_channel = 'dashboard' and p_ozow_refund_id is null then
     raise exception 'Ozow refund id required' using errcode='22023', detail='ozow_refund_id_required';
+  end if;
+  -- The refund as the website read it from Ozow (transaction, amount and
+  -- status), when it could: it must be this payment's and this amount. It
+  -- only refuses: Ozow's status is stored only when the server's own
+  -- follow-up reads the refund back (internal.apply_ozow_refund_status).
+  if p_ozow_fact is not null and (p_channel <> 'dashboard' or not internal.valid_ozow_refund_fact(p_ozow_fact)
+      or p_ozow_fact->>'refund_id' is distinct from p_ozow_refund_id::text) then
+    raise exception 'valid Ozow refund required' using errcode='22023';
   end if;
   if p_reason_code is null or p_reason_code not in ('billing_error', 'duplicate', 'our_failure_after_fix_offered',
       's14_cancellation', 'breach_credit') then
@@ -608,6 +616,15 @@ begin
     raise exception 'a refund of this payment is on its way through Ozow' using errcode='PT409', detail='refund_in_flight';
   end if;
   amount := coalesce(line.amount_cents, pay.amount_cents);
+  if p_ozow_fact is not null then
+    if (p_ozow_fact->>'transaction_id')::uuid is distinct from transaction
+        or (p_ozow_fact->>'amount_cents')::bigint is distinct from amount then
+      raise exception 'this Ozow refund is for another payment or amount' using errcode='PT409', detail='ozow_refund_mismatch';
+    end if;
+    if p_ozow_fact->>'status' in ('Failed', 'Cancelled', 'Returned', 'Invalid', 'Error') then
+      raise exception 'Ozow has no paid refund with this id' using errcode='PT409', detail='refund_ozow_failed';
+    end if;
+  end if;
   refunded_before := internal.payment_refunded_before_cents(pay.id);
   approval := internal.refund_needs_approval('refunded', refunded_before, amount);
   if p_channel = 'dashboard' and not approval then
@@ -641,8 +658,8 @@ begin
     'payment_status', (select p.status from private.payments p where p.id = pay.id), 'repeated', false);
 end;
 $function$;
-alter function internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid) owner to postgres;
-revoke all on function internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid) from public, anon, authenticated, service_role;
+alter function internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid,jsonb) owner to postgres;
+revoke all on function internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid,jsonb) from public, anon, authenticated, service_role;
 
 CREATE OR REPLACE FUNCTION internal.request_staff_ozow_refund(p_payment_id uuid, p_line_id uuid, p_reason_code text,
   p_reason text)
@@ -651,7 +668,7 @@ CREATE OR REPLACE FUNCTION internal.request_staff_ozow_refund(p_payment_id uuid,
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.record_staff_ozow_refund('api', p_payment_id, p_line_id, p_reason_code, p_reason, null);
+  select internal.record_staff_ozow_refund('api', p_payment_id, p_line_id, p_reason_code, p_reason, null, null);
 $function$;
 alter function internal.request_staff_ozow_refund(uuid,uuid,text,text) owner to postgres;
 revoke all on function internal.request_staff_ozow_refund(uuid,uuid,text,text) from public, anon, authenticated, service_role;
@@ -670,29 +687,31 @@ revoke all on function api.request_staff_ozow_refund(uuid,uuid,text,text) from p
 grant execute on function api.request_staff_ozow_refund(uuid,uuid,text,text) to authenticated;
 
 CREATE OR REPLACE FUNCTION internal.record_staff_dashboard_refund(p_payment_id uuid, p_line_id uuid, p_reason_code text,
-  p_reason text, p_ozow_refund_id uuid)
+  p_reason text, p_ozow_refund_id uuid, p_ozow_fact jsonb)
  RETURNS jsonb
  LANGUAGE sql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.record_staff_ozow_refund('dashboard', p_payment_id, p_line_id, p_reason_code, p_reason, p_ozow_refund_id);
+  select internal.record_staff_ozow_refund('dashboard', p_payment_id, p_line_id, p_reason_code, p_reason, p_ozow_refund_id,
+    p_ozow_fact);
 $function$;
-alter function internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid) owner to postgres;
-revoke all on function internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid) from public, anon, authenticated, service_role;
-grant execute on function internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid) to authenticated;
+alter function internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb) owner to postgres;
+revoke all on function internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb) from public, anon, authenticated, service_role;
+grant execute on function internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb) to authenticated;
 
 CREATE OR REPLACE FUNCTION api.record_staff_dashboard_refund(p_payment_id uuid, p_line_id uuid, p_reason_code text,
-  p_reason text, p_ozow_refund_id uuid)
+  p_reason text, p_ozow_refund_id uuid, p_ozow_fact jsonb)
  RETURNS jsonb
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.record_staff_dashboard_refund(p_payment_id, p_line_id, p_reason_code, p_reason, p_ozow_refund_id);
+  select internal.record_staff_dashboard_refund(p_payment_id, p_line_id, p_reason_code, p_reason, p_ozow_refund_id,
+    p_ozow_fact);
 $function$;
-alter function api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid) owner to postgres;
-revoke all on function api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid) from public, anon, authenticated, service_role;
-grant execute on function api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid) to authenticated;
+alter function api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb) owner to postgres;
+revoke all on function api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb) from public, anon, authenticated, service_role;
+grant execute on function api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb) to authenticated;
 
 -- A second, different staff member approves a waiting refund: a reference or
 -- dashboard refund takes effect now; an API refund becomes approved, for the
@@ -865,7 +884,7 @@ grant execute on function api.get_staff_ozow_refunds(uuid[]) to authenticated;
 -- 4. Service commands for the website's server.
 -- The sender takes an approved API refund once ("sent"). A send whose outcome
 -- is unknown (no answer, a server error) may be taken again, with the same
--- Idempotency-Key, at most twice more, five minutes apart and within six
+-- Idempotency-Key, at most twice more, 30 minutes apart and within six
 -- hours; Ozow returns the refund it already made for that key. A payment that
 -- changed before the first send fails the record without contacting Ozow.
 CREATE OR REPLACE FUNCTION internal.claim_ozow_refund_send(p_request_id uuid)
@@ -897,7 +916,7 @@ begin
     update private.payment_refund_requests set status = 'sent', sent_at = statement_timestamp(), send_attempts = 1,
       last_send_at = statement_timestamp(), send_outcome = 'unknown' where id = request.id returning * into request;
   elsif request.status = 'sent' and request.send_outcome = 'unknown' and request.ozow_refund_id is null
-      and request.send_attempts < 3 and request.last_send_at <= statement_timestamp() - interval '5 minutes'
+      and request.send_attempts < 3 and request.last_send_at <= statement_timestamp() - interval '30 minutes'
       and request.sent_at > statement_timestamp() - interval '6 hours' then
     update private.payment_refund_requests set send_attempts = send_attempts + 1, last_send_at = statement_timestamp()
       where id = request.id returning * into request;
@@ -905,7 +924,7 @@ begin
     return jsonb_build_object('request_id', request.id, 'claimed', false, 'status', request.status);
   end if;
   return jsonb_build_object('request_id', request.id, 'claimed', true, 'status', request.status,
-    'attempt', request.send_attempts, 'idempotency_key', request.ozow_reference,
+    'attempt', request.send_attempts, 'sent_at', request.sent_at, 'idempotency_key', request.ozow_reference,
     'transaction_id', request.ozow_transaction_id, 'amount_cents', request.amount_cents,
     'reason_code', request.reason_code);
 end;
@@ -941,7 +960,7 @@ begin
       select r.id, coalesce(r.last_send_at, r.approved_at) as due_at from private.payment_refund_requests r
       where r.channel = 'api' and ((r.status = 'approved' and r.approved_at <= statement_timestamp() - interval '2 minutes')
         or (r.status = 'sent' and r.send_outcome = 'unknown' and r.ozow_refund_id is null and r.send_attempts < 3
-          and r.last_send_at <= statement_timestamp() - interval '5 minutes'
+          and r.last_send_at <= statement_timestamp() - interval '30 minutes'
           and r.sent_at > statement_timestamp() - interval '6 hours'))
       order by 2, 1 limit p_limit) d), '[]'::jsonb);
 end;
@@ -1288,6 +1307,12 @@ begin
     end if;
   end if;
   if request.ozow_transaction_id is distinct from transaction or request.amount_cents <> amount then
+    -- A waiting dashboard refund whose id Ozow reports for another transaction
+    -- or amount is not the refund recorded: like one Ozow does not have, it
+    -- is never approved.
+    if request.channel = 'dashboard' and request.status = 'awaiting_approval' then
+      update private.payment_refund_requests set ozow_missing_at = statement_timestamp() where id = request.id;
+    end if;
     perform internal.ozow_refund_problem(request.payment_id, 'refund_mismatch', source, request.id::text);
     return jsonb_build_object('outcome', 'mismatch', 'request_id', request.id);
   end if;
@@ -1416,7 +1441,9 @@ begin
           and not (r.ozow_refund_id is null and r.send_outcome = 'unknown' and r.send_attempts < 3
             and r.sent_at > statement_timestamp() - interval '6 hours'))
         or (r.channel = 'dashboard' and r.status in ('awaiting_approval', 'applied')
-          and r.requested_at > statement_timestamp() - interval '30 days' and r.ozow_missing_at is null
+          and r.requested_at > statement_timestamp() - interval '30 days'
+          and (r.ozow_missing_at is null or (r.requested_at > statement_timestamp() - interval '7 days'
+            and coalesce(r.ozow_checked_at, '-infinity') <= statement_timestamp() - interval '6 hours'))
           and (r.ozow_status is null or r.ozow_status not in ('Complete', 'Failed', 'Cancelled', 'Returned', 'Invalid',
             'Error'))))
     -- Refunds through Ozow first: dashboard records never hold them back.
@@ -1558,5 +1585,54 @@ $function$;
 alter function api.close_staff_ozow_refund(uuid,text) owner to postgres;
 revoke all on function api.close_staff_ozow_refund(uuid,text) from public, anon, authenticated, service_role;
 grant execute on function api.close_staff_ozow_refund(uuid,text) to authenticated;
+
+-- What the website needs before it asks Ozow anything for staff (refund
+-- permission, recent second factor): for a payment (or one slot), its Ozow
+-- transaction and the amount a refund of it is; for a refund record, its
+-- channel, state and whether Ozow's status was read. Nothing else.
+CREATE OR REPLACE FUNCTION internal.get_staff_refund_context(p_payment_id uuid, p_line_id uuid, p_request_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid; result jsonb;
+begin
+  actor := internal.staff_actor('payments:refund');
+  if (p_payment_id is null) = (p_request_id is null) or (p_line_id is not null and p_payment_id is null) then
+    raise exception 'a payment or a refund request required' using errcode='22023';
+  end if;
+  if p_payment_id is not null then
+    select jsonb_build_object('ozow_transaction_id', internal.ozow_refund_transaction(p.id),
+        'amount_cents', coalesce(l.amount_cents, p.amount_cents))
+      into result
+      from private.payments p left join private.payment_lines l on l.id = p_line_id and l.payment_id = p.id
+      where p.id = p_payment_id and (p_line_id is null or l.id is not null);
+  else
+    select jsonb_build_object('channel', r.channel, 'status', r.status, 'ozow_checked', r.ozow_status is not null,
+        'ozow_missing', r.ozow_missing_at is not null)
+      into result
+      from private.payment_refund_requests r where r.id = p_request_id;
+  end if;
+  if internal.staff_actor('payments:refund') is distinct from actor then
+    raise exception 'staff actor changed' using errcode='42501';
+  end if;
+  return result;
+end;
+$function$;
+alter function internal.get_staff_refund_context(uuid,uuid,uuid) owner to postgres;
+revoke all on function internal.get_staff_refund_context(uuid,uuid,uuid) from public, anon, authenticated, service_role;
+grant execute on function internal.get_staff_refund_context(uuid,uuid,uuid) to authenticated;
+
+CREATE OR REPLACE FUNCTION api.get_staff_refund_context(p_payment_id uuid, p_line_id uuid, p_request_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select internal.get_staff_refund_context(p_payment_id, p_line_id, p_request_id);
+$function$;
+alter function api.get_staff_refund_context(uuid,uuid,uuid) owner to postgres;
+revoke all on function api.get_staff_refund_context(uuid,uuid,uuid) from public, anon, authenticated, service_role;
+grant execute on function api.get_staff_refund_context(uuid,uuid,uuid) to authenticated;
 
 commit;

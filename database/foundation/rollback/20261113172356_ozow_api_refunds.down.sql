@@ -13,7 +13,7 @@
 --
 -- It puts back the five function bodies the update replaced (the refund record
 -- guard, the money-returned sum, the approval of a waiting refund, the
--- reversal guard and the payment problem record), drops the update's 31 new
+-- reversal guard and the payment problem record), drops the update's 33 new
 -- functions, its indexes, constraints and columns, and puts back the earlier
 -- status, approver, payment problem reason and source constraints. Payments,
 -- slots, entitlements, commissions and every existing refund record keep their
@@ -28,7 +28,7 @@ do $$
 declare records bigint; problems bigint;
 begin
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.request_staff_ozow_refund(uuid,uuid,text,text)')) is distinct from 'cf120b37f56a25599011105d66e1a94b'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid)')) is distinct from 'ffa1f756f16316681ddce6d0d213db55'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb)')) is distinct from '835bdc316f8762ee0c441d86e79f82a8'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_ozow_refunds(uuid[])')) is distinct from '09755b758fde6141a93a2afc7ee43ece'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.claim_ozow_refund_send(uuid)')) is distinct from '436a4f6cf0ad64bc3c1eabc1bc079b2a'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.list_ozow_refund_sends_due(integer)')) is distinct from '410a5f50adefa396587ac5045f80e326'
@@ -38,19 +38,21 @@ begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.claim_ozow_refund_checks(integer)')) is distinct from 'af55530f14c06e80b56017c55d407725'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.report_ozow_refund_missing(uuid)')) is distinct from 'dc4ee76940d144ff60fcbca0cc0d1f72'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.close_staff_ozow_refund(uuid,text)')) is distinct from '916b8177461b733dbab5060a07f8e5e1'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.claim_ozow_refund_checks(integer)')) is distinct from 'd7716a64d8e175e14cd35f23a4cf0963'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_refund_context(uuid,uuid,uuid)')) is distinct from 'f7580a68a1fb083278b2bea3a69909dd'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.claim_ozow_refund_checks(integer)')) is distinct from 'fc88a84efa8b427b1c176e3e41762775'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.report_ozow_refund_missing(uuid)')) is distinct from 'b7ae6c2deac0c275b3bad89dec3c81fb'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.close_staff_ozow_refund(uuid,text)')) is distinct from '5b7a8a8d3f7bd430e0024fb2088338c3'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_staff_refund_context(uuid,uuid,uuid)')) is distinct from '00a72d4c37e7ea2726f3f47bfa9c4d97'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.ozow_refund_link_candidate(uuid,uuid,bigint,timestamptz)')) is distinct from 'f73ba1c23d33d6a03ad992fd34c71d8c'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.request_staff_ozow_refund(uuid,uuid,text,text)')) is distinct from 'fc7b44826c2e9631294794decac9211d'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid)')) is distinct from 'a0b442a5376baedc71e8c7c381d8b8e0'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid)')) is distinct from 'aebd7c14f574e08bf42353ca8a4293fe'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.request_staff_ozow_refund(uuid,uuid,text,text)')) is distinct from '2a6c9cb2ea7f62132bc10f29d4a27ab7'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb)')) is distinct from 'df0d1a2dbf3d2f306adc7eba2957e11b'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid,jsonb)')) is distinct from '90fd7db662d18b89fdce0e395f92ea0c'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_staff_ozow_refunds(uuid[])')) is distinct from 'ed9a446630dda6bdda7c78248da278a6'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_ozow_refund_view(private.payment_refund_requests,uuid)')) is distinct from 'c4ff0e12f1bfde14f2a0d7d1d5800a9c'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.claim_ozow_refund_send(uuid)')) is distinct from '54a567cdb0016c98ce2748f222c8e342'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.list_ozow_refund_sends_due(integer)')) is distinct from '64ead03337cca707f3dd17c50b62bec8'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.claim_ozow_refund_send(uuid)')) is distinct from '0b9666cbe9d56092d32b11e326c1fb90'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.list_ozow_refund_sends_due(integer)')) is distinct from '34b44167b37d7dcea9e2b5a0e7a17744'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_ozow_refund_send(uuid,jsonb)')) is distinct from '9e3bafab54e36843cc570cf196e9babf'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.apply_ozow_refund_status(jsonb)')) is distinct from '11d425d5feb78204959f069cb5e044ae'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.apply_ozow_refund_status(jsonb)')) is distinct from '22b002f9363cae60fd6b40635590a3a9'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.reconcile_ozow_refunds(jsonb)')) is distinct from '218a119128346ee7df387e651494eef1'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.apply_ozow_refund_state(uuid,text,timestamptz,timestamptz,text)')) is distinct from '431e2541a83cf8e892efd61aa5cacd4d'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.valid_ozow_refund_fact(jsonb)')) is distinct from '023cde0ed9da4adc588737b40751899d'
@@ -78,7 +80,7 @@ end$$;
 
 -- The update's functions (the API commands first).
 drop function if exists api.request_staff_ozow_refund(uuid,uuid,text,text);
-drop function if exists api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid);
+drop function if exists api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb);
 drop function if exists api.get_staff_ozow_refunds(uuid[]);
 drop function if exists api.claim_ozow_refund_send(uuid);
 drop function if exists api.list_ozow_refund_sends_due(integer);
@@ -88,13 +90,15 @@ drop function if exists api.reconcile_ozow_refunds(jsonb);
 drop function if exists api.claim_ozow_refund_checks(integer);
 drop function if exists api.report_ozow_refund_missing(uuid);
 drop function if exists api.close_staff_ozow_refund(uuid,text);
+drop function if exists api.get_staff_refund_context(uuid,uuid,uuid);
 drop function if exists internal.claim_ozow_refund_checks(integer);
 drop function if exists internal.report_ozow_refund_missing(uuid);
 drop function if exists internal.close_staff_ozow_refund(uuid,text);
+drop function if exists internal.get_staff_refund_context(uuid,uuid,uuid);
 drop function if exists internal.ozow_refund_link_candidate(uuid,uuid,bigint,timestamptz);
 drop function if exists internal.request_staff_ozow_refund(uuid,uuid,text,text);
-drop function if exists internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid);
-drop function if exists internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid);
+drop function if exists internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb);
+drop function if exists internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid,jsonb);
 drop function if exists internal.get_staff_ozow_refunds(uuid[]);
 drop function if exists internal.staff_ozow_refund_view(private.payment_refund_requests,uuid);
 drop function if exists internal.claim_ozow_refund_send(uuid);

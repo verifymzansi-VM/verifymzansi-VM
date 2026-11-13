@@ -88,11 +88,20 @@ export type FoundationRuntimeAuthenticatedDatabase = {
           p_reason_code: string;
           p_reason: string;
           p_ozow_refund_id: string;
+          p_ozow_fact: Json | null;
         };
         Returns: Json;
       };
       get_staff_ozow_refunds: { Args: { p_payment_ids: string[] }; Returns: Json };
       close_staff_ozow_refund: { Args: { p_request_id: string; p_reason: string }; Returns: Json };
+      get_staff_refund_context: {
+        Args: {
+          p_payment_id: string | null;
+          p_line_id: string | null;
+          p_request_id: string | null;
+        };
+        Returns: Json;
+      };
       confirm_staff_invoice_payment: { Args: { p_transfer_id: string }; Returns: Json };
       decline_staff_invoice_payment: {
         Args: { p_transfer_id: string; p_reason: string };

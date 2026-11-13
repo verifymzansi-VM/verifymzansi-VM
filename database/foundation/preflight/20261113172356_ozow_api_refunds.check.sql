@@ -6,7 +6,7 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and reads "update not applied".
 --
--- The summary says whether the update is absent (its 31 new functions and the
+-- The summary says whether the update is absent (its 33 new functions and the
 -- channel column of private.payment_refund_requests are absent, and the five
 -- functions it replaces have their reviewed earlier bodies) or applied (every
 -- body is the update's and the column is present), and counts the refunds
@@ -24,34 +24,36 @@ with added as (
     ('internal.ozow_refund_transaction(uuid)', '936ee7437cc4a204e8357e840d103b0b'),
     ('internal.reverse_payment_line(uuid,text,text,uuid)', '3f95168e1faacac2ca6f1431962c182c'),
     ('internal.ozow_refund_problem(uuid,text,text,text)', '8c7462925151c5f8f040162fb6263dc6'),
-    ('internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid)', 'aebd7c14f574e08bf42353ca8a4293fe'),
-    ('internal.request_staff_ozow_refund(uuid,uuid,text,text)', 'fc7b44826c2e9631294794decac9211d'),
+    ('internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid,jsonb)', '90fd7db662d18b89fdce0e395f92ea0c'),
+    ('internal.request_staff_ozow_refund(uuid,uuid,text,text)', '2a6c9cb2ea7f62132bc10f29d4a27ab7'),
     ('api.request_staff_ozow_refund(uuid,uuid,text,text)', 'cf120b37f56a25599011105d66e1a94b'),
-    ('internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid)', 'a0b442a5376baedc71e8c7c381d8b8e0'),
-    ('api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid)', 'ffa1f756f16316681ddce6d0d213db55'),
+    ('internal.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb)', 'df0d1a2dbf3d2f306adc7eba2957e11b'),
+    ('api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb)', '835bdc316f8762ee0c441d86e79f82a8'),
     ('internal.staff_ozow_refund_view(private.payment_refund_requests,uuid)', 'c4ff0e12f1bfde14f2a0d7d1d5800a9c'),
     ('internal.get_staff_ozow_refunds(uuid[])', 'ed9a446630dda6bdda7c78248da278a6'),
     ('api.get_staff_ozow_refunds(uuid[])', '09755b758fde6141a93a2afc7ee43ece'),
-    ('internal.claim_ozow_refund_send(uuid)', '54a567cdb0016c98ce2748f222c8e342'),
+    ('internal.claim_ozow_refund_send(uuid)', '0b9666cbe9d56092d32b11e326c1fb90'),
     ('api.claim_ozow_refund_send(uuid)', '436a4f6cf0ad64bc3c1eabc1bc079b2a'),
-    ('internal.list_ozow_refund_sends_due(integer)', '64ead03337cca707f3dd17c50b62bec8'),
+    ('internal.list_ozow_refund_sends_due(integer)', '34b44167b37d7dcea9e2b5a0e7a17744'),
     ('api.list_ozow_refund_sends_due(integer)', '410a5f50adefa396587ac5045f80e326'),
     ('internal.apply_ozow_refund_state(uuid,text,timestamptz,timestamptz,text)', '431e2541a83cf8e892efd61aa5cacd4d'),
     ('internal.valid_ozow_refund_fact(jsonb)', '023cde0ed9da4adc588737b40751899d'),
     ('internal.ozow_transaction_payment(uuid)', 'bfeb28fb4e3eea65fd4b51c3e3e2a0fa'),
     ('internal.record_ozow_refund_send(uuid,jsonb)', '9e3bafab54e36843cc570cf196e9babf'),
     ('api.record_ozow_refund_send(uuid,jsonb)', 'de2a72c4eaf64a58d7c4917b76cb0208'),
-    ('internal.apply_ozow_refund_status(jsonb)', '11d425d5feb78204959f069cb5e044ae'),
+    ('internal.apply_ozow_refund_status(jsonb)', '22b002f9363cae60fd6b40635590a3a9'),
     ('api.apply_ozow_refund_status(jsonb)', 'cb0b3fd2432f28aedac7dcbdf7d1a2cb'),
     ('internal.reconcile_ozow_refunds(jsonb)', '218a119128346ee7df387e651494eef1'),
     ('api.reconcile_ozow_refunds(jsonb)', 'ea40cc8571dab987fcb5b49d9f27ba53')
     ,('internal.ozow_refund_link_candidate(uuid,uuid,bigint,timestamp with time zone)', 'f73ba1c23d33d6a03ad992fd34c71d8c'),
-    ('internal.claim_ozow_refund_checks(integer)', 'd7716a64d8e175e14cd35f23a4cf0963'),
+    ('internal.claim_ozow_refund_checks(integer)', 'fc88a84efa8b427b1c176e3e41762775'),
     ('api.claim_ozow_refund_checks(integer)', 'af55530f14c06e80b56017c55d407725'),
     ('internal.report_ozow_refund_missing(uuid)', 'b7ae6c2deac0c275b3bad89dec3c81fb'),
     ('api.report_ozow_refund_missing(uuid)', 'dc4ee76940d144ff60fcbca0cc0d1f72'),
     ('internal.close_staff_ozow_refund(uuid,text)', '5b7a8a8d3f7bd430e0024fb2088338c3'),
-    ('api.close_staff_ozow_refund(uuid,text)', '916b8177461b733dbab5060a07f8e5e1')
+    ('api.close_staff_ozow_refund(uuid,text)', '916b8177461b733dbab5060a07f8e5e1'),
+    ('internal.get_staff_refund_context(uuid,uuid,uuid)', '00a72d4c37e7ea2726f3f47bfa9c4d97'),
+    ('api.get_staff_refund_context(uuid,uuid,uuid)', 'f7580a68a1fb083278b2bea3a69909dd')
   ) v(sig, after)
 ),
 replaced as (

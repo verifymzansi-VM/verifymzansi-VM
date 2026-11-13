@@ -56,9 +56,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Payment reconciliation unavailable" }, { status: 503 });
   }
   const refunds = await runRefundJobs();
+  // Refund job failures are reported on their own (logged, and counted in
+  // refundJobs): they never fail the payment check or its heartbeat. Refunds
+  // without an answer are read again on the next run and in the daily check.
+  if (refunds?.failures) log.error("Ozow refund jobs had failures", { failures: refunds.failures });
   // While API refunds are off the answer is exactly as before.
   return NextResponse.json(refunds ? { ...result, refundJobs: refunds } : result, {
-    status: result.failures || refunds?.failures ? 503 : 200,
+    status: result.failures ? 503 : 200,
     headers: { "Cache-Control": "no-store" },
   });
 }

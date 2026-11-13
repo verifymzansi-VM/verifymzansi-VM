@@ -14,8 +14,11 @@ import { refundReasonCode, type RefundReasonCode } from "./staff-payments";
 import {
   OzowRefundNotFoundError,
   OzowRefundUnavailableError,
+  ozowApiRefundsEnabled,
+  ozowRefundKeyConfigured,
   type OzowRefundClient,
   type OzowRefundFact,
+  type OzowRefundSendResult,
 } from "../payments/ozow-refunds";
 import { createLogger } from "../utils/logger";
 
@@ -118,6 +121,13 @@ const REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new Map([
   ],
   ["refund_closer_same", [403, "Another staff member must close this refund: you recorded it."]],
   [
+    "ozow_refund_mismatch",
+    [
+      409,
+      "This Ozow refund is for another payment or amount. Check the refund id in the Ozow dashboard.",
+    ],
+  ],
+  [
     "refund_ozow_failed",
     [409, "Ozow has no paid refund with this id. Decline this record instead of approving it."],
   ],
@@ -148,6 +158,80 @@ async function settle<T>(
       "You need an accepted ID review of your own to change payments."
     );
   return settleStaffCommand(Promise.resolve(settled), schema);
+}
+
+const factForDatabase = (fact: OzowRefundFact) => ({
+  refund_id: fact.refundId,
+  transaction_id: fact.transactionId,
+  amount_cents: fact.amountCents,
+  status: fact.status,
+  requested_at: fact.requestedAt,
+  completed_at: fact.completedAt,
+});
+
+const paymentContext = z
+  .strictObject({ ozow_transaction_id: z.uuid().nullable(), amount_cents: cents })
+  .nullable();
+const requestContext = z
+  .strictObject({
+    channel: z.enum(["manual", "api", "dashboard"]),
+    status: recordStatus,
+    ozow_checked: z.boolean(),
+    ozow_missing: z.boolean(),
+  })
+  .nullable();
+
+/**
+ * A payment (or one slot) as a refund of it would be: its Ozow transaction and
+ * amount. Needs the refund right (and a recent second factor), so it comes
+ * before the server asks Ozow anything for staff. Null when not found.
+ */
+export function readStaffRefundPayment(
+  api: FoundationAuthenticatedApi,
+  paymentId: string,
+  lineId: string | null
+) {
+  return settle(
+    api.rpc(
+      "get_staff_refund_context",
+      { p_payment_id: paymentId, p_line_id: lineId, p_request_id: null },
+      { get: false }
+    ),
+    paymentContext
+  );
+}
+
+/**
+ * Before a second staff member approves a waiting refund, whichever page asks:
+ * a refund through Ozow only while refunds through Ozow are switched on, and a
+ * dashboard refund, when the refund key is set, only once the server has read
+ * Ozow's status of it (the database refuses one Ozow did not pay, does not
+ * have, or reported for another payment or amount).
+ */
+export async function assertStaffRefundApprovable(
+  api: FoundationAuthenticatedApi,
+  requestId: string
+) {
+  const context = await settle(
+    api.rpc(
+      "get_staff_refund_context",
+      { p_payment_id: null, p_line_id: null, p_request_id: requestId },
+      { get: false }
+    ),
+    requestContext
+  );
+  if (!context)
+    throw new FoundationStaffCommandError(404, "This refund was not found. Reload the page.");
+  if (context.channel === "api" && !ozowApiRefundsEnabled())
+    throw new FoundationStaffCommandError(
+      409,
+      "Refunds through Ozow are switched off, so this refund cannot be approved now. Approve it once they are on again, or decline it."
+    );
+  if (context.channel === "dashboard" && ozowRefundKeyConfigured() && !context.ozow_checked)
+    throw new FoundationStaffCommandError(
+      409,
+      "Ozow's status of this refund has not been read yet. Try again in 10 minutes."
+    );
 }
 
 export type StaffOzowRefundInput = {
@@ -184,10 +268,14 @@ const ozowRefundId = z
   .regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)
   .transform((value) => value.toLowerCase());
 
-/** Records a refund an admin made by hand in the Ozow dashboard. */
+/**
+ * Records a refund an admin made by hand in the Ozow dashboard, with the
+ * refund as the server read it from Ozow (null only when the refund key is
+ * not set): the database refuses another payment's or amount's refund.
+ */
 export function recordStaffDashboardRefund(
   api: FoundationAuthenticatedApi,
-  input: StaffOzowRefundInput & { ozowRefundId: string }
+  input: StaffOzowRefundInput & { ozowRefundId: string; ozowFact: OzowRefundFact | null }
 ) {
   const refundId = ozowRefundId.safeParse(input.ozowRefundId);
   if (!refundId.success)
@@ -204,6 +292,7 @@ export function recordStaffDashboardRefund(
         p_reason_code: refundReasonCode.parse(input.reasonCode),
         p_reason: staffReason.parse(input.reason),
         p_ozow_refund_id: refundId.data,
+        p_ozow_fact: input.ozowFact ? factForDatabase(input.ozowFact) : null,
       },
       { get: false }
     ),
@@ -335,6 +424,7 @@ const claimed = z.union([
     claimed: z.literal(true),
     status: z.literal("sent"),
     attempt: z.number().int().min(1).max(3),
+    sent_at: instant,
     idempotency_key: z.string().regex(/^vm-refund-[0-9a-f-]{36}$/),
     transaction_id: z.uuid(),
     amount_cents: cents,
@@ -364,17 +454,41 @@ export type OzowRefundSendOutcome =
   | { sent: true; status: OzowRefundRecordStatus; answered: boolean }
   | { sent: false; status: OzowRefundRecordStatus | null; reason: "not_claimed" | "unavailable" };
 
-const factForDatabase = (fact: OzowRefundFact) => ({
-  refund_id: fact.refundId,
-  transaction_id: fact.transactionId,
-  amount_cents: fact.amountCents,
-  status: fact.status,
-  requested_at: fact.requestedAt,
-  completed_at: fact.completedAt,
-});
-
 /** Fixed words for Ozow: the reason code only, never staff notes. */
 const ozowReason = (code: RefundReasonCode) => `VerifyMzansi refund: ${code.replace(/_/g, " ")}`;
+
+/**
+ * Ozow refunds of the transaction that could be this record's lost send
+ * (requested from ten minutes before the first send on, or with no request
+ * time), each passed to the database, which links the one that fits or alerts
+ * staff. Returns how many of them are this record's or belong to no record
+ * (a refund already recorded elsewhere is not this send), or "unknown" when
+ * Ozow's list could not be read in full: anything but 0 means nothing may be
+ * sent again.
+ */
+async function refundsSince(
+  service: FoundationServiceApi,
+  client: OzowRefundClient,
+  record: { request_id: string; transaction_id: string; sent_at: string | null }
+): Promise<number | "unknown"> {
+  let facts: OzowRefundFact[];
+  try {
+    facts = await client.transactionRefunds(record.transaction_id);
+  } catch (error) {
+    if (!(error instanceof OzowRefundUnavailableError)) throw error;
+    return "unknown";
+  }
+  const from = record.sent_at ? Date.parse(record.sent_at) - 10 * 60 * 1000 : -Infinity;
+  const couldBe = facts.filter(
+    (fact) => fact.requestedAt === null || Date.parse(fact.requestedAt) >= from
+  );
+  let mine = 0;
+  for (const fact of couldBe) {
+    const result = await applyOzowRefundFact(service, fact, "refund_check");
+    if (result.outcome === "unmatched" || result.request_id === record.request_id) mine++;
+  }
+  return mine;
+}
 
 /**
  * Sends one approved API refund to Ozow, at most once per claim: the database
@@ -400,17 +514,25 @@ export async function sendOzowRefund(
   }
   const claim = await call(service, "claim_ozow_refund_send", { p_request_id: requestId }, claimed);
   if (!claim.claimed) return { sent: false, status: claim.status, reason: "not_claimed" };
-  let result;
-  try {
-    result = await client.create({
-      transactionId: claim.transaction_id,
-      amountCents: claim.amount_cents,
-      reason: ozowReason(claim.reason_code),
-      idempotencyKey: claim.idempotency_key,
-    });
-  } catch (error) {
-    if (!(error instanceof OzowRefundUnavailableError)) throw error;
-    result = { outcome: "unknown" as const, status: null };
+  let result: OzowRefundSendResult;
+  // A retry never relies on Ozow keeping the Idempotency-Key: it first reads
+  // the transaction's refunds and sends again only when Ozow's complete list
+  // has none that could be this refund.
+  const made = claim.attempt > 1 ? await refundsSince(service, client, claim) : 0;
+  if (made !== 0) {
+    result = { outcome: "unknown", status: null };
+  } else {
+    try {
+      result = await client.create({
+        transactionId: claim.transaction_id,
+        amountCents: claim.amount_cents,
+        reason: ozowReason(claim.reason_code),
+        idempotencyKey: claim.idempotency_key,
+      });
+    } catch (error) {
+      if (!(error instanceof OzowRefundUnavailableError)) throw error;
+      result = { outcome: "unknown", status: null };
+    }
   }
   const payload =
     result.outcome === "accepted"
@@ -418,7 +540,7 @@ export async function sendOzowRefund(
       : result.outcome === "refused"
         ? { outcome: "refused", failure_reason: result.failureReason }
         : { outcome: "unknown" };
-  log.info("Ozow refund sent", {
+  log.info(made === 0 ? "Ozow refund sent" : "Ozow refund not sent again", {
     requestId,
     attempt: claim.attempt,
     outcome: result.outcome,
@@ -534,20 +656,17 @@ async function checkOzowRefund(
     return;
   }
   // A send whose answer was lost. "Missing" is reported only when Ozow's full
-  // list of the transaction's refunds has none that could be it: none
-  // requested after (or up to ten minutes before) the send, and none without a
-  // request time, whatever the amount. Every refund that could be it goes to
-  // the database, which links exactly one fit (an id recorded nowhere else) or
-  // raises an unmatched-refund alert, which also blocks closing the record.
-  const sentAt = item.sent_at ? Date.parse(item.sent_at) - 10 * 60 * 1000 : -Infinity;
-  const couldBe = (await client.transactionRefunds(item.transaction_id)).filter(
-    (fact) => fact.requestedAt === null || Date.parse(fact.requestedAt) >= sentAt
-  );
-  if (couldBe.length === 0) return void (await missing());
-  for (const fact of couldBe) await applyOzowRefundFact(service, fact, "refund_check");
+  // list of the transaction's refunds has none that could be it, whatever the
+  // amount. Every refund that could be it goes to the database, which links
+  // exactly one fit (an id recorded nowhere else) or raises an
+  // unmatched-refund alert, which also blocks closing the record.
+  const made = await refundsSince(service, client, item);
+  if (made === "unknown") throw new OzowRefundUnavailableError("Ozow refund list not read");
+  if (made === 0) await missing();
 }
 
 const applied = z.looseObject({
+  request_id: z.uuid().optional(),
   outcome: z.enum([
     "applied",
     "failed",

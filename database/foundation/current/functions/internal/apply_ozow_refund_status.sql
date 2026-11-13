@@ -92,6 +92,12 @@ begin
     end if;
   end if;
   if request.ozow_transaction_id is distinct from transaction or request.amount_cents <> amount then
+    -- A waiting dashboard refund whose id Ozow reports for another transaction
+    -- or amount is not the refund recorded: like one Ozow does not have, it
+    -- is never approved.
+    if request.channel = 'dashboard' and request.status = 'awaiting_approval' then
+      update private.payment_refund_requests set ozow_missing_at = statement_timestamp() where id = request.id;
+    end if;
     perform internal.ozow_refund_problem(request.payment_id, 'refund_mismatch', source, request.id::text);
     return jsonb_build_object('outcome', 'mismatch', 'request_id', request.id);
   end if;

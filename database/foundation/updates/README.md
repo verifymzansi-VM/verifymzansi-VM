@@ -822,20 +822,35 @@ Ozow's reference exactly as before.
   (a whole Ozow payment, or one open slot; no reference; PT409
   `payment_not_ozow` for a payment without an Ozow transaction id, such as a
   bank transfer, which keeps the reference form), and
-  `api.record_staff_dashboard_refund(p_payment_id, p_line_id, p_reason_code, p_reason, p_ozow_refund_id)`
+  `api.record_staff_dashboard_refund(p_payment_id, p_line_id, p_reason_code, p_reason, p_ozow_refund_id, p_ozow_fact)`
   for a refund an admin already made by hand in the Ozow dashboard (Ozow's
   refund id, used once, PT409 `ozow_refund_id_used`; the same R1,000 rule; it
-  takes effect as today's refunds do). `api.approve_staff_payment_refund` now
-  approves a refund through Ozow into `approved` (the server then sends it)
-  instead of reversing; for every other record it is unchanged. New staff read
+  takes effect as today's refunds do). `p_ozow_fact` is the refund as the server
+  read it from Ozow (null only while the refund key is not set): it must name
+  the same id, this payment's Ozow transaction and its amount (PT409
+  `ozow_refund_mismatch`) and must not have failed (`refund_ozow_failed`). It
+  only refuses: Ozow's status is stored only when the server's follow-up reads
+  the refund back. New staff read
+  `api.get_staff_refund_context(p_payment_id, p_line_id, p_request_id)`
+  (`payments:refund`): a payment's Ozow transaction and refund amount, or a
+  refund record's channel, status and whether Ozow's status was read; the
+  website calls it before it asks Ozow anything for staff, and before an
+  approval (a refund through Ozow is approved only while the switch is on; a
+  dashboard refund, when the refund key is set, only once Ozow's status was
+  read). `api.approve_staff_payment_refund` now approves a refund through Ozow
+  into `approved` (the server then sends it) instead of reversing; for every
+  other record it is unchanged. New staff read
   `api.get_staff_ozow_refunds(p_payment_ids)` (`payments:view`): which of up to
   50 payments can be refunded through Ozow, their API and dashboard refund
   records, and up to 20 refunds through Ozow that need staff.
 - **Service commands** (`service_role` only):
   `api.claim_ozow_refund_send(p_request_id)` hands an approved record to the
   sender once (`sent`); an unknown send may be handed over again, with the same
-  key, at most twice more, five minutes apart and within six hours; a payment
-  that changed before the first send fails the record without contacting Ozow.
+  key, at most twice more, 30 minutes apart and within six hours (the server
+  then first reads Ozow's refunds of the transaction since the first send,
+  `sent_at`, and sends again only when Ozow's complete list has none that could
+  be it, so a retry never relies on Ozow keeping the key); a payment that
+  changed before the first send fails the record without contacting Ozow.
   `api.list_ozow_refund_sends_due(p_limit)` lists approved records not sent for
   two minutes and unknown sends due a retry (the 10-minute payment job sends up
   to two per run). `api.record_ozow_refund_send(p_request_id, p_result)` stores
@@ -885,9 +900,11 @@ Ozow's reference exactly as before.
   payment and declined can be recorded again. A later read that finds the refund
   clears an earlier "missing". A typed reference whose payment is not the one
   Ozow refunded raises `refund_mismatch`. Refunds through Ozow are read back
-  before dashboard records, and a dashboard record Ozow does not have is no
-  longer polled. The dashboard record stays available while refunds through Ozow
-  are switched off, and the 10-minute follow-up and the daily check keep reading
+  before dashboard records; a dashboard record Ozow does not have is read again
+  every six hours for seven days, and a waiting dashboard record whose id Ozow
+  reports for another transaction or amount is marked missing too (never
+  approved). The dashboard record stays available while refunds through Ozow are
+  switched off, and the 10-minute follow-up and the daily check keep reading
   refunds back (never sending) whenever the refund key is set; without the key,
   a dashboard record is not read back from Ozow (accepted, noted for the owner).
 - **Typed references retire for Ozow refunds.** Once the server has sent any

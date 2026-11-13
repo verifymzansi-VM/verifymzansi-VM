@@ -269,29 +269,67 @@ describe("reading refunds back", () => {
     ).rejects.toThrow(/not complete/);
   });
 
-  it("lists by date, follows Ozow's next link on Ozow's origin only", async () => {
-    const page = (next: string | null, items: unknown[]) =>
-      json({ links: { next }, results: items, meta: { totalPages: 2, totalItems: 2 } });
+  it("lists by date, page by page by offset, until Ozow's total", async () => {
+    const id = (n: number) => `${String(n).padStart(8, "0")}-19c5-41ab-86dd-15272d103455`;
+    const items = (from: number, n: number) =>
+      Array.from({ length: n }, (_, i) => refundBody({ id: id(from + i) }));
+    // Ozow's RefundList: results, links (self/next...) and meta.totalItems.
+    const page = (results: unknown[], offset: number, totalItems: number | undefined) =>
+      json({
+        results,
+        links: { self: `https://stagingone.ozow.com/v1/refunds?offset=${offset}` },
+        meta:
+          totalItems === undefined ? {} : { totalItems, totalPages: Math.ceil(totalItems / 50) },
+      });
     const fetcher = fakeFetch(
-      page("https://stagingone.ozow.com/v1/refunds?offset=50", [refundBody()]),
-      page(null, [
-        refundBody({ id: "c2fa5055-19c5-41ab-86dd-15272d103455" }),
-        refundBody({ id: "d3fa5055-19c5-41ab-86dd-15272d103455", status: "Refunded" }),
-      ])
+      page(items(0, 50), 0, 52),
+      page([...items(50, 1), refundBody({ id: id(51), status: "Refunded" })], 50, 52)
     );
     let mod = await load();
     const { facts, unreadable } = await mod
       .createOzowRefundClient({ environment })
       .list(new Date("2026-11-10T00:00:00Z"), new Date("2026-11-13T00:00:00Z"));
-    expect(facts).toHaveLength(2);
+    expect(facts).toHaveLength(51);
     expect(unreadable).toBe(1);
-    const first = new URL(String(sent(fetcher)[0][0]));
-    expect(first.searchParams.get("fromDate")).toBe("2026-11-10T00:00:00.000Z");
-    expect(first.searchParams.get("siteCode")).toBe("SYN-001");
-    fakeFetch(page("https://evil.example.invalid/v1/refunds", [refundBody()]));
+    const urls = sent(fetcher).map(([input]) => new URL(String(input)));
+    expect(urls.map((url) => url.searchParams.get("offset"))).toEqual(["0", "50"]);
+    expect(urls[0].searchParams.get("limit")).toBe("50");
+    expect(urls[0].searchParams.get("fromDate")).toBe("2026-11-10T00:00:00.000Z");
+    expect(urls[0].searchParams.get("siteCode")).toBe("SYN-001");
+    expect(urls.every((url) => url.origin === "https://stagingone.ozow.com")).toBe(true);
+    // A short page without a total is the whole list.
+    fakeFetch(page(items(0, 2), 0, undefined));
+    mod = await load();
+    expect(
+      (await mod.createOzowRefundClient({ environment }).list(new Date(), new Date())).facts
+    ).toHaveLength(2);
+    // A full page without a total may hide more refunds: the run fails.
+    fakeFetch(page(items(0, 50), 0, undefined));
     mod = await load();
     await expect(
       mod.createOzowRefundClient({ environment }).list(new Date(), new Date())
-    ).rejects.toThrow(/Invalid Ozow refund link/);
+    ).rejects.toThrow(/no total/);
+    // Fewer refunds than Ozow's total, or a total that changes: the run fails.
+    fakeFetch(page(items(0, 3), 0, 5));
+    mod = await load();
+    await expect(
+      mod.createOzowRefundClient({ environment }).list(new Date(), new Date())
+    ).rejects.toThrow(/shorter than its total/);
+    fakeFetch(page(items(0, 50), 0, 60), page(items(50, 10), 50, 61));
+    mod = await load();
+    await expect(
+      mod.createOzowRefundClient({ environment }).list(new Date(), new Date())
+    ).rejects.toThrow(/changed/);
+    // A page repeated (Ozow ignored the offset): not the whole list.
+    fakeFetch(page(items(0, 50), 0, 60), page(items(0, 10), 50, 60));
+    mod = await load();
+    await expect(
+      mod.createOzowRefundClient({ environment }).list(new Date(), new Date())
+    ).rejects.toThrow(/repeated/);
+    fakeFetch(json({ results: [], meta: { totalItems: "2" } }));
+    mod = await load();
+    await expect(
+      mod.createOzowRefundClient({ environment }).list(new Date(), new Date())
+    ).rejects.toThrow(/Invalid Ozow refund list/);
   });
 });

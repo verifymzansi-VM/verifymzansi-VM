@@ -30,7 +30,7 @@ begin
     update private.payment_refund_requests set status = 'sent', sent_at = statement_timestamp(), send_attempts = 1,
       last_send_at = statement_timestamp(), send_outcome = 'unknown' where id = request.id returning * into request;
   elsif request.status = 'sent' and request.send_outcome = 'unknown' and request.ozow_refund_id is null
-      and request.send_attempts < 3 and request.last_send_at <= statement_timestamp() - interval '5 minutes'
+      and request.send_attempts < 3 and request.last_send_at <= statement_timestamp() - interval '30 minutes'
       and request.sent_at > statement_timestamp() - interval '6 hours' then
     update private.payment_refund_requests set send_attempts = send_attempts + 1, last_send_at = statement_timestamp()
       where id = request.id returning * into request;
@@ -38,7 +38,7 @@ begin
     return jsonb_build_object('request_id', request.id, 'claimed', false, 'status', request.status);
   end if;
   return jsonb_build_object('request_id', request.id, 'claimed', true, 'status', request.status,
-    'attempt', request.send_attempts, 'idempotency_key', request.ozow_reference,
+    'attempt', request.send_attempts, 'sent_at', request.sent_at, 'idempotency_key', request.ozow_reference,
     'transaction_id', request.ozow_transaction_id, 'amount_cents', request.amount_cents,
     'reason_code', request.reason_code);
 end;

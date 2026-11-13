@@ -30,9 +30,8 @@ export const OZOW_API_REFUNDS_SWITCH = "OZOW_API_REFUNDS_ENABLED";
 const REFUND_SCOPE = "refunds";
 const REQUEST_TIMEOUT_MS = 15_000;
 /** Ozow lists at most 50 refunds a page; the daily check reads 40 pages at most. */
+const PAGE_SIZE = 50;
 const LIST_PAGE_LIMIT = 40;
-/** Ozow's largest page; a transaction with this many refunds is not "complete". */
-const TRANSACTION_PAGE_LIMIT = 50;
 
 type Environment = Record<string, string | undefined>;
 
@@ -226,6 +225,20 @@ export type OzowRefundSendResult =
 type Fetcher = typeof fetch;
 
 /**
+ * The total Ozow gives for a refund list (meta.totalItems): a number, null
+ * when Ozow gives none, undefined when it is not a usable count.
+ */
+function listTotal(data: Record<string, unknown>): number | null | undefined {
+  const meta =
+    data.meta && typeof data.meta === "object" && !Array.isArray(data.meta)
+      ? (data.meta as Record<string, unknown>)
+      : null;
+  const value = meta?.totalItems;
+  if (value === undefined || value === null) return null;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
+/**
  * The One API refund client. `fetcher` and `environment` exist for tests,
  * which pass fakes: nothing in the test suite reaches Ozow.
  */
@@ -348,7 +361,7 @@ export function createOzowRefundClient({
         response = await send(
           apiUrl(
             baseUrl,
-            `/v1/transactions/${encodeURIComponent(tx.data)}/refunds?limit=${TRANSACTION_PAGE_LIMIT}&offset=0`
+            `/v1/transactions/${encodeURIComponent(tx.data)}/refunds?limit=${PAGE_SIZE}&offset=0`
           ),
           { method: "GET" }
         );
@@ -386,7 +399,7 @@ export function createOzowRefundClient({
       ].filter((value) => value !== undefined);
       if (
         (typeof page?.links?.next === "string" && page.links.next) ||
-        items.length >= TRANSACTION_PAGE_LIMIT ||
+        items.length >= PAGE_SIZE ||
         totals.some((value) => typeof value !== "number" || value > items.length)
       )
         throw new OzowRefundUnavailableError("Ozow refund list is not complete");
@@ -427,18 +440,23 @@ export function createOzowRefundClient({
       const query = new URLSearchParams({
         fromDate: from.toISOString(),
         toDate: to.toISOString(),
-        limit: "50",
+        limit: String(PAGE_SIZE),
         offset: "0",
       });
       const siteCode = environment.OZOW_SITE_CODE?.trim();
       if (siteCode) query.set("siteCode", siteCode);
-      let url: URL | null = apiUrl(baseUrl, `/v1/refunds?${query}`);
-      const facts: OzowRefundFact[] = [];
+      const facts = new Map<string, OzowRefundFact>();
       let unreadable = 0;
-      for (let page = 0; url && page < LIST_PAGE_LIMIT; page++) {
+      let total: number | null = null;
+      // Ozow's pages by offset (limit 50), until the total Ozow gives
+      // (meta.totalItems). Without a total, only a page shorter than the limit
+      // ends the list; a full page without one could hide more refunds.
+      for (let page = 0; page < LIST_PAGE_LIMIT; page++) {
+        const offset = page * PAGE_SIZE;
+        query.set("offset", String(offset));
         let response: Response;
         try {
-          response = await send(url, { method: "GET" });
+          response = await send(apiUrl(baseUrl, `/v1/refunds?${query}`), { method: "GET" });
         } catch {
           throw new OzowRefundUnavailableError("Ozow refund list failed");
         }
@@ -447,27 +465,38 @@ export function createOzowRefundClient({
           throw new OzowRefundUnavailableError("Ozow refund list failed", response.status);
         }
         const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-        if (!data || !Array.isArray(data.results))
+        if (!data || !Array.isArray(data.results) || data.results.length > PAGE_SIZE)
           throw new OzowRefundUnavailableError("Invalid Ozow refund list");
+        const reported = listTotal(data);
+        if (reported === undefined)
+          throw new OzowRefundUnavailableError("Invalid Ozow refund list");
+        // The list changed while it was read: offsets no longer line up.
+        if (total !== null && reported !== total)
+          throw new OzowRefundUnavailableError("Ozow refund list changed while it was read");
+        total = reported;
         for (const item of data.results) {
           // One entry this site cannot read (a new status, another currency)
           // must not stop the check of the others: it is counted and logged.
           const fact = readOzowRefund(item);
-          if (fact) facts.push(fact);
+          if (fact) facts.set(fact.refundId, fact);
           else unreadable++;
         }
-        const links =
-          data.links && typeof data.links === "object"
-            ? (data.links as Record<string, unknown>)
-            : null;
-        const next = typeof links?.next === "string" && links.next ? links.next : null;
-        // Follow Ozow's own next link, only on Ozow's API origin; stop on an
-        // empty page so a repeating link cannot loop.
-        url = next && data.results.length > 0 ? apiUrl(baseUrl, next) : null;
+        const seen = offset + data.results.length;
+        if (total === null) {
+          if (data.results.length < PAGE_SIZE) return { facts: [...facts.values()], unreadable };
+          throw new OzowRefundUnavailableError("Ozow refund list gives no total for a full page");
+        }
+        if (seen >= total) {
+          // Every entry Ozow counted, once: a page repeated (an offset Ozow
+          // ignored) is not the whole list.
+          if (facts.size + unreadable < total)
+            throw new OzowRefundUnavailableError("Ozow refund list repeated entries");
+          return { facts: [...facts.values()], unreadable };
+        }
+        if (data.results.length < PAGE_SIZE)
+          throw new OzowRefundUnavailableError("Ozow refund list is shorter than its total");
       }
-      if (url)
-        throw new OzowRefundUnavailableError("Ozow refund list is longer than one check reads");
-      return { facts, unreadable };
+      throw new OzowRefundUnavailableError("Ozow refund list is longer than one check reads");
     },
   };
 }

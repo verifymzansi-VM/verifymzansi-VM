@@ -80,6 +80,7 @@ export const FOUNDATION_ERROR_REASONS = {
   ozow_reference_used: ["PT409"],
   ozow_refund_id_required: ["22023"],
   ozow_refund_id_used: ["PT409"],
+  ozow_refund_mismatch: ["PT409"],
   partner_account_unavailable: ["PT409"],
   partner_code_taken: ["PT409"],
   partner_exists: ["PT409"],

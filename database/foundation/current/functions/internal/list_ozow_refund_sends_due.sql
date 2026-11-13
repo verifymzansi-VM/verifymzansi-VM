@@ -15,7 +15,7 @@ begin
       select r.id, coalesce(r.last_send_at, r.approved_at) as due_at from private.payment_refund_requests r
       where r.channel = 'api' and ((r.status = 'approved' and r.approved_at <= statement_timestamp() - interval '2 minutes')
         or (r.status = 'sent' and r.send_outcome = 'unknown' and r.ozow_refund_id is null and r.send_attempts < 3
-          and r.last_send_at <= statement_timestamp() - interval '5 minutes'
+          and r.last_send_at <= statement_timestamp() - interval '30 minutes'
           and r.sent_at > statement_timestamp() - interval '6 hours'))
       order by 2, 1 limit p_limit) d), '[]'::jsonb);
 end;

@@ -22,6 +22,7 @@ const claimed = {
   claimed: true,
   status: "sent",
   attempt: 1,
+  sent_at: "2026-11-13T09:29:00.000Z",
   idempotency_key: `vm-refund-${REQUEST}`,
   transaction_id: TX,
   amount_cents: 6900,
@@ -126,6 +127,89 @@ describe("sending an approved refund", () => {
       { outcome: "unknown" },
       { outcome: "refused", failure_reason: "ozow_refused" },
     ]);
+  });
+
+  it("never sends again while Ozow may have the refund, even if Ozow ignored the key", async () => {
+    // A fake Ozow that ignores Idempotency-Key: every POST makes a new refund.
+    // The first answer is lost on the way back.
+    const made: ReturnType<typeof fact>[] = [];
+    client.create.mockImplementation(async () => {
+      made.push(
+        fact({ refundId: `${made.length}0fa5055-19c5-41ab-86dd-15272d103455`, status: "Pending" })
+      );
+      throw new OzowRefundUnavailableError("answer lost");
+    });
+    client.transactionRefunds.mockImplementation(async () => [...made]);
+    answer({ claim_ozow_refund_send: claimed, record_ozow_refund_send: recorded() });
+    await sendOzowRefund(service, client, REQUEST);
+    expect(made).toHaveLength(1);
+    expect(client.transactionRefunds).not.toHaveBeenCalled();
+    // The retry reads the transaction's refunds first, hands the one that
+    // could be this send to the database, and sends nothing.
+    answer({
+      claim_ozow_refund_send: { ...claimed, attempt: 2 },
+      apply_ozow_refund_status: { outcome: "pending", request_id: REQUEST },
+      record_ozow_refund_send: recorded(),
+    });
+    await sendOzowRefund(service, client, REQUEST);
+    expect(made).toHaveLength(1);
+    expect(client.create).toHaveBeenCalledOnce();
+    expect(calls("apply_ozow_refund_status")[0][1].p_event).toMatchObject({
+      refund_id: made[0].refundId,
+      source: "refund_check",
+    });
+    expect(calls("record_ozow_refund_send").map(([, args]) => args.p_result)).toEqual([
+      { outcome: "unknown" },
+      { outcome: "unknown" },
+    ]);
+    // A list Ozow cannot give in full: still nothing is sent.
+    client.transactionRefunds.mockRejectedValueOnce(new OzowRefundUnavailableError("not complete"));
+    answer({
+      claim_ozow_refund_send: { ...claimed, attempt: 3 },
+      record_ozow_refund_send: recorded(),
+    });
+    await sendOzowRefund(service, client, REQUEST);
+    expect(made).toHaveLength(1);
+    expect(client.create).toHaveBeenCalledOnce();
+  });
+
+  it("a refund of the transaction recorded for another refund is not this send", async () => {
+    client.create.mockRejectedValue(new OzowRefundUnavailableError("down"));
+    client.transactionRefunds.mockResolvedValue([fact({ requestedAt: null })]);
+    answer({
+      claim_ozow_refund_send: { ...claimed, attempt: 2 },
+      apply_ozow_refund_status: {
+        outcome: "unchanged",
+        request_id: "99999999-2222-4333-8444-555555555555",
+      },
+      record_ozow_refund_send: recorded(),
+    });
+    await sendOzowRefund(service, client, REQUEST);
+    expect(client.create).toHaveBeenCalledOnce();
+    // An Ozow refund that belongs to no record may be this send: nothing is sent.
+    client.create.mockClear();
+    answer({
+      claim_ozow_refund_send: { ...claimed, attempt: 2 },
+      apply_ozow_refund_status: { outcome: "unmatched" },
+      record_ozow_refund_send: recorded(),
+    });
+    await sendOzowRefund(service, client, REQUEST);
+    expect(client.create).not.toHaveBeenCalled();
+  });
+
+  it("sends again only when Ozow's complete list has no refund that could be it", async () => {
+    client.create.mockRejectedValue(new OzowRefundUnavailableError("down"));
+    // An older refund of the transaction (before this send) is not this one.
+    client.transactionRefunds.mockResolvedValue([
+      fact({ requestedAt: "2026-11-01T09:00:00.000Z" }),
+    ]);
+    answer({
+      claim_ozow_refund_send: { ...claimed, attempt: 2 },
+      record_ozow_refund_send: recorded(),
+    });
+    await sendOzowRefund(service, client, REQUEST);
+    expect(client.create).toHaveBeenCalledOnce();
+    expect(calls("apply_ozow_refund_status")).toHaveLength(0);
   });
 
   it("refuses a claim the database did not shape as expected", async () => {

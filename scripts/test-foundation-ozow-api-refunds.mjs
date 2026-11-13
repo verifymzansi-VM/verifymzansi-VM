@@ -22,6 +22,7 @@
 //
 // Needs a local Docker daemon; it takes no connection settings at all.
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
@@ -57,9 +58,10 @@ const SERVICE_COMMANDS = [
 ];
 const STAFF_COMMANDS = [
   "api.request_staff_ozow_refund(uuid,uuid,text,text)",
-  "api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid)",
+  "api.record_staff_dashboard_refund(uuid,uuid,text,text,uuid,jsonb)",
   "api.get_staff_ozow_refunds(uuid[])",
   "api.close_staff_ozow_refund(uuid,text)",
+  "api.get_staff_refund_context(uuid,uuid,uuid)",
 ];
 const ROLES = ["anon", "authenticated", "service_role"];
 const literal = (value) => `$j$${JSON.stringify(value)}$j$::jsonb`;
@@ -126,11 +128,44 @@ try {
       who,
       `select api.request_staff_ozow_refund('${paymentId}',${lineId ? `'${lineId}'` : "null"},'s14_cancellation','${reason}');`
     );
-  const dashboard = (who, paymentId, refundId, lineId = null) =>
+  const dashboard = (who, paymentId, refundId, lineId = null, ozowFact = null) =>
     staff(
       who,
-      `select api.record_staff_dashboard_refund('${paymentId}',${lineId ? `'${lineId}'` : "null"},'billing_error','Refunded by hand in Ozow','${refundId}');`
+      `select api.record_staff_dashboard_refund('${paymentId}',${lineId ? `'${lineId}'` : "null"},'billing_error','Refunded by hand in Ozow','${refundId}',${ozowFact ? literal(ozowFact) : "null"});`
     );
+  /** A psql session of its own, run alongside others (for lock races). */
+  const session = (sql) =>
+    new Promise((resolve, reject) => {
+      const child = spawn(
+        "docker",
+        [
+          "exec",
+          "-i",
+          database.name,
+          "psql",
+          "-X",
+          "-q",
+          "-A",
+          "-t",
+          "-v",
+          "ON_ERROR_STOP=1",
+          "-U",
+          "postgres",
+          "-d",
+          "postgres",
+        ],
+        { stdio: ["pipe", "pipe", "pipe"] }
+      );
+      let out = "";
+      let err = "";
+      child.stdout.on("data", (chunk) => (out += chunk));
+      child.stderr.on("data", (chunk) => (err += chunk));
+      child.on("error", reject);
+      child.on("close", (code) =>
+        code === 0 ? resolve(out.trim()) : reject(new Error(err.trim()))
+      );
+      child.stdin.end(sql);
+    });
   const claim = (id) => json(service(`select api.claim_ozow_refund_send('${id}');`));
   const sendResult = (id, result) =>
     json(service(`select api.record_ozow_refund_send('${id}',${literal(result)});`));
@@ -408,8 +443,8 @@ try {
       const asked = json(request(admin, pay.id));
       const first = claim(asked.request_id);
       assert.equal(sendResult(asked.request_id, { outcome: "unknown" }).status, "sent");
-      assert.equal(claim(asked.request_id).claimed, false, "not again within five minutes");
-      backdate(asked.request_id, "last_send_at", "6 minutes");
+      assert.equal(claim(asked.request_id).claimed, false, "not again within 30 minutes");
+      backdate(asked.request_id, "last_send_at", "31 minutes");
       assert.ok(
         json(service("select api.list_ozow_refund_sends_due(20);")).includes(asked.request_id)
       );
@@ -425,7 +460,7 @@ try {
       );
       assert.equal(record(asked.request_id).status, "sent");
       assert.equal(problem(pay.id, "refund_stuck").alert, true);
-      backdate(asked.request_id, "last_send_at", "6 minutes");
+      backdate(asked.request_id, "last_send_at", "31 minutes");
       assert.equal(claim(asked.request_id).claimed, false, "no more retries");
       // Ozow's notice for that refund still links and settles it.
       const complete = fact(first, "Complete");
@@ -542,7 +577,7 @@ try {
       fails(
         staff(
           admin,
-          `select api.record_staff_dashboard_refund('${other.id}',null,'billing_error','Refunded by hand',null);`
+          `select api.record_staff_dashboard_refund('${other.id}',null,'billing_error','Refunded by hand',null,null);`
         ),
         "22023"
       );
@@ -609,6 +644,140 @@ try {
       );
     }
   );
+
+  await check(
+    "a dashboard refund read from Ozow must be this payment's, for its amount, and paid",
+    () => {
+      const pay = buy(verified("ozow-dashboard-fact"), PLANS.days30, 1);
+      const refundId = randomUUID();
+      const read = (overrides = {}) => ({
+        refund_id: refundId,
+        transaction_id: pay.tx,
+        amount_cents: pay.cents,
+        status: "Complete",
+        requested_at: null,
+        completed_at: null,
+        ...overrides,
+      });
+      const refused = (overrides, state, message) =>
+        fails(dashboard(admin, pay.id, refundId, null, read(overrides)), state, message);
+      refused({ transaction_id: randomUUID() }, "PT409", /another payment or amount/);
+      refused({ amount_cents: pay.cents - 100 }, "PT409", /another payment or amount/);
+      refused({ status: "Failed" }, "PT409", /no paid refund/);
+      refused({ refund_id: randomUUID() }, "22023");
+      fails(dashboard(admin, pay.id, refundId, null, { refund_id: refundId }), "22023");
+      assert.equal(payStatus(pay.id), "complete");
+      const done = json(dashboard(admin, pay.id, refundId, null, read()));
+      assert.equal(done.status, "applied");
+      // The website's read only refuses: Ozow's status waits for the
+      // server's own read-back (a staff caller cannot set it).
+      const stored = record(done.request_id);
+      assert.equal(stored.ozow_status, null);
+      assert.equal(stored.ozow_checked_at, null);
+      // Above R1,000: Ozow later reporting this id for another amount (or
+      // transaction) blocks approval.
+      const big = buy(verified("ozow-dashboard-fact-big"), PLANS.days180, 3);
+      const bigId = randomUUID();
+      const waiting = json(
+        dashboard(admin, big.id, bigId, null, {
+          refund_id: bigId,
+          transaction_id: big.tx,
+          amount_cents: big.cents,
+          status: "Pending",
+          requested_at: null,
+          completed_at: null,
+        })
+      );
+      assert.equal(waiting.status, "awaiting_approval");
+      assert.equal(
+        ozowStatus(
+          {
+            refund_id: bigId,
+            transaction_id: big.tx,
+            amount_cents: big.cents - 100,
+            status: "Complete",
+            requested_at: null,
+            completed_at: null,
+          },
+          "refund_check"
+        ).outcome,
+        "mismatch"
+      );
+      assert.ok(record(waiting.request_id).ozow_missing_at);
+      fails(
+        staff(admin2, `select api.approve_staff_payment_refund('${waiting.request_id}');`),
+        "PT409",
+        /no paid refund/
+      );
+      assert.equal(payStatus(big.id), "complete");
+    }
+  );
+
+  await check("the staff refund context needs the refund right and shows only its facts", () => {
+    const pay = buy(verified("ozow-context"), PLANS.days30, 1);
+    const context = (who, args) => staff(who, `select api.get_staff_refund_context(${args});`);
+    assert.deepEqual(json(context(admin, `'${pay.id}',null,null`)), {
+      ozow_transaction_id: pay.tx,
+      amount_cents: pay.cents,
+    });
+    const asked = json(request(admin, pay.id));
+    assert.deepEqual(json(context(admin2, `null,null,'${asked.request_id}'`)), {
+      channel: "api",
+      status: "approved",
+      ozow_checked: false,
+      ozow_missing: false,
+    });
+    assert.equal(q(context(admin, `'${randomUUID()}',null,null`)), "");
+    fails(context(moderator, `'${pay.id}',null,null`), "42501");
+    fails(member(admin, `select api.get_staff_refund_context('${pay.id}',null,null);`), "42501");
+    fails(context(admin, "null,null,null"), "22023");
+    fails(context(admin, `'${pay.id}',null,'${asked.request_id}'`), "22023");
+    json(
+      staff(
+        admin2,
+        `select api.close_staff_ozow_refund('${asked.request_id}','Not needed after all');`
+      )
+    );
+  });
+
+  await check("senders racing for one approved refund: exactly one gets it", async () => {
+    const pay = buy(verified("ozow-race"), PLANS.days30, 1);
+    const asked = json(request(admin, pay.id));
+    const racer = () =>
+      session(
+        [
+          "set role service_role;",
+          "begin;",
+          `select api.claim_ozow_refund_send('${asked.request_id}')->>'claimed';`,
+          "select pg_sleep(0.5);",
+          "commit;",
+          "",
+        ].join("\n")
+      );
+    const results = await Promise.all([racer(), racer(), racer()]);
+    const claimed = results.map((out) => out.split("\n")[0].trim());
+    assert.deepEqual([...claimed].sort(), ["false", "false", "true"], JSON.stringify(results));
+    const stored = record(asked.request_id);
+    assert.equal(stored.status, "sent");
+    assert.equal(stored.send_attempts, 1);
+  });
+
+  await check("a dashboard refund Ozow did not have is read again for a week", () => {
+    const big = buy(verified("ozow-dashboard-recheck"), PLANS.days180, 3);
+    const waiting = json(dashboard(admin, big.id, randomUUID()));
+    const ids = () =>
+      json(service("select api.claim_ozow_refund_checks(20);")).map((item) => item.request_id);
+    assert.ok(ids().includes(waiting.request_id));
+    json(service(`select api.report_ozow_refund_missing('${waiting.request_id}');`));
+    assert.ok(!ids().includes(waiting.request_id), "not again at once");
+    backdate(waiting.request_id, "ozow_checked_at", "1 hour");
+    assert.ok(!ids().includes(waiting.request_id), "not again within six hours");
+    backdate(waiting.request_id, "ozow_checked_at", "6 hours");
+    assert.ok(ids().includes(waiting.request_id), "read again after six hours");
+    backdate(waiting.request_id, "ozow_checked_at", "7 hours");
+    backdate(waiting.request_id, "requested_at", "8 days");
+    assert.ok(!ids().includes(waiting.request_id), "not after a week");
+  });
 
   await check("a lost send links only to a later refund that is not recorded anywhere else", () => {
     const pay = buy(verified("ozow-link"), PLANS.days30, 1);
