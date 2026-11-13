@@ -19,7 +19,14 @@ import { getDataBackend } from "@/lib/data-backend";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { FoundationStaffCommandError, staffCommandRefusal } from "@/lib/foundation/staff-command";
 import { decideRestoredCommission, saveRestoredPartner } from "@/lib/foundation/partners";
-import { recordFrontendStaffPaymentReversal } from "@/lib/foundation/staff-payments";
+import {
+  activateStaffPaidPayment,
+  approveStaffPaymentRefund,
+  declineStaffPaymentRefund,
+  recordStaffPaymentRefund,
+  recordStaffSlotRefund,
+  refundReasonCode,
+} from "@/lib/foundation/staff-payments";
 import {
   inviteFrontendStaffOrganisationAdmin,
   manageFrontendStaffOrganisation,
@@ -119,12 +126,27 @@ const schema = z.discriminatedUnion("action", [
       }),
     reason,
   }),
+  // A refund or chargeback names Ozow's reference and a reason code; an empty
+  // reference reaches the command, which refuses it with a plain message.
   z.object({
     action: z.literal("payment.reverse"),
     paymentId: uuid,
     kind: z.enum(["refunded", "chargeback"]),
+    reasonCode: refundReasonCode,
+    ozowReference: z.string().max(200).default(""),
     reason,
   }),
+  z.object({
+    action: z.literal("payment.reverse_slot"),
+    lineId: uuid,
+    kind: z.enum(["refunded", "chargeback"]),
+    reasonCode: refundReasonCode,
+    ozowReference: z.string().max(200).default(""),
+    reason,
+  }),
+  z.object({ action: z.literal("payment.activate"), paymentId: uuid, reason }),
+  z.object({ action: z.literal("payment.refund_approve"), requestId: uuid }),
+  z.object({ action: z.literal("payment.refund_decline"), requestId: uuid, reason }),
   z.object({
     action: z.literal("partner.manage"),
     userId: uuid,
@@ -218,6 +240,10 @@ const CAPABILITY: Record<Body["action"], Capability> = {
   "trial.override": "trials:manage",
   "event.allowance": "contracts:manage",
   "payment.reverse": "payments:refund",
+  "payment.reverse_slot": "payments:refund",
+  "payment.activate": "payments:refund",
+  "payment.refund_approve": "payments:refund",
+  "payment.refund_decline": "payments:refund",
   "partner.manage": "partners:manage",
   "commission.manage": "partners:manage",
   "organisation.upsert": "organisations:manage",
@@ -284,6 +310,15 @@ function call(body: Exclude<Body, { action: "organisation.invite_admin" }>, acto
         p_payment: body.paymentId,
         p_kind: body.kind,
         p_reason: body.reason,
+      });
+    case "payment.reverse_slot":
+    case "payment.activate":
+    case "payment.refund_approve":
+    case "payment.refund_decline":
+      // Slots, activation and the second approval exist only on the new backend.
+      return Promise.resolve({
+        data: null,
+        error: { message: "This action is not available on this backend.", code: "UNSUPPORTED" },
       });
     case "partner.manage":
       return db.rpc("admin_manage_partner", {
@@ -419,12 +454,27 @@ export async function POST(request: Request) {
         if (body.action === "payment.reverse")
           return {
             success: true,
-            data: await recordFrontendStaffPaymentReversal(
-              api,
-              body.paymentId.toLowerCase(),
-              body.kind,
-              body.reason
-            ),
+            data: await recordStaffPaymentRefund(api, body.paymentId.toLowerCase(), body),
+          };
+        if (body.action === "payment.reverse_slot")
+          return {
+            success: true,
+            data: await recordStaffSlotRefund(api, body.lineId.toLowerCase(), body),
+          };
+        if (body.action === "payment.activate")
+          return {
+            success: true,
+            data: await activateStaffPaidPayment(api, body.paymentId.toLowerCase(), body.reason),
+          };
+        if (body.action === "payment.refund_approve")
+          return {
+            success: true,
+            data: await approveStaffPaymentRefund(api, body.requestId.toLowerCase()),
+          };
+        if (body.action === "payment.refund_decline")
+          return {
+            success: true,
+            data: await declineStaffPaymentRefund(api, body.requestId.toLowerCase(), body.reason),
           };
         if (body.action === "organisation.upsert")
           return { success: true, data: await saveFrontendStaffOrganisation(api, body) };

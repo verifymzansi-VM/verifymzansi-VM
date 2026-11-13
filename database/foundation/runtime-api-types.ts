@@ -55,6 +55,36 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_account_id: string; p_slot_limit: number; p_ends_at: string; p_reason: string };
         Returns: Json;
       };
+      get_staff_payment_list: { Args: { p_page: number; p_filter?: string }; Returns: Json };
+      activate_staff_paid_payment: {
+        Args: { p_payment_id: string; p_reason: string };
+        Returns: Json;
+      };
+      record_staff_payment_refund: {
+        Args: {
+          p_payment_id: string;
+          p_kind: string;
+          p_reason_code: string;
+          p_reason: string;
+          p_ozow_reference: string;
+        };
+        Returns: Json;
+      };
+      record_staff_slot_refund: {
+        Args: {
+          p_line_id: string;
+          p_kind: string;
+          p_reason_code: string;
+          p_reason: string;
+          p_ozow_reference: string;
+        };
+        Returns: Json;
+      };
+      approve_staff_payment_refund: { Args: { p_request_id: string }; Returns: Json };
+      decline_staff_payment_refund: {
+        Args: { p_request_id: string; p_reason: string };
+        Returns: Json;
+      };
       save_frontend_organisation_profile: {
         Args: {
           p_slug: string;
@@ -506,6 +536,7 @@ export type FoundationRuntimeServiceDatabase = {
       complete_payment_alerts: { Args: { p_claim: string; p_sent: boolean }; Returns: number };
       claim_payment_digest: { Args: { p_from_hour: number; p_limit: number }; Returns: Json };
       complete_payment_digest: { Args: { p_claim: string }; Returns: boolean };
+      get_payment_receipt: { Args: { p_payment_id: string }; Returns: Json };
       start_frontend_cipc_email: {
         Args: {
           p_owner: string;

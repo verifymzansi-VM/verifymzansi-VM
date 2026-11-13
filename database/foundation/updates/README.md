@@ -786,6 +786,141 @@ updates publish a copy of it first (`planOnSale` in
 Individual slot of the same length instead, and the browser test copy's checkout
 specs buy the Individual slots.
 
+## Staff fix paid but not delivered, and refunds with Ozow's reference, 13 November 2026
+
+`20261113021223_staff_payment_fixes.sql` is not applied yet. It needs
+`20261113002421_individual_slots_r69.sql` with its reviewed bodies and refuses
+(55000) without them. It only adds: no existing command, argument, grant or
+function body changes (roadmap M3.4, with the receipt read for M3.7).
+
+- **Paid but not delivered, on the staff list.** New staff read
+  `api.get_staff_payment_list(p_page, p_filter)` (capability `payments:view`):
+  each payment with its delivery status (`fulfillment_status`), product kind,
+  merchant reference, slot lines, the refund waiting for approval (and whether
+  the caller's identity recorded it) and when staff activated it. The filter
+  takes a payment status, `needs_attention` (complete and
+  `needs_reconciliation`: the money arrived and nothing was delivered) or
+  `awaiting_approval`; both counts come with every page.
+  `api.get_frontend_staff_payments` stays for the release before this one.
+- **Activate what was paid for.** New staff command
+  `api.activate_staff_paid_payment(p_payment_id, p_reason)` (capability
+  `payments:refund`, recent second factor): only a complete,
+  `needs_reconciliation` payment of an account with current access. A plan: one
+  entitlement per open slot line, refused (PT429) when the person would hold
+  more Individual slots than their limit; a plan payment without lines: one
+  entitlement; an add-on: its window, refused (PT409) unless the post can still
+  carry it. The payment becomes fulfilled, a row goes to
+  `private.payment_activations` (immutable) and to the staff audit trail, and
+  the partner commission the purchase earns is created here
+  (`internal.payment_delivery_commission`, the same rule as the commission
+  trigger, which fires only on a status change and activation leaves the status
+  `complete`). A repeat by the same staff member with the same reason returns
+  the result; anything else is refused.
+- **Refunds and chargebacks need Ozow's reference and a reason code.** New staff
+  commands
+  `api.record_staff_payment_refund(p_payment_id, p_kind, p_reason_code, p_reason, p_ozow_reference)`
+  (whole payment) and `api.record_staff_slot_refund(p_line_id, ...)` (one slot
+  of an order). Without a reference (22023 `ozow_reference_required`), or with
+  one that is not 4 to 100 letters, digits or `. _ : / -`, or already recorded
+  (PT409; references are compared without letter case), nothing is recorded.
+  Reason codes: `billing_error`, `duplicate`, `our_failure_after_fix_offered`,
+  `s14_cancellation`, `breach_credit`. The amount is always the payment's or the
+  slot's own, and the record names the account that paid (a trigger refuses
+  anything else). **When the money returned on the payment would exceed R1,000**
+  (100,000 cents: every applied or waiting refund and chargeback record, slots
+  reversed earlier, and this one), the record is stored as waiting and changes
+  nothing until a second staff member approves it
+  (`api.approve_staff_payment_refund(p_request_id)`: never the requester or
+  another account of the requester's identity, checked again after the lock
+  waits), so a large refund cannot be split slot by slot. Chargebacks follow the
+  same rule while `internal.chargebacks_need_approval()` returns true (the safe
+  default until the owner decides; one function to change). Any staff member
+  with the capability can decline a waiting record with a reason, the requester
+  included (`api.decline_staff_payment_refund`). A payment with a refund waiting
+  accepts no other refund and cannot be activated, and **nothing else reverses
+  it**: new triggers `payments_refund_waiting` and
+  `payment_lines_refund_waiting` refuse (PT409 `refund_awaiting_approval`) any
+  reversal of that payment or its slots, including the earlier staff commands
+  and the service's `api.reverse_payment`. The approval marks the record applied
+  before it reverses, in one transaction (a failed reversal leaves it waiting).
+  An approval that finds the payment changed (for example after an owner SQL
+  fix) refuses with PT409 `refund_payment_changed`; the record can still be
+  declined. A refund record needs approval exactly when the total exceeds R1,000
+  (a constraint); for chargebacks the constraint only allows approval above that
+  amount, because the switch must not live in a constraint. Records are kept in
+  `private.payment_refund_requests` (immutable except for the one approval or
+  decline) and listed in the staff audit trail. The earlier
+  `api.record_frontend_staff_payment_reversal` and
+  `api.record_staff_slot_reversal` stay until a later contract step; the website
+  release in the same pull request no longer calls them.
+- **Staff never act for themselves.** Every new staff command needs a current
+  (not ended) accepted ID review of the staff member's own and refuses a payment
+  of their own identity, compared over every fingerprint either account has had
+  (`internal.assert_staff_payment_actor`), before the lock waits and again after
+  the last authority check.
+- **Audit trail.** `private.frontend_staff_audit_events` also lists activations
+  (`payment:activated`), recorded, approved and declined refunds and every
+  single-slot reversal (`payment:slot_refunded`, also those recorded with
+  `api.record_staff_slot_reversal`).
+- **Receipt read.** New service read `api.get_payment_receipt(p_payment_id)`:
+  one payment's amount, currency, completion time, product kind, label, slot
+  count, statuses, merchant reference, Ozow transaction id and invoice number,
+  description and issue time, with its owner id; null for an unknown payment.
+  Only `service_role` may call it (for the receipt email of M3.7).
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the new commands and the deploy preflight probes every command in
+`../runtime-api-manifest.json`, so a deploy without the update stops there.
+Earlier releases do not use them and keep working with the update applied.
+
+**Applying.**
+
+1. Run `../preflight/20261113021223_staff_payment_fixes.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff payment fixes: update not applied (apply before
+   the website release that uses it is deployed); paid but not delivered: N;
+   refunds waiting for approval: none (table absent)".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "staff payment fixes: already applied; ...; refunds
+   waiting for approval: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261113021223_staff_payment_fixes.down.sql` (only with the owner's
+decision; prefer a forward fix). Revert and deploy the website release first:
+the rollback removes the commands that release calls. It refuses once a payment
+was activated or a refund recorded with the new commands (those are audit
+records); otherwise it puts back the earlier staff audit view and drops the
+update's functions, its triggers (also the two on payments and payment lines)
+and two tables.
+
+`node --import tsx scripts/test-foundation-staff-payment-fixes.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals without the reviewed slot
+bodies and with a drifted table; apply, rollback and re-apply return the same
+fingerprints; a payment completed at the bank after its checkout was cancelled
+is listed under "needs attention" and activated by staff (two slots, an audit
+row, two commissions matching the trigger's), seen by the member in "My slots";
+the refusals (a member, a moderator, staff without their own ID review, staff of
+the same identity, over the slot limit, an already delivered payment, an add-on
+whose post ended); refunds without a reference, with a bad one, with an unknown
+reason code, a reused reference (also in other letter case), staff whose only
+review has ended; a R69 refund and a small chargeback at once, a R1,656
+chargeback and a R1,656 refund that wait, refused to its requester and to
+another account of the requester's identity, approved by a second admin, and a
+declined one recorded again; one slot of three refunded alone and the whole
+order refused after it; a refund split slot by slot (the third R414 slot waits
+after two went through); the earlier whole-payment and slot commands and the
+service reversal refused while a refund waits, an approval after the payment
+changed refused with `refund_payment_changed` and the record still declined;
+activation refused while a refund waits; an approval racing the earlier commands
+(the money goes back once); a table with this update's columns but not its
+constraints refused; the account and amount rule; the receipt read against the
+invoice (a two-slot order and an add-on) and its service-only grant; the grants;
+and that the rollback refuses once the commands were used.
+
 ## Individual slots at R69, 12 November 2026
 
 `20261113002421_individual_slots_r69.sql` is not applied yet. It was first
@@ -2497,5 +2632,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   bodies matched the update's and exactly individual_30d, individual_90d and
   individual_180d were on sale at 6900, 20700 and 41400 cents; production
   fingerprint after it matched the full replay
+- `20261113021223_staff_payment_fixes.sql`: applied 2026-11-13 07:15 UTC; time
+  approximate, applied by the coordinator with the owner's approval through the
+  Supabase query API, from the reviewed file, before the pull request was
+  merged; preflight before "update not applied; paid but not delivered: 0;
+  refunds waiting for approval: none (table absent)", after "already applied"
+  (all 24 function bodies matched the update's, both new tables, the audit view
+  and both waiting triggers present; no problem rows); production fingerprint
+  after it matched the full replay
 
 <!-- applied-register:end -->
