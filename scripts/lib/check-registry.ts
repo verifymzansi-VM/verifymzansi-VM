@@ -170,14 +170,20 @@ export const CHECKS: Check[] = [
   ),
   check(
     "browser",
-    ["test:browser:isolated"],
-    "critical smoke, add-on checkout and DSAR flows on the stub suite; isolated build and bundle budget (billing and KYC journeys run in e2e-foundation, part of the main release gate)",
+    ["test:e2e:foundation"],
+    "restored website on the private local foundation test copy: public pages and forms, checkout and fulfilment, account recovery, identity review, showroom and video (e2e/foundation)",
     ["release", "payments", "kyc"],
     {
-      dependencies: ["Playwright Chromium"],
-      exclusions: "WebKit/mobile-safari quarantine; authenticated scenarios need test credentials",
-      evidence: ["tmp/isolated-browser/latest.json"],
-      timeoutMs: 1_800_000,
+      dependencies: [
+        "Docker",
+        "Supabase CLI",
+        "Playwright Chromium",
+        "free loopback ports 3110 and 55440-55460",
+      ],
+      exclusions:
+        "Local throwaway copy only (nothing hosted, no real provider); WebKit and Firefox are not run; delete the copy afterwards with pnpm foundation:e2e:down",
+      evidence: ["playwright-report/foundation", "test-results/foundation"],
+      timeoutMs: 2_700_000,
     }
   ),
   check(
@@ -419,7 +425,13 @@ for (const item of CHECKS) {
     ],
     preflight: ["src/__tests__/preflight-check.test.ts"],
     "preflight-production": ["src/__tests__/preflight-check.test.ts"],
-    browser: ["e2e/smoke.spec.ts", "e2e/addon-checkout.spec.ts", "e2e/dsar.spec.ts"],
+    browser: [
+      "playwright.foundation.config.ts",
+      "e2e/foundation/checkout-fulfilment.spec.ts",
+      "e2e/foundation/account-recovery.spec.ts",
+      "e2e/foundation/staff-review.spec.ts",
+      "e2e/foundation/public-forms.spec.ts",
+    ],
     lighthouse: ["scripts/run-lighthouse.test.mjs", "lighthouse.config.json"],
     "http-smoke": ["src/__tests__/test-smoke-script.test.ts"],
     "video-worker": ["scripts/test-video-worker.mjs"],
