@@ -69,7 +69,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 21. Payment receipt email (M3.7)            | 0 (email only) | keep (owner, 2026-11-13)                                                                   | Members who pay: the 'Payment received' email lists the invoice number, date paid, item, amount in rands and bank reference, and links to 'My slots' (add-ons: the dashboard) instead of Billing                                                  |
 | 22. Hidden until it works, part 2 (M6.2)    |              3 | keep (owner, 2026-11-13)                                                                   | No 'Performance' page or menu entry and no 'Detect province and city' button; a search lists tourism businesses under Businesses again                                                                                                            |
 | 23. Phone-sized photos (M4.3)               |              0 | keep (owner, 2026-11-13)                                                                   | Nothing on screen: the same photos, but a phone downloads a 400, 800 or 1 600 px copy of each new photo instead of the full-size original                                                                                                         |
-| 24. Communication choices saved (M1.7)      |              1 | awaiting owner                                                                             | Notifications page: no 'Failed to load email activity' message on every visit; the four switches (all off until turned on) stay as set after a reload; the Email tab lists the member's own sent and failed account emails                        |
+| 25. Communication choices saved (M1.7)      |              1 | awaiting owner                                                                             | Notifications page: no 'Failed to load email activity' message on every visit; the four switches (all off until turned on) stay as set after a reload; the Email tab lists the member's own sent and failed account emails                        |
 | **Total**                                   |        **295** |                                                                                            |                                                                                                                                                                                                                                                   |
 
 Questions for the owner:
@@ -366,7 +366,7 @@ Questions for the owner:
     Answered: approved by owner 2026-11-13: copies on; MEDIA_PHOTO_VARIANTS=off
     is the switch if the free 5,000 monthly allowance gets close.
 
-20. **Communication choices saved (group 24, M1.7).** The Notifications page
+20. **Communication choices saved (group 25, M1.7).** The Notifications page
     looks the same, but it now works: the 'Failed to load email activity'
     message no longer appears on every visit, a switch you turn on or off stays
     that way after a reload (before, saving failed and every switch read off),
@@ -942,9 +942,9 @@ photos a month instead of 5,000 before uploads stop until the next month). The
 Worker setting `MEDIA_PHOTO_VARIANTS=off` stops making copies without a code
 change; the paid Images plan (the owner's budget decision) removes the limit.
 
-### 24. Communication choices saved (roadmap M1.7)
+### 25. Communication choices saved (roadmap M1.7)
 
-Owner question 20. The Notifications page (`/dashboard/communication`) keeps its
+Owner question 21. The Notifications page (`/dashboard/communication`) keeps its
 design; it now reads and saves through the live backend. Before, every visit
 showed 'Failed to load email activity', saving a switch failed with 'Unable to
 update preference' and every switch read off after a reload. Now the four
