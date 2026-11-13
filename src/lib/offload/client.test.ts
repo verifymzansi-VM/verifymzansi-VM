@@ -28,12 +28,14 @@ const extracted = {
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 
 function inWorker(binding: unknown) {
+  vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
   cloudflare.inWorker = true;
   cloudflare.env = binding === undefined ? {} : { OFFLOAD: binding };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
   cloudflare.inWorker = false;
   cloudflare.env = {};
 });
@@ -47,6 +49,15 @@ describe("outside a Worker (Node)", () => {
     expect(local.extractPdfHere).toHaveBeenCalledWith(bytes);
     expect(await renderShareCard(card)).toBe(png.buffer);
     expect(local.renderShareCardHere).toHaveBeenCalledWith(card);
+  });
+
+  it("ignores the local wrangler proxy's OFFLOAD service, which has no Worker behind it", async () => {
+    const fetch = vi.fn(async () => new Response("no local dev session", { status: 503 }));
+    cloudflare.inWorker = true;
+    cloudflare.env = { OFFLOAD: { fetch } };
+    local.extractPdfHere.mockResolvedValue(extracted);
+    expect(await readPdf(new Uint8Array([1]))).toBe(extracted);
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 
@@ -84,6 +95,7 @@ describe("inside the Worker", () => {
   });
 
   it.each([
+    ["the Worker context cannot be read", "no-context"],
     ["the binding is missing", undefined],
     ["the binding is not a service", { nope: true }],
     [
@@ -99,6 +111,7 @@ describe("inside the Worker", () => {
     ["the reply is not JSON", { fetch: async () => new Response("<html>") }],
   ])("refuses to guess when %s", async (_case, binding) => {
     inWorker(binding);
+    if (binding === "no-context") cloudflare.inWorker = false;
     await expect(readPdf(new Uint8Array([1]))).rejects.toBeInstanceOf(OffloadUnavailableError);
     await expect(renderShareCard(card)).rejects.toBeInstanceOf(OffloadUnavailableError);
     expect(local.extractPdfHere).not.toHaveBeenCalled();

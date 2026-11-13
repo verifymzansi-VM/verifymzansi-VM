@@ -25,15 +25,27 @@ function isBinding(value: unknown): value is OffloadBinding {
   return !!value && typeof (value as { fetch?: unknown }).fetch === "function";
 }
 
+/**
+ * Whether this code runs in a Cloudflare Worker. In Node (local development,
+ * tests, the browser-test server) OpenNext still offers a Cloudflare context
+ * through wrangler's local proxies, whose OFFLOAD service has no local Worker
+ * behind it, so the context alone does not tell the two apart.
+ */
+function inWorker(): boolean {
+  return typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
+}
+
 /** The OFFLOAD binding inside a Worker; null outside one (Node). */
 async function offloadBinding(): Promise<OffloadBinding | null> {
+  if (!inWorker()) return null;
   let environment: Record<string, unknown>;
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     environment = (await getCloudflareContext({ async: true })).env as Record<string, unknown>;
-  } catch {
-    // Not running inside a Worker (local dev, tests, CI).
-    return null;
+  } catch (error) {
+    throw new OffloadUnavailableError(
+      `Worker context unavailable: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
   if (!isBinding(environment.OFFLOAD)) {
     throw new OffloadUnavailableError("Worker offload binding is missing");
