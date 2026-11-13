@@ -139,6 +139,17 @@ id = "247144b6d9b1406093351378a57c62fa"
 binding = "IMAGES"
 
 # ────────────────────────────────────────────────────────────────────────────
+# Offload Worker (M9.9): CIPC PDF reading and link-preview cards run in
+# verifymzansi-offload (wrangler.offload.toml) so pdf.js and @vercel/og stay
+# out of this Worker (src/lib/offload/client.ts). Without it, PDF uploads and
+# share previews answer "try again shortly" (503). Deploy it before this
+# Worker. Bindings are not inherited: keep [[env.*.services]] below in step.
+# ────────────────────────────────────────────────────────────────────────────
+[[services]]
+binding = "OFFLOAD"
+service = "verifymzansi-offload"
+
+# ────────────────────────────────────────────────────────────────────────────
 # R2 Access
 # ────────────────────────────────────────────────────────────────────────────
 # The main app uses R2's S3-compatible API via the R2_* secrets below. Native
@@ -231,6 +242,10 @@ id = "247144b6d9b1406093351378a57c62fa"
 
 [env.production.images]
 binding = "IMAGES"
+
+[[env.production.services]]
+binding = "OFFLOAD"
+service = "verifymzansi-offload"
 
 [env.production.vars]
 NODE_ENV = "production"
