@@ -54,19 +54,16 @@ import {
 // (ADDON_SALES_ENABLED, src/lib/billing/addon-sales.ts); the plan steps above
 // run on that same server, so pausing add-ons leaves plans working.
 //
-// Two steps are broken today and are marked test.fail(), each pinned to its
-// exact known symptom (characterise, support/known-break.ts); any other
-// outcome turns the run red:
-// - "the receipt email ... payment details": PAY-06, fixed by M3.7. The
-//   "Payment received" email has no amount, date, plan, bank reference or
-//   invoice number, and sends the member to Billing for an invoice.
+// One step is broken today and is marked test.fail(), pinned to its exact
+// known symptom (characterise, support/known-break.ts); any other outcome
+// turns the run red:
 // - "a paid Urgent add-on shows its label": BL-05, fixed by M1.10. The
 //   website sells no add-on while sales are paused, so the payment is arranged
 //   as one made before the pause (trusted local steps) and paid at the mock;
 //   it settles and the owner sees "Already urgent", but visitors see no Urgent
 //   label. M1.10 buys it through the button again and removes the mark.
 // The tests share one member and run in order; a failure skips the rest, so
-// the marked steps come after the working flows.
+// the marked step comes after the working flows.
 //
 // The provider is the copy's mock (support/mock-ozow.ts): its payment page is
 // served here, paying sends a notice signed with the copy's synthetic secret to
@@ -85,7 +82,6 @@ import {
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const PAY06 = "PAY-06, fixed by M3.7";
 const BL05 = "BL-05, fixed by M1.10";
 /** The restored checkout page's notice for a plan with a pending payment. */
 const PENDING_NOTICE =
@@ -97,9 +93,6 @@ const ADDONS_PAUSED = {
   code: "addon_sales_paused",
 };
 const ADDONS_PAUSED_LOG = "Paid add-on checkout refused while add-on sales are paused";
-/** Today's "Payment received" email body (src/lib/services/email.ts). */
-const RECEIPT_TODAY =
-  /^Payment received\s+Your payment has been recorded\. View your posting allowance and invoice in Billing\.\s+Sign in to view the details: https:\/\/\S+\/billing\s*$/;
 
 // A service worker could fetch outside page routing; the allowlist must see every request.
 test.use({ serviceWorkers: "block" });
@@ -1065,58 +1058,49 @@ test.describe("checkout to fulfilment", () => {
   });
 
   test("the receipt email arrives with the payment details", async ({ request }) => {
-    test.fail(true, PAY06);
-    // Generous; characterise gives up 15 s before this limit (a test timeout
-    // would count as the expected failure).
     test.setTimeout(180_000);
-    await characterise(PAY06, async () => {
-      const mark = readOutboundAttempts().length;
-      const outboxId = queryTestCopy(
-        "select id from private.outbox_events where kind = 'payment_completed' " +
-          `and subject_id = '${planPayment.id}';`
-      );
-      expect(outboxId).toMatch(UUID);
-      // Each run of the job sends at most one email, oldest first.
-      for (let run = 0; run < 20 && !outboxState(outboxId).processed; run++)
-        expect((await runOpsJob(request)).retrying).toBe(0);
-      expect(outboxState(outboxId)).toEqual({ processed: true, attempts: 1, error: null });
-      const mail = await caughtMailFor(member.email, `foundation-outbox/${outboxId}`);
-      expect(mail.subject).toBe("Payment received");
-      expectNoOutboundSince(mark);
+    const mark = readOutboundAttempts().length;
+    const outboxId = queryTestCopy(
+      "select id from private.outbox_events where kind = 'payment_completed' " +
+        `and subject_id = '${planPayment.id}';`
+    );
+    expect(outboxId).toMatch(UUID);
+    // Each run of the job sends at most one email, oldest first.
+    for (let run = 0; run < 20 && !outboxState(outboxId).processed; run++)
+      expect((await runOpsJob(request)).retrying).toBe(0);
+    expect(outboxState(outboxId)).toEqual({ processed: true, attempts: 1, error: null });
+    const mail = await caughtMailFor(member.email, `foundation-outbox/${outboxId}`);
+    expect(mail.subject).toBe("Payment received");
+    expectNoOutboundSince(mark);
 
-      const [invoiceNumber, issued] = queryTestCopy(
-        "select invoice_number, to_char(issued_at at time zone 'Africa/Johannesburg', 'YYYY-MM-DD') " +
-          `from private.invoices where payment_id = '${planPayment.id}';`
-      ).split("|");
-      expect(invoiceNumber).toMatch(/^INV-\d{8}-[0-9A-F]{10}$/);
-      const [year, month, day] = issued.split("-").map(Number);
-      const monthName = new Date(Date.UTC(year, month - 1, 15)).toLocaleString("en-ZA", {
-        month: "long",
-        timeZone: "UTC",
-      });
-      // What a receipt shows (M3.7): amount, date, plan, the reference on the
-      // bank statement (the provider reference field, 14 characters) and the
-      // invoice number.
-      const amount = (Number(plans.business.price_cents) / 100).toFixed(2);
-      const shows = (...forms: string[]) => forms.some((form) => mail.text.includes(form));
-      const wanted: Record<string, boolean> = {
-        amount: shows(`R ${amount}`, `R${amount}`),
-        date: shows(issued, `${day} ${monthName} ${year}`, `0${day} ${monthName} ${year}`),
-        plan: shows(plans.business.label),
-        "bank reference": shows(planPayment.merchantReference.slice(0, 14)),
-        "invoice number": shows(invoiceNumber),
-      };
-      const missing = Object.keys(wanted).filter((name) => !wanted[name]);
-      if (missing.length === Object.keys(wanted).length && RECEIPT_TODAY.test(mail.text)) {
-        // PAY-06 as recorded: the email confirms only that a payment was
-        // recorded and sends the member to Billing, which lists no invoices.
-        throw new KnownBreak(
-          `${PAY06}: "Payment received" has no ${missing.join(", ")} and points to Billing for the invoice`
-        );
-      }
-      expect(missing).toEqual([]);
-      expect(mail.text).not.toContain("invoice in Billing");
+    const [invoiceNumber, issued] = queryTestCopy(
+      "select invoice_number, to_char(issued_at at time zone 'Africa/Johannesburg', 'YYYY-MM-DD') " +
+        `from private.invoices where payment_id = '${planPayment.id}';`
+    ).split("|");
+    expect(invoiceNumber).toMatch(/^INV-\d{8}-[0-9A-F]{10}$/);
+    const [year, month, day] = issued.split("-").map(Number);
+    const monthName = new Date(Date.UTC(year, month - 1, 15)).toLocaleString("en-ZA", {
+      month: "long",
+      timeZone: "UTC",
     });
+    // What a receipt shows (M3.7, PAY-06): amount, date, plan, the reference
+    // on the bank statement (the provider reference field, 14 characters) and
+    // the invoice number.
+    const amount = (Number(plans.business.price_cents) / 100).toFixed(2);
+    const shows = (...forms: string[]) => forms.some((form) => mail.text.includes(form));
+    const wanted: Record<string, boolean> = {
+      amount: shows(`R ${amount}`, `R${amount}`),
+      date: shows(issued, `${day} ${monthName} ${year}`, `0${day} ${monthName} ${year}`),
+      plan: shows(plans.business.label),
+      "bank reference": shows(planPayment.merchantReference.slice(0, 14)),
+      "invoice number": shows(invoiceNumber),
+    };
+    expect(Object.keys(wanted).filter((name) => !wanted[name])).toEqual([]);
+    // No page that lists no payments, and nothing about the member beyond the
+    // address it went to.
+    expect(mail.text).not.toContain("/billing");
+    expect(mail.text).not.toContain(member.lastName);
+    expect(mail.text).not.toContain(member.id);
   });
 
   test("a paid Urgent add-on shows its label to visitors", async ({ context, page }) => {

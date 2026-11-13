@@ -154,3 +154,91 @@ it("keeps an uncertain transfer reserved instead of rejecting its potentially st
   ).rejects.toMatchObject({ status: 503 });
   expect(attest).not.toHaveBeenCalled();
 });
+
+function imageIntent() {
+  return vi.fn().mockResolvedValue({
+    data: {
+      object_id: objectId,
+      object_key: key,
+      max_bytes: 5_242_880,
+      state: "intent",
+      kind: "image",
+      width: null,
+      height: null,
+      sha256: null,
+      size_bytes: null,
+      mime: null,
+    },
+    error: null,
+  });
+}
+async function detailedJpeg(width: number, height: number) {
+  const { default: sharp } = await import("sharp");
+  const noise = Buffer.alloc(width * height * 3);
+  for (let index = 0; index < noise.length; index++) noise[index] = (index * 7919) % 251;
+  const bytes = await sharp(noise, { raw: { width, height, channels: 3 } })
+    .jpeg({ quality: 90 })
+    .toBuffer();
+  return new File([new Uint8Array(bytes)], "photo.jpg", { type: "image/jpeg" });
+}
+const attested = () =>
+  vi.fn().mockResolvedValue({ data: { object_id: objectId, state: "ready" }, error: null });
+
+it("stores 400, 800 and 1600 px WebP copies of a photo before completing its upload", async () => {
+  vi.mocked(putImmutableR2Bytes).mockClear();
+  const order: string[] = [];
+  vi.mocked(putImmutableR2Bytes).mockImplementation(async (_bucket, objectKey, bytes) => {
+    order.push(objectKey);
+    return bytes;
+  });
+  const attest = vi.fn(async () => {
+    order.push("complete");
+    return { data: { object_id: objectId, state: "ready" }, error: null };
+  });
+  const uploaded = await uploadFoundationMedia(
+    { rpc: imageIntent() } as unknown as FoundationAuthenticatedApi,
+    { rpc: attest } as unknown as FoundationServiceApi,
+    await detailedJpeg(2000, 1500)
+  );
+  expect(uploaded).toMatchObject({ kind: "image", width: 2000, height: 1500 });
+  expect(order[0]).toBe(key);
+  expect(order.slice(1, 4).sort()).toEqual(
+    [`${key}.w1600.webp`, `${key}.w400.webp`, `${key}.w800.webp`].sort()
+  );
+  expect(order[4]).toBe("complete");
+  for (const call of vi.mocked(putImmutableR2Bytes).mock.calls.slice(1))
+    expect(call[3]).toEqual({
+      contentType: "image/webp",
+      cacheControl: "public, max-age=31536000, immutable",
+    });
+});
+
+it("completes a photo upload when its copies cannot be stored", async () => {
+  vi.mocked(putImmutableR2Bytes).mockClear();
+  vi.mocked(putImmutableR2Bytes).mockImplementation(async (_bucket, objectKey, bytes) => {
+    if (objectKey.endsWith(".webp")) throw new Error("storage busy");
+    return bytes;
+  });
+  const attest = attested();
+  await expect(
+    uploadFoundationMedia(
+      { rpc: imageIntent() } as unknown as FoundationAuthenticatedApi,
+      { rpc: attest } as unknown as FoundationServiceApi,
+      await detailedJpeg(1200, 900)
+    )
+  ).resolves.toMatchObject({ object_id: objectId, kind: "image" });
+  expect(attest).toHaveBeenCalledTimes(1);
+});
+
+it("stores only the original when MEDIA_PHOTO_VARIANTS is off", async () => {
+  vi.mocked(putImmutableR2Bytes).mockClear();
+  vi.mocked(putImmutableR2Bytes).mockImplementation(async (_bucket, _key, bytes) => bytes);
+  await uploadFoundationMedia(
+    { rpc: imageIntent() } as unknown as FoundationAuthenticatedApi,
+    { rpc: attested() } as unknown as FoundationServiceApi,
+    await detailedJpeg(1200, 900),
+    undefined,
+    { MEDIA_PHOTO_VARIANTS: "off" } as unknown as NodeJS.ProcessEnv
+  );
+  expect(vi.mocked(putImmutableR2Bytes).mock.calls.map((call) => call[1])).toEqual([key]);
+});
