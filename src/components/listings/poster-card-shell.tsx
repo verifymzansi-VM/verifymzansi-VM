@@ -161,6 +161,9 @@ export function PosterCardShell({
   // Keep hero media mounted as cards move between active and side slots.
   const hasIndependentControls =
     hasVideo || showPlaybackControl || (cardVariant === "hero" && makeEntireCardClickable);
+  // One tap opens any post: video cards link their whole surface, like photo
+  // cards; their Preview, sound and pause buttons sit above that link.
+  const linkWholeCard = makeEntireCardClickable || immersive || hasVideo;
   // Immersive cards use "smart": fill when the crop is small, otherwise contain
   // over a blurred backdrop so landscape uploads are never hard-cropped.
   const effectiveFitStrategy = immersive ? "smart" : fitStrategy;
@@ -412,7 +415,7 @@ export function PosterCardShell({
 
         {/* Status badge — top-left corner of thumbnail */}
         {statusLabel && !immersive ? (
-          <div className="absolute left-2 top-2 z-[6]">
+          <div className="pointer-events-none absolute left-2 top-2 z-[6]">
             <span
               className={cn(
                 "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md ring-1 ring-black/10",
@@ -425,7 +428,9 @@ export function PosterCardShell({
         ) : null}
 
         {/* Duration badge — bottom-right of thumbnail (YouTube-style) */}
-        {hasVideo && !immersive ? <VideoDurationBadge seconds={videoDuration} /> : null}
+        {hasVideo && !immersive ? (
+          <VideoDurationBadge seconds={videoDuration} className="pointer-events-none" />
+        ) : null}
         {immersive ? (
           <div
             data-card-overlay
@@ -460,7 +465,7 @@ export function PosterCardShell({
       </div>
 
       {/* ── YouTube-style metadata row beneath thumbnail ────────── */}
-      {immersive ? null : hasIndependentControls && !makeEntireCardClickable ? (
+      {immersive ? null : hasIndependentControls && !linkWholeCard ? (
         <Link
           href={href}
           prefetch={false}
@@ -478,7 +483,7 @@ export function PosterCardShell({
         metadataBody
       )}
 
-      {hasIndependentControls && (makeEntireCardClickable || immersive) ? (
+      {hasIndependentControls && linkWholeCard ? (
         <Link
           href={href}
           prefetch={false}
