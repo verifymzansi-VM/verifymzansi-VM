@@ -1,16 +1,37 @@
 /** @vitest-environment node */
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationServiceApi } from "./service-api";
-import { uploadFoundationMedia } from "./media-upload";
-import { putImmutableR2Bytes } from "../services/storage";
+import { IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE, uploadFoundationMedia } from "./media-upload";
+import { getR2ObjectSize, putImmutableR2Bytes } from "../services/storage";
+import { ImageReencodeError, reencodeImage } from "../utils/image-reencode";
+import type * as ImageReencode from "../utils/image-reencode";
+import { openImagesAllowance, type ImagesAllowance } from "../media/images-allowance";
 
 vi.mock("server-only", () => ({}));
 vi.mock("../services/storage", () => ({
   putImmutableR2Bytes: vi.fn(async (_b, _k, bytes) => bytes),
+  getR2ObjectSize: vi.fn(async () => null),
 }));
+vi.mock("../utils/image-reencode", async (original) => {
+  const actual = await original<typeof ImageReencode>();
+  return { ...actual, reencodeImage: vi.fn(actual.reencodeImage) };
+});
+/** The monthly Images count: open (copies allowed) unless a test says otherwise. */
+const allowance = { allowsCopies: vi.fn(), add: vi.fn(), save: vi.fn(), markUsedUp: vi.fn() };
+vi.mock("../media/images-allowance", () => ({ openImagesAllowance: vi.fn() }));
+beforeEach(() => {
+  allowance.allowsCopies.mockReset().mockResolvedValue(true);
+  allowance.markUsedUp.mockReset().mockResolvedValue(undefined);
+  allowance.add.mockReset();
+  allowance.save.mockReset().mockResolvedValue(undefined);
+  vi.mocked(openImagesAllowance)
+    .mockReset()
+    .mockResolvedValue(allowance as ImagesAllowance);
+  vi.mocked(getR2ObjectSize).mockReset().mockResolvedValue(null);
+});
 const objectId = "00000000-0000-4000-8000-000000000001";
 const key = "media/00000000-0000-4000-8000-000000000002";
 function fixture() {
@@ -184,7 +205,7 @@ async function detailedJpeg(width: number, height: number) {
 const attested = () =>
   vi.fn().mockResolvedValue({ data: { object_id: objectId, state: "ready" }, error: null });
 
-it("stores 400, 800 and 1600 px WebP copies of a photo before completing its upload", async () => {
+it("stores only the 800 px WebP copy of a photo before completing its upload", async () => {
   vi.mocked(putImmutableR2Bytes).mockClear();
   const order: string[] = [];
   vi.mocked(putImmutableR2Bytes).mockImplementation(async (_bucket, objectKey, bytes) => {
@@ -201,11 +222,11 @@ it("stores 400, 800 and 1600 px WebP copies of a photo before completing its upl
     await detailedJpeg(2000, 1500)
   );
   expect(uploaded).toMatchObject({ kind: "image", width: 2000, height: 1500 });
-  expect(order[0]).toBe(key);
-  expect(order.slice(1, 4).sort()).toEqual(
-    [`${key}.w1600.webp`, `${key}.w400.webp`, `${key}.w800.webp`].sort()
-  );
-  expect(order[4]).toBe("complete");
+  expect(order).toEqual([key, `${key}.w800.webp`, "complete"]);
+  // One re-encode and one copy, counted with one write.
+  expect(allowance.add.mock.calls).toEqual([[1], [1]]);
+  expect(allowance.allowsCopies).toHaveBeenCalledWith(1);
+  expect(allowance.save).toHaveBeenCalledTimes(1);
   for (const call of vi.mocked(putImmutableR2Bytes).mock.calls.slice(1))
     expect(call[3]).toEqual({
       contentType: "image/webp",
@@ -241,4 +262,97 @@ it("stores only the original when MEDIA_PHOTO_VARIANTS is off", async () => {
     { MEDIA_PHOTO_VARIANTS: "off" } as unknown as NodeJS.ProcessEnv
   );
   expect(vi.mocked(putImmutableR2Bytes).mock.calls.map((call) => call[1])).toEqual([key]);
+});
+
+it("still re-encodes and stores the photo when the monthly copy budget is reached", async () => {
+  vi.mocked(putImmutableR2Bytes).mockClear();
+  vi.mocked(putImmutableR2Bytes).mockImplementation(async (_bucket, _key, bytes) => bytes);
+  vi.mocked(reencodeImage).mockClear();
+  allowance.allowsCopies.mockResolvedValue(false);
+  const attest = attested();
+  await expect(
+    uploadFoundationMedia(
+      { rpc: imageIntent() } as unknown as FoundationAuthenticatedApi,
+      { rpc: attest } as unknown as FoundationServiceApi,
+      await detailedJpeg(1200, 900)
+    )
+  ).resolves.toMatchObject({ object_id: objectId, kind: "image", width: 1200 });
+  expect(reencodeImage).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(putImmutableR2Bytes).mock.calls.map((call) => call[1])).toEqual([key]);
+  expect(allowance.add.mock.calls).toEqual([[1]]);
+  expect(allowance.save).toHaveBeenCalledTimes(1);
+  expect(attest).toHaveBeenCalledTimes(1);
+});
+
+it("does not make the copy again when a retried upload already stored it", async () => {
+  vi.mocked(putImmutableR2Bytes).mockClear();
+  vi.mocked(putImmutableR2Bytes).mockImplementation(async (_bucket, _key, bytes) => bytes);
+  vi.mocked(getR2ObjectSize).mockImplementation(async (_bucket, objectKey) =>
+    objectKey === `${key}.w800.webp` ? 1234 : null
+  );
+  await uploadFoundationMedia(
+    { rpc: imageIntent() } as unknown as FoundationAuthenticatedApi,
+    { rpc: attested() } as unknown as FoundationServiceApi,
+    await detailedJpeg(1200, 900)
+  );
+  expect(getR2ObjectSize).toHaveBeenCalledWith("verifymzansi-public", `${key}.w800.webp`);
+  expect(vi.mocked(putImmutableR2Bytes).mock.calls.map((call) => call[1])).toEqual([key]);
+  expect(allowance.add.mock.calls).toEqual([[1]]);
+});
+
+it("makes no copy when storage cannot say whether it exists", async () => {
+  vi.mocked(putImmutableR2Bytes).mockClear();
+  vi.mocked(putImmutableR2Bytes).mockImplementation(async (_bucket, _key, bytes) => bytes);
+  vi.mocked(getR2ObjectSize).mockRejectedValue(new Error("storage busy"));
+  await expect(
+    uploadFoundationMedia(
+      { rpc: imageIntent() } as unknown as FoundationAuthenticatedApi,
+      { rpc: attested() } as unknown as FoundationServiceApi,
+      await detailedJpeg(1200, 900)
+    )
+  ).resolves.toMatchObject({ kind: "image" });
+  expect(vi.mocked(putImmutableR2Bytes).mock.calls.map((call) => call[1])).toEqual([key]);
+});
+
+it("refuses a photo with a clear reason, storing nothing, when the Images allowance is used up", async () => {
+  vi.mocked(putImmutableR2Bytes).mockClear();
+  vi.mocked(reencodeImage).mockRejectedValueOnce(
+    new ImageReencodeError("exhausted", "Images allowance used up: 9422")
+  );
+  const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+  const rpc = imageIntent();
+  const attest = attested();
+  const write = vi.fn();
+  try {
+    await expect(
+      uploadFoundationMedia(
+        { rpc } as unknown as FoundationAuthenticatedApi,
+        { rpc: attest } as unknown as FoundationServiceApi,
+        await detailedJpeg(1200, 900),
+        write
+      )
+    ).rejects.toMatchObject({ status: 503, reason: "images_allowance_exhausted" });
+    expect(errors.mock.calls.flat().join(" ")).toContain("images_allowance_exhausted");
+  } finally {
+    errors.mockRestore();
+  }
+  expect(rpc).not.toHaveBeenCalled();
+  expect(attest).not.toHaveBeenCalled();
+  expect(write).not.toHaveBeenCalled();
+  expect(putImmutableR2Bytes).not.toHaveBeenCalled();
+  expect(allowance.add).not.toHaveBeenCalled();
+  expect(allowance.markUsedUp).toHaveBeenCalledTimes(1);
+  expect(IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE).toMatch(/paused/);
+});
+
+it("passes other re-encode failures on unchanged", async () => {
+  const failure = new ImageReencodeError("unavailable", "outage");
+  vi.mocked(reencodeImage).mockRejectedValueOnce(failure);
+  await expect(
+    uploadFoundationMedia(
+      { rpc: imageIntent() } as unknown as FoundationAuthenticatedApi,
+      { rpc: attested() } as unknown as FoundationServiceApi,
+      await detailedJpeg(1200, 900)
+    )
+  ).rejects.toBe(failure);
 });

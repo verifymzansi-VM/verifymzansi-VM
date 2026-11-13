@@ -195,6 +195,20 @@ describe("uploadFoundationMediaRequest", () => {
     });
   });
 
+  it("tells the member when photo uploads are paused for the month", async () => {
+    vi.mocked(uploadFoundationMedia).mockRejectedValue(
+      new FoundationMediaError(503, "images_allowance_exhausted")
+    );
+    const response = await uploadFoundationMediaRequest(request([file("a.png")]));
+    expect(await json(response)).toMatchObject({
+      status: 503,
+      body: {
+        success: false,
+        errors: ["Photo uploads are paused for now. Please try again later."],
+      },
+    });
+  });
+
   it.each([
     [new FoundationMediaError(400), 400],
     [new FoundationMediaError(403), 403],

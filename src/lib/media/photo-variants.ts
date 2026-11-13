@@ -2,23 +2,31 @@ import "server-only";
 
 import { getImageDimensions } from "../utils/image-dimensions";
 import { resizeImageToWebp } from "../utils/image-reencode";
-import { VARIANT_WIDTHS, variantKeyFor } from "./variant-keys";
+import { variantKeyFor } from "./variant-keys";
 
 /**
  * Phone-sized copies of an uploaded photo (roadmap M4.3).
  *
- * After a photo is re-encoded and stored, smaller WebP copies are stored
- * beside it at `<key>.w400.webp`, `<key>.w800.webp` and `<key>.w1600.webp`.
- * The image loader (src/lib/image-loader.ts) asks for the copy that fits the
- * screen, and the media route serves the original when a copy is missing, so
- * photos uploaded before this change, or whose copies failed, still show.
+ * After a photo is re-encoded and stored, one smaller WebP copy is stored
+ * beside it at `<key>.w800.webp`. The image loader (src/lib/image-loader.ts)
+ * asks for that copy for screens up to 800 px, and the media route serves the
+ * original when a copy is missing, so photos uploaded before this change, or
+ * whose copy failed or was skipped, still show. Photos uploaded while three
+ * copies were made (pull request #217) also have 400 and 1600 px copies; the
+ * 1600 px one is still served and all are deleted with their original
+ * (VARIANT_WIDTHS in ./variant-keys.ts).
  *
  * Copies are made with the same free tools as the re-encode: the Cloudflare
  * Images binding on Workers, sharp in Node. Each copy is one Images
- * transformation (Images Free allows 5,000 a month, shared with the
- * re-encode), so only copies narrower than the original are made, and
- * `MEDIA_PHOTO_VARIANTS=off` stops making them without a code change.
+ * transformation (Images Free allows 5,000 a month, shared with the re-encode
+ * every photo needs), so only the 800 px copy is made, only when the original
+ * is wider, only while the monthly count is under the copy budget
+ * (./images-allowance.ts), and `MEDIA_PHOTO_VARIANTS=off` stops making it
+ * without a code change.
  */
+
+/** The copy widths made at upload (the loader and cleanup know more). */
+const MADE_VARIANT_WIDTHS = [800] as const;
 
 interface PhotoVariant {
   key: string;
@@ -33,7 +41,12 @@ export function photoVariantsEnabled(environment: Record<string, string | undefi
 
 /** The copy widths worth making: narrower than the original, never enlarged. */
 export function variantWidthsFor(originalWidth: number): number[] {
-  return VARIANT_WIDTHS.filter((width) => width < originalWidth);
+  return MADE_VARIANT_WIDTHS.filter((width) => width < originalWidth);
+}
+
+/** The keys of the copies a photo of this width gets. */
+export function variantKeysFor(objectKey: string, originalWidth: number): string[] {
+  return variantWidthsFor(originalWidth).map((width) => variantKeyFor(objectKey, width));
 }
 
 /**

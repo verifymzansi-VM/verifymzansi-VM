@@ -24,9 +24,11 @@ export function isReencodableImageType(mime: string): mime is ReencodableImageTy
 
 /**
  * `undecodable`: the bytes are not a readable image (tell the uploader).
- * `unavailable`: the re-encoder is down or over quota (try again later).
+ * `exhausted`: the monthly Cloudflare Images allowance is used up (error 9422;
+ * new transformations fail until the next calendar month).
+ * `unavailable`: the re-encoder is down or failed otherwise (try again later).
  */
-export type ImageReencodeFailure = "undecodable" | "unavailable";
+export type ImageReencodeFailure = "undecodable" | "exhausted" | "unavailable";
 
 export class ImageReencodeError extends Error {
   constructor(
@@ -76,13 +78,17 @@ async function getImagesBinding(): Promise<ImagesBinding | null> {
 
 /**
  * Images error codes for bad input: 9413 over 100 MP, 9520 unsupported
- * format, 9522/9523 could not be processed. Anything else (9422 monthly quota,
- * 9432 plan, outages) is treated as temporary.
+ * format, 9522/9523 could not be processed. 9422: the monthly allowance is
+ * used up (https://developers.cloudflare.com/images/reference/troubleshooting/).
+ * Anything else (9432 plan, outages) is treated as temporary.
  */
 function classifyBindingError(error: unknown): ImageReencodeError {
   const message = error instanceof Error ? error.message : String(error);
   if (/\b9(413|520|522|523)\b/.test(message)) {
     return new ImageReencodeError("undecodable", `Image could not be processed: ${message}`);
+  }
+  if (/\b9422\b/.test(message)) {
+    return new ImageReencodeError("exhausted", `Images allowance used up: ${message}`);
   }
   return new ImageReencodeError("unavailable", `Image processing unavailable: ${message}`);
 }
@@ -200,7 +206,7 @@ export async function reencodeImage(
 /**
  * A smaller WebP copy of an image that `reencodeImage` already re-saved:
  * `width` pixels wide, height in proportion, never enlarged. Used for the
- * 400/800/1600 px display copies (src/lib/media/photo-variants.ts). Each call
+ * display copies (src/lib/media/photo-variants.ts). Each call
  * on Workers is one Cloudflare Images transformation.
  */
 export async function resizeImageToWebp(bytes: Uint8Array, width: number): Promise<Uint8Array> {
