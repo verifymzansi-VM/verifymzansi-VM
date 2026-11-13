@@ -1,0 +1,30 @@
+name = "verifymzansi-offload"
+main = "workers/offload.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+# Heavy server-only work for the website (M9.9): CIPC PDF reading and
+# link-preview cards. Reached only through the website's OFFLOAD service
+# binding (wrangler.toml): no routes, no workers.dev address, no preview URLs.
+# It needs no secrets, storage or other bindings.
+workers_dev = false
+preview_urls = false
+
+# Copies the Workers build of @vercel/og with its font loaded as a module
+# (scripts/prepare-offload-worker.mjs); the alias below points at that copy.
+[build]
+command = "node scripts/prepare-offload-worker.mjs"
+
+[alias]
+"next/dist/compiled/@vercel/og/index.edge.js" = "./.wrangler/offload-og/index.edge.js"
+
+[limits]
+cpu_ms = 30000
+
+# Persist Workers Logs (7-day retention) so production errors can be
+# investigated after the fact; without this only a live `wrangler tail` works.
+[observability]
+enabled = true
+
+[vars]
+ENVIRONMENT = "production"
