@@ -68,6 +68,19 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         };
         Returns: Json;
       };
+      record_staff_invoice_payment: {
+        Args: {
+          p_account_email: string;
+          p_term_days: number;
+          p_slots: number;
+          p_amount_cents: number;
+          p_bank_reference: string;
+          p_cleared_on: string;
+          p_cooling_off_waiver: boolean;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
       record_staff_dashboard_refund: {
         Args: {
           p_payment_id: string;
@@ -80,6 +93,14 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       };
       get_staff_ozow_refunds: { Args: { p_payment_ids: string[] }; Returns: Json };
       close_staff_ozow_refund: { Args: { p_request_id: string; p_reason: string }; Returns: Json };
+      confirm_staff_invoice_payment: { Args: { p_transfer_id: string }; Returns: Json };
+      decline_staff_invoice_payment: {
+        Args: { p_transfer_id: string; p_reason: string };
+        Returns: Json;
+      };
+      get_staff_invoice_transfers: { Args: Record<never, never>; Returns: Json };
+      get_staff_invoice_customer: { Args: { p_account_email: string }; Returns: Json };
+      get_staff_invoice_payments: { Args: { p_payment_ids: string[] }; Returns: Json };
       activate_staff_paid_payment: {
         Args: { p_payment_id: string; p_reason: string };
         Returns: Json;
