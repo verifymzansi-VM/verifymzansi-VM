@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 import { verifyFoundationGateway } from "./gateway-readiness";
 
 const environment = {
-  NEXT_PUBLIC_DATA_BACKEND: "foundation",
   FOUNDATION_SUPABASE_URL: "https://gntzjtuncsyefujajmjy.supabase.co",
   FOUNDATION_PROJECT_REF: "gntzjtuncsyefujajmjy",
   FOUNDATION_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic_readiness",

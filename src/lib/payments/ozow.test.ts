@@ -650,7 +650,6 @@ describe("mock checkout page (M0.8)", () => {
     PLAYWRIGHT_TEST_MODE: "1",
     ENABLE_MOCK_OZOW: "true",
     OZOW_ENV: "staging",
-    NEXT_PUBLIC_DATA_BACKEND: "foundation",
     FOUNDATION_PROJECT_REF: "local-foundation",
     FOUNDATION_SUPABASE_URL: "http://127.0.0.1:55443",
   };
@@ -686,7 +685,7 @@ describe("mock checkout page (M0.8)", () => {
   });
 
   it("stays on the website's own mock route outside the foundation test copy", async () => {
-    stub({ ...copy, NEXT_PUBLIC_DATA_BACKEND: "source", NODE_ENV: "test" });
+    stub({ ...copy, FOUNDATION_PROJECT_REF: "gntzjtuncsyefujajmjy", NODE_ENV: "test" });
     vi.stubGlobal("fetch", vi.fn());
     const { createOzowHostedPayment } = await import("./ozow");
     const result = await createOzowHostedPayment(input);
@@ -769,7 +768,6 @@ describe("provider lookups in the foundation test copy (M0.9c)", () => {
     PLAYWRIGHT_TEST_MODE: "1",
     ENABLE_MOCK_OZOW: "true",
     OZOW_ENV: "staging",
-    NEXT_PUBLIC_DATA_BACKEND: "foundation",
     FOUNDATION_PROJECT_REF: "local-foundation",
     FOUNDATION_SUPABASE_URL: "http://127.0.0.1:55443",
   };
@@ -882,7 +880,6 @@ describe("provider lookups in the foundation test copy (M0.9c)", () => {
     ["ENVIRONMENT=staging", { ENVIRONMENT: "staging" }],
     ["OZOW_ENV=production", { OZOW_ENV: "production" }],
     ["another database address", { FOUNDATION_SUPABASE_URL: "http://127.0.0.1:55441" }],
-    ["the retired backend", { NEXT_PUBLIC_DATA_BACKEND: "source" }],
     ["no e2e runtime", { VERIFYMZANSI_RUNTIME_MODE: "" }],
     ["no browser test mode", { PLAYWRIGHT_TEST_MODE: "" }],
   ])("asks nobody in mock mode outside the test copy (%s)", async (_label, change) => {

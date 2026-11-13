@@ -1,7 +1,6 @@
 import crypto from "crypto";
 import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import { loadEnvConfig } from "@next/env";
-import { verifySupabaseSchema } from "./check-supabase-schema";
 import { verifyFoundationRuntime } from "./lib/foundation-runtime-readiness";
 import {
   validateLaunchConfiguration,
@@ -18,7 +17,6 @@ type CheckResult = {
 };
 
 const results: CheckResult[] = [];
-const SUPABASE_SCHEMA_TIMEOUT_MS = 12_000;
 const FOUNDATION_RUNTIME_TIMEOUT_MS = 90_000;
 const R2_HEAD_BUCKET_TIMEOUT_MS = 10_000;
 const R2_HEAD_BUCKET_MAX_ATTEMPTS = 3;
@@ -311,60 +309,20 @@ export async function checkOzowPaymentApiAccess({
 export async function inspectConfiguredSupabaseSchema(
   environment: Readonly<Record<string, string | undefined>> = process.env
 ) {
-  const backend = environment.NEXT_PUBLIC_DATA_BACKEND ?? "foundation";
-  if (backend === "foundation") {
-    await withTimeout(
-      verifyFoundationRuntime(environment, true),
-      FOUNDATION_RUNTIME_TIMEOUT_MS,
-      "Native Supabase runtime verification"
-    );
-    return { backend: "foundation" as const, result: null };
-  }
-  if (backend !== "source") throw new Error("Application backend configuration is invalid");
-  const url = environment.NEXT_PUBLIC_SUPABASE_URL,
-    serviceRoleKey = environment.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRoleKey)
-    throw new Error("Source schema verification configuration is missing");
-  const result = await withTimeout(
-    verifySupabaseSchema({ url, serviceRoleKey }),
-    SUPABASE_SCHEMA_TIMEOUT_MS,
-    "Supabase schema verification"
+  await withTimeout(
+    verifyFoundationRuntime(environment, true),
+    FOUNDATION_RUNTIME_TIMEOUT_MS,
+    "Native Supabase runtime verification"
   );
-  return { backend: "source" as const, result };
 }
 async function checkSupabaseSchema(mode: LaunchValidationMode): Promise<void> {
   try {
-    const inspected = await inspectConfiguredSupabaseSchema();
-    if (inspected.backend === "foundation") {
-      addResult(
-        "Supabase schema",
-        "pass",
-        "Provisioned native API contracts, public reads, anonymous refusal and schema isolation verified; authenticated/provider/release acceptance remain separate checks"
-      );
-      return;
-    }
-    const result = inspected.result;
-
-    if (result.ok) {
-      addResult("Supabase schema", "pass", "Required public tables are queryable");
-      return;
-    }
-
-    if (result.missingTables.length > 0) {
-      addResult(
-        "Supabase schema",
-        "fail",
-        `PGRST205 missing tables: ${result.missingTables.join(
-          ", "
-        )}. Run 'supabase db push' and reload PostgREST schema cache before deploy.`
-      );
-      return;
-    }
-
-    const otherErrors = result.otherErrors
-      .map((item) => `${item.table} [${item.code}] ${item.message}`)
-      .join("; ");
-    addResult("Supabase schema", "fail", otherErrors || "Unknown schema verification failure");
+    await inspectConfiguredSupabaseSchema();
+    addResult(
+      "Supabase schema",
+      "pass",
+      "Provisioned native API contracts, public reads, anonymous refusal and schema isolation verified; authenticated/provider/release acceptance remain separate checks"
+    );
   } catch (error) {
     const classifiedError = classifySupabaseSchemaPreflightError(mode, error);
     addResult("Supabase schema", classifiedError.status, classifiedError.detail);

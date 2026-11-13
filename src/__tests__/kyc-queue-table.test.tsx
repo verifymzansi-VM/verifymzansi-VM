@@ -5,7 +5,9 @@ import React from "react";
 const mockToast = vi.fn();
 // The signed-in staff account that evidence responses must have been served to.
 const { getUser } = vi.hoisted(() => ({ getUser: vi.fn() }));
-vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth: { getUser } }) }));
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({ auth: { getUser } }),
+}));
 
 // Mock UI components
 vi.mock("@/components/ui/card", () => ({

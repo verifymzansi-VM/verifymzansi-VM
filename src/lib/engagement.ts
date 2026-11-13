@@ -14,15 +14,3 @@ interface _ContentEngagementSnapshot {
 export function createAnonymousViewerId() {
   return crypto.randomUUID();
 }
-
-export function buildViewerKey(viewerId?: string | null, userId?: string | null) {
-  if (userId) {
-    return `user:${userId}`;
-  }
-
-  if (!viewerId) {
-    return null;
-  }
-
-  return `anon:${viewerId}`;
-}

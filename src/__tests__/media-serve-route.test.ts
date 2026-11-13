@@ -46,14 +46,18 @@ describe("GET /api/media/serve/[...key]", () => {
     delete process.env.R2_PUBLIC_URL;
     delete process.env.NEXT_PUBLIC_MEDIA_URL;
     delete process.env.PLAYWRIGHT_TEST_MODE;
-    delete process.env.PLAYWRIGHT_SUPABASE_MODE;
+    delete process.env.FOUNDATION_PROJECT_REF;
+    delete process.env.FOUNDATION_SUPABASE_URL;
     delete (process.env as unknown as Record<string, unknown>).PUBLIC_BUCKET;
   });
 
-  it("serves e2e-stub uploads from the local filesystem without hitting S3", async () => {
+  it("serves foundation test copy uploads from the local filesystem without hitting S3", async () => {
+    // The test copy check runs on the server only.
+    vi.stubGlobal("window", undefined);
     process.env.PLAYWRIGHT_TEST_MODE = "1";
-    process.env.PLAYWRIGHT_SUPABASE_MODE = "stub";
-    // Point the stub's public/e2e-media root at a temp dir with a known file.
+    process.env.FOUNDATION_PROJECT_REF = "local-foundation";
+    process.env.FOUNDATION_SUPABASE_URL = "http://127.0.0.1:55443";
+    // Point the copy's public/e2e-media root at a temp dir with a known file.
     const fs = await import("node:fs/promises");
     const os = await import("node:os");
     const path = await import("node:path");
@@ -70,7 +74,7 @@ describe("GET /api/media/serve/[...key]", () => {
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toBe("image/png");
       expect(res.headers.get("Content-Length")).toBe(String(pngBytes.length));
-      // S3 must never be touched in stub mode.
+      // S3 must never be touched by the test copy.
       expect(mockSend).not.toHaveBeenCalled();
     } finally {
       cwdSpy.mockRestore();
@@ -78,9 +82,12 @@ describe("GET /api/media/serve/[...key]", () => {
     }
   });
 
-  it("returns 404 in e2e-stub mode when the local file is missing", async () => {
+  it("returns 404 in the test copy when the local file is missing", async () => {
+    // The test copy check runs on the server only.
+    vi.stubGlobal("window", undefined);
     process.env.PLAYWRIGHT_TEST_MODE = "1";
-    process.env.PLAYWRIGHT_SUPABASE_MODE = "stub";
+    process.env.FOUNDATION_PROJECT_REF = "local-foundation";
+    process.env.FOUNDATION_SUPABASE_URL = "http://127.0.0.1:55443";
     const res = await GET(createRequest(), {
       params: Promise.resolve({
         key: ["media", "listing", "u1", `missing-${Date.now()}.png`],

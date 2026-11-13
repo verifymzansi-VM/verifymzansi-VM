@@ -24,7 +24,6 @@ const setup = () =>
   );
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.stubGlobal("fetch", fetcher);
 });
 afterEach(() => {

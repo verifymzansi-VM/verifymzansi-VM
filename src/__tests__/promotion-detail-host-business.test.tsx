@@ -35,11 +35,6 @@ vi.mock("@/lib/foundation/marketplace-server", () => ({
   restoredPublicDetail: vi.fn(),
   restoredEventHostBusiness: vi.fn(),
 }));
-vi.mock("@/lib/engagement-server", () => ({
-  getOptionalContentViewCountMap: vi.fn().mockResolvedValue({ ok: false }),
-  getOptionalContentLikeSummaryMap: vi.fn().mockResolvedValue({ ok: false }),
-  getOptionalContentShareCountMap: vi.fn().mockResolvedValue(new Map()),
-}));
 vi.mock("@/lib/utils/request-context", () => ({
   getOptionalCookieStore: vi.fn().mockResolvedValue(null),
   readCookieValue: vi.fn(() => null),

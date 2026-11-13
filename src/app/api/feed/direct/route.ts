@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { feedError, openFeedRequest, PRIVATE_NO_STORE } from "@/app/api/feed/_lib/feed-request";
-import { buildDirectSequence } from "@/lib/feed/direct-sequence";
+import { foundationDirectSequence } from "@/lib/foundation/feed-read";
 import { decodeRef, encodeRef } from "@/lib/feed/refs";
-import { getVisitorProvince } from "@/lib/showroom/visitor-province";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("FeedDirectRoute");
@@ -17,12 +16,11 @@ export async function GET(request: NextRequest) {
   const ref = decodeRef(request.nextUrl.searchParams.get("ref") ?? "");
   if (!ref) return feedError(400, "Invalid ref");
 
-  const opened = await openFeedRequest(request, "feed:direct", 30);
-  if (opened.response) return opened.response;
+  const limited = openFeedRequest(request, "feed:direct", 30);
+  if (limited) return limited;
 
   try {
-    const { province } = await getVisitorProvince();
-    const sequence = await buildDirectSequence(opened.supabase, ref, province);
+    const sequence = await foundationDirectSequence(ref);
     if (!sequence) return feedError(404, "Post not found");
     return NextResponse.json(
       {

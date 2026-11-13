@@ -235,7 +235,10 @@ describe("public production build settings", () => {
       const good = run();
       expect(good.status, good.stderr).toBe(0);
       const exported = readFileSync(file, "utf8");
-      expect(exported).toContain("NEXT_PUBLIC_DATA_BACKEND=foundation");
+      expect(exported).toContain(
+        "NEXT_PUBLIC_SUPABASE_URL=https://gntzjtuncsyefujajmjy.supabase.co"
+      );
+      expect(exported).not.toContain("NEXT_PUBLIC_DATA_BACKEND");
       expect(
         exported
           .split("\n")

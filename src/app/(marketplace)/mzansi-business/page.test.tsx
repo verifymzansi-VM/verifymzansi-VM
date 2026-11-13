@@ -85,15 +85,6 @@ vi.mock("@/lib/utils/placeholder-content", () => ({
   isPlaceholderMarketplaceContent: () => false,
 }));
 
-vi.mock("@/components/home/playwright-fixture-filter", () => ({
-  shouldHidePlaywrightFixtureRowWhenEnabled: () => false,
-}));
-
-vi.mock("@/lib/supabase/playwright-visual-fixtures", () => ({
-  PLAYWRIGHT_HIDE_FIXTURES_COOKIE: "playwright-hide-fixtures",
-  shouldHidePlaywrightFixtures: () => false,
-}));
-
 function createBusinessesQuery(data: unknown[]) {
   const builder = {
     select: vi.fn(() => builder),

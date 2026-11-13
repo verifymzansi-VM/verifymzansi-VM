@@ -139,12 +139,13 @@ out of time without a failure.
 
 ## Retired source schema and first administrator
 
-The root `supabase/migrations` tree, `bootstrap:operator` and supplemental REST
-export belong to the retired source schema. Their wrappers refuse foundation
-targets. Do not replay that tree into the new project. Use reviewed additive
-foundation migrations; keep this clean baseline guarded until acceptance. The
-`Database Backup` workflow dumps the private/API/internal/auth schemas and
-encrypts the backup; a public REST export cannot replace it.
+The root `supabase/migrations` tree belongs to the retired source schema (the
+`bootstrap:operator` script and supplemental REST export that went with it have
+been removed). The `supabase:cli` wrapper refuses schema operations against the
+foundation project. Do not replay that tree into the new project. Use reviewed
+additive foundation migrations; keep this clean baseline guarded until
+acceptance. The `Database Backup` workflow dumps the private/API/internal/auth
+schemas and encrypts the backup; a public REST export cannot replace it.
 
 The first foundation administrator must already have a confirmed active account
 and a verified authenticator app. An owner SQL session can then call

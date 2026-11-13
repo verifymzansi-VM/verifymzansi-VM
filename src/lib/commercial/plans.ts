@@ -1,5 +1,4 @@
 import "server-only";
-import { getDataBackend } from "@/lib/data-backend";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import {
   isIndividualSlotPlan,
@@ -15,7 +14,6 @@ import {
   type EnterprisePlanDefinition,
   type RetailOffer,
 } from "@/lib/constants/pricing";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import type { MarketplaceArea } from "@/types/enums";
 
@@ -70,7 +68,7 @@ function defaultCatalog(): CommercialCatalog {
   };
 }
 
-/** Build the public catalogue from `plans` rows (authoritative prices). */
+/** Build the public catalogue from plan rows (authoritative prices). */
 export function buildCommercialCatalog(rows: readonly PlanRow[]): CommercialCatalog {
   const fallback = defaultCatalog();
   const sellable = rows.filter((row) => row.active && row.public);
@@ -182,21 +180,9 @@ export function buildFoundationCommercialCatalog(
 
 export async function getCommercialCatalog(): Promise<CommercialCatalog> {
   try {
-    if (getDataBackend() === "foundation")
-      return buildFoundationCommercialCatalog(
-        await readFoundationBillingCatalogue(foundationServerPublicApi())
-      );
-    const { data, error } = await createAdminClient()
-      .from("plans")
-      .select(
-        "id, area, tier, name, price_cents, plan_code, duration_days, slot_capacity, monthly_activation_limit, promo_label, compare_at_cents, public, active"
-      )
-      .eq("active", true);
-    if (error || !data) {
-      if (error) log.warn("Falling back to default plan catalogue", { error: error.message });
-      return defaultCatalog();
-    }
-    return buildCommercialCatalog(data as PlanRow[]);
+    return buildFoundationCommercialCatalog(
+      await readFoundationBillingCatalogue(foundationServerPublicApi())
+    );
   } catch (error) {
     log.warn("Falling back to default plan catalogue", {
       error: error instanceof Error ? error.message : "Unknown error",

@@ -2,7 +2,9 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { fetchPostingAllowance } from "./posting-allowance-client";
 const { getUser } = vi.hoisted(() => ({ getUser: vi.fn() }));
-vi.mock("../supabase/client", () => ({ createClient: () => ({ auth: { getUser } }) }));
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({ auth: { getUser } }),
+}));
 const owner = "11111111-1111-4111-8111-111111111111",
   other = "22222222-2222-4222-8222-222222222222";
 const account = (id: string) => ({ data: { user: { id } }, error: null });

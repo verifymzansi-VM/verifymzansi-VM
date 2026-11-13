@@ -7,8 +7,8 @@ const { getUser, onAuthStateChange, fetchFoundationAccountSession } = vi.hoisted
   onAuthStateChange: vi.fn(),
   fetchFoundationAccountSession: vi.fn(),
 }));
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { getUser, onAuthStateChange } }),
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({ auth: { getUser, onAuthStateChange } }),
 }));
 vi.mock("@/lib/foundation/account-session-client", () => ({ fetchFoundationAccountSession }));
 vi.mock("@/lib/foundation/verification-runtime-client", () => ({

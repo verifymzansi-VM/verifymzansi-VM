@@ -7,7 +7,9 @@ const { mockCreateClient, mockSignOut, mockPush } = vi.hoisted(() => ({
   mockPush: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/client", () => ({ createClient: mockCreateClient }));
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: mockCreateClient,
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, refresh: vi.fn() }),
 }));

@@ -83,7 +83,6 @@ vi.mock("@/lib/utils/format", async (importOriginal) => ({
   formatZAR: (cents: number) => `R ${(cents / 100).toFixed(2)}`,
   formatZARShort: (cents: number) => `R${Math.round(cents / 100)}`,
   formatRelativeTime: () => "1d ago",
-  timeAgo: (_date: string) => "2h ago",
 }));
 
 vi.mock("@/components/ui/video-card-player", () => ({

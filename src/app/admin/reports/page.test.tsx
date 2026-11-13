@@ -3,10 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { staffGuard } from "@/test/staff-guard";
 import AdminReportsPage from "./page";
 
-const { mockGetUser, mockSessionFrom, mockAdminFrom, redirectMock } = vi.hoisted(() => ({
-  mockGetUser: vi.fn(),
-  mockSessionFrom: vi.fn(),
-  mockAdminFrom: vi.fn(),
+const { readFrontendReportQueue, readFoundationServerSession, redirectMock } = vi.hoisted(() => ({
+  readFrontendReportQueue: vi.fn(),
+  readFoundationServerSession: vi.fn(),
   redirectMock: vi.fn(),
 }));
 
@@ -14,21 +13,8 @@ vi.mock(
   "@/lib/auth/require-staff",
   async () => (await import("@/test/staff-guard")).staffGuardModule
 );
-
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({
-    auth: {
-      getUser: mockGetUser,
-    },
-    from: mockSessionFrom,
-  })),
-}));
-
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: vi.fn(() => ({
-    from: mockAdminFrom,
-  })),
-}));
+vi.mock("@/lib/foundation/server-session", () => ({ readFoundationServerSession }));
+vi.mock("@/lib/foundation/report-queue", () => ({ readFrontendReportQueue }));
 
 vi.mock("next/navigation", () => ({
   redirect: redirectMock,
@@ -56,35 +42,23 @@ vi.mock("./reports-client", () => ({
 }));
 
 describe("AdminReportsPage", () => {
+  const api = { rpc: vi.fn() };
+
   beforeEach(() => {
     staffGuard.reset();
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "moderator-1", app_metadata: { role: "moderator" } } },
-    });
+    readFoundationServerSession.mockResolvedValue({ api, user: { id: "staff-1" } });
   });
 
-  /** Reports by status: open, in progress, and recently closed. */
-  function reportsByStatus(byStatus: Record<string, unknown[]>, openCount?: number) {
-    mockAdminFrom.mockImplementation(() => {
-      let status = "";
-      const q: Record<string, unknown> = {};
-      q.select = vi.fn(() => q);
-      q.eq = vi.fn((_col: string, value: string) => {
-        status = value;
-        return q;
-      });
-      q.in = vi.fn(() => {
-        status = "closed";
-        return q;
-      });
-      q.order = vi.fn(() => q);
-      q.limit = vi.fn(async () => ({
-        data: byStatus[status] ?? [],
-        count: status === "open" ? (openCount ?? (byStatus.open ?? []).length) : null,
-        error: null,
-      }));
-      return q;
+  /** The foundation report queue: open, in progress and recently closed. */
+  function reportQueue(byStatus: Record<string, unknown[]>, openTotal?: number) {
+    const open = byStatus.open ?? [];
+    readFrontendReportQueue.mockResolvedValue({
+      reports: [...open, ...(byStatus.in_progress ?? []), ...(byStatus.closed ?? [])],
+      open,
+      openTotal: openTotal ?? open.length,
+      myClaims: 0,
+      claims: {},
     });
   }
 
@@ -102,8 +76,8 @@ describe("AdminReportsPage", () => {
     updated_at: "2026-03-17T10:00:00.000Z",
   });
 
-  it("loads open, in-progress and recently closed reports through the admin client", async () => {
-    reportsByStatus({
+  it("loads open, in-progress and recently closed reports from the foundation queue", async () => {
+    reportQueue({
       open: [report("report-1", "open")],
       in_progress: [report("report-2", "in_progress")],
       closed: [report("report-3", "resolved")],
@@ -111,14 +85,13 @@ describe("AdminReportsPage", () => {
 
     render(await AdminReportsPage());
 
-    expect(mockSessionFrom).not.toHaveBeenCalled();
-    expect(mockAdminFrom).toHaveBeenCalledWith("reports");
+    expect(readFrontendReportQueue).toHaveBeenCalledWith(api, "staff-1");
     expect(screen.getByTestId("reports-client")).toHaveTextContent("3 reports");
     expect(screen.getByText("1 open")).toBeInTheDocument();
   });
 
   it("says when more open reports exist than are shown", async () => {
-    reportsByStatus({ open: [report("report-1", "open")] }, 260);
+    reportQueue({ open: [report("report-1", "open")] }, 260);
 
     render(await AdminReportsPage());
 
@@ -127,10 +100,18 @@ describe("AdminReportsPage", () => {
   });
 
   it("shows the empty state when there are no reports", async () => {
-    reportsByStatus({});
+    reportQueue({});
 
     render(await AdminReportsPage());
 
     expect(screen.getByText("No reports to review.")).toBeInTheDocument();
+  });
+
+  it("says so instead of showing an empty queue when the read fails", async () => {
+    readFrontendReportQueue.mockRejectedValue(new Error("timeout"));
+
+    render(await AdminReportsPage());
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Reports could not be loaded");
   });
 });

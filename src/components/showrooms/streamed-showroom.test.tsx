@@ -13,7 +13,6 @@ describe("StreamedShowroom", () => {
       <StreamedShowroom
         feed="market"
         surface="showroom:market"
-        hideFixtures={false}
         emptyTitle="Mzansi Market"
         emptyDescription="Listings"
         background={mzansiMarketShowroomBackground}

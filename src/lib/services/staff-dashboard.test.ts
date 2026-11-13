@@ -3,7 +3,6 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { getStaffDashboard, getStaffNavCounts } from "./staff-dashboard";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { createAdminClient } from "@/lib/supabase/admin";
-vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => "foundation" }));
 vi.mock("@/lib/foundation/server-session", () => ({ readFoundationServerSession: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(() => {
