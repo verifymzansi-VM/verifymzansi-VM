@@ -304,6 +304,9 @@ export function PaymentsPanel({
           const paidNotDelivered =
             p.status === "complete" && p.fulfillment_status === "needs_reconciliation";
           const slotReversed = lines.some((line) => line.status === "reversed");
+          const priorCents = lines
+            .filter((line) => line.status === "reversed")
+            .reduce((sum, line) => sum + line.amount_cents, 0);
           const canReverse = canRefund && p.status === "complete" && !request;
           return (
             <li
@@ -367,6 +370,7 @@ export function PaymentsPanel({
                           id: p.id,
                           kind,
                           amountCents: p.amount_cents,
+                          priorCents,
                           label: lines.length > 1 ? `the whole order` : "this payment",
                           accountId: p.user_id,
                         })
@@ -402,6 +406,7 @@ export function PaymentsPanel({
                                   id: line.id,
                                   kind,
                                   amountCents: line.amount_cents,
+                                  priorCents,
                                   label: `slot ${line.line_number}`,
                                   accountId: p.user_id,
                                 })

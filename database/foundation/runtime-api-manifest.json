@@ -433,7 +433,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own accepted ID review and never a payment of their own identity; only a complete, needs_reconciliation payment of an account with current access: delivers one slot per open line within the person's Individual slot limit (one entitlement for a plan payment without lines) or the add-on window while the post can carry it, marks it fulfilled, creates the partner commission it earns and records the audit row."
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; only a complete, needs_reconciliation payment of an account with current access and no refund waiting: delivers one slot per open line within the person's Individual slot limit (one entitlement for a plan payment without lines) or the add-on window while the post can carry it, marks it fulfilled, creates the partner commission it earns and records the audit row."
     },
     {
       "name": "record_staff_payment_refund",
@@ -472,7 +472,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own accepted ID review and never a payment of their own identity; only with Ozow's reference (used once) and a reason code from the closed list; the payment's own amount for the account that paid; a refund above R1,000 waits for a second, different staff member, everything else takes effect at once as a whole-payment reversal."
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; only with Ozow's reference (used once, any letter case) and a reason code from the closed list; the payment's own amount for the account that paid; when the money returned on the payment would exceed R1,000 the record waits for a second, different staff member (chargebacks too while internal.chargebacks_need_approval is true), otherwise it takes effect at once as a whole-payment reversal."
     },
     {
       "name": "record_staff_slot_refund",
@@ -511,7 +511,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own accepted ID review and never a payment of their own identity; one open slot line of a completed payment, only with Ozow's reference (used once) and a reason code from the closed list; the slot's own amount for the account that paid; above R1,000 it waits for a second staff member, otherwise it revokes that slot as the single-slot reversal does."
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; one open slot line of a completed payment, only with Ozow's reference (used once, any letter case) and a reason code from the closed list; the slot's own amount for the account that paid; when the money returned on the payment would exceed R1,000 it waits for a second staff member, otherwise it revokes that slot as the single-slot reversal does."
     },
     {
       "name": "approve_staff_payment_refund",
@@ -530,7 +530,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own accepted ID review, never the requester's identity and never a payment of their own identity; applies a refund waiting for approval (whole payment or one slot) and records the approver."
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never the requester's identity (checked again after the lock waits) and never a payment of their own identity; applies a refund waiting for approval (whole payment or one slot), the only reversal allowed while it waits, and records the approver; refuses when the payment changed since it was recorded."
     },
     {
       "name": "decline_staff_payment_refund",
@@ -554,7 +554,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own accepted ID review and never a payment of their own identity; declines (or, for the requester, withdraws) a refund waiting for approval, with a reason; nothing else changes."
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; declines (or, for the requester, withdraws) a refund waiting for approval, with a reason; nothing else changes."
     },
     {
       "name": "get_payment_receipt",

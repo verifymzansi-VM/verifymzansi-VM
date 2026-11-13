@@ -89,6 +89,7 @@ export const FOUNDATION_ERROR_REASONS = {
   refund_approver_same: ["42501"],
   refund_awaiting_approval: ["PT409"],
   refund_not_waiting: ["PT409"],
+  refund_payment_changed: ["PT409"],
   refund_reason_code_invalid: ["22023"],
   self_partner: ["42501"],
   self_sponsorship: ["42501"],

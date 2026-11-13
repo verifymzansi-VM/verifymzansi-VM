@@ -13,7 +13,9 @@ export const REFUND_REASON_LABELS = {
   breach_credit: "Credit for our breach",
 } as const;
 
-/** Refunds above R1 000 wait for a second staff member. */
+/** Above R1 000 returned on one payment (refunds and chargebacks together,
+ * this one included), a second staff member must approve. The database
+ * decides; this only words the form. */
 const APPROVAL_ABOVE_CENTS = 100_000;
 
 export type RefundTarget = {
@@ -22,6 +24,8 @@ export type RefundTarget = {
   id: string;
   kind: "refunded" | "chargeback";
   amountCents: number;
+  /** Money already returned on this payment (refunded or charged back slots). */
+  priorCents: number;
   label: string;
   accountId: string;
 };
@@ -41,7 +45,8 @@ export function RefundForm({
   onDone: () => void;
 }) {
   const refund = target.kind === "refunded";
-  const needsApproval = refund && target.amountCents > APPROVAL_ABOVE_CENTS;
+  const needsApproval = target.priorCents + target.amountCents > APPROVAL_ABOVE_CENTS;
+  const what = refund ? "refund" : "chargeback";
   return (
     <form
       className="w-full space-y-3 rounded-lg border bg-muted/40 p-3"
@@ -52,8 +57,8 @@ export function RefundForm({
         if (
           !window.confirm(
             needsApproval
-              ? `Record this refund of ${formatPlanPrice(target.amountCents)}? It takes effect when another staff member approves it.`
-              : `Record this ${refund ? "refund" : "chargeback"} of ${formatPlanPrice(target.amountCents)}? Paid visibility will be withdrawn.`
+              ? `Record this ${what} of ${formatPlanPrice(target.amountCents)}? It takes effect when another staff member approves it.`
+              : `Record this ${what} of ${formatPlanPrice(target.amountCents)}? Paid visibility will be withdrawn.`
           )
         )
           return;
@@ -67,7 +72,7 @@ export function RefundForm({
             reason: values.reason,
           },
           needsApproval
-            ? "Refund recorded. It waits for another staff member's approval."
+            ? `${refund ? "Refund" : "Chargeback"} recorded. It waits for another staff member's approval.`
             : "Payment updated"
         );
         if (done) onDone();
@@ -80,7 +85,9 @@ export function RefundForm({
         </span>{" "}
         <span className="text-muted-foreground">
           to the account that paid ({target.accountId})
-          {needsApproval ? ". Above R1 000: another staff member must approve it." : "."}
+          {needsApproval
+            ? ". Above R1 000 returned on this payment: another staff member must approve it."
+            : "."}
         </span>
       </p>
       <label className="block text-sm">

@@ -6,7 +6,7 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and reads "update not applied".
 --
--- The summary says whether the update is absent (its 20 functions and two
+-- The summary says whether the update is absent (its 24 functions and two
 -- tables are absent and the staff audit view does not list activations) or
 -- applied (every body is the update's), and counts the payments that are paid
 -- but not delivered (complete and needs_reconciliation) and, once applied,
@@ -25,19 +25,23 @@ with added as (
     ('internal.payment_delivery_commission(uuid)', '173b97b47147f69d097daba72def56d9'),
     ('internal.get_staff_payment_list(integer,text)', '7511534bec5595b3641450e9a88ccfdb'),
     ('api.get_staff_payment_list(integer,text)', 'a96efb8aa9552502327936ecf4e05d5f'),
-    ('internal.assert_staff_activates_for_other(uuid,uuid)', 'eb5d2a23cce3405ed2fcc7f1b5d368ae'),
-    ('internal.activate_staff_paid_payment(uuid,text)', 'e2efe254180538ed74de10f046d3ff23'),
+    ('internal.assert_staff_payment_actor(uuid,uuid)', 'fe81cc39557206e06346fcf5e9f33bfd'),
+    ('internal.activate_staff_paid_payment(uuid,text)', 'd388959dfaee486c2d82b3d5e6f5e709'),
     ('api.activate_staff_paid_payment(uuid,text)', '38ff2863e1c58cd9cb7d6dd22636ad10'),
     ('internal.assert_staff_refund_input(text,text,text,text)', '09b161b7933849f4f5c221dd3c6e6f6d'),
-    ('internal.staff_refund_repeat(uuid,uuid,uuid,text,text,text,text)', 'dfa34b75b1f4549501507d531ee0cc00'),
-    ('internal.record_staff_payment_refund(uuid,text,text,text,text)', 'f08b49dc31a69c4c074a320325d54e6e'),
+    ('internal.staff_refund_repeat(uuid,uuid,uuid,text,text,text,text)', '6e38d5e6f28b5ed84b79388329effc18'),
+    ('internal.chargebacks_need_approval()', 'fea61f3c66945592f0c658d93dd2c747'),
+    ('internal.payment_refunded_before_cents(uuid)', 'deeeb438b3d54710a061b49a4e52e9f5'),
+    ('internal.refund_needs_approval(text,bigint,bigint)', '7f3795506bf5dedfc96e78c6adb0b1ff'),
+    ('internal.record_staff_payment_refund(uuid,text,text,text,text)', '03691c9ff0eb92fed4be87b11c1fb15b'),
     ('api.record_staff_payment_refund(uuid,text,text,text,text)', 'c88c371f4398b69da822669fe832dac9'),
-    ('internal.record_staff_slot_refund(uuid,text,text,text,text)', '08391240cbecfb2446c0120e5336813a'),
+    ('internal.record_staff_slot_refund(uuid,text,text,text,text)', 'a315072d628da2b6f164491cbc1a0076'),
     ('api.record_staff_slot_refund(uuid,text,text,text,text)', '74bae46217113296da99631b7a316e76'),
-    ('internal.approve_staff_payment_refund(uuid)', '6a4f831bd97e28235cd96d2bd8a7d618'),
+    ('internal.approve_staff_payment_refund(uuid)', '3ab93e11833cd0faa37ac45122aaa413'),
     ('api.approve_staff_payment_refund(uuid)', 'c940eeb3f76b9bdd82e4377909b97cc0'),
-    ('internal.decline_staff_payment_refund(uuid,text)', '694e862b46f7ebddb8ee5c17c07d560e'),
+    ('internal.decline_staff_payment_refund(uuid,text)', '494408ef422ce9389cd096722ea8d63a'),
     ('api.decline_staff_payment_refund(uuid,text)', 'e05112535fb4c6e13589f4f339a74dec'),
+    ('internal.payment_reversal_waiting_guard()', 'ffa0a62683e2e1b9360be710a6a44493'),
     ('internal.get_payment_receipt(uuid)', '1c8ef468ae622086d57af8b8c16fb886'),
     ('api.get_payment_receipt(uuid)', '245869d4f4c606db44bc43c0cea8c4e3')
   ) v(sig, after)

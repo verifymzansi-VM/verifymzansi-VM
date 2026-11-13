@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION internal.staff_refund_repeat(p_actor uuid, p_payment_
 AS $function$
 declare prior private.payment_refund_requests;
 begin
-  select * into prior from private.payment_refund_requests r where r.ozow_reference = btrim(p_ozow_reference);
+  select * into prior from private.payment_refund_requests r where lower(r.ozow_reference) = lower(btrim(p_ozow_reference));
   if not found then return null; end if;
   if prior.payment_id = p_payment_id and prior.payment_line_id is not distinct from p_line_id and prior.kind = p_kind
       and prior.reason_code = p_reason_code and prior.reason = btrim(p_reason) and prior.requested_by = p_actor then

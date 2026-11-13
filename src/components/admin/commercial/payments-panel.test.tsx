@@ -108,12 +108,33 @@ describe("staff payments panel", () => {
     });
   });
 
-  it("says a refund above R1 000 needs a second staff member", async () => {
-    render(<PaymentsPanel canRefund payments={[{ ...base, amount_cents: 165600 }]} />);
+  it("says a refund or chargeback above R1 000 needs a second staff member", async () => {
+    const approval = /Above R1 000 returned on this payment: another staff member must approve it/;
+    const { rerender } = render(
+      <PaymentsPanel canRefund payments={[{ ...base, amount_cents: 165600 }]} />
+    );
     fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
-    expect(
-      screen.getByText(/Above R1 000: another staff member must approve it/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(approval)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record chargeback" }));
+    expect(screen.getByText(approval)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    // A slot that alone is small, after three slots were already returned.
+    const big = (n: number, status = "open") => ({ ...line(n, status), amount_cents: 41400 });
+    rerender(
+      <PaymentsPanel
+        canRefund
+        payments={[
+          {
+            ...base,
+            amount_cents: 165600,
+            lines: [big(1, "reversed"), big(2, "reversed"), big(3), big(4)],
+          },
+        ]}
+      />
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Refund this slot" })[0]);
+    expect(screen.getByText(approval)).toBeInTheDocument();
   });
 
   it("refunds one slot of a multi-slot order", async () => {

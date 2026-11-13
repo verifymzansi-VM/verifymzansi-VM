@@ -11,6 +11,7 @@ create table private.payment_refund_requests (
   reason text not null,
   ozow_reference text not null,
   amount_cents bigint not null,
+  recorded_before_cents bigint not null,
   needs_approval boolean not null,
   status text not null,
   requested_by uuid not null,
@@ -24,7 +25,7 @@ create table private.payment_refund_requests (
   constraint payment_refund_requests_account_id_fkey FOREIGN KEY (account_id) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint payment_refund_requests_amount_cents_check CHECK (amount_cents > 0),
   constraint payment_refund_requests_applied CHECK ((status = 'applied'::text) = (applied_at IS NOT NULL AND released_activations IS NOT NULL)),
-  constraint payment_refund_requests_approval_rule CHECK (needs_approval = (kind = 'refunded'::text AND amount_cents > 100000)),
+  constraint payment_refund_requests_approval_rule CHECK (NOT needs_approval OR (recorded_before_cents + amount_cents) > 100000),
   constraint payment_refund_requests_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint payment_refund_requests_approver CHECK (
 CASE
@@ -41,7 +42,7 @@ END),
   constraint payment_refund_requests_pkey PRIMARY KEY (id),
   constraint payment_refund_requests_reason_check CHECK (internal.plain_text_valid(reason, 5, 500, true)),
   constraint payment_refund_requests_reason_code_check CHECK (reason_code = ANY (ARRAY['billing_error'::text, 'duplicate'::text, 'our_failure_after_fix_offered'::text, 's14_cancellation'::text, 'breach_credit'::text])),
-  constraint payment_refund_requests_reference_key UNIQUE (ozow_reference),
+  constraint payment_refund_requests_recorded_before_cents_check CHECK (recorded_before_cents >= 0),
   constraint payment_refund_requests_released_activations_check CHECK (released_activations >= 0),
   constraint payment_refund_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint payment_refund_requests_status_check CHECK (status = ANY (ARRAY['awaiting_approval'::text, 'applied'::text, 'declined'::text]))
@@ -53,6 +54,7 @@ CREATE INDEX payment_refund_requests_approved_by_idx ON private.payment_refund_r
 CREATE INDEX payment_refund_requests_declined_by_idx ON private.payment_refund_requests USING btree (declined_by) WHERE (declined_by IS NOT NULL);
 CREATE INDEX payment_refund_requests_line_idx ON private.payment_refund_requests USING btree (payment_line_id, payment_id) WHERE (payment_line_id IS NOT NULL);
 CREATE INDEX payment_refund_requests_payment_idx ON private.payment_refund_requests USING btree (payment_id);
+CREATE UNIQUE INDEX payment_refund_requests_reference_idx ON private.payment_refund_requests USING btree (lower(ozow_reference));
 CREATE INDEX payment_refund_requests_requested_by_idx ON private.payment_refund_requests USING btree (requested_by);
 CREATE UNIQUE INDEX payment_refund_requests_waiting_idx ON private.payment_refund_requests USING btree (payment_id) WHERE (status = 'awaiting_approval'::text);
 CREATE TRIGGER payment_refund_requests_guard BEFORE INSERT OR UPDATE ON private.payment_refund_requests FOR EACH ROW EXECUTE FUNCTION internal.payment_refund_request_guard();

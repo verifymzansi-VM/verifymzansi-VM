@@ -126,6 +126,10 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   ["refund_not_waiting", [409, "This refund is no longer waiting for approval. Reload the page."]],
   [
+    "refund_payment_changed",
+    [409, "The payment changed since this refund was recorded. Decline it and record it again."],
+  ],
+  [
     "refund_approver_same",
     [403, "Another staff member must approve this refund: you recorded it."],
   ],
@@ -153,7 +157,7 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   [
     "staff_review_required",
-    [403, "You need an accepted ID review of your own to change payments."],
+    [403, "You need a current accepted ID review of your own to change payments."],
   ],
   ["staff_same_identity", [403, "Another staff member must handle a payment of your own."]],
 ]);

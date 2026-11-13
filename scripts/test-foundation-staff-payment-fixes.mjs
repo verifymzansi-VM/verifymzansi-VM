@@ -30,6 +30,7 @@
 // staff, identity facts, posts and partners are written directly as the
 // database owner. Nothing contacts Ozow.
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
@@ -130,10 +131,43 @@ try {
     q(`select vmtest.verified('${m.id}','${admin.id}','${m.fingerprint}');`);
     return m;
   };
-  // Staff with an accepted ID review of their own (the third admin has none).
+  // Staff with an accepted ID review of their own (the third admin has none;
+  // the fourth only one that has ended).
   q(`select vmtest.verified('${admin.id}','${admin2.id}','${fingerprintOf("pay-admin")}');`);
   q(`select vmtest.verified('${admin2.id}','${admin.id}','${fingerprintOf("pay-admin2")}');`);
+  const revokedAdmin = staffUser("pay-admin4", "admin");
+  q(
+    `select vmtest.past_identity('${revokedAdmin.id}','${admin.id}','${fingerprintOf("pay-admin4")}');`
+  );
   const post = (owner, kind, area) => q(`select vmtest.post('${owner.id}','${kind}','${area}');`);
+  // A separate psql session, for the concurrency check.
+  const session = (sql) =>
+    new Promise((resolve) => {
+      const child = spawn(
+        "docker",
+        [
+          "exec",
+          "-i",
+          database.name,
+          "psql",
+          "-X",
+          "-q",
+          "-A",
+          "-t",
+          "-v",
+          "ON_ERROR_STOP=1",
+        ].concat(["-U", "postgres", "-d", "postgres"]),
+        { windowsHide: true }
+      );
+      let stdout = "",
+        stderr = "";
+      child.stdout.on("data", (data) => (stdout += data));
+      child.stderr.on("data", (data) => (stderr += data));
+      child.on("close", (status) => resolve({ status, stdout, stderr }));
+      child.stdin.end(`\\set VERBOSITY verbose\n${sql}`);
+    });
+  const sessionAfter = (ms, sql) =>
+    new Promise((resolve) => setTimeout(resolve, ms)).then(() => session(sql));
 
   const quote = (owner, plan, slots) =>
     json(
@@ -255,6 +289,15 @@ try {
         /table drift: private\.payment_activations payment_id/
       );
       q("drop table private.payment_activations;");
+      // The same columns without this update's constraints and indexes.
+      q(`create table private.payment_activations(payment_id uuid not null, actor_id uuid not null, reason text not null,
+      entitlements integer not null, addon_window boolean not null, commissions integer not null,
+      created_at timestamptz not null);`);
+      assert.match(
+        fails(step.sql, "55000"),
+        /constraint or index drift: private\.payment_activations/
+      );
+      q("drop table private.payment_activations;");
       assert.equal(fingerprint(), before);
     }
   );
@@ -343,10 +386,15 @@ try {
     );
     fails(activateSql(moderator, earlyPayment), "42501", /capability not granted/);
     fails(activateSql(unreviewedAdmin, earlyPayment), "42501", /accepted ID review of their own/);
+    fails(activateSql(revokedAdmin, earlyPayment), "42501", /current accepted ID review/);
     fails(activateSql(admin, earlyPayment, "no"), "22023");
     const mirror = user("early-second-account");
     q(`select vmtest.past_identity('${admin.id}','${admin2.id}','${early.fingerprint}');`);
-    fails(activateSql(admin, earlyPayment), "42501", /different staff member must activate/);
+    fails(
+      activateSql(admin, earlyPayment),
+      "42501",
+      /different staff member must handle this payment/
+    );
     q(`set session_replication_role=replica;
        delete from private.accepted_identity_facts where owner_id='${admin.id}' and identity_hmac='${early.fingerprint}';
        set session_replication_role=origin;`);
@@ -500,22 +548,38 @@ try {
     const other = buy(verified("lindi-friend"), P30, 1);
     fails(refundSql(admin, other, "OZ-REF-1"), "PT409", /already recorded/);
     fails(refundSql(admin, paid, "OZ-REF-2"), "PT409", /not reversed can be refunded/);
-    // A chargeback takes effect at once, whatever the amount.
+    // A small chargeback takes effect at once; one above R1,000 waits for a
+    // second staff member, as a refund does.
+    const small = buy(verified("smallcb"), P30, 1);
+    assert.equal(
+      json(refundSql(admin, small, "OZ-CB-0", "chargeback", "duplicate")).status,
+      "applied"
+    );
+    assert.deepEqual(paymentRow(small), { status: "chargeback", fulfillment: "reversed" });
     const big = buy(verified("chargeback"), P180, 4);
     const chargeback = json(refundSql(admin, big, "OZ-CB-1", "chargeback", "duplicate"));
-    assert.equal(chargeback.status, "applied");
-    assert.deepEqual(paymentRow(big), { status: "chargeback", fulfillment: "reversed" });
+    assert.equal(chargeback.status, "awaiting_approval");
+    assert.deepEqual(paymentRow(big), { status: "complete", fulfillment: "fulfilled" });
+    assert.equal(
+      json(staff(admin2, `select api.approve_staff_payment_refund('${chargeback.request_id}');`))
+        .payment_status,
+      "chargeback"
+    );
+    // The reference is used once whatever its letter case.
+    fails(refundSql(admin, other, "oz-ref-1"), "PT409", /already recorded/);
+    // Staff whose only review has ended cannot refund.
+    fails(refundSql(revokedAdmin, other, "OZ-REF-9"), "42501", /current accepted ID review/);
     // Records are never changed, and only the account that paid gets a refund.
     fails("update private.payment_refund_requests set reason='Changed later';", "23514");
     fails(
-      `insert into private.payment_refund_requests(payment_id,account_id,kind,reason_code,reason,ozow_reference,amount_cents,needs_approval,status,requested_by,applied_at,released_activations)
-       values('${other}','${lindi.id}','refunded','billing_error','Wrong account','OZ-WRONG-1',6900,false,'applied','${admin.id}',now(),0);`,
+      `insert into private.payment_refund_requests(payment_id,account_id,kind,reason_code,reason,ozow_reference,amount_cents,recorded_before_cents,needs_approval,status,requested_by,applied_at,released_activations)
+       values('${other}','${lindi.id}','refunded','billing_error','Wrong account','OZ-WRONG-1',6900,0,false,'applied','${admin.id}',now(),0);`,
       "23514",
       /account that paid/
     );
     fails(
-      `insert into private.payment_refund_requests(payment_id,account_id,kind,reason_code,reason,ozow_reference,amount_cents,needs_approval,status,requested_by,applied_at,released_activations)
-       values('${other}',(select owner_id from private.payments where id='${other}'),'refunded','billing_error','Wrong amount','OZ-WRONG-2',100,false,'applied','${admin.id}',now(),0);`,
+      `insert into private.payment_refund_requests(payment_id,account_id,kind,reason_code,reason,ozow_reference,amount_cents,recorded_before_cents,needs_approval,status,requested_by,applied_at,released_activations)
+       values('${other}',(select owner_id from private.payments where id='${other}'),'refunded','billing_error','Wrong amount','OZ-WRONG-2',100,0,false,'applied','${admin.id}',now(),0);`,
       "23514",
       /paid amount/
     );
@@ -542,9 +606,12 @@ try {
       staff(who, `select api.approve_staff_payment_refund('${waiting.request_id}');`);
     // Not by the requester, nor by another account of the requester's identity.
     fails(approve(admin), "42501", /different staff member must approve/);
+    // A second account of the requester: a current review of its own and an
+    // ended one with the requester's fingerprint.
     const adminTwin = json(`select vmtest.staff('pay-admin-twin','admin');`);
     q(
-      `select vmtest.past_identity('${adminTwin.id}','${admin2.id}','${fingerprintOf("pay-admin")}');`
+      `select vmtest.verified('${adminTwin.id}','${admin2.id}','${fingerprintOf("pay-admin-twin")}');` +
+        `select vmtest.past_identity('${adminTwin.id}','${admin2.id}','${fingerprintOf("pay-admin")}');`
     );
     fails(approve(adminTwin), "42501", /different staff member must approve/);
     fails(approve(moderator), "42501", /capability not granted/);
@@ -650,6 +717,128 @@ try {
     assert.equal(json(slotRefundSql(admin, rest[1].id, "OZ-SLOT-5")).payment_status, "refunded");
     assert.deepEqual(paymentRow(order), { status: "refunded", fulfillment: "reversed" });
   });
+
+  // ------------------------------------------------- the approval threshold
+  const request = (id) =>
+    json(
+      `select jsonb_build_object('status',status,'needs_approval',needs_approval,'before',recorded_before_cents,'amount',amount_cents) from private.payment_refund_requests where id='${id}';`
+    );
+  const approveSql = (who, id) => staff(who, `select api.approve_staff_payment_refund('${id}');`);
+  const declineSql = (who, id, reason = "Payment changed meanwhile") =>
+    staff(who, `select api.decline_staff_payment_refund('${id}','${reason}');`);
+
+  await check("a large refund split slot by slot still needs a second staff member", () => {
+    const zanele = verified("zanele");
+    const order = buy(zanele, P180, 4); // 4 x 41,400 cents
+    const slots = lines(order);
+    const first = json(slotRefundSql(admin, slots[0].id, "OZ-SPLIT-1"));
+    const second = json(slotRefundSql(admin, slots[1].id, "OZ-SPLIT-2", "chargeback", "duplicate"));
+    assert.deepEqual([first.status, second.status], ["applied", "applied"]);
+    // The third would bring the money returned to 124,200 cents.
+    const third = json(slotRefundSql(admin, slots[2].id, "OZ-SPLIT-3"));
+    assert.equal(third.status, "awaiting_approval");
+    assert.deepEqual(request(third.request_id), {
+      status: "awaiting_approval",
+      needs_approval: true,
+      before: 82800,
+      amount: 41400,
+    });
+    assert.equal(lines(order)[2].status, "open");
+    assert.equal(json(approveSql(admin2, third.request_id)).status, "applied");
+    assert.equal(lines(order)[2].status, "reversed");
+    assert.equal(paymentRow(order).status, "complete");
+  });
+
+  await check("nothing else reverses a payment while its refund waits", () => {
+    const thembi = verified("thembi");
+    const order = buy(thembi, P180, 4);
+    const waiting = json(refundSql(admin, order, "OZ-WAIT-1", "refunded", "billing_error"));
+    assert.equal(waiting.status, "awaiting_approval");
+    const [line] = lines(order);
+    // The earlier commands and the service reversal are refused.
+    fails(
+      staff(
+        admin2,
+        `select api.record_frontend_staff_payment_reversal('${order}','refunded','Old screen refund');`
+      ),
+      "PT409",
+      /DETAIL:\s+refund_awaiting_approval/
+    );
+    fails(
+      staff(
+        admin2,
+        `select api.record_staff_slot_reversal('${line.id}','refunded','Old slot refund');`
+      ),
+      "PT409",
+      /DETAIL:\s+refund_awaiting_approval/
+    );
+    fails(
+      service(`select api.reverse_payment('${order}','chargeback','Service reversal');`),
+      "PT409",
+      /DETAIL:\s+refund_awaiting_approval/
+    );
+    assert.deepEqual(paymentRow(order), { status: "complete", fulfillment: "fulfilled" });
+    assert.ok(lines(order).every((l) => l.status === "open"));
+    assert.equal(count(`private.frontend_payment_reversals where payment_id='${order}'`), 0);
+    // A change made around the rule (owner SQL) leaves the request resolvable:
+    // approval names the reason, and declining still works.
+    q(`set session_replication_role=replica;
+       update private.payment_lines set status='reversed',reversal_kind='refunded',reversal_reason='Changed by hand',
+         reversed_at=now() where id='${line.id}';
+       set session_replication_role=origin;`);
+    fails(approveSql(admin2, waiting.request_id), "PT409", /DETAIL:\s+refund_payment_changed/);
+    assert.equal(json(declineSql(admin2, waiting.request_id)).status, "declined");
+  });
+
+  await check("a payment with a refund waiting cannot be activated", () => {
+    const sizwe = verified("sizwe");
+    const undelivered = paidNotDelivered(sizwe, P180, 3); // 124,200 cents
+    const waiting = json(refundSql(admin, undelivered, "OZ-WAIT-2"));
+    assert.equal(waiting.status, "awaiting_approval");
+    fails(activateSql(admin2, undelivered), "PT409", /DETAIL:\s+refund_awaiting_approval/);
+    assert.equal(
+      json(declineSql(admin, waiting.request_id, "Activate instead")).status,
+      "declined"
+    );
+    assert.equal(json(activateSql(admin2, undelivered)).entitlements, 3);
+  });
+
+  await check(
+    "approval and an earlier command at the same time: the money goes back once",
+    async () => {
+      const vusi = verified("vusi");
+      const order = buy(vusi, P180, 4);
+      const waiting = json(refundSql(admin, order, "OZ-RACE-1"));
+      const [line] = lines(order);
+      const approving = session(
+        staff(
+          admin2,
+          `begin; select api.approve_staff_payment_refund('${waiting.request_id}'); select pg_sleep(2); commit;`
+        )
+      );
+      const whole = sessionAfter(
+        500,
+        staff(
+          admin,
+          `select api.record_frontend_staff_payment_reversal('${order}','chargeback','Old screen at the same time');`
+        )
+      );
+      const slot = sessionAfter(
+        500,
+        staff(
+          admin,
+          `select api.record_staff_slot_reversal('${line.id}','refunded','Old slot at the same time');`
+        )
+      );
+      const [a, b, c] = await Promise.all([approving, whole, slot]);
+      assert.equal(a.status, 0, a.stderr);
+      assert.notEqual(b.status, 0, "the earlier whole-payment command succeeded");
+      assert.notEqual(c.status, 0, "the earlier slot command succeeded");
+      assert.deepEqual(paymentRow(order), { status: "refunded", fulfillment: "reversed" });
+      assert.equal(count(`private.frontend_payment_reversals where payment_id='${order}'`), 1);
+      assert.equal(request(waiting.request_id).status, "applied");
+    }
+  );
 
   // ------------------------------------------------------------- receipt
   await check("the receipt read matches the invoice, for the service only", () => {

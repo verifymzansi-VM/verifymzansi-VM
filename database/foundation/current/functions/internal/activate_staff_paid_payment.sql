@@ -17,11 +17,11 @@ begin
   end if;
   select p.owner_id into buyer from private.payments p where p.id = p_payment_id;
   if buyer is null then raise exception 'payment not found' using errcode='22023'; end if;
-  perform internal.assert_staff_activates_for_other(actor, buyer);
+  perform internal.assert_staff_payment_actor(actor, buyer);
   perform internal.lock_evidence_subject(buyer);
   select * into pay from private.payments p where p.id = p_payment_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
-  perform internal.assert_staff_activates_for_other(actor, buyer);
+  perform internal.assert_staff_payment_actor(actor, buyer);
   select * into prior from private.payment_activations a where a.payment_id = pay.id;
   if found then
     if prior.actor_id = actor and prior.reason = btrim(p_reason) then
@@ -33,6 +33,9 @@ begin
   end if;
   if pay.status <> 'complete' or pay.fulfillment_status <> 'needs_reconciliation' then
     raise exception 'only a paid payment that was not delivered can be activated' using errcode='PT409', detail='payment_not_awaiting_activation';
+  end if;
+  if exists(select 1 from private.payment_refund_requests r where r.payment_id = pay.id and r.status = 'awaiting_approval') then
+    raise exception 'a refund of this payment is waiting for approval' using errcode='PT409', detail='refund_awaiting_approval';
   end if;
   if not exists(select 1 from private.current_account_access u where u.id = pay.owner_id) then
     raise exception 'the account that paid cannot use it now; refund instead' using errcode='PT409', detail='payment_account_unavailable';
@@ -100,7 +103,7 @@ begin
   update private.payments set fulfillment_status = 'fulfilled' where id = pay.id;
   commissions := internal.payment_delivery_commission(pay.id);
   perform internal.staff_actor('payments:refund');
-  perform internal.assert_staff_activates_for_other(actor, buyer);
+  perform internal.assert_staff_payment_actor(actor, buyer);
   insert into private.payment_activations (payment_id, actor_id, reason, entitlements, addon_window, commissions)
     values (pay.id, actor, btrim(p_reason), made, pay.product_kind = 'addon', commissions);
   return jsonb_build_object('payment_id', pay.id, 'fulfillment_status', 'fulfilled', 'entitlements', made,

@@ -16,13 +16,16 @@ begin
   if internal.same_identity(actor, request.requested_by) then
     raise exception 'a different staff member must approve this refund' using errcode='42501', detail='refund_approver_same';
   end if;
-  perform internal.assert_staff_acts_for_other(actor, request.account_id, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, request.account_id);
   perform pg_advisory_xact_lock(hashtextextended('frontend-payment-reversal:'||request.payment_id::text, 0));
   perform internal.lock_evidence_subject(request.account_id);
   select * into pay from private.payments p where p.id = request.payment_id for update;
   select * into request from private.payment_refund_requests r where r.id = p_request_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
-  perform internal.assert_staff_acts_for_other(actor, request.account_id, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, request.account_id);
+  if internal.same_identity(actor, request.requested_by) then
+    raise exception 'a different staff member must approve this refund' using errcode='42501', detail='refund_approver_same';
+  end if;
   if request.status = 'applied' and request.approved_by = actor then
     return jsonb_build_object('request_id', request.id, 'status', request.status, 'kind', request.kind,
       'released_activations', request.released_activations, 'payment_status', pay.status, 'repeated', true);
@@ -30,18 +33,30 @@ begin
   if request.status <> 'awaiting_approval' then
     raise exception 'this refund is no longer waiting for approval' using errcode='PT409', detail='refund_not_waiting';
   end if;
+  -- The payment or slot changed since the refund was recorded (for example a
+  -- reversal recorded before this rule existed): decline it and record again.
+  if pay.status <> 'complete'
+    or exists(select 1 from private.frontend_payment_reversals v where v.payment_id = pay.id)
+    or (request.payment_line_id is null
+      and exists(select 1 from private.payment_lines l where l.payment_id = pay.id and l.status = 'reversed'))
+    or (request.payment_line_id is not null
+      and not exists(select 1 from private.payment_lines l where l.id = request.payment_line_id and l.status = 'open')) then
+    raise exception 'the payment changed since this refund was recorded; decline it and record it again'
+      using errcode='PT409', detail='refund_payment_changed';
+  end if;
+  -- Only this approval may reverse the payment while the refund waits
+  -- (internal.payment_reversal_waiting_guard).
+  perform set_config('vm.refund_approval', request.id::text, true);
   if request.payment_line_id is null then
-    if exists(select 1 from private.frontend_payment_reversals v where v.payment_id = pay.id) then
-      raise exception 'payment already reversed' using errcode='PT409';
-    end if;
     result := internal.reverse_payment(pay.id, request.kind, request.reason);
     insert into private.frontend_payment_reversals(payment_id, actor_id, kind, reason, released_activations)
       values (pay.id, actor, request.kind, request.reason, (result->>'released_activations')::integer);
   else
     result := internal.record_staff_slot_reversal(request.payment_line_id, request.kind, request.reason);
   end if;
+  perform set_config('vm.refund_approval', '', true);
   perform internal.staff_actor('payments:refund');
-  perform internal.assert_staff_acts_for_other(actor, request.account_id, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, request.account_id);
   update private.payment_refund_requests set status = 'applied', approved_by = actor, applied_at = statement_timestamp(),
     released_activations = (result->>'released_activations')::integer
     where id = request.id returning * into request;

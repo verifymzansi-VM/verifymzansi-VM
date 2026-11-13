@@ -822,26 +822,39 @@ function body changes (roadmap M3.4, with the receipt read for M3.7).
   (whole payment) and `api.record_staff_slot_refund(p_line_id, ...)` (one slot
   of an order). Without a reference (22023 `ozow_reference_required`), or with
   one that is not 4 to 100 letters, digits or `. _ : / -`, or already recorded
-  (PT409), nothing is recorded. Reason codes: `billing_error`, `duplicate`,
-  `our_failure_after_fix_offered`, `s14_cancellation`, `breach_credit`. The
-  amount is always the payment's or the slot's own, and the record names the
-  account that paid (a trigger refuses anything else). A **refund above R1,000**
-  (100,000 cents) is stored as waiting and changes nothing until a second staff
-  member approves it (`api.approve_staff_payment_refund(p_request_id)`: never
-  the requester or another account of the requester's identity); any staff
-  member with the capability can decline it with a reason, the requester
-  included (`api.decline_staff_payment_refund`). Chargebacks are bank facts and
-  take effect at once. A payment with a refund waiting accepts no other refund.
+  (PT409; references are compared without letter case), nothing is recorded.
+  Reason codes: `billing_error`, `duplicate`, `our_failure_after_fix_offered`,
+  `s14_cancellation`, `breach_credit`. The amount is always the payment's or the
+  slot's own, and the record names the account that paid (a trigger refuses
+  anything else). **When the money returned on the payment would exceed R1,000**
+  (100,000 cents: every applied or waiting refund and chargeback record, slots
+  reversed earlier, and this one), the record is stored as waiting and changes
+  nothing until a second staff member approves it
+  (`api.approve_staff_payment_refund(p_request_id)`: never the requester or
+  another account of the requester's identity, checked again after the lock
+  waits), so a large refund cannot be split slot by slot. Chargebacks follow the
+  same rule while `internal.chargebacks_need_approval()` returns true (the safe
+  default until the owner decides; one function to change). Any staff member
+  with the capability can decline a waiting record with a reason, the requester
+  included (`api.decline_staff_payment_refund`). A payment with a refund waiting
+  accepts no other refund and cannot be activated, and **nothing else reverses
+  it**: new triggers `payments_refund_waiting` and
+  `payment_lines_refund_waiting` refuse (PT409 `refund_awaiting_approval`) any
+  reversal of that payment or its slots, including the earlier staff commands
+  and the service's `api.reverse_payment`, except the approval itself (which
+  names the request in the transaction setting `vm.refund_approval`). An
+  approval finds the payment changed (for example after an owner SQL fix) and
+  refuses with PT409 `refund_payment_changed`; the record can still be declined.
   Records are kept in `private.payment_refund_requests` (immutable except for
   the one approval or decline) and listed in the staff audit trail. The earlier
   `api.record_frontend_staff_payment_reversal` and
   `api.record_staff_slot_reversal` stay until a later contract step; the website
   release in the same pull request no longer calls them.
-- **Staff never act for themselves.** Every new staff command needs the staff
-  member's own accepted ID review and refuses a payment of their own identity
-  (`internal.assert_staff_acts_for_other`, and for activation
-  `internal.assert_staff_activates_for_other`), before the lock waits and again
-  after the last authority check.
+- **Staff never act for themselves.** Every new staff command needs a current
+  (not ended) accepted ID review of the staff member's own and refuses a payment
+  of their own identity, compared over every fingerprint either account has had
+  (`internal.assert_staff_payment_actor`), before the lock waits and again after
+  the last authority check.
 - **Audit trail.** `private.frontend_staff_audit_events` also lists activations
   (`payment:activated`), recorded, approved and declined refunds and every
   single-slot reversal (`payment:slot_refunded`, also those recorded with
@@ -877,7 +890,8 @@ decision; prefer a forward fix). Revert and deploy the website release first:
 the rollback removes the commands that release calls. It refuses once a payment
 was activated or a refund recorded with the new commands (those are audit
 records); otherwise it puts back the earlier staff audit view and drops the
-update's functions, triggers and two tables.
+update's functions, its triggers (also the two on payments and payment lines)
+and two tables.
 
 `node --import tsx scripts/test-foundation-staff-payment-fixes.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
@@ -889,13 +903,20 @@ row, two commissions matching the trigger's), seen by the member in "My slots";
 the refusals (a member, a moderator, staff without their own ID review, staff of
 the same identity, over the slot limit, an already delivered payment, an add-on
 whose post ended); refunds without a reference, with a bad one, with an unknown
-reason code, a reused reference; a R69 refund at once, a chargeback at once, a
-R1,656 refund that waits, refused to its requester and to another account of the
-requester's identity, approved by a second admin, and a declined one recorded
-again; one slot of three refunded alone and the whole order refused after it;
-the account and amount rule; the receipt read against the invoice (a two-slot
-order and an add-on) and its service-only grant; the grants; and that the
-rollback refuses once the commands were used.
+reason code, a reused reference (also in other letter case), staff whose only
+review has ended; a R69 refund and a small chargeback at once, a R1,656
+chargeback and a R1,656 refund that wait, refused to its requester and to
+another account of the requester's identity, approved by a second admin, and a
+declined one recorded again; one slot of three refunded alone and the whole
+order refused after it; a refund split slot by slot (the third R414 slot waits
+after two went through); the earlier whole-payment and slot commands and the
+service reversal refused while a refund waits, an approval after the payment
+changed refused with `refund_payment_changed` and the record still declined;
+activation refused while a refund waits; an approval racing the earlier commands
+(the money goes back once); a table with this update's columns but not its
+constraints refused; the account and amount rule; the receipt read against the
+invoice (a two-slot order and an add-on) and its service-only grant; the grants;
+and that the rollback refuses once the commands were used.
 
 ## Individual slots at R69, 12 November 2026
 

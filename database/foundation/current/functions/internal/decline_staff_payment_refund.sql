@@ -15,11 +15,11 @@ begin
   end if;
   select * into request from private.payment_refund_requests r where r.id = p_request_id;
   if not found then raise exception 'refund request not found' using errcode='22023'; end if;
-  perform internal.assert_staff_acts_for_other(actor, request.account_id, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, request.account_id);
   perform pg_advisory_xact_lock(hashtextextended('frontend-payment-reversal:'||request.payment_id::text, 0));
   select * into request from private.payment_refund_requests r where r.id = p_request_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
-  perform internal.assert_staff_acts_for_other(actor, request.account_id, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, request.account_id);
   if request.status = 'declined' and request.declined_by = actor and request.decline_reason = btrim(p_reason) then
     return jsonb_build_object('request_id', request.id, 'status', request.status, 'repeated', true);
   end if;

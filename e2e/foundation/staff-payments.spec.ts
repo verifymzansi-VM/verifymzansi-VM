@@ -12,13 +12,17 @@ import {
   type Person,
   type TestCopy,
 } from "./support/test-copy";
-import { registerVerifiedMember, type VerifiedMember } from "./support/verified-member";
+import {
+  registerVerifiedMember,
+  reviewStaffIdentity,
+  type VerifiedMember,
+} from "./support/verified-member";
 
 // Staff find and fix paid but not delivered (roadmap M3.4), on the restored
 // website in foundation mode against the private test copy:
 // - a payment the bank completed after its checkout was cancelled (paid, not
 //   delivered) appears on the staff payments page under "Needs attention";
-// - an admin activates what was paid for; an audit row exists and the member
+// - staff activate what was paid for; an audit row exists and the member
 //   sees the slot;
 // - recording a refund without Ozow's reference is refused (the form, the
 //   website route and the database command).
@@ -30,10 +34,14 @@ import { registerVerifiedMember, type VerifiedMember } from "./support/verified-
 // notification route, signed by the copy's mock (support/mock-ozow.ts). Ozow
 // is never contacted.
 //
-// Staff money actions need the staff member's own accepted ID review
-// (20261113002421, internal.assert_staff_acts_for_other). The copy's admin has
-// none, so a trusted local step gives the admin an ended accepted review with
-// a synthetic fingerprint for this spec and removes it afterwards.
+// Staff money actions need a current accepted ID review of the staff
+// member's own (internal.assert_staff_payment_actor). The copy's staff have
+// none, and the admin's own review would change what the staff review spec
+// expects of the admin's identity case, so the moderator acts here: once per
+// copy the moderator's identity is reviewed by the admin through the
+// production commands (as for any member), and for this spec only a trusted
+// local step lets the moderator role view and refund payments (two
+// staff_capabilities rows, removed afterwards).
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
@@ -47,8 +55,8 @@ test.describe.configure({ mode: "serial" });
 const ozow = new MockOzow();
 let copy: TestCopy;
 let member: VerifiedMember;
-let adminId = "";
-let adminFact = "";
+let staffId = "";
+const grantedCapabilities: string[] = [];
 let payment = { id: "", merchantReference: "", amountCents: 0 };
 
 /** Only the copy's website and its gateway; anything else is aborted. */
@@ -110,21 +118,23 @@ test.describe("staff fix paid but not delivered", () => {
     test.setTimeout(120_000);
     copy = readTestCopy();
     member = await registerVerifiedMember("paidfix");
-    adminId = queryTestCopy("select id from auth.users where email = 'admin@verifymzansi.test';");
-    expect(adminId).toMatch(UUID);
-    const moderatorId = queryTestCopy(
+    staffId = queryTestCopy(
       "select id from auth.users where email = 'moderator@verifymzansi.test';"
     );
-    // Trusted local step: an ended accepted ID review for the admin (synthetic
-    // fingerprint, never a member's), removed in afterAll.
-    adminFact = randomUUID();
-    const fingerprint = `${randomUUID().replaceAll("-", "")}abcdefghij`.slice(0, 42) + "A";
-    queryTestCopy(
-      "set session_replication_role = replica; " +
-        "insert into private.accepted_identity_facts(id, owner_id, submission_id, identity_hmac, reviewed_by, revoked_at) " +
-        `values ('${adminFact}', '${adminId}', gen_random_uuid(), '${fingerprint}', '${moderatorId}', now()); ` +
-        "set session_replication_role = origin;"
-    );
+    expect(staffId).toMatch(UUID);
+    await reviewStaffIdentity(copy, "moderator", staffId);
+    // Trusted local step: the moderator role may view and refund payments for
+    // this spec (removed in afterAll).
+    for (const [capability, recent] of [
+      ["payments:view", false],
+      ["payments:refund", true],
+    ] as const) {
+      const added = queryTestCopy(
+        "insert into private.staff_capabilities(role, capability, requires_recent_mfa) " +
+          `values ('moderator', '${capability}', ${recent}) on conflict do nothing returning capability;`
+      );
+      if (added === capability) grantedCapabilities.push(capability);
+    }
 
     // The member's quote and the server's mock request, as for a checkout.
     const session = await signIn(copy, member);
@@ -157,11 +167,10 @@ test.describe("staff fix paid but not delivered", () => {
   });
 
   test.afterAll(() => {
-    if (adminFact)
+    for (const capability of grantedCapabilities.splice(0))
       queryTestCopy(
-        "set session_replication_role = replica; " +
-          `delete from private.accepted_identity_facts where id = '${adminFact}'; ` +
-          "set session_replication_role = origin;"
+        "delete from private.staff_capabilities " +
+          `where role = 'moderator' and capability = '${capability}';`
       );
   });
 
@@ -182,7 +191,7 @@ test.describe("staff fix paid but not delivered", () => {
     expect(paymentState()).toBe("complete|needs_reconciliation");
 
     const outside = await guard(context);
-    await signInBrowser(context, "admin");
+    await signInBrowser(context, "moderator");
     await page.goto("/admin/payments");
     await expect(
       page.getByRole("link", { name: /paid but not delivered: needs attention/ })
@@ -202,7 +211,7 @@ test.describe("staff fix paid but not delivered", () => {
     page,
   }) => {
     const outside = await guard(context);
-    await signInBrowser(context, "admin");
+    await signInBrowser(context, "moderator");
     await page.goto("/admin/payments?status=needs_attention");
     page.on("dialog", (dialog) =>
       dialog.type() === "prompt" ? dialog.accept(ACTIVATION_REASON) : dialog.accept()
@@ -215,7 +224,7 @@ test.describe("staff fix paid but not delivered", () => {
       queryTestCopy(
         `select actor_id || '|' || reason || '|' || entitlements from private.payment_activations where payment_id = '${payment.id}';`
       )
-    ).toBe(`${adminId}|${ACTIVATION_REASON}|1`);
+    ).toBe(`${staffId}|${ACTIVATION_REASON}|1`);
     expect(
       queryTestCopy(
         `select count(*) from private.frontend_staff_audit_events where target_id = '${payment.id}' and action = 'payment:activated';`
@@ -243,7 +252,7 @@ test.describe("staff fix paid but not delivered", () => {
 
   test("recording a refund without an Ozow reference is refused", async ({ context, page }) => {
     const outside = await guard(context);
-    await signInBrowser(context, "admin");
+    await signInBrowser(context, "moderator");
     await page.goto("/admin/payments");
     const row = paymentRow(page);
     await row.getByRole("button", { name: "Record refund" }).click();
@@ -277,7 +286,7 @@ test.describe("staff fix paid but not delivered", () => {
       status: 422,
       body: expect.objectContaining({ error: "Enter Ozow's refund reference." }),
     });
-    const admin = await signIn(copy, "admin");
+    const staff = await signIn(copy, "moderator");
     const refused = await rpc(
       copy,
       "record_staff_payment_refund",
@@ -288,7 +297,7 @@ test.describe("staff fix paid but not delivered", () => {
         p_reason: "Refund without a reference",
         p_ozow_reference: null,
       },
-      admin.token
+      staff.token
     );
     expect(refused.status).toBe(400);
     expect(refused.data).toMatchObject({ code: "22023", details: "ozow_reference_required" });

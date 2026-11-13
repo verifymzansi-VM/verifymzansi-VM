@@ -29,29 +29,37 @@
 --    p_reason_code, p_reason, p_ozow_reference) and
 --    api.record_staff_slot_refund(p_line_id, p_kind, p_reason_code, p_reason,
 --    p_ozow_reference): a refund or chargeback of a whole payment or of one
---    slot, recorded only with Ozow's reference (stored, used once) and a
---    reason code (billing_error, duplicate, our_failure_after_fix_offered,
---    s14_cancellation, breach_credit). A refund above R1,000 (100,000 cents)
---    waits for a second, different staff member
---    (api.approve_staff_payment_refund) and takes effect only then; any staff
---    member with the capability can decline it with a reason
---    (api.decline_staff_payment_refund). The amount is always the payment's
---    or the slot's own amount, and the refund is recorded for the account
---    that paid (private.payment_refund_requests.account_id, checked against
---    the payment). The earlier commands api.record_frontend_staff_payment_reversal
+--    slot, recorded only with Ozow's reference (stored, used once whatever its
+--    letter case) and a reason code (billing_error, duplicate,
+--    our_failure_after_fix_offered, s14_cancellation, breach_credit). When the
+--    money returned on the payment, this record included, would exceed R1,000
+--    (100,000 cents), the record waits for a second, different staff member
+--    (api.approve_staff_payment_refund) and takes effect only then, so a large
+--    refund cannot be split slot by slot; chargebacks follow the same rule
+--    while internal.chargebacks_need_approval() is true. Any staff member with
+--    the capability can decline a waiting record with a reason
+--    (api.decline_staff_payment_refund). The amount is always the payment's or
+--    the slot's own amount, and the record names the account that paid
+--    (private.payment_refund_requests.account_id, checked against the
+--    payment). The earlier commands api.record_frontend_staff_payment_reversal
 --    and api.record_staff_slot_reversal stay until a later contract step.
--- 4. Staff never act for themselves (internal.assert_staff_acts_for_other,
---    from 20261113002421): every new staff command needs the staff member's
---    own accepted ID review and refuses a payment of their own identity,
+-- 4. Staff never act for themselves: every new staff command needs the staff
+--    member's own current accepted ID review and refuses a payment of their
+--    own identity (internal.assert_staff_payment_actor, using
+--    internal.same_identity over every fingerprint either account has had),
 --    before the lock waits and again after the last authority check; the
---    approver must also be another person than the requester
---    (internal.same_identity).
+--    approver must also be another person than the requester, checked again
+--    after the lock waits.
 -- 5. The staff audit trail (private.frontend_staff_audit_events) also lists
 --    activations, refund requests, approvals, declines and single-slot
 --    reversals.
 -- 6. New service read api.get_payment_receipt(p_payment_id): the details of
 --    one payment and its invoice for the receipt email (M3.7); null for an
 --    unknown payment. Only service_role may call it.
+-- 7. While a refund or chargeback waits for approval, nothing else reverses
+--    that payment or one of its slots (new triggers payments_refund_waiting and
+--    payment_lines_refund_waiting on the existing tables; only the approval
+--    passes), and staff cannot activate it.
 --
 -- ORDER: apply this update before the pull request that uses it is merged (a
 -- merge into main is deployed, and that release calls the new commands).
@@ -85,11 +93,38 @@ begin
         'private.payment_activations payment_id:uuid!,actor_id:uuid!,reason:text!,entitlements:integer!,'
           ||'addon_window:boolean!,commissions:integer!,created_at:timestamp with time zone!',
         'private.payment_refund_requests id:uuid!,payment_id:uuid!,payment_line_id:uuid,account_id:uuid!,kind:text!,'
-          ||'reason_code:text!,reason:text!,ozow_reference:text!,amount_cents:bigint!,needs_approval:boolean!,'
+          ||'reason_code:text!,reason:text!,ozow_reference:text!,amount_cents:bigint!,recorded_before_cents:bigint!,'
+          ||'needs_approval:boolean!,'
           ||'status:text!,requested_by:uuid!,requested_at:timestamp with time zone!,approved_by:uuid,'
           ||'applied_at:timestamp with time zone,released_activations:integer,declined_by:uuid,'
           ||'declined_at:timestamp with time zone,decline_reason:text') then
       raise exception 'staff payment fixes table drift: %', shape using errcode='55000';
+    end if;
+  end loop;
+  -- The same tables must also carry exactly this update's constraints and indexes.
+  for shape in
+    select v.name||' '||case when to_regclass(v.name) is null then 'absent' else coalesce((select string_agg(s.n, ',' order by s.n collate "C") from (
+        select c.conname::text as n from pg_catalog.pg_constraint c where c.conrelid=to_regclass(v.name) and c.contype <> 'n'
+        union select i.relname::text from pg_catalog.pg_index x join pg_catalog.pg_class i on i.oid=x.indexrelid
+          where x.indrelid=to_regclass(v.name)) s),'none') end
+    from (values ('private.payment_activations'),('private.payment_refund_requests')) v(name)
+  loop
+    if shape not in ('private.payment_activations absent','private.payment_refund_requests absent',
+        'private.payment_activations payment_activations_actor_id_fkey,payment_activations_actor_idx,payment_activations_commissions_check,'
+          ||'payment_activations_entitlements_check,payment_activations_payment_id_fkey,payment_activations_pkey,'
+          ||'payment_activations_reason_check',
+        'private.payment_refund_requests payment_refund_requests_account_id_fkey,payment_refund_requests_account_idx,'
+          ||'payment_refund_requests_amount_cents_check,payment_refund_requests_applied,payment_refund_requests_approval_rule,'
+          ||'payment_refund_requests_approved_by_fkey,payment_refund_requests_approved_by_idx,payment_refund_requests_approver,'
+          ||'payment_refund_requests_decline_reason_check,payment_refund_requests_declined,'
+          ||'payment_refund_requests_declined_by_fkey,payment_refund_requests_declined_by_idx,payment_refund_requests_kind_check,'
+          ||'payment_refund_requests_line_fkey,payment_refund_requests_line_idx,payment_refund_requests_ozow_reference_check,'
+          ||'payment_refund_requests_payment_id_fkey,payment_refund_requests_payment_idx,payment_refund_requests_pkey,'
+          ||'payment_refund_requests_reason_check,payment_refund_requests_reason_code_check,'
+          ||'payment_refund_requests_recorded_before_cents_check,payment_refund_requests_reference_idx,'
+          ||'payment_refund_requests_released_activations_check,payment_refund_requests_requested_by_fkey,'
+          ||'payment_refund_requests_requested_by_idx,payment_refund_requests_status_check,payment_refund_requests_waiting_idx') then
+      raise exception 'staff payment fixes constraint or index drift: %', shape using errcode='55000';
     end if;
   end loop;
 end$$;
@@ -120,6 +155,7 @@ create table if not exists private.payment_refund_requests (
   reason text not null check (internal.plain_text_valid(reason, 5, 500, true)),
   ozow_reference text not null check (ozow_reference ~ '^[A-Za-z0-9][A-Za-z0-9._:/-]{3,99}$'),
   amount_cents bigint not null check (amount_cents > 0),
+  recorded_before_cents bigint not null check (recorded_before_cents >= 0),
   needs_approval boolean not null,
   status text not null check (status in ('awaiting_approval', 'applied', 'declined')),
   requested_by uuid not null references auth.users (id) on delete restrict,
@@ -132,8 +168,8 @@ create table if not exists private.payment_refund_requests (
   decline_reason text check (decline_reason is null or internal.plain_text_valid(decline_reason, 5, 500, true)),
   constraint payment_refund_requests_line_fkey foreign key (payment_line_id, payment_id)
     references private.payment_lines (id, payment_id) on delete cascade,
-  constraint payment_refund_requests_reference_key unique (ozow_reference),
-  constraint payment_refund_requests_approval_rule check (needs_approval = (kind = 'refunded' and amount_cents > 100000)),
+  constraint payment_refund_requests_approval_rule check (not needs_approval
+    or recorded_before_cents + amount_cents > 100000),
   constraint payment_refund_requests_applied check ((status = 'applied') = (applied_at is not null and released_activations is not null)),
   constraint payment_refund_requests_declined check ((status = 'declined')
     = (declined_at is not null and declined_by is not null and decline_reason is not null)),
@@ -142,6 +178,9 @@ create table if not exists private.payment_refund_requests (
 );
 alter table private.payment_refund_requests enable row level security;
 revoke all on table private.payment_refund_requests from public, anon, authenticated, service_role;
+-- Ozow's reference is used once, whatever its letter case.
+create unique index if not exists payment_refund_requests_reference_idx on private.payment_refund_requests
+  (lower(ozow_reference));
 create unique index if not exists payment_refund_requests_waiting_idx on private.payment_refund_requests (payment_id)
   where status = 'awaiting_approval';
 create index if not exists payment_refund_requests_payment_idx on private.payment_refund_requests (payment_id);
@@ -312,26 +351,27 @@ revoke all on function api.get_staff_payment_list(integer,text) from public, ano
 grant execute on function api.get_staff_payment_list(integer,text) to authenticated;
 
 -- 4. Activate what was paid for.
--- The staff rule of internal.assert_staff_acts_for_other, worded for an
--- activation: the staff member needs an accepted ID review of their own and
--- never activates a payment of their own identity.
-CREATE OR REPLACE FUNCTION internal.assert_staff_activates_for_other(p_actor uuid, p_subject uuid)
+-- The staff rule for every new payment command: the staff member holds a
+-- current accepted ID review of their own (not only an ended one), and never
+-- acts on a payment of their own identity (internal.same_identity compares
+-- every fingerprint either account has had, ended reviews too).
+CREATE OR REPLACE FUNCTION internal.assert_staff_payment_actor(p_actor uuid, p_subject uuid)
  RETURNS void
  LANGUAGE plpgsql
- STABLE
  SET search_path TO 'pg_catalog'
 AS $function$
 begin
-  if internal.individual_slot_identity(p_actor) is null then
-    raise exception 'staff need an accepted ID review of their own for this' using errcode='42501', detail='staff_review_required';
+  if internal.current_verified_identity(p_actor) is null then
+    raise exception 'staff need a current accepted ID review of their own for this' using errcode='42501', detail='staff_review_required';
   end if;
   if internal.same_identity(p_actor, p_subject) then
-    raise exception 'a different staff member must activate this payment' using errcode='42501', detail='staff_same_identity';
+    raise exception 'a different staff member must handle this payment' using errcode='42501', detail='staff_same_identity';
   end if;
 end;
 $function$;
-alter function internal.assert_staff_activates_for_other(uuid,uuid) owner to postgres;
-revoke all on function internal.assert_staff_activates_for_other(uuid,uuid) from public, anon, authenticated, service_role;
+alter function internal.assert_staff_payment_actor(uuid,uuid) owner to postgres;
+revoke all on function internal.assert_staff_payment_actor(uuid,uuid) from public, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION internal.activate_staff_paid_payment(p_payment_id uuid, p_reason text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -348,11 +388,11 @@ begin
   end if;
   select p.owner_id into buyer from private.payments p where p.id = p_payment_id;
   if buyer is null then raise exception 'payment not found' using errcode='22023'; end if;
-  perform internal.assert_staff_activates_for_other(actor, buyer);
+  perform internal.assert_staff_payment_actor(actor, buyer);
   perform internal.lock_evidence_subject(buyer);
   select * into pay from private.payments p where p.id = p_payment_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
-  perform internal.assert_staff_activates_for_other(actor, buyer);
+  perform internal.assert_staff_payment_actor(actor, buyer);
   select * into prior from private.payment_activations a where a.payment_id = pay.id;
   if found then
     if prior.actor_id = actor and prior.reason = btrim(p_reason) then
@@ -364,6 +404,9 @@ begin
   end if;
   if pay.status <> 'complete' or pay.fulfillment_status <> 'needs_reconciliation' then
     raise exception 'only a paid payment that was not delivered can be activated' using errcode='PT409', detail='payment_not_awaiting_activation';
+  end if;
+  if exists(select 1 from private.payment_refund_requests r where r.payment_id = pay.id and r.status = 'awaiting_approval') then
+    raise exception 'a refund of this payment is waiting for approval' using errcode='PT409', detail='refund_awaiting_approval';
   end if;
   if not exists(select 1 from private.current_account_access u where u.id = pay.owner_id) then
     raise exception 'the account that paid cannot use it now; refund instead' using errcode='PT409', detail='payment_account_unavailable';
@@ -431,7 +474,7 @@ begin
   update private.payments set fulfillment_status = 'fulfilled' where id = pay.id;
   commissions := internal.payment_delivery_commission(pay.id);
   perform internal.staff_actor('payments:refund');
-  perform internal.assert_staff_activates_for_other(actor, buyer);
+  perform internal.assert_staff_payment_actor(actor, buyer);
   insert into private.payment_activations (payment_id, actor_id, reason, entitlements, addon_window, commissions)
     values (pay.id, actor, btrim(p_reason), made, pay.product_kind = 'addon', commissions);
   return jsonb_build_object('payment_id', pay.id, 'fulfillment_status', 'fulfilled', 'entitlements', made,
@@ -493,7 +536,7 @@ CREATE OR REPLACE FUNCTION internal.staff_refund_repeat(p_actor uuid, p_payment_
 AS $function$
 declare prior private.payment_refund_requests;
 begin
-  select * into prior from private.payment_refund_requests r where r.ozow_reference = btrim(p_ozow_reference);
+  select * into prior from private.payment_refund_requests r where lower(r.ozow_reference) = lower(btrim(p_ozow_reference));
   if not found then return null; end if;
   if prior.payment_id = p_payment_id and prior.payment_line_id is not distinct from p_line_id and prior.kind = p_kind
       and prior.reason_code = p_reason_code and prior.reason = btrim(p_reason) and prior.requested_by = p_actor then
@@ -507,6 +550,57 @@ $function$;
 alter function internal.staff_refund_repeat(uuid,uuid,uuid,text,text,text,text) owner to postgres;
 revoke all on function internal.staff_refund_repeat(uuid,uuid,uuid,text,text,text,text) from public, anon, authenticated, service_role;
 
+-- The second-approver rule. THE ONE SWITCH for chargebacks: true means a
+-- chargeback above the threshold waits for a second staff member like a
+-- refund (the safe default until the owner decides); false lets chargebacks
+-- take effect at once.
+CREATE OR REPLACE FUNCTION internal.chargebacks_need_approval()
+ RETURNS boolean
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select true;
+$function$;
+alter function internal.chargebacks_need_approval() owner to postgres;
+revoke all on function internal.chargebacks_need_approval() from public, anon, authenticated, service_role;
+
+-- Money already returned or waiting to be returned on a payment: every
+-- applied or waiting refund or chargeback record, plus slots reversed without
+-- one (the earlier single-slot command), but never the slots of a payment
+-- reversed whole by a record (that record already counts them).
+CREATE OR REPLACE FUNCTION internal.payment_refunded_before_cents(p_payment_id uuid)
+ RETURNS bigint
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select coalesce((select sum(r.amount_cents) from private.payment_refund_requests r
+      where r.payment_id = p_payment_id and r.status in ('applied', 'awaiting_approval')), 0)
+    + coalesce((select sum(l.amount_cents) from private.payment_lines l
+      where l.payment_id = p_payment_id and l.status = 'reversed'
+        and not exists(select 1 from private.payment_refund_requests r
+          where r.status = 'applied' and r.payment_id = p_payment_id
+            and (r.payment_line_id = l.id or r.payment_line_id is null))), 0)::bigint;
+$function$;
+alter function internal.payment_refunded_before_cents(uuid) owner to postgres;
+revoke all on function internal.payment_refunded_before_cents(uuid) from public, anon, authenticated, service_role;
+
+-- A second staff member must approve when the money returned on the payment,
+-- this record included, would exceed R1,000 (100,000 cents), so a large
+-- refund cannot be split slot by slot or relabelled as a chargeback.
+CREATE OR REPLACE FUNCTION internal.refund_needs_approval(p_kind text, p_refunded_before bigint, p_amount bigint)
+ RETURNS boolean
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select (p_kind = 'refunded' or internal.chargebacks_need_approval())
+    and coalesce(p_refunded_before, 0) + p_amount > 100000;
+$function$;
+alter function internal.refund_needs_approval(text,bigint,bigint) owner to postgres;
+revoke all on function internal.refund_needs_approval(text,bigint,bigint) from public, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION internal.record_staff_payment_refund(p_payment_id uuid, p_kind text, p_reason_code text,
   p_reason text, p_ozow_reference text)
  RETURNS jsonb
@@ -515,19 +609,19 @@ CREATE OR REPLACE FUNCTION internal.record_staff_payment_refund(p_payment_id uui
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid; buyer uuid; pay private.payments; repeat jsonb; request private.payment_refund_requests;
-  result jsonb; approval boolean;
+  result jsonb; approval boolean; refunded_before bigint;
 begin
   actor := internal.staff_actor('payments:refund');
   perform internal.assert_staff_refund_input(p_kind, p_reason_code, p_reason, p_ozow_reference);
   if p_payment_id is null then raise exception 'payment required' using errcode='22023'; end if;
   select p.owner_id into buyer from private.payments p where p.id = p_payment_id;
   if buyer is null then raise exception 'payment not found' using errcode='22023'; end if;
-  perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, buyer);
   perform pg_advisory_xact_lock(hashtextextended('frontend-payment-reversal:'||p_payment_id::text, 0));
   perform internal.lock_evidence_subject(buyer);
   select * into pay from private.payments p where p.id = p_payment_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
-  perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, buyer);
   repeat := internal.staff_refund_repeat(actor, pay.id, null, p_kind, p_reason_code, p_reason, p_ozow_reference);
   if repeat is not null then return repeat; end if;
   if exists(select 1 from private.frontend_payment_reversals v where v.payment_id = pay.id) or pay.status <> 'complete' then
@@ -539,17 +633,18 @@ begin
   if exists(select 1 from private.payment_lines l where l.payment_id = pay.id and l.status = 'reversed') then
     raise exception 'a slot of this payment was already reversed; refund its other slots one by one' using errcode='PT409', detail='payment_slot_reversed';
   end if;
-  approval := p_kind = 'refunded' and pay.amount_cents > 100000;
+  refunded_before := internal.payment_refunded_before_cents(pay.id);
+  approval := internal.refund_needs_approval(p_kind, refunded_before, pay.amount_cents);
   if not approval then
     result := internal.reverse_payment(pay.id, p_kind, btrim(p_reason));
     insert into private.frontend_payment_reversals(payment_id, actor_id, kind, reason, released_activations)
       values (pay.id, actor, p_kind, btrim(p_reason), (result->>'released_activations')::integer);
   end if;
   perform internal.staff_actor('payments:refund');
-  perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, buyer);
   insert into private.payment_refund_requests (payment_id, account_id, kind, reason_code, reason, ozow_reference,
-      amount_cents, needs_approval, status, requested_by, applied_at, released_activations)
-    values (pay.id, pay.owner_id, p_kind, p_reason_code, btrim(p_reason), btrim(p_ozow_reference), pay.amount_cents,
+      amount_cents, recorded_before_cents, needs_approval, status, requested_by, applied_at, released_activations)
+    values (pay.id, pay.owner_id, p_kind, p_reason_code, btrim(p_reason), btrim(p_ozow_reference), pay.amount_cents, refunded_before,
       approval, case when approval then 'awaiting_approval' else 'applied' end, actor,
       case when approval then null else statement_timestamp() end,
       case when approval then null else (result->>'released_activations')::integer end)
@@ -583,7 +678,7 @@ CREATE OR REPLACE FUNCTION internal.record_staff_slot_refund(p_line_id uuid, p_k
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid; buyer uuid; payment uuid; pay private.payments; line private.payment_lines; repeat jsonb;
-  request private.payment_refund_requests; result jsonb; approval boolean;
+  request private.payment_refund_requests; result jsonb; approval boolean; refunded_before bigint;
 begin
   actor := internal.staff_actor('payments:refund');
   perform internal.assert_staff_refund_input(p_kind, p_reason_code, p_reason, p_ozow_reference);
@@ -591,13 +686,13 @@ begin
   select p.owner_id, p.id into buyer, payment from private.payment_lines l join private.payments p on p.id = l.payment_id
     where l.id = p_line_id;
   if buyer is null then raise exception 'slot payment line not found' using errcode='22023'; end if;
-  perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, buyer);
   perform pg_advisory_xact_lock(hashtextextended('frontend-payment-reversal:'||payment::text, 0));
   perform internal.lock_evidence_subject(buyer);
   select * into pay from private.payments p where p.id = payment for update;
   select * into line from private.payment_lines l where l.id = p_line_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
-  perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, buyer);
   repeat := internal.staff_refund_repeat(actor, pay.id, line.id, p_kind, p_reason_code, p_reason, p_ozow_reference);
   if repeat is not null then return repeat; end if;
   if pay.status <> 'complete' or line.status <> 'open' then
@@ -606,16 +701,17 @@ begin
   if exists(select 1 from private.payment_refund_requests r where r.payment_id = pay.id and r.status = 'awaiting_approval') then
     raise exception 'a refund of this payment is waiting for approval' using errcode='PT409', detail='refund_awaiting_approval';
   end if;
-  approval := p_kind = 'refunded' and line.amount_cents > 100000;
+  refunded_before := internal.payment_refunded_before_cents(pay.id);
+  approval := internal.refund_needs_approval(p_kind, refunded_before, line.amount_cents);
   if not approval then
     result := internal.record_staff_slot_reversal(line.id, p_kind, btrim(p_reason));
   end if;
   perform internal.staff_actor('payments:refund');
-  perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, buyer);
   insert into private.payment_refund_requests (payment_id, payment_line_id, account_id, kind, reason_code, reason,
-      ozow_reference, amount_cents, needs_approval, status, requested_by, applied_at, released_activations)
+      ozow_reference, amount_cents, recorded_before_cents, needs_approval, status, requested_by, applied_at, released_activations)
     values (pay.id, line.id, pay.owner_id, p_kind, p_reason_code, btrim(p_reason), btrim(p_ozow_reference),
-      line.amount_cents, approval, case when approval then 'awaiting_approval' else 'applied' end, actor,
+      line.amount_cents, refunded_before, approval, case when approval then 'awaiting_approval' else 'applied' end, actor,
       case when approval then null else statement_timestamp() end,
       case when approval then null else (result->>'released_activations')::integer end)
     returning * into request;
@@ -656,13 +752,16 @@ begin
   if internal.same_identity(actor, request.requested_by) then
     raise exception 'a different staff member must approve this refund' using errcode='42501', detail='refund_approver_same';
   end if;
-  perform internal.assert_staff_acts_for_other(actor, request.account_id, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, request.account_id);
   perform pg_advisory_xact_lock(hashtextextended('frontend-payment-reversal:'||request.payment_id::text, 0));
   perform internal.lock_evidence_subject(request.account_id);
   select * into pay from private.payments p where p.id = request.payment_id for update;
   select * into request from private.payment_refund_requests r where r.id = p_request_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
-  perform internal.assert_staff_acts_for_other(actor, request.account_id, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, request.account_id);
+  if internal.same_identity(actor, request.requested_by) then
+    raise exception 'a different staff member must approve this refund' using errcode='42501', detail='refund_approver_same';
+  end if;
   if request.status = 'applied' and request.approved_by = actor then
     return jsonb_build_object('request_id', request.id, 'status', request.status, 'kind', request.kind,
       'released_activations', request.released_activations, 'payment_status', pay.status, 'repeated', true);
@@ -670,18 +769,30 @@ begin
   if request.status <> 'awaiting_approval' then
     raise exception 'this refund is no longer waiting for approval' using errcode='PT409', detail='refund_not_waiting';
   end if;
+  -- The payment or slot changed since the refund was recorded (for example a
+  -- reversal recorded before this rule existed): decline it and record again.
+  if pay.status <> 'complete'
+    or exists(select 1 from private.frontend_payment_reversals v where v.payment_id = pay.id)
+    or (request.payment_line_id is null
+      and exists(select 1 from private.payment_lines l where l.payment_id = pay.id and l.status = 'reversed'))
+    or (request.payment_line_id is not null
+      and not exists(select 1 from private.payment_lines l where l.id = request.payment_line_id and l.status = 'open')) then
+    raise exception 'the payment changed since this refund was recorded; decline it and record it again'
+      using errcode='PT409', detail='refund_payment_changed';
+  end if;
+  -- Only this approval may reverse the payment while the refund waits
+  -- (internal.payment_reversal_waiting_guard).
+  perform set_config('vm.refund_approval', request.id::text, true);
   if request.payment_line_id is null then
-    if exists(select 1 from private.frontend_payment_reversals v where v.payment_id = pay.id) then
-      raise exception 'payment already reversed' using errcode='PT409';
-    end if;
     result := internal.reverse_payment(pay.id, request.kind, request.reason);
     insert into private.frontend_payment_reversals(payment_id, actor_id, kind, reason, released_activations)
       values (pay.id, actor, request.kind, request.reason, (result->>'released_activations')::integer);
   else
     result := internal.record_staff_slot_reversal(request.payment_line_id, request.kind, request.reason);
   end if;
+  perform set_config('vm.refund_approval', '', true);
   perform internal.staff_actor('payments:refund');
-  perform internal.assert_staff_acts_for_other(actor, request.account_id, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, request.account_id);
   update private.payment_refund_requests set status = 'applied', approved_by = actor, applied_at = statement_timestamp(),
     released_activations = (result->>'released_activations')::integer
     where id = request.id returning * into request;
@@ -720,11 +831,11 @@ begin
   end if;
   select * into request from private.payment_refund_requests r where r.id = p_request_id;
   if not found then raise exception 'refund request not found' using errcode='22023'; end if;
-  perform internal.assert_staff_acts_for_other(actor, request.account_id, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, request.account_id);
   perform pg_advisory_xact_lock(hashtextextended('frontend-payment-reversal:'||request.payment_id::text, 0));
   select * into request from private.payment_refund_requests r where r.id = p_request_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
-  perform internal.assert_staff_acts_for_other(actor, request.account_id, 'reversal');
+  perform internal.assert_staff_payment_actor(actor, request.account_id);
   if request.status = 'declined' and request.declined_by = actor and request.decline_reason = btrim(p_reason) then
     return jsonb_build_object('request_id', request.id, 'status', request.status, 'repeated', true);
   end if;
@@ -751,6 +862,39 @@ $function$;
 alter function api.decline_staff_payment_refund(uuid,text) owner to postgres;
 revoke all on function api.decline_staff_payment_refund(uuid,text) from public, anon, authenticated, service_role;
 grant execute on function api.decline_staff_payment_refund(uuid,text) to authenticated;
+
+-- While a refund or chargeback of a payment waits for a second staff member,
+-- nothing else may reverse that payment or one of its slots (the earlier
+-- commands api.record_frontend_staff_payment_reversal and
+-- api.record_staff_slot_reversal, or the service's api.reverse_payment): only
+-- its approval, which names the request in the transaction setting
+-- vm.refund_approval while it applies it.
+CREATE OR REPLACE FUNCTION internal.payment_reversal_waiting_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare payment uuid := (case when tg_table_name = 'payments' then to_jsonb(new)->>'id'
+  else to_jsonb(new)->>'payment_id' end)::uuid;
+begin
+  if exists(select 1 from private.payment_refund_requests r
+      where r.payment_id = payment and r.status = 'awaiting_approval'
+        and r.id::text is distinct from nullif(current_setting('vm.refund_approval', true), '')) then
+    raise exception 'a refund of this payment is waiting for approval' using errcode='PT409', detail='refund_awaiting_approval';
+  end if;
+  return new;
+end;
+$function$;
+alter function internal.payment_reversal_waiting_guard() owner to postgres;
+revoke all on function internal.payment_reversal_waiting_guard() from public, anon, authenticated, service_role;
+drop trigger if exists payments_refund_waiting on private.payments;
+create trigger payments_refund_waiting before update of status on private.payments
+  for each row when (new.status in ('refunded', 'chargeback') and old.status is distinct from new.status)
+  execute function internal.payment_reversal_waiting_guard();
+drop trigger if exists payment_lines_refund_waiting on private.payment_lines;
+create trigger payment_lines_refund_waiting before update of status on private.payment_lines
+  for each row when (new.status = 'reversed' and old.status = 'open')
+  execute function internal.payment_reversal_waiting_guard();
 
 -- 6. The staff audit trail also lists the new payment actions and every
 -- single-slot reversal.
