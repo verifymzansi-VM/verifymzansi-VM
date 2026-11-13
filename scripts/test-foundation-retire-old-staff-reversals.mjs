@@ -28,45 +28,44 @@ import {
   assertReadOnlyPreflight,
   createChecks,
   sqlHelpers,
+  updateCheckViews,
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 
-const UPDATE = "20261113085340_retire_old_staff_reversal_commands.sql";
-const companion = (folder, suffix) =>
-  readFileSync(`database/foundation/${folder}/${UPDATE.replace(/\.sql$/, suffix)}`, "utf8");
-const PREFLIGHT = companion("preflight", ".check.sql");
-const ROLLBACK = companion("rollback", ".down.sql");
-const FINGERPRINT = readFileSync("database/foundation/fingerprint.sql", "utf8");
-const P30 = { id: "d6ca48e5-43be-40df-8d8c-72c98a6fda96", cents: 6900 };
-const P180 = { id: "ce4ef578-344a-4816-ab6a-6961bec46621", cents: 41400 };
 const RETIRED = [
   "api.record_frontend_staff_payment_reversal(uuid,text,text)",
   "api.record_staff_slot_reversal(uuid,text,text)",
   "api.get_frontend_staff_payments(integer,text)",
 ];
-const CLOSED = [
-  "internal.record_frontend_staff_payment_reversal(uuid,text,text)",
-  "internal.get_frontend_staff_payments(integer,text)",
-  "internal.record_staff_slot_reversal(uuid,text,text)",
-];
+// The internal functions behind them, closed to the API roles.
+const CLOSED = RETIRED.map((sig) => sig.replace(/^api\./, "internal."));
 const ROLES = ["anon", "authenticated", "service_role"];
-const sha = (text) => createHash("sha256").update(text).digest("hex");
-const fingerprintOf = (label) =>
-  `${createHash("sha256").update(`person-${label}`).digest("base64url").slice(0, 42)}A`;
-
-const { check, current, passed: checks } = createChecks();
+// Plan versions on sale since 20261113002421_individual_slots_r69.sql.
+const PLANS = {
+  days30: { id: "d6ca48e5-43be-40df-8d8c-72c98a6fda96", cents: 6900 },
+  days180: { id: "ce4ef578-344a-4816-ab6a-6961bec46621", cents: 41400 },
+};
+const UPDATE = "20261113085340_retire_old_staff_reversal_commands.sql";
+const [PREFLIGHT, ROLLBACK] = [
+  ["preflight", ".check.sql"],
+  ["rollback", ".down.sql"],
+].map(([folder, suffix]) =>
+  readFileSync(`database/foundation/${folder}/${UPDATE.replace(/\.sql$/, suffix)}`, "utf8")
+);
+const digest = (text, encoding) => createHash("sha256").update(text).digest(encoding);
+const sha = (text) => digest(text, "hex");
+const fingerprintOf = (label) => `${digest(`person-${label}`, "base64url").slice(0, 42)}A`;
 
 const started = Date.now();
+const { check, current, passed: checks } = createChecks();
 const database = await startLintDatabase({ log: (line) => console.log(line) });
 try {
-  const { steps, index, step } = applyStepsBefore(database, UPDATE);
   const { q, json, fails, member, staff, service } = sqlHelpers(database, current);
-  const fingerprint = () => q(`set search_path to pg_catalog;\n${FINGERPRINT}`);
-  const preflight = () =>
-    q(PREFLIGHT)
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => line.split("|"));
+  const { fingerprint, preflightRows: preflight } = updateCheckViews(database, current, {
+    preflight: PREFLIGHT,
+  });
+  // Every update before this one, as production has them.
+  const { steps, index, step } = applyStepsBefore(database, UPDATE);
   const present = (sig) => q(`select to_regprocedure('${sig}') is not null;`) === "t";
   const callers = (sig) =>
     ROLES.filter(
@@ -180,7 +179,7 @@ try {
 
   // ------------------------------------------------------------ before
   const buyer = verified("retire-buyer");
-  const order = buy(buyer, P30, 2);
+  const order = buy(buyer, PLANS.days30, 2);
   await check(
     "before the update: preflight reads 'not applied', staff may call the commands",
     () => {
@@ -299,7 +298,7 @@ try {
   });
 
   await check("an approved refund still reverses the slot it waited for", () => {
-    const big = buy(verified("retire-big"), P180, 3);
+    const big = buy(verified("retire-big"), PLANS.days180, 3);
     const [a, b, c] = lines(big);
     assert.equal(json(slotRefund(admin, a.id, "OZ-RETIRE-A")).status, "applied");
     assert.equal(json(slotRefund(admin, b.id, "OZ-RETIRE-B")).status, "applied");
