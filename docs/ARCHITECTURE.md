@@ -52,17 +52,14 @@ Postgres data, RLS, and migrations.
 
 ## KYC And Trust Flow
 
-- `src/app/api/verification/upload/route.ts`: KYC document/selfie/proof upload
-  endpoint. It validates form data, checks file integrity, strips metadata,
-  encrypts evidence, stores it in private R2, and updates verification state.
-- `src/app/api/verification/upload/_lib/kyc-upload-cleanup.ts`: cleanup and
-  retry handling for failed KYC artifact/R2 writes.
-- `src/lib/services/kyc-engine.ts`: risk engine for SHA-256 duplicates,
-  perceptual-hash similarity, velocity, ID HMAC reuse, provider results,
-  EXIF/liveness/blur signals, and aggregate risk score.
-- `src/app/api/admin/verification/decide/route.ts`: admin review path that
-  approves/rejects/resubmits verification steps and propagates verified account
-  status.
+- `src/app/api/verification/upload/route.ts`: KYC document and selfie upload. It
+  hands the request to `src/lib/foundation/restored-verification-upload.ts`,
+  which validates the form, cleans the image, encrypts the evidence, stores it
+  in private R2 and records it through the foundation `api.*` commands.
+- `src/app/api/admin/verification/decide/route.ts`: staff review of a
+  verification step, handled by
+  `src/lib/foundation/restored-identity-decision-route.ts`. The database applies
+  the decision and its policy (staff role, two-step check, overrides).
 
 ## Payment Flow
 

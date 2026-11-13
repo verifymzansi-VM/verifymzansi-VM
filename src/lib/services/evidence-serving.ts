@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { NextResponse } from "next/server";
 
 import { scanForMalware } from "@/lib/utils/malware-scan";
@@ -67,18 +66,4 @@ export function evidenceViewResponse(buffer: Buffer): NextResponse {
       "Referrer-Policy": "no-referrer",
     },
   });
-}
-
-/**
- * Hash an IP address for privacy-compliant logging.
- * Uses HMAC-SHA256 with a secret key to prevent rainbow-table deanonymisation.
- */
-export function hashIp(ip: string, secret: string | undefined): string {
-  // In production, IP_HASH_SECRET is required (checked earlier in handler).
-  // In dev, use a deterministic but non-production-safe fallback.
-  if (!secret && process.env.NODE_ENV === "production") {
-    throw new Error("IP_HASH_SECRET is required in production");
-  }
-  const key = secret || "dev-only-local-not-for-production";
-  return crypto.createHmac("sha256", key).update(ip).digest("hex").slice(0, 16);
 }
