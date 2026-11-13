@@ -944,7 +944,7 @@ change; the paid Images plan (the owner's budget decision) removes the limit.
 
 ### 25. Communication choices saved (roadmap M1.7)
 
-Owner question 21. The Notifications page (`/dashboard/communication`) keeps its
+Owner question 20. The Notifications page (`/dashboard/communication`) keeps its
 design; it now reads and saves through the live backend. Before, every visit
 showed 'Failed to load email activity', saving a switch failed with 'Unable to
 update preference' and every switch read off after a reload. Now the four
