@@ -3,6 +3,7 @@ import Link from "next/link";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import {
   readStaffBankTransfers,
+  readStaffBankTransfersWaiting,
   readStaffPaymentList,
   staffPaymentListFilter,
 } from "@/lib/foundation/staff-payments";
@@ -30,27 +31,38 @@ export default async function PaymentsAdminPage({
   const parsedPage = Number(params.page || 1);
   const page =
     Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
-  const { rows, total, needsAttention, awaitingApproval, transfersUnavailable } =
+  const canConfirm = staff.assignedCapabilities?.includes("payments:confirm_transfer") === true;
+  const { rows, total, needsAttention, awaitingApproval, transfersUnavailable, waiting } =
     await (async () => {
       const { api } = await readFoundationServerSession();
       const result = await readStaffPaymentList(api, page, status);
-      // Payments recorded from a bank transfer show its reference; the list
-      // still loads if this read fails, with a warning.
+      // Payments confirmed from a bank transfer show its reference, and the
+      // transfers waiting for a second staff member are listed; the payments
+      // list still loads if these reads fail, with a warning.
       let unavailable = false;
-      const transfers = new Map(
-        (
-          await readStaffBankTransfers(
-            api,
-            result.items.map((item) => item.id)
-          ).catch((error: unknown) => {
-            log.warn("Bank transfer details unavailable", { error });
-            unavailable = true;
+      const missing = (error: unknown) => {
+        log.warn("Bank transfer details unavailable", { error });
+        unavailable = true;
+      };
+      const [details, waitingTransfers] = await Promise.all([
+        readStaffBankTransfers(
+          api,
+          result.items.map((item) => item.id)
+        ).catch((error: unknown) => {
+          missing(error);
+          return [];
+        }),
+        readStaffBankTransfersWaiting(api)
+          .then((read) => read.items)
+          .catch((error: unknown) => {
+            missing(error);
             return [];
-          })
-        ).map((transfer) => [transfer.payment_id, transfer])
-      );
+          }),
+      ]);
+      const transfers = new Map(details.map((transfer) => [transfer.payment_id, transfer]));
       return {
         transfersUnavailable: unavailable,
+        waiting: waitingTransfers,
         rows: result.items.map((item) => {
           const transfer = transfers.get(item.id);
           return transfer
@@ -140,7 +152,9 @@ export default async function PaymentsAdminPage({
           Bank transfer details could not be loaded. Reload before refunding a payment.
         </p>
       ) : null}
-      {canRefund ? <BankTransferPanel /> : null}
+      {canRefund || canConfirm || waiting.length > 0 ? (
+        <BankTransferPanel canRecord={canRefund} canConfirm={canConfirm} waiting={waiting} />
+      ) : null}
       <PaymentsPanel payments={rows} canRefund={canRefund} />
       {(page > 1 || rows.length === PAGE_SIZE) && (
         <nav aria-label="Payment pages" className="flex gap-4 text-sm">

@@ -7,6 +7,8 @@ import { decideRestoredCommission, saveRestoredPartner } from "@/lib/foundation/
 import {
   activateStaffPaidPayment,
   approveStaffPaymentRefund,
+  confirmStaffBankTransfer,
+  declineStaffBankTransfer,
   declineStaffPaymentRefund,
   readStaffBankTransferCustomer,
   recordStaffBankTransfer,
@@ -132,6 +134,8 @@ const schema = z.discriminatedUnion("action", [
     reason,
   }),
   z.object({ action: z.literal("payment.activate"), paymentId: uuid, reason }),
+  z.object({ action: z.literal("payment.transfer_confirm"), transferId: uuid }),
+  z.object({ action: z.literal("payment.transfer_decline"), transferId: uuid, reason }),
   z.object({
     action: z.literal("payment.transfer_customer"),
     accountEmail: z.string().trim().min(3).max(254),
@@ -266,6 +270,16 @@ export async function POST(request: Request) {
         return {
           success: true,
           data: await activateStaffPaidPayment(api, body.paymentId.toLowerCase(), body.reason),
+        };
+      if (body.action === "payment.transfer_confirm")
+        return {
+          success: true,
+          data: await confirmStaffBankTransfer(api, body.transferId.toLowerCase()),
+        };
+      if (body.action === "payment.transfer_decline")
+        return {
+          success: true,
+          data: await declineStaffBankTransfer(api, body.transferId.toLowerCase(), body.reason),
         };
       if (body.action === "payment.transfer_customer")
         return {

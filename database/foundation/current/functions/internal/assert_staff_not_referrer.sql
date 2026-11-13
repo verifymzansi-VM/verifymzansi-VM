@@ -9,7 +9,7 @@ AS $function$
 begin
   if exists(select 1 from private.account_acquisitions a join private.partners p on p.id = a.partner_id
       where a.account_id = p_customer and internal.same_identity(p_actor, p.account_id)) then
-    raise exception 'a different staff member must record a payment of a customer you referred'
+    raise exception 'a different staff member must handle a payment of a customer you referred'
       using errcode='42501', detail='staff_referred_customer';
   end if;
 end;

@@ -69,7 +69,7 @@ describe("record a bank transfer", () => {
   };
 
   it("shows the order total, flags a different amount and sends the transfer", async () => {
-    render(<BankTransferPanel />);
+    render(<BankTransferPanel canRecord canConfirm waiting={[]} />);
     fireEvent.click(screen.getByRole("button", { name: "Record a bank transfer" }));
     const form = screen.getByRole("form", { name: "Record a bank transfer" });
     fill(form);
@@ -90,7 +90,7 @@ describe("record a bank transfer", () => {
     });
     expect(confirm).toHaveBeenCalledWith(
       expect.stringContaining(
-        "Record R828 from Thandi D. (thandi@example.test) for 2 × 180-day slots? They hold 1 of 4 slots."
+        "Record R828 from Thandi D. (thandi@example.test) for 2 × 180-day slots? They hold 1 of 4 slots. Another staff member must confirm it"
       )
     );
     expect(sent(1)).toEqual({
@@ -104,12 +104,14 @@ describe("record a bank transfer", () => {
       coolingOffWaiver: true,
       reason: "EFT cleared; written waiver on file",
     });
-    expect(await screen.findByRole("status")).toHaveTextContent("Bank transfer recorded");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Bank transfer recorded. It waits for another staff member to confirm it"
+    );
   });
 
   it("sends nothing when staff cancel the confirmation", async () => {
     confirm.mockReturnValue(false);
-    render(<BankTransferPanel />);
+    render(<BankTransferPanel canRecord canConfirm waiting={[]} />);
     fireEvent.click(screen.getByRole("button", { name: "Record a bank transfer" }));
     const form = screen.getByRole("form", { name: "Record a bank transfer" });
     fill(form);
@@ -124,7 +126,7 @@ describe("record a bank transfer", () => {
 
   it("stops before recording when the customer's ID review is not accepted", async () => {
     customer = { ...customer, id_reviewed: false, slots_held: null, slot_limit: null };
-    render(<BankTransferPanel />);
+    render(<BankTransferPanel canRecord canConfirm waiting={[]} />);
     fireEvent.click(screen.getByRole("button", { name: "Record a bank transfer" }));
     const form = screen.getByRole("form", { name: "Record a bank transfer" });
     fill(form);
@@ -140,8 +142,8 @@ describe("record a bank transfer", () => {
   });
 
   it("says plainly when the same transfer was already recorded", async () => {
-    recorded = { payment_id: "p", repeated: true };
-    render(<BankTransferPanel />);
+    recorded = { payment_id: null, status: "confirmed", repeated: true };
+    render(<BankTransferPanel canRecord canConfirm waiting={[]} />);
     fireEvent.click(screen.getByRole("button", { name: "Record a bank transfer" }));
     const form = screen.getByRole("form", { name: "Record a bank transfer" });
     fill(form);
@@ -150,7 +152,7 @@ describe("record a bank transfer", () => {
     });
     fireEvent.submit(form);
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "already recorded with these details: nothing new was recorded"
+      "already recorded with these details (it was confirmed): nothing new was recorded"
     );
   });
 });
@@ -181,5 +183,63 @@ describe("a payment recorded from a bank transfer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
     const form = screen.getByRole("form", { name: "Refund of this payment" });
     expect(within(form).getByLabelText("Bank reference of the refund transfer")).toBeRequired();
+  });
+});
+
+describe("bank transfers waiting for a second staff member", () => {
+  const waiting = {
+    transfer_id: "55555555-5555-4555-8555-555555555555",
+    customer_name: "Thandi D.",
+    customer_email: "thandi@example.test",
+    similar_records: 1,
+    account_id: "11111111-1111-4111-8111-111111111111",
+    term_days: 30,
+    slots: 2,
+    amount_received_cents: 13800,
+    bank_reference: "FNB 2026-11 A1",
+    cleared_on: "2026-11-13",
+    reason: "EFT cleared; written waiver on file",
+    recorded_at: "2026-11-13T08:00:00Z",
+    recorded_by_me: false,
+    recorded_by_name: "Sipho F.",
+  };
+
+  it("lets another staff member confirm, with a duplicate warning", async () => {
+    render(<BankTransferPanel canRecord={false} canConfirm waiting={[waiting]} />);
+    const list = screen.getByRole("list", { name: "Bank transfers waiting for confirmation" });
+    expect(within(list).getByText(/Possible duplicate: 1 other record names/)).toBeInTheDocument();
+    expect(within(list).getByText(/thandi@example.test/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Record a bank transfer" })).toBeNull();
+    fireEvent.click(within(list).getByRole("button", { name: "Confirm transfer" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Check the bank statement first"));
+    expect(sent()).toEqual({ action: "payment.transfer_confirm", transferId: waiting.transfer_id });
+  });
+
+  it("never lets the recorder confirm; the recorder may withdraw", async () => {
+    vi.stubGlobal(
+      "prompt",
+      vi.fn(() => "Recorded by mistake")
+    );
+    render(
+      <BankTransferPanel canRecord canConfirm waiting={[{ ...waiting, recorded_by_me: true }]} />
+    );
+    expect(screen.getByRole("button", { name: "Confirm transfer" })).toBeDisabled();
+    expect(
+      screen.getByText("You recorded it: another staff member must confirm it.")
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(sent()).toEqual({
+      action: "payment.transfer_decline",
+      transferId: waiting.transfer_id,
+      reason: "Recorded by mistake",
+    });
+  });
+
+  it("shows the list without buttons to staff who cannot confirm", () => {
+    render(<BankTransferPanel canRecord canConfirm={false} waiting={[waiting]} />);
+    expect(screen.queryByRole("button", { name: "Confirm transfer" })).toBeNull();
+    expect(screen.getByText(/R138 from Thandi D. for 2 × 30-day slots/)).toBeInTheDocument();
   });
 });

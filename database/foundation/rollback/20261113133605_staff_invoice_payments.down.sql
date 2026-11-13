@@ -2,46 +2,57 @@
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so; prefer a forward fix. Revert and deploy the website
 -- release that uses the update FIRST: this rollback removes the commands that
--- release calls (recording a bank transfer and reading its details).
+-- release calls (recording, confirming and declining a bank transfer and
+-- reading its details).
 --
 -- It works only while no bank transfer was recorded: it refuses (55000) once
 -- private.payments holds a payment with provider 'invoice' or
--- private.invoice_payments has a row, because those are payment records.
--- After that, fix forward.
+-- private.invoice_transfers has a row (waiting, confirmed or declined),
+-- because those are payment and audit records. After that, fix forward.
 --
 -- It puts back the receipt read and the staff audit view of
--- 20261113021223_staff_payment_fixes.sql, drops the update's eight functions,
--- its table and trigger, and puts back the earlier payment rules
--- (payments_provider_check: Ozow only; payments_check1: a complete payment has
--- an Ozow transaction id; payments_invoice_without_ozow removed). Ozow
--- payments, slots, entitlements and commissions are untouched.
+-- 20261113021223_staff_payment_fixes.sql, drops the update's functions, its
+-- table and trigger and the capability payments:confirm_transfer, and puts
+-- back the earlier payment rules (payments_provider_check: Ozow only;
+-- payments_check1: a complete payment has an Ozow transaction id;
+-- payments_invoice_without_ozow removed). Ozow payments, slots, entitlements
+-- and commissions are untouched.
 begin;
 set local lock_timeout='5s';
 
 lock table private.payments in share row exclusive mode;
 do $$begin
-  if to_regclass('private.invoice_payments') is not null then
-    lock table private.invoice_payments in exclusive mode;
+  if to_regclass('private.invoice_transfers') is not null then
+    lock table private.invoice_transfers in exclusive mode;
   end if;
 end$$;
 
 do $$
 declare transfers bigint; records bigint;
 begin
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.invoice_payment_guard()')) is distinct from 'c2075abe4553a5a73f0606a52ece7e77'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)')) is distinct from '78bdd7c897cdc749cfeb359d3ac7b5dd'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.assert_staff_not_referrer(uuid,uuid)')) is distinct from '71804372f75f2acd51755da91411285a'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_staff_invoice_customer(text)')) is distinct from 'ab80d1875925dc2caae65e03b620a45c'
+    if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.invoice_transfer_guard()')) is distinct from '2797782f05696a8cbabcd243efb716e6'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.assert_staff_not_referrer(uuid,uuid)')) is distinct from '1e9fa59ac5ab01018789e91e882e4363'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.invoice_customer_by_email(text)')) is distinct from 'd972c0ebbd47f3bd5fbe7cd355ddf446'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.invoice_transfer_dto(private.invoice_transfers,uuid)')) is distinct from '271116a2ef1b920f162c0c6e3dd9d367'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_staff_invoice_customer(text)')) is distinct from '6a57d5ad1c9ab0ff8cd97c991afd38b7'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_customer(text)')) is distinct from '5d0cac600807f6a77ef8a41ec0180246'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)')) is distinct from '6b00db574fbf4056485339f1766460b9'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)')) is distinct from '2428c38dc7877ae2ca3fb3c4c9ea5b1b'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_staff_invoice_payments(uuid[])')) is distinct from 'f89339079c5cde312fd78e1669caa4e3'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.lock_invoice_transfer_for_review(uuid,uuid)')) is distinct from 'bf73096cddd3d08eb23f6b0dd87967ee'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.confirm_staff_invoice_payment(uuid)')) is distinct from '216b293e1b4104ee91657556956b2204'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.confirm_staff_invoice_payment(uuid)')) is distinct from 'cf439d1781015f8561f5bf7c1f326186'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.decline_staff_invoice_payment(uuid,text)')) is distinct from 'cc8641faee31c5a9a043e4c510d26302'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.decline_staff_invoice_payment(uuid,text)')) is distinct from '5074950cec394946e97e5ec183d77d9c'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_staff_invoice_transfers()')) is distinct from '37ec35ae8968df035025e3c69234f3be'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_transfers()')) is distinct from 'cfc5c52c20818b63133e796f75600c0f'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_staff_invoice_payments(uuid[])')) is distinct from '96c9643c1e0128672d6528f0e4f61aaf'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_payments(uuid[])')) is distinct from '526991f8c1f78cacddb8558606f31c2c'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_payment_receipt(uuid)')) is distinct from '43ecbc061ead044081583c5451b11a48'
-    or to_regclass('private.invoice_payments') is null then
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_payment_receipt(uuid)')) is distinct from '82b6d1f1a4f8f1b7e1325c71146b453d'
+    or to_regclass('private.invoice_transfers') is null then
     raise exception 'rollback precondition: the staff invoice payments update is not applied' using errcode='55000';
   end if;
   select count(*) into transfers from private.payments where provider = 'invoice';
-  select count(*) into records from private.invoice_payments;
+  select count(*) into records from private.invoice_transfers;
   if transfers > 0 or records > 0 then
     raise exception 'rollback precondition: staff already recorded bank transfers (% invoice payments, % records); fix forward with a new update',
       transfers, records using errcode='55000';
@@ -139,15 +150,25 @@ revoke all on function internal.get_payment_receipt(uuid) from public, anon, aut
 grant execute on function internal.get_payment_receipt(uuid) to service_role;
 
 drop function api.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text);
+drop function api.confirm_staff_invoice_payment(uuid);
+drop function api.decline_staff_invoice_payment(uuid,text);
+drop function api.get_staff_invoice_transfers();
 drop function api.get_staff_invoice_payments(uuid[]);
-drop function internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text);
-drop function internal.get_staff_invoice_payments(uuid[]);
 drop function api.get_staff_invoice_customer(text);
+drop function internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text);
+drop function internal.confirm_staff_invoice_payment(uuid);
+drop function internal.decline_staff_invoice_payment(uuid,text);
+drop function internal.lock_invoice_transfer_for_review(uuid,uuid);
+drop function internal.get_staff_invoice_transfers();
+drop function internal.get_staff_invoice_payments(uuid[]);
 drop function internal.get_staff_invoice_customer(text);
+drop function internal.invoice_transfer_dto(private.invoice_transfers,uuid);
+drop function internal.invoice_customer_by_email(text);
 drop function internal.assert_staff_not_referrer(uuid,uuid);
-drop trigger invoice_payments_guard on private.invoice_payments;
-drop function internal.invoice_payment_guard();
-drop table private.invoice_payments;
+drop trigger invoice_transfers_guard on private.invoice_transfers;
+drop function internal.invoice_transfer_guard();
+drop table private.invoice_transfers;
+delete from private.staff_capabilities where role = 'admin' and capability = 'payments:confirm_transfer';
 
 alter table private.payments drop constraint payments_invoice_without_ozow;
 alter table private.payments drop constraint payments_check1;

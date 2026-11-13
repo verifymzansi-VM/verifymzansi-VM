@@ -548,7 +548,63 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; a confirmed account with current access and an accepted ID review, an Individual slot on sale for 30, 90 or 180 days, 1 to 25 slots within the person's Individual slot limit, the amount received equal to the order total and at most R50,000, money cleared today or in the last 90 days, the customer's written cooling-off waiver confirmed and a bank reference never recorded before: records a complete, fulfilled invoice payment with its lines, slots starting now, invoice, receipt event and partner commission, and the audited bank transfer record; the same request again returns the first result."
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; a confirmed account with current access and an accepted ID review, an Individual slot on sale for 30, 90 or 180 days, 1 to 25 slots within the person's Individual slot limit, the amount received equal to the order total and at most R50,000, money cleared today or in the last 90 days, the customer's written cooling-off waiver confirmed and a bank reference never recorded before (waiting, confirmed or declined): stores the audited record as waiting for a second staff member; no payment, slot, receipt or commission is made. The same request again by the same staff member returns the first record."
+    },
+    {
+      "name": "confirm_staff_invoice_payment",
+      "updates": ["updates/20261113133605_staff_invoice_payments.sql"],
+      "arguments": [
+        {
+          "name": "p_transfer_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current transfer confirmation capability (admin) and recent authenticator proof; the staff member's own current accepted ID review; never the recorder or another account of the recorder's identity, the customer or a partner who referred the customer, checked again after the lock waits; only a waiting record whose recorder still holds the payment refund capability and has not come to refer the customer, with the customer's current access, accepted ID review and Individual slot limit (open checkouts included) checked again: records a complete, fulfilled invoice payment with its lines, slots starting now, invoice, receipt event and partner commission, and marks the record confirmed. The same confirmer again returns the result; a declined record is refused."
+    },
+    {
+      "name": "decline_staff_invoice_payment",
+      "updates": ["updates/20261113133605_staff_invoice_payments.sql"],
+      "arguments": [
+        {
+          "name": "p_transfer_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current transfer confirmation capability (admin) and recent authenticator proof; the staff member's own current accepted ID review, never the customer or a partner who referred the customer; only a waiting record, with an audit reason: marks it declined (its recorder may withdraw it). Nothing is paid or started and the bank reference stays used. The same decline again returns the result; a confirmed record is refused."
+    },
+    {
+      "name": "get_staff_invoice_transfers",
+      "updates": ["updates/20261113133605_staff_invoice_payments.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability and recent authenticator proof: the recorded bank transfers waiting for confirmation (up to 50, oldest first, with their count): customer account id, account email (to match the bank statement) and public name, term, slots, amount, bank reference, date cleared, reason, recorded time, the recorder's public name, whether the caller's identity recorded it and how many other waiting or confirmed records name the same customer, amount and date. No phone, legal name or identity details."
     },
     {
       "name": "get_staff_invoice_customer",
@@ -586,7 +642,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment view capability and recent authenticator proof: the bank transfer details (reference, date cleared, amount, reason, recorded time and whether the caller's identity recorded it) of up to 50 listed payments that staff recorded from a bank transfer."
+      "authority": "Current payment view capability and recent authenticator proof: the bank transfer details (reference, date cleared, amount, reason, recorded time and whether the caller's identity recorded or confirmed it) of up to 50 listed payments confirmed from a recorded bank transfer."
     },
     {
       "name": "get_frontend_staff_organisation_detail",

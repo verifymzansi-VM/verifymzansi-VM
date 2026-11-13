@@ -7,18 +7,10 @@ CREATE OR REPLACE FUNCTION internal.get_staff_invoice_customer(p_account_email t
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid; buyer uuid; matches integer; fingerprint text; result jsonb;
+declare actor uuid; buyer uuid; fingerprint text; result jsonb;
 begin
   actor := internal.staff_actor('payments:refund');
-  if length(btrim(coalesce(p_account_email, ''))) not between 3 and 254 then
-    raise exception 'customer email required' using errcode='22023', detail='invoice_payment_invalid';
-  end if;
-  select count(*), min(u.id::text)::uuid into matches, buyer from auth.users u
-    where lower(u.email) = lower(btrim(p_account_email)) and u.email_confirmed_at is not null
-      and u.is_anonymous is false;
-  if matches <> 1 then
-    raise exception 'no confirmed account has that email' using errcode='PT404', detail='invoice_account_unavailable';
-  end if;
+  buyer := internal.invoice_customer_by_email(p_account_email);
   perform internal.assert_staff_payment_actor(actor, buyer);
   perform internal.assert_staff_not_referrer(actor, buyer);
   fingerprint := internal.current_verified_identity(buyer);

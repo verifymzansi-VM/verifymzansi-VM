@@ -50,32 +50,32 @@
       "fingerprint": "11724f805587a82326eae936e0200f0c"
     },
     "columns": {
-      "items": 1179,
-      "fingerprint": "ff2d92ec59e8740f5512c7c5bd4bde28"
+      "items": 1188,
+      "fingerprint": "96ec25223d5ae0a3c9b1e97e272d137c"
     },
     "constraints": {
-      "items": 1049,
-      "fingerprint": "4cf74c17af515b13b7d34170c7dc4291"
+      "items": 1058,
+      "fingerprint": "8293be8d92e07a6d44aa515a3d4c303b"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 812,
-      "fingerprint": "3dd9725eb1a9c0f8dc28f83078302832"
+      "items": 821,
+      "fingerprint": "c9ff81a1aef3ac42bf5bee2daa0db5ed"
     },
     "function_grants": {
-      "items": 639,
-      "fingerprint": "0dbf6ed4296a9effa4c3ee850c9c790c"
+      "items": 645,
+      "fingerprint": "7292949e1ae3d89c87ad61c8596f30ee"
     },
     "function_metadata": {
-      "items": 812,
-      "fingerprint": "5073003f07946fe0a1dd7e265b25e7cf"
+      "items": 821,
+      "fingerprint": "2d3c2c16481fe1ddd423a6fa9e0a57e8"
     },
     "indexes": {
-      "items": 465,
-      "fingerprint": "5d32b4b124014ac3cd5eabb226058ef7"
+      "items": 470,
+      "fingerprint": "4a91448aba8d96923c0fa4a2b630c36e"
     },
     "policies": {
       "items": 1,
@@ -83,7 +83,7 @@
     },
     "row_level_security": {
       "items": 132,
-      "fingerprint": "fb91e81ebd5073c725ef7937fc0d3b55"
+      "fingerprint": "fdf671b963c4e8e7766d43c0578782af"
     },
     "schema_grants": {
       "items": 7,
@@ -91,7 +91,7 @@
     },
     "triggers": {
       "items": 104,
-      "fingerprint": "a95f109ef4babd4b4d013687babf7dee"
+      "fingerprint": "15ac6ce693c324e6f70c938ad0ac6c39"
     }
   }
 }

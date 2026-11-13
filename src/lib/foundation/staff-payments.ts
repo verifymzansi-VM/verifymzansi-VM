@@ -184,7 +184,7 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ["invoice_account_unavailable", [404, "No confirmed account has that email."]],
   [
     "staff_referred_customer",
-    [403, "Another staff member must record a payment of a customer you referred."],
+    [403, "Another staff member must handle a payment of a customer you or its recorder referred."],
   ],
   [
     "bank_reference_used",
@@ -194,6 +194,21 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   [
     "invoice_buyer_unverified",
     [409, "The customer's ID review must be accepted before their slots are recorded."],
+  ],
+  [
+    "transfer_confirmer_same",
+    [403, "Another staff member must confirm this bank transfer: you recorded it."],
+  ],
+  [
+    "transfer_recorder_inactive",
+    [
+      409,
+      "The staff member who recorded this transfer can no longer record payments. Decline it and record it again.",
+    ],
+  ],
+  [
+    "transfer_not_waiting",
+    [409, "This bank transfer is no longer waiting for confirmation. Reload the page."],
   ],
   [
     "invoice_amount_mismatch",
@@ -378,8 +393,29 @@ export type StaffBankTransferInput = {
   reason: string;
 };
 
-/** Records a cleared bank transfer as a payment: the slots start now, with the
- * same receipt email and partner commission as an Ozow payment (audited). */
+const term = z.union([z.literal(30), z.literal(90), z.literal(180)]);
+/** A recorded bank transfer as staff see it (waiting, confirmed or declined). */
+const staffTransferRecord = z.strictObject({
+  transfer_id: z.uuid(),
+  status: z.enum(["awaiting_confirmation", "confirmed", "declined"]),
+  account_id: z.uuid(),
+  customer_email: z.string().max(254).nullable(),
+  similar_records: count,
+  customer_name: z.string().max(120).nullable(),
+  term_days: term,
+  slots: z.number().int().min(1).max(25),
+  amount_received_cents: cents.max(BANK_TRANSFER_LIMIT_CENTS),
+  bank_reference: z.string().min(4).max(60),
+  cleared_on: z.iso.date(),
+  reason: z.string().min(5).max(500),
+  recorded_at: z.iso.datetime({ offset: true }),
+  recorded_by_me: z.boolean(),
+  recorded_by_name: z.string().max(120).nullable(),
+  payment_id: z.uuid().nullable(),
+});
+
+/** Records a cleared bank transfer. It waits for a second staff member: no
+ * slot starts and nothing is sent until another person confirms it (audited). */
 export async function recordStaffBankTransfer(
   api: FoundationAuthenticatedApi,
   input: StaffBankTransferInput
@@ -417,16 +453,57 @@ export async function recordStaffBankTransfer(
       },
       { get: false }
     ),
-    z.strictObject({
+    staffTransferRecord.extend({ repeated: z.boolean() })
+  );
+}
+
+/** A second staff member confirms a recorded transfer: only now the slots
+ * start, the receipt is sent and the partner commission is created. */
+export function confirmStaffBankTransfer(api: FoundationAuthenticatedApi, transferId: string) {
+  return settlePaymentCommand(
+    api.rpc("confirm_staff_invoice_payment", { p_transfer_id: transferId }, { get: false }),
+    staffTransferRecord.extend({
+      transfer_id: z.literal(transferId),
+      status: z.literal("confirmed"),
       payment_id: z.uuid(),
-      customer_name: z.string().max(120).nullable(),
-      slots: z.number().int().min(1).max(25),
-      term_days: z.union([z.literal(30), z.literal(90), z.literal(180)]),
-      amount_cents: cents.max(BANK_TRANSFER_LIMIT_CENTS),
-      ends_at: z.iso.datetime({ offset: true }).nullable(),
       commissions: count,
-      payment_status: z.enum(actualStatuses),
+      slots_started: z.number().int().min(1).max(25).optional(),
+      ends_at: z.iso.datetime({ offset: true }).optional(),
       repeated: z.boolean(),
+    })
+  );
+}
+
+/** Declines (or, for its recorder, withdraws) a waiting record. The bank
+ * reference stays used. */
+export function declineStaffBankTransfer(
+  api: FoundationAuthenticatedApi,
+  transferId: string,
+  reason: string
+) {
+  return settlePaymentCommand(
+    api.rpc(
+      "decline_staff_invoice_payment",
+      { p_transfer_id: transferId, p_reason: staffReason.parse(reason) },
+      { get: false }
+    ),
+    staffTransferRecord.extend({
+      transfer_id: z.literal(transferId),
+      status: z.literal("declined"),
+      repeated: z.boolean(),
+    })
+  );
+}
+
+/** The recorded bank transfers waiting for a second staff member (oldest first). */
+export function readStaffBankTransfersWaiting(api: FoundationAuthenticatedApi) {
+  return settleStaffCommand(
+    api.rpc("get_staff_invoice_transfers", {}, { get: false }),
+    z.strictObject({
+      waiting: count,
+      items: z
+        .array(staffTransferRecord.extend({ status: z.literal("awaiting_confirmation") }))
+        .max(50),
     })
   );
 }
@@ -452,6 +529,7 @@ const staffBankTransfer = z.strictObject({
   amount_received_cents: cents,
   recorded_at: z.iso.datetime({ offset: true }),
   recorded_by_me: z.boolean(),
+  confirmed_by_me: z.boolean(),
   reason: z.string().min(5).max(500),
 });
 export type StaffBankTransfer = z.infer<typeof staffBankTransfer>;

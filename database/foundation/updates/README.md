@@ -982,85 +982,98 @@ behind them, while a slot refund and an approved refund still reverse one slot
 through the retained internal step; and that apply, rollback and re-apply return
 the same fingerprints.
 
-## Staff record a cleared bank transfer as a payment, 13 November 2026
+## Staff record a cleared bank transfer; a second staff member confirms it, 13 November 2026
 
 `20261113133605_staff_invoice_payments.sql` is not applied yet. It needs
 `20261113021223_staff_payment_fixes.sql` and the Individual slot rules with
 their reviewed bodies and refuses (55000) without them, or when the payment
-rules or its new table differ from the reviewed ones (roadmap P2b, first slice).
-It only adds: no API command, argument or grant is removed or changed.
+rules, its new table or the new capability differ from the reviewed ones
+(roadmap P2b, first slice; the manual fallback to the Ozow payment link that a
+later slice puts on each invoice). It only adds: no API command, argument or
+grant is removed or changed.
 
 - **A payment can be a bank transfer.** `private.payments` accepts the provider
   `invoice` besides `ozow`. A complete invoice payment has no Ozow transaction
   id (`payments_check1` changed for that case only), and the new constraint
   `payments_invoice_without_ozow` refuses Ozow's request, transaction and
   checkout fields on it. Ozow payments meet every rule unchanged.
-- **Record a bank transfer.** New staff command
+- **Record (first person).** New staff command
   `api.record_staff_invoice_payment(p_account_email, p_term_days, p_slots, p_amount_cents, p_bank_reference, p_cleared_on, p_cooling_off_waiver, p_reason)`
   (capability `payments:refund`, recent second factor), used only after the
   money has cleared. It needs a confirmed account with current access and an
   accepted ID review (PT404 `invoice_account_unavailable`, PT409
   `payment_account_unavailable`, PT412 `invoice_buyer_unverified`), the
   Individual slot on sale for 30, 90 or 180 days (PT409
-  `invoice_plan_unavailable`), 1 to 25 slots within the person's Individual slot
-  limit (PT429 `slot_limit_reached`), the amount received equal to the order
-  total (PT428 `invoice_amount_mismatch`) and at most R50,000 (PT413
-  `invoice_amount_above_limit`; a second staff member's check above that amount
-  is not built), a date the money cleared from 90 days ago to today
-  (`cleared_date_invalid`), the staff member's confirmation that the customer
-  agreed in writing to the cooling-off waiver (`cooling_off_waiver_required`), a
-  bank reference of 4 to 60 letters, digits, spaces or `. _ : / -` and an audit
-  reason. It records a complete, fulfilled payment with provider `invoice`, one
+  `invoice_plan_unavailable`), 1 to 25 slots within the person's slot limit
+  (PT429 `slot_limit_reached`), the amount received equal to the order total
+  (PT428 `invoice_amount_mismatch`) and at most R50,000 (PT413
+  `invoice_amount_above_limit`), a date the money cleared from 90 days ago to
+  today (`cleared_date_invalid`), the staff member's confirmation that the
+  customer agreed in writing to the cooling-off waiver
+  (`cooling_off_waiver_required`), a bank reference of 4 to 60 letters, digits,
+  spaces or `. _ : / -` and an audit reason. It stores a row in the new table
+  `private.invoice_transfers` as `awaiting_confirmation`. **Nothing else
+  happens**: no payment, slot, invoice, receipt email or commission.
+- **Confirm (second person).** New capability `payments:confirm_transfer` (admin
+  only, recent second factor) and staff command
+  `api.confirm_staff_invoice_payment(p_transfer_id)`. Never the recorder or
+  another account of the recorder's identity (42501 `transfer_confirmer_same`),
+  never the customer or a partner who referred the customer
+  (`staff_referred_customer`), with the staff member's own current accepted ID
+  review; every check runs again after the lock waits (bank reference, then the
+  person, then the row). It refuses when the recorder no longer holds
+  `payments:refund` (PT409 `transfer_recorder_inactive`) or has since come to
+  refer the customer, and rechecks the customer's access, ID review and slot
+  limit, counting checkouts still open at Ozow. Only then it records a complete,
+  fulfilled payment with provider `invoice` on the recorded plan version, one
   line and one slot per slot starting now, its invoice, the `payment_completed`
-  outbox event (the receipt email of M3.7) and the partner commission the
-  purchase earns (`internal.payment_delivery_commission`, the rule of the
-  commission trigger, which fires only on a status change), exactly as a
-  confirmed Ozow payment of the same order.
-- **A bank reference is recorded once.** References are compared on their
+  outbox event (the receipt email of M3.7) and the partner commission
+  (`internal.payment_delivery_commission`, the rule of the commission trigger),
+  exactly as a confirmed Ozow payment of the same order, and marks the record
+  `confirmed`.
+- **Decline.** `api.decline_staff_invoice_payment(p_transfer_id, p_reason)`
+  (same capability and checks; the recorder may withdraw their own record) marks
+  a waiting record `declined` with the reason. Nothing is paid.
+- **One record per bank reference, ever.** References are compared on their
   letters and digits only, whatever the case, spaces or punctuation (a unique
-  index), and the command serialises on the reference before it reads it. The
-  same request again by the same staff member (same account, term, slots,
-  amount, date and reason) returns the first result with `repeated: true`;
-  anything else with that reference is refused (PT409 `bank_reference_used`),
-  also after the payment was refunded.
-- **Staff never act for themselves.** The staff member needs a current accepted
-  ID review of their own and never records a payment for an account of their own
-  identity (`internal.assert_staff_payment_actor`), checked before and after the
-  lock waits; the record table also refuses its own recorder as the customer.
-  Nor do they record a payment of a customer that a partner account of their own
-  identity referred (42501 `staff_referred_customer`,
-  `internal.assert_staff_not_referrer`), so nobody records a transfer that earns
-  them commission.
-- **Who the email names.** New staff read
-  `api.get_staff_invoice_customer(p_account_email)` (capability
-  `payments:refund`, the same staff rules) returns, for the one confirmed
-  account with that email, its public name, whether its ID review is accepted
-  and it can use slots, the Individual slots it holds and the person's limit, so
-  the form shows whose account will get the slots before anything is recorded.
-- **Room for a second person.** Recording is one step today. A later update can
-  add a second staff member's confirmation without changing this record: the
-  command would store the record as waiting (a new status column, as
-  `private.payment_refund_requests` has) and create the payment, slots, invoice,
-  receipt event and commission only when another staff member confirms, with the
-  same bank-reference lock and checks.
-- **Dates.** The payment, its invoice and the receipt carry the time staff
-  recorded it; the date the money cleared is kept in the record and in the
-  payment snapshot (`cleared_on`).
-- **The record.** `private.invoice_payments` keeps the bank reference, the
-  amount received, the date it cleared, the waiver confirmation, the reason, who
-  recorded it and when. Rows never change and are never removed (trigger), and
-  must name an invoice payment, its owner and its amount. New staff read
-  `api.get_staff_invoice_payments(p_payment_ids)` (capability `payments:view`)
-  returns these details for up to 50 listed payments, so the staff payments page
-  can show the bank reference without changing `api.get_staff_payment_list`. The
-  staff audit trail lists each record as `payment:invoice_recorded`.
+  index), across waiting, confirmed and declined records: the safest rule, so a
+  declined reference can never be recorded again (a transfer recorded with wrong
+  details is declined, and the owner decides how to correct it; see the pull
+  request). The command serialises on the reference before reading it. The same
+  request again by the same staff member returns the first record with
+  `repeated: true` (and its status); anything else with that reference is
+  refused (PT409 `bank_reference_used`). A declined record cannot be confirmed
+  and a confirmed one cannot be declined (PT409 `transfer_not_waiting`); the
+  same confirmer or decliner repeating returns the result.
+- **The record.** `private.invoice_transfers` keeps the customer, plan version,
+  slots, amount, bank reference, date cleared, the waiver confirmation, the
+  reason, who recorded it and when, then who confirmed or declined it and when
+  (and the payment, or the decline reason). Rows are never removed and change
+  only once, from waiting to confirmed (naming its own complete invoice payment:
+  that account, amount, plan, slots and record) or to declined (trigger); the
+  recorder is never the customer and the confirmer never the recorder or the
+  customer (constraints).
+- **Reads.** `api.get_staff_invoice_customer(p_account_email)`
+  (`payments:refund`) shows whose account an email names before recording
+  (public name, ID review, slots held, limit).
+  `api.get_staff_invoice_transfers()` (`payments:view`) lists the waiting
+  records with the customer's account email (to match the bank statement) and
+  how many other waiting or confirmed records name the same customer, amount and
+  date (a possible duplicate under another reference).
+  `api.get_staff_invoice_payments(p_payment_ids)` (`payments:view`) gives the
+  bank transfer details of listed payments, so `api.get_staff_payment_list`
+  stays unchanged. The staff audit trail lists `payment:invoice_recorded`,
+  `payment:invoice_confirmed` and `payment:invoice_declined`.
 - **Receipt read.** `api.get_payment_receipt` also returns `payment_method`
   (`ozow` or `invoice`) and, for a bank transfer, `bank_reference`, which the
   receipt email shows instead of the Ozow reference.
-- **Refunds.** The existing staff refund commands work on an invoice payment
-  unchanged: whole payment, one slot, a second approver above R1,000, the
-  commission reversed. The reference they need is that of the transfer back to
-  the customer.
+- **Refunds.** The existing staff refund commands work on a confirmed invoice
+  payment unchanged: whole payment, one slot, a second approver above R1,000,
+  the commission reversed. The reference they need is that of the transfer back
+  to the customer.
+- **Dates.** The payment, its invoice and the receipt carry the confirmation
+  time; the date the money cleared is kept in the record and in the payment
+  snapshot (`cleared_on`).
 
 **Order: apply first, then merge.** The website release from the same pull
 request calls the new commands and the deploy preflight probes every command in
@@ -1074,12 +1087,13 @@ It is recorded after `20261113085340_retire_old_staff_reversal_commands.sql`.
 1. Run `../preflight/20261113133605_staff_invoice_payments.check.sql` unchanged
    in the SQL editor. It is read only. Continue only if its result is the single
    "summary" row reading "staff invoice payments: update not applied (apply
-   before the website release that uses it is deployed); payments recorded by
-   bank transfer: none (table absent)".
+   before the website release that uses it is deployed); bank transfers waiting
+   for confirmation: none (table absent); payments confirmed from a bank
+   transfer: 0".
 2. Run the update. It waits at most 5 seconds for any lock (it briefly locks
    `private.payments` to change its rules). Run the preflight again: it must
-   read "staff invoice payments: already applied; payments recorded by bank
-   transfer: 0".
+   read "staff invoice payments: already applied; bank transfers waiting for
+   confirmation: 0; payments confirmed from a bank transfer: 0".
 3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
    compare with `../fingerprint.json`; once it matches, record it as described
    above.
@@ -1088,36 +1102,35 @@ The reviewed rollback is
 `../rollback/20261113133605_staff_invoice_payments.down.sql` (only with the
 owner's decision; prefer a forward fix). Revert and deploy the website release
 first: the rollback removes the commands that release calls. It refuses once a
-bank transfer was recorded (those are payment records); otherwise it puts back
-the receipt read, the staff audit view and the payment rules of
-`20261113021223_staff_payment_fixes.sql` and drops the update's functions and
-table.
+bank transfer was recorded (waiting, confirmed or declined: payment and audit
+records); otherwise it puts back the receipt read, the staff audit view and the
+payment rules of `20261113021223_staff_payment_fixes.sql`, removes the
+capability and drops the update's functions and table.
 
 `node --import tsx scripts/test-foundation-staff-invoice-payments.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
 preflight before and after, read only; the refusals without the reviewed bodies,
-with a drifted table, constraints or payment rule, changing nothing; apply,
-rollback and re-apply return the same fingerprints, and an earlier Ozow payment
-keeps its rules; a recorded two-slot transfer gives the same lines, slots,
-invoice, receipt event and partner commissions as an Ozow payment of the same
-order, the member sees the slots, the record and the audit row; the staff read
-and the receipt read (also for an Ozow payment); a staff member who is also the
-customer's referring partner is refused (the read too) while another staff
-member records it with the commission; the read of whose account an email names,
-its refusals and grants; the same request again (also with the reference written
-differently) returns the first payment, while another staff member, order,
-customer, date or reason with that reference is refused; every refusal (a
-member, a moderator, staff without their own ID review, their own account or
-another account of their identity, a wrong amount, above R50,000, an unknown or
-unverified customer, no written waiver, a missing or bad reference, a future,
-too old or invalid date, a bad term, number of slots or reason, over the slot
-limit) records nothing; two staff members recording the same transfer at once
-give one payment; a slot refund reverses that slot and its commission only, a
-whole small transfer is refunded at once with its slots and commission, its
-reference stays used, and a refund above R1,000 waits for a second staff member;
-records never change and must match their invoice payment, an invoice payment
-never carries Ozow's fields; the grants; and that the rollback refuses once a
-transfer was recorded.
+with a drifted table, payment rule or capability, changing nothing; apply,
+rollback and re-apply return the same fingerprints; a recorded transfer waits
+and starts nothing (no payment, slot, commission or receipt event); the
+recorder, another account of the recorder's identity, a moderator, the customer
+and staff without their own ID review cannot confirm it; another admin's
+confirmation gives the same lines, slots, invoice, receipt event and partner
+commissions as an Ozow payment of the same order, with both audit rows; repeats
+of the record (also with the reference written differently) and of the
+confirmation return the first result, while another staff member, order,
+customer, date or reason with that reference is refused; a declined record
+cannot be confirmed, its decline repeats, its reference is never recorded again,
+and a recorder may withdraw; a confirmed record cannot be declined; the reads
+and the receipt (also for an Ozow payment); every refusal records nothing; the
+slot limit at recording and again at confirmation (an open Ozow checkout
+counts); a recorder who lost the role or came to refer the customer blocks
+confirmation; a possible duplicate under another reference is flagged; staff who
+referred the customer can neither record nor confirm; two staff recording the
+same transfer at once give one record, and a decline racing a confirmation is
+refused; the refund commands on a confirmed payment (one slot, a whole order, a
+second approver above R1,000); the record and payment rules; the grants; and
+that the rollback refuses once a transfer was recorded.
 
 ## Individual slots at R69, 12 November 2026
 

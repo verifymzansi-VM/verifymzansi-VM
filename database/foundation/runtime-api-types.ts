@@ -60,6 +60,12 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         };
         Returns: Json;
       };
+      confirm_staff_invoice_payment: { Args: { p_transfer_id: string }; Returns: Json };
+      decline_staff_invoice_payment: {
+        Args: { p_transfer_id: string; p_reason: string };
+        Returns: Json;
+      };
+      get_staff_invoice_transfers: { Args: Record<never, never>; Returns: Json };
       get_staff_invoice_customer: { Args: { p_account_email: string }; Returns: Json };
       get_staff_invoice_payments: { Args: { p_payment_ids: string[] }; Returns: Json };
       activate_staff_paid_payment: {

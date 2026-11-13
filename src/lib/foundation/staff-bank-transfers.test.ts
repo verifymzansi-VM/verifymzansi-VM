@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import {
+  confirmStaffBankTransfer,
+  declineStaffBankTransfer,
   normaliseBankReference,
+  readStaffBankTransfersWaiting,
   readStaffBankTransferCustomer,
   readStaffBankTransfers,
   recordStaffBankTransfer,
@@ -31,17 +34,25 @@ const input: StaffBankTransferInput = {
   coolingOffWaiver: true,
   reason: "EFT cleared; written waiver on file",
 };
-const recorded = {
-  payment_id: id,
+const record = {
+  transfer_id: other,
+  status: "awaiting_confirmation",
+  account_id: id,
+  customer_email: "thandi@example.test",
+  similar_records: 0,
   customer_name: "Thandi D.",
-  slots: 2,
   term_days: 180,
-  amount_cents: 82800,
-  ends_at: "2027-05-12T10:00:00.000+00:00",
-  commissions: 2,
-  payment_status: "complete",
-  repeated: false,
+  slots: 2,
+  amount_received_cents: 82800,
+  bank_reference: "FNB 2026-11 A1",
+  cleared_on: "2026-11-13",
+  reason: "EFT cleared; written waiver on file",
+  recorded_at: "2026-11-13T10:00:00.000+00:00",
+  recorded_by_me: true,
+  recorded_by_name: "Sipho F.",
+  payment_id: null,
 };
+const recorded = { ...record, repeated: false };
 afterEach(() => vi.resetAllMocks());
 
 describe("bank transfer adapters", () => {
@@ -56,8 +67,9 @@ describe("bank transfer adapters", () => {
   it("records a cleared transfer with the normalised reference", async () => {
     const { rpc, api } = fixture(recorded);
     await expect(recordStaffBankTransfer(api, input)).resolves.toMatchObject({
-      payment_id: id,
-      slots: 2,
+      transfer_id: other,
+      status: "awaiting_confirmation",
+      payment_id: null,
       repeated: false,
     });
     expect(rpc).toHaveBeenCalledWith(
@@ -159,7 +171,51 @@ describe("bank transfer adapters", () => {
     rpc.mockResolvedValueOnce(refused("42501", "staff_referred_customer"));
     await expect(readStaffBankTransferCustomer(api, "x@example.test")).rejects.toMatchObject({
       status: 403,
-      message: "Another staff member must record a payment of a customer you referred.",
+      message:
+        "Another staff member must handle a payment of a customer you or its recorder referred.",
+    });
+  });
+
+  it("confirms or declines a waiting record, and lists the waiting ones", async () => {
+    const { rpc, api } = fixture({
+      ...record,
+      status: "confirmed",
+      recorded_by_me: false,
+      payment_id: id,
+      commissions: 2,
+      slots_started: 2,
+      ends_at: "2027-05-12T10:00:00.000+00:00",
+      repeated: false,
+    });
+    await expect(confirmStaffBankTransfer(api, other)).resolves.toMatchObject({
+      status: "confirmed",
+      payment_id: id,
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "confirm_staff_invoice_payment",
+      { p_transfer_id: other },
+      { get: false }
+    );
+    rpc.mockResolvedValueOnce(refused("42501", "transfer_confirmer_same"));
+    await expect(confirmStaffBankTransfer(api, other)).rejects.toMatchObject({
+      status: 403,
+      message: "Another staff member must confirm this bank transfer: you recorded it.",
+    });
+    rpc.mockResolvedValueOnce(refused("PT409", "transfer_not_waiting"));
+    await expect(confirmStaffBankTransfer(api, other)).rejects.toMatchObject({ status: 409 });
+    rpc.mockResolvedValueOnce(ok({ ...record, status: "declined", repeated: false }));
+    await expect(
+      declineStaffBankTransfer(api, other, "The bank shows no such transfer")
+    ).resolves.toMatchObject({ status: "declined" });
+    expect(rpc).toHaveBeenLastCalledWith(
+      "decline_staff_invoice_payment",
+      { p_transfer_id: other, p_reason: "The bank shows no such transfer" },
+      { get: false }
+    );
+    rpc.mockResolvedValueOnce(ok({ waiting: 1, items: [record] }));
+    await expect(readStaffBankTransfersWaiting(api)).resolves.toEqual({
+      waiting: 1,
+      items: [record],
     });
   });
 
@@ -176,6 +232,7 @@ describe("bank transfer adapters", () => {
       amount_received_cents: 82800,
       recorded_at: "2026-11-13T10:00:00.000+00:00",
       recorded_by_me: true,
+      confirmed_by_me: false,
       reason: "EFT cleared; written waiver on file",
     };
     const { rpc, api } = fixture({ items: [transfer, { ...transfer, payment_id: other }] });

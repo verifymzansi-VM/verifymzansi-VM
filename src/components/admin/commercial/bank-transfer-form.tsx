@@ -38,9 +38,10 @@ function southAfricanToday(): string {
 }
 
 /**
- * Staff record a bank transfer (EFT) only after the money has cleared: the
- * customer's slots start at once, with the same receipt email and partner
- * commission as an Ozow payment. Audited; the database rechecks everything.
+ * Staff record a bank transfer (EFT) only after the money has cleared; a
+ * second staff member confirms it, and only then the customer's slots start,
+ * with the same receipt email and partner commission as an Ozow payment.
+ * Audited; the database rechecks everything.
  */
 type Customer = {
   customer_name: string | null;
@@ -76,7 +77,138 @@ async function lookUpCustomer(
   }
 }
 
-export function BankTransferPanel() {
+export type WaitingTransfer = {
+  transfer_id: string;
+  customer_name: string | null;
+  customer_email: string | null;
+  similar_records: number;
+  account_id: string;
+  term_days: number;
+  slots: number;
+  amount_received_cents: number;
+  bank_reference: string;
+  cleared_on: string;
+  reason: string;
+  recorded_at: string;
+  recorded_by_me: boolean;
+  recorded_by_name: string | null;
+};
+
+const recordedDate = new Intl.DateTimeFormat("en-ZA", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Africa/Johannesburg",
+});
+
+/** Recorded bank transfers waiting for a second staff member, who confirms
+ * (the slots start and the receipt is sent) or declines them. */
+function WaitingTransfers({
+  waiting,
+  canConfirm,
+}: {
+  waiting: WaitingTransfer[];
+  canConfirm: boolean;
+}) {
+  const { run, busy, message } = useCommercialAction();
+  if (waiting.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold">Waiting for a second staff member</h3>
+      <ActionMessage message={message} />
+      <ul className="space-y-2" aria-label="Bank transfers waiting for confirmation">
+        {waiting.map((t) => {
+          const what = `${formatPlanPrice(t.amount_received_cents)} from ${t.customer_name ?? "the customer"} for ${t.slots} × ${t.term_days}-day ${t.slots === 1 ? "slot" : "slots"}`;
+          return (
+            <li
+              key={t.transfer_id}
+              className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm"
+            >
+              <span className="font-semibold">{what}</span>
+              {t.similar_records > 0 ? (
+                <span className="w-full text-destructive" role="note">
+                  Possible duplicate: {t.similar_records} other{" "}
+                  {t.similar_records === 1 ? "record names" : "records name"} this customer, amount
+                  and date under another reference. Check the bank statement.
+                </span>
+              ) : null}
+              <span className="w-full text-xs text-muted-foreground">
+                Bank transfer {t.bank_reference}, cleared {t.cleared_on} ·{" "}
+                {t.customer_email ?? t.account_id} · Recorded{" "}
+                {recordedDate.format(new Date(t.recorded_at))}
+                {t.recorded_by_me
+                  ? " by you"
+                  : t.recorded_by_name
+                    ? ` by ${t.recorded_by_name}`
+                    : ""}
+                {" · "}
+                {t.reason}
+              </span>
+              {canConfirm ? (
+                <span className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="h-10"
+                    disabled={busy || t.recorded_by_me}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Confirm ${what}? Check the bank statement first: the slots start now and the customer gets a receipt.`
+                        )
+                      )
+                        void run(
+                          { action: "payment.transfer_confirm", transferId: t.transfer_id },
+                          "Bank transfer confirmed: the slots have started and the receipt is on its way"
+                        );
+                    }}
+                  >
+                    Confirm transfer
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-10"
+                    disabled={busy}
+                    onClick={() => {
+                      const reason = window
+                        .prompt("Reason (audited, at least 5 characters):")
+                        ?.trim();
+                      if (reason && reason.length >= 5)
+                        void run(
+                          {
+                            action: "payment.transfer_decline",
+                            transferId: t.transfer_id,
+                            reason,
+                          },
+                          "Bank transfer declined. Its bank reference cannot be recorded again."
+                        );
+                    }}
+                  >
+                    {t.recorded_by_me ? "Withdraw" : "Decline"}
+                  </Button>
+                  {t.recorded_by_me ? (
+                    <span className="text-xs text-muted-foreground">
+                      You recorded it: another staff member must confirm it.
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+export function BankTransferPanel({
+  canRecord,
+  canConfirm,
+  waiting,
+}: {
+  canRecord: boolean;
+  canConfirm: boolean;
+  waiting: WaitingTransfer[];
+}) {
   const router = useRouter();
   const { run, busy, message } = useCommercialAction();
   const [checking, setChecking] = useState(false);
@@ -93,10 +225,11 @@ export function BankTransferPanel() {
   return (
     <AdminCard
       title="Record a bank transfer"
-      description="Only after the money has cleared in the bank account. The customer's slots start at once and they get the receipt email."
+      description="Only after the money has cleared in the bank account. Another staff member then confirms it; only then the customer's slots start and they get the receipt email."
     >
+      <WaitingTransfers waiting={waiting} canConfirm={canConfirm} />
       <ActionMessage message={check ? { tone: "error", text: check } : message} />
-      {!open ? (
+      {!canRecord ? null : !open ? (
         <Button type="button" variant="outline" className="h-11" onClick={() => setOpen(true)}>
           Record a bank transfer
         </Button>
@@ -138,7 +271,7 @@ export function BankTransferPanel() {
                 : "";
             if (
               !window.confirm(
-                `Record ${formatPlanPrice(cents)} from ${who} (${values.accountEmail}) for ${slots} × ${term}-day ${slots === 1 ? "slot" : "slots"}?${held} The slots start now and the customer gets a receipt.`
+                `Record ${formatPlanPrice(cents)} from ${who} (${values.accountEmail}) for ${slots} × ${term}-day ${slots === 1 ? "slot" : "slots"}?${held} Another staff member must confirm it before the slots start.`
               )
             )
               return;
@@ -154,10 +287,18 @@ export function BankTransferPanel() {
                 coolingOffWaiver: values.coolingOffWaiver === "on",
                 reason: values.reason,
               },
-              (data) =>
-                (data as { repeated?: boolean } | null)?.repeated
-                  ? "This bank transfer was already recorded with these details: nothing new was recorded and no new receipt is sent."
-                  : "Bank transfer recorded: the slots have started and the receipt is on its way"
+              (data) => {
+                const reply = data as { repeated?: boolean; status?: string } | null;
+                if (!reply?.repeated)
+                  return "Bank transfer recorded. It waits for another staff member to confirm it; no slot starts until then.";
+                const state =
+                  reply.status === "confirmed"
+                    ? "it was confirmed"
+                    : reply.status === "declined"
+                      ? "it was declined"
+                      : "it still waits for confirmation";
+                return `This bank transfer was already recorded with these details (${state}): nothing new was recorded.`;
+              }
             );
             if (done) {
               setOpen(false);

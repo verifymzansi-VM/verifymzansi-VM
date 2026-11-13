@@ -12,19 +12,24 @@ import {
   type VerifiedMember,
 } from "./support/verified-member";
 
-// Staff record a cleared bank transfer (EFT) as a payment (roadmap P2b), on
-// the restored website in foundation mode against the private test copy:
-// - the staff payments page has a "Record a bank transfer" form; recorded,
-//   the customer's slots start, with an invoice and the receipt event;
-// - the payment's row shows the bank reference, and its refund form asks for
-//   the reference of the transfer back;
-// - the same bank reference cannot be recorded for another order.
+// Staff record a cleared bank transfer (EFT) for a second staff member to
+// confirm (roadmap P2b), on the restored website in foundation mode against
+// the private test copy:
+// - the staff payments page has a "Record a bank transfer" form; a recorded
+//   transfer waits: no payment, slot, invoice or receipt yet;
+// - the recorder sees it waiting with Confirm switched off, and the route and
+//   the database refuse the recorder's confirmation;
+// - the recorder can withdraw it, and its bank reference is never recorded
+//   again.
 //
-// As in staff-payments.spec.ts, the moderator acts: the moderator's identity
-// is reviewed once per copy through the production commands, and for this
-// spec only a trusted local step lets the moderator role view and refund
-// payments (two staff_capabilities rows, removed afterwards). Nothing contacts
-// a bank or Ozow.
+// A second staff member's confirmation (slots, receipt, commission) is proven
+// by scripts/test-foundation-staff-invoice-payments.mjs: the copy's admin has
+// no ID review of its own (the staff review spec relies on that). As in
+// staff-payments.spec.ts, the moderator acts: the moderator's identity is
+// reviewed once per copy through the production commands, and for this spec
+// only a trusted local step lets the moderator role view, record and confirm
+// payments (staff_capabilities rows, removed afterwards). Nothing contacts a
+// bank or Ozow.
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
@@ -80,6 +85,7 @@ test.describe("staff record a cleared bank transfer", () => {
     for (const [capability, recent] of [
       ["payments:view", false],
       ["payments:refund", true],
+      ["payments:confirm_transfer", true],
     ] as const) {
       const added = queryTestCopy(
         "insert into private.staff_capabilities(role, capability, requires_recent_mfa) " +
@@ -98,7 +104,7 @@ test.describe("staff record a cleared bank transfer", () => {
       );
   });
 
-  test("staff record it; the slots start and the row shows the bank reference", async ({
+  test("staff record it; it waits for another staff member and the recorder cannot confirm", async ({
     context,
     page,
   }, testInfo) => {
@@ -117,44 +123,73 @@ test.describe("staff record a cleared bank transfer", () => {
     await form.getByLabel("Amount received (R)").fill("138.00");
     await expect(form.getByText(/Not the order total/)).toHaveCount(0);
     await shot("3-form-filled");
-    page.on("dialog", (dialog) => dialog.accept());
+    page.on("dialog", (dialog) =>
+      dialog.type() === "prompt"
+        ? dialog.accept("Recorded against the wrong order")
+        : dialog.accept()
+    );
     await form.getByRole("button", { name: "Record bank transfer" }).click();
     await expect(
-      page.getByRole("status").filter({ hasText: "Bank transfer recorded" })
+      page.getByRole("status").filter({ hasText: "It waits for another staff member" })
     ).toBeVisible();
 
-    // An ordinary payment with the method 'invoice': delivered, two slots,
-    // its invoice and the receipt event.
+    // A waiting record: no payment, slot, invoice or receipt yet.
     const [id, state] = queryTestCopy(
-      `select p.id || '|' || p.provider || ',' || p.status || ',' || p.fulfillment_status || ',' || p.amount_cents
-         || ',' || (select count(*) from private.entitlements e where e.payment_id = p.id and e.status = 'active')
-         || ',' || (select count(*) from private.invoices i where i.payment_id = p.id)
-         || ',' || (select count(*) from private.outbox_events o where o.subject_id = p.id and o.kind = 'payment_completed')
-       from private.payments p join private.invoice_payments t on t.payment_id = p.id
-       where t.bank_reference = '${reference}';`
+      `select t.id || '|' || t.status || ',' || t.amount_received_cents || ',' || t.slots
+         || ',' || (select count(*) from private.payments p where p.owner_id = t.account_id and p.provider = 'invoice')
+       from private.invoice_transfers t where t.bank_reference = '${reference}';`
     ).split("|");
     expect(id).toMatch(UUID);
-    expect(state).toBe("invoice,complete,fulfilled,13800,2,1,1");
+    expect(state).toBe("awaiting_confirmation,13800,2,0");
     expect(
       queryTestCopy(
         `select count(*) from private.frontend_staff_audit_events where target_id = '${id}' and action = 'payment:invoice_recorded';`
       )
     ).toBe("1");
 
-    const row = page.getByRole("listitem").filter({ hasText: `Bank transfer ${reference}` });
-    await expect(row).toBeVisible();
-    await shot("4-recorded-row");
-    await row.getByRole("button", { name: "Record refund" }).click();
-    const refund = page.getByRole("form", { name: "Refund of the whole order" });
-    await expect(refund.getByLabel("Bank reference of the refund transfer")).toBeVisible();
-    await shot("5-refund-form");
+    // The recorder sees it waiting, with Confirm switched off.
+    const waiting = page
+      .getByRole("list", { name: "Bank transfers waiting for confirmation" })
+      .getByRole("listitem")
+      .filter({ hasText: `Bank transfer ${reference}` });
+    await expect(waiting).toBeVisible();
+    await expect(waiting.getByRole("button", { name: "Confirm transfer" })).toBeDisabled();
+    await expect(
+      waiting.getByText("You recorded it: another staff member must confirm it.")
+    ).toBeVisible();
+    await shot("4-waiting-for-confirmation");
+    // The website route and the database refuse the recorder too.
+    const refused = await page.evaluate(async (transferId) => {
+      const token = /(?:^|;\s*)vm_csrf=([^;]+)/.exec(document.cookie)?.[1] ?? "";
+      const response = await fetch("/api/admin/commercial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-csrf-token": token },
+        body: JSON.stringify({ action: "payment.transfer_confirm", transferId }),
+      });
+      return { status: response.status, body: await response.json().catch(() => null) };
+    }, id);
+    expect(refused).toEqual({
+      status: 403,
+      body: expect.objectContaining({
+        error: "Another staff member must confirm this bank transfer: you recorded it.",
+      }),
+    });
+
+    // The recorder withdraws it: declined, nothing paid.
+    await waiting.getByRole("button", { name: "Withdraw" }).click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "Bank transfer declined" })
+    ).toBeVisible();
+    expect(
+      queryTestCopy(
+        `select status || ',' || coalesce(payment_id::text, '-') from private.invoice_transfers where id = '${id}';`
+      )
+    ).toBe("declined,-");
+    await shot("5-withdrawn");
     expect(outside).toEqual([]);
   });
 
-  test("the same bank reference cannot be recorded for another order", async ({
-    context,
-    page,
-  }) => {
+  test("a declined bank reference cannot be recorded again", async ({ context, page }) => {
     const outside = await guard(context);
     await signInBrowser(context, "moderator");
     await page.goto("/admin/payments");
@@ -169,7 +204,7 @@ test.describe("staff record a cleared bank transfer", () => {
     );
     expect(
       queryTestCopy(
-        `select count(*) from private.payments where owner_id = '${member.id}' and provider = 'invoice';`
+        `select count(*) from private.invoice_transfers where account_id = '${member.id}';`
       )
     ).toBe("1");
     expect(outside).toEqual([]);
