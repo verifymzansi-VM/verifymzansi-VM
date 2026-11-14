@@ -2432,7 +2432,9 @@ try {
   });
   await check("events: the member's privacy export includes their submissions", () => {
     const exported = json(`select internal.frontend_privacy_export_data('${cara.id}');`);
-    assert.equal(Object.keys(exported).length, 33);
+    // 36 datasets since 20261113223806_bank_transfer_and_consent_fixes.sql
+    // added communication_choices, signup_terms and bank_transfers.
+    assert.equal(Object.keys(exported).length, 36);
     const rows = exported.event_submissions;
     assert.equal(
       rows.length,
