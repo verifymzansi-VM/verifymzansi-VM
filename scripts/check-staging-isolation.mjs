@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Refuses a staging Worker config that points at production resources.
  * Staging must use its own Supabase project, R2 buckets, rate-limit state,
@@ -7,6 +6,10 @@
  * Run before any `wrangler deploy --env staging`. Exit code 1 lists every
  * shared resource. Secret values cannot be read here; compare secret
  * provenance separately (wrangler only exposes names).
+ *
+ * Run it with `node` (pnpm cloudflare:staging:isolation). It has no `#!` line
+ * on purpose: its unit test imports it through Vitest, which cannot load a
+ * `#!` line ending in CRLF, as Git writes it on Windows checkouts.
  */
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
