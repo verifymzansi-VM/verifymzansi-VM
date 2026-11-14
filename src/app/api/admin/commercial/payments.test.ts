@@ -290,3 +290,102 @@ it("refuses a bank transfer without the written waiver or with a bad term before
   expect(date.status).toBe(422);
   expect(rpc).not.toHaveBeenCalled();
 });
+
+// Customer invoices (P2b): the database numbers, prices and audits them.
+const invoiceRequest = {
+  action: "invoice.issue",
+  accountEmail: " thandi@example.test ",
+  termDays: 90,
+  slots: 3,
+  dueDays: 7,
+  requestId: payment,
+  reason: "Invoice requested by email",
+};
+it("issues and voids a customer invoice with the staff commands", async () => {
+  const view = {
+    invoice_id: line,
+    invoice_number: "VM-2026-000001",
+    status: "issued",
+    issued_at: "2026-11-14T08:00:00.000+00:00",
+    due_on: "2026-11-21",
+    seller: {
+      legal_name: "Verifymzansi (Pty) Ltd",
+      registration_number: "2026/155305/07",
+      vat_registered: false,
+    },
+    buyer: null,
+    revision: 1,
+    term_days: 90,
+    slots: 3,
+    unit_price_cents: 20700,
+    total_cents: 62100,
+    description: "3 × Individual slot — 90 days",
+    currency: "ZAR",
+    payment_reference: "VM-2026-000001",
+    cooling_off_consent_at: null,
+    cooling_off_consent_version: null,
+    consent: {
+      version: "invoice-cooling-off-v1",
+      wording: "My slots start as soon as this invoice is paid.",
+    },
+    paid_at: null,
+    payment_id: null,
+    payment_status: null,
+    voided_at: null,
+    latest_attempt: null,
+    account_id: payment,
+    customer_email: "thandi@example.test",
+    customer_name: "Thandi D.",
+    issued_by_me: true,
+    issued_by_name: null,
+    issue_reason: "Invoice requested by email",
+    void_reason: null,
+    attempts: 0,
+  };
+  rpc.mockResolvedValue({ data: { ...view, repeated: false }, error: null });
+  const issued = await POST(request(invoiceRequest));
+  expect(issued.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "issue_staff_invoice",
+    {
+      p_account_email: "thandi@example.test",
+      p_term_days: 90,
+      p_slots: 3,
+      p_due_days: 7,
+      p_reason: "Invoice requested by email",
+      p_request_id: payment,
+    },
+    { get: false }
+  );
+  rpc.mockResolvedValue({
+    data: {
+      ...view,
+      status: "void",
+      voided_at: view.issued_at,
+      void_reason: "Wrong term",
+      repeated: false,
+    },
+    error: null,
+  });
+  const voided = await POST(
+    request({ action: "invoice.void", invoiceId: line.toUpperCase(), reason: "Wrong term" })
+  );
+  expect(voided.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "void_staff_invoice",
+    { p_invoice_id: line, p_reason: "Wrong term" },
+    { get: false }
+  );
+});
+
+it("refuses an invoice with a bad term, slot count or days to pay before any call", async () => {
+  for (const change of [
+    { termDays: 60 },
+    { slots: 26 },
+    { dueDays: 0 },
+    { dueDays: 31 },
+    { requestId: "x" },
+  ])
+    expect((await POST(request({ ...invoiceRequest, ...change }))).status).toBe(422);
+  expect(rpc).not.toHaveBeenCalled();
+});

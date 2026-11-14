@@ -197,6 +197,13 @@ service = "verifymzansi-offload"
 #   pnpm wrangler secret put OZOW_REFUND_CLIENT_ID      # Ozow API key with the refunds scope
 #   pnpm wrangler secret put OZOW_REFUND_CLIENT_SECRET
 #   pnpm wrangler secret put OZOW_REFUND_WEBHOOK_SECRET  # the refund.complete webhook's whsec_ secret
+#   # Customer invoices (src/lib/billing/invoice-settings.ts); never in code.
+#   # Unset, the invoice leaves the seller's address or the bank transfer out:
+#   pnpm wrangler secret put INVOICE_SELLER_ADDRESS        # one line, commas between parts
+#   pnpm wrangler secret put INVOICE_BANK_ACCOUNT_NAME     # all four bank settings, or none
+#   pnpm wrangler secret put INVOICE_BANK_NAME
+#   pnpm wrangler secret put INVOICE_BANK_ACCOUNT_NUMBER
+#   pnpm wrangler secret put INVOICE_BANK_BRANCH_CODE
 #   # NEVER set in production:
 #   # PLAYWRIGHT_E2E_AUTH, PLAYWRIGHT_TEST_MODE, PLAYWRIGHT_SUPABASE_MODE,
 #   # NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE,

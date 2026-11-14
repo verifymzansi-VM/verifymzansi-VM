@@ -1,11 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { RETAIL_OFFERS, formatPlanPrice } from "@/lib/constants/pricing";
+import { formatPlanPrice } from "@/lib/constants/pricing";
 import {
   ActionMessage,
   AdminCard,
@@ -14,12 +11,10 @@ import {
   readForm,
   useCommercialAction,
 } from "./commercial-action";
+import { CustomerEmailField, SlotOrderFields, useCustomerCheck, useSlotOrder } from "./slot-order";
 
 /** Bank transfers above R50 000 are refused for now; the database decides. */
 const LIMIT_CENTS = 5_000_000;
-const TERMS = [30, 90, 180] as const;
-const slotPrice = (days: number) =>
-  RETAIL_OFFERS.find((offer) => offer.durationDays === days)?.priceCents ?? 0;
 
 /** Rand as typed ("1656", "1 656,00", "R1,656.00") in cents, or null. */
 export function randToCents(value: string): number | null {
@@ -43,40 +38,6 @@ function southAfricanToday(): string {
  * with the same receipt email and partner commission as an Ozow payment.
  * Audited; the database rechecks everything.
  */
-type Customer = {
-  customer_name: string | null;
-  id_reviewed: boolean;
-  can_use_slots: boolean;
-  slots_held: number | null;
-  slot_limit: number | null;
-};
-
-/** Asks the staff route whose account the email names (records nothing). */
-async function lookUpCustomer(
-  email: string
-): Promise<{ customer: Customer } | { error: string; redirect?: string }> {
-  try {
-    const res = await fetch("/api/admin/commercial", {
-      method: "POST",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ action: "payment.transfer_customer", accountEmail: email }),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (res.ok && body.data) return { customer: body.data as Customer };
-    if (body.code === "step_up_required" || body.code === "mfa_required")
-      return {
-        error: "",
-        redirect: staffVerifyHref(
-          "/staff/two-step",
-          window.location.pathname + window.location.search
-        ),
-      };
-    return { error: body.error ?? "The customer's account could not be checked." };
-  } catch {
-    return { error: "Network error. Please try again." };
-  }
-}
-
 export type WaitingTransfer = {
   transfer_id: string;
   customer_name: string | null;
@@ -211,16 +172,13 @@ export function BankTransferPanel({
   canConfirm: boolean;
   waiting: WaitingTransfer[];
 }) {
-  const router = useRouter();
   const { run, busy, message } = useCommercialAction();
-  const [checking, setChecking] = useState(false);
-  const [check, setCheck] = useState<string | null>(null);
+  const { checking, check, checkCustomer } = useCustomerCheck("Nothing was recorded.");
+  const order = useSlotOrder();
+  const { term, slots, setSlots, totalCents } = order;
   const [open, setOpen] = useState(false);
-  const [term, setTerm] = useState<(typeof TERMS)[number]>(30);
-  const [slots, setSlots] = useState(1);
   const [amount, setAmount] = useState("");
   const today = southAfricanToday();
-  const totalCents = slotPrice(term) * (Number.isSafeInteger(slots) ? slots : 0);
   const receivedCents = amount.trim() ? randToCents(amount) : null;
   const mismatch = receivedCents !== null && receivedCents !== totalCents;
 
@@ -248,24 +206,8 @@ export function BankTransferPanel({
               return;
             }
             // Whose account the email names, before anything is recorded.
-            setChecking(true);
-            setCheck(null);
-            const found = await lookUpCustomer(values.accountEmail ?? "");
-            setChecking(false);
-            if ("error" in found) {
-              if (found.redirect) router.push(found.redirect);
-              else setCheck(found.error);
-              return;
-            }
-            const customer = found.customer;
-            if (!customer.id_reviewed || !customer.can_use_slots) {
-              setCheck(
-                customer.id_reviewed
-                  ? "This customer's account cannot use slots now. Nothing was recorded."
-                  : "This customer's ID review is not accepted yet. Nothing was recorded."
-              );
-              return;
-            }
+            const customer = await checkCustomer(values.accountEmail ?? "");
+            if (!customer) return;
             const who = customer.customer_name ?? "this customer";
             const held =
               customer.slots_held !== null && customer.slot_limit !== null
@@ -309,49 +251,8 @@ export function BankTransferPanel({
             }
           }}
         >
-          <label className="block text-sm">
-            <span className="font-medium">Customer&apos;s account email</span>
-            <input
-              name="accountEmail"
-              type="email"
-              required
-              maxLength={254}
-              autoComplete="off"
-              spellCheck={false}
-              className="mt-1 block w-full rounded-md border bg-background p-2"
-            />
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="font-medium">Slot term</span>
-              <select
-                name="termDays"
-                value={term}
-                onChange={(event) => setTerm(Number(event.target.value) as (typeof TERMS)[number])}
-                className="mt-1 block w-full rounded-md border bg-background p-2"
-              >
-                {TERMS.map((days) => (
-                  <option key={days} value={days}>
-                    {days} days · {formatPlanPrice(slotPrice(days))} per slot
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium">Number of slots</span>
-              <input
-                name="slots"
-                type="number"
-                inputMode="numeric"
-                required
-                min={1}
-                max={25}
-                value={slots}
-                onChange={(event) => setSlots(Math.trunc(Number(event.target.value)))}
-                className="mt-1 block w-full rounded-md border bg-background p-2"
-              />
-            </label>
-          </div>
+          <CustomerEmailField />
+          <SlotOrderFields order={order} />
           <p className="text-sm">
             <span className="font-medium">Order total: {formatPlanPrice(totalCents)}</span>{" "}
             {totalCents > LIMIT_CENTS ? (
