@@ -1391,8 +1391,9 @@ date and the privacy export were changed afterwards by
 
 ## Bank transfer and consent fixes, 13 November 2026
 
-`20261113223806_bank_transfer_and_consent_fixes.sql` is pending. It fixes review
-findings in `20261113162457_staff_invoice_payments.sql` and
+`20261113223806_bank_transfer_and_consent_fixes.sql` was applied on 14 November
+2026 at 02:35 UTC with the owner's approval. It fixes review findings in
+`20261113162457_staff_invoice_payments.sql` and
 `20261113134500_communication_choices_and_signup_terms.sql`, needs both (and the
 refund commands of `20261113085340`) with their reviewed bodies and refuses
 (55000) otherwise. It does not depend on `20261113172356_ozow_api_refunds.sql`
@@ -3243,7 +3244,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   refunds through Ozow not settled: 0"; production fingerprint after it matched
   the full replay (except the known schema grant difference); refunds through
   Ozow stay switched off (`OZOW_API_REFUNDS_ENABLED`)
-- `20261113223806_bank_transfer_and_consent_fixes.sql`: pending; section Bank
-  transfer and consent fixes
+- `20261113223806_bank_transfer_and_consent_fixes.sql`: applied 2026-11-14 02:35
+  UTC; applied with the owner's approval, from the reviewed file (sha256
+  starting 8d025150d48e7dcd), before the pull request was merged; preflight
+  before "update not applied; declined bank transfers: 0; bank references
+  recorded more than once: 0; refund references with a space: 0", after "already
+  applied" with the same three counts 0; production fingerprint after it matched
+  the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
