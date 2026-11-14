@@ -1499,6 +1499,168 @@ the retention job deletes the three consent records 30 days after closure and
 keeps them under a legal hold or before; a restricted member reads their email
 history; and that the rollback refuses once the new rules were used.
 
+## Customer invoices with an Ozow "Pay now" link, 14 November 2026
+
+`20261114041000_customer_invoice_pay_now.sql` is pending (roadmap P2b, second
+slice). It needs `20261113223806_bank_transfer_and_consent_fixes.sql` and the
+payment, checkout and slot bodies it builds on with their reviewed bodies, and
+refuses (55000) otherwise. It only adds: no API command, argument or grant is
+removed or changed.
+
+- **Invoice numbers.** `VM-YYYY-NNNNNN`, one sequence per South African calendar
+  year (`VM-2026-000001`, `VM-2026-000002`, ... and again from `000001` in
+  2027). The number is taken in the transaction that issues the invoice, under
+  the row lock of the year's counter in the new table
+  `private.customer_invoice_numbers`, so a refused or failed issue takes no
+  number and two staff issuing at once get consecutive numbers. The counter
+  starts at 1 and only moves up by one (trigger), every invoice takes the
+  counter's current value (trigger) and at commit a year's invoices are exactly
+  1 to its counter (deferred constraint trigger). Invoices are never removed
+  (only the retention job, five tax years later); a cancelled invoice stays as
+  `void` with its number.
+- **The invoice.** New table `private.customer_invoices`: number, customer
+  account, the Individual slot plan version, slots (1 to 25), price per slot and
+  total (at most R50,000; today 25 x 180 days is R10,350), the description ("3 ×
+  Individual slot — 90 days"), issue date, due date (1 to 30 days), who issued
+  it and why, the seller (Verifymzansi (Pty) Ltd, 2026/155305/07, not registered
+  for VAT; issuing refuses with PT409 `invoice_vat_status_changed` unless the
+  merchant VAT setting `private.invoice_merchant_config` says not registered),
+  the buyer's billing details, the cooling-off consent (time and wording version
+  `invoice-cooling-off-v1`) and its status. Issued facts never change; billing
+  details change only while it is issued (each change a new revision); the
+  consent is recorded once; it becomes `paid` (naming its complete Ozow payment
+  of that account and amount) or `void` once (trigger). The seller's street
+  address and the bank account are not stored: the website shows them from
+  server-side settings, and leaves them out when they are not set.
+- **Issue and void (staff).**
+  `api.issue_staff_invoice(p_account_email, p_term_days, p_slots, p_due_days, p_reason, p_request_id)`
+  and `api.void_staff_invoice(p_invoice_id, p_reason)`: capability
+  `payments:refund` with a recent second factor, the staff member's own current
+  accepted ID review, never for an account of their own identity (and, to issue,
+  never for a customer a partner account of their identity referred). Issuing
+  needs a confirmed account with current access and an accepted ID review (PT404
+  `invoice_account_unavailable`, PT409 `payment_account_unavailable`, PT412
+  `invoice_buyer_unverified`), the Individual slot on sale for 30, 90 or 180
+  days (PT409 `invoice_plan_unavailable`) and room within the person's slot
+  limit (PT429 `slot_limit_reached`); the same request id again by the same
+  staff member returns the first invoice (`repeated: true`), with other details
+  PT409 `invoice_request_conflict`. Voiding refuses a paid invoice (PT409
+  `invoice_paid`: refund the payment instead) and one with a payment attempt
+  that could still be paid (PT409 `invoice_payment_open`); an attempt never sent
+  to Ozow is cancelled with it.
+- **Reads.** Staff (`payments:view`): `api.get_staff_invoices()` (latest 50, and
+  the number unpaid) and `api.get_staff_invoice(p_invoice_number)`. The
+  customer: `api.get_my_invoices()` and `api.get_my_invoice(p_invoice_number)`,
+  only for the signed-in account's own invoices; another account's number, or a
+  malformed one, reads as not found (PT404 `invoice_unavailable`), so a guessed
+  number shows nothing.
+- **Billing details.**
+  `api.save_my_invoice_billing(p_invoice_number, p_revision, p_buyer_name, p_buyer_address, p_buyer_registration_number)`:
+  the owner of an issued invoice saves the business or buyer name (2 to 160
+  characters), the address (5 to 300, lines allowed) and an optional
+  registration number (letters, digits, spaces, `/ . -`), at the current
+  revision (PT409 `invoice_revision_changed`); the same details again change
+  nothing.
+- **Pay now.**
+  `api.start_invoice_payment(p_invoice_number, p_expected_total_cents, p_cooling_off_consent)`:
+  the owner of an issued invoice with billing details (PT409
+  `invoice_billing_required`), the box ticked (22023
+  `invoice_consent_required`), the total shown equal to the invoice total (PT428
+  `invoice_amount_mismatch`), the plan version still on sale at the invoice
+  price (PT409 `invoice_plan_unavailable`), an accepted ID review and room
+  within the slot limit counting open checkouts. It returns the attempt whose
+  Ozow page is still open (`reused: true`), or one never sent to Ozow; refuses
+  while an attempt is still being checked (PT409 `invoice_payment_checking`:
+  pending after its Ozow window, being sent, or failed while Ozow's page may
+  take another try) or another payment for the same slot term is open at Ozow
+  (PT409 `invoice_checkout_open`; one never sent to Ozow is cancelled instead);
+  and otherwise starts an ordinary pending Ozow payment of the invoice total
+  with one line per slot, linked in the new table
+  `private.customer_invoice_payments`. The first attempt's reference is the
+  invoice number; a later attempt (after an earlier one expired, failed or was
+  cancelled) is `<number>-<attempt>`, which Ozow shows on the bank statement as
+  the invoice number (its payer reference holds 14 characters). At most 20
+  attempts (PT429 `invoice_attempts_exhausted`). The website opens the Ozow
+  request with the existing service commands; online orders above R10,000 are
+  allowed here (the R10,000 limit is the ordinary checkout's).
+- **Paid.** The attempt is settled by the existing Ozow notice and status check
+  (`internal.apply_provider_event`, unchanged): the same amount check,
+  idempotency, slots (one per line, starting at payment), invoice record,
+  receipt event and partner commission as any Ozow checkout. The new trigger
+  `payments_customer_invoice_paid` then marks the invoice paid with that payment
+  and its completion time. Money for an invoice already paid or void (an earlier
+  attempt settling late) is never refused: the payment completes as any Ozow
+  payment and is recorded as a payment problem `conflicting_transaction` (staff
+  alert "Paid twice"), to refund.
+- **Refunds.** The existing staff refund commands (whole payment, one slot,
+  through Ozow or recorded) work on the payment unchanged; the invoice stays
+  paid and its read shows the payment's status (for example `refunded`).
+- **Privacy export and retention.** The privacy export holds the member's
+  invoices (`customer_invoices`: number, status, slots, amounts, dates, billing
+  details, consent, payment and attempts; never the staff member or the
+  reasons). The retention job (`internal.retention_commerce`, full body) removes
+  invoices and their attempt links five tax years after they were paid, voided
+  or (if neither) issued, and no longer stops on a payment that an invoice or a
+  recorded bank transfer still names (it skips it; before, such a payment would
+  have made the delete fail).
+- **Audit.** The staff audit trail lists `payment:customer_invoice_issued` and
+  `payment:customer_invoice_voided`.
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the new commands and the deploy preflight probes every command in
+`../runtime-api-manifest.json`, so a deploy without the update stops there.
+Earlier releases do not call them and keep working with the update applied. It
+is recorded after `20261113223806_bank_transfer_and_consent_fixes.sql`. Merge
+the pull request right after applying (another merge in between fails the
+deploy's API exposure check).
+
+**Applying.**
+
+1. Run `../preflight/20261114041000_customer_invoice_pay_now.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "customer invoices: update not applied
+   (apply before the website release that uses it is deployed); invoices issued:
+   none (table absent); payment attempts: none (table absent)".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "customer invoices: already applied; invoices issued: 0
+   (unpaid: 0); payment attempts: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261114041000_customer_invoice_pay_now.down.sql` (only with the
+owner's decision; prefer a forward fix). Revert and deploy the website release
+first: the rollback removes the commands that release calls. It refuses once an
+invoice was issued (numbered financial records); otherwise it puts back the
+retention job, the privacy export and the staff audit view and drops the
+update's functions, tables and triggers.
+
+`node --import tsx scripts/test-foundation-customer-invoices.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted body or
+table, changing nothing; apply, rollback and re-apply return the same
+fingerprints; issuing and its refusals (wrong staff, own identity, no ID review
+of their own, a referred customer, unknown, unreviewed or blocked customer, slot
+limit, term, due days, request id, VAT setting), none of which takes a number; a
+repeated request; five staff issuing at once and an issue rolled back give
+consecutive numbers, and the counter cannot skip, step back or lose an invoice;
+another account (and a malformed number) reads nothing and cannot change or pay
+the invoice, staff read with `payments:view` only; billing details (normalised,
+revision-fenced, repeat-safe) and the consent before payment; Pay now binds the
+total, the lines and the invoice number; the same attempt while open or unsent;
+a wrong amount is refused, the payment pays the invoice once and a repeated or
+second notice changes nothing; the paid invoice delivered exactly what an Ozow
+checkout of the same order delivered (slots, invoice record, receipt event,
+partner commissions); a paid invoice cannot be paid, changed or voided; attempts
+being checked, later attempts (`-2`, `-3`) and a late earlier attempt (money
+kept, payment problem raised); another open checkout, the slot limit, the ID
+review and the catalogue at payment; voiding (and its refusals, the unsent
+attempt cancelled); refunds of one slot and of a whole payment; the record
+rules; the privacy export; the retention job keeps a payment an invoice names
+and removes the invoice five tax years on; the audit trail; the grants; and that
+the rollback refuses once an invoice was issued.
+
 ## Individual slots at R69, 12 November 2026
 
 `20261113002421_individual_slots_r69.sql` is not applied yet. It was first
@@ -3251,5 +3413,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   recorded more than once: 0; refund references with a space: 0", after "already
   applied" with the same three counts 0; production fingerprint after it matched
   the full replay (except the known schema grant difference)
+- `20261114041000_customer_invoice_pay_now.sql`: pending
 
 <!-- applied-register:end -->

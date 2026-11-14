@@ -56,6 +56,7 @@ CREATE INDEX payments_owner_id_idx ON private.payments USING btree (owner_id);
 CREATE INDEX payments_owner_plan_created_idx ON private.payments USING btree (owner_id, created_at) WHERE (product_kind = 'plan'::text);
 CREATE INDEX payments_staff_recent_idx ON private.payments USING btree (created_at DESC, id DESC);
 CREATE INDEX payments_staff_status_recent_idx ON private.payments USING btree (status, created_at DESC, id DESC);
+CREATE TRIGGER payments_customer_invoice_paid AFTER UPDATE OF status ON private.payments FOR EACH ROW WHEN (new.status = 'complete'::text AND old.status IS DISTINCT FROM 'complete'::text) EXECUTE FUNCTION internal.customer_invoice_payment_settled();
 CREATE TRIGGER payments_invoice_snapshot BEFORE INSERT ON private.payments FOR EACH ROW EXECUTE FUNCTION internal.payment_invoice_snapshot();
 CREATE TRIGGER payments_partner_commission AFTER UPDATE OF status ON private.payments FOR EACH ROW WHEN (old.status IS DISTINCT FROM new.status) EXECUTE FUNCTION internal.payment_partner_commission();
 CREATE TRIGGER payments_quote_immutable BEFORE UPDATE ON private.payments FOR EACH ROW EXECUTE FUNCTION internal.payment_quote_guard();

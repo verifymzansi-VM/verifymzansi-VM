@@ -110,6 +110,40 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       get_staff_invoice_transfers: { Args: Record<never, never>; Returns: Json };
       get_staff_invoice_customer: { Args: { p_account_email: string }; Returns: Json };
       get_staff_invoice_payments: { Args: { p_payment_ids: string[] }; Returns: Json };
+      issue_staff_invoice: {
+        Args: {
+          p_account_email: string;
+          p_term_days: number;
+          p_slots: number;
+          p_due_days: number;
+          p_reason: string;
+          p_request_id: string;
+        };
+        Returns: Json;
+      };
+      void_staff_invoice: { Args: { p_invoice_id: string; p_reason: string }; Returns: Json };
+      get_staff_invoices: { Args: Record<never, never>; Returns: Json };
+      get_staff_invoice: { Args: { p_invoice_number: string }; Returns: Json };
+      get_my_invoices: { Args: Record<never, never>; Returns: Json };
+      get_my_invoice: { Args: { p_invoice_number: string }; Returns: Json };
+      save_my_invoice_billing: {
+        Args: {
+          p_invoice_number: string;
+          p_revision: number;
+          p_buyer_name: string;
+          p_buyer_address: string;
+          p_buyer_registration_number: string | null;
+        };
+        Returns: Json;
+      };
+      start_invoice_payment: {
+        Args: {
+          p_invoice_number: string;
+          p_expected_total_cents: number;
+          p_cooling_off_consent: boolean;
+        };
+        Returns: Json;
+      };
       activate_staff_paid_payment: {
         Args: { p_payment_id: string; p_reason: string };
         Returns: Json;
