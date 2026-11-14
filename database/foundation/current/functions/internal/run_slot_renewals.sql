@@ -18,21 +18,29 @@ begin
   -- follows on from it without a break and covers now. Only posts that can
   -- move are picked (the next period may carry the post and has room), so
   -- posts that cannot move (an owner who lost access, for example) never
-  -- crowd out the rest. Candidates are unlocked: take the owner's fence, then
-  -- lock and recheck.
+  -- crowd out the rest. Read from the renewals that have not ended
+  -- (entitlements_renewals_current_idx, against the statement's time) and
+  -- the posts still in an earlier period of their slot; the checks that call
+  -- functions run only on those. Candidates are unlocked: take the owner's
+  -- fence, then lock and recheck.
   for r in
-    select a.id as activation_id, a.post_id, a.owner_id, n.id as next_id
-    from private.post_activations a
-      join private.entitlements g on g.id=a.entitlement_id
-      join private.entitlements n on n.slot_id=coalesce(g.slot_id, g.id)
-    where a.released_at is null and a.post_id is not null and g.status='active' and g.ends_at<=clock_timestamp()
-      and n.status='active' and n.starts_at>g.starts_at and n.starts_at<=clock_timestamp() and n.ends_at>clock_timestamp()
-      and n.ends_at<=internal.slot_chain_end(g.id)
-      and internal.entitlement_for_post_eligible(n.id, a.post_id, a.owner_id)
-      and (select count(*) from private.post_activations o where o.released_at is null and o.id<>a.id
+    select w.activation_id, w.post_id, w.owner_id, w.next_id from (
+      select a.id as activation_id, a.post_id, a.owner_id, n.id as next_id, n.ends_at as next_ends,
+        n.slot_id as next_slot, n.slot_capacity as next_capacity, g.id as grant_id, g.ends_at as grant_ends
+      from private.entitlements n
+        join private.entitlements g on (g.id=n.slot_id or g.slot_id=n.slot_id) and g.id<>n.id
+        join private.post_activations a on a.entitlement_id=g.id and a.released_at is null
+      where n.slot_id is not null and n.status='active' and n.ends_at>statement_timestamp()
+        and n.starts_at<=statement_timestamp() and a.post_id is not null and g.status='active'
+        and g.ends_at<=statement_timestamp() and n.starts_at>g.starts_at
+      offset 0
+    ) w
+    where w.next_ends<=internal.slot_chain_end(w.grant_id)
+      and internal.entitlement_for_post_eligible(w.next_id, w.post_id, w.owner_id)
+      and (select count(*) from private.post_activations o where o.released_at is null and o.id<>w.activation_id
         and o.entitlement_id in (select c.id from private.entitlements c
-          where c.id=coalesce(n.slot_id, n.id) or c.slot_id=coalesce(n.slot_id, n.id))) < n.slot_capacity
-    order by g.ends_at, a.id limit p_limit
+          where c.id=w.next_slot or c.slot_id=w.next_slot)) < w.next_capacity
+    order by w.grant_ends, w.activation_id limit p_limit
   loop
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
     select * into post from private.posts p where p.id=r.post_id for update skip locked;
@@ -64,7 +72,7 @@ begin
       join private.payment_lines l on l.id=g.payment_line_id
       join private.plan_versions v on v.id=l.plan_version_id
     where g.source='retail_paid' and g.status='active' and internal.individual_slot_plan(v.plan_code)
-      and g.ends_at>clock_timestamp() and g.ends_at<=clock_timestamp()+interval '3 days'
+      and g.ends_at>statement_timestamp() and g.ends_at<=statement_timestamp()+interval '3 days'
       and internal.slot_renewal_due(g.id, g.owner_id)
       and not exists(select 1 from private.outbox_events o where o.dedupe_key='slot_renewal_reminder:'||g.id)
     order by g.ends_at, g.id limit p_limit

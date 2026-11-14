@@ -58,6 +58,7 @@ CREATE INDEX posts_lifecycle_idx ON private.posts USING btree (status, status_ch
 CREATE UNIQUE INDEX posts_one_open_edit_idx ON private.posts USING btree (edit_of) WHERE (edit_of IS NOT NULL);
 CREATE INDEX posts_owner_draft_idx ON private.posts USING btree (owner_id, status);
 CREATE INDEX posts_owner_submitted_idx ON private.posts USING btree (owner_id, kind, submitted_at);
+CREATE INDEX posts_paid_run_due_idx ON private.posts USING btree (visible_until) WHERE ((kind <> 'event'::text) AND (status = ANY (ARRAY['live'::text, 'paused'::text])));
 CREATE TRIGGER core_identity_immutable BEFORE UPDATE ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.core_identity_guard();
 CREATE CONSTRAINT TRIGGER core_post_detail AFTER INSERT OR DELETE OR UPDATE ON private.posts DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION internal.core_detail_guard();
 CREATE CONSTRAINT TRIGGER core_post_price_category AFTER INSERT OR UPDATE ON private.posts DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION internal.core_listing_price_guard();

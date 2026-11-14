@@ -28,7 +28,7 @@ begin
   ) select jsonb_build_object(
     'account_id',actor,'profile_exists',exists(select 1 from private.profiles p where p.account_id=actor),
     'capacity',coalesce(sum(u.slot_capacity),0),
-    'used',(select count(*) from private.post_activations a where a.entitlement_id in(select id from usable) and a.released_at is null),
+    'used',coalesce(sum(a.active_count),0),
     'creation_remaining',coalesce(sum(greatest(0,least(u.slot_capacity-a.active_count,
         coalesce(u.activations_per_period-a.period_count,u.slot_capacity)))),0),
     'max_photos',coalesce(max(u.max_photos),case when eligible then 10 else 0 end),
@@ -41,9 +41,8 @@ begin
     'trial_used',claimed,'trial_offer',jsonb_build_object('eligible',eligible,'sevenDayAvailable',eligible,
       'thirtyDayAvailable',false,'remaining',null,'launchEnabled',true,'shortDays',7,'longDays',30)
   ) into result from usable u cross join lateral (
-      select count(*) filter(where x.released_at is null) as active_count,
-        count(*) filter(where x.activated_at>statement_timestamp()-make_interval(days=>u.activation_period_days)) as period_count
-      from private.post_activations x where x.entitlement_id=u.id
+      select internal.slot_posts_held(u.id) as active_count,
+        internal.slot_posts_started(u.id,statement_timestamp()-make_interval(days=>u.activation_period_days)) as period_count
     ) a;
   perform internal.price_draft_actor();return result;
 end$function$;

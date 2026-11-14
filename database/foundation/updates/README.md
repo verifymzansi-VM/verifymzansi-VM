@@ -1505,7 +1505,9 @@ history; and that the rollback refuses once the new rules were used.
 owner's renewal rule of 14 November 2026). It needs
 `20261114041000_customer_invoice_pay_now.sql` and the slot, payment, post and
 mail bodies it builds on with their reviewed bodies, and refuses (55000)
-otherwise. It only adds: no API command, argument or grant is removed or
+otherwise (the two post funding views it replaces are checked by an md5 of each
+whole definition, so a view changed in any other way is refused, not
+overwritten). It only adds: no API command, argument or grant is removed or
 changed.
 
 - **A renewal is a new grant of the same slot.** `private.payment_lines` gains
@@ -1576,7 +1578,29 @@ changed.
   body) counts a slot's posts over all its periods (a post waiting to move still
   fills the slot) and the 4 posts going live per rolling 30 days over the slot's
   whole renewal chain (a renewal does not restart the count; a continued
-  activation is not a post going live).
+  activation is not a post going live); so do `internal.my_posting_capacity`,
+  `internal.get_my_frontend_posting_allowance_v2` and
+  `internal.get_my_frontend_post_manager` (full bodies, through the new
+  `internal.slot_posts_held` and `internal.slot_posts_started`), so a place is
+  never shown free while a post waits to move into it.
+- **Every end date a post shows is the end of its slot's run**
+  (`internal.post_shown_until`, the same `internal.slot_chain_end` as its
+  funding; an event keeps its own end date): the search document
+  (`internal.write_post_projection`, full body, so an edit approved, moderation
+  or any other rewrite before the boundary keeps the renewed end), the post page
+  (`internal.get_public_post`), My posts (`internal.list_my_posts`), the owner's
+  post (`internal.frontend_owner_post`) and the dashboard
+  (`internal.restored_owner_dashboard`, active and ending-soon listings), full
+  bodies.
+- **Cost.** The funding views compare the period's own dates first and follow
+  the slot only once the period has ended. The lifecycle job reads by date only:
+  posts whose own end date has passed (new partial index
+  `posts_paid_run_due_idx`) and visible search documents whose end has passed
+  (`post_search_documents_due_idx`; a revoked renewal moves it back before the
+  post's own end date). The sweep reads the renewals that have not ended
+  (`entitlements_renewals_current_idx`) and the reminders the grants ending
+  within 3 days (`entitlements_active_ends_idx`). Measured on 20,000 live posts
+  in the pull request.
 - **Refunds.** A member who asks to cancel a renewal before it starts gets a
   full refund: staff record the one-slot refund with the existing commands (the
   full line amount), which withdraws the queued grant, reverses that line's
@@ -1637,45 +1661,53 @@ The reviewed rollback is `../rollback/20261114093742_renew_slots_early.down.sql`
 (only with the owner's decision; prefer a forward fix). Revert and deploy the
 website release first: the rollback removes the commands that release calls. It
 refuses once a slot was renewed, an activation was moved into a renewed period
-or a reminder was queued; otherwise it puts back the thirteen earlier bodies,
-the two post funding views and the outbox kinds and drops the update's
-functions, trigger, indexes, constraints and columns.
+or a reminder was queued, or when a body or a funding view (by an md5 of its
+whole definition) is not the update's; otherwise it puts back the twenty-one
+earlier bodies, the two post funding views and the outbox kinds and drops the
+update's functions, trigger, indexes, constraints and columns.
 
 `node --import tsx scripts/test-foundation-slot-renewals.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
-preflight before and after, read only; the refusals with a drifted body or
-column, changing nothing; apply, rollback and re-apply return the same
-fingerprints; renewing opens 14 days before the end; an early renewal starts
-exactly at the old end, with the renewal's consent and start date in the
-snapshot, one payment and the slot counted once; confirming writes no post (its
-search document moves at once); after the boundary and before any job runs the
-public view, the restorable view, the post page, search, phone reveal, an
-enquiry, post funding and the owner's kept activation all serve the post; the
-lifecycle job does not expire it but moves its end date on; it still fills the
-slot while it waits to move, moves once into the next period, the moved
-activation is not a post going live, and the 3-day grace starts only when the
-last renewal ends; renewing twice queues one period after the other, also from
-the old period's id; an overlapping renewal checkout returns the open one, one
-never sent to Ozow is replaced, and the new-slot checkout never takes a renewal
-(one order per term); "Renew all" for three slots with different ends makes one
-payment, each slot ends exactly its own period later, refunding one queued line
-(full amount) withdraws only that slot and moves its post back, and the slot can
-be renewed again; a chargeback of the current period keeps the queued renewal's
-dates; the R10,000 limit on the total and the shown total; a person over their
-limit renews at most the limit; consent, ID review, duplicates, retired plans;
-another account, anonymous callers, staff grants and ended slots; a renewal paid
-after the slot ended starts at payment; staff deliver a renewal sent to
-reconciliation after the slot's last period; one reminder per slot end when the
-job runs twice, only within 3 days, never for a staff grant, "Renew all" only
-when another slot ends within 7 days, no payment started by the job; no
-recipient for an unconfirmed address or a slot renewed after queueing; the mail
-claim with every earlier kind; retention removes a renewed slot's periods newest
-first; the sweep moves a post that can move although 101 posts of owners who
-lost access ended earlier; a post held by staff across the boundary is restored
-with its renewed days and not expired; the 4 posts going live per 30 days count
-over a slot's renewals; a staff-raised limit never carries more than 4 renewals
-past its end; the privacy export holds renewal links and each payment's consent;
-the grants; and that the rollback refuses once a slot was renewed.
+preflight before and after, read only; the refusals with a drifted body, a
+drifted column or a funding view changed in any way, changing nothing; apply,
+rollback and re-apply return the same fingerprints; renewing opens 14 days
+before the end; an early renewal starts exactly at the old end, with the
+renewal's consent and start date in the snapshot, one payment and the slot
+counted once; confirming writes no post (its search document moves at once);
+after the boundary and before any job runs the public view, the restorable view,
+the post page, search, phone reveal, an enquiry, post funding and the owner's
+kept activation all serve the post; the lifecycle job does not expire it but
+moves its end date on; it still fills the slot while it waits to move, moves
+once into the next period, the moved activation is not a post going live, and
+the 3-day grace starts only when the last renewal ends; an edit approved by a
+moderator before the boundary keeps the renewed end in the search document, the
+post page, My posts, the owner's post and the dashboard show the renewed end
+before and after the boundary with no job run (and the post is not ending soon),
+it stays in search and on its page, the capacity, allowance and post manager
+count it while it waits to move, and a chargeback of the renewal after its end
+date caught up moves the document's end back and the lifecycle job expires it;
+renewing twice queues one period after the other, also from the old period's id;
+an overlapping renewal checkout returns the open one, one never sent to Ozow is
+replaced, and the new-slot checkout never takes a renewal (one order per term);
+"Renew all" for three slots with different ends makes one payment, each slot
+ends exactly its own period later, refunding one queued line (full amount)
+withdraws only that slot and moves its post back, and the slot can be renewed
+again; a chargeback of the current period keeps the queued renewal's dates; the
+R10,000 limit on the total and the shown total; a person over their limit renews
+at most the limit; consent, ID review, duplicates, retired plans; another
+account, anonymous callers, staff grants and ended slots; a renewal paid after
+the slot ended starts at payment; staff deliver a renewal sent to reconciliation
+after the slot's last period; one reminder per slot end when the job runs twice,
+only within 3 days, never for a staff grant, "Renew all" only when another slot
+ends within 7 days, no payment started by the job; no recipient for an
+unconfirmed address or a slot renewed after queueing; the mail claim with every
+earlier kind; retention removes a renewed slot's periods newest first; the sweep
+moves a post that can move although 101 posts of owners who lost access ended
+earlier; a post held by staff across the boundary is restored with its renewed
+days and not expired; the 4 posts going live per 30 days count over a slot's
+renewals; a staff-raised limit never carries more than 4 renewals past its end;
+the privacy export holds renewal links and each payment's consent; the grants;
+and that the rollback refuses once a slot was renewed.
 
 ## Customer invoices with an Ozow "Pay now" link, 14 November 2026
 

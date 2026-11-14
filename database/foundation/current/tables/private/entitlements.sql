@@ -56,6 +56,7 @@ END),
 );
 alter table private.entitlements owner to postgres;
 alter table private.entitlements enable row level security;
+CREATE INDEX entitlements_active_ends_idx ON private.entitlements USING btree (ends_at) WHERE (status = 'active'::text);
 CREATE INDEX entitlements_granted_by_idx ON private.entitlements USING btree (granted_by) WHERE (granted_by IS NOT NULL);
 CREATE INDEX entitlements_owner_id_idx ON private.entitlements USING btree (owner_id);
 CREATE INDEX entitlements_owner_usable_idx ON private.entitlements USING btree (owner_id, ends_at) WHERE (status = 'active'::text);
@@ -63,6 +64,7 @@ CREATE INDEX entitlements_payment_id_idx ON private.entitlements USING btree (pa
 CREATE UNIQUE INDEX entitlements_payment_line_idx ON private.entitlements USING btree (payment_line_id) WHERE (payment_line_id IS NOT NULL);
 CREATE INDEX entitlements_payment_line_payment_idx ON private.entitlements USING btree (payment_line_id, payment_id) WHERE (payment_line_id IS NOT NULL);
 CREATE UNIQUE INDEX entitlements_payment_unlined_idx ON private.entitlements USING btree (payment_id) WHERE ((payment_id IS NOT NULL) AND (payment_line_id IS NULL));
+CREATE INDEX entitlements_renewals_current_idx ON private.entitlements USING btree (ends_at) WHERE ((slot_id IS NOT NULL) AND (status = 'active'::text));
 CREATE UNIQUE INDEX entitlements_renews_active_idx ON private.entitlements USING btree (renews_entitlement_id) WHERE ((renews_entitlement_id IS NOT NULL) AND (status = 'active'::text));
 CREATE INDEX entitlements_renews_entitlement_idx ON private.entitlements USING btree (renews_entitlement_id) WHERE (renews_entitlement_id IS NOT NULL);
 CREATE INDEX entitlements_slot_idx ON private.entitlements USING btree (slot_id) WHERE (slot_id IS NOT NULL);

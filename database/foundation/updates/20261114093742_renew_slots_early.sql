@@ -81,7 +81,26 @@
 --    out. api.activate_post (full body) counts a slot's posts over all its
 --    periods, so a post waiting to move still fills the slot, and counts the 4
 --    posts going live per rolling 30 days over the slot's whole renewal chain
---    (a continued activation is not a post going live).
+--    (a continued activation is not a post going live); so do the member's
+--    posting capacity (internal.my_posting_capacity), posting allowance
+--    (internal.get_my_frontend_posting_allowance_v2) and post manager
+--    (internal.get_my_frontend_post_manager), full bodies, through
+--    internal.slot_posts_held and internal.slot_posts_started.
+--    Every end date a post shows is the end of its slot's run
+--    (internal.post_shown_until, the same internal.slot_chain_end as its
+--    funding): the search document (internal.write_post_projection, full
+--    body, so an edit approved or any other rewrite before the boundary keeps
+--    the renewed end), the post page (internal.get_public_post), My posts
+--    (internal.list_my_posts), the owner's post (internal.frontend_owner_post)
+--    and the dashboard (internal.restored_owner_dashboard), full bodies.
+--    Cost: the funding views compare the period's own dates first and follow
+--    the slot only once the period has ended; the lifecycle job reads only
+--    posts whose own end date passed and visible search documents whose end
+--    passed (a revoked renewal moves it back), through two new partial
+--    indexes (posts_paid_run_due_idx, post_search_documents_due_idx); the
+--    sweep reads only renewals that have not ended and grants ending within
+--    the reminder window (entitlements_renewals_current_idx,
+--    entitlements_active_ends_idx).
 -- 5. Renewal reminders. The same sweep queues one email (outbox kind
 --    slot_renewal_reminder, keyed by the ending grant, so at most one per
 --    slot end whatever the retries) for each ending grant the member can renew
@@ -134,9 +153,29 @@ begin
       ('internal.claim_supported_notification_outbox(text[],integer)'),('internal.retention_commerce(integer)'),
       ('internal.entitlement_for_post_eligible(uuid,uuid,uuid)'),('internal.run_post_lifecycle(integer)'),
       ('internal.release_frontend_content_hold(uuid,integer,text)'),('internal.set_post_media(uuid,integer,jsonb)'),
-      ('internal.frontend_privacy_export_data(uuid)')) v(sig)
+      ('internal.frontend_privacy_export_data(uuid)'),('internal.write_post_projection(uuid)'),
+      ('internal.get_public_post(uuid)'),('internal.list_my_posts(integer,integer)'),
+      ('internal.frontend_owner_post(uuid,uuid)'),('internal.restored_owner_dashboard()'),
+      ('internal.my_posting_capacity()'),('internal.get_my_frontend_posting_allowance_v2(text)'),
+      ('internal.get_my_frontend_post_manager()')) v(sig)
   loop
     if shape not in (
+        'internal.write_post_projection(uuid) a2cbe4d6ec0700eadd96321ad9d8dca6',
+        'internal.write_post_projection(uuid) aea4b9d7f9b4aa62308d71f6061abdd4',
+        'internal.get_public_post(uuid) 32aacc4c2ffb638eff09caafaefc7f89',
+        'internal.get_public_post(uuid) 474d4b8c99272d9ef97d883fb6623e32',
+        'internal.list_my_posts(integer,integer) f6fff6ccaae90fdf0fc020de24f00fa9',
+        'internal.list_my_posts(integer,integer) 07d86bafa2af93a7cb92dffff236b360',
+        'internal.frontend_owner_post(uuid,uuid) e8b8897f090143a4e4c428e530fd0dc2',
+        'internal.frontend_owner_post(uuid,uuid) e30bfe43996087f4ad9fdd0c046db212',
+        'internal.restored_owner_dashboard() e343f8753b0e22c05b6c1612d097af37',
+        'internal.restored_owner_dashboard() 58825cecd904b5cd6ff11bd8eb5c147c',
+        'internal.my_posting_capacity() 00a41fbaa617c3c69b14358853e867e5',
+        'internal.my_posting_capacity() 9c37c3662b616409fceba1c16c160711',
+        'internal.get_my_frontend_posting_allowance_v2(text) 5f289349861a6c403d88221437d6ff51',
+        'internal.get_my_frontend_posting_allowance_v2(text) 18edc8cd354b8990c7b557fa4f00eea3',
+        'internal.get_my_frontend_post_manager() 8120d3f354a6e4f3b08704fc56abfaea',
+        'internal.get_my_frontend_post_manager() a435e97820a6788e8203c2af447c0f42',
         'internal.individual_slots_counted(text,uuid,uuid) 1444a238736eac1d4de7dc8a53526e9b',
         'internal.individual_slots_counted(text,uuid,uuid) 4213e64e4b2fb9f8062fe02277a28e69',
         'internal.start_slot_checkout(uuid,integer,bigint,boolean) dcbb5be85829b017a483c21b91c95602',
@@ -156,7 +195,7 @@ begin
         'internal.entitlement_for_post_eligible(uuid,uuid,uuid) ff74c8cfdd93037f14e29f53ac0896ff',
         'internal.entitlement_for_post_eligible(uuid,uuid,uuid) d3861dfcebe2d7e1d6955a0c549b2db3',
         'internal.run_post_lifecycle(integer) e902328043d024a4ba16e38eeabb1b73',
-        'internal.run_post_lifecycle(integer) cb178dd0e47f84cbb277a87abd31b140',
+        'internal.run_post_lifecycle(integer) cb5770e3e71e9e6ed31d1eff3e06e3fc',
         'internal.release_frontend_content_hold(uuid,integer,text) 5c7eaa1a42528d6467b1eb06fe992f4d',
         'internal.release_frontend_content_hold(uuid,integer,text) c975e7b75ad113c28018d36477c953f7',
         'internal.set_post_media(uuid,integer,jsonb) 3ff7aba47039b8f074318e796718f85d',
@@ -172,7 +211,7 @@ begin
       ('internal.individual_slot_identity(uuid)'),
       ('internal.individual_slot_limit(text)'),('internal.individual_slot_plan(text)'),
       ('internal.entitlement_usable(text,timestamp with time zone,timestamp with time zone)'),
-      ('internal.lock_verification_subject(uuid)'),('internal.retention_reason(text)'),('internal.write_post_projection(uuid)'),
+      ('internal.lock_verification_subject(uuid)'),('internal.retention_reason(text)'),
       ('internal.customer_invoice_settled_elsewhere(uuid)'),('internal.addon_purchase_entitlement(uuid,uuid,text)'),
       ('internal.payment_invoice_vat(private.payments)'),('internal.payment_delivery_commission(uuid)'),
       ('internal.staff_actor(text)'),('internal.assert_staff_payment_actor(uuid,uuid)'),
@@ -188,7 +227,6 @@ begin
         'internal.entitlement_usable(text,timestamp with time zone,timestamp with time zone) 0db72b1ee054a2d8dd1b946d73c58e41',
         'internal.lock_verification_subject(uuid) 7b86872a4f8c8495ab393817fe360853',
         'internal.retention_reason(text) e452f846d3d2bcff13706c6e315bb53b',
-        'internal.write_post_projection(uuid) a2cbe4d6ec0700eadd96321ad9d8dca6',
         'internal.customer_invoice_settled_elsewhere(uuid) eab13db8976c5bcde805288faec9591c',
         'internal.addon_purchase_entitlement(uuid,uuid,text) 2cd60895de8dad14dfe1d1f26ae83543',
         'internal.payment_invoice_vat(private.payments) 8ba4ca6c4ea0207abece5a9fdc57336e',
@@ -206,14 +244,22 @@ begin
   if to_regclass('private.payment_lines') is null or to_regclass('private.customer_invoices') is null then
     raise exception 'slot renewal precondition: apply 20261113002421 and 20261114041000 first' using errcode='55000';
   end if;
-  -- The two funding views are the reviewed ones (own-period funding) or this
-  -- update's (funding through the slot).
-  if not coalesce(pg_get_viewdef('private.public_eligible_posts'::regclass) like '%entitlement_usable(e_1.status, e_1.starts_at, e_1.ends_at)%'
-        or pg_get_viewdef('private.public_eligible_posts'::regclass) like '%slot_grant_usable(e_1.id, e_1.status, e_1.starts_at, e_1.ends_at)%', false)
-    or not coalesce(pg_get_viewdef('private.frontend_restorable_posts'::regclass) like '%entitlement_usable(e.status, e.starts_at, e.ends_at)%'
-        or pg_get_viewdef('private.frontend_restorable_posts'::regclass) like '%slot_grant_usable(e.id, e.status, e.starts_at, e.ends_at)%', false) then
-    raise exception 'slot renewal precondition: the post funding views are not the reviewed ones' using errcode='55000';
-  end if;
+  -- The two funding views are exactly the reviewed ones (own-period funding)
+  -- or this update's (funding through the slot): an md5 of each whole
+  -- definition, so a view changed in any other way is refused, not replaced.
+  for shape in
+    select v.name||' '||coalesce(md5(replace(pg_get_viewdef(to_regclass(v.name),true),E'\r\n',E'\n')),'absent')
+    from (values ('private.public_eligible_posts'),('private.frontend_restorable_posts')) v(name)
+  loop
+    if shape not in (
+        'private.public_eligible_posts 4473313cb46b357611a146d8106ada10',
+        'private.public_eligible_posts 921182c5875ae0f33536c11e2b85c8a2',
+        'private.frontend_restorable_posts 32f39440f8227938a70d8dde624e18dc',
+        'private.frontend_restorable_posts 715c8d00fa79df66d1c0544283ea3ff5') then
+      raise exception 'slot renewal precondition: the post funding view % is not a reviewed definition', shape
+        using errcode='55000';
+    end if;
+  end loop;
   for shape in
     select v.rel||'.'||v.col||' '||coalesce((select pg_catalog.format_type(a.atttypid,a.atttypmod)
         ||case when a.attnotnull then '!' else '' end||coalesce(' default '||pg_catalog.pg_get_expr(d.adbin,d.adrelid),'')
@@ -268,6 +314,17 @@ create index if not exists entitlements_renews_entitlement_idx on private.entitl
 create index if not exists entitlements_slot_idx on private.entitlements (slot_id) where slot_id is not null;
 create index if not exists payment_lines_renews_entitlement_idx on private.payment_lines (renews_entitlement_id)
   where renews_entitlement_id is not null;
+-- 4. What the jobs read, by date: paid posts (live, or paused holding a slot)
+-- whose own end date passes; visible search documents whose end passes (a
+-- revoked renewal moves it back before the post's own end date); renewals that
+-- have not ended (the hand-over); and grants by end date (the reminders).
+create index if not exists posts_paid_run_due_idx on private.posts (visible_until)
+  where kind <> 'event' and status = any (array['live', 'paused']);
+create index if not exists post_search_documents_due_idx on private.post_search_documents (visible_until)
+  where is_visible and kind <> 'event';
+create index if not exists entitlements_renewals_current_idx on private.entitlements (ends_at)
+  where slot_id is not null and status = 'active';
+create index if not exists entitlements_active_ends_idx on private.entitlements (ends_at) where status = 'active';
 
 -- 5. The reminder's outbox kind.
 alter table private.outbox_events drop constraint if exists outbox_events_kind_check;
@@ -527,6 +584,61 @@ $function$;
 alter function internal.slot_grant_usable(uuid,text,timestamp with time zone,timestamp with time zone) owner to postgres;
 revoke all on function internal.slot_grant_usable(uuid,text,timestamp with time zone,timestamp with time zone) from public, anon, authenticated, service_role;
 
+-- The end date a post shows (its search document, its page, the owner's
+-- lists): an event's own end date; a paid post's end of its slot's unbroken
+-- run of periods (internal.slot_chain_end, as its funding) while it holds a
+-- period of an active grant, so a renewal paid ahead shows its new end at once
+-- and a revoked renewal moves it back; otherwise (not yet published, ended) its
+-- own end date.
+CREATE OR REPLACE FUNCTION internal.post_shown_until(p_post_id uuid, p_kind text, p_visible_until timestamp with time zone)
+ RETURNS timestamp with time zone
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select case when p_kind = 'event' or p_visible_until is null then p_visible_until
+    else coalesce((select internal.slot_chain_end(a.entitlement_id) from private.post_activations a
+        join private.entitlements e on e.id = a.entitlement_id
+      where a.post_id = p_post_id and a.released_at is null and e.status = 'active'), p_visible_until) end;
+$function$;
+alter function internal.post_shown_until(uuid,text,timestamp with time zone) owner to postgres;
+revoke all on function internal.post_shown_until(uuid,text,timestamp with time zone) from public, anon, authenticated, service_role;
+
+-- The posts a grant's slot holds now, over all the slot's periods: a post
+-- still in the period that just ended (waiting to move to the next one) fills
+-- the slot, as api.activate_post counts it.
+CREATE OR REPLACE FUNCTION internal.slot_posts_held(p_entitlement uuid)
+ RETURNS integer
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select count(*)::integer from private.post_activations a
+  where a.released_at is null and a.entitlement_id in (select c.id from private.entitlements t
+    join private.entitlements c on c.id = coalesce(t.slot_id, t.id) or c.slot_id = coalesce(t.slot_id, t.id)
+    where t.id = p_entitlement);
+$function$;
+alter function internal.slot_posts_held(uuid) owner to postgres;
+revoke all on function internal.slot_posts_held(uuid) from public, anon, authenticated, service_role;
+
+-- The posts that went live in a grant's slot since a time, over all the
+-- slot's periods, as api.activate_post counts them for fair use: a submission
+-- that review rejected and a post moved on into a renewed period do not count.
+CREATE OR REPLACE FUNCTION internal.slot_posts_started(p_entitlement uuid, p_since timestamp with time zone)
+ RETURNS integer
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select count(*)::integer from private.post_activations a
+  where a.activated_at > p_since and a.release_reason is distinct from 'moderation' and not a.continued
+    and a.entitlement_id in (select c.id from private.entitlements t
+    join private.entitlements c on c.id = coalesce(t.slot_id, t.id) or c.slot_id = coalesce(t.slot_id, t.id)
+    where t.id = p_entitlement);
+$function$;
+alter function internal.slot_posts_started(uuid,timestamp with time zone) owner to postgres;
+revoke all on function internal.slot_posts_started(uuid,timestamp with time zone) from public, anon, authenticated, service_role;
+
 -- The search documents of a slot's live and paused posts show until the end
 -- of the slot's unbroken run of periods: a renewal moves the date on, a
 -- revoked renewal moves it back. Only search documents are written (no post
@@ -580,8 +692,10 @@ create trigger entitlements_slot_chain_revoked after update of status on private
   for each row execute function internal.slot_grant_revoked();
 
 -- Who may see, reach and enquire about a post: as before, but a paid post is
--- funded through its slot (internal.slot_grant_usable), and its own end date
--- no longer hides it while its slot runs on (an event keeps its end date).
+-- funded through its slot (internal.slot_grant_usable, written out so the
+-- period's own dates are compared first and the slot is followed only once
+-- the period has ended), and its own end date no longer hides it while its
+-- slot runs on (an event keeps its end date).
 create or replace view private.public_eligible_posts with (security_invoker=true) as
  SELECT id
    FROM ( SELECT p.id
@@ -593,7 +707,7 @@ create or replace view private.public_eligible_posts with (security_invoker=true
                    FROM private.post_activations a
                      JOIN private.entitlements e_1 ON e_1.id = a.entitlement_id
                      JOIN private.current_account_access funding_owner ON funding_owner.id = e_1.owner_id
-                  WHERE a.post_id = p.id AND a.owner_id = p.owner_id AND a.released_at IS NULL AND internal.slot_grant_usable(e_1.id, e_1.status, e_1.starts_at, e_1.ends_at) AND (e_1.area IS NULL OR e_1.area = p.area) AND (e_1.owner_id = p.owner_id OR (EXISTS ( SELECT 1
+                  WHERE a.post_id = p.id AND a.owner_id = p.owner_id AND a.released_at IS NULL AND e_1.status = 'active'::text AND e_1.starts_at <= statement_timestamp() AND (e_1.ends_at > statement_timestamp() OR internal.slot_chain_end(e_1.id) > statement_timestamp()) AND (e_1.area IS NULL OR e_1.area = p.area) AND (e_1.owner_id = p.owner_id OR (EXISTS ( SELECT 1
                            FROM private.entitlement_members m
                           WHERE m.entitlement_id = e_1.id AND m.member_id = p.owner_id))) AND (( SELECT count(DISTINCT pm.object_id) AS count
                            FROM private.post_media pm
@@ -619,7 +733,7 @@ create or replace view private.frontend_restorable_posts with (security_invoker=
            FROM private.post_activations a
              JOIN private.entitlements e ON e.id = a.entitlement_id
              JOIN private.current_account_access funding_owner ON funding_owner.id = e.owner_id
-          WHERE a.post_id = p.id AND a.owner_id = p.owner_id AND a.released_at IS NULL AND internal.slot_grant_usable(e.id, e.status, e.starts_at, e.ends_at) AND (e.area IS NULL OR e.area = p.area) AND (e.owner_id = p.owner_id OR (EXISTS ( SELECT 1
+          WHERE a.post_id = p.id AND a.owner_id = p.owner_id AND a.released_at IS NULL AND e.status = 'active'::text AND e.starts_at <= statement_timestamp() AND (e.ends_at > statement_timestamp() OR internal.slot_chain_end(e.id) > statement_timestamp()) AND (e.area IS NULL OR e.area = p.area) AND (e.owner_id = p.owner_id OR (EXISTS ( SELECT 1
                    FROM private.entitlement_members m
                   WHERE m.entitlement_id = e.id AND m.member_id = p.owner_id))) AND (( SELECT count(DISTINCT pm.object_id) AS count
                    FROM private.post_media pm
@@ -630,6 +744,353 @@ create or replace view private.frontend_restorable_posts with (security_invoker=
                   WHERE pay.id = e.payment_id AND pay.owner_id = e.owner_id AND pay.status = 'complete'::text))))));
 alter view private.frontend_restorable_posts owner to postgres;
 revoke all on private.frontend_restorable_posts from public, anon, authenticated, service_role;
+
+-- The end date a post shows, everywhere it is built (internal.post_shown_until).
+-- The search document: any rewrite (an edit approved, moderation, a state
+-- change) keeps the end of the slot's run, so a post renewed ahead stays in
+-- search across the boundary whether or not a job has run.
+CREATE OR REPLACE FUNCTION internal.write_post_projection(p_post_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare post private.posts; price record; public_facets jsonb := '{}'::jsonb;
+begin
+  select * into post from private.posts p where p.id = p_post_id;
+  select d.price_mode, d.price_cents, d.price_negotiable into price from private.listing_details d where d.post_id = post.id;
+  if post.kind = 'listing' then
+    select coalesce(jsonb_object_agg(f.key, d.attributes->f.key), '{}'::jsonb) into public_facets
+    from private.category_fields f join private.listing_details d on d.post_id = post.id
+    where f.category_key = post.category_key and f.facet_kind is not null and d.attributes ? f.key;
+  end if;
+  insert into private.post_search_documents (post_id, kind, area, category_key, activity_key, province_id, city_id,
+    locality_label, title, summary, price_mode, price_cents, price_negotiable, published_at, visible_until, is_visible, facets)
+  values (post.id, post.kind, post.area, post.category_key, post.activity_key, post.province_id, post.city_id,
+    coalesce(post.locality_label, (select c.label from private.cities c where c.id = post.city_id)),
+    post.title, left(coalesce(post.description, ''), 300), price.price_mode,
+    case when price.price_mode = 'on_request' then null else price.price_cents end,
+    coalesce(price.price_negotiable,false),
+    post.published_at, internal.post_shown_until(post.id, post.kind, post.visible_until), post.status = 'live', public_facets)
+  on conflict (post_id) do update set kind = excluded.kind, area = excluded.area,
+    category_key = excluded.category_key, activity_key = excluded.activity_key, province_id = excluded.province_id,
+    city_id = excluded.city_id, locality_label = excluded.locality_label, title = excluded.title,
+    summary = excluded.summary, price_mode = excluded.price_mode, price_cents = excluded.price_cents, price_negotiable = excluded.price_negotiable,
+    published_at = excluded.published_at, visible_until = excluded.visible_until, is_visible = excluded.is_visible,
+    facets = excluded.facets;
+end;
+$function$;
+alter function internal.write_post_projection(uuid) owner to postgres;
+revoke all on function internal.write_post_projection(uuid) from public;
+
+-- The post page.
+CREATE OR REPLACE FUNCTION internal.get_public_post(p_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select jsonb_build_object('id', p.id, 'kind', p.kind, 'area', p.area, 'category', p.category_key,
+    'activity', p.activity_key, 'title', p.title, 'description', p.description, 'province', p.province_id,
+    'city', p.city_id, 'locality', d.locality_label, 'price_mode', d.price_mode, 'price_cents', d.price_cents::text,
+    'price_negotiable', d.price_negotiable,
+    'published_at', p.published_at, 'visible_until', internal.post_shown_until(p.id, p.kind, p.visible_until),
+    'event_window',case when p.kind='event' then jsonb_build_object(
+      'starts_at',to_char(e.starts_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+      'ends_at',to_char(e.ends_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+      'timezone',e.timezone) else null end,
+    'condition', case when p.kind='listing' then d.facets->>'condition' end,
+    'media', coalesce((select jsonb_agg(jsonb_build_object('purpose', pm.purpose, 'position', pm.position,
+        'object_key', m.object_key, 'kind', m.kind, 'width', m.width, 'height', m.height,
+        'focal_x', pm.focal_x, 'focal_y', pm.focal_y) order by pm.purpose, pm.position)
+      from private.post_media pm join private.media_objects m on m.id = pm.object_id
+      where pm.post_id = p.id and m.state = 'ready'), '[]'),
+    'seller', jsonb_build_object(
+      'public_name', internal.profile_public_name(pr.display_name),
+      'avatar_object_key', (select m.object_key from private.media_objects m
+        where m.id=pr.avatar_object_id and m.state='ready' and m.kind='image'),
+      'identity_verified', exists(select 1 from private.accepted_identity_facts f
+        where f.owner_id=p.owner_id and f.revoked_at is null)))
+  from private.posts p join private.post_search_documents d on d.post_id = p.id
+  left join private.event_details e on e.post_id=p.id and p.kind='event'
+  left join private.profiles pr on pr.account_id=p.owner_id
+  where p.id = p_id and d.is_visible and (d.visible_until is null or d.visible_until>statement_timestamp())
+    and exists(select 1 from private.public_eligible_posts eligible where eligible.id=p.id);
+$function$;
+alter function internal.get_public_post(uuid) owner to postgres;
+revoke all on function internal.get_public_post(uuid) from public;
+grant execute on function internal.get_public_post(uuid) to anon;
+grant execute on function internal.get_public_post(uuid) to authenticated;
+
+-- My posts.
+CREATE OR REPLACE FUNCTION internal.list_my_posts(p_limit integer DEFAULT 48, p_offset integer DEFAULT 0)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid:=internal.price_draft_actor(); result jsonb;
+begin
+  if p_limit is null or p_limit not between 1 and 100 or p_offset is null or p_offset not between 0 and 100000 then
+    raise exception 'invalid page' using errcode='22023'; end if;
+  select jsonb_build_object('items',coalesce((select jsonb_agg(jsonb_build_object(
+    'id',p.id,'kind',p.kind,'area',p.area,'category',p.category_key,'title',p.title,
+    'status',p.status,'revision',p.revision,'created_at',p.created_at,
+    'published_at',p.published_at,'visible_until',internal.post_shown_until(p.id,p.kind,p.visible_until),
+    'price_mode',d.price_mode,'price_cents',d.price_cents::text,
+    'cover_object_key',(select m.object_key from private.post_media pm join private.media_objects m on m.id=pm.object_id
+      where pm.post_id=p.id and m.state='ready' and m.kind='image' order by (pm.purpose='cover') desc,pm.position limit 1)
+    ) order by p.created_at desc,p.id desc) from (select * from private.posts
+      where owner_id=actor and edit_of is null order by created_at desc,id desc limit p_limit offset p_offset) p
+      left join private.post_search_documents d on d.post_id=p.id),'[]'::jsonb),
+    'total',(select count(*) from private.posts where owner_id=actor and edit_of is null),
+    'limit',p_limit,'offset',p_offset) into result;
+  perform internal.price_draft_actor();
+  return result;
+end;
+$function$;
+alter function internal.list_my_posts(integer,integer) owner to postgres;
+revoke all on function internal.list_my_posts(integer,integer) from public;
+grant execute on function internal.list_my_posts(integer,integer) to authenticated;
+
+-- The owner's post (editor, post page for the owner, staff review).
+CREATE OR REPLACE FUNCTION internal.frontend_owner_post(p_post uuid, p_actor uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+ select jsonb_build_object('id',p.id,'kind',p.kind,'area',p.area,'category',p.category_key,'activity',p.activity_key,
+   'status',p.status,'status_reason',p.status_reason,'revision',p.revision,'edit_of',p.edit_of,
+   'created_at',p.created_at,'updated_at',p.content_updated_at,'published_at',p.published_at,'expires_at',case when p.status='pending_moderation' then (select f.funded_until from internal.post_funding(p.id) f) else coalesce(internal.post_shown_until(p.id,p.kind,p.visible_until),(select f.funded_until from internal.post_funding(p.id) f)) end,
+   'content',jsonb_build_object('title',p.title,'description',p.description,'province_id',p.province_id,'city_id',p.city_id,'locality_label',p.locality_label),
+   'listing',case when p.kind='listing' then (select to_jsonb(d)-array['post_id','post_kind'] from private.listing_details d where d.post_id=p.id) end,
+   'business_type',(select d.business_type from private.business_details d where d.post_id=p.id),
+   'event_window',(select jsonb_build_object('starts_at',e.starts_at,'ends_at',e.ends_at,'timezone',e.timezone) from private.event_details e where e.post_id=p.id),
+   'contact_channels',(select channels from private.post_contacts c where c.post_id=p.id),
+   'media',coalesce((select jsonb_agg(jsonb_build_object('object_id',m.id,'object_key',m.object_key,'kind',m.kind,'state',m.state,
+     'purpose',r.purpose,'position',r.position,'width',m.width,'height',m.height,'focal_x',r.focal_x,'focal_y',r.focal_y) order by r.purpose,r.position)
+     from private.post_media r join private.media_objects m on m.id=r.object_id and m.owner_id=p.owner_id where r.post_id=p.id),'[]'::jsonb),
+   'frontend',jsonb_set(internal.frontend_post_presentation(p.id),'{data}',coalesce((select data from private.post_presentations where post_id=p.id),'{}'::jsonb)),
+   'contacts',coalesce((select contacts from private.post_presentations where post_id=p.id),'{}'::jsonb),
+   'pending_edit',(select jsonb_build_object('id',e.id,'status',e.status,'revision',e.revision) from private.posts e where e.edit_of=p.id and e.owner_id=p_actor))
+ from private.posts p where p.id=p_post and p.owner_id=p_actor;
+$function$;
+alter function internal.frontend_owner_post(uuid,uuid) owner to postgres;
+revoke all on function internal.frontend_owner_post(uuid,uuid) from public;
+
+-- The dashboard: active and ending-soon listings and each post's end date.
+CREATE OR REPLACE FUNCTION internal.restored_owner_dashboard()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid:=internal.price_draft_actor(); result jsonb; verification jsonb;
+begin
+  verification:=internal.get_my_verification_case();
+  select jsonb_build_object(
+    'version',1,'account_id',actor,'generated_at',statement_timestamp(),
+    'verification',verification,
+    'profile_facts',jsonb_build_object(
+      'legal_name_locked_at',p.legal_name_locked_at,
+      'phone_changed_at',phone.contact_changed_at,
+      'phone_verified_at',phone.verified_at,
+      'identity_reviewed_at',(select f.reviewed_at from private.accepted_identity_facts f
+        where f.owner_id=actor and f.revoked_at is null and f.identity_hmac=internal.current_verified_identity(actor)),
+      'location_province',province.label,'location_city',city.label,
+      'location_confirmed_at',locality.confirmed_at),
+    'counts',(select jsonb_build_object(
+      'active_listings',count(*) filter(where kind='listing' and status='live' and s.shown_until>statement_timestamp()),
+      'active_events',count(*) filter(where kind='event' and status='live' and visible_until>statement_timestamp()
+        and exists(select 1 from private.event_details e where e.post_id=posts.id and e.ends_at>statement_timestamp())),
+      'rejected_listings',count(*) filter(where kind='listing' and status='rejected'),
+      'pending_listings',count(*) filter(where kind='listing' and status='pending_moderation'),
+      'expiring_listings',count(*) filter(where kind='listing' and status='live' and s.shown_until>statement_timestamp()
+        and s.shown_until<statement_timestamp()+interval '7 days'),
+      'expiring_events',count(*) filter(where kind='event' and status='live' and visible_until>statement_timestamp()
+        and exists(select 1 from private.event_details e where e.post_id=posts.id and e.ends_at>statement_timestamp()
+          and e.ends_at<statement_timestamp()+interval '48 hours')),
+      'businesses',count(*) filter(where kind='business' and area='business'),
+      'tourism_businesses',count(*) filter(where kind='business' and area='tourism_events'))
+      from private.posts posts cross join lateral (select internal.post_shown_until(posts.id,posts.kind,posts.visible_until) as shown_until) s
+      where owner_id=actor and edit_of is null),
+    'unread_leads',(select count(*) from private.enquiries e where e.owner_id=actor and e.status='new'),
+    'unread_notifications',(select count(*) from private.notifications n where n.account_id=actor and n.read_at is null),
+    'organisation_admin_count',(select count(*) from private.organisation_admins a where a.account_id=actor),
+    'posts',coalesce((select jsonb_agg(jsonb_build_object(
+      'id',post.id,'title',post.title,'status',post.status,'created_at',post.created_at,
+      'updated_at',post.content_updated_at,'expires_at',internal.post_shown_until(post.id,post.kind,post.visible_until),
+      'area','MZANSI_MARKET','cover_object_key',(select m.object_key from private.post_media pm
+        join private.media_objects m on m.id=pm.object_id
+        where pm.post_id=post.id and m.owner_id=actor and m.state='ready' and m.kind='image'
+        order by (pm.purpose='cover') desc,pm.position,pm.object_id limit 1)
+      ) order by post.content_updated_at desc,post.id desc)
+      from (select * from private.posts where owner_id=actor and kind='listing' and edit_of is null
+        order by content_updated_at desc,id desc limit 10) post),'[]'::jsonb),
+    'recent_leads',coalesce((select jsonb_agg(jsonb_build_object(
+      'id',e.id,'status',e.status,'message',e.message,'buyer_name',e.buyer_name,
+      'created_at',e.created_at,'target_id',e.post_id,'target_type',case when post.kind='event' then 'promotion' else post.kind end,
+      'title',post.title) order by e.created_at desc,e.id desc)
+      from (select * from private.enquiries where owner_id=actor order by created_at desc,id desc limit 3) e
+      left join private.posts post on post.id=e.post_id and post.owner_id=actor),'[]'::jsonb),
+    -- Only actual active retail plans produce a paid-plan label. Trial,
+    -- sponsorship and staff grants are never presented as purchased plans.
+    'paid_plans',coalesce((select jsonb_agg(jsonb_build_object(
+      'id',e.id,'area',case e.area when 'market' then 'MZANSI_MARKET' when 'business' then 'MZANSI_BUSINESS' when 'tourism_events' then 'PROMOTIONS_EVENTS' else null end,
+      'label',pay.snapshot->>'label',
+      'tier',case when e.slot_capacity>1 then 'enterprise'
+        when pay.snapshot->>'duration_days'='180' then 'half_year'
+        when pay.snapshot->>'duration_days'='90' then 'quarter'
+        when pay.snapshot->>'duration_days'='30' then 'month'
+        when pay.snapshot->>'duration_days'='365' then 'year' else null end,
+      'status','active') order by e.slot_capacity desc,e.ends_at desc,e.id)
+      from private.entitlements e join private.payments pay on pay.id=e.payment_id
+      where e.source='retail_paid' and e.status='active' and e.starts_at<=statement_timestamp() and e.ends_at>statement_timestamp()
+        and (e.owner_id=actor or exists(select 1 from private.entitlement_members m where m.entitlement_id=e.id and m.member_id=actor))),'[]'::jsonb)
+    ) into result from private.profiles p
+    left join private.verification_phone_proofs phone on phone.owner_id=p.account_id and phone.revoked_at is null
+    left join private.verification_localities locality on locality.owner_id=p.account_id
+    left join private.provinces province on province.id=locality.province_id
+    left join private.cities city on city.id=locality.city_id and city.province_id=locality.province_id
+    where p.account_id=actor;
+  if result is null then raise exception 'account profile unavailable' using errcode='42501'; end if;
+  perform internal.price_draft_actor();
+  return result;
+end;
+$function$;
+alter function internal.restored_owner_dashboard() owner to postgres;
+revoke all on function internal.restored_owner_dashboard() from public;
+grant execute on function internal.restored_owner_dashboard() to authenticated;
+
+-- The member's posting capacity, allowance and post manager count a slot's
+-- posts over all its periods (internal.slot_posts_held, internal.
+-- slot_posts_started), as api.activate_post does: a post waiting to move into
+-- the renewed period still fills its place. The capacity's end is the end of
+-- the slot's run.
+CREATE OR REPLACE FUNCTION internal.my_posting_capacity()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+begin
+  -- The disposable prototype installs current account authority next. The clean
+  -- baseline must create authority relations before dependent API functions.
+  return (
+  with actor as (select internal.price_draft_actor() as id),
+  usable as (
+    select e.* from private.entitlements e, actor
+    where internal.entitlement_usable(e.status, e.starts_at, e.ends_at)
+      and (e.owner_id = actor.id or exists (select 1 from private.entitlement_members m
+        where m.entitlement_id = e.id and m.member_id = actor.id))
+      and exists(select 1 from private.current_account_access u where u.id=e.owner_id)
+      and (e.source<>'retail_paid' or exists(select 1 from private.payments pay
+        where pay.id=e.payment_id and pay.owner_id=e.owner_id and pay.status='complete'))
+  )
+  select jsonb_build_object(
+    'capacity', coalesce(sum(u.slot_capacity), 0),
+    'active', coalesce(sum(internal.slot_posts_held(u.id)), 0),
+    'ends_at', max(internal.slot_chain_end(u.id)),
+    'sources', coalesce(jsonb_agg(distinct u.source) filter (where u.source is not null), '[]'))
+  from usable u);
+end;
+$function$;
+alter function internal.my_posting_capacity() owner to postgres;
+revoke all on function internal.my_posting_capacity() from public;
+grant execute on function internal.my_posting_capacity() to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.get_my_frontend_posting_allowance_v2(p_area text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid:=internal.price_draft_actor();fingerprint text;claimed boolean;eligible boolean;result jsonb;
+begin
+  if p_area is null or p_area not in('market','business','tourism_events') then
+    raise exception 'posting area required' using errcode='22023';end if;
+  fingerprint:=internal.current_verified_identity(actor);
+  claimed:=exists(select 1 from private.trial_identities t where t.owner_id=actor or t.identity_hmac=fingerprint);
+  -- A post waiting for the free week (internal.queue_intro_trial) uses the
+  -- offer. The free week is 7 days: the 30-day choice is not available.
+  eligible:=not claimed and not exists(select 1 from private.banned_identities b where b.identity_hmac=fingerprint and b.retain_until>clock_timestamp())
+    and not internal.intro_trial_waiting(actor);
+  -- Eligibility here is a display hint, including before identity review. The
+  -- existing grant derives the verified identity and rechecks claims atomically.
+  with usable as (
+    select e.*,pay.snapshot from private.entitlements e left join private.payments pay on pay.id=e.payment_id
+    where (e.area is null or e.area=p_area) and internal.entitlement_usable(e.status,e.starts_at,e.ends_at)
+      and (e.owner_id=actor or exists(select 1 from private.entitlement_members m where m.entitlement_id=e.id and m.member_id=actor))
+      and exists(select 1 from private.current_account_access a where a.id=e.owner_id)
+      and (e.source<>'retail_paid' or (pay.status='complete' and pay.owner_id=e.owner_id))
+  ) select jsonb_build_object(
+    'account_id',actor,'profile_exists',exists(select 1 from private.profiles p where p.account_id=actor),
+    'capacity',coalesce(sum(u.slot_capacity),0),
+    'used',coalesce(sum(a.active_count),0),
+    'creation_remaining',coalesce(sum(greatest(0,least(u.slot_capacity-a.active_count,
+        coalesce(u.activations_per_period-a.period_count,u.slot_capacity)))),0),
+    'max_photos',coalesce(max(u.max_photos),case when eligible then 10 else 0 end),
+    'max_videos',coalesce(max(u.max_videos),case when eligible then 1 else 0 end),
+    'tier',case when count(*)=0 then 'free' else coalesce((select case when x.slot_capacity>1 then 'enterprise'
+      when (x.snapshot->>'duration_days')::integer=30 then 'month' when (x.snapshot->>'duration_days')::integer=90 then 'quarter'
+      when (x.snapshot->>'duration_days')::integer=180 then 'half_year' else 'active' end
+      from usable x where x.source='retail_paid' order by (x.snapshot->>'duration_days')::integer desc,x.id limit 1),'active') end,
+    'trial_ends_at',max(u.ends_at) filter(where u.source='intro_trial'),
+    'trial_used',claimed,'trial_offer',jsonb_build_object('eligible',eligible,'sevenDayAvailable',eligible,
+      'thirtyDayAvailable',false,'remaining',null,'launchEnabled',true,'shortDays',7,'longDays',30)
+  ) into result from usable u cross join lateral (
+      select internal.slot_posts_held(u.id) as active_count,
+        internal.slot_posts_started(u.id,statement_timestamp()-make_interval(days=>u.activation_period_days)) as period_count
+    ) a;
+  perform internal.price_draft_actor();return result;
+end$function$;
+alter function internal.get_my_frontend_posting_allowance_v2(text) owner to postgres;
+revoke all on function internal.get_my_frontend_posting_allowance_v2(text) from public;
+grant execute on function internal.get_my_frontend_posting_allowance_v2(text) to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.get_my_frontend_post_manager()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid:=internal.price_draft_actor();result jsonb;
+begin
+  select jsonb_build_object('account_id',actor,
+    'slot_usage',coalesce((select jsonb_agg(jsonb_build_object(
+      'id',e.id,'source',case e.source when 'retail_paid' then 'RETAIL_PAID' when 'intro_trial' then 'Free trial'
+        when 'sponsorship' then 'SPONSORED_ORGANISATION_MEMBER' when 'contract' then 'ENTERPRISE_CONTRACT' when 'staff_grant' then 'ADMIN_GRANT' end,
+      'area',case e.area when 'market' then 'MZANSI_MARKET' when 'business' then 'MZANSI_BUSINESS' when 'tourism_events' then 'PROMOTIONS_EVENTS' end,
+      'planName',pay.snapshot->>'label','status',e.status,'slotCapacity',e.slot_capacity,
+      'activeUsage',internal.slot_posts_held(e.id),
+      'activationCount',(select count(*) from private.post_activations a where a.entitlement_id=e.id),
+      'activationLimitTotal',null,'activationLimitPerPeriod',e.activations_per_period,'activationPeriodDays',e.activation_period_days,
+      'periodActivations',internal.slot_posts_started(e.id,statement_timestamp()-make_interval(days=>e.activation_period_days)),
+      'startsAt',e.starts_at,'expiresAt',e.ends_at,'autoRenew',false,'sponsored',e.source='sponsorship') order by e.ends_at,e.id)
+      from private.entitlements e left join private.payments pay on pay.id=e.payment_id
+      where (e.owner_id=actor or exists(select 1 from private.entitlement_members m where m.entitlement_id=e.id and m.member_id=actor))
+      and internal.entitlement_usable(e.status,e.starts_at,e.ends_at) and exists(select 1 from private.current_account_access a where a.id=e.owner_id)
+      and (e.source<>'retail_paid' or pay.status='complete')),'[]'::jsonb),
+    'plan_admins',coalesce((select jsonb_agg(jsonb_build_object('entitlementId',e.id,'slotCapacity',e.slot_capacity,'expiresAt',e.ends_at,
+      'admins',coalesce((select jsonb_agg(jsonb_build_object('name',coalesce(internal.profile_public_name(pr.display_name),'Member'),
+        'email',u.email) order by m.member_id) from private.entitlement_members m join auth.users u on u.id=m.member_id
+        left join private.profiles pr on pr.account_id=m.member_id where m.entitlement_id=e.id),'[]'::jsonb)))
+      from private.entitlements e join private.payments p on p.id=e.payment_id and p.status='complete'
+      where e.owner_id=actor and e.source='retail_paid' and e.slot_capacity>1 and internal.entitlement_usable(e.status,e.starts_at,e.ends_at)),'[]'::jsonb),
+    'sponsored_post_ids',coalesce((select jsonb_agg(a.post_id order by a.post_id) from private.post_activations a
+      join private.entitlements e on e.id=a.entitlement_id and e.source='sponsorship'
+      where a.owner_id=actor and a.released_at is null and internal.entitlement_usable(e.status,e.starts_at,e.ends_at)),'[]'::jsonb),
+    'addons',coalesce((select jsonb_agg(jsonb_build_object('post_id',p.id,
+      'boost_until',(select max(w.ends_at) from private.post_addon_windows w where w.post_id=p.id and w.kind='boost' and w.revoked_at is null and w.starts_at<=statement_timestamp() and w.ends_at>statement_timestamp()),
+      'featured_until',(select max(w.ends_at) from private.post_addon_windows w where w.post_id=p.id and w.kind='featured' and w.revoked_at is null and w.starts_at<=statement_timestamp() and w.ends_at>statement_timestamp()),
+      'urgent_until',(select max(w.ends_at) from private.post_addon_windows w where w.post_id=p.id and w.kind='urgent' and w.revoked_at is null and w.starts_at<=statement_timestamp() and w.ends_at>statement_timestamp())) order by p.id)
+      from private.posts p where p.owner_id=actor and p.edit_of is null and exists(select 1 from private.post_addon_windows w
+        where w.post_id=p.id and w.revoked_at is null and w.starts_at<=statement_timestamp() and w.ends_at>statement_timestamp())),'[]'::jsonb)) into result;
+  perform internal.price_draft_actor();return result;
+end$function$;
+alter function internal.get_my_frontend_post_manager() owner to postgres;
+revoke all on function internal.get_my_frontend_post_manager() from public;
+grant execute on function internal.get_my_frontend_post_manager() to authenticated;
 
 -- The post's current funding for its owner's commands (resubmission, the
 -- activation it keeps): the same read-time funding through its slot.
@@ -836,20 +1297,30 @@ begin
   -- expired: its end date moves to the end of the slot's run; a post whose
   -- slot run ended early (a renewal revoked) expires although its end date
   -- has not come.
+  -- Candidates are read by date only (posts_paid_run_due_idx,
+  -- post_search_documents_due_idx, against the statement's time so the
+  -- indexes bound the read): posts whose own end date has passed, and live
+  -- posts whose search document's end has passed before it (a revoked renewal
+  -- moves the document's end back to the slot's remaining run).
   -- Candidates are unlocked. Take the shared hold/closure subject guard before
   -- locking a post, then re-evaluate all mutable eligibility under those locks.
   for r in
-    select p.id,p.owner_id from private.posts p
-    where p.kind<>'event'
-      and (p.visible_until<=clock_timestamp() or exists(select 1 from private.post_activations a
-        join private.entitlements g on g.id=a.entitlement_id
-        where a.post_id=p.id and a.released_at is null
-          and not internal.slot_grant_usable(g.id,g.status,g.starts_at,g.ends_at)))
-      and (p.status='live' or (p.status='paused' and exists(select 1 from private.post_activations a
-        where a.post_id=p.id and a.released_at is null)))
-      and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
-      and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
-    order by p.visible_until,p.id limit p_limit
+    select c.id,c.owner_id from (
+      (select p.id,p.owner_id,p.visible_until as due from private.posts p
+        where p.kind<>'event' and p.status in('live','paused') and p.visible_until<=statement_timestamp()
+          and (p.status='live' or (select true from private.post_activations a
+            where a.post_id=p.id and a.released_at is null))
+          and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
+          and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
+        order by p.visible_until,p.id limit p_limit)
+      union all
+      (select p.id,p.owner_id,d.visible_until from private.post_search_documents d join private.posts p on p.id=d.post_id
+        where d.is_visible and d.kind<>'event' and d.visible_until<=statement_timestamp()
+          and p.kind<>'event' and p.status='live' and p.visible_until>statement_timestamp()
+          and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
+          and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
+        order by d.visible_until,d.post_id limit p_limit)
+    ) c order by c.due,c.id limit p_limit
   loop
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
     select * into post from private.posts p where p.id=r.id and p.kind<>'event'
@@ -860,11 +1331,12 @@ begin
       or exists(select 1 from private.frontend_content_holds h where h.post_id=r.id and h.released_at is null) then continue; end if;
     select max(f.funded_until) into funded from internal.post_funding(post.id) f;
     if funded>clock_timestamp() then
-      -- Still funded through its slot: only its end date catches up.
+      -- Still funded through its slot: only its end dates catch up.
       if post.visible_until is distinct from funded then
         update private.posts set visible_until=funded where id=post.id;
-        update private.post_search_documents set visible_until=funded where post_id=post.id;
       end if;
+      update private.post_search_documents set visible_until=funded
+        where post_id=post.id and visible_until is distinct from funded;
       continue;
     end if;
     continue when post.visible_until>clock_timestamp() and exists(select 1 from private.post_activations a
@@ -1788,21 +2260,29 @@ begin
   -- follows on from it without a break and covers now. Only posts that can
   -- move are picked (the next period may carry the post and has room), so
   -- posts that cannot move (an owner who lost access, for example) never
-  -- crowd out the rest. Candidates are unlocked: take the owner's fence, then
-  -- lock and recheck.
+  -- crowd out the rest. Read from the renewals that have not ended
+  -- (entitlements_renewals_current_idx, against the statement's time) and
+  -- the posts still in an earlier period of their slot; the checks that call
+  -- functions run only on those. Candidates are unlocked: take the owner's
+  -- fence, then lock and recheck.
   for r in
-    select a.id as activation_id, a.post_id, a.owner_id, n.id as next_id
-    from private.post_activations a
-      join private.entitlements g on g.id=a.entitlement_id
-      join private.entitlements n on n.slot_id=coalesce(g.slot_id, g.id)
-    where a.released_at is null and a.post_id is not null and g.status='active' and g.ends_at<=clock_timestamp()
-      and n.status='active' and n.starts_at>g.starts_at and n.starts_at<=clock_timestamp() and n.ends_at>clock_timestamp()
-      and n.ends_at<=internal.slot_chain_end(g.id)
-      and internal.entitlement_for_post_eligible(n.id, a.post_id, a.owner_id)
-      and (select count(*) from private.post_activations o where o.released_at is null and o.id<>a.id
+    select w.activation_id, w.post_id, w.owner_id, w.next_id from (
+      select a.id as activation_id, a.post_id, a.owner_id, n.id as next_id, n.ends_at as next_ends,
+        n.slot_id as next_slot, n.slot_capacity as next_capacity, g.id as grant_id, g.ends_at as grant_ends
+      from private.entitlements n
+        join private.entitlements g on (g.id=n.slot_id or g.slot_id=n.slot_id) and g.id<>n.id
+        join private.post_activations a on a.entitlement_id=g.id and a.released_at is null
+      where n.slot_id is not null and n.status='active' and n.ends_at>statement_timestamp()
+        and n.starts_at<=statement_timestamp() and a.post_id is not null and g.status='active'
+        and g.ends_at<=statement_timestamp() and n.starts_at>g.starts_at
+      offset 0
+    ) w
+    where w.next_ends<=internal.slot_chain_end(w.grant_id)
+      and internal.entitlement_for_post_eligible(w.next_id, w.post_id, w.owner_id)
+      and (select count(*) from private.post_activations o where o.released_at is null and o.id<>w.activation_id
         and o.entitlement_id in (select c.id from private.entitlements c
-          where c.id=coalesce(n.slot_id, n.id) or c.slot_id=coalesce(n.slot_id, n.id))) < n.slot_capacity
-    order by g.ends_at, a.id limit p_limit
+          where c.id=w.next_slot or c.slot_id=w.next_slot)) < w.next_capacity
+    order by w.grant_ends, w.activation_id limit p_limit
   loop
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
     select * into post from private.posts p where p.id=r.post_id for update skip locked;
@@ -1834,7 +2314,7 @@ begin
       join private.payment_lines l on l.id=g.payment_line_id
       join private.plan_versions v on v.id=l.plan_version_id
     where g.source='retail_paid' and g.status='active' and internal.individual_slot_plan(v.plan_code)
-      and g.ends_at>clock_timestamp() and g.ends_at<=clock_timestamp()+interval '3 days'
+      and g.ends_at>statement_timestamp() and g.ends_at<=statement_timestamp()+interval '3 days'
       and internal.slot_renewal_due(g.id, g.owner_id)
       and not exists(select 1 from private.outbox_events o where o.dedupe_key='slot_renewal_reminder:'||g.id)
     order by g.ends_at, g.id limit p_limit

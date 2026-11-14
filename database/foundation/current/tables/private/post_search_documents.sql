@@ -44,6 +44,7 @@ alter table private.post_search_documents enable row level security;
 CREATE INDEX post_search_area_idx ON private.post_search_documents USING btree (area, published_at DESC, post_id DESC) WHERE is_visible;
 CREATE INDEX post_search_category_idx ON private.post_search_documents USING btree (category_key, published_at DESC, post_id DESC) WHERE is_visible;
 CREATE INDEX post_search_document_idx ON private.post_search_documents USING gin (document) WHERE is_visible;
+CREATE INDEX post_search_documents_due_idx ON private.post_search_documents USING btree (visible_until) WHERE (is_visible AND (kind <> 'event'::text));
 CREATE INDEX post_search_facets_idx ON private.post_search_documents USING gin (facets jsonb_path_ops) WHERE is_visible;
 CREATE INDEX post_search_locality_idx ON private.post_search_documents USING btree (province_id, city_id) WHERE is_visible;
 CREATE INDEX post_search_recent_idx ON private.post_search_documents USING btree (published_at DESC, post_id DESC) WHERE is_visible;

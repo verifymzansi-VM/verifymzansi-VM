@@ -21,20 +21,30 @@ begin
   -- expired: its end date moves to the end of the slot's run; a post whose
   -- slot run ended early (a renewal revoked) expires although its end date
   -- has not come.
+  -- Candidates are read by date only (posts_paid_run_due_idx,
+  -- post_search_documents_due_idx, against the statement's time so the
+  -- indexes bound the read): posts whose own end date has passed, and live
+  -- posts whose search document's end has passed before it (a revoked renewal
+  -- moves the document's end back to the slot's remaining run).
   -- Candidates are unlocked. Take the shared hold/closure subject guard before
   -- locking a post, then re-evaluate all mutable eligibility under those locks.
   for r in
-    select p.id,p.owner_id from private.posts p
-    where p.kind<>'event'
-      and (p.visible_until<=clock_timestamp() or exists(select 1 from private.post_activations a
-        join private.entitlements g on g.id=a.entitlement_id
-        where a.post_id=p.id and a.released_at is null
-          and not internal.slot_grant_usable(g.id,g.status,g.starts_at,g.ends_at)))
-      and (p.status='live' or (p.status='paused' and exists(select 1 from private.post_activations a
-        where a.post_id=p.id and a.released_at is null)))
-      and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
-      and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
-    order by p.visible_until,p.id limit p_limit
+    select c.id,c.owner_id from (
+      (select p.id,p.owner_id,p.visible_until as due from private.posts p
+        where p.kind<>'event' and p.status in('live','paused') and p.visible_until<=statement_timestamp()
+          and (p.status='live' or (select true from private.post_activations a
+            where a.post_id=p.id and a.released_at is null))
+          and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
+          and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
+        order by p.visible_until,p.id limit p_limit)
+      union all
+      (select p.id,p.owner_id,d.visible_until from private.post_search_documents d join private.posts p on p.id=d.post_id
+        where d.is_visible and d.kind<>'event' and d.visible_until<=statement_timestamp()
+          and p.kind<>'event' and p.status='live' and p.visible_until>statement_timestamp()
+          and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
+          and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
+        order by d.visible_until,d.post_id limit p_limit)
+    ) c order by c.due,c.id limit p_limit
   loop
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
     select * into post from private.posts p where p.id=r.id and p.kind<>'event'
@@ -45,11 +55,12 @@ begin
       or exists(select 1 from private.frontend_content_holds h where h.post_id=r.id and h.released_at is null) then continue; end if;
     select max(f.funded_until) into funded from internal.post_funding(post.id) f;
     if funded>clock_timestamp() then
-      -- Still funded through its slot: only its end date catches up.
+      -- Still funded through its slot: only its end dates catch up.
       if post.visible_until is distinct from funded then
         update private.posts set visible_until=funded where id=post.id;
-        update private.post_search_documents set visible_until=funded where post_id=post.id;
       end if;
+      update private.post_search_documents set visible_until=funded
+        where post_id=post.id and visible_until is distinct from funded;
       continue;
     end if;
     continue when post.visible_until>clock_timestamp() and exists(select 1 from private.post_activations a

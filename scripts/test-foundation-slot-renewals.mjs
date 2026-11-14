@@ -38,7 +38,14 @@
 // crowded out by posts that cannot move; a post held across the boundary is
 // restored with its days; fair use counts over the renewal chain; a raised
 // limit never carries renewals past its end; the privacy export holds renewal
-// links and consents.
+// links and consents. Second review: an edit approved before the boundary
+// keeps the renewed end in search, and every end date shown (post page, My
+// posts, the owner's post, the dashboard) is the renewed end, before and after
+// the boundary with no job run; a post waiting to move still fills its place
+// in the capacity, allowance and post manager; a chargeback of the renewal
+// after the end date caught up moves the document's end back and the
+// lifecycle job expires the post; a funding view changed in any way is
+// refused.
 //
 //   node --import tsx scripts/test-foundation-slot-renewals.mjs
 //
@@ -75,7 +82,7 @@ try {
   const { steps, index, step } = applyStepsBefore(database, UPDATE);
 
   // ---------------------------------------------------------------- helpers
-  const { q, json, fails, member, staff, service } = sqlHelpers(database, current);
+  const { q, json, fails, member, staff, service, claims } = sqlHelpers(database, current);
   const asRole = (role, sql) => `set role ${role};\n${sql}`;
   const fingerprint = () => q(`set search_path to pg_catalog;\n${FINGERPRINT}`);
   const preflight = () =>
@@ -293,6 +300,25 @@ try {
     q("alter table private.post_activations add column continued text;");
     assert.match(fails(step.sql, "55000"), /column drift: private.post_activations.continued text/);
     q("alter table private.post_activations drop column continued;");
+    // A funding view changed in any way (here one harmless extra condition) is
+    // refused, not replaced: the update checks an md5 of each whole definition.
+    const view = q("select pg_get_viewdef('private.public_eligible_posts'::regclass,true);");
+    const drifted = view.replace("WHERE NOT (EXISTS", "WHERE 1 = 1 AND NOT (EXISTS");
+    assert.notEqual(drifted, view);
+    q(
+      `create or replace view private.public_eligible_posts with (security_invoker=true) as ${drifted}`
+    );
+    assert.match(
+      fails(step.sql, "55000"),
+      /post funding view private.public_eligible_posts [0-9a-f]{32} is not a reviewed definition/
+    );
+    assert.match(
+      preflight()[1][1],
+      /private.public_eligible_posts is neither the earlier reviewed view/
+    );
+    q(
+      `create or replace view private.public_eligible_posts with (security_invoker=true) as ${view}`
+    );
     assert.equal(fingerprint(), before);
   });
 
@@ -525,6 +551,130 @@ try {
           from private.posts where id='${kept}')`)
       );
       assert.equal(slots2(bongi).individual.held, 0);
+    }
+  );
+
+  await check(
+    "an edit approved before the boundary keeps the renewed end: the post stays in search and on its page with the new end date, the owner's pages show it and the place stays filled",
+    () => {
+      const thando = verified("thando");
+      const [e1] = grantsOf(buy(thando, P30, 1));
+      const listing = post(thando);
+      q(
+        `insert into private.post_contacts(post_id,post_kind,channels) values('${listing}','listing',array['call','form']);`
+      );
+      live(thando, listing);
+      // Five days before the slot ends (so the post counts as ending soon
+      // until the renewal shows), the member renews it.
+      travel(thando, "25 days");
+      const oldEnd = visibleUntil(listing);
+      const [e2] = grantsOf(renew(thando, [e1.id]));
+      const endOf = (id) => scalar(`select ends_at from private.entitlements where id='${id}';`);
+      assert.ok(same(docUntil(listing), endOf(e2.id)));
+      // The owner edits the live post and a moderator approves the edit before
+      // the boundary (internal.apply_post_edit in a staff session with a second
+      // factor, as api.moderate_post does): the rewritten search document keeps
+      // the renewed end, not the post's own.
+      const revision = scalar(`select revision from private.posts where id='${listing}';`);
+      const edit = json(member(thando, `select api.create_post_edit('${listing}',${revision});`));
+      const editId = edit.id ?? edit.edit_id ?? edit.post_id;
+      assert.match(String(editId), /^[0-9a-f-]{36}$/, JSON.stringify(edit));
+      const moderator = JSON.stringify({
+        ...claims(admin),
+        aal: "aal2",
+        amr: [{ method: "totp", timestamp: Math.floor(Date.now() / 1000) }],
+      });
+      q(
+        `update private.posts set title='Fixture listing, edited' where id='${editId}';
+         select set_config('request.jwt.claim.sub','${admin.id}',false),
+           set_config('request.jwt.claims','${moderator}',false);
+         select internal.apply_post_edit('${listing}','${editId}');`
+      );
+      assert.equal(
+        scalar(`select title from private.post_search_documents where post_id='${listing}';`),
+        "Fixture listing, edited"
+      );
+      assert.ok(same(visibleUntil(listing), oldEnd), "the post's own end date is not written");
+      assert.ok(same(docUntil(listing), endOf(e2.id)), "the search document keeps the renewed end");
+      // Every end date shown is the renewed end, before the boundary.
+      const mine = () =>
+        json(member(thando, "select api.list_my_posts(48,0);")).items.find((i) => i.id === listing)
+          .visible_until;
+      const shown = () => ({
+        page: json(asRole("anon", `select api.get_public_post('${listing}');`)).visible_until,
+        mine: mine(),
+        owner: json(`select internal.frontend_owner_post('${listing}','${thando.id}');`).expires_at,
+        dashboard: json(member(thando, "select api.get_my_dashboard();")),
+      });
+      let seen = shown();
+      for (const at of [seen.page, seen.mine, seen.owner, seen.dashboard.posts[0].expires_at]) {
+        assert.ok(same(at, endOf(e2.id)), `shown end ${at}`);
+      }
+      assert.equal(seen.dashboard.counts.active_listings, 1);
+      assert.equal(seen.dashboard.counts.expiring_listings, 0, "a renewed post is not ending soon");
+      // Across the boundary, with no job run: still in search and on its
+      // page, with the new end date.
+      travel(thando, "5 days 1 second");
+      assert.ok(publiclyVisible(listing), "search document");
+      assert.deepEqual(
+        json(
+          asRole("anon", `select api.search_posts('{"post_id":"${listing}"}'::jsonb);`)
+        ).items.map((i) => i.id),
+        [listing],
+        "search"
+      );
+      seen = shown();
+      for (const at of [seen.page, seen.mine, seen.owner, seen.dashboard.posts[0].expires_at]) {
+        assert.ok(same(at, endOf(e2.id)), `shown end after the boundary ${at}`);
+      }
+      assert.equal(seen.dashboard.counts.active_listings, 1);
+      // The post waits to move (still in the first period), yet its place is
+      // not shown as free: capacity, allowance and post manager count it.
+      assert.equal(
+        scalar(
+          `select entitlement_id from private.post_activations where post_id='${listing}' and released_at is null;`
+        ),
+        e1.id
+      );
+      const capacity = json(member(thando, "select api.my_posting_capacity();"));
+      assert.deepEqual([capacity.capacity, capacity.active], [1, 1]);
+      assert.ok(same(capacity.ends_at, endOf(e2.id)));
+      const allowance = json(
+        member(thando, "select api.get_my_frontend_posting_allowance_v2('market');")
+      );
+      assert.deepEqual(
+        [allowance.capacity, allowance.used, allowance.creation_remaining],
+        [1, 1, 0]
+      );
+      const manager = json(member(thando, "select api.get_my_frontend_post_manager();"));
+      assert.deepEqual(
+        manager.slot_usage.map((s) => [s.id, s.activeUsage]),
+        [[e2.id, 1]]
+      );
+      // The lifecycle job catches the post's own end date up. A chargeback of
+      // the renewal after that ends the slot's run: the search document's end
+      // moves back, the post is no longer shown, and the job (reading only
+      // posts and search documents whose end has passed) expires it although
+      // its own end date has not come.
+      lifecycle();
+      assert.equal(scalar(`select status from private.posts where id='${listing}';`), "live");
+      assert.ok(same(visibleUntil(listing), endOf(e2.id)));
+      q(
+        `select internal.reverse_payment_line('${e2.line}','chargeback','Bank chargeback on the renewal','${admin.id}');`
+      );
+      assert.ok(same(docUntil(listing), endOf(e1.id)), "the document's end moves back");
+      assert.ok(!publiclyVisible(listing));
+      assert.ok(
+        !truth(`exists(select 1 from private.public_eligible_posts where id='${listing}')`)
+      );
+      assert.ok(same(mine(), endOf(e1.id)), "My posts shows the end of the remaining run");
+      assert.ok(
+        truth(
+          `(select visible_until>statement_timestamp() from private.posts where id='${listing}')`
+        )
+      );
+      lifecycle();
+      assert.equal(scalar(`select status from private.posts where id='${listing}';`), "expired");
     }
   );
 

@@ -12,7 +12,7 @@ create view private.public_eligible_posts with (security_invoker=true) as
                    FROM private.post_activations a
                      JOIN private.entitlements e_1 ON e_1.id = a.entitlement_id
                      JOIN private.current_account_access funding_owner ON funding_owner.id = e_1.owner_id
-                  WHERE a.post_id = p.id AND a.owner_id = p.owner_id AND a.released_at IS NULL AND internal.slot_grant_usable(e_1.id, e_1.status, e_1.starts_at, e_1.ends_at) AND (e_1.area IS NULL OR e_1.area = p.area) AND (e_1.owner_id = p.owner_id OR (EXISTS ( SELECT 1
+                  WHERE a.post_id = p.id AND a.owner_id = p.owner_id AND a.released_at IS NULL AND e_1.status = 'active'::text AND e_1.starts_at <= statement_timestamp() AND (e_1.ends_at > statement_timestamp() OR internal.slot_chain_end(e_1.id) > statement_timestamp()) AND (e_1.area IS NULL OR e_1.area = p.area) AND (e_1.owner_id = p.owner_id OR (EXISTS ( SELECT 1
                            FROM private.entitlement_members m
                           WHERE m.entitlement_id = e_1.id AND m.member_id = p.owner_id))) AND (( SELECT count(DISTINCT pm.object_id) AS count
                            FROM private.post_media pm

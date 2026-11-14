@@ -15,10 +15,10 @@ begin
         when 'sponsorship' then 'SPONSORED_ORGANISATION_MEMBER' when 'contract' then 'ENTERPRISE_CONTRACT' when 'staff_grant' then 'ADMIN_GRANT' end,
       'area',case e.area when 'market' then 'MZANSI_MARKET' when 'business' then 'MZANSI_BUSINESS' when 'tourism_events' then 'PROMOTIONS_EVENTS' end,
       'planName',pay.snapshot->>'label','status',e.status,'slotCapacity',e.slot_capacity,
-      'activeUsage',(select count(*) from private.post_activations a where a.entitlement_id=e.id and a.released_at is null),
+      'activeUsage',internal.slot_posts_held(e.id),
       'activationCount',(select count(*) from private.post_activations a where a.entitlement_id=e.id),
       'activationLimitTotal',null,'activationLimitPerPeriod',e.activations_per_period,'activationPeriodDays',e.activation_period_days,
-      'periodActivations',(select count(*) from private.post_activations a where a.entitlement_id=e.id and a.activated_at>statement_timestamp()-make_interval(days=>e.activation_period_days)),
+      'periodActivations',internal.slot_posts_started(e.id,statement_timestamp()-make_interval(days=>e.activation_period_days)),
       'startsAt',e.starts_at,'expiresAt',e.ends_at,'autoRenew',false,'sponsored',e.source='sponsorship') order by e.ends_at,e.id)
       from private.entitlements e left join private.payments pay on pay.id=e.payment_id
       where (e.owner_id=actor or exists(select 1 from private.entitlement_members m where m.entitlement_id=e.id and m.member_id=actor))
