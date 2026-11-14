@@ -128,10 +128,6 @@ const nextConfig = {
       },
       {
         protocol: "https",
-        hostname: "tnygdgormnofpgjknlhr.supabase.co",
-      },
-      {
-        protocol: "https",
         hostname: "*.r2.cloudflarestorage.com",
       },
       {

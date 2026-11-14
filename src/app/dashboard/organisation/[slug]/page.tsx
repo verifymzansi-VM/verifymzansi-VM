@@ -13,6 +13,7 @@ import {
   parsePerformanceReport,
 } from "@/components/organisations/performance-report";
 import { ExtensionOfferCard } from "@/components/trials/extension-offer-card";
+import { SHOW_ORGANISATION_REPORT, SHOW_TRIAL_EXTENSION_OFFERS } from "@/lib/hidden-features";
 
 import {
   FoundationServerSessionError,
@@ -190,7 +191,9 @@ export default async function OrganisationDashboardPage({
         </section>
       ) : null}
 
-      {offer ? <ExtensionOfferCard offer={offer} canRespond={isOwner} /> : null}
+      {SHOW_TRIAL_EXTENSION_OFFERS && offer ? (
+        <ExtensionOfferCard offer={offer} canRespond={isOwner} />
+      ) : null}
 
       <section aria-labelledby="programme-places" className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border p-4">
@@ -266,7 +269,10 @@ export default async function OrganisationDashboardPage({
           <TabsList className="w-max">
             <TabsTrigger value="applications">Applications</TabsTrigger>
             <TabsTrigger value="members">Businesses</TabsTrigger>
-            <TabsTrigger value="report">Performance</TabsTrigger>
+            {/* The report and its CSV downloads are hidden until they work. */}
+            {SHOW_ORGANISATION_REPORT ? (
+              <TabsTrigger value="report">Performance</TabsTrigger>
+            ) : null}
             <TabsTrigger value="profile">Profile &amp; admins</TabsTrigger>
           </TabsList>
         </div>
@@ -282,27 +288,29 @@ export default async function OrganisationDashboardPage({
             allowFoundingSponsorship={false}
           />
         </TabsContent>
-        <TabsContent value="report" className="mt-4 space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <a
-              className="inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium"
-              href={`/api/organisations/${org.id}/report?from=${reportFrom}`}
-            >
-              <Download aria-hidden="true" className="h-4 w-4" />
-              Download report (CSV)
-            </a>
-            <a
-              className="inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium"
-              href={`/api/organisations/${org.id}/report?days=30`}
-            >
-              <Download aria-hidden="true" className="h-4 w-4" />
-              Last 30 days (CSV)
-            </a>
-          </div>
-          {parsedReport ? (
-            <PerformanceReport organisationName={org.name} report={parsedReport} />
-          ) : null}
-        </TabsContent>
+        {SHOW_ORGANISATION_REPORT ? (
+          <TabsContent value="report" className="mt-4 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <a
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium"
+                href={`/api/organisations/${org.id}/report?from=${reportFrom}`}
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                Download report (CSV)
+              </a>
+              <a
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium"
+                href={`/api/organisations/${org.id}/report?days=30`}
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                Last 30 days (CSV)
+              </a>
+            </div>
+            {parsedReport ? (
+              <PerformanceReport organisationName={org.name} report={parsedReport} />
+            ) : null}
+          </TabsContent>
+        ) : null}
         <TabsContent value="profile" className="mt-4 space-y-3 text-sm">
           <p>
             Public page:{" "}

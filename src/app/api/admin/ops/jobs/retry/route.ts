@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SHOW_STAFF_OPERATIONS } from "@/lib/hidden-features";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
@@ -14,6 +15,8 @@ const schema = z.object({ jobId: z.string().uuid() });
  * Jobs are idempotent, so a retry never repeats completed work.
  */
 export async function POST(request: Request) {
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_STAFF_OPERATIONS) return NextResponse.json({ error: "Not found" }, { status: 404 });
   try {
     const guard = await enforceAdminMutationGuard({
       request,

@@ -9,7 +9,6 @@ import { readFoundationRuntimeConnection } from "@/lib/foundation/runtime-connec
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { createNotification } from "@/lib/notifications";
 import { sendContactFormNotification } from "@/lib/services/email";
 import { verifyPublicTurnstile } from "@/lib/utils/public-mutation-route";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
@@ -41,7 +40,6 @@ const { oldBackend } = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: oldBackend("createAdminClient") }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: oldBackend("createClient") }));
-vi.mock("@/lib/notifications", () => ({ createNotification: oldBackend("createNotification") }));
 vi.mock("@/lib/services/email", () => ({
   sendContactFormNotification: oldBackend("sendContactFormNotification"),
 }));
@@ -326,17 +324,12 @@ describe("POST /api/contact on the foundation backend", () => {
     expect(service).not.toHaveBeenCalled();
   });
 
-  it("never touches the old backend's clients, tables, notifications or email", async () => {
+  it("never touches the old backend's clients, tables or email", async () => {
     await POST(request(dialog));
     service.mockResolvedValueOnce({ data: null, error: { details: "post_unavailable" } });
     await POST(request(dialog));
     await POST(request({ ...dialog, message: "x" }));
-    for (const fn of [
-      createAdminClient,
-      createClient,
-      createNotification,
-      sendContactFormNotification,
-    ])
+    for (const fn of [createAdminClient, createClient, sendContactFormNotification])
       expect(fn).not.toHaveBeenCalled();
   });
 });

@@ -1096,6 +1096,22 @@ test.describe("staff review with an authenticator", () => {
       const { outside, failures } = await guard(context);
       await signInBrowser(context, "admin");
       await page.goto("/admin/operations");
+      // The admin's staff home: its banner's only h1 says "Platform".
+      const home = page.locator("h1").filter({ hasText: /^Platform$/ });
+      const brokenOrHealthy = page
+        .getByRole("alert")
+        .filter({ hasText: "Operations health could not be loaded." })
+        .or(page.getByRole("heading", { name: "Operations health" }));
+      await expect(home.or(brokenOrHealthy).first()).toBeVisible({ timeout: 20_000 });
+      if (new URL(page.url()).pathname === "/admin") {
+        // Hidden until it works (SHOW_STAFF_OPERATIONS): the address leads to
+        // the staff home and the menu no longer lists the page.
+        await expect(page.getByRole("link", { name: "Operations health" })).toHaveCount(0);
+        expect(failures).toEqual([]);
+        expect(outside).toEqual([]);
+        expectNoOutboundSince(mark);
+        throw new KnownBreak(`${D502}: the operations page is hidden until it works`);
+      }
       const broken = page.getByRole("alert").filter({
         hasText:
           "Operations health could not be loaded. Refresh to try again. This does not mean everything is working.",

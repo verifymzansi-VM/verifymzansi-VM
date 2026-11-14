@@ -52,6 +52,7 @@ import {
   EMAIL_CHANGE_COOLDOWN_MS,
 } from "@/lib/account/identity-policy";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { SHOW_ACCOUNT_DELETION } from "@/lib/hidden-features";
 import type { AccountVerificationStatus } from "@/types/enums";
 
 type TabValue = "profile" | "security" | "account";
@@ -1149,91 +1150,103 @@ export default function ProfilePage() {
 
               <Separator />
 
-              {/* Delete account */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-destructive">Delete account</p>
-                  <p className="text-xs text-muted-foreground">
-                    Removes your account and personal data for good.
-                  </p>
-                </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="h-11 gap-1.5"
-                  onClick={() => setIsDeleteDialogOpen(true)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </Button>
-              </div>
-
-              <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Confirm account deletion</DialogTitle>
-                    <DialogDescription>
-                      This permanently deletes your account and personal data. This action cannot be
-                      undone.
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      Type <strong>DELETE</strong> to continue.
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Your account will be removed immediately after confirmation.
-                    </p>
-                    {isPasswordAccount && (
-                      <div className="space-y-1">
-                        <Label htmlFor="deleteCurrentPassword">Current password</Label>
-                        <Input
-                          id="deleteCurrentPassword"
-                          type="password"
-                          autoComplete="current-password"
-                          value={deleteCurrentPassword}
-                          onChange={(e) => setDeleteCurrentPassword(e.target.value)}
-                          placeholder="Enter current password"
-                        />
-                      </div>
-                    )}
-                    <Input
-                      value={deleteConfirmation}
-                      onChange={(e) => setDeleteConfirmation(e.target.value)}
-                      placeholder="Type DELETE"
-                      aria-label="Type DELETE to confirm"
-                    />
-                  </div>
-
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      className="h-11"
-                      onClick={() => handleDeleteDialogOpenChange(false)}
-                    >
-                      Cancel
-                    </Button>
+              {/* Delete account: hidden until it works (src/lib/hidden-features.ts). */}
+              {SHOW_ACCOUNT_DELETION ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-destructive">Delete account</p>
+                      <p className="text-xs text-muted-foreground">
+                        Removes your account and personal data for good.
+                      </p>
+                    </div>
                     <Button
                       variant="destructive"
-                      onClick={handleStartDeleteRequest}
-                      disabled={
-                        isDeleteVerifying ||
-                        deleteConfirmation.trim().toUpperCase() !== "DELETE" ||
-                        (isPasswordAccount && !deleteCurrentPassword)
-                      }
+                      size="sm"
                       className="h-11 gap-1.5"
+                      onClick={() => setIsDeleteDialogOpen(true)}
                     >
-                      {isDeleteVerifying ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                      {isDeleteVerifying ? "Verifying…" : "Continue"}
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
                     </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                  </div>
+
+                  <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Confirm account deletion</DialogTitle>
+                        <DialogDescription>
+                          This permanently deletes your account and personal data. This action
+                          cannot be undone.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">
+                          Type <strong>DELETE</strong> to continue.
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Your account will be removed immediately after confirmation.
+                        </p>
+                        {isPasswordAccount && (
+                          <div className="space-y-1">
+                            <Label htmlFor="deleteCurrentPassword">Current password</Label>
+                            <Input
+                              id="deleteCurrentPassword"
+                              type="password"
+                              autoComplete="current-password"
+                              value={deleteCurrentPassword}
+                              onChange={(e) => setDeleteCurrentPassword(e.target.value)}
+                              placeholder="Enter current password"
+                            />
+                          </div>
+                        )}
+                        <Input
+                          value={deleteConfirmation}
+                          onChange={(e) => setDeleteConfirmation(e.target.value)}
+                          placeholder="Type DELETE"
+                          aria-label="Type DELETE to confirm"
+                        />
+                      </div>
+
+                      <DialogFooter>
+                        <Button
+                          variant="outline"
+                          className="h-11"
+                          onClick={() => handleDeleteDialogOpenChange(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={handleStartDeleteRequest}
+                          disabled={
+                            isDeleteVerifying ||
+                            deleteConfirmation.trim().toUpperCase() !== "DELETE" ||
+                            (isPasswordAccount && !deleteCurrentPassword)
+                          }
+                          className="h-11 gap-1.5"
+                        >
+                          {isDeleteVerifying ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          {isDeleteVerifying ? "Verifying…" : "Continue"}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  To close your account, send us a{" "}
+                  <Link className="underline" href="/dsar">
+                    data request
+                  </Link>
+                  .
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

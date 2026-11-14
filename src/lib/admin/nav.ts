@@ -1,6 +1,13 @@
 import { hasCapability, type Capability } from "@/lib/auth/roles";
 import type { StaffRole } from "@/types/enums";
 import { nativeCapabilityFor } from "@/lib/auth/native-capabilities";
+import {
+  SHOW_STAFF_COMMERCIAL_SETTINGS,
+  SHOW_STAFF_INTELLIGENCE,
+  SHOW_STAFF_OPERATIONS,
+  SHOW_STAFF_PROGRAMMES,
+  SHOW_STAFF_TRIALS,
+} from "@/lib/hidden-features";
 
 /**
  * The admin navigation registry: every admin page, the capability its page
@@ -73,6 +80,8 @@ export interface NavItem {
   badge?: NavBadge;
   /** Shown only while this feature flag is on. */
   flag?: "kyc_evidence_desk";
+  /** False while the page is hidden until it works (src/lib/hidden-features.ts). */
+  shown?: boolean;
 }
 
 const NAV_SECTION_LABELS: Record<NavSectionId, string> = {
@@ -240,6 +249,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
   },
   {
     href: "/admin/operations",
+    shown: SHOW_STAFF_OPERATIONS,
     label: "Operations health",
     icon: "activity",
     section: "oversight",
@@ -248,6 +258,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
 
   {
     href: "/admin/commercial",
+    shown: SHOW_STAFF_COMMERCIAL_SETTINGS,
     label: "Commercial settings",
     icon: "percent",
     section: "commercial",
@@ -255,6 +266,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
   },
   {
     href: "/admin/trials",
+    shown: SHOW_STAFF_TRIALS,
     label: "Free posts & trials",
     icon: "gift",
     section: "commercial",
@@ -262,6 +274,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
   },
   {
     href: "/admin/programmes",
+    shown: SHOW_STAFF_PROGRAMMES,
     label: "Programmes & contracts",
     icon: "award",
     section: "commercial",
@@ -293,6 +306,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
 
   {
     href: "/admin/intelligence/users",
+    shown: SHOW_STAFF_INTELLIGENCE,
     label: "Users & growth",
     icon: "users",
     section: "intelligence",
@@ -300,6 +314,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
   },
   {
     href: "/admin/intelligence/verification",
+    shown: SHOW_STAFF_INTELLIGENCE,
     label: "Verification metrics",
     icon: "shield",
     section: "intelligence",
@@ -307,6 +322,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
   },
   {
     href: "/admin/intelligence/revenue",
+    shown: SHOW_STAFF_INTELLIGENCE,
     label: "Revenue & costs",
     icon: "trending",
     section: "intelligence",
@@ -314,6 +330,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
   },
   {
     href: "/admin/intelligence/marketplace",
+    shown: SHOW_STAFF_INTELLIGENCE,
     label: "Marketplace health",
     icon: "chart",
     section: "intelligence",
@@ -321,6 +338,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
   },
   {
     href: "/admin/intelligence/trends",
+    shown: SHOW_STAFF_INTELLIGENCE,
     label: "Trends",
     icon: "trending",
     section: "intelligence",
@@ -328,6 +346,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
   },
   {
     href: "/admin/intelligence/operations",
+    shown: SHOW_STAFF_INTELLIGENCE,
     label: "Operations summary",
     icon: "clock",
     section: "intelligence",
@@ -378,7 +397,7 @@ export function navFor(
     const allowed = native
       ? capability === null || native.has(capability)
       : canSeeNavItem(role, item);
-    return allowed && (!item.flag || flags[item.flag] === true);
+    return allowed && item.shown !== false && (!item.flag || flags[item.flag] === true);
   });
   return SECTION_ORDER.map((id) => ({
     id,

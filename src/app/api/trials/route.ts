@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SHOW_TRIAL_PLAN_CHANGES } from "@/lib/hidden-features";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enforceAuthenticatedMutationRequest } from "@/lib/utils/authenticated-mutation-route";
@@ -8,6 +9,8 @@ import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 const schema = z.object({ claimId: z.uuid(), action: z.enum(["choose_seven", "renew"]) });
 const log = createLogger("IntroTrials");
 export async function POST(request: Request) {
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_TRIAL_PLAN_CHANGES) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const guard = await enforceAuthenticatedMutationRequest({
     request,
     logger: log,
