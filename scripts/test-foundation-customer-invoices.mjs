@@ -864,7 +864,18 @@ try {
           reference: "ZAN-0001",
         }),
         "PT409",
-        /unpaid invoice for this order/
+        /unpaid invoice VM-[0-9]{4}-[0-9]{6} for this amount/
+      );
+      // Another order of the same total (1 x 180 days = 2 x 90 days) is refused too.
+      fails(
+        transfers.recordSql(admin, {
+          email: zanele.email,
+          term: 180,
+          slots: 1,
+          reference: "ZAN-0009",
+        }),
+        "PT409",
+        new RegExp(`unpaid invoice ${invoice.invoice_number} for this amount`)
       );
       const recorded = json(transferSql(admin, invoice.invoice_number, "ZAN-0001"));
       assert.deepEqual(
@@ -939,6 +950,33 @@ try {
         cooling_off_waiver_confirmed,reason,recorded_by,customer_invoice_id)
        values('${ayanda.id}','${P30.id}',2,13800,'FAKE-0009',current_date,true,'Wrong order here','${admin.id}','${other.invoice_id}');`,
         "23514"
+      );
+    }
+  );
+
+  await check(
+    "recording and confirming a transfer close an unsent invoice attempt, also at the slot limit",
+    () => {
+      const nomsa = verified("inv-nomsa");
+      ozowPurchase(kit, nomsa, P30, 2);
+      const invoice = issue(admin, { email: nomsa.email, term: 30, slots: 2 });
+      save(nomsa, invoice.invoice_number, 1);
+      // Pay now, but never sent to Ozow: recording the transfer closes it, so
+      // the slot checkout cannot continue it.
+      const attempt = start(nomsa, invoice.invoice_number, invoice.total_cents);
+      const recorded = json(transferSql(admin, invoice.invoice_number, "NOM-0001"));
+      assert.equal(payment(attempt.payment_id).status, "cancelled");
+      // Should one be pending again, confirmation closes it before the slot
+      // limit (2 held + 2 = the limit of 4; the attempt would have counted).
+      q(`select set_config('session_replication_role','replica',false);
+      update private.payments set status='pending' where id='${attempt.payment_id}';
+      select set_config('session_replication_role','origin',false);`);
+      const confirmed = transfers.confirm(admin2, recorded.transfer_id);
+      assert.equal(payment(attempt.payment_id).status, "cancelled");
+      assert.equal(invoiceRow(invoice.invoice_number).payment_id, confirmed.payment_id);
+      fails(
+        member(nomsa, `select api.start_slot_checkout('${P30.id}',2,${2 * P30.cents},true);`),
+        "PT429"
       );
     }
   );
@@ -1040,10 +1078,18 @@ try {
   });
 
   await check(
-    "the retention job keeps payments an invoice names and removes invoices five tax years on",
+    "the retention job keeps payments an invoice names and removes invoices and transfers five tax years on",
     () => {
       const old = verified("inv-old");
       const { invoice, paymentId } = paidInvoice(old, { term: 30, slots: 1 });
+      // Issued first: a later issue in the same year would meet the gap the
+      // job leaves in this year's numbers (in real use the year is long over).
+      const bank = verified("inv-old-bank");
+      const paidByBank = issue(admin, { email: bank.email, term: 30, slots: 1 });
+      const declined = json(transferSql(admin, paidByBank.invoice_number, "OLD-0001"));
+      json(transfers.declineSql(admin2, declined.transfer_id, "Wrong credit on the statement"));
+      const transfer = json(transferSql(admin, paidByBank.invoice_number, "OLD-0002"));
+      const bankPayment = transfers.confirm(admin2, transfer.transfer_id).payment_id;
       // The payment and everything it delivered are old; the invoice is not.
       q(`select set_config('session_replication_role','replica',false);
       update private.payments set completed_at=now()-interval '7 years',created_at=now()-interval '7 years',
@@ -1070,6 +1116,58 @@ try {
       );
       assert.equal(count(`private.customer_invoice_payments where payment_id='${paymentId}'`), 0);
       assert.equal(count(`private.payments where id='${paymentId}'`), 0);
+      // An invoice paid by bank transfer goes with its transfers (also a
+      // declined one), then the payment; a transfer without an invoice goes
+      // five tax years after it was confirmed.
+      const plain = verified("inv-old-plain");
+      const plainTransfer = transfers.record(admin, {
+        email: plain.email,
+        term: 90,
+        slots: 1,
+        reference: "OLD-0003",
+      });
+      const plainPayment = transfers.confirm(admin2, plainTransfer.transfer_id).payment_id;
+      const kept = verified("inv-kept");
+      const keptTransfer = transfers.record(admin, {
+        email: kept.email,
+        term: 90,
+        slots: 1,
+        reference: "OLD-0004",
+      });
+      transfers.confirm(admin2, keptTransfer.transfer_id);
+      const age = (ids) => `'${ids.join("','")}'`;
+      q(`select set_config('session_replication_role','replica',false);
+        update private.payments set completed_at=now()-interval '7 years',created_at=now()-interval '7 years',
+          status_changed_at=now()-interval '7 years' where id in(${age([bankPayment, plainPayment])});
+        update private.entitlements set starts_at=now()-interval '7 years',ends_at=now()-interval '7 years'+interval '30 days',
+          created_at=now()-interval '7 years' where payment_id in(${age([bankPayment, plainPayment])});
+        update private.invoices set issued_at=now()-interval '7 years' where payment_id in(${age([bankPayment, plainPayment])});
+        update private.outbox_events set created_at=now()-interval '7 years' where subject_id in(${age([bankPayment, plainPayment])});
+        update private.invoice_transfers set recorded_at=now()-interval '7 years',
+          confirmed_at=case when confirmed_at is null then null else now()-interval '7 years' end
+          where id='${plainTransfer.transfer_id}';
+        update private.customer_invoices set issued_at=now()-interval '7 years',paid_at=now()-interval '7 years'
+          where invoice_number='${paidByBank.invoice_number}';
+        select set_config('session_replication_role','origin',false);`);
+      const thirdRun = json(service("select api.run_retention(1000);"));
+      assert.ok(thirdRun.commerce.bank_transfers >= 3, JSON.stringify(thirdRun.commerce));
+      assert.equal(
+        count(
+          `private.invoice_transfers where id in(${age([declined.transfer_id, transfer.transfer_id, plainTransfer.transfer_id])})`
+        ),
+        0
+      );
+      assert.equal(
+        count(`private.customer_invoices where invoice_number='${paidByBank.invoice_number}'`),
+        0
+      );
+      assert.equal(count(`private.payments where id in(${age([bankPayment, plainPayment])})`), 0);
+      // A recent transfer stays; outside the retention job none is removed.
+      assert.equal(count(`private.invoice_transfers where id='${keptTransfer.transfer_id}'`), 1);
+      fails(
+        `delete from private.invoice_transfers where id='${keptTransfer.transfer_id}';`,
+        "23514"
+      );
     }
   );
 

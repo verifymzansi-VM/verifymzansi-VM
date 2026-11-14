@@ -237,7 +237,7 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
     "invoice_transfer_required",
     [
       409,
-      "This customer has an unpaid invoice for this order. Record the transfer on the invoice (Invoices), so it pays the invoice.",
+      "This customer has an unpaid invoice for this amount. Record the transfer on that invoice (Invoices), so it pays the invoice.",
     ],
   ],
   [

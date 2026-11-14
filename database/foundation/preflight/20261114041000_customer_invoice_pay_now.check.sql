@@ -10,7 +10,7 @@
 -- tables and their triggers, the trigger on private.payments, the invoice
 -- column, indexes and trigger of private.invoice_transfers and the audit
 -- view's invoice rows are absent, and the six functions it replaces have the
--- earlier bodies) or applied (every body, table, column, index, trigger and
+-- earlier bodies, the bank transfer guard included) or applied (every body, table, column, index, trigger and
 -- the audit view are the update's), and counts the invoices issued, those unpaid,
 -- and the "Pay now" payment attempts once applied. A problem row is shown when
 -- a function the update builds on is not the reviewed body.
@@ -50,7 +50,7 @@ with added as (
     ('internal.customer_invoice_day(timestamp with time zone)', 'af0a1c3cf37d397a9b806e2e67b6124f'),
     ('internal.invoice_transfer_invoice_rule()', '44f62364fd5049bb282bd13360dc7865'),
     ('internal.customer_invoice_settled_elsewhere(uuid)', 'eab13db8976c5bcde805288faec9591c'),
-    ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)', '1ba6cf32c94df47f3427fef6fd7767a3'),
+    ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)', '368a7de259a913eddf339bf718abba24'),
     ('api.record_staff_invoice_transfer(text,text,text,boolean,text)', '751d4a9857600ba9a3ee4a61960e5367')
   ) v(sig, after)
 ),
@@ -58,12 +58,13 @@ changed as (
   select v.sig, v.before, v.after,
     (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)) as body
   from (values
-    ('internal.retention_commerce(integer)', '53418aba6b15cf8fa73dc49f25a2f8c3', '31a0439565fcefacf87830f0f94b5008'),
+    ('internal.retention_commerce(integer)', '53418aba6b15cf8fa73dc49f25a2f8c3', '20f9abaf7fcccd8b59974226a8ad0f3f'),
     ('internal.frontend_privacy_export_data(uuid)', 'd30c545386536a718e824d1ec56f03ce', 'cea6d5d00f5def4143bde4daa5b84373'),
     ('internal.apply_provider_event(jsonb)', '8a226003da741381225c11dfd1e44308', '8654ccb29310b12224a153f1327325e4'),
     ('internal.activate_staff_paid_payment(uuid,text)', 'd388959dfaee486c2d82b3d5e6f5e709', '355b954c1a0edc055a73485def59cd7c'),
-    ('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)', 'fa71c56d4a686ea343f23d551985af9e', '62c68be6e97ec0e9be9b98473e971b02'),
-    ('internal.confirm_staff_invoice_payment(uuid)', '216b293e1b4104ee91657556956b2204', 'c78087aed00aff1cba013fb4b7ad419e')
+    ('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)', 'fa71c56d4a686ea343f23d551985af9e', 'e02d131400fd0ac64c4d50e616dc4be7'),
+    ('internal.confirm_staff_invoice_payment(uuid)', '216b293e1b4104ee91657556956b2204', 'cae341b6ac2373b82529618276d0bfb5'),
+    ('internal.invoice_transfer_guard()', '2797782f05696a8cbabcd243efb716e6', '1a73d1dd9054c76a3f52fa415fe7a318')
   ) v(sig, before, after)
 ),
 needed as (
@@ -72,7 +73,6 @@ needed as (
   from (values
     ('internal.lock_invoice_transfer_for_review(uuid,uuid)', 'bf73096cddd3d08eb23f6b0dd87967ee'),
     ('internal.invoice_transfer_dto(private.invoice_transfers,uuid)', 'b91dbdd96bec847ddb165d6a663cc7cb'),
-    ('internal.invoice_transfer_guard()', '2797782f05696a8cbabcd243efb716e6'),
     ('internal.payment_delivery_commission(uuid)', '173b97b47147f69d097daba72def56d9'),
     ('internal.payment_invoice_vat(private.payments)', '8ba4ca6c4ea0207abece5a9fdc57336e'),
     ('internal.claim_checkout_request(uuid,uuid)', 'd29afcd49f72e712602914d6ecb4d8f5'),

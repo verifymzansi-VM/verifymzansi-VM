@@ -34,11 +34,12 @@ begin
   if to_regclass('private.customer_invoices') is null
     or to_regclass('private.customer_invoice_payments') is null
     or to_regclass('private.customer_invoice_numbers') is null
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.retention_commerce(integer)')) is distinct from '31a0439565fcefacf87830f0f94b5008'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.retention_commerce(integer)')) is distinct from '20f9abaf7fcccd8b59974226a8ad0f3f'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.apply_provider_event(jsonb)')) is distinct from '8654ccb29310b12224a153f1327325e4'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.activate_staff_paid_payment(uuid,text)')) is distinct from '355b954c1a0edc055a73485def59cd7c'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)')) is distinct from '62c68be6e97ec0e9be9b98473e971b02'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.confirm_staff_invoice_payment(uuid)')) is distinct from 'c78087aed00aff1cba013fb4b7ad419e'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)')) is distinct from 'e02d131400fd0ac64c4d50e616dc4be7'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.confirm_staff_invoice_payment(uuid)')) is distinct from 'cae341b6ac2373b82529618276d0bfb5'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.invoice_transfer_guard()')) is distinct from '1a73d1dd9054c76a3f52fa415fe7a318'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.frontend_privacy_export_data(uuid)')) is distinct from 'cea6d5d00f5def4143bde4daa5b84373'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.customer_invoice_number_guard()')) is distinct from '2e6031880d4018cb9d13913539a754eb'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.customer_invoice_numbers_gapless()')) is distinct from '5c33b3714ea57979ee88f047f5470b1e'
@@ -69,7 +70,7 @@ begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.customer_invoice_day(timestamp with time zone)')) is distinct from 'af0a1c3cf37d397a9b806e2e67b6124f'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.invoice_transfer_invoice_rule()')) is distinct from '44f62364fd5049bb282bd13360dc7865'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.customer_invoice_settled_elsewhere(uuid)')) is distinct from 'eab13db8976c5bcde805288faec9591c'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_invoice_transfer(text,text,text,boolean,text)')) is distinct from '1ba6cf32c94df47f3427fef6fd7767a3'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_invoice_transfer(text,text,text,boolean,text)')) is distinct from '368a7de259a913eddf339bf718abba24'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.record_staff_invoice_transfer(text,text,text,boolean,text)')) is distinct from '751d4a9857600ba9a3ee4a61960e5367'
   then
     raise exception 'rollback precondition: the customer invoice update is not applied' using errcode='55000';
@@ -727,6 +728,52 @@ $function$;
 alter function internal.confirm_staff_invoice_payment(uuid) owner to postgres;
 revoke all on function internal.confirm_staff_invoice_payment(uuid) from public, anon, authenticated, service_role;
 grant execute on function internal.confirm_staff_invoice_payment(uuid) to authenticated;
+
+-- The bank transfer guard of 20261113162457.
+CREATE OR REPLACE FUNCTION internal.invoice_transfer_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare pay private.payments;
+begin
+  -- A recorded bank transfer is an audit record: never removed; recorded as
+  -- waiting; changed only once, from waiting to confirmed (naming its invoice
+  -- payment: that account, amount and plan) or to declined.
+  if tg_op = 'DELETE' then
+    raise exception 'recorded bank transfers are never removed' using errcode='23514';
+  end if;
+  if tg_op = 'INSERT' then
+    if new.status <> 'awaiting_confirmation' or new.confirmed_by is not null or new.confirmed_at is not null
+        or new.payment_id is not null or new.declined_by is not null or new.declined_at is not null
+        or new.decline_reason is not null then
+      raise exception 'a bank transfer is recorded as waiting for confirmation' using errcode='23514';
+    end if;
+    return new;
+  end if;
+  if old.status <> 'awaiting_confirmation' or new.status not in ('confirmed', 'declined')
+      or (to_jsonb(new) - array['status','confirmed_by','confirmed_at','payment_id','declined_by','declined_at','decline_reason'])
+        is distinct from (to_jsonb(old) - array['status','confirmed_by','confirmed_at','payment_id','declined_by','declined_at','decline_reason']) then
+    raise exception 'a recorded bank transfer is confirmed or declined once and never changed' using errcode='23514';
+  end if;
+  if new.status = 'confirmed' then
+    select * into pay from private.payments p where p.id = new.payment_id;
+    if not found or pay.provider <> 'invoice' or pay.status <> 'complete' or pay.owner_id <> new.account_id
+        or pay.amount_cents <> new.amount_received_cents or pay.plan_version_id <> new.plan_version_id
+        or pay.snapshot->>'invoice_transfer_id' is distinct from new.id::text
+        or (pay.snapshot->>'slots')::integer is distinct from new.slots
+        or internal.same_identity(new.confirmed_by, new.recorded_by)
+        or new.declined_by is not null or new.declined_at is not null or new.decline_reason is not null then
+      raise exception 'a confirmed bank transfer names its invoice payment of that account and amount' using errcode='23514';
+    end if;
+  elsif new.confirmed_by is not null or new.confirmed_at is not null or new.payment_id is not null then
+    raise exception 'a declined bank transfer has no payment' using errcode='23514';
+  end if;
+  return new;
+end;
+$function$;
+alter function internal.invoice_transfer_guard() owner to postgres;
+revoke all on function internal.invoice_transfer_guard() from public, anon, authenticated, service_role;
 
 -- The staff audit view of 20261113162457.
 create or replace view private.frontend_staff_audit_events with (security_invoker=true) as

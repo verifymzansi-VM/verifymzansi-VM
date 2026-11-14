@@ -1610,16 +1610,21 @@ removed or changed.
   stored as "Invoice <number>: <reason>") records it against an issued invoice
   (PT409 `invoice_paid`, `invoice_void`) with no payment attempt that could
   still be paid (PT409 `invoice_payment_open`) and no other transfer waiting
-  (PT409 `invoice_transfer_waiting`). While it waits, Pay now and voiding are
-  refused (PT409 `invoice_transfer_waiting`). The second staff member's
-  confirmation (`internal.confirm_staff_invoice_payment`, full body; its answer
-  unchanged) rechecks the invoice (paid or void: PT409, decline the transfer and
-  return the money) and marks it paid with the bank transfer payment, whose
-  slots, receipt and commission are those of 20261113162457. A declined transfer
-  leaves the invoice unpaid. Recording a transfer without the invoice for
-  exactly the order of one of the customer's unpaid invoices is refused (PT409
-  `invoice_transfer_required`; `internal.record_staff_invoice_payment`, full
-  body), so a bank transfer to an invoice always pays it.
+  (PT409 `invoice_transfer_waiting`); an attempt never sent to Ozow is cancelled
+  with it. While it waits, Pay now and voiding are refused (PT409
+  `invoice_transfer_waiting`). The second staff member's confirmation
+  (`internal.confirm_staff_invoice_payment`, full body; its answer unchanged)
+  rechecks the invoice (paid or void: PT409, decline the transfer and return the
+  money; an attempt open at Ozow: PT409 `invoice_payment_open`), cancels an
+  attempt never sent to Ozow before it checks the slot limit (so the slot
+  checkout cannot continue it, and it does not count as open), and marks the
+  invoice paid with the bank transfer payment, whose slots, receipt and
+  commission are those of 20261113162457. A declined transfer leaves the invoice
+  unpaid. Recording a transfer without the invoice for the total of one of the
+  customer's unpaid invoices (any order of that total) is refused with that
+  invoice's number (PT409 `invoice_transfer_required`;
+  `internal.record_staff_invoice_payment`, full body), so a bank transfer to an
+  invoice always pays it.
 - **Refunds.** The existing staff refund commands (whole payment, one slot,
   through Ozow or recorded) work on the payment unchanged; the invoice stays
   paid and its read shows the payment's status (for example `refunded`).
@@ -1628,10 +1633,14 @@ removed or changed.
   details, consent, payment and attempts; never the staff member or the
   reasons). The retention job (`internal.retention_commerce`, full body) removes
   invoices and their attempt links five tax years after they were paid, voided
-  or (if neither) issued (an invoice a recorded bank transfer names is kept, as
-  the transfer is), and no longer stops on a payment that an invoice or a
-  recorded bank transfer still names (it skips it; before, such a payment would
-  have made the delete fail).
+  or (if neither) issued, and recorded bank transfers (`bank_transfers` in its
+  answer) five tax years after they were confirmed, declined or (if neither)
+  recorded, and always with the invoice they name (declined ones too), before
+  the payment. This replaces "rows are never removed" of 20261113162457: the
+  guard `internal.invoice_transfer_guard` (full body) allows a delete only
+  within the retention job, as the other payment records. The job no longer
+  stops on a payment that an invoice or a recorded bank transfer still names (it
+  skips it; before, such a payment would have made the delete fail).
 - **Audit.** The staff audit trail lists `payment:customer_invoice_issued` and
   `payment:customer_invoice_voided`.
 
@@ -1662,8 +1671,8 @@ The reviewed rollback is
 owner's decision; prefer a forward fix). Revert and deploy the website release
 first: the rollback removes the commands that release calls. It refuses once an
 invoice was issued (numbered financial records); otherwise it puts back the
-retention job, the privacy export and the staff audit view and drops the
-update's functions, tables and triggers.
+retention job, the privacy export, the bank transfer guard and the staff audit
+view and drops the update's functions, tables and triggers.
 
 `node --import tsx scripts/test-foundation-customer-invoices.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
@@ -1690,17 +1699,23 @@ a void invoice (kept, not delivered); two Pay now requests at once give one
 attempt; the South African year boundary (23:59:59 on 31 December and 00:00 on 1
 January); the slot checkout and an invoice attempt (another number of slots
 closes the unsent attempt, the same order continues it and pays the invoice
-once); a bank transfer recorded on the invoice (the same order without the
-invoice refused, a repeat, Pay now, voiding and a second transfer refused while
-it waits, the recorder cannot confirm, another admin's confirmation pays the
-invoice with its slots, receipt event and commissions, then Pay now and another
-transfer refused); an open Ozow payment refuses a transfer, a declined transfer
-frees the invoice, a late Ozow payment while a transfer waits pays the invoice
-and the transfer cannot be confirmed, a void invoice takes no transfer, a
-transfer row of another order is refused; refunds of one slot and of a whole
-payment; the record rules; the privacy export; the retention job keeps a payment
-an invoice names and removes the invoice five tax years on; the audit trail; the
-grants; and that the rollback refuses once an invoice was issued.
+once); a bank transfer recorded on the invoice (the same order, and another
+order of the same total, without the invoice refused, a repeat, Pay now, voiding
+and a second transfer refused while it waits, the recorder cannot confirm,
+another admin's confirmation pays the invoice with its slots, receipt event and
+commissions, then Pay now and another transfer refused); an open Ozow payment
+refuses a transfer, a declined transfer frees the invoice, a late Ozow payment
+while a transfer waits pays the invoice and the transfer cannot be confirmed, a
+void invoice takes no transfer, a transfer row of another order is refused;
+recording and confirming a transfer close an unsent invoice attempt
+(confirmation also at the slot limit, and the slot checkout cannot continue it);
+refunds of one slot and of a whole payment; the record rules; the privacy
+export; the retention job keeps a payment an invoice names and removes the
+invoice five tax years on, and an invoice paid by bank transfer with its
+transfers (a declined one too) and payment, a transfer without an invoice five
+tax years after confirmation, keeps a recent transfer, and no delete works
+outside the job; the audit trail; the grants; and that the rollback refuses once
+an invoice was issued.
 
 ## Individual slots at R69, 12 November 2026
 

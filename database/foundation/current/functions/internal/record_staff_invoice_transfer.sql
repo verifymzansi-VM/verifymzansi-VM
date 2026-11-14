@@ -101,6 +101,11 @@ begin
       > internal.individual_slot_limit(fingerprint) then
     raise exception 'more slots than the person''s limit; raise the limit first' using errcode='PT429', detail='slot_limit_reached';
   end if;
+  -- An attempt never sent to Ozow is closed, so the slot checkout cannot
+  -- continue it while the transfer waits.
+  update private.payments p set status = 'cancelled', status_changed_at = pg_catalog.clock_timestamp()
+    from private.customer_invoice_payments l
+    where l.invoice_id = inv.id and l.payment_id = p.id and p.status = 'pending';
   insert into private.invoice_transfers (account_id, plan_version_id, slots, amount_received_cents, bank_reference,
       cleared_on, cooling_off_waiver_confirmed, reason, recorded_by, customer_invoice_id)
     values (inv.account_id, plan.id, inv.slots, inv.total_cents, reference, cleared, true, audit_reason, actor, inv.id)

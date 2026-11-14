@@ -48,15 +48,6 @@ begin
   if plan.price_cents * t.slots <> t.amount_received_cents or not internal.individual_slot_plan(plan.plan_code) then
     raise exception 'the recorded amount is not the order total' using errcode='PT428', detail='invoice_amount_mismatch';
   end if;
-  -- Within the person's Individual slot limit (every account of the
-  -- identity), counting checkouts still open at Ozow as checkout does, so a
-  -- later Ozow payment is not pushed over the limit.
-  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
-  if (internal.individual_slots_counted(fingerprint, t.account_id, null)->>'held')::integer
-      + (internal.individual_slots_counted(fingerprint, t.account_id, null)->>'pending')::integer + t.slots
-      > internal.individual_slot_limit(fingerprint) then
-    raise exception 'more slots than the person''s limit; raise the limit or decline' using errcode='PT429', detail='slot_limit_reached';
-  end if;
   -- A transfer to an invoice pays that invoice: still issued and with no
   -- payment attempt that could still be paid.
   if t.customer_invoice_id is not null then
@@ -73,6 +64,20 @@ begin
       raise exception 'a payment of this invoice is still open at Ozow; try again when it has closed'
         using errcode='PT409', detail='invoice_payment_open';
     end if;
+    -- An attempt never sent to Ozow is closed (as voiding does): the slot
+    -- checkout cannot continue it, and it no longer counts as open below.
+    update private.payments p set status = 'cancelled', status_changed_at = pg_catalog.clock_timestamp()
+      from private.customer_invoice_payments l
+      where l.invoice_id = inv.id and l.payment_id = p.id and p.status = 'pending';
+  end if;
+  -- Within the person's Individual slot limit (every account of the
+  -- identity), counting checkouts still open at Ozow as checkout does, so a
+  -- later Ozow payment is not pushed over the limit.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
+  if (internal.individual_slots_counted(fingerprint, t.account_id, null)->>'held')::integer
+      + (internal.individual_slots_counted(fingerprint, t.account_id, null)->>'pending')::integer + t.slots
+      > internal.individual_slot_limit(fingerprint) then
+    raise exception 'more slots than the person''s limit; raise the limit or decline' using errcode='PT429', detail='slot_limit_reached';
   end if;
   insert into private.payments (owner_id, product_kind, plan_version_id, amount_cents, currency, snapshot, provider,
       status, fulfillment_status, completed_at, status_changed_at)

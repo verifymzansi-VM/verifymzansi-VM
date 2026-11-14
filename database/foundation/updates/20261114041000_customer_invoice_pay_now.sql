@@ -63,8 +63,10 @@
 --    invoice_transfer_waiting). The second staff member's confirmation
 --    (internal.confirm_staff_invoice_payment, full body) rechecks the invoice
 --    and marks it paid with the bank transfer payment; a declined transfer
---    leaves the invoice unpaid. Recording a transfer without the invoice for
---    the exact order of a customer's unpaid invoice is refused (PT409
+--    leaves the invoice unpaid. Recording and confirming a transfer close an
+--    invoice attempt never sent to Ozow (as voiding does), so the slot
+--    checkout cannot continue it. Recording a transfer without the invoice
+--    for the total of one of the customer's unpaid invoices is refused (PT409
 --    invoice_transfer_required; internal.record_staff_invoice_payment, full
 --    body), so a bank transfer to an invoice always pays it.
 -- 5. Staff commands (capability payments:refund, recent second factor, the
@@ -97,10 +99,12 @@
 -- 8. The privacy export holds the member's invoices (customer_invoices; never
 --    the staff member or staff notes). The retention job removes invoices and
 --    their attempt links five tax years after they were paid, voided or (if
---    neither) issued (an invoice a recorded bank transfer names is kept, as
---    the transfer is), and skips payments an invoice or a recorded bank
---    transfer still names (before, such a payment would have stopped the
---    job). internal.retention_commerce and internal.frontend_privacy_export_data
+--    neither) issued, with the bank transfers recorded against them;
+--    recorded bank transfers go five tax years after they were confirmed,
+--    declined or (if neither) recorded (before, they were kept for ever;
+--    internal.invoice_transfer_guard, full body, lets only the retention job
+--    remove them); and payments an invoice or a recorded bank transfer still
+--    names are skipped (before, such a payment would have stopped the job). internal.retention_commerce and internal.frontend_privacy_export_data
 --    are replaced (full bodies).
 -- 9. The staff audit trail (private.frontend_staff_audit_events) lists each
 --    invoice issued and voided.
@@ -123,11 +127,11 @@ begin
     from (values ('internal.retention_commerce(integer)'),('internal.frontend_privacy_export_data(uuid)'),
       ('internal.apply_provider_event(jsonb)'),('internal.activate_staff_paid_payment(uuid,text)'),
       ('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)'),
-      ('internal.confirm_staff_invoice_payment(uuid)')) v(sig)
+      ('internal.confirm_staff_invoice_payment(uuid)'),('internal.invoice_transfer_guard()')) v(sig)
   loop
     if shape not in (
         'internal.retention_commerce(integer) 53418aba6b15cf8fa73dc49f25a2f8c3',
-        'internal.retention_commerce(integer) 31a0439565fcefacf87830f0f94b5008',
+        'internal.retention_commerce(integer) 20f9abaf7fcccd8b59974226a8ad0f3f',
         'internal.frontend_privacy_export_data(uuid) d30c545386536a718e824d1ec56f03ce',
         'internal.frontend_privacy_export_data(uuid) cea6d5d00f5def4143bde4daa5b84373',
         'internal.apply_provider_event(jsonb) 8a226003da741381225c11dfd1e44308',
@@ -135,9 +139,11 @@ begin
         'internal.activate_staff_paid_payment(uuid,text) d388959dfaee486c2d82b3d5e6f5e709',
         'internal.activate_staff_paid_payment(uuid,text) 355b954c1a0edc055a73485def59cd7c',
         'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) fa71c56d4a686ea343f23d551985af9e',
-        'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) 62c68be6e97ec0e9be9b98473e971b02',
+        'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) e02d131400fd0ac64c4d50e616dc4be7',
         'internal.confirm_staff_invoice_payment(uuid) 216b293e1b4104ee91657556956b2204',
-        'internal.confirm_staff_invoice_payment(uuid) c78087aed00aff1cba013fb4b7ad419e') then
+        'internal.confirm_staff_invoice_payment(uuid) cae341b6ac2373b82529618276d0bfb5',
+        'internal.invoice_transfer_guard() 2797782f05696a8cbabcd243efb716e6',
+        'internal.invoice_transfer_guard() 1a73d1dd9054c76a3f52fa415fe7a318') then
       raise exception 'customer invoice precondition: % is not a reviewed body', shape using errcode='55000';
     end if;
   end loop;
@@ -145,7 +151,7 @@ begin
     select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)),'absent')
     from (values ('internal.claim_checkout_request(uuid,uuid)'),
       ('internal.lock_invoice_transfer_for_review(uuid,uuid)'),('internal.invoice_transfer_dto(private.invoice_transfers,uuid)'),
-      ('internal.invoice_transfer_guard()'),('internal.payment_delivery_commission(uuid)'),
+      ('internal.payment_delivery_commission(uuid)'),
       ('internal.payment_invoice_vat(private.payments)'),
       ('internal.complete_checkout_request(uuid,uuid,uuid,text,text)'),('internal.price_draft_actor()'),
       ('internal.staff_actor(text)'),('internal.assert_staff_payment_actor(uuid,uuid)'),
@@ -161,7 +167,6 @@ begin
         'internal.claim_checkout_request(uuid,uuid) d29afcd49f72e712602914d6ecb4d8f5',
         'internal.lock_invoice_transfer_for_review(uuid,uuid) bf73096cddd3d08eb23f6b0dd87967ee',
         'internal.invoice_transfer_dto(private.invoice_transfers,uuid) b91dbdd96bec847ddb165d6a663cc7cb',
-        'internal.invoice_transfer_guard() 2797782f05696a8cbabcd243efb716e6',
         'internal.payment_delivery_commission(uuid) 173b97b47147f69d097daba72def56d9',
         'internal.payment_invoice_vat(private.payments) 8ba4ca6c4ea0207abece5a9fdc57336e',
         'internal.complete_checkout_request(uuid,uuid,uuid,text,text) d392cd27ab1a56d820b917a27118f150',
@@ -1493,6 +1498,7 @@ CREATE OR REPLACE FUNCTION internal.record_staff_invoice_payment(p_account_email
 AS $function$
 declare actor uuid; buyer uuid; reference text; reference_key text; cleared date; today date;
   plan private.plan_versions; prior private.invoice_transfers; made private.invoice_transfers; fingerprint text;
+  open_invoice private.customer_invoices;
 begin
   actor := internal.staff_actor('payments:refund');
   if length(btrim(coalesce(p_account_email, ''))) not between 3 and 254 or p_term_days is null
@@ -1575,13 +1581,15 @@ begin
     raise exception 'the amount received is not the order total of % cents', plan.price_cents * p_slots
       using errcode='PT428', detail='invoice_amount_mismatch';
   end if;
-  -- A transfer for the order of one of the customer's unpaid invoices is
+  -- A transfer of the total of one of the customer's unpaid invoices is
   -- recorded against that invoice (api.record_staff_invoice_transfer), so it
   -- pays the invoice.
-  if exists(select 1 from private.customer_invoices i where i.account_id = buyer and i.status = 'issued'
-      and i.plan_version_id = plan.id and i.slots = p_slots and i.total_cents = p_amount_cents) then
-    raise exception 'this customer has an unpaid invoice for this order; record the transfer on the invoice'
-      using errcode='PT409', detail='invoice_transfer_required';
+  select * into open_invoice from private.customer_invoices i
+    where i.account_id = buyer and i.status = 'issued' and i.total_cents = p_amount_cents
+    order by i.issued_at limit 1;
+  if found then
+    raise exception 'this customer has unpaid invoice % for this amount; record the transfer on the invoice',
+      open_invoice.invoice_number using errcode='PT409', detail='invoice_transfer_required';
   end if;
   -- An early check of the slot limit; confirmation checks it again.
   if (internal.individual_slots_counted(fingerprint, buyer, null)->>'held')::integer + p_slots
@@ -1648,15 +1656,6 @@ begin
   if plan.price_cents * t.slots <> t.amount_received_cents or not internal.individual_slot_plan(plan.plan_code) then
     raise exception 'the recorded amount is not the order total' using errcode='PT428', detail='invoice_amount_mismatch';
   end if;
-  -- Within the person's Individual slot limit (every account of the
-  -- identity), counting checkouts still open at Ozow as checkout does, so a
-  -- later Ozow payment is not pushed over the limit.
-  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
-  if (internal.individual_slots_counted(fingerprint, t.account_id, null)->>'held')::integer
-      + (internal.individual_slots_counted(fingerprint, t.account_id, null)->>'pending')::integer + t.slots
-      > internal.individual_slot_limit(fingerprint) then
-    raise exception 'more slots than the person''s limit; raise the limit or decline' using errcode='PT429', detail='slot_limit_reached';
-  end if;
   -- A transfer to an invoice pays that invoice: still issued and with no
   -- payment attempt that could still be paid.
   if t.customer_invoice_id is not null then
@@ -1673,6 +1672,20 @@ begin
       raise exception 'a payment of this invoice is still open at Ozow; try again when it has closed'
         using errcode='PT409', detail='invoice_payment_open';
     end if;
+    -- An attempt never sent to Ozow is closed (as voiding does): the slot
+    -- checkout cannot continue it, and it no longer counts as open below.
+    update private.payments p set status = 'cancelled', status_changed_at = pg_catalog.clock_timestamp()
+      from private.customer_invoice_payments l
+      where l.invoice_id = inv.id and l.payment_id = p.id and p.status = 'pending';
+  end if;
+  -- Within the person's Individual slot limit (every account of the
+  -- identity), counting checkouts still open at Ozow as checkout does, so a
+  -- later Ozow payment is not pushed over the limit.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
+  if (internal.individual_slots_counted(fingerprint, t.account_id, null)->>'held')::integer
+      + (internal.individual_slots_counted(fingerprint, t.account_id, null)->>'pending')::integer + t.slots
+      > internal.individual_slot_limit(fingerprint) then
+    raise exception 'more slots than the person''s limit; raise the limit or decline' using errcode='PT429', detail='slot_limit_reached';
   end if;
   insert into private.payments (owner_id, product_kind, plan_version_id, amount_cents, currency, snapshot, provider,
       status, fulfillment_status, completed_at, status_changed_at)
@@ -1732,6 +1745,53 @@ $function$;
 alter function internal.confirm_staff_invoice_payment(uuid) owner to postgres;
 revoke all on function internal.confirm_staff_invoice_payment(uuid) from public, anon, authenticated, service_role;
 grant execute on function internal.confirm_staff_invoice_payment(uuid) to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.invoice_transfer_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare pay private.payments;
+begin
+  -- A recorded bank transfer is an audit record: never removed; recorded as
+  -- waiting; changed only once, from waiting to confirmed (naming its invoice
+  -- payment: that account, amount and plan) or to declined.
+  if tg_op = 'DELETE' then
+    -- Only the retention job removes a record, five tax years on.
+    if pg_catalog.current_setting('vm.retention', true) = 'on' then return old; end if;
+    raise exception 'recorded bank transfers are never removed' using errcode='23514';
+  end if;
+  if tg_op = 'INSERT' then
+    if new.status <> 'awaiting_confirmation' or new.confirmed_by is not null or new.confirmed_at is not null
+        or new.payment_id is not null or new.declined_by is not null or new.declined_at is not null
+        or new.decline_reason is not null then
+      raise exception 'a bank transfer is recorded as waiting for confirmation' using errcode='23514';
+    end if;
+    return new;
+  end if;
+  if old.status <> 'awaiting_confirmation' or new.status not in ('confirmed', 'declined')
+      or (to_jsonb(new) - array['status','confirmed_by','confirmed_at','payment_id','declined_by','declined_at','decline_reason'])
+        is distinct from (to_jsonb(old) - array['status','confirmed_by','confirmed_at','payment_id','declined_by','declined_at','decline_reason']) then
+    raise exception 'a recorded bank transfer is confirmed or declined once and never changed' using errcode='23514';
+  end if;
+  if new.status = 'confirmed' then
+    select * into pay from private.payments p where p.id = new.payment_id;
+    if not found or pay.provider <> 'invoice' or pay.status <> 'complete' or pay.owner_id <> new.account_id
+        or pay.amount_cents <> new.amount_received_cents or pay.plan_version_id <> new.plan_version_id
+        or pay.snapshot->>'invoice_transfer_id' is distinct from new.id::text
+        or (pay.snapshot->>'slots')::integer is distinct from new.slots
+        or internal.same_identity(new.confirmed_by, new.recorded_by)
+        or new.declined_by is not null or new.declined_at is not null or new.decline_reason is not null then
+      raise exception 'a confirmed bank transfer names its invoice payment of that account and amount' using errcode='23514';
+    end if;
+  elsif new.confirmed_by is not null or new.confirmed_at is not null or new.payment_id is not null then
+    raise exception 'a declined bank transfer has no payment' using errcode='23514';
+  end if;
+  return new;
+end;
+$function$;
+alter function internal.invoice_transfer_guard() owner to postgres;
+revoke all on function internal.invoice_transfer_guard() from public, anon, authenticated, service_role;
 
 -- 9b. Staff record a bank transfer to an invoice (the bank transfer rules of
 -- 20261113223806): the account, plan, slots and amount are the invoice's. It
@@ -1837,6 +1897,11 @@ begin
       > internal.individual_slot_limit(fingerprint) then
     raise exception 'more slots than the person''s limit; raise the limit first' using errcode='PT429', detail='slot_limit_reached';
   end if;
+  -- An attempt never sent to Ozow is closed, so the slot checkout cannot
+  -- continue it while the transfer waits.
+  update private.payments p set status = 'cancelled', status_changed_at = pg_catalog.clock_timestamp()
+    from private.customer_invoice_payments l
+    where l.invoice_id = inv.id and l.payment_id = p.id and p.status = 'pending';
   insert into private.invoice_transfers (account_id, plan_version_id, slots, amount_received_cents, bank_reference,
       cleared_on, cooling_off_waiver_confirmed, reason, recorded_by, customer_invoice_id)
     values (inv.account_id, plan.id, inv.slots, inv.total_cents, reference, cleared, true, audit_reason, actor, inv.id)
@@ -1875,7 +1940,7 @@ CREATE OR REPLACE FUNCTION internal.retention_commerce(p_limit integer)
 AS $function$
 declare provider_events integer; invoices integer; addon_windows integer; partner_events integer;
   commissions integer; acquisitions integer; sponsorships integer; trial_claims integer; activations integer;
-  entitlements integer; payments integer; customer_invoices integer;
+  entitlements integer; payments integer; customer_invoices integer; bank_transfers integer;
 begin
   delete from private.provider_events where id in(select e.id from private.provider_events e
     where internal.retention_tax_year_due(e.received_at) order by e.received_at limit p_limit);
@@ -1883,6 +1948,14 @@ begin
   delete from private.invoices where id in(select i.id from private.invoices i
     where internal.retention_tax_year_due(i.issued_at) order by i.issued_at limit p_limit);
   get diagnostics invoices=row_count;
+  -- Recorded bank transfers: five tax years after they were confirmed,
+  -- declined or recorded, and always with the invoice they name.
+  delete from private.invoice_transfers where id in(select t.id from private.invoice_transfers t
+    where internal.retention_tax_year_due(coalesce(t.confirmed_at,t.declined_at,t.recorded_at))
+      or t.customer_invoice_id in(select i.id from private.customer_invoices i
+        where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at)))
+    order by t.recorded_at limit p_limit);
+  get diagnostics bank_transfers=row_count;
   delete from private.customer_invoice_payments where invoice_id in(select i.id from private.customer_invoices i
     where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at))
       and not exists(select 1 from private.invoice_transfers t where t.customer_invoice_id=i.id)
@@ -1944,7 +2017,8 @@ begin
   return jsonb_build_object('provider_events',provider_events,'invoices',invoices,'addon_windows',addon_windows,
     'partner_events',partner_events,'partner_commissions',commissions,'account_acquisitions',acquisitions,
     'sponsorships',sponsorships,'post_trial_claims',trial_claims,'post_activations',activations,
-    'entitlements',entitlements,'payments',payments,'customer_invoices',customer_invoices);
+    'entitlements',entitlements,'payments',payments,'customer_invoices',customer_invoices,
+    'bank_transfers',bank_transfers);
 end;
 $function$;
 alter function internal.retention_commerce(integer) owner to postgres;
