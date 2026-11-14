@@ -1501,13 +1501,13 @@ history; and that the rollback refuses once the new rules were used.
 
 ## Renew early and renewal reminders, 14 November 2026
 
-`20261114093742_renew_slots_early.sql` is not applied yet (roadmap P3, with the
-owner's renewal rule of 14 November 2026). It needs
-`20261114041000_customer_invoice_pay_now.sql` and the slot, payment, post and
-mail bodies it builds on with their reviewed bodies, and refuses (55000)
-otherwise (the two post funding views it replaces are checked by an md5 of each
-whole definition, so a view changed in any other way is refused, not
-overwritten). It only adds: no API command, argument or grant is removed or
+`20261114093742_renew_slots_early.sql` was applied on 14 November 2026 at 14:35
+UTC with the owner's approval (roadmap P3, with the owner's renewal rule of 14
+November 2026). It needs `20261114041000_customer_invoice_pay_now.sql` and the
+slot, payment, post and mail bodies it builds on with their reviewed bodies, and
+refuses (55000) otherwise (the two post funding views it replaces are checked by
+an md5 of each whole definition, so a view changed in any other way is refused,
+not overwritten). It only adds: no API command, argument or grant is removed or
 changed.
 
 - **A renewal is a new grant of the same slot.** `private.payment_lines` gains
@@ -3687,7 +3687,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   "customer invoices: already applied; invoices issued: 0 (unpaid: 0); payment
   attempts: 0"; production fingerprint after it matched the full replay (except
   the known schema grant difference)
-- `20261114093742_renew_slots_early.sql`: pending; apply before the pull request
-  that uses it is merged (roadmap P3)
+- `20261114093742_renew_slots_early.sql`: applied 2026-11-14 14:35 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file (sha256 starting 8cb30b16b330f1fe, files from
+  raw GitHub at 0f4fcd28) before the pull request was merged; preflight before
+  "update not applied", after "slot renewals: already applied; renewal payment
+  lines: 0; renewals issued: 0; reminders queued: 0"; production fingerprint
+  after it matched the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
