@@ -3,11 +3,12 @@
  * on the platform is at most 2 minutes; an event post's video at most
  * 1 minute. The limit follows the post's kind, not its area.
  *
- * The length is read from the container itself (MP4/MOV `mvhd`/`mdhd`, WebM
- * Segment Info), so the same rule runs in the browser before upload and on
- * the server at upload. Nothing here decodes the media: a forged header can
- * still lie, which the database check at submit (part B) and the 50 MB cap
- * on the stored file bound.
+ * The length is read from the container itself, so the same rule runs in the
+ * browser before upload and on the server at upload: for MP4/MOV the video
+ * track's sample table (what players time playback from), not the declared
+ * movie header; for WebM (phone side only, before conversion) Segment Info.
+ * Nothing here decodes the media; the database check at submit (part B) and
+ * the 50 MB cap on the stored file bound what a forged file can still do.
  */
 
 /** Every video on the platform. */
@@ -132,57 +133,107 @@ function children(
   return found;
 }
 
-/** Duration in seconds from an `mvhd` or `mdhd` box (both share this layout). */
-function headerSeconds(bytes: Uint8Array, data: number, end: number): number | null {
-  if (data + 4 > end) return null;
-  const version = bytes[data];
-  if (version === 1) {
-    if (data + 32 > end) return null;
-    const timescale = u32(bytes, data + 20);
-    const duration = u64(bytes, data + 24);
-    // u64 already refuses the all-ones "unknown" value (and anything past 2^53).
-    if (!timescale || duration === null) return null;
-    return duration / timescale;
-  }
-  if (data + 20 > end) return null;
-  const timescale = u32(bytes, data + 12);
-  const duration = u32(bytes, data + 16);
-  if (!timescale || duration === 0xffffffff) return null;
-  return duration / timescale;
+type Box = { type: string; data: number; end: number };
+
+function child(bytes: Uint8Array, parent: Box | undefined, type: string): Box | undefined {
+  return parent
+    ? children(bytes, parent.data, parent.end)?.find((box) => box.type === type)
+    : undefined;
 }
 
-/** The movie's length: the longest of the movie header and every track's media header. */
+/** Timescale of an `mvhd` or `mdhd` box (both share this layout); 0 when malformed. */
+function timescaleOf(bytes: Uint8Array, box: Box | undefined): number {
+  if (!box) return 0;
+  const offset = box.data + (bytes[box.data] === 1 ? 20 : 12);
+  return offset + 4 <= box.end ? u32(bytes, offset) : 0;
+}
+
+/**
+ * Media length of a track from its sample table: the sum of the `stts`
+ * sample durations, which is what players time playback from (the movie and
+ * media headers are only a declared summary). The sample count must match
+ * `stsz`/`stz2`, or the table is treated as forged.
+ */
+function sampleTableSeconds(bytes: Uint8Array, stbl: Box | undefined, timescale: number) {
+  const stts = child(bytes, stbl, "stts");
+  const sizes = child(bytes, stbl, "stsz") ?? child(bytes, stbl, "stz2");
+  if (!stts || !sizes || !timescale || stts.data + 8 > stts.end || sizes.data + 12 > sizes.end) {
+    return null;
+  }
+  const entries = u32(bytes, stts.data + 4);
+  if (stts.data + 8 + entries * 8 > stts.end) return null;
+  let samples = 0;
+  let ticks = 0;
+  for (let i = 0, at = stts.data + 8; i < entries; i++, at += 8) {
+    const count = u32(bytes, at);
+    samples += count;
+    ticks += count * u32(bytes, at + 4);
+  }
+  if (!samples || samples !== u32(bytes, sizes.data + 8)) return null;
+  return ticks / timescale;
+}
+
+/** Presentation length declared by an edit list, in seconds; 0 when absent, null when malformed. */
+function editListSeconds(bytes: Uint8Array, trak: Box, movieTimescale: number): number | null {
+  const elst = child(bytes, child(bytes, trak, "edts"), "elst");
+  if (!elst) return 0;
+  if (!movieTimescale || elst.data + 8 > elst.end) return null;
+  const wide = bytes[elst.data] === 1;
+  const entry = wide ? 20 : 12;
+  const entries = u32(bytes, elst.data + 4);
+  if (elst.data + 8 + entries * entry > elst.end) return null;
+  let ticks = 0;
+  for (let i = 0, at = elst.data + 8; i < entries; i++, at += entry) {
+    const segment = wide ? u64(bytes, at) : u32(bytes, at);
+    if (segment === null) return null;
+    ticks += segment;
+  }
+  return ticks / movieTimescale;
+}
+
+/**
+ * The movie's playing length, measured from the video track's sample table
+ * (or its edit list, if that is longer). Another track counts only when it
+ * runs more than a second past the video, so a few milliseconds of audio
+ * priming never push a clip over the limit, while a long audio track behind
+ * one frame does. Fragmented movies (`mvex`) are refused: their length is
+ * spread over fragments, and neither phones nor the site's converter write them.
+ */
 function isobmffMovieSeconds(moov: Uint8Array): number | null {
   const top = children(moov, 0, moov.length);
-  if (!top) return null;
-  let movie: number | null = null;
-  let movieTimescale = 0;
-  let longest = 0;
-  for (const box of top) {
-    if (box.type === "mvhd") {
-      movie = headerSeconds(moov, box.data, box.end);
-      const version = moov[box.data];
-      movieTimescale = u32(moov, box.data + (version === 1 ? 20 : 12));
-    } else if (box.type === "trak") {
-      const media = children(moov, box.data, box.end)?.find((child) => child.type === "mdia");
-      const header = media && children(moov, media.data, media.end)?.find((c) => c.type === "mdhd");
-      const seconds = header ? headerSeconds(moov, header.data, header.end) : null;
-      if (seconds) longest = Math.max(longest, seconds);
-    } else if (box.type === "mvex" && movieTimescale) {
-      // Fragmented MP4: the whole length is in the movie extends header.
-      const mehd = children(moov, box.data, box.end)?.find((child) => child.type === "mehd");
-      if (mehd && mehd.data + 8 <= mehd.end) {
-        const fragments =
-          moov[mehd.data] === 1 ? u64(moov, mehd.data + 4) : u32(moov, mehd.data + 4);
-        if (fragments) longest = Math.max(longest, fragments / movieTimescale);
-      }
-    }
+  if (!top || top.some((box) => box.type === "mvex")) return null;
+  const movieTimescale = timescaleOf(
+    moov,
+    top.find((box) => box.type === "mvhd")
+  );
+  let video = 0;
+  let other = 0;
+  for (const trak of top.filter((box) => box.type === "trak")) {
+    const mdia = child(moov, trak, "mdia");
+    const hdlr = child(moov, mdia, "hdlr");
+    if (!hdlr || hdlr.data + 12 > hdlr.end) return null;
+    const media = sampleTableSeconds(
+      moov,
+      child(moov, child(moov, mdia, "minf"), "stbl"),
+      timescaleOf(moov, child(moov, mdia, "mdhd"))
+    );
+    const edits = editListSeconds(moov, trak, movieTimescale);
+    if (media === null || edits === null) return null;
+    const seconds = Math.max(media, edits);
+    if (fourcc(moov, hdlr.data + 8) === "vide") video = Math.max(video, seconds);
+    else other = Math.max(other, seconds);
   }
-  return plausible(Math.max(movie ?? 0, longest) || null);
+  if (!video) return null;
+  return plausible(other > video + 1 ? other : video);
 }
 
 async function readIsobmffSeconds(read: VideoByteReader, size: number): Promise<number | null> {
-  for (let offset = 0, boxes = 0; offset + 8 <= size && boxes < MAX_TOP_LEVEL_BOXES; boxes++) {
+  let seconds: number | null = null;
+  let offset = 0;
+  // Every top-level box is visited (headers only; media data is skipped), so
+  // movie fragments after the movie header are seen and refused.
+  for (let boxes = 0; offset + 8 <= size; boxes++) {
+    if (boxes >= MAX_TOP_LEVEL_BOXES) return null;
     const head = await read(offset, 16);
     if (head.length < 8) return null;
     let boxSize = u32(head, 0);
@@ -195,16 +246,18 @@ async function readIsobmffSeconds(read: VideoByteReader, size: number): Promise<
       boxSize = large;
     } else if (boxSize === 0) boxSize = size - offset;
     if (boxSize < 8 || offset + boxSize > size) return null;
+    if (type === "moof" || (type === "moov" && seconds !== null)) return null;
     if (type === "moov") {
       if (boxSize > MAX_MOOV_BYTES) return null;
       const moov = await read(offset, boxSize);
       if (moov.length !== boxSize) return null;
       const header = u32(moov, 0) === 1 ? 16 : 8;
-      return isobmffMovieSeconds(moov.subarray(header));
+      seconds = isobmffMovieSeconds(moov.subarray(header));
+      if (seconds === null) return null;
     }
     offset += boxSize;
   }
-  return null;
+  return offset === size ? seconds : null;
 }
 
 const EBML_ID = 0x1a45dfa3;

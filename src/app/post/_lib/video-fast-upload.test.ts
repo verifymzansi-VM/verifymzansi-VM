@@ -166,9 +166,9 @@ describe("uploadVideoWithFastPath", () => {
     ).resolves.toBe("https://media.example.com/event.mp4");
   });
 
-  it("refuses a video whose length cannot be read", async () => {
+  it("refuses a video whose length cannot be read even after conversion", async () => {
     const uploadViaServer = vi.fn();
-    mockReadLength.mockResolvedValueOnce(null);
+    mockReadLength.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
     await expect(
       uploadVideoWithFastPath({
         file: new File(["?"], "unknown.webm", { type: "video/webm" }),
@@ -177,6 +177,49 @@ describe("uploadVideoWithFastPath", () => {
       })
     ).rejects.toThrow("We couldn't read this video's length; please export it as MP4");
     expect(uploadViaServer).not.toHaveBeenCalled();
+  });
+
+  it("converts a WebM with no duration (MediaRecorder) and measures the converted MP4", async () => {
+    const original = new File(["webm"], "recorded.webm", { type: "video/webm" });
+    const converted = new File(["mp4"], "recorded.mp4", { type: "video/mp4" });
+    mockCompressVideoForUpload.mockResolvedValueOnce(converted);
+    mockReadLength.mockImplementation(async (file: Blob) => (file === original ? null : 45));
+    const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/recorded.mp4");
+    await expect(
+      uploadVideoWithFastPath({ file: original, area: "listing", uploadViaServer })
+    ).resolves.toBe("https://media.example.com/recorded.mp4");
+    expect(uploadViaServer).toHaveBeenCalledWith(converted);
+  });
+
+  it("refuses a converted WebM over an event's limit", async () => {
+    const original = new File(["webm"], "teaser.webm", { type: "video/webm" });
+    mockCompressVideoForUpload.mockResolvedValueOnce(
+      new File(["mp4"], "teaser.mp4", { type: "video/mp4" })
+    );
+    mockReadLength.mockImplementation(async (file: Blob) => (file === original ? null : 90));
+    const uploadViaServer = vi.fn();
+    await expect(
+      uploadVideoWithFastPath({
+        file: original,
+        area: "promotion",
+        uploadViaServer,
+        maxSeconds: 60,
+      })
+    ).rejects.toThrow("Your video is 1 min 30 s; the limit is 1 minute.");
+    expect(uploadViaServer).not.toHaveBeenCalled();
+  });
+
+  it("does not reuse a 2-minute upload when the post switches to an event", async () => {
+    const file = new File(["clip"], "tour.mp4", { type: "video/mp4" });
+    mockReadLength.mockResolvedValue(90);
+    const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/tour.mp4");
+    await expect(
+      uploadVideoWithFastPath({ file, area: "promotion", uploadViaServer })
+    ).resolves.toBe("https://media.example.com/tour.mp4");
+    await expect(
+      uploadVideoWithFastPath({ file, area: "promotion", uploadViaServer, maxSeconds: 60 })
+    ).rejects.toThrow("Your video is 1 min 30 s; the limit is 1 minute.");
+    expect(uploadViaServer).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a failed conversion without uploading the original", async () => {

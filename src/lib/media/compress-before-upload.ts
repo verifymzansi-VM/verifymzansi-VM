@@ -73,16 +73,25 @@ export function compressVideoForUpload(
   return prepared;
 }
 
+/**
+ * Whether this video must be converted before upload: anything but a
+ * compatible (H.264/AAC) MP4 within the 50 MB stored-file cap. WebM is
+ * converted like MOV: browser-made WebM often has no readable length.
+ */
+export async function videoNeedsConversion(file: Blob): Promise<boolean> {
+  return (
+    file.type !== "video/mp4" ||
+    file.size > MAX_VIDEO_UPLOAD_BYTES ||
+    !(await hasCompatibleMp4Tracks(file))
+  );
+}
+
 async function prepareVideo(
   file: File,
   options?: { requireCompatibleOutput?: boolean; timeoutMs?: number }
 ): Promise<File> {
   const { compressVideo } = await import("@/lib/media/video-compressor");
-  // WebM is converted like MOV: browser-made WebM often has no readable length.
-  const needsConversion =
-    file.type !== "video/mp4" ||
-    file.size > MAX_VIDEO_UPLOAD_BYTES ||
-    !(await hasCompatibleMp4Tracks(file));
+  const needsConversion = await videoNeedsConversion(file);
   const timeout = createTimeoutSignal(
     options?.timeoutMs ??
       (needsConversion ? REQUIRED_CONVERSION_TIMEOUT_MS : DEFAULT_COMPRESSION_TIMEOUT_MS)

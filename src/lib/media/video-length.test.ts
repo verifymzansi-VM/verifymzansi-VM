@@ -1,4 +1,5 @@
 /** @vitest-environment node */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   formatVideoLength,
@@ -77,15 +78,50 @@ describe("reading the length from the file", () => {
     expect(await readVideoBlobSeconds(blob)).toBeCloseTo(59, 3);
   });
 
-  it("uses the longest of the movie and track headers, so a short movie header cannot hide a long track", async () => {
-    expect(await readVideoBytesSeconds(syntheticMp4(30, { trackSeconds: 150 }))).toBeCloseTo(
+  it("measures the video track's samples, not the declared headers, so a forged header cannot hide a long clip", async () => {
+    expect(await readVideoBytesSeconds(syntheticMp4(150, { declaredSeconds: 30 }))).toBeCloseTo(
       150,
       3
     );
-    expect(
-      await readVideoBytesSeconds(syntheticMp4(0, { trackSeconds: 90, withMovieHeader: false }))
-    ).toBeCloseTo(90, 3);
+    expect(await readVideoBytesSeconds(syntheticMp4(30, { declaredSeconds: 150 }))).toBeCloseTo(
+      30,
+      3
+    );
   });
+
+  it("refuses a sample table whose counts disagree", async () => {
+    expect(await readVideoBytesSeconds(syntheticMp4(30, { badSizes: true }))).toBeNull();
+  });
+
+  it("refuses fragmented movies, whose length is spread over fragments", async () => {
+    expect(await readVideoBytesSeconds(syntheticMp4(30, { fragmented: true }))).toBeNull();
+  });
+
+  it("reads version-1 headers and 64-bit box sizes", async () => {
+    expect(await readVideoBytesSeconds(syntheticMp4(61, { wide: true }))).toBeCloseTo(61, 3);
+  });
+
+  it("counts an edit list that presents the video for longer", async () => {
+    expect(await readVideoBytesSeconds(syntheticMp4(30, { editSeconds: 200 }))).toBeCloseTo(200, 2);
+  });
+
+  it("ignores audio priming but not a long audio track behind the video", async () => {
+    const primed = await readVideoBytesSeconds(syntheticMp4(120.5, { audioSeconds: 121 }));
+    expect(primed).toBeCloseTo(120.5, 3);
+    expect(videoLengthProblem(primed, MAX_VIDEO_SECONDS)).toBeNull();
+    expect(await readVideoBytesSeconds(syntheticMp4(10, { audioSeconds: 600 }))).toBeCloseTo(
+      600,
+      3
+    );
+  });
+
+  it.each(["business", "market", "tourism"])(
+    "reads the site's own %s advert (a real MP4) as its 4.5 s, matching its movie header",
+    async (name) => {
+      const bytes = new Uint8Array(readFileSync(`public/video/advert-originals/${name}.mp4`));
+      expect(await readVideoBytesSeconds(bytes)).toBeCloseTo(4.5, 2);
+    }
+  );
 
   it("reads a WebM's Segment Info duration", async () => {
     expect(await readVideoBytesSeconds(syntheticWebm(61))).toBeCloseTo(61, 3);

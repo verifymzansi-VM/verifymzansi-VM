@@ -1247,18 +1247,22 @@ put the best part first.' in its help text, and checks the picked video's length
 on the phone: a longer video is refused with its real length ('"clip.mp4": Your
 video is 2 min 40 s; the limit is 2 minutes.'), a video whose length cannot be
 read with '"clip.mp4": We couldn't read this video's length; please export it as
-MP4.' The same check runs again at submit, because a Tourism & Events post can
-switch to an event after the pick. The field's line 'Videos (MP4, WebM, MOV) up
-to 50 MB' becomes 'Videos (MP4, WebM, MOV)': a phone original up to 300 MB is
-now accepted, only to be converted first; the stored file stays at most 50 MB. A
-failed conversion says 'We couldn't convert this video. Film it in 720p or
-export it as MP4, then try again.' Six rows in group 4 and four test rows in
-group 5 carry the same change. Text outside the checked scope:
-`src/lib/media/video-length.ts`, `src/lib/media/video-length-client.ts`,
+MP4.' A video that is converted anyway (a phone's MOV or WebM recording, which
+often states no length) is measured after conversion instead. The same check
+runs again at submit, because a Tourism & Events post can switch to an event
+after the pick. The field's line 'Videos (MP4, WebM, MOV) up to 50 MB' becomes
+'Videos (MP4, WebM, MOV)': a phone original up to 300 MB is now accepted, only
+to be converted first; the stored file stays at most 50 MB. A failed conversion
+says 'We couldn't convert this video. Film it in 720p or export it as MP4, then
+try again.' Six rows in group 4 and four test rows in group 5 carry the same
+change. Text outside the checked scope: `src/lib/media/video-length.ts`,
+`src/lib/media/video-length-client.ts`,
 `src/lib/media/compress-before-upload.ts`,
 `src/app/post/_lib/video-fast-upload.ts`, `src/lib/foundation/media-upload.ts`
-and `src/app/api/media/upload/foundation.ts` (the server refuses a video over 2
-minutes or without a readable length, with the same messages).
+and `src/app/api/media/upload/foundation.ts` (the server stores MP4 only and
+refuses a video over 2 minutes or without a readable length, with the same
+messages; a WebM or MOV sent directly gets 'Videos are stored as MP4; please
+export it as MP4 and try again').
 
 | File                                      | Kind              | Reason                                                                                                                             | What changes on screen                                                                                                                                                                                                                                                                        | Proposed | Owner decision | Date       | Version      |
 | ----------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------- | ---------- | ------------ |

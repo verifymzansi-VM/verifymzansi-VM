@@ -63,9 +63,7 @@ export async function uploadFoundationMediaRequest(request: NextRequest) {
         errors.push(
           error instanceof FoundationMediaError && error.reason === "images_allowance_exhausted"
             ? IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE
-            : error instanceof FoundationMediaError &&
-                error.reason === "video_length" &&
-                error.detail
+            : error instanceof FoundationMediaError && error.detail
               ? error.detail
               : "A file could not be uploaded. Check the format and storage allowance."
         );
