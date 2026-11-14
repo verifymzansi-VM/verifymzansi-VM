@@ -510,8 +510,10 @@ try {
   if (later.length) {
     applySteps(database, later);
     await check("later updates keep the rules", () => {
+      // Another staff member: the same request by its recorder (admin) is a
+      // repeat that returns the confirmed record instead.
       fails(
-        recordSql(admin, { email: sizwe.email, term: 30, reference: "WRONG-0001" }),
+        recordSql(admin2, { email: sizwe.email, term: 30, reference: "WRONG-0001" }),
         "PT409",
         /reference, amount and date was already recorded \(confirmed\)/
       );
