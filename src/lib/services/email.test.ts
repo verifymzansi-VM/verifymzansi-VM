@@ -180,6 +180,45 @@ describe("email service", () => {
     expect(options.idempotencyKey).toBe("foundation-outbox/returned");
     vi.unstubAllEnvs();
   });
+  it("reminds a member that a slot ends, with its date and a renew link (P3)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    const slot = "00000000-0000-4000-8000-0000000000a1";
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "slot_renewal_reminder",
+      "foundation-outbox/reminder",
+      undefined,
+      { slotEndsAt: "2026-11-17T12:00:00Z", slotRenewAll: false, renewSlotId: slot }
+    );
+    let [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.subject).toBe("Your slot ends soon");
+    expect(message.text).toContain("Your Individual slot ends on 17 November 2026");
+    expect(message.text).toContain("Nothing renews automatically.");
+    expect(message.text).toContain(
+      `Renew my slot: https://verifymzansi.com/billing/checkout?renew=${slot}`
+    );
+    expect(message.html).toContain(`https://verifymzansi.com/billing/checkout?renew=${slot}`);
+    expect(options.idempotencyKey).toBe("foundation-outbox/reminder");
+    // More than one slot ending within 7 days: "Renew all".
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "slot_renewal_reminder",
+      "foundation-outbox/reminder-all",
+      undefined,
+      { slotEndsAt: "2026-11-17T12:00:00Z", slotRenewAll: true, renewSlotId: slot }
+    );
+    [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.text).toContain("another of your slots ends within 7 days");
+    expect(message.text).toContain(
+      "Renew all: https://verifymzansi.com/billing/checkout?renew=soon"
+    );
+    // Without a date: the plain wording, and My slots without a slot id.
+    await sendPlatformNotice("member@example.invalid", "slot_renewal_reminder", "outbox/plain");
+    [message] = mockSend.mock.calls.at(-1)!;
+    expect(message.text).toContain("One of your Individual slots ends within 3 days.");
+    expect(message.text).toContain("https://verifymzansi.com/dashboard/slots");
+    vi.unstubAllEnvs();
+  });
   it("passes durable job keys to Resend for repeatable notices", async () => {
     await sendModerationNoticeEmail({
       email: "user@example.com",

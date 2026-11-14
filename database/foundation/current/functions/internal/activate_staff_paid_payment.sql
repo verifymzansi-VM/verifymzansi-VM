@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION internal.activate_staff_paid_payment(p_payment_id uui
 AS $function$
 declare actor uuid; buyer uuid; pay private.payments; snap jsonb; prior private.payment_activations;
   target private.posts; line_count integer := 0; made integer := 0; window_start timestamptz;
-  fingerprint text; commissions integer := 0; has_lines boolean;
+  fingerprint text; commissions integer := 0; has_lines boolean; renewing uuid[];
 begin
   actor := internal.staff_actor('payments:refund');
   if p_payment_id is null or not coalesce(internal.plain_text_valid(p_reason,5,500,true),false) then
@@ -74,23 +74,22 @@ begin
       if line_count = 0 then
         raise exception 'every slot of this payment was refunded' using errcode='PT409', detail='payment_slots_refunded';
       end if;
-      -- Within the person's Individual slot limit (every account of the identity).
+      -- Within the person's Individual slot limit (every account of the
+      -- identity, each slot once; a renewal of a held slot adds none, and
+      -- the slots renewed ahead stay within the limit).
       fingerprint := internal.individual_slot_identity(pay.owner_id);
       if fingerprint is not null then
         perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
       end if;
-      if (internal.individual_slots_counted(fingerprint, pay.owner_id, pay.id)->>'held')::integer + line_count
-          > internal.individual_slot_limit(fingerprint) then
+      renewing := internal.slot_lines_renewing(pay.id);
+      if (internal.slot_lines_adding(pay.id) > 0
+          and (internal.individual_slots_counted(fingerprint, pay.owner_id, pay.id)->>'held')::integer
+            + internal.slot_lines_adding(pay.id) > internal.individual_slot_limit(fingerprint))
+        or (cardinality(renewing) > 0
+          and not internal.individual_renewals_allowed(fingerprint, pay.owner_id, pay.id, renewing)) then
         raise exception 'more slots than the person''s limit; raise the limit or refund' using errcode='PT429', detail='slot_limit_reached';
       end if;
-      insert into private.entitlements (owner_id, source, area, payment_id, payment_line_id, slot_capacity,
-        activations_per_period, activation_period_days, max_photos, max_videos, starts_at, ends_at, addon_capabilities)
-      select pay.owner_id, 'retail_paid', snap->>'area', pay.id, l.id, (snap->>'slot_capacity')::integer,
-        (snap->>'activations_per_period')::integer, (snap->>'activation_period_days')::integer,
-        (snap->>'max_photos')::integer, (snap->>'max_videos')::integer, statement_timestamp(),
-        statement_timestamp() + make_interval(days => (snap->>'duration_days')::integer),
-        array(select jsonb_array_elements_text(coalesce(snap->'addon_capabilities','[]'::jsonb)))
-      from private.payment_lines l where l.payment_id = pay.id and l.status = 'open' order by l.line_number;
+      made := internal.issue_slot_line_entitlements(pay.id);
     else
       insert into private.entitlements (owner_id, source, area, payment_id, slot_capacity, activations_per_period,
         activation_period_days, max_photos, max_videos, starts_at, ends_at, addon_capabilities)
@@ -99,8 +98,8 @@ begin
         (snap->>'max_photos')::integer, (snap->>'max_videos')::integer, statement_timestamp(),
         statement_timestamp() + make_interval(days => (snap->>'duration_days')::integer),
         array(select jsonb_array_elements_text(coalesce(snap->'addon_capabilities','[]'::jsonb))));
+      get diagnostics made = row_count;
     end if;
-    get diagnostics made = row_count;
   end if;
   -- The status stays complete, so the commission trigger does not fire: the
   -- delivered purchase earns its commission here.

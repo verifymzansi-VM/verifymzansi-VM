@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BadgeCheck, Building2, Gift, Layers, Plus } from "lucide-react";
+import { BadgeCheck, Building2, Gift, Layers, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatSaLongDate, saCalendarDaysBetween } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
@@ -35,11 +35,13 @@ function daysLeft(endsAt: string, now: Date) {
 }
 
 /**
- * "My slots" (Pricing v2 P2): every slot the member holds and every slot that
- * ended in the last 3 days, phone first. Each shows the post in it (or that it
- * is empty), its end date and days left, or, once ended, until when its post
- * is kept. Renewing a slot early comes with P3; until then the page offers one
- * "Buy a slot" (a new slot with its own end date).
+ * "My slots" (Pricing v2 P2, renewing P3): every slot the member holds and
+ * every slot that ended in the last 3 days, phone first. Each shows the post in
+ * it (or that it is empty), its end date and days left, or, once ended, until
+ * when its post is kept. An Individual slot can be renewed from 14 days before
+ * it ends ("Renew", and "Renew all" when several can): the new days start when
+ * its current days end, and a renewed slot shows until when it is renewed. One
+ * "Buy a slot" buys a new slot with its own end date.
  */
 export function MySlots({
   slots,
@@ -54,6 +56,9 @@ export function MySlots({
   now?: Date;
 }) {
   const room = individual.limit - individual.held - individual.pending;
+  const renewable = individual.verified
+    ? slots.filter((slot) => slot.individual && slot.renewable)
+    : [];
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-muted/60 px-4 py-3.5">
@@ -62,18 +67,28 @@ export function MySlots({
           of {individual.limit} Individual slots
           {individual.limit_ends_at ? ` until ${formatSaLongDate(individual.limit_ends_at)}` : null}
         </p>
-        {!individual.verified ? (
-          <Button asChild variant="outline" className="h-11 rounded-full">
-            <Link href="/verification">Finish my ID review</Link>
-          </Button>
-        ) : buyHref && room > 0 ? (
-          <Button asChild variant="trust-verified" className="h-11 rounded-full">
-            <Link href={buyHref}>
-              <Plus aria-hidden="true" className="h-4 w-4" />
-              Buy a slot
-            </Link>
-          </Button>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {renewable.length > 1 ? (
+            <Button asChild variant="outline" className="h-11 rounded-full">
+              <Link href="/billing/checkout?renew=all">
+                <RefreshCw aria-hidden="true" className="h-4 w-4" />
+                Renew all
+              </Link>
+            </Button>
+          ) : null}
+          {!individual.verified ? (
+            <Button asChild variant="outline" className="h-11 rounded-full">
+              <Link href="/verification">Finish my ID review</Link>
+            </Button>
+          ) : buyHref && room > 0 ? (
+            <Button asChild variant="trust-verified" className="h-11 rounded-full">
+              <Link href={buyHref}>
+                <Plus aria-hidden="true" className="h-4 w-4" />
+                Buy a slot
+              </Link>
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {slots.length === 0 ? (
@@ -85,7 +100,15 @@ export function MySlots({
           {slots.map((slot) => {
             const Icon = SOURCE[slot.source].icon;
             const ended = slot.state === "ended";
+            const upcoming = slot.state === "upcoming";
             const empty = Math.max(0, slot.places - slot.posts.length);
+            const canRenew = individual.verified && slot.individual && slot.renewable;
+            const opensLater =
+              individual.verified &&
+              slot.individual &&
+              !slot.renewable &&
+              slot.renew_opens_at !== null &&
+              Date.parse(slot.renew_opens_at) > now.getTime();
             return (
               <li
                 key={slot.id}
@@ -105,19 +128,26 @@ export function MySlots({
                       <p className="text-xs text-muted-foreground">
                         {ended
                           ? formatSaLongDate(slot.ends_at)
-                          : `Ends ${formatSaLongDate(slot.ends_at)}`}
+                          : upcoming
+                            ? `Starts ${formatSaLongDate(slot.starts_at)}`
+                            : `Ends ${formatSaLongDate(slot.ends_at)}`}
                       </p>
+                      {slot.renewed_until ? (
+                        <p className="text-xs font-medium text-brand-green-700 dark:text-brand-gold-300">
+                          {`Renewed until ${formatSaLongDate(slot.renewed_until)}`}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                   <span
                     className={cn(
                       "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
-                      ended
+                      ended || upcoming
                         ? "bg-muted text-muted-foreground"
                         : "bg-brand-green/10 text-brand-green-700 dark:text-brand-gold-300"
                     )}
                   >
-                    {ended ? "Ended" : daysLeft(slot.ends_at, now)}
+                    {ended ? "Ended" : upcoming ? "Not started" : daysLeft(slot.ends_at, now)}
                   </span>
                 </div>
                 <ul className="mt-3 space-y-2 border-t border-border/60 pt-3 text-sm">
@@ -136,7 +166,7 @@ export function MySlots({
                       ) : null}
                     </li>
                   ))}
-                  {!ended && empty > 0 ? (
+                  {!ended && !upcoming && empty > 0 ? (
                     <li className="flex items-center justify-between gap-2 text-muted-foreground">
                       <span>{empty === 1 ? "Empty" : `${empty} places empty`}</span>
                       <Link
@@ -148,6 +178,18 @@ export function MySlots({
                     </li>
                   ) : null}
                 </ul>
+                {canRenew ? (
+                  <Button asChild variant="outline" className="mt-3 h-11 w-full rounded-full">
+                    <Link href={`/billing/checkout?renew=${slot.id}`}>
+                      <RefreshCw aria-hidden="true" className="h-4 w-4" />
+                      Renew
+                    </Link>
+                  </Button>
+                ) : opensLater && slot.renew_opens_at ? (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {`You can renew from ${formatSaLongDate(slot.renew_opens_at)}.`}
+                  </p>
+                ) : null}
               </li>
             );
           })}

@@ -27,6 +27,8 @@ import {
 } from "../billing/addon-sales";
 import { PRODUCTION_CHECKOUT_ORIGIN, testCopyCheckout } from "../payments/checkout-origins";
 import type { PaymentRecordShape } from "../payments/types";
+import { hasDatabaseReason } from "./error-reasons";
+import { RENEWAL_WINDOW_DAYS } from "../billing/slot-checkout";
 
 type BillingRpcName =
   | "get_my_billing"
@@ -42,12 +44,16 @@ type BillingRpcName =
   | "apply_provider_event"
   | "start_checkout"
   | "start_slot_checkout"
-  | "get_my_slots";
+  | "start_slot_renewal_checkout"
+  | "get_my_slots_v2";
 type BillingRpc = {
   rpc: (
     name: BillingRpcName,
     args?: Record<string, unknown>
-  ) => PromiseLike<{ data: unknown; error: { code?: string } | null }>;
+  ) => PromiseLike<{
+    data: unknown;
+    error: { code?: string; details?: string | null; message?: string } | null;
+  }>;
 };
 const log = createLogger("FoundationPayments");
 // The transport is deliberately limited to this closed command set. Callers
@@ -146,6 +152,8 @@ export interface FoundationPendingPayment {
    * of slots and its total, which may differ from what the page now shows. */
   slots?: number;
   amountCents?: number;
+  /** The unpaid order renews slots (one order per term can be open). */
+  renewal?: boolean;
 }
 export class FoundationPendingPaymentError extends FoundationBillingError {
   override name = "FoundationPendingPaymentError";
@@ -184,6 +192,28 @@ const SLOT_CHECKOUT_REFUSALS: Readonly<
     "SLOT_LIMIT_REACHED",
   ],
 };
+/** The renewal checkout's refusals (api.start_slot_renewal_checkout). */
+const RENEWAL_CHECKOUT_REFUSALS: Readonly<
+  Record<string, readonly [status: 400 | 403 | 404 | 409, message: string, code: string]>
+> = {
+  ...SLOT_CHECKOUT_REFUSALS,
+  PT412: [403, "Your ID review must be accepted before you renew a slot.", "ID_REVIEW_REQUIRED"],
+  PT404: [
+    404,
+    "This slot cannot be renewed: it has ended or is not yours. Buy a new slot instead.",
+    "SLOT_UNAVAILABLE",
+  ],
+  PT429: [
+    409,
+    "You can renew only as many slots ahead as your slot limit allows. Let a slot end before renewing another.",
+    "RENEWAL_LIMIT_REACHED",
+  ],
+};
+const RENEWAL_NOT_OPEN = [
+  409,
+  `A slot can be renewed from ${RENEWAL_WINDOW_DAYS} days before it ends.`,
+  "RENEWAL_NOT_OPEN",
+] as const;
 /** A status check that found something staff must look at. `reason` is a
  * reason code for the logs and the status-check job's report; members only
  * ever see the message. */
@@ -204,8 +234,15 @@ async function command(
   args: Record<string, unknown> = {}
 ) {
   const { data, error } = await billingRpc(api).rpc(name, args);
-  const refusal =
-    error && name === "start_slot_checkout" ? SLOT_CHECKOUT_REFUSALS[error.code ?? ""] : null;
+  const refusal = !error
+    ? null
+    : name === "start_slot_checkout"
+      ? SLOT_CHECKOUT_REFUSALS[error.code ?? ""]
+      : name === "start_slot_renewal_checkout"
+        ? error.code === "PT409" && hasDatabaseReason(error, "renewal_not_open")
+          ? RENEWAL_NOT_OPEN
+          : RENEWAL_CHECKOUT_REFUSALS[error.code ?? ""]
+        : null;
   if (refusal) throw new FoundationBillingCommandError(...refusal);
   if (error)
     throw new FoundationBillingCommandError(
@@ -252,9 +289,18 @@ const mySlotsSchema = z.strictObject({
         area: z.enum(["market", "business", "tourism_events"]).nullable(),
         starts_at: instant,
         ends_at: instant,
-        state: z.enum(["active", "ended"]),
+        // upcoming: a renewal waiting to start while its slot has no current period.
+        state: z.enum(["active", "ended", "upcoming"]),
         places: z.number().int().positive(),
         sponsor: z.string().max(200).nullable(),
+        // Renewing (P3): whether it can be renewed now, from when, the end of
+        // its renewed periods and the renewals waiting to start.
+        renewable: z.boolean(),
+        renew_opens_at: instant.nullable(),
+        renewed_until: instant.nullable(),
+        renewals: z
+          .array(z.strictObject({ id: z.uuid(), starts_at: instant, ends_at: instant }))
+          .max(200),
         posts: z.array(slotPostSchema).max(1000),
       })
     )
@@ -263,17 +309,19 @@ const mySlotsSchema = z.strictObject({
     verified: z.boolean(),
     held: z.number().int().nonnegative(),
     pending: z.number().int().nonnegative(),
+    renewed_ahead: z.number().int().nonnegative(),
     limit: z.number().int().min(4).max(25),
     limit_ends_at: instant.nullable(),
   }),
 });
 export type FoundationMySlots = z.infer<typeof mySlotsSchema>;
 /** Every slot the member holds (and ended ones for 3 days), with the posts in
- * them, and their Individual slot count and limit. */
+ * them, whether each can be renewed, and their Individual slot count and
+ * limit (api.get_my_slots_v2, 20261114093742_renew_slots_early.sql). */
 export async function readFoundationMySlots(
   api: FoundationAuthenticatedApi
 ): Promise<FoundationMySlots> {
-  return mySlotsSchema.parse(await command(api, "get_my_slots"));
+  return mySlotsSchema.parse(await command(api, "get_my_slots_v2"));
 }
 export async function readFoundationPayment(
   api: FoundationAuthenticatedApi,
@@ -328,6 +376,8 @@ const quoteSchema = z.object({
   status: z.literal("pending"),
   // The slot checkout says how many slots the payment holds.
   slots: z.number().int().min(1).max(25).optional(),
+  // ...and whether they are renewals (also for an earlier order it returns).
+  renewal: z.boolean().optional(),
 });
 const claimSchema = foundationPaymentSchema.extend({
   claim_token: z.uuid().nullable(),
@@ -392,6 +442,49 @@ export async function startFoundationSlotCheckout(
     await command(api, "start_slot_checkout", {
       p_plan_id: value.planId,
       p_slots: value.slots,
+      p_expected_total_cents: value.expectedTotalCents,
+      p_cooling_off_consent: value.coolingOffConsent,
+    })
+  );
+  return openFoundationCheckout(quote, ownerId, app, service);
+}
+
+/** Renewing slots early ("Renew all" included): the slots, the term, the
+ * total shown and the renewal's own cooling-off consent. */
+export interface FoundationSlotRenewal {
+  planId: string;
+  entitlementIds: string[];
+  expectedTotalCents: number;
+  coolingOffConsent: boolean;
+}
+const slotRenewalSchema = z.strictObject({
+  planId: z.uuid(),
+  entitlementIds: z
+    .array(z.uuid())
+    .min(1)
+    .max(25)
+    .refine((ids) => new Set(ids).size === ids.length),
+  expectedTotalCents: z.number().int().positive().max(100_000_000),
+  coolingOffConsent: z.literal(true),
+});
+
+/** SQL owns which slots may be renewed (the member's own, still running, from
+ * 14 days before they end), the price, the consent record, the ID review, the
+ * R10,000 online limit and the person's limit; each renewal starts when its
+ * slot's current days end. */
+export async function startFoundationSlotRenewalCheckout(
+  api: FoundationAuthenticatedApi,
+  ownerId: string,
+  order: FoundationSlotRenewal,
+  appUrl: string,
+  service = createFoundationServiceApi()
+) {
+  const app = checkoutApp(appUrl);
+  const value = slotRenewalSchema.parse(order);
+  const quote = quoteSchema.parse(
+    await command(api, "start_slot_renewal_checkout", {
+      p_entitlement_ids: value.entitlementIds,
+      p_plan_id: value.planId,
       p_expected_total_cents: value.expectedTotalCents,
       p_cooling_off_consent: value.coolingOffConsent,
     })
@@ -474,6 +567,7 @@ async function openFoundationCheckout(
           slots: quote.slots,
           amountCents: Number(pay.amount_cents),
         }),
+        ...(quote.renewal === true && { renewal: true }),
       });
     return { paymentId: pay.id, checkoutUrl };
   }

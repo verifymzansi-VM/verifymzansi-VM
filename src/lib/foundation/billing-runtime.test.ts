@@ -23,6 +23,7 @@ import {
   runFoundationPaymentReconciliation,
   startFoundationCheckout,
   startFoundationSlotCheckout,
+  startFoundationSlotRenewalCheckout,
 } from "./billing-runtime";
 const logged = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn() }));
 vi.mock("server-only", () => ({}));
@@ -1174,6 +1175,88 @@ describe("the Individual slot checkout", () => {
   });
 });
 
+describe("renewing slots early (P3)", () => {
+  const order = {
+    planId: product,
+    entitlementIds: [uuid(30), uuid(31)],
+    expectedTotalCents: 13800,
+    coolingOffConsent: true,
+  };
+  const renewal = (value: Record<string, unknown> = order) =>
+    startFoundationSlotRenewalCheckout(
+      api,
+      owner,
+      value as typeof order,
+      "https://verifymzansi.com",
+      service
+    );
+  it("quotes the renewal of the chosen slots with the total shown, then opens Ozow", async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ...quote, amount_cents: "13800", slots: 2, renewal: true },
+      error: null,
+    });
+    machine.mockImplementationOnce(async () => ({
+      data: { ...claimDto(), amount_cents: "13800" },
+      error: null,
+    }));
+    expect(await renewal()).toEqual({ paymentId: payment, checkoutUrl });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("start_slot_renewal_checkout", {
+      p_entitlement_ids: [uuid(30), uuid(31)],
+      p_plan_id: product,
+      p_expected_total_cents: 13800,
+      p_cooling_off_consent: true,
+    });
+  });
+  it.each([
+    ["without the consent", { ...order, coolingOffConsent: false }],
+    ["with no slot", { ...order, entitlementIds: [] }],
+    ["with the same slot twice", { ...order, entitlementIds: [uuid(30), uuid(30)] }],
+    ["with a slot that is not an id", { ...order, entitlementIds: ["slot-1"] }],
+  ])("refuses a renewal %s before any command", async (_label, value) => {
+    await expect(renewal(value)).rejects.toThrow();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it.each([
+    [
+      { code: "PT409", details: "renewal_not_open" },
+      409,
+      "RENEWAL_NOT_OPEN",
+      /from 14 days before it ends/,
+    ],
+    [
+      { code: "PT404", details: "slot_unavailable" },
+      404,
+      "SLOT_UNAVAILABLE",
+      /has ended or is not yours/,
+    ],
+    [{ code: "PT412" }, 403, "ID_REVIEW_REQUIRED", /before you renew a slot/],
+    [{ code: "PT413" }, 400, "INVOICE_REQUIRED", /paid by invoice/],
+    [{ code: "PT428" }, 409, "PRICE_CHANGED", /price changed/],
+    [{ code: "PT429" }, 409, "RENEWAL_LIMIT_REACHED", /as many slots ahead/],
+  ])("tells the member why the database refused (%o)", async (error, status, code, message) => {
+    rpc.mockResolvedValueOnce({ data: null, error });
+    const refused = renewal();
+    await expect(refused).rejects.toMatchObject({ status, code });
+    await expect(refused).rejects.toThrow(message);
+    expect(machine).not.toHaveBeenCalled();
+  });
+  it("names an unpaid renewal open at Ozow for the same term", async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ...quote, amount_cents: "6900", slots: 1, renewal: true, reused: true },
+      error: null,
+    });
+    machine.mockResolvedValueOnce({
+      data: { ...openRequest(), amount_cents: "6900" },
+      error: null,
+    });
+    await expect(renewal()).rejects.toMatchObject({
+      status: 409,
+      code: "PENDING_PAYMENT_EXISTS",
+      pendingPayment: { id: payment, slots: 1, amountCents: 6900, renewal: true },
+    });
+  });
+});
+
 describe("My slots", () => {
   const slot = {
     id: uuid(20),
@@ -1186,6 +1269,12 @@ describe("My slots", () => {
     state: "active",
     places: 1,
     sponsor: null,
+    renewable: true,
+    renew_opens_at: "2026-11-28T10:00:00Z",
+    renewed_until: "2027-01-11T10:00:00Z",
+    renewals: [
+      { id: uuid(22), starts_at: "2026-12-12T10:00:00Z", ends_at: "2027-01-11T10:00:00Z" },
+    ],
     posts: [
       {
         id: uuid(21),
@@ -1197,11 +1286,29 @@ describe("My slots", () => {
       },
     ],
   };
-  const individual = { verified: true, held: 1, pending: 0, limit: 4, limit_ends_at: null };
-  it("reads the member's slots and counts", async () => {
+  const individual = {
+    verified: true,
+    held: 1,
+    pending: 0,
+    renewed_ahead: 1,
+    limit: 4,
+    limit_ends_at: null,
+  };
+  it("reads the member's slots, their renewals and counts (v2)", async () => {
     rpc.mockResolvedValueOnce({ data: { slots: [slot], individual }, error: null });
     expect(await readFoundationMySlots(api)).toEqual({ slots: [slot], individual });
-    expect(rpc).toHaveBeenCalledExactlyOnceWith("get_my_slots", {});
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("get_my_slots_v2", {});
+  });
+  it("reads a renewal waiting to start", async () => {
+    const upcoming = {
+      ...slot,
+      state: "upcoming",
+      renewable: false,
+      renewed_until: null,
+      renewals: [],
+    };
+    rpc.mockResolvedValueOnce({ data: { slots: [upcoming], individual }, error: null });
+    expect((await readFoundationMySlots(api)).slots[0].state).toBe("upcoming");
   });
   it("refuses an unexpected shape", async () => {
     rpc.mockResolvedValueOnce({

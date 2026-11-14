@@ -9,6 +9,7 @@ import {
   FoundationPendingPaymentError,
   startFoundationCheckout,
   startFoundationSlotCheckout,
+  startFoundationSlotRenewalCheckout,
 } from "./billing-runtime";
 import type * as BillingRuntime from "./billing-runtime";
 import { createFoundationRouteContext } from "./request-route";
@@ -26,6 +27,7 @@ vi.mock("./billing-runtime", async (importOriginal) => ({
   ...(await importOriginal<typeof BillingRuntime>()),
   startFoundationCheckout: vi.fn(),
   startFoundationSlotCheckout: vi.fn(),
+  startFoundationSlotRenewalCheckout: vi.fn(),
 }));
 
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
@@ -184,6 +186,63 @@ describe("plan checkouts are not add-ons", () => {
       status: 403,
       body: { error: "Your ID review must be accepted first.", code: "ID_REVIEW_REQUIRED" },
     });
+  });
+});
+
+describe("renewing slots early (P3)", () => {
+  const renewal = {
+    ...order,
+    slots: 2,
+    expectedTotalCents: 13800,
+    renewSlotIds: [uuid(7), uuid(8)],
+  };
+  it("starts the renewal checkout for the chosen slots, never a new-slot order", async () => {
+    vi.mocked(startFoundationSlotRenewalCheckout).mockResolvedValueOnce({
+      paymentId: uuid(5),
+      checkoutUrl: "https://one.ozow.com/checkout/synthetic",
+    });
+    const response = await handleFoundationBillingRoute(request(renewal), "checkout");
+    expect(response.status).toBe(200);
+    expect(startFoundationSlotRenewalCheckout).toHaveBeenCalledExactlyOnceWith(
+      {},
+      account,
+      {
+        planId,
+        entitlementIds: [uuid(7), uuid(8)],
+        expectedTotalCents: 13800,
+        coolingOffConsent: true,
+      },
+      "https://verifymzansi.com"
+    );
+    expect(startFoundationSlotCheckout).not.toHaveBeenCalled();
+  });
+  it.each([
+    ["a number of slots other than the slots named", { ...renewal, slots: 1 }],
+    ["the same slot twice", { ...renewal, renewSlotIds: [uuid(7), uuid(7)] }],
+    ["no slot", { ...renewal, renewSlotIds: [] }],
+    ["a slot that is not an id", { ...renewal, renewSlotIds: ["slot", uuid(8)] }],
+  ])("refuses %s before any checkout", async (_label, value) => {
+    const response = await handleFoundationBillingRoute(request(value), "checkout");
+    expect(response.status).toBe(400);
+    expect(startFoundationSlotRenewalCheckout).not.toHaveBeenCalled();
+    expect(startFoundationSlotCheckout).not.toHaveBeenCalled();
+  });
+  it("refuses without the renewal's consent, saying why", async () => {
+    expect(
+      await json(
+        await handleFoundationBillingRoute(
+          request({ ...renewal, coolingOffConsent: false }),
+          "checkout"
+        )
+      )
+    ).toEqual({
+      status: 400,
+      body: {
+        error: "Tick the box to confirm when your new days start.",
+        code: "CONSENT_REQUIRED",
+      },
+    });
+    expect(startFoundationSlotRenewalCheckout).not.toHaveBeenCalled();
   });
 });
 

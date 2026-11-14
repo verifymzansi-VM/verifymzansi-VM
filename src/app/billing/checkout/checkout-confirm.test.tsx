@@ -292,3 +292,167 @@ describe("CheckoutConfirm for Individual slots", () => {
     expect(payButton()).toBeDisabled();
   });
 });
+
+describe("CheckoutConfirm renewing slots early (P3)", () => {
+  const term = {
+    planId: "11111111-2222-4333-8444-000000000030",
+    label: "Individual slot — 30 days",
+    durationDays: 30,
+    priceCents: 6900,
+  };
+  const slotA = "00000000-0000-4000-8000-0000000000a1";
+  const slotB = "00000000-0000-4000-8000-0000000000b2";
+  const renewalSummary = (renewal: CheckoutSummary["renewal"]): CheckoutSummary => ({
+    planId: term.planId,
+    name: term.label,
+    areaLabel: "Market, Business or Tourism",
+    priceCents: 6900,
+    durationDays: 30,
+    durationLabel: "30 days",
+    slotCapacity: 1,
+    monthlyActivationLimit: 4,
+    slotTerms: [term],
+    slotStatus: { verified: true, held: 4, pending: 0, limit: 4 },
+    renewal,
+  });
+  const originalLocation = window.location;
+  beforeEach(() => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { assign: vi.fn(), origin: "http://localhost" },
+    });
+  });
+  afterEach(() => {
+    Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+    vi.unstubAllGlobals();
+  });
+  const payButton = () => screen.getByRole("button", { name: /Pay .* securely/ });
+  const sent = (fetch: ReturnType<typeof vi.fn>) =>
+    JSON.parse((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+
+  it("renews one slot from its end date, with the renewal's own box naming the start date", async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ checkoutUrl: "https://pay.ozow.com/x" }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetch);
+    render(
+      <CheckoutConfirm
+        summary={renewalSummary([
+          { id: slotA, startsAt: "2026-11-20T10:00:00Z", postTitle: "Mountain bike" },
+        ])}
+      />
+    );
+    expect(screen.getByRole("heading", { name: "Renew your slot" })).toBeInTheDocument();
+    // Every slot is held, but a renewal adds no slot: no limit notice.
+    expect(screen.queryByTestId("slot-block-limit")).toBeNull();
+    expect(screen.getByText("Mountain bike")).toBeInTheDocument();
+    expect(screen.getByText("New days: 20 November 2026 – 20 December 2026")).toBeInTheDocument();
+    expect(screen.getByText("20 November 2026 (when your current days end)")).toBeInTheDocument();
+    const box = screen.getByRole("checkbox", { name: /My new days start on 20 November 2026/ });
+    expect(
+      screen.getByText(/If I ask to cancel before they start, I get a full refund/)
+    ).toBeInTheDocument();
+    // Members cannot cancel themselves: the box links to asking billing.
+    expect(screen.getByRole("link", { name: "Ask to cancel" })).toHaveAttribute(
+      "href",
+      "mailto:billing@verifymzansi.com?subject=Cancel%20my%20renewal"
+    );
+    expect(screen.queryByText(/My slot starts now/)).toBeNull();
+    expect(payButton()).toBeDisabled();
+    fireEvent.click(box);
+    fireEvent.click(payButton());
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(sent(fetch)).toEqual({
+      planId: term.planId,
+      slots: 1,
+      expectedTotalCents: 6900,
+      coolingOffConsent: true,
+      renewSlotIds: [slotA],
+    });
+    expect(screen.getByRole("link", { name: "Back to My slots" })).toHaveAttribute(
+      "href",
+      "/dashboard/slots"
+    );
+  });
+
+  it("renews every ticked slot in one payment (Renew all)", async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ checkoutUrl: "https://pay.ozow.com/x" }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetch);
+    render(
+      <CheckoutConfirm
+        summary={renewalSummary([
+          { id: slotA, startsAt: "2026-11-20T10:00:00Z", postTitle: "Mountain bike" },
+          { id: slotB, startsAt: "2026-11-24T10:00:00Z", postTitle: null },
+        ])}
+      />
+    );
+    expect(screen.getByRole("heading", { name: "Renew your slots" })).toBeInTheDocument();
+    expect(screen.getByTestId("checkout-total")).toHaveTextContent(formatPlanPrice(13800));
+    expect(screen.getByText("When each slot's current days end")).toBeInTheDocument();
+    expect(screen.getByText("Empty slot")).toBeInTheDocument();
+    // Changing the slots clears the box (its wording names their dates).
+    fireEvent.click(screen.getByRole("checkbox", { name: /My new days/ }));
+    expect(screen.getByRole("checkbox", { name: /My new days/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Mountain bike/ }));
+    expect(screen.getByRole("checkbox", { name: /My new days/ })).not.toBeChecked();
+    expect(payButton()).toBeDisabled();
+    expect(screen.getByTestId("checkout-total")).toHaveTextContent(formatPlanPrice(6900));
+    fireEvent.click(screen.getByRole("checkbox", { name: /My new days/ }));
+    fireEvent.click(payButton());
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(sent(fetch).renewSlotIds).toEqual([slotB]);
+    expect(sent(fetch).slots).toBe(1);
+  });
+
+  it("says when nothing can be renewed yet, or the slots cannot be read", () => {
+    const { unmount } = render(<CheckoutConfirm summary={renewalSummary([])} />);
+    expect(screen.getByTestId("renewal-none")).toHaveTextContent(
+      "Nothing to renew right now. A slot can be renewed from 14 days before it ends."
+    );
+    expect(payButton()).toBeDisabled();
+    unmount();
+    render(<CheckoutConfirm summary={renewalSummary(null)} />);
+    expect(screen.getByTestId("renewal-none")).toHaveTextContent(
+      "Your slots cannot be shown right now."
+    );
+  });
+
+  it("names an unpaid renewal still open for the same term", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: "You already have a pending payment",
+              code: "PENDING_PAYMENT_EXISTS",
+              pendingPayment: {
+                id: slotB,
+                checkoutUrl: null,
+                statusUrl: "/billing/success",
+                canCancel: true,
+                slots: 2,
+                amountCents: 13800,
+                renewal: true,
+              },
+            }),
+            { status: 409 }
+          )
+      )
+    );
+    render(
+      <CheckoutConfirm
+        summary={renewalSummary([{ id: slotA, startsAt: "2026-11-20T10:00:00Z", postTitle: null }])}
+      />
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: /My new days/ }));
+    fireEvent.click(payButton());
+    expect(await screen.findByTestId("unpaid-order")).toHaveTextContent(
+      `Unpaid renewal: 2 slots, ${formatPlanPrice(13800)}`
+    );
+  });
+});
