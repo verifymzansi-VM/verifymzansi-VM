@@ -788,7 +788,7 @@ specs buy the Individual slots.
 
 ## Staff refunds are sent to Ozow by the server, 13 November 2026
 
-`20261113172356_ozow_api_refunds.sql` is not applied yet. It needs
+`20261113172356_ozow_api_refunds.sql` was applied on 14 November 2026. It needs
 `20261113085340_retire_old_staff_reversal_commands.sql` applied and the staff
 payment fixes of `20261113021223_staff_payment_fixes.sql` with their reviewed
 bodies, and refuses (55000) otherwise. It only adds: no API command, argument or
@@ -3123,6 +3123,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   0", after "already applied; bank transfers waiting for confirmation: 0;
   payments confirmed from a bank transfer: 0"; production fingerprint after it
   matched the full replay
-- `20261113172356_ozow_api_refunds.sql`: pending
+- `20261113172356_ozow_api_refunds.sql`: applied 2026-11-14 00:25 UTC; applied
+  with the owner's approval, from the reviewed file (sha256 starting
+  d0595c11cd8bd9bb), before the pull request was merged; preflight before
+  "update not applied", after "already applied; refunds waiting for approval: 0;
+  refunds through Ozow not settled: 0"; production fingerprint after it matched
+  the full replay (except the known schema grant difference); refunds through
+  Ozow stay switched off (`OZOW_API_REFUNDS_ENABLED`)
 
 <!-- applied-register:end -->
