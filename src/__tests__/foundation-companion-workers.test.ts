@@ -263,3 +263,21 @@ it("payment and retention keep the foundation backend marker their job type requ
     expect(config.vars.DATA_BACKEND).toBe("foundation");
   }
 });
+
+it("payment cleanup runs every 10 minutes and the daily refund check once a day", async () => {
+  const config = parse(readFileSync("wrangler.payment-cleanup.toml", "utf8")) as {
+    triggers: { crons: string[] };
+  };
+  expect(config.triggers.crons).toEqual(["*/10 * * * *", "15 5 * * *"]);
+  env.APP.fetch.mockResolvedValue(new Response("{}"));
+  await payment.scheduled!({ cron: "15 5 * * *", scheduledTime: 0 }, env, context);
+  expect(env.APP.fetch).toHaveBeenCalledExactlyOnceWith(
+    new URL("/api/internal/payments/refunds/reconcile", env.APP_URL).href,
+    expect.objectContaining({ method: "POST", headers: { Authorization: `Bearer ${key}` } })
+  );
+  const health = await payment.fetch!(new Request("https://worker.example.invalid/"), env, context);
+  expect(await health.json()).toMatchObject({
+    schedule: config.triggers.crons[0],
+    refundCheck: config.triggers.crons[1],
+  });
+});

@@ -115,6 +115,13 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   ["refund_reason_code_invalid", [422, "Choose why the money is returned."]],
   ["ozow_reference_used", [409, "That Ozow reference was already recorded for another refund."]],
+  [
+    "ozow_reference_retired",
+    [
+      409,
+      "Refunds of Ozow payments now go through Ozow. Use 'Refund through Ozow', or 'Recorded in the Ozow dashboard' with Ozow's refund id.",
+    ],
+  ],
   ["payment_not_refundable", [409, "This payment or slot was already refunded. Reload the page."]],
   [
     "payment_slot_reversed",
@@ -241,7 +248,17 @@ async function settlePaymentCommand<T>(
 
 const refundResult = z.strictObject({
   request_id: z.uuid(),
-  status: z.enum(["applied", "awaiting_approval", "declined"]),
+  // An approved refund through Ozow is "approved" (then sent and settled by
+  // the server: ./ozow-refunds.ts); the other states are the same as before.
+  status: z.enum([
+    "applied",
+    "awaiting_approval",
+    "declined",
+    "approved",
+    "sent",
+    "failed",
+    "returned",
+  ]),
   kind: z.enum(["refunded", "chargeback"]),
   line_id: z.uuid().optional(),
   released_activations: count.nullable(),

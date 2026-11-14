@@ -26,7 +26,7 @@ begin
   if internal.same_identity(actor, request.requested_by) then
     raise exception 'a different staff member must approve this refund' using errcode='42501', detail='refund_approver_same';
   end if;
-  if request.status = 'applied' and request.approved_by = actor then
+  if request.status not in ('awaiting_approval', 'declined') and request.approved_by = actor then
     return jsonb_build_object('request_id', request.id, 'status', request.status, 'kind', request.kind,
       'released_activations', request.released_activations, 'payment_status', pay.status, 'repeated', true);
   end if;
@@ -40,9 +40,27 @@ begin
     or (request.payment_line_id is null
       and exists(select 1 from private.payment_lines l where l.payment_id = pay.id and l.status = 'reversed'))
     or (request.payment_line_id is not null
-      and not exists(select 1 from private.payment_lines l where l.id = request.payment_line_id and l.status = 'open')) then
+      and not exists(select 1 from private.payment_lines l where l.id = request.payment_line_id and l.status = 'open'))
+    or (request.channel in ('api', 'dashboard')
+      and internal.ozow_refund_transaction(pay.id) is distinct from request.ozow_transaction_id) then
     raise exception 'the payment changed since this refund was recorded; decline it and record it again'
       using errcode='PT409', detail='refund_payment_changed';
+  end if;
+  -- A dashboard refund Ozow does not have, or did not pay, never takes effect.
+  if request.channel = 'dashboard' and (request.ozow_missing_at is not null
+      or request.ozow_status in ('Failed', 'Cancelled', 'Returned', 'Invalid', 'Error')) then
+    raise exception 'Ozow has no paid refund with this id; decline it' using errcode='PT409', detail='refund_ozow_failed';
+  end if;
+  if request.channel = 'api' then
+    -- Approved: the server sends it to Ozow; the payment changes only when
+    -- Ozow reports the refund complete.
+    update private.payment_refund_requests set status = 'approved', approved_by = actor,
+      approved_at = statement_timestamp()
+      where id = request.id returning * into request;
+    perform internal.staff_actor('payments:refund');
+    perform internal.assert_staff_payment_actor(actor, request.account_id);
+    return jsonb_build_object('request_id', request.id, 'status', request.status, 'kind', request.kind,
+      'released_activations', null, 'payment_status', pay.status, 'repeated', false);
   end if;
   -- The record leaves "waiting" first, so the reversal below is no longer held
   -- back by internal.payment_reversal_waiting_guard; it is one transaction, so

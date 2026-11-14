@@ -786,6 +786,152 @@ updates publish a copy of it first (`planOnSale` in
 Individual slot of the same length instead, and the browser test copy's checkout
 specs buy the Individual slots.
 
+## Staff refunds are sent to Ozow by the server, 13 November 2026
+
+`20261113172356_ozow_api_refunds.sql` was applied on 14 November 2026. It needs
+`20261113085340_retire_old_staff_reversal_commands.sql` applied and the staff
+payment fixes of `20261113021223_staff_payment_fixes.sql` with their reviewed
+bodies, and refuses (55000) otherwise. It only adds: no API command, argument or
+grant is removed or changed, and every existing refund record keeps its meaning
+(channel `manual`). The website uses the new commands only while the Worker
+variable `OZOW_API_REFUNDS_ENABLED` is `"true"` and the Ozow refund key is set
+(`src/lib/payments/ozow-refunds.ts`); while it is off, staff record refunds with
+Ozow's reference exactly as before.
+
+- **Refund records gain a channel and Ozow's facts.**
+  `private.payment_refund_requests` gets `channel` (`manual`, `api`,
+  `dashboard`), the Ozow transaction refunded, Ozow's refund id (unique), its
+  status and times, and the send bookkeeping. A refund through Ozow goes
+  `awaiting_approval` (above R1,000 returned on the payment, as before) ->
+  `approved` -> `sent` -> `applied` (Ozow reported it complete), `failed` or
+  `returned`. Its reference is `vm-refund-<record id>`, which is also the
+  `Idempotency-Key` the server sends, so a retried send of the same record can
+  never make a second refund at Ozow. One refund of a payment is in flight at a
+  time (a unique index over waiting, approved and sent records), money in flight
+  counts towards the R1,000 rule, and nothing else may reverse the payment or a
+  slot while it is in flight (`internal.payment_reversal_waiting_guard`, detail
+  `refund_in_flight`). The record guard
+  (`internal.payment_refund_request_guard`) allows only these transitions and
+  only the columns each one sets; the facts of a record (payment, slot, account,
+  amount, channel, transaction, reference) never change, Ozow's refund id is set
+  once and send attempts only rise.
+- **Staff commands** (capability `payments:refund`, admins, recent second
+  factor, own accepted ID review, never a payment of their own identity, checked
+  again after the lock waits):
+  `api.request_staff_ozow_refund(p_payment_id, p_line_id, p_reason_code, p_reason)`
+  (a whole Ozow payment, or one open slot; no reference; PT409
+  `payment_not_ozow` for a payment without an Ozow transaction id, such as a
+  bank transfer, which keeps the reference form), and
+  `api.record_staff_dashboard_refund(p_payment_id, p_line_id, p_reason_code, p_reason, p_ozow_refund_id, p_ozow_fact)`
+  for a refund an admin already made by hand in the Ozow dashboard (Ozow's
+  refund id, used once, PT409 `ozow_refund_id_used`; the same R1,000 rule; it
+  takes effect as today's refunds do). `p_ozow_fact` is the refund as the server
+  read it from Ozow (null only while the refund key is not set): it must name
+  the same id, this payment's Ozow transaction and its amount (PT409
+  `ozow_refund_mismatch`) and must not have failed (`refund_ozow_failed`). It
+  only refuses: Ozow's status is stored only when the server's follow-up reads
+  the refund back. New staff read
+  `api.get_staff_refund_context(p_payment_id, p_line_id, p_request_id)`
+  (`payments:refund`): a payment's Ozow transaction and refund amount, or a
+  refund record's channel, status and whether Ozow's status was read; the
+  website calls it before it asks Ozow anything for staff, and before an
+  approval (a refund through Ozow is approved only while the switch is on; a
+  dashboard refund, when the refund key is set, only once Ozow's status was
+  read). `api.approve_staff_payment_refund` now approves a refund through Ozow
+  into `approved` (the server then sends it) instead of reversing; for every
+  other record it is unchanged. New staff read
+  `api.get_staff_ozow_refunds(p_payment_ids)` (`payments:view`): which of up to
+  50 payments can be refunded through Ozow, their API and dashboard refund
+  records, and up to 20 refunds through Ozow that need staff.
+- **Service commands** (`service_role` only):
+  `api.claim_ozow_refund_send(p_request_id)` hands an approved record to the
+  sender once (`sent`); an unknown send may be handed over again, with the same
+  key, at most twice more, 30 minutes apart and within six hours (the server
+  then first reads Ozow's refunds of the transaction since the first send,
+  `sent_at`, and sends again only when Ozow's complete list has none that could
+  be it, so a retry never relies on Ozow keeping the key); a payment that
+  changed before the first send fails the record without contacting Ozow.
+  `api.list_ozow_refund_sends_due(p_limit)` lists approved records not sent for
+  two minutes and unknown sends due a retry (the 10-minute payment job sends up
+  to two per run). `api.record_ozow_refund_send(p_request_id, p_result)` stores
+  Ozow's answer: accepted (Ozow's refund id, checked against the record's
+  transaction and amount), refused (only a first send fails the record; a
+  refused retry only stops retries and alerts) or unknown.
+  `api.apply_ozow_refund_status(p_event)` applies a refund status the server
+  read back from Ozow after a signed `refund.complete` notice: only `Complete`
+  reverses the payment (`internal.reverse_payment`) or the slot
+  (`internal.reverse_payment_line`, the single-slot reversal without a staff
+  session, audited as the approver or requester); `Failed`, `Error`, `Invalid`
+  and `Cancelled` fail the record and `Returned` returns it, both with a staff
+  alert; the same status twice changes nothing; an Ozow refund with no record,
+  or with another transaction or amount, alerts staff.
+  `api.reconcile_ozow_refunds(p_refunds)` is the daily check (05:15 UTC, the
+  payment-cleanup Worker): it changes no refund and alerts staff for each Ozow
+  refund in the last three days with no record, each record that differs, and
+  each refund through Ozow approved or sent more than a day ago.
+- **Nothing is left waiting forever.** `api.claim_ozow_refund_checks(p_limit)`
+  (service) hands the 10-minute job sent refunds with no final answer after ten
+  minutes (and each dashboard refund once), at most every 30 minutes each; the
+  server reads them back from Ozow (by refund id, or among the transaction's
+  refunds for a send whose answer was lost) and applies Ozow's status, or calls
+  `api.report_ozow_refund_missing(p_request_id)` when Ozow has no such refund
+  (recorded on the record, staff alerted). A lost send links only to a refund
+  Ozow says was requested at most ten minutes before it was sent, and never to a
+  refund id already recorded in any way (`internal.ozow_refund_link_candidate`).
+  A final Ozow status is never replaced by a non-final one. New staff command
+  `api.close_staff_ozow_refund(p_request_id, p_reason)` lets a staff member
+  other than the requester close a refund that never reached Ozow: approved and
+  never sent, or a lost send that Ozow, read more than a day after it was sent,
+  does not have (`refund_not_closable` otherwise); the record fails
+  (`closed_by_staff`) with the closer and reason.
+- **Closing and dashboard records are guarded.** A lost send cannot be closed
+  while an unmatched or mismatched Ozow refund of the payment has been seen
+  since it was sent (it may be that refund). The server reports "missing" only
+  when Ozow's complete list of the transaction's refunds has none requested
+  after (or ten minutes before) the send and none without a request time. A
+  dashboard refund that Ozow does not have or did not pay is never approved
+  (`refund_ozow_failed`), dashboard refunds are read back from Ozow until Ozow
+  gives a final status (30 days at most), and the daily check also alerts for a
+  refund recorded as made that Ozow lists as failed or returned. One unique
+  index keeps an Ozow refund recorded once, whichever way
+  (`lower(coalesce(ozow_refund_id::text, ozow_reference))`, and Ozow's refund
+  id), leaving out declined records, which took no effect: a dashboard record's
+  reference is `<refund id>:<record id>`, so a refund id recorded on the wrong
+  payment and declined can be recorded again. A later read that finds the refund
+  clears an earlier "missing". A typed reference whose payment is not the one
+  Ozow refunded raises `refund_mismatch`. Refunds through Ozow are read back
+  before dashboard records; a dashboard record Ozow does not have is read again
+  every six hours for seven days, and a waiting dashboard record whose id Ozow
+  reports for another transaction or amount is marked missing too (never
+  approved). The dashboard record stays available while refunds through Ozow are
+  switched off, and the 10-minute follow-up and the daily check keep reading
+  refunds back (never sending) whenever the refund key is set; without the key,
+  a dashboard record is not read back from Ozow (accepted, noted for the owner).
+- **Typed references retire for Ozow refunds.** Once the server has sent any
+  refund to Ozow, a refund of an Ozow payment can no longer be recorded with a
+  typed reference (PT409 `ozow_reference_retired`); chargebacks and payments
+  made outside Ozow keep it, and a typed reference may never be a refund id
+  already recorded.
+- **Alerts.** `private.payment_problems` and `internal.record_payment_problem`
+  accept the reasons `refund_failed`, `refund_returned`, `refund_unmatched`,
+  `refund_stuck` and `refund_mismatch` and the sources `refund_notice`,
+  `refund_check` and `refund_send`; they reach staff through the existing
+  payment alert emails. The website no longer watches for a "Refunded" payment
+  status (`refunded_after_completion`), which never fires because Ozow keeps a
+  refunded payment "Complete".
+
+**Order: apply, then merge.** Apply after
+`20261113085340_retire_old_staff_reversal_commands.sql` and before the pull
+request that uses it is merged. The read-only preflight
+`../preflight/20261113172356_ozow_api_refunds.check.sql` must read "update not
+applied" with no problem row before, and "already applied" after. The rollback
+`../rollback/20261113172356_ozow_api_refunds.down.sql` refuses once a refund
+through Ozow or from the dashboard was recorded or a refund problem was raised.
+`scripts/test-foundation-ozow-api-refunds.mjs`
+(`pnpm db:foundation:lifecycle-test`) proves the preflight, the refusal, apply
+-> rollback -> apply and the rules above on the replayed schema, standing in for
+Ozow.
+
 ## Staff fix paid but not delivered, and refunds with Ozow's reference, 13 November 2026
 
 `20261113021223_staff_payment_fixes.sql` is not applied yet. It needs
@@ -2969,7 +3115,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   applied; current terms: posting-v4", after "already applied; current terms:
   posting-v4; choice changes recorded: 0; sign-up acceptances recorded: 0";
   production fingerprint after it matched the full replay
-
 - `20261113162457_staff_invoice_payments.sql`: applied 2026-11-13 19:05 UTC;
   applied with the owner's approval, from the reviewed file, before the pull
   request was merged; preflight before "update not applied (apply before the
@@ -2978,5 +3123,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   0", after "already applied; bank transfers waiting for confirmation: 0;
   payments confirmed from a bank transfer: 0"; production fingerprint after it
   matched the full replay
+- `20261113172356_ozow_api_refunds.sql`: applied 2026-11-14 00:25 UTC; applied
+  with the owner's approval, from the reviewed file (sha256 starting
+  d0595c11cd8bd9bb), before the pull request was merged; preflight before
+  "update not applied", after "already applied; refunds waiting for approval: 0;
+  refunds through Ozow not settled: 0"; production fingerprint after it matched
+  the full replay (except the known schema grant difference); refunds through
+  Ozow stay switched off (`OZOW_API_REFUNDS_ENABLED`)
 
 <!-- applied-register:end -->

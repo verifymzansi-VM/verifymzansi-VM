@@ -13,6 +13,10 @@ begin
       where r.payment_id = payment and r.status = 'awaiting_approval') then
     raise exception 'a refund of this payment is waiting for approval' using errcode='PT409', detail='refund_awaiting_approval';
   end if;
+  if exists(select 1 from private.payment_refund_requests r
+      where r.payment_id = payment and r.status in ('approved', 'sent')) then
+    raise exception 'a refund of this payment is on its way through Ozow' using errcode='PT409', detail='refund_in_flight';
+  end if;
   return new;
 end;
 $function$;

@@ -59,6 +59,15 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_staff_payment_list: { Args: { p_page: number; p_filter?: string }; Returns: Json };
+      request_staff_ozow_refund: {
+        Args: {
+          p_payment_id: string;
+          p_line_id: string | null;
+          p_reason_code: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
       record_staff_invoice_payment: {
         Args: {
           p_account_email: string;
@@ -69,6 +78,27 @@ export type FoundationRuntimeAuthenticatedDatabase = {
           p_cleared_on: string;
           p_cooling_off_waiver: boolean;
           p_reason: string;
+        };
+        Returns: Json;
+      };
+      record_staff_dashboard_refund: {
+        Args: {
+          p_payment_id: string;
+          p_line_id: string | null;
+          p_reason_code: string;
+          p_reason: string;
+          p_ozow_refund_id: string;
+          p_ozow_fact: Json | null;
+        };
+        Returns: Json;
+      };
+      get_staff_ozow_refunds: { Args: { p_payment_ids: string[] }; Returns: Json };
+      close_staff_ozow_refund: { Args: { p_request_id: string; p_reason: string }; Returns: Json };
+      get_staff_refund_context: {
+        Args: {
+          p_payment_id: string | null;
+          p_line_id: string | null;
+          p_request_id: string | null;
         };
         Returns: Json;
       };
@@ -561,6 +591,13 @@ export type FoundationRuntimeServiceDatabase = {
       claim_payment_digest: { Args: { p_from_hour: number; p_limit: number }; Returns: Json };
       complete_payment_digest: { Args: { p_claim: string }; Returns: boolean };
       get_payment_receipt: { Args: { p_payment_id: string }; Returns: Json };
+      claim_ozow_refund_send: { Args: { p_request_id: string }; Returns: Json };
+      list_ozow_refund_sends_due: { Args: { p_limit: number }; Returns: Json };
+      record_ozow_refund_send: { Args: { p_request_id: string; p_result: Json }; Returns: Json };
+      apply_ozow_refund_status: { Args: { p_event: Json }; Returns: Json };
+      reconcile_ozow_refunds: { Args: { p_refunds: Json }; Returns: Json };
+      claim_ozow_refund_checks: { Args: { p_limit: number }; Returns: Json };
+      report_ozow_refund_missing: { Args: { p_request_id: string }; Returns: Json };
       start_frontend_cipc_email: {
         Args: {
           p_owner: string;

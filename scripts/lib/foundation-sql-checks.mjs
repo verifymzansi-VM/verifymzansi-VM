@@ -3,9 +3,10 @@
 // fail with the current check's name, synthetic API-role sessions, replaying
 // the updates before the one under test and the read-only preflight check.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { replaySteps } from "./foundation-replay.mjs";
-import { applySteps } from "./foundation-sql-lint.mjs";
+import { applySteps, startLintDatabase } from "./foundation-sql-lint.mjs";
 
 /** Named checks; `current()` is the check that is running (for messages). */
 export function createChecks() {
@@ -218,4 +219,165 @@ function slotBuyer(q, ownerId) {
   q(`insert into vmtest_slots.buyers(owner_id,fingerprint) values('${ownerId}',
       left(translate(encode(sha256(convert_to('slot-buyer-${ownerId}','UTF8')),'base64'),'+/=','-_'),42)||'A')
     on conflict do nothing;`);
+}
+
+/**
+ * Synthetic members and staff for the staff payment checks (schema vmtest):
+ * members with a live session, staff with an AAL2 session, a verified
+ * authenticator app and a role, and an accepted ID review (a synthetic
+ * identity fingerprint answered by a stand-in internal.current_verified_identity
+ * that reads the accepted identity facts). Written as the database owner.
+ */
+export function installStaffPaymentWorld(q, json) {
+  q(`create schema vmtest;
+    create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
+    declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); begin
+      insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
+        values(uid,p_label||'-'||uid||'@example.invalid',now(),jsonb_build_object('display_name','Fixture '||p_label));
+      insert into auth.sessions(id,user_id,aal) values(sid,uid,'aal1');
+      return jsonb_build_object('id',uid,'session',sid);
+    end$$;
+    create function vmtest.staff(p_label text,p_role text) returns jsonb language plpgsql as $$
+    declare m jsonb:=vmtest.member(p_label); begin
+      update auth.sessions set aal='aal2' where id=(m->>'session')::uuid;
+      insert into auth.mfa_factors(user_id,factor_type,status) values((m->>'id')::uuid,'totp','verified');
+      insert into private.staff_roles(user_id,role) values((m->>'id')::uuid,p_role);
+      return m;
+    end$$;
+    create function vmtest.verified(p_owner uuid,p_staff uuid,p_fp text) returns void language plpgsql as $$
+    begin
+      perform set_config('session_replication_role','replica',true);
+      insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
+        values(p_owner,gen_random_uuid(),p_fp,p_staff);
+      insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
+        values(p_owner,gen_random_uuid(),'+2782'||lpad((abs(hashtext(p_owner::text))%10000000)::text,7,'0'));
+      insert into private.verification_localities(owner_id,province_id,city_id) values(p_owner,'gp','gp_johannesburg');
+      perform set_config('session_replication_role','origin',true);
+    end$$;
+    create or replace function internal.current_verified_identity(p_owner uuid) returns text
+      language sql set search_path to 'pg_catalog' as $fn$
+      select f.identity_hmac from private.accepted_identity_facts f where f.owner_id=p_owner and f.revoked_at is null
+        and exists(select 1 from private.current_account_access a where a.id=p_owner) $fn$;`);
+  const fingerprintOf = (label) =>
+    `${createHash("sha256").update(`person-${label}`).digest("base64url").slice(0, 42)}A`;
+  const user = (label) => json(`select vmtest.member('${label}');`);
+  const staffUser = (label, role) => json(`select vmtest.staff('${label}','${role}');`);
+  /** Gives `person` (labelled `label`) an accepted ID review by `reviewer`. */
+  const verify = (person, reviewer, label) =>
+    q(`select vmtest.verified('${person.id}','${reviewer.id}','${fingerprintOf(label)}');`);
+  return { user, staffUser, verify };
+}
+
+/**
+ * A completed Individual slot order of `owner`: quoted with the cooling-off
+ * consent, its Ozow request attached and settled through the service command
+ * as the notice handler does, with Ozow's transaction id `tx` (by default
+ * "tx-<payment id>"). Returns the payment id, transaction and amount.
+ */
+export function completeSlotOrder({ q, json, member, service }, owner, plan, slots, tx) {
+  const quoted = json(
+    member(
+      owner,
+      `select api.start_slot_checkout('${plan.id}',${slots},${plan.cents * slots},true);`
+    )
+  );
+  const paymentId = quoted.payment_id;
+  const transaction = tx ?? `tx-${paymentId}`;
+  const lease = json(service(`select api.claim_checkout_request('${paymentId}','${owner.id}');`));
+  if (!lease.checkout_url)
+    q(
+      service(
+        `select api.complete_checkout_request('${paymentId}','${owner.id}','${lease.claim_token}','req-${paymentId}','https://one.ozow.com/checkout/req-${paymentId}');`
+      )
+    );
+  const row = json(
+    `select jsonb_build_object('ref',merchant_reference,'amount',amount_cents) from private.payments where id='${paymentId}';`
+  );
+  const event = {
+    payload_sha256: createHash("sha256").update(`event-${paymentId}-complete`).digest("hex"),
+    merchant_reference: row.ref,
+    provider_request_id: `req-${paymentId}`,
+    provider_transaction_id: transaction,
+    status: "complete",
+    amount_cents: Number(row.amount),
+    currency: "ZAR",
+  };
+  const settled = json(
+    service(`select api.apply_provider_event($e$${JSON.stringify(event)}$e$::jsonb);`)
+  );
+  assert.equal(settled.outcome, "completed");
+  return { id: paymentId, tx: transaction, cents: Number(row.amount) };
+}
+
+/**
+ * Apply -> rollback -> apply on the throwaway database: `after` must differ
+ * from `before`, the rollback must restore `before` (twice in a row), and
+ * applying again (twice) must give `after`. `preflightSummary` reads the
+ * preflight's summary line; it must say "not applied" after the rollback.
+ */
+function assertApplyRollbackApply(
+  database,
+  { step, rollback, label, fingerprint, before, after, preflightSummary, repeatRollback = false }
+) {
+  assert.notEqual(after, before);
+  applySteps(database, [{ label: `${label} rollback`, sql: rollback }]);
+  assert.equal(fingerprint(), before, "the rollback leaves the pre-update schema");
+  assert.match(preflightSummary(), /: update not applied/);
+  if (repeatRollback) {
+    applySteps(database, [{ label: `${label} rollback again`, sql: rollback }]);
+    assert.equal(fingerprint(), before, "a repeated rollback changes nothing");
+  }
+  applySteps(database, [step]);
+  assert.equal(fingerprint(), after, "re-applying gives the same schema");
+  applySteps(database, [step]);
+  assert.equal(fingerprint(), after, "a repeated run changes nothing");
+}
+
+/**
+ * Opens an update's behaviour check: named checks, a throwaway lint database,
+ * its psql helpers and the update's read-only views (`preflight` is the
+ * preflight SQL). The caller stops `database` in a `finally`.
+ */
+export async function openUpdateCheck(preflight) {
+  const started = Date.now();
+  const checks = createChecks();
+  const database = await startLintDatabase({ log: (line) => console.log(line) });
+  return {
+    started,
+    database,
+    ...checks,
+    ...sqlHelpers(database, checks.current),
+    ...updateCheckViews(database, checks.current, { preflight }),
+  };
+}
+
+/**
+ * Applies the update `step`, checks that its preflight then shows only the
+ * summary and that it matches `appliedSummary`, and proves apply -> rollback
+ * -> apply (assertApplyRollbackApply).
+ */
+export function applyWithRollbackCheck(
+  database,
+  { step, rollback, label, fingerprint, preflightRows, appliedSummary, repeatRollback = false }
+) {
+  const before = fingerprint();
+  applySteps(database, [step]);
+  const after = fingerprint();
+  const rows = preflightRows();
+  assert.deepEqual(
+    rows.map((r) => r[0]),
+    ["summary"],
+    JSON.stringify(rows)
+  );
+  assert.match(rows[0][1], appliedSummary);
+  assertApplyRollbackApply(database, {
+    step,
+    rollback,
+    label,
+    fingerprint,
+    before,
+    after,
+    preflightSummary: () => preflightRows()[0][1],
+    repeatRollback,
+  });
 }

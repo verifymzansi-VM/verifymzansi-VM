@@ -7,6 +7,14 @@ vi.mock("@/lib/foundation/billing-runtime", () => ({
   runFoundationPaymentReconciliation: vi.fn(),
   paymentCheckFailureReason: () => "unavailable",
 }));
+const refundJobs = vi.hoisted(() => ({ run: vi.fn(), keySet: vi.fn(() => false) }));
+vi.mock("@/lib/foundation/ozow-refunds", () => ({ runOzowRefundJobs: refundJobs.run }));
+vi.mock("@/lib/foundation/service-api", () => ({ createFoundationServiceApi: vi.fn(() => ({})) }));
+vi.mock("@/lib/payments/ozow-refunds", () => ({
+  createOzowRefundClient: vi.fn(() => ({})),
+  ozowApiRefundsEnabled: vi.fn(() => false),
+  ozowRefundKeyConfigured: refundJobs.keySet,
+}));
 
 const SECRET = "internal-jobs-test-secret";
 function request(token = SECRET) {
@@ -45,6 +53,23 @@ describe("internal payment reconciliation", () => {
     const partial = await POST(request());
     expect(partial.status).toBe(503);
     expect(await partial.json()).toEqual({ checked: 1, failures: 1 });
+  });
+
+  it("reports refund job failures on their own, never failing the payment check", async () => {
+    refundJobs.keySet.mockReturnValue(true);
+    refundJobs.run.mockResolvedValueOnce({ attempted: 0, checked: 1, failures: 2 });
+    vi.mocked(runFoundationPaymentReconciliation).mockResolvedValueOnce({
+      checked: 2,
+      failures: 0,
+    } as never);
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      checked: 2,
+      failures: 0,
+      refundJobs: { attempted: 0, checked: 1, failures: 2 },
+    });
+    refundJobs.keySet.mockReturnValue(false);
   });
 
   it("answers 503 without details when the run throws", async () => {
