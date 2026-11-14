@@ -26,15 +26,19 @@ export const RENEWAL_WINDOW_DAYS = 14;
 
 /**
  * The renewal's own checkout box. Never the new-slot wording above: renewed
- * days start on a later date, and cancelling before they start means a full
- * refund. The database records the version renewal-cooling-off-v1 with each
- * slot's start date. Wording awaiting the owner's approval (lawyer later).
+ * days start on a later date, and a member who asks to cancel before they
+ * start gets a full refund (staff record it; there is no self-service cancel).
+ * The database records the version renewal-cooling-off-v1 with each slot's
+ * start date. Wording awaiting the owner's approval (lawyer later).
  */
 export function renewalConsent(startDates: readonly string[]): string {
   return startDates.length === 1
-    ? `My new days start on ${startDates[0]}, when my current days end. If I cancel before they start, I get a full refund; once they start, the 7-day cooling-off no longer applies.`
-    : "My new days for each slot start when its current days end (dates above). If I cancel before they start, I get a full refund; once they start, the 7-day cooling-off no longer applies.";
+    ? `My new days start on ${startDates[0]}, when my current days end. If I ask to cancel before they start, I get a full refund; once they start, the 7-day cooling-off no longer applies.`
+    : "My new days for each slot start when its current days end (dates above). If I ask to cancel before they start, I get a full refund; once they start, the 7-day cooling-off no longer applies.";
 }
+
+/** Where a member asks to cancel a renewal (or any refund question). */
+export const RENEWAL_CANCEL_HREF = `mailto:${BILLING_EMAIL}?subject=Cancel%20my%20renewal`;
 
 /** One term of the Individual slot on sale. */
 export interface SlotCheckoutTerm {

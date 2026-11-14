@@ -21,6 +21,7 @@ import {
   BILLING_EMAIL,
   COOLING_OFF_CONSENT,
   ONLINE_ORDER_LIMIT_CENTS,
+  RENEWAL_CANCEL_HREF,
   RENEWAL_WINDOW_DAYS,
   renewalConsent,
   slotOrderTotalCents,
@@ -469,11 +470,13 @@ export function CheckoutConfirm({
                       slots={renewing}
                       unreadable={summary.renewal === null}
                       selected={renewIds}
-                      onToggle={(id) =>
+                      onToggle={(id) => {
+                        // The box names these slots' dates: tick it again.
+                        setConsent(false);
                         setRenewIds((ids) =>
                           ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
-                        )
-                      }
+                        );
+                      }}
                       newEnd={renewedEnd}
                     />
                   ) : (
@@ -621,6 +624,17 @@ export function CheckoutConfirm({
                     className="cursor-pointer text-sm leading-6 text-foreground/80"
                   >
                     {consentText}{" "}
+                    {renewing ? (
+                      <>
+                        <a
+                          href={RENEWAL_CANCEL_HREF}
+                          className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
+                        >
+                          Ask to cancel
+                        </a>
+                        {" · "}
+                      </>
+                    ) : null}
                     <Link
                       href="/terms#refunds"
                       target="_blank"

@@ -1,7 +1,7 @@
 -- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
 -- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
 
-CREATE OR REPLACE FUNCTION internal.individual_slots_extended(p_identity text, p_owner uuid, p_exclude uuid, p_chains uuid[])
+CREATE OR REPLACE FUNCTION internal.individual_slots_extended(p_identity text, p_owner uuid, p_exclude uuid, p_chains uuid[], p_from timestamp with time zone)
  RETURNS integer
  LANGUAGE sql
  STABLE
@@ -14,6 +14,7 @@ AS $function$
       join private.plan_versions v on v.id=l.plan_version_id
     where e.owner_id in (select id from owners) and e.source='retail_paid' and e.status='active'
       and e.slot_id is not null and e.starts_at>clock_timestamp() and internal.individual_slot_plan(v.plan_code)
+      and (p_from is null or e.starts_at>=p_from)
     union
     select coalesce(t.slot_id, t.id) from private.payment_lines l
       join private.payments p on p.id=l.payment_id
@@ -22,10 +23,12 @@ AS $function$
       and (p.checkout_expires_at>clock_timestamp() or p.checkout_claim_until>clock_timestamp()
         or (p.checkout_url is null and p.created_at>clock_timestamp()-interval '30 minutes'))
       and internal.slot_chain_held(t.id)
+      and (p_from is null or internal.slot_chain_last_end(t.id)>=p_from)
     union
-    select c from unnest(coalesce(p_chains, '{}'::uuid[])) c where c is not null
+    select c from unnest(coalesce(p_chains, '{}'::uuid[])) c
+    where c is not null and (p_from is null or internal.slot_chain_last_end(c)>=p_from)
   )
   select count(*)::integer from chains;
 $function$;
-alter function internal.individual_slots_extended(text,uuid,uuid,uuid[]) owner to postgres;
-revoke all on function internal.individual_slots_extended(text,uuid,uuid,uuid[]) from public;
+alter function internal.individual_slots_extended(text,uuid,uuid,uuid[],timestamp with time zone) owner to postgres;
+revoke all on function internal.individual_slots_extended(text,uuid,uuid,uuid[],timestamp with time zone) from public;

@@ -99,8 +99,10 @@ begin
     end if;
   end loop;
   slot_limit := internal.individual_slot_limit(fingerprint);
-  if internal.individual_slots_extended(fingerprint, actor, pay.id, chains) > slot_limit then
-    raise exception 'you can renew at most % Individual slots ahead', slot_limit using errcode='PT429';
+  -- Within the limit, and a staff-raised limit never carries renewals past its end.
+  if not internal.individual_renewals_allowed(fingerprint, actor, pay.id, chains) then
+    raise exception 'you can renew at most % Individual slots ahead, and % that start after a raised limit ends',
+      slot_limit, internal.individual_slot_limit(null) using errcode='PT429';
   end if;
   if pay.id is null then
     insert into private.payments (owner_id, product_kind, plan_version_id, amount_cents, currency, snapshot)
@@ -119,7 +121,7 @@ begin
         'cooling_off_consent', jsonb_build_object('accepted_at', statement_timestamp(),
           'terms_version', (select c.version from private.posting_terms_current c where c.singleton),
           'wording_version', 'renewal-cooling-off-v1',
-          'wording', 'My new days start on the date shown for each slot, when its current days end. If I cancel before they start, I get a full refund; once they start, the 7-day cooling-off no longer applies')))
+          'wording', 'My new days start on the date shown for each slot, when its current days end. If I ask to cancel before they start, I get a full refund; once they start, the 7-day cooling-off no longer applies')))
     returning * into pay;
     insert into private.payment_lines (payment_id, line_number, plan_version_id, amount_cents, renews_entitlement_id)
       select pay.id, x.n, plan.id, plan.price_cents, x.id

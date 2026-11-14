@@ -12,13 +12,14 @@ AS $function$
   where p.id = p_post_id and p.kind = 'event'
   union all
   -- A paid slot funds its post until the end of the slot's unbroken run of
-  -- paid periods (a renewal follows on from the period before it).
+  -- paid periods (a renewal follows on from the period before it), also after
+  -- the post's own period ended and before the sweep moved it.
   select internal.slot_chain_end(e.id), e.max_photos, e.max_videos
   from private.posts p
   join private.post_activations a on a.post_id = p.id and a.released_at is null and a.owner_id = p.owner_id
   join private.entitlements e on e.id = a.entitlement_id
   where p.id = p_post_id and p.kind <> 'event'
-    and internal.entitlement_usable(e.status, e.starts_at, e.ends_at)
+    and internal.slot_grant_usable(e.id, e.status, e.starts_at, e.ends_at)
     and (e.area is null or e.area = p.area)
     and (e.owner_id = p.owner_id or exists (select 1 from private.entitlement_members m
       where m.entitlement_id = e.id and m.member_id = p.owner_id))

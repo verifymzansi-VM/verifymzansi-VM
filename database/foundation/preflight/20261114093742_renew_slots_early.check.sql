@@ -8,9 +8,10 @@
 --
 -- The summary says whether the update is absent (its new functions, columns,
 -- constraints, indexes and trigger are absent, the outbox does not know the
--- reminder kind, and the eight functions it replaces have the earlier bodies)
--- or applied (every body, column, constraint, index and trigger is the
--- update's), and counts the renewal payment lines, the renewals issued and
+-- reminder kind, the thirteen functions it replaces have the earlier bodies
+-- and the two post funding views fund a post by its own period) or applied
+-- (every body, column, constraint, index, trigger and view is the update's),
+-- and counts the renewal payment lines, the renewals issued and
 -- the reminders queued once applied. A problem row is shown when a function
 -- the update builds on is not the reviewed body.
 do $$begin
@@ -26,17 +27,19 @@ with added as (
     ('internal.slot_chain_held(uuid)', '23b8b9c552d561b4f2d818e9d5056f61'),
     ('internal.slot_chain_end(uuid)', 'de3528681a1ad52128c6db296e413d12'),
     ('internal.slot_renewal_due(uuid,uuid)', 'f0eb3360c8456cc4b191c315c61c482e'),
-    ('internal.individual_slots_extended(text,uuid,uuid,uuid[])', 'a8f1a8a67615d34c7df7bc6fe99fb5e6'),
+    ('internal.individual_slots_extended(text,uuid,uuid,uuid[],timestamp with time zone)', 'fa0c223b351aa2fb07c4d1d1c42a9f24'),
     ('internal.slot_lines_adding(uuid)', '74fe04e6cff80dece687c24e05c18fb7'),
     ('internal.slot_lines_renewing(uuid)', '9ce02eccc93128dff9142cb06db0efe6'),
-    ('internal.refresh_slot_chain_posts(uuid)', '5de8771d0e48075d29d5599bde817274'),
-    ('internal.slot_grant_revoked()', '2410c6bf91b0a03d37fecf8ee67dba87'),
-    ('internal.issue_slot_line_entitlements(uuid)', 'ca22bb743ebbce2edc273f77e97ed8b1'),
-    ('internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean)', 'e879052f8802483e44c5c8f661fe137c'),
+    ('internal.individual_renewals_allowed(text,uuid,uuid,uuid[])', '0012cbcef8b31da4ed93ee267ca13afd'),
+    ('internal.slot_grant_usable(uuid,text,timestamp with time zone,timestamp with time zone)', 'b43abb8cb82c15c1a3f240680d3710ac'),
+    ('internal.refresh_slot_chain_documents(uuid)', '8654d4f1d0886ad9e877835077a2ad3d'),
+    ('internal.slot_grant_revoked()', '00f9bfbdb6f79cc4496f5747b85cdd17'),
+    ('internal.issue_slot_line_entitlements(uuid)', '85ae00308b9abb35c6c13bc67821d39d'),
+    ('internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean)', '94de32ca80099d59db23aed33c6e7ee2'),
     ('api.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean)', 'ee9fe432c0390ba2fecdcebff294e775'),
-    ('internal.run_slot_renewals(integer)', 'dbfab27a486e46e84ee881ac49175c8c'),
+    ('internal.run_slot_renewals(integer)', 'dc2fa45bd9d0502e6f3dafbfd75984d4'),
     ('api.run_slot_renewals(integer)', 'b4e29cfe085196212c3e710c09631de2'),
-    ('internal.get_my_slots_v2()', '4c51e06db867fcab660f464ea64eb49d'),
+    ('internal.get_my_slots_v2()', 'ccd8613df13112af02b3d062cc0ea486'),
     ('api.get_my_slots_v2()', '94a9406f69aba4f4abdf419809498258')
   ) v(sig, after)
 ),
@@ -46,11 +49,16 @@ changed as (
   from (values
     ('internal.individual_slots_counted(text,uuid,uuid)', '1444a238736eac1d4de7dc8a53526e9b', '4213e64e4b2fb9f8062fe02277a28e69'),
     ('internal.start_slot_checkout(uuid,integer,bigint,boolean)', 'dcbb5be85829b017a483c21b91c95602', '4ce514eae4c2fb3fd9b0a0ecc40ac498'),
-    ('internal.apply_provider_event(jsonb)', '8654ccb29310b12224a153f1327325e4', 'cca841d0e0417233624c8afb7baba6e8'),
-    ('internal.activate_staff_paid_payment(uuid,text)', '355b954c1a0edc055a73485def59cd7c', '492170b6a48e1ccf1c4036e872860fce'),
-    ('internal.activate_post(uuid)', 'd9dd75c96dd1cce5b490eaafffe308be', '6c4e0634477f324fbda2964a49668d81'),
-    ('internal.post_funding(uuid)', '48204868fb2cd5b34cd44acbab243a6f', '2cff9aa43f38ded2f0f9d40fdbf6c285'),
+    ('internal.apply_provider_event(jsonb)', '8654ccb29310b12224a153f1327325e4', '19d5c2eb7e1a75210bc2b77d2cbb961b'),
+    ('internal.activate_staff_paid_payment(uuid,text)', '355b954c1a0edc055a73485def59cd7c', '03c8a3314cd99f02fb465a391ca2942f'),
+    ('internal.activate_post(uuid)', 'd9dd75c96dd1cce5b490eaafffe308be', 'bc99d728b6a6e4465b87b0fd607aeb08'),
+    ('internal.post_funding(uuid)', '48204868fb2cd5b34cd44acbab243a6f', '16c30a8438ae9d43796f5f78f4144ad0'),
     ('internal.claim_supported_notification_outbox(text[],integer)', '13d3edc000634dfd830ffd1baa846381', 'c7206aab3ac04b1f9d9b6ce2dc47bd0f'),
+    ('internal.entitlement_for_post_eligible(uuid,uuid,uuid)', 'ff74c8cfdd93037f14e29f53ac0896ff', 'd3861dfcebe2d7e1d6955a0c549b2db3'),
+    ('internal.run_post_lifecycle(integer)', 'e902328043d024a4ba16e38eeabb1b73', 'cb178dd0e47f84cbb277a87abd31b140'),
+    ('internal.release_frontend_content_hold(uuid,integer,text)', '5c7eaa1a42528d6467b1eb06fe992f4d', 'c975e7b75ad113c28018d36477c953f7'),
+    ('internal.set_post_media(uuid,integer,jsonb)', '3ff7aba47039b8f074318e796718f85d', 'cd3c1062f03370a6a9346ed935eff0fc'),
+    ('internal.frontend_privacy_export_data(uuid)', 'cea6d5d00f5def4143bde4daa5b84373', '03c73dba3ba38c4866186a8b84b4a521'),
     ('internal.retention_commerce(integer)', '20f9abaf7fcccd8b59974226a8ad0f3f', '06d7529db4898b7bb3b158d38a1d5929')
   ) v(sig, before, after)
 ),
@@ -63,7 +71,6 @@ needed as (
     ('internal.individual_slot_identity(uuid)', '4e4552c83cb629e96f1300060eeff16b'),
     ('internal.individual_slot_limit(text)', '90ecd5c02572cc9831468458f3ae0e2d'),
     ('internal.individual_slot_plan(text)', 'c0c1d06dc52122641d02db6b1364be75'),
-    ('internal.entitlement_for_post_eligible(uuid,uuid,uuid)', 'ff74c8cfdd93037f14e29f53ac0896ff'),
     ('internal.entitlement_usable(text,timestamp with time zone,timestamp with time zone)', '0db72b1ee054a2d8dd1b946d73c58e41'),
     ('internal.customer_invoice_settled_elsewhere(uuid)', 'eab13db8976c5bcde805288faec9591c'),
     ('internal.addon_purchase_entitlement(uuid,uuid,text)', '2cd60895de8dad14dfe1d1f26ae83543'),
@@ -75,7 +82,9 @@ needed as (
     ('internal.retention_tax_year_due(timestamp with time zone)', '330c487132c054e1995261d5e92871b2'),
     ('internal.reverse_payment_line(uuid,text,text,uuid)', '3f95168e1faacac2ca6f1431962c182c'),
     ('internal.reverse_payment(uuid,text,text)', '66005adb9e06b17e689dbac47ce93d5a'),
-    ('internal.run_post_lifecycle(integer)', 'e902328043d024a4ba16e38eeabb1b73')
+    ('internal.lock_verification_subject(uuid)', '7b86872a4f8c8495ab393817fe360853'),
+    ('internal.retention_reason(text)', 'e452f846d3d2bcff13706c6e315bb53b'),
+    ('internal.write_post_projection(uuid)', 'a2cbe4d6ec0700eadd96321ad9d8dca6')
   ) v(sig, reviewed)
 ),
 others as (
@@ -86,6 +95,7 @@ others as (
       when 'constraint' then exists (select 1 from pg_constraint c where c.conname = split_part(v.name, ' on ', 1)
         and c.conrelid = to_regclass(split_part(v.name, ' on ', 2)))
       when 'index' then to_regclass(v.name) is not null
+      when 'view' then coalesce(pg_get_viewdef(to_regclass(v.name)) like '%slot_grant_usable(%', false)
       when 'trigger' then exists (select 1 from pg_trigger t where t.tgname = split_part(v.name, ' on ', 1)
         and not t.tgisinternal and t.tgrelid = to_regclass(split_part(v.name, ' on ', 2)))
       else coalesce((select pg_get_constraintdef(c.oid) like '%slot_renewal_reminder%' from pg_constraint c
@@ -105,6 +115,8 @@ others as (
     ('index', 'private.entitlements_slot_idx'),
     ('index', 'private.payment_lines_renews_entitlement_idx'),
     ('trigger', 'entitlements_slot_chain_revoked on private.entitlements'),
+    ('view', 'private.public_eligible_posts'),
+    ('view', 'private.frontend_restorable_posts'),
     ('kind', 'outbox kind slot_renewal_reminder')
   ) v(kind, name)
 ),

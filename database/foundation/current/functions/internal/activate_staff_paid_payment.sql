@@ -85,8 +85,8 @@ begin
       if (internal.slot_lines_adding(pay.id) > 0
           and (internal.individual_slots_counted(fingerprint, pay.owner_id, pay.id)->>'held')::integer
             + internal.slot_lines_adding(pay.id) > internal.individual_slot_limit(fingerprint))
-        or (cardinality(renewing) > 0 and internal.individual_slots_extended(fingerprint, pay.owner_id, pay.id, renewing)
-          > internal.individual_slot_limit(fingerprint)) then
+        or (cardinality(renewing) > 0
+          and not internal.individual_renewals_allowed(fingerprint, pay.owner_id, pay.id, renewing)) then
         raise exception 'more slots than the person''s limit; raise the limit or refund' using errcode='PT429', detail='slot_limit_reached';
       end if;
       made := internal.issue_slot_line_entitlements(pay.id);

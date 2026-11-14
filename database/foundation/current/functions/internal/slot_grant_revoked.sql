@@ -9,7 +9,7 @@ AS $function$
 begin
   if new.status='revoked' and old.status<>'revoked'
     and (new.slot_id is not null or exists(select 1 from private.entitlements r where r.slot_id=new.id)) then
-    perform internal.refresh_slot_chain_posts(coalesce(new.slot_id, new.id));
+    perform internal.refresh_slot_chain_documents(coalesce(new.slot_id, new.id));
   end if;
   return null;
 end;

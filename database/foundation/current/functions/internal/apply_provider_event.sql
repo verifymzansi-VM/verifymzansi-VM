@@ -104,8 +104,7 @@ begin
             or (internal.individual_slots_counted(fingerprint, pay.owner_id, pay.id)->>'held')::integer
               + internal.slot_lines_adding(pay.id) <= internal.individual_slot_limit(fingerprint))
           and (cardinality(renewing) = 0
-            or internal.individual_slots_extended(fingerprint, pay.owner_id, pay.id, renewing)
-              <= internal.individual_slot_limit(fingerprint));
+            or internal.individual_renewals_allowed(fingerprint, pay.owner_id, pay.id, renewing));
       end if;
     end if;
     fulfillable := coalesce(fulfillable,false);

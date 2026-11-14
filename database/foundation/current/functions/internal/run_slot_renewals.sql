@@ -13,9 +13,13 @@ begin
   if p_limit is null or p_limit not between 1 and 5000 then
     raise exception 'limit 1 to 5000' using errcode='22023';
   end if;
-  -- 1. Hand-over. A post whose period has ended moves to the slot's period
-  -- that follows on from it without a break and covers now. Candidates are
-  -- unlocked: take the owner's fence, then lock and recheck.
+  -- 1. Hand-over (housekeeping only: posts are funded through their slot at
+  -- read time). A post whose period has ended moves to the slot's period that
+  -- follows on from it without a break and covers now. Only posts that can
+  -- move are picked (the next period may carry the post and has room), so
+  -- posts that cannot move (an owner who lost access, for example) never
+  -- crowd out the rest. Candidates are unlocked: take the owner's fence, then
+  -- lock and recheck.
   for r in
     select a.id as activation_id, a.post_id, a.owner_id, n.id as next_id
     from private.post_activations a
@@ -24,6 +28,10 @@ begin
     where a.released_at is null and a.post_id is not null and g.status='active' and g.ends_at<=clock_timestamp()
       and n.status='active' and n.starts_at>g.starts_at and n.starts_at<=clock_timestamp() and n.ends_at>clock_timestamp()
       and n.ends_at<=internal.slot_chain_end(g.id)
+      and internal.entitlement_for_post_eligible(n.id, a.post_id, a.owner_id)
+      and (select count(*) from private.post_activations o where o.released_at is null and o.id<>a.id
+        and o.entitlement_id in (select c.id from private.entitlements c
+          where c.id=coalesce(n.slot_id, n.id) or c.slot_id=coalesce(n.slot_id, n.id))) < n.slot_capacity
     order by g.ends_at, a.id limit p_limit
   loop
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
@@ -47,7 +55,6 @@ begin
       where id=activation.id;
     insert into private.post_activations (post_id, entitlement_id, owner_id, activated_at, continued)
       values (post.id, next_grant.id, post.owner_id, clock_timestamp(), true);
-    perform internal.refresh_slot_chain_posts(coalesce(next_grant.slot_id, next_grant.id));
     n_moved := n_moved + 1;
   end loop;
   -- 2. Reminders: one per grant (so one per slot end, whatever the retries),

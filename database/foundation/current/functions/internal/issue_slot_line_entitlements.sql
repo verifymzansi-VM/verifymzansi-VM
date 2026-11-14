@@ -39,7 +39,7 @@ begin
       case when chain is not null then coalesce(tail.id, target.id) end, chain);
     made := made + 1;
     if chain is not null then
-      perform internal.refresh_slot_chain_posts(chain);
+      perform internal.refresh_slot_chain_documents(chain);
     end if;
   end loop;
   return made;

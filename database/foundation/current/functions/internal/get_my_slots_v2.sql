@@ -78,7 +78,7 @@ begin
         order by e.ends_at desc limit 200) s), '[]'),
     'individual', jsonb_build_object('verified', verified is not null,
       'held', (counted->>'held')::integer, 'pending', (counted->>'pending')::integer,
-      'renewed_ahead', internal.individual_slots_extended(fingerprint, actor, null, null),
+      'renewed_ahead', internal.individual_slots_extended(fingerprint, actor, null, null, null),
       'limit', internal.individual_slot_limit(fingerprint), 'limit_ends_at', raise_ends)) into result;
   perform internal.price_draft_actor();
   return result;

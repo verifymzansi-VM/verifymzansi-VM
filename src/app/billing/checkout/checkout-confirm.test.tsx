@@ -351,8 +351,13 @@ describe("CheckoutConfirm renewing slots early (P3)", () => {
     expect(screen.getByText("20 November 2026 (when your current days end)")).toBeInTheDocument();
     const box = screen.getByRole("checkbox", { name: /My new days start on 20 November 2026/ });
     expect(
-      screen.getByText(/If I cancel before they start, I get a full refund/)
+      screen.getByText(/If I ask to cancel before they start, I get a full refund/)
     ).toBeInTheDocument();
+    // Members cannot cancel themselves: the box links to asking billing.
+    expect(screen.getByRole("link", { name: "Ask to cancel" })).toHaveAttribute(
+      "href",
+      "mailto:billing@verifymzansi.com?subject=Cancel%20my%20renewal"
+    );
     expect(screen.queryByText(/My slot starts now/)).toBeNull();
     expect(payButton()).toBeDisabled();
     fireEvent.click(box);
@@ -389,7 +394,12 @@ describe("CheckoutConfirm renewing slots early (P3)", () => {
     expect(screen.getByTestId("checkout-total")).toHaveTextContent(formatPlanPrice(13800));
     expect(screen.getByText("When each slot's current days end")).toBeInTheDocument();
     expect(screen.getByText("Empty slot")).toBeInTheDocument();
+    // Changing the slots clears the box (its wording names their dates).
+    fireEvent.click(screen.getByRole("checkbox", { name: /My new days/ }));
+    expect(screen.getByRole("checkbox", { name: /My new days/ })).toBeChecked();
     fireEvent.click(screen.getByRole("checkbox", { name: /Mountain bike/ }));
+    expect(screen.getByRole("checkbox", { name: /My new days/ })).not.toBeChecked();
+    expect(payButton()).toBeDisabled();
     expect(screen.getByTestId("checkout-total")).toHaveTextContent(formatPlanPrice(6900));
     fireEvent.click(screen.getByRole("checkbox", { name: /My new days/ }));
     fireEvent.click(payButton());

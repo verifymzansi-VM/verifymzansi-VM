@@ -24,8 +24,13 @@ begin
     ('post_reviews',$q$select m.post_id,m.edit_id,m.decision,m.reason,m.decided_at,m.price_only
       from private.moderation_log m join private.posts p on p.id=m.post_id where p.owner_id=$1 order by m.decided_at,m.id$q$),
     ('media_metadata',$q$select id,kind,size_bytes,mime,width,height,state,created_at,deleted_at from private.media_objects where owner_id=$1 order by created_at,id$q$),
-    ('payments',$q$select id,product_kind,target_post_id,amount_cents,currency,status,fulfillment_status,merchant_reference,provider,created_at,completed_at
-      from private.payments where owner_id=$1 order by created_at,id$q$),
+    ('payments',$q$select p.id,p.product_kind,p.target_post_id,p.amount_cents,p.currency,p.status,p.fulfillment_status,p.merchant_reference,
+      p.provider,p.created_at,p.completed_at,coalesce((p.snapshot->>'renewal')::boolean,false) renewal,
+      p.snapshot->'cooling_off_consent' cooling_off_consent,p.snapshot->'renewal_starts' renewal_starts,
+      (select jsonb_agg(jsonb_build_object('line_number',l.line_number,'amount_cents',l.amount_cents,'status',l.status,
+          'renews_entitlement_id',l.renews_entitlement_id,'reversal_kind',l.reversal_kind,'reversed_at',l.reversed_at)
+        order by l.line_number) from private.payment_lines l where l.payment_id=p.id) lines
+      from private.payments p where p.owner_id=$1 order by p.created_at,p.id$q$),
     ('invoices',$q$select i.id,i.payment_id,i.invoice_number,i.amount_ex_vat_cents,i.vat_cents,i.total_cents,i.description,i.issued_at
       from private.invoices i join private.payments p on p.id=i.payment_id where p.owner_id=$1 order by i.issued_at,i.id$q$),
     ('customer_invoices',$q$select i.invoice_number,i.status,i.description,i.slots,i.unit_price_cents,i.total_cents,i.issued_at,i.due_on,
@@ -36,9 +41,10 @@ begin
     ('bank_transfers',$q$select t.id,t.payment_id,v.duration_days term_days,t.slots,t.amount_received_cents,t.bank_reference,t.cleared_on,
       t.cooling_off_waiver_confirmed,t.status,t.recorded_at,t.confirmed_at,t.declined_at
       from private.invoice_transfers t join private.plan_versions v on v.id=t.plan_version_id where t.account_id=$1 order by t.recorded_at,t.id$q$),
-    ('entitlements',$q$select id,source,area,slot_capacity,activations_per_period,activation_period_days,max_photos,max_videos,starts_at,ends_at,status,revoked_reason
+    ('entitlements',$q$select id,source,area,slot_capacity,activations_per_period,activation_period_days,max_photos,max_videos,starts_at,ends_at,status,revoked_reason,
+      renews_entitlement_id,slot_id
       from private.entitlements where owner_id=$1 order by created_at,id$q$),
-    ('post_activations',$q$select post_id,entitlement_id,activated_at,released_at,release_reason
+    ('post_activations',$q$select post_id,entitlement_id,activated_at,released_at,release_reason,continued
       from private.post_activations where owner_id=$1 order by activated_at,id$q$),
     ('event_submissions',$q$select post_id,submitted_at,released_at,release_reason
       from private.event_submissions where owner_id=$1 order by submitted_at,id$q$),

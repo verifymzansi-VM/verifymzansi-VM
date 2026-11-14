@@ -31,7 +31,14 @@
 // runs twice, links to "Renew all" when several slots end within 7 days, never
 // goes to an unconfirmed address and is not sent for a slot renewed meanwhile;
 // no payment is ever created by the job (no automatic charge); retention keeps
-// a renewed slot's first period until its renewal is gone.
+// a renewed slot's first period until its renewal is gone. Review fixes: every
+// read path (the public view, post page, search, phone reveal, enquiry, post
+// funding, the kept activation) serves a renewed post after the boundary before
+// any job runs, and confirming a renewal writes no post; the sweep is not
+// crowded out by posts that cannot move; a post held across the boundary is
+// restored with its days; fair use counts over the renewal chain; a raised
+// limit never carries renewals past its end; the privacy export holds renewal
+// links and consents.
 //
 //   node --import tsx scripts/test-foundation-slot-renewals.mjs
 //
@@ -229,6 +236,8 @@ try {
     return activation.entitlement_id;
   };
   const visibleUntil = (id) => scalar(`select visible_until from private.posts where id='${id}';`);
+  const docUntil = (id) =>
+    scalar(`select visible_until from private.post_search_documents where post_id='${id}';`);
   const publiclyVisible = (id) =>
     truth(`select d.is_visible and d.visible_until>statement_timestamp() from private.post_search_documents d
       where d.post_id='${id}'`);
@@ -341,6 +350,9 @@ try {
       const first = buy(bongi, P30, 1);
       const [e1] = grantsOf(first);
       const listing = post(bongi);
+      q(
+        `insert into private.post_contacts(post_id,post_kind,channels) values('${listing}','listing',array['call','form']);`
+      );
       assert.equal(live(bongi, listing), e1.id);
       travel(bongi, "20 days");
       const oldEnd = scalar(`select ends_at from private.entitlements where id='${e1.id}';`);
@@ -362,9 +374,13 @@ try {
       assert.ok(
         truth(`'${snap.renewal_starts[0].starts_at}'::timestamptz='${oldEnd}'::timestamptz`)
       );
+      const revisionBefore = Number(
+        scalar(`select revision from private.posts where id='${listing}';`)
+      );
       const settled = settle(bongi, quoted.payment_id);
       assert.equal(settled.outcome, "completed");
       const [e2] = grantsOf(quoted.payment_id);
+      const e2Ends = () => scalar(`select ends_at from private.entitlements where id='${e2.id}';`);
       assert.ok(same(e2.starts, oldEnd), "the renewal starts exactly at the old end");
       assert.ok(truth(`'${e2.ends}'::timestamptz='${oldEnd}'::timestamptz+interval '30 days'`));
       assert.deepEqual([e2.slot, e2.renews, e2.line_renews], [e1.id, e1.id, e1.id]);
@@ -382,18 +398,82 @@ try {
         [e2.id]
       );
       assert.equal(json(member(bongi, "select api.get_my_slots();")).individual.held, 1);
-      // The post's end moved with the renewal at once.
-      assert.ok(same(visibleUntil(listing), e2.ends));
+      // Confirming the renewal wrote no post: its search document alone shows
+      // until the end of the renewal; funding runs through the slot.
+      const postRow = () =>
+        json(
+          `select jsonb_build_object('revision',revision,'visible_until',visible_until) from private.posts where id='${listing}';`
+        );
+      assert.ok(same(postRow().visible_until, oldEnd));
+      assert.equal(postRow().revision, revisionBefore);
+      assert.ok(
+        same(
+          scalar(
+            `select visible_until from private.post_search_documents where post_id='${listing}';`
+          ),
+          e2.ends
+        )
+      );
       assert.ok(publiclyVisible(listing));
       assert.ok(
         truth(
           `(select funded_until from internal.post_funding('${listing}'))='${e2.ends}'::timestamptz`
         )
       );
-      // Across the boundary: the first period ended a second ago.
+      // Across the boundary: the first period ended a second ago. Before the
+      // sweep or the lifecycle job runs, every read path still serves the post.
       travel(bongi, "10 days 1 second");
+      assert.ok(
+        truth(`exists(select 1 from private.public_eligible_posts where id='${listing}')`),
+        "public view"
+      );
+      assert.ok(
+        truth(`exists(select 1 from private.frontend_restorable_posts where id='${listing}')`),
+        "restorable"
+      );
+      assert.ok(publiclyVisible(listing), "search document");
+      assert.equal(
+        json(asRole("anon", `select api.get_public_post('${listing}');`)).id,
+        listing,
+        "post page"
+      );
+      assert.deepEqual(
+        json(
+          asRole("anon", `select api.search_posts('{"post_id":"${listing}"}'::jsonb);`)
+        ).items.map((i) => i.id),
+        [listing],
+        "search"
+      );
+      assert.match(
+        q(service(`select api.reveal_post_phone('${listing}','call');`)),
+        /^\+2782[0-9]{7}$/,
+        "phone reveal"
+      );
+      assert.match(
+        json(
+          service(
+            `select api.submit_enquiry(gen_random_uuid(),'${listing}','sipho.buyer@example.com','Is this still available, please?');`
+          )
+        ).id,
+        /^[0-9a-f-]{36}$/,
+        "enquiry"
+      );
+      assert.ok(
+        truth(
+          `(select funded_until from internal.post_funding('${listing}'))>statement_timestamp()`
+        ),
+        "edits and moderation see the post funded"
+      );
+      const kept1 = json(member(bongi, `select api.activate_post('${listing}');`));
+      assert.deepEqual(
+        [kept1.reused, kept1.entitlement_id],
+        [true, e1.id],
+        "the owner's post keeps its activation"
+      );
+      // The lifecycle job does not expire it: its end date catches up.
       assert.deepEqual(lifecycle().expired, 0);
       assert.equal(scalar(`select status from private.posts where id='${listing}';`), "live");
+      assert.ok(same(postRow().visible_until, e2Ends()));
       assert.ok(publiclyVisible(listing), "the post stays visible across the boundary");
       // Waiting to move, the post still fills the slot.
       const other = post(bongi);
@@ -571,7 +651,8 @@ try {
       assert.equal(slots2(enhle).individual.held, 3);
       assert.equal(slots2(enhle).individual.renewed_ahead, 3);
       const queued = renewed.find((g) => g.slot === funded);
-      assert.ok(same(visibleUntil(listing), queued.ends));
+      assert.ok(same(docUntil(listing), queued.ends));
+      assert.ok(same(visibleUntil(listing), oldEnds[funded]), "no post row is written");
       // Refund the funded slot's renewal before it starts (the full line).
       const result = json(
         staff(
@@ -591,14 +672,14 @@ try {
         [a, b, c].map((s) => [s, s === funded ? "revoked" : "active"])
       );
       // The post now ends with its current period again; the others keep theirs.
-      assert.ok(same(visibleUntil(listing), oldEnds[funded]));
+      assert.ok(same(docUntil(listing), oldEnds[funded]));
       assert.equal(scalar(`select status from private.posts where id='${listing}';`), "live");
       assert.equal(slots2(enhle).individual.held, 3);
       assert.equal(slots2(enhle).individual.renewed_ahead, 2);
       // The slot can be renewed again.
       const again = grantsOf(renew(enhle, [funded]))[0];
       assert.equal(again.starts, oldEnds[funded]);
-      assert.ok(same(visibleUntil(listing), again.ends));
+      assert.ok(same(docUntil(listing), again.ends));
     }
   );
 
@@ -928,6 +1009,192 @@ try {
     assert.equal(count(`private.payments where owner_id='${pule.id}'`), 0);
   });
 
+  // ------------------------------------------------------------- review fixes
+  /** `count` live posts in renewed slots of one member whose first periods
+   * ended `ago` (a raised limit lets one person hold up to 25). */
+  const renewedLivePosts = (label, count, ago) => {
+    const owner = verified(label);
+    if (count > 4)
+      q(`insert into private.individual_slot_limits(identity_hmac,account_id,slot_limit,ends_at,reason,granted_by)
+         values('${fingerprintOf(label)}','${owner.id}',${count},now()+interval '200 days','Checked dealer, interim offer','${admin.id}');`);
+    const grants = grantsOf(buy(owner, P30, count)).map((g) => g.id);
+    const posts = grants.map(() => post(owner));
+    q(`insert into private.post_activations(post_id,entitlement_id,owner_id)
+       select p, g, '${owner.id}' from unnest(${ids(posts)}, ${ids(grants)}) x(p, g);
+       update private.posts set status='live',published_at=now(),
+         visible_until=(select e.ends_at from private.post_activations a join private.entitlements e on e.id=a.entitlement_id
+           where a.post_id=posts.id and a.released_at is null)
+       where id = any(${ids(posts)});
+       select internal.write_post_projection(p) from unnest(${ids(posts)}) p;`);
+    travel(owner, "20 days");
+    renew(owner, grants);
+    travel(owner, ago);
+    return { owner, grants, posts };
+  };
+
+  await check(
+    "the sweep picks only posts that can move: 101 posts of owners who lost access never crowd out one that can",
+    () => {
+      const blocked = [
+        renewedLivePosts("crowd-a", 25, "10 days 3 hours"),
+        renewedLivePosts("crowd-b", 25, "10 days 3 hours"),
+        renewedLivePosts("crowd-c", 25, "10 days 3 hours"),
+        renewedLivePosts("crowd-d", 25, "10 days 3 hours"),
+        renewedLivePosts("crowd-e", 1, "10 days 3 hours"),
+      ];
+      for (const { owner } of blocked)
+        q(`update auth.users set banned_until=now()+interval '30 days' where id='${owner.id}';`);
+      const able = renewedLivePosts("crowd-able", 1, "10 days 1 second");
+      // The blocked posts' periods ended earlier, so they would come first.
+      assert.equal(
+        count(`private.post_activations a join private.entitlements g on g.id=a.entitlement_id
+          where a.released_at is null and g.ends_at<=now() and g.owner_id in (${blocked.map((b) => `'${b.owner.id}'`).join(",")})`),
+        101
+      );
+      const result = json(service("select api.run_slot_renewals(100);"));
+      assert.ok(result.moved >= 1, JSON.stringify(result));
+      assert.equal(
+        count(
+          `private.post_activations where post_id='${able.posts[0]}' and released_at is null and continued`
+        ),
+        1
+      );
+    }
+  );
+
+  await check(
+    "a post held by staff across the boundary is restored with its renewed days, not expired",
+    () => {
+      const zola = verified("zola");
+      const [e1] = grantsOf(buy(zola, P30, 1));
+      const listing = post(zola);
+      live(zola, listing);
+      travel(zola, "25 days");
+      const e2 = grantsOf(renew(zola, [e1.id]))[0];
+      // Staff hide it (as the report action does) before the boundary.
+      const hold = q(`set session_replication_role=replica;
+        insert into private.frontend_post_hold_state(post_id,prior_status,prior_reason,hidden_revision)
+          select id,status,status_reason,revision+1 from private.posts where id='${listing}';
+        set session_replication_role=origin;
+        update private.posts set status='paused',status_reason='staff_hidden',revision=revision+1 where id='${listing}';
+        insert into private.frontend_content_holds(id,post_id,account_id,actor_id,reason,applied_at)
+          values(gen_random_uuid(),'${listing}','${zola.id}','${admin.id}','Synthetic staff visibility hold',clock_timestamp()) returning id;`)
+        .split("\n")
+        .filter((line) => /^[0-9a-f-]{36}$/.test(line))[0];
+      travel(zola, "5 days 1 second");
+      lifecycle();
+      assert.equal(scalar(`select status from private.posts where id='${listing}';`), "paused");
+      const version = Number(
+        scalar(`select version from private.frontend_content_holds where id='${hold}';`)
+      );
+      const released = json(
+        staff(
+          admin2,
+          `select api.release_frontend_content_hold('${hold}',${version},'Synthetic review found no problem');`
+        )
+      );
+      assert.equal(released.restored, true);
+      const e2Ends = scalar(`select ends_at from private.entitlements where id='${e2.id}';`);
+      assert.equal(scalar(`select status from private.posts where id='${listing}';`), "live");
+      assert.ok(same(visibleUntil(listing), e2Ends));
+      assert.ok(same(docUntil(listing), e2Ends));
+      // (Other members' posts may expire in the same run: only this one matters.)
+      lifecycle();
+      assert.equal(scalar(`select status from private.posts where id='${listing}';`), "live");
+      assert.ok(truth(`exists(select 1 from private.public_eligible_posts where id='${listing}')`));
+    }
+  );
+
+  await check(
+    "the 4 posts going live per 30 days count over a slot's renewals (no restart)",
+    () => {
+      const yusuf = verified("yusuf");
+      const [e1] = grantsOf(buy(yusuf, P30, 1));
+      travel(yusuf, "25 days");
+      const goLive = () => {
+        const next = post(yusuf);
+        json(member(yusuf, `select api.activate_post('${next}');`));
+        q(
+          `update private.post_activations set released_at=clock_timestamp(),release_reason='deleted' where post_id='${next}' and released_at is null;`
+        );
+      };
+      for (let n = 0; n < 4; n++) goLive();
+      renew(yusuf, [e1.id]);
+      travel(yusuf, "5 days 1 second");
+      // The renewal is running, but four posts went live in the last 30 days.
+      fails(
+        member(yusuf, `select api.activate_post('${post(yusuf)}');`),
+        "PT409",
+        /capacity is in use/
+      );
+      travel(yusuf, "25 days");
+      goLive();
+    }
+  );
+
+  await check("a staff-raised limit never carries renewals past its end", () => {
+    const xolani = verified("xolani");
+    q(`insert into private.individual_slot_limits(identity_hmac,account_id,slot_limit,ends_at,reason,granted_by)
+       values('${fingerprintOf("xolani")}','${xolani.id}',6,now()+interval '25 days','Checked dealer, interim offer','${admin.id}');`);
+    const six = grantsOf(buy(xolani, P30, 6)).map((g) => g.id);
+    // Slots end in 10 days; the raise ends in 5: every renewal would start after it.
+    travel(xolani, "20 days");
+    q(`set session_replication_role=replica;
+       update private.individual_slot_limits set ends_at=now()+interval '5 days' where account_id='${xolani.id}';
+       set session_replication_role=origin;`);
+    fails(renewSql(xolani, six.slice(0, 5)), "PT429", /4 that start after a raised limit ends/);
+    renew(xolani, six.slice(0, 4));
+    fails(renewSql(xolani, six.slice(4, 5)), "PT429");
+    // With the raise lasting past the slots' ends, all six may be renewed.
+    const yanga = verified("yanga");
+    q(`insert into private.individual_slot_limits(identity_hmac,account_id,slot_limit,ends_at,reason,granted_by)
+       values('${fingerprintOf("yanga")}','${yanga.id}',6,now()+interval '200 days','Checked dealer, interim offer','${admin.id}');`);
+    const hers = grantsOf(buy(yanga, P30, 6)).map((g) => g.id);
+    travel(yanga, "20 days");
+    renew(yanga, hers);
+  });
+
+  await check(
+    "the privacy export holds renewal links and each payment's cooling-off consent",
+    () => {
+      const wandile = verified("wandile");
+      const firstOrder = buy(wandile, P30, 1);
+      const [e1] = grantsOf(firstOrder);
+      const listing = post(wandile);
+      live(wandile, listing);
+      travel(wandile, "20 days");
+      const renewal = renew(wandile, [e1.id]);
+      const [e2] = grantsOf(renewal);
+      travel(wandile, "10 days 1 second");
+      sweep();
+      const exported = json(`select internal.frontend_privacy_export_data('${wandile.id}');`);
+      const pay = (id) => exported.payments.find((p) => p.id === id);
+      assert.equal(pay(firstOrder).renewal, false);
+      assert.match(pay(firstOrder).cooling_off_consent.wording, /^My slot starts now/);
+      assert.equal(pay(renewal).renewal, true);
+      assert.equal(pay(renewal).cooling_off_consent.wording_version, "renewal-cooling-off-v1");
+      assert.match(
+        pay(renewal).cooling_off_consent.wording,
+        /If I ask to cancel before they start/
+      );
+      assert.deepEqual(
+        pay(renewal).renewal_starts.map((s) => s.entitlement_id),
+        [e1.id]
+      );
+      assert.deepEqual(
+        pay(renewal).lines.map((l) => l.renews_entitlement_id),
+        [e1.id]
+      );
+      const grant = exported.entitlements.find((e) => e.id === e2.id);
+      assert.deepEqual([grant.renews_entitlement_id, grant.slot_id], [e1.id, e1.id]);
+      assert.deepEqual(
+        exported.post_activations.filter((a) => a.post_id === listing).map((a) => a.continued),
+        [false, true]
+      );
+      assert.equal(Object.keys(exported).length, 37, "no new dataset");
+    }
+  );
+
   await check(
     "grants: members call the member commands, the sweep is the service's, helpers are closed",
     () => {
@@ -936,11 +1203,13 @@ try {
         "api.get_my_slots_v2()",
         "api.run_slot_renewals(integer)",
         "internal.issue_slot_line_entitlements(uuid)",
-        "internal.refresh_slot_chain_posts(uuid)",
         "internal.slot_chain_end(uuid)",
         "internal.slot_renewal_due(uuid,uuid)",
-        "internal.individual_slots_extended(text,uuid,uuid,uuid[])",
+        "internal.individual_slots_extended(text,uuid,uuid,uuid[],timestamp with time zone)",
         "internal.slot_renewal_window()",
+        "internal.slot_grant_usable(uuid,text,timestamp with time zone,timestamp with time zone)",
+        "internal.individual_renewals_allowed(text,uuid,uuid,uuid[])",
+        "internal.refresh_slot_chain_documents(uuid)",
       ];
       const grants = json(
         "select jsonb_object_agg(r.rolname||' '||f.sig,has_function_privilege(r.rolname,f.sig,'execute')) " +

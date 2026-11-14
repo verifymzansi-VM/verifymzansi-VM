@@ -10,12 +10,14 @@
 -- renewal reminder is in the outbox, because those records would lose their
 -- meaning. After that, fix forward.
 --
--- It puts back the eight function bodies the update replaced (slot counting,
--- the new-slot checkout, the Ozow settlement and the staff activation of
--- 20261114041000, post activation, post funding, the mail claim and the
--- retention job), restores the outbox kinds, and drops the update's
--- functions, trigger, indexes, constraints and columns. Payments, slots,
--- posts and commissions are untouched.
+-- It puts back the thirteen function bodies the update replaced (slot
+-- counting, the new-slot checkout, the Ozow settlement and the staff
+-- activation of 20261114041000, post activation, post funding and its
+-- eligibility, the post lifecycle job, the hold release, the media allowance,
+-- the mail claim, the retention job and the privacy export) and the two post
+-- funding views, restores the outbox kinds, and drops the update's functions,
+-- trigger, indexes, constraints and columns. Payments, slots, posts and
+-- commissions are untouched.
 begin;
 set local lock_timeout='5s';
 
@@ -29,24 +31,31 @@ begin
       and not a.attisdropped)
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slots_counted(text,uuid,uuid)')) is distinct from '4213e64e4b2fb9f8062fe02277a28e69'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.start_slot_checkout(uuid,integer,bigint,boolean)')) is distinct from '4ce514eae4c2fb3fd9b0a0ecc40ac498'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.apply_provider_event(jsonb)')) is distinct from 'cca841d0e0417233624c8afb7baba6e8'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.activate_staff_paid_payment(uuid,text)')) is distinct from '492170b6a48e1ccf1c4036e872860fce'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.activate_post(uuid)')) is distinct from '6c4e0634477f324fbda2964a49668d81'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.post_funding(uuid)')) is distinct from '2cff9aa43f38ded2f0f9d40fdbf6c285'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.apply_provider_event(jsonb)')) is distinct from '19d5c2eb7e1a75210bc2b77d2cbb961b'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.activate_staff_paid_payment(uuid,text)')) is distinct from '03c8a3314cd99f02fb465a391ca2942f'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.activate_post(uuid)')) is distinct from 'bc99d728b6a6e4465b87b0fd607aeb08'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.post_funding(uuid)')) is distinct from '16c30a8438ae9d43796f5f78f4144ad0'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.claim_supported_notification_outbox(text[],integer)')) is distinct from 'c7206aab3ac04b1f9d9b6ce2dc47bd0f'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.retention_commerce(integer)')) is distinct from '06d7529db4898b7bb3b158d38a1d5929'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.entitlement_for_post_eligible(uuid,uuid,uuid)')) is distinct from 'd3861dfcebe2d7e1d6955a0c549b2db3'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.run_post_lifecycle(integer)')) is distinct from 'cb178dd0e47f84cbb277a87abd31b140'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.release_frontend_content_hold(uuid,integer,text)')) is distinct from 'c975e7b75ad113c28018d36477c953f7'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.set_post_media(uuid,integer,jsonb)')) is distinct from 'cd3c1062f03370a6a9346ed935eff0fc'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.frontend_privacy_export_data(uuid)')) is distinct from '03c73dba3ba38c4866186a8b84b4a521'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_my_slots_v2()')) is distinct from '94a9406f69aba4f4abdf419809498258'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_my_slots_v2()')) is distinct from '4c51e06db867fcab660f464ea64eb49d'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_my_slots_v2()')) is distinct from 'ccd8613df13112af02b3d062cc0ea486'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.run_slot_renewals(integer)')) is distinct from 'b4e29cfe085196212c3e710c09631de2'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.run_slot_renewals(integer)')) is distinct from 'dbfab27a486e46e84ee881ac49175c8c'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.run_slot_renewals(integer)')) is distinct from 'dc2fa45bd9d0502e6f3dafbfd75984d4'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean)')) is distinct from 'ee9fe432c0390ba2fecdcebff294e775'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean)')) is distinct from 'e879052f8802483e44c5c8f661fe137c'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.issue_slot_line_entitlements(uuid)')) is distinct from 'ca22bb743ebbce2edc273f77e97ed8b1'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.slot_grant_revoked()')) is distinct from '2410c6bf91b0a03d37fecf8ee67dba87'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.refresh_slot_chain_posts(uuid)')) is distinct from '5de8771d0e48075d29d5599bde817274'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean)')) is distinct from '94de32ca80099d59db23aed33c6e7ee2'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.issue_slot_line_entitlements(uuid)')) is distinct from '85ae00308b9abb35c6c13bc67821d39d'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.slot_grant_revoked()')) is distinct from '00f9bfbdb6f79cc4496f5747b85cdd17'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.refresh_slot_chain_documents(uuid)')) is distinct from '8654d4f1d0886ad9e877835077a2ad3d'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.slot_grant_usable(uuid,text,timestamp with time zone,timestamp with time zone)')) is distinct from 'b43abb8cb82c15c1a3f240680d3710ac'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_renewals_allowed(text,uuid,uuid,uuid[])')) is distinct from '0012cbcef8b31da4ed93ee267ca13afd'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.slot_lines_renewing(uuid)')) is distinct from '9ce02eccc93128dff9142cb06db0efe6'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.slot_lines_adding(uuid)')) is distinct from '74fe04e6cff80dece687c24e05c18fb7'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slots_extended(text,uuid,uuid,uuid[])')) is distinct from 'a8f1a8a67615d34c7df7bc6fe99fb5e6'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slots_extended(text,uuid,uuid,uuid[],timestamp with time zone)')) is distinct from 'fa0c223b351aa2fb07c4d1d1c42a9f24'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.slot_renewal_due(uuid,uuid)')) is distinct from 'f0eb3360c8456cc4b191c315c61c482e'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.slot_chain_end(uuid)')) is distinct from 'de3528681a1ad52128c6db296e413d12'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.slot_chain_held(uuid)')) is distinct from '23b8b9c552d561b4f2d818e9d5056f61'
@@ -699,6 +708,458 @@ $function$;
 alter function internal.retention_commerce(integer) owner to postgres;
 revoke all on function internal.retention_commerce(integer) from public;
 
+CREATE OR REPLACE FUNCTION internal.entitlement_for_post_eligible(p_ent uuid, p_post uuid, p_owner uuid)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
+begin
+  return exists(select 1 from private.entitlements e join private.posts p on p.id=p_post
+    where e.id=p_ent and p.owner_id=p_owner
+      and e.status='active' and e.starts_at<=clock_timestamp() and e.ends_at>clock_timestamp()
+      and (e.area is null or e.area=p.area)
+      and (e.owner_id=p_owner or exists(select 1 from private.entitlement_members m
+        where m.entitlement_id=e.id and m.member_id=p_owner))
+      and exists(select 1 from private.current_account_access u where u.id=p_owner)
+      and exists(select 1 from private.current_account_access u where u.id=e.owner_id)
+      and (e.source<>'retail_paid' or exists(select 1 from private.payments pay
+        where pay.id=e.payment_id and pay.owner_id=e.owner_id and pay.status='complete')));
+end;
+$function$;
+alter function internal.entitlement_for_post_eligible(uuid,uuid,uuid) owner to postgres;
+revoke all on function internal.entitlement_for_post_eligible(uuid,uuid,uuid) from public;
+
+CREATE OR REPLACE FUNCTION internal.run_post_lifecycle(p_limit integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare n_expired integer:=0; n_notices integer:=0; n_deleted integer:=0; n_extended integer:=0; n_kept integer:=0;
+  r record; post private.posts; changed integer; decision jsonb;
+begin
+  if p_limit is null or p_limit not between 1 and 5000 then
+    raise exception 'limit 1 to 5000' using errcode='22023';
+  end if;
+  -- 1. Expiry. A Market or Business post whose paid run has ended expires,
+  -- whether live or paused while it still holds its slot. Events are not
+  -- expired: they are deleted when they end (step 3). A post under a staff
+  -- hold keeps its state until the hold is released.
+  -- Candidates are unlocked. Take the shared hold/closure subject guard before
+  -- locking a post, then re-evaluate all mutable eligibility under those locks.
+  for r in
+    select p.id,p.owner_id from private.posts p
+    where p.kind<>'event' and p.visible_until<=clock_timestamp()
+      and (p.status='live' or (p.status='paused' and exists(select 1 from private.post_activations a
+        where a.post_id=p.id and a.released_at is null)))
+      and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
+      and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
+    order by p.visible_until,p.id limit p_limit
+  loop
+    if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
+    select * into post from private.posts p where p.id=r.id and p.kind<>'event' and p.visible_until<=clock_timestamp()
+      and (p.status='live' or (p.status='paused' and exists(select 1 from private.post_activations a
+        where a.post_id=p.id and a.released_at is null)))
+      for update skip locked;
+    if not found or exists(select 1 from private.legal_holds h where h.subject_id=r.owner_id and h.released_at is null)
+      or exists(select 1 from private.frontend_content_holds h where h.post_id=r.id and h.released_at is null) then continue; end if;
+    update private.posts set status='expired',status_reason='Visibility period ended',revision=revision+1 where id=post.id;
+    update private.post_search_documents set is_visible=false where post_id=post.id;
+    update private.post_activations set released_at=clock_timestamp(),release_reason='expired'
+      where post_id=post.id and released_at is null;
+    n_expired:=n_expired+1;
+  end loop;
+  -- 2. Notices. At most p_limit new notices per invocation; old dedupe rows
+  -- do not starve later notices. Lock/recheck each post so a concurrent change
+  -- invalidates the captured revision first. The expiry notice keys on
+  -- ended_at, which edits do not move; its ':3d' suffix gives posts that ended
+  -- before this update one notice of the 3-day rule. The sold notice keys on
+  -- the slot the post was sold in (its last activation, released or not), so
+  -- neither a refund freeing the slot nor undoing and redoing "sold" repeats it.
+  -- A post already due for deletion gets the deletion notice instead. A held
+  -- post is not warned about a deletion that will not happen; an idle post's
+  -- clock counts from the release of its last staff hold. A paused post that
+  -- holds a slot is not idle: it expires with its run.
+  for r in
+    select n.* from (
+      select 'post_expired'::text as kind,p.id,p.owner_id,p.revision,p.ended_at as due_at,
+        'post_expired:'||p.id||':'||floor(extract(epoch from p.ended_at))::bigint||':3d' as dedupe_key
+      from private.posts p where p.status='expired' and p.kind<>'event' and p.deletes_at>clock_timestamp()
+      union all
+      select 'post_sold',p.id,p.owner_id,p.revision,p.ended_at,
+        'post_sold:'||p.id||':'||coalesce((select a.id::text from private.post_activations a
+          where a.post_id=p.id and a.activated_at<=p.ended_at order by a.activated_at desc,a.id desc limit 1),'none')
+      from private.posts p where p.status='sold' and p.deletes_at>clock_timestamp()
+      union all
+      select 'draft_deletion_warning',p.id,p.owner_id,p.revision,i.idle_since+interval '45 days',
+        'draft_deletion_warning:'||p.id||':'||floor(extract(epoch from i.idle_since))::bigint
+      from private.posts p cross join lateral (select greatest(p.content_updated_at,p.status_changed_at,
+        (select max(h.released_at) from private.frontend_content_holds h where h.post_id=p.id)) as idle_since) i
+      where (p.status in('draft','rejected') or (p.status='paused' and not exists(select 1 from private.post_activations a
+          where a.post_id=p.id and a.released_at is null)))
+        and i.idle_since<=clock_timestamp()-interval '45 days'
+    ) n where not exists(select 1 from private.outbox_events o where o.dedupe_key=n.dedupe_key)
+      and not exists(select 1 from private.legal_holds h where h.subject_id=n.owner_id and h.released_at is null)
+      and not exists(select 1 from private.frontend_content_holds h where h.post_id=n.id and h.released_at is null)
+    order by n.due_at,n.id,n.kind,n.dedupe_key limit p_limit
+  loop
+    if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
+    select * into post from private.posts p where p.id=r.id and p.revision=r.revision for update skip locked;
+    if not found or exists(select 1 from private.legal_holds h where h.subject_id=r.owner_id and h.released_at is null)
+      or exists(select 1 from private.frontend_content_holds h where h.post_id=r.id and h.released_at is null) then continue; end if;
+    insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key) values(r.kind,r.id,r.owner_id,r.dedupe_key)
+      on conflict(dedupe_key) do nothing;
+    get diagnostics changed=row_count; n_notices:=n_notices+changed;
+  end loop;
+  -- 3. Deletion: ended runs at their deletion date (moved by the late-payment
+  -- rule, internal.ended_post_decision), events that have ended, and idle
+  -- drafts, rejected posts and paused posts without a slot, unless an open
+  -- report keeps the post a little longer (internal.post_report_deferred).
+  -- Deleting a post releases its slot (posts_release_activation). The payment
+  -- rule is evaluated only for posts that are due or whose owner has confirmed
+  -- a recent plan payment.
+  for r in
+    select p.id,p.owner_id from private.posts p
+    where ((p.status in('expired','sold','archived') and (p.deletes_at<=clock_timestamp()
+          or (p.status='expired' and p.kind<>'event' and exists(select 1 from private.payments pay
+            where pay.owner_id=p.owner_id and pay.product_kind='plan' and pay.created_at>=p.ended_at-interval '24 hours'
+              and pay.status='complete' and pay.fulfillment_status='fulfilled')))
+          and internal.ended_post_decision(p) is not null)
+        or (p.kind='event' and p.edit_of is null and p.status not in('expired','sold','archived')
+          and p.deletes_at<=clock_timestamp() and exists(select 1 from private.event_details e
+            where e.post_id=p.id and e.ends_at<=clock_timestamp()))
+        or (p.status in('draft','rejected','paused') and greatest(p.content_updated_at,p.status_changed_at)<=clock_timestamp()-interval '60 days'
+          and internal.post_idle_deletion_due(p)))
+      and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
+      and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
+      and not internal.post_report_deferred(p)
+    order by coalesce(p.deletes_at,p.status_changed_at),p.id limit p_limit
+  loop
+    if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
+    select * into post from private.posts p where p.id=r.id for update skip locked;
+    if not found or exists(select 1 from private.legal_holds h where h.subject_id=r.owner_id and h.released_at is null)
+      or exists(select 1 from private.frontend_content_holds h where h.post_id=post.id and h.released_at is null) then continue; end if;
+    if post.status in('expired','sold','archived') then
+      decision:=internal.ended_post_decision(post);
+      if decision is null then continue; end if;
+      if decision->>'action' in('extend','keep') then
+        insert into private.post_deletion_extensions(post_id,ended_at,grace_ended_at,payment_id,kept_at)
+          values(post.id,post.ended_at,(decision->>'grace_ended_at')::timestamptz,(decision->>'payment_id')::uuid,
+            case when decision->>'action'='keep' then clock_timestamp() end)
+          on conflict(post_id) do update set ended_at=excluded.ended_at,grace_ended_at=excluded.grace_ended_at,
+            payment_id=excluded.payment_id,extended_at=excluded.extended_at,kept_at=excluded.kept_at;
+        update private.posts set deletes_at=(decision->>'deletes_at')::timestamptz where id=post.id;
+        if decision->>'action'='keep' then
+          insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key)
+            values('post_kept',post.id,post.owner_id,'post_kept:'||post.id||':'||floor(extract(epoch from post.ended_at))::bigint)
+            on conflict(dedupe_key) do nothing;
+          n_kept:=n_kept+1;
+        else
+          n_extended:=n_extended+1;
+        end if;
+        continue;
+      end if;
+    elsif not ((post.kind='event' and post.edit_of is null and post.deletes_at<=clock_timestamp()
+        and exists(select 1 from private.event_details e where e.post_id=post.id and e.ends_at<=clock_timestamp()))
+      or internal.post_idle_deletion_due(post)) then
+      continue;
+    end if;
+    if internal.post_report_deferred(post) then continue; end if;
+    insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key)
+      values('post_deleted',post.id,post.owner_id,'post_deleted:'||post.id) on conflict(dedupe_key) do nothing;
+    delete from private.posts where id=post.id;
+    n_deleted:=n_deleted+1;
+  end loop;
+  -- Free-event submissions older than every rolling 30-day window.
+  delete from private.event_submissions s where s.id in(select x.id from private.event_submissions x
+    where x.submitted_at<=clock_timestamp()-interval '31 days' order by x.submitted_at limit p_limit);
+  return jsonb_build_object('expired',n_expired,'notices',n_notices,'deleted',n_deleted,'extended',n_extended,'kept',n_kept);
+end;
+$function$;
+alter function internal.run_post_lifecycle(integer) owner to postgres;
+revoke all on function internal.run_post_lifecycle(integer) from public;
+grant execute on function internal.run_post_lifecycle(integer) to service_role;
+
+CREATE OR REPLACE FUNCTION internal.release_frontend_content_hold(p_hold uuid, p_expected_version integer, p_reason text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid:=internal.staff_actor('content:restore');target uuid;subject uuid;h private.frontend_content_holds;
+  post private.posts;state private.frontend_post_hold_state;review_reason text;did_restore boolean:=false;
+begin
+  review_reason:=internal.retention_reason(p_reason);
+  select x.post_id,x.account_id into target,subject from private.frontend_content_holds x where x.id=p_hold;
+  if not found then raise exception 'content hold unavailable' using errcode='PT409';end if;
+  perform internal.lock_verification_subject(subject);
+  select * into post from private.posts where id=target for update;
+  select * into h from private.frontend_content_holds where id=p_hold for update;
+
+  actor:=internal.staff_actor('content:restore');
+  if actor=subject or actor=h.actor_id or actor=h.reporter_id then raise exception 'independent restoration reviewer required' using errcode='42501';end if;
+  if h.released_at is not null then
+    if h.released_by=actor and h.release_reason=review_reason and h.version=p_expected_version+1 then return jsonb_build_object('hold_id',h.id,'status','released','restored',h.restored,'reused',true);end if;
+    raise exception 'content hold release changed' using errcode='PT409';
+  end if;
+  if h.version is distinct from p_expected_version or h.version>=2147483647 then raise exception 'represented content hold changed' using errcode='PT409';end if;
+  update private.frontend_content_holds set version=version+1,released_at=clock_timestamp(),released_by=actor,release_reason=review_reason where id=h.id;
+  if not exists(select 1 from private.frontend_content_holds x where x.post_id=target and x.released_at is null) then
+    select * into state from private.frontend_post_hold_state where post_id=target for update;
+    if post.status='paused' and post.status_reason='staff_hidden' and post.revision<2147483647 then
+      if not state.content_changed and post.revision=state.hidden_revision and state.prior_status='live'
+        and internal.current_verified_identity(subject) is not null and exists(select 1 from private.frontend_restorable_posts x where x.id=target) then
+        update private.posts set status='live',status_reason=state.prior_reason,revision=revision+1 where id=target;
+        perform internal.write_post_projection(target);did_restore:=true;
+      else
+        update private.posts set status_reason=case when state.prior_status='paused' then state.prior_reason else 'staff_review_cleared' end,revision=revision+1 where id=target;
+      end if;
+    end if;
+    delete from private.frontend_post_hold_state where post_id=target;
+  end if;
+  update private.frontend_content_holds set restored=did_restore where id=h.id;
+  perform internal.staff_actor('content:restore');
+  return jsonb_build_object('hold_id',h.id,'status','released','restored',did_restore);
+end$function$;
+alter function internal.release_frontend_content_hold(uuid,integer,text) owner to postgres;
+revoke all on function internal.release_frontend_content_hold(uuid,integer,text) from public;
+grant execute on function internal.release_frontend_content_hold(uuid,integer,text) to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.set_post_media(p_post_id uuid, p_expected_revision integer, p_items jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare
+  actor uuid := internal.price_draft_actor();
+  post private.posts;
+  photo_limit integer;
+  video_limit integer;
+  rev integer;
+begin
+  -- Edit mutations lock the original before their copy, matching approval and cleanup.
+  perform original.id from private.posts original join private.posts copy on copy.edit_of=original.id
+    where copy.id=p_post_id and copy.owner_id=actor for update of original;
+  perform internal.assert_post_revision(p_expected_revision);
+  if jsonb_typeof(p_items) is distinct from 'array' or jsonb_array_length(p_items) > 62 then
+    raise exception 'invalid media list' using errcode = '22023';
+  end if;
+  select * into post from private.posts p where p.id = p_post_id and p.owner_id = actor for update;
+  if not found then raise exception 'post not found' using errcode = '22023'; end if;
+  if post.status not in ('draft', 'rejected', 'paused') then
+    raise exception 'only drafts can be edited' using errcode = '22023';
+  end if;
+  if post.revision <> p_expected_revision then raise exception 'post changed' using errcode = 'PT409'; end if;
+  if post.kind='event' then
+    photo_limit:=10; video_limit:=1; -- Free event product allowance, not paid funding.
+  else
+    select e.max_photos,e.max_videos into photo_limit,video_limit
+    from private.post_activations a join private.entitlements e on e.id=a.entitlement_id
+    where a.post_id=post.id and a.owner_id=actor and a.released_at is null
+      and internal.entitlement_usable(e.status,e.starts_at,e.ends_at)
+      and (e.area is null or e.area=post.area)
+      and (e.owner_id=actor or exists(select 1 from private.entitlement_members m where m.entitlement_id=e.id and m.member_id=actor))
+      and exists(select 1 from private.current_account_access u where u.id=e.owner_id)
+      and (e.source<>'retail_paid' or exists(select 1 from private.payments pay where pay.id=e.payment_id and pay.owner_id=e.owner_id and pay.status='complete'));
+    if not found then
+      -- Unfunded drafts can prepare the current public product allowance.
+      -- Submission still checks the exact entitlement selected atomically.
+      select max(v.max_photos),max(v.max_videos) into photo_limit,video_limit
+      from private.plan_versions v where v.is_public and v.retired_at is null and (v.area is null or v.area=post.area);
+      -- With no plan on sale (paid plans paused), drafts prepare the free first
+      -- post's allowance (internal.grant_intro_trial: 10 photos, 1 video).
+      if photo_limit is null or video_limit is null then
+        photo_limit:=10; video_limit:=1;
+      end if;
+    end if;
+  end if;
+  if photo_limit is null or video_limit is null then
+    raise exception 'no current media allowance available' using errcode='PT409';
+  end if;
+  if exists (select 1 from jsonb_array_elements(p_items) i
+      where jsonb_typeof(i) <> 'object'
+        or not (array(select jsonb_object_keys(i)) <@ array['object_id', 'purpose', 'position', 'focal_x', 'focal_y'])
+        or i->>'purpose' not in ('cover', 'gallery', 'logo', 'video')
+        or (i->>'object_id') !~ '^[0-9a-f-]{36}$' or (i->>'position') !~ '^[0-9]{1,2}$') then
+    raise exception 'invalid media item' using errcode = '22023';
+  end if;
+  -- Lock before checking state; cleanup takes the same lock and rechecks links.
+  perform m.id from private.media_objects m
+    where m.owner_id=actor and m.id in (select (i->>'object_id')::uuid from jsonb_array_elements(p_items) i)
+    order by m.id for update;
+  -- Every object must be the owner's, finished, and the right kind for its purpose.
+  if exists (select 1 from jsonb_array_elements(p_items) i
+      left join private.media_objects m on m.id = (i->>'object_id')::uuid
+      where m.id is null or m.owner_id <> actor or m.state <> 'ready'
+        or (i->>'purpose' = 'video') <> (m.kind = 'video')) then
+    raise exception 'media must be your own finished uploads of the right type' using errcode = '22023';
+  end if;
+  if (select count(*) from jsonb_array_elements(p_items) i where i->>'purpose' = 'cover') > 1
+    or (select count(*) from jsonb_array_elements(p_items) i where i->>'purpose' = 'logo') > 1 then
+    raise exception 'one cover and one logo at most' using errcode = '22023';
+  end if;
+  -- Per-post limits count distinct objects, so reuse costs nothing extra.
+  if (select count(distinct i->>'object_id') from jsonb_array_elements(p_items) i where i->>'purpose' <> 'video') > photo_limit
+    or (select count(distinct i->>'object_id') from jsonb_array_elements(p_items) i where i->>'purpose' = 'video') > video_limit then
+    raise exception 'media exceed the current post allowance' using errcode = '22023';
+  end if;
+  delete from private.post_media where post_id = post.id;
+  begin
+    insert into private.post_media (post_id, object_id, purpose, position, focal_x, focal_y)
+    select post.id, (i->>'object_id')::uuid, i->>'purpose', (i->>'position')::smallint,
+      (i->>'focal_x')::numeric, (i->>'focal_y')::numeric
+    from jsonb_array_elements(p_items) i;
+  exception when unique_violation or check_violation then
+    raise exception 'duplicate media position or invalid focal point' using errcode = '22023';
+  end;
+  update private.posts set revision = revision + 1, content_updated_at = statement_timestamp()
+  where id = post.id returning revision into rev;
+  perform internal.price_draft_actor(); -- final live owner/session check after all waits
+  return jsonb_build_object('id', post.id, 'revision', rev);
+end;
+$function$;
+alter function internal.set_post_media(uuid,integer,jsonb) owner to postgres;
+revoke all on function internal.set_post_media(uuid,integer,jsonb) from public;
+grant execute on function internal.set_post_media(uuid,integer,jsonb) to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.frontend_privacy_export_data(p_subject uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare entry record;items jsonb;row_count integer;result jsonb:='{}';size_so_far bigint:=0;
+begin
+  for entry in select * from (values
+    ('profile',$q$select account_id,display_name,bio,legal_first_name,legal_last_name,legal_name_locked_at,created_at,updated_at from private.profiles where account_id=$1$q$),
+    ('account',$q$select id,email,email_confirmed_at,phone,phone_confirmed_at,created_at,last_sign_in_at from auth.users where id=$1 and deleted_at is null$q$),
+    ('listing_drafts',$q$select category_key,price_mode,price_cents,price_negotiable,revision,expires_at from private.listing_price_drafts where owner_id=$1$q$),
+    ('posts',$q$select p.id,p.kind,p.area,p.category_key,p.activity_key,p.title,p.description,p.province_id,p.city_id,p.locality_label,
+      p.status,p.status_reason,p.created_at,p.submitted_at,p.published_at,p.visible_until,p.edit_of,
+      l.price_mode,l.price_cents,l.price_negotiable,l.attributes,b.business_type,e.starts_at,e.ends_at,e.timezone,
+      s.slug,d.data presentation,d.contacts contact_details,c.channels
+      from private.posts p left join private.listing_details l on l.post_id=p.id left join private.business_details b on b.post_id=p.id
+      left join private.event_details e on e.post_id=p.id left join private.post_slugs s on s.post_id=p.id
+      left join private.post_presentations d on d.post_id=p.id left join private.post_contacts c on c.post_id=p.id
+      where p.owner_id=$1 order by p.created_at,p.id$q$),
+    ('post_reviews',$q$select m.post_id,m.edit_id,m.decision,m.reason,m.decided_at,m.price_only
+      from private.moderation_log m join private.posts p on p.id=m.post_id where p.owner_id=$1 order by m.decided_at,m.id$q$),
+    ('media_metadata',$q$select id,kind,size_bytes,mime,width,height,state,created_at,deleted_at from private.media_objects where owner_id=$1 order by created_at,id$q$),
+    ('payments',$q$select id,product_kind,target_post_id,amount_cents,currency,status,fulfillment_status,merchant_reference,provider,created_at,completed_at
+      from private.payments where owner_id=$1 order by created_at,id$q$),
+    ('invoices',$q$select i.id,i.payment_id,i.invoice_number,i.amount_ex_vat_cents,i.vat_cents,i.total_cents,i.description,i.issued_at
+      from private.invoices i join private.payments p on p.id=i.payment_id where p.owner_id=$1 order by i.issued_at,i.id$q$),
+    ('customer_invoices',$q$select i.invoice_number,i.status,i.description,i.slots,i.unit_price_cents,i.total_cents,i.issued_at,i.due_on,
+      i.buyer_name,i.buyer_address,i.buyer_registration_number,i.buyer_saved_at,i.cooling_off_consent_at,i.cooling_off_consent_version,
+      i.payment_id,i.paid_at,i.voided_at,(select array_agg(l.payment_id order by l.attempt) from private.customer_invoice_payments l
+        where l.invoice_id=i.id) payment_attempts
+      from private.customer_invoices i where i.account_id=$1 order by i.issued_at,i.id$q$),
+    ('bank_transfers',$q$select t.id,t.payment_id,v.duration_days term_days,t.slots,t.amount_received_cents,t.bank_reference,t.cleared_on,
+      t.cooling_off_waiver_confirmed,t.status,t.recorded_at,t.confirmed_at,t.declined_at
+      from private.invoice_transfers t join private.plan_versions v on v.id=t.plan_version_id where t.account_id=$1 order by t.recorded_at,t.id$q$),
+    ('entitlements',$q$select id,source,area,slot_capacity,activations_per_period,activation_period_days,max_photos,max_videos,starts_at,ends_at,status,revoked_reason
+      from private.entitlements where owner_id=$1 order by created_at,id$q$),
+    ('post_activations',$q$select post_id,entitlement_id,activated_at,released_at,release_reason
+      from private.post_activations where owner_id=$1 order by activated_at,id$q$),
+    ('event_submissions',$q$select post_id,submitted_at,released_at,release_reason
+      from private.event_submissions where owner_id=$1 order by submitted_at,id$q$),
+    ('introductory_trials',$q$select post_id,trial_entitlement_id,claimed_at,converted_at
+      from private.post_trial_claims where owner_id=$1 order by claimed_at,post_id$q$),
+    ('posting_terms',$q$select version,document_hash,accepted_at from private.posting_terms_acceptances where owner_id=$1 order by accepted_at,version$q$),
+    ('signup_terms',$q$select version,document_hash,method,accepted_at from private.signup_terms_acceptances where account_id=$1$q$),
+    ('communication_choices',$q$select purpose,granted,wording_version,recorded_at from private.communication_choice_events
+      where account_id=$1 order by recorded_at,id$q$),
+    ('verification_cases',$q$select id,kind,status,created_at from private.evidence_cases where subject_id=$1 order by created_at,id$q$),
+    ('verification_reviews',$q$select r.case_id,r.reason,r.decision,r.created_at from private.verification_return_requests r join private.evidence_cases c on c.id=r.case_id
+      where c.subject_id=$1 order by r.created_at,r.id$q$),
+    ('evidence_metadata',$q$select id,case_id,purpose,state,size_bytes,created_at,retain_until,deleted_at
+      from private.evidence_artifacts where owner_id=$1 order by created_at,id$q$),
+    ('phone_verification',$q$select phone,verified_at,contact_changed_at,revoked_at from private.verification_phone_proofs where owner_id=$1 order by verified_at,id$q$),
+    ('locality_verification',$q$select province_id,city_id,assurance,confirmed_at from private.verification_localities where owner_id=$1$q$),
+    ('enquiries_sent',$q$select id,post_id,message,created_at from private.enquiries where sender_account_id=$1 order by created_at,id$q$),
+    ('enquiries_received',$q$select id,post_id,message,status,created_at from private.enquiries where owner_id=$1 order by created_at,id$q$),
+    ('notifications',$q$select id,kind,post_id,created_at,read_at from private.notifications where account_id=$1 order by created_at,id$q$),
+    ('reports_submitted',$q$select id,post_id,coalesce(frontend_reason,category) category,description,status,created_at,resolved_at
+      from private.reports where reporter_id=$1 order by created_at,id$q$),
+    ('moderation_decisions',$q$select id,kind,reason,starts_at,ends_at,active from private.frontend_appealable_actions
+      where account_id=$1 order by starts_at,id$q$),
+    ('appeals',$q$select id,action_id,kind,reason,status,reviewer_rationale,created_at,resolved_at from private.frontend_appeals
+      where appellant_id=$1 order by created_at,id$q$),
+    ('organisation_applications',$q$select id,organisation_id,programme_id,post_id,reason,member_reference,share_representative_name,consented_at,
+      status,info_request,info_response,decision_at,decision_note,created_at from private.organisation_applications where applicant_id=$1 order by created_at,id$q$),
+    ('organisation_affiliations',$q$select a.id,a.organisation_id,a.programme_id,a.post_id,a.affiliation_type,a.status,a.confirmed_at,a.revoked_at,a.revoke_reason
+      from private.organisation_affiliations a join private.posts p on p.id=a.post_id where p.owner_id=$1 order by a.created_at,a.id$q$),
+    ('organisation_roles',$q$select organisation_id,role,created_at from private.organisation_admins where account_id=$1 order by created_at,organisation_id$q$),
+    ('sponsorships',$q$select id,organisation_id,post_id,sponsor_type,status,starts_at,ends_at,ended_at,end_reason
+      from private.organisation_sponsorships where owner_id=$1 order by created_at,id$q$),
+    ('partner_account',$q$select id,code,status,commission_bps,created_at,updated_at from private.partners where account_id=$1 order by created_at,id$q$),
+    ('partner_commissions',$q$select c.id,c.base_cents,c.rate_bps,c.amount_cents,c.status,c.eligible_at,c.approved_at,c.paid_at,c.reversed_at
+      from private.partner_commissions c join private.partners p on p.id=c.partner_id where p.account_id=$1 order by c.created_at,c.id$q$),
+    ('acquisition',$q$select source,campaign,landing_path,referrer_host,first_touch_at,recorded_at from private.account_acquisitions where account_id=$1$q$),
+    ('account_closure',$q$select closed_at,evidence_delete_after from private.account_closures where user_id=$1$q$),
+    ('data_requests',$q$select id,type,description,status,received_at,due_by,extended_due_at,extension_reason,response_summary,completed_at
+      from private.privacy_requests where subject_user_id=$1 order by received_at,id$q$)
+  ) as registry(dataset,statement) loop
+    execute 'select coalesce(jsonb_agg(to_jsonb(x)),''[]''::jsonb),count(*) from ('||entry.statement||' limit 2501)x'
+      into items,row_count using p_subject;
+    size_so_far:=size_so_far+octet_length(items::text);
+    if row_count>2500 or size_so_far>4194304 then raise exception 'privacy export exceeds the direct delivery limit' using errcode='PT413';end if;
+    result:=result||jsonb_build_object(entry.dataset,items);
+  end loop;
+  return result;
+end$function$;
+alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
+revoke all on function internal.frontend_privacy_export_data(uuid) from public;
+
+create or replace view private.public_eligible_posts with (security_invoker=true) as
+ SELECT id
+   FROM ( SELECT p.id
+           FROM private.posts p
+             JOIN private.current_account_access u ON u.id = p.owner_id
+          WHERE p.status = 'live'::text AND p.published_at <= statement_timestamp() AND p.visible_until > statement_timestamp() AND (p.kind = 'event'::text AND (EXISTS ( SELECT 1
+                   FROM private.event_details e_1
+                  WHERE e_1.post_id = p.id AND e_1.ends_at > statement_timestamp())) OR p.kind <> 'event'::text AND (EXISTS ( SELECT 1
+                   FROM private.post_activations a
+                     JOIN private.entitlements e_1 ON e_1.id = a.entitlement_id
+                     JOIN private.current_account_access funding_owner ON funding_owner.id = e_1.owner_id
+                  WHERE a.post_id = p.id AND a.owner_id = p.owner_id AND a.released_at IS NULL AND internal.entitlement_usable(e_1.status, e_1.starts_at, e_1.ends_at) AND (e_1.area IS NULL OR e_1.area = p.area) AND (e_1.owner_id = p.owner_id OR (EXISTS ( SELECT 1
+                           FROM private.entitlement_members m
+                          WHERE m.entitlement_id = e_1.id AND m.member_id = p.owner_id))) AND (( SELECT count(DISTINCT pm.object_id) AS count
+                           FROM private.post_media pm
+                          WHERE pm.post_id = p.id AND pm.purpose <> 'video'::text)) <= e_1.max_photos AND (( SELECT count(DISTINCT pm.object_id) AS count
+                           FROM private.post_media pm
+                          WHERE pm.post_id = p.id AND pm.purpose = 'video'::text)) <= e_1.max_videos AND (e_1.source <> 'retail_paid'::text OR (EXISTS ( SELECT 1
+                           FROM private.payments pay
+                          WHERE pay.id = e_1.payment_id AND pay.owner_id = e_1.owner_id AND pay.status = 'complete'::text))))))) e
+  WHERE NOT (EXISTS ( SELECT 1
+           FROM private.frontend_content_holds h
+          WHERE h.post_id = e.id AND h.released_at IS NULL));
+alter view private.public_eligible_posts owner to postgres;
+revoke all on private.public_eligible_posts from public;
+
+create or replace view private.frontend_restorable_posts with (security_invoker=true) as
+ SELECT p.id
+   FROM private.posts p
+     JOIN private.current_account_access u ON u.id = p.owner_id
+  WHERE (p.status = ANY (ARRAY['live'::text, 'paused'::text])) AND p.published_at <= statement_timestamp() AND p.visible_until > statement_timestamp() AND (p.kind = 'event'::text AND (EXISTS ( SELECT 1
+           FROM private.event_details e
+          WHERE e.post_id = p.id AND e.ends_at > statement_timestamp())) OR p.kind <> 'event'::text AND (EXISTS ( SELECT 1
+           FROM private.post_activations a
+             JOIN private.entitlements e ON e.id = a.entitlement_id
+             JOIN private.current_account_access funding_owner ON funding_owner.id = e.owner_id
+          WHERE a.post_id = p.id AND a.owner_id = p.owner_id AND a.released_at IS NULL AND internal.entitlement_usable(e.status, e.starts_at, e.ends_at) AND (e.area IS NULL OR e.area = p.area) AND (e.owner_id = p.owner_id OR (EXISTS ( SELECT 1
+                   FROM private.entitlement_members m
+                  WHERE m.entitlement_id = e.id AND m.member_id = p.owner_id))) AND (( SELECT count(DISTINCT pm.object_id) AS count
+                   FROM private.post_media pm
+                  WHERE pm.post_id = p.id AND pm.purpose <> 'video'::text)) <= e.max_photos AND (( SELECT count(DISTINCT pm.object_id) AS count
+                   FROM private.post_media pm
+                  WHERE pm.post_id = p.id AND pm.purpose = 'video'::text)) <= e.max_videos AND (e.source <> 'retail_paid'::text OR (EXISTS ( SELECT 1
+                   FROM private.payments pay
+                  WHERE pay.id = e.payment_id AND pay.owner_id = e.owner_id AND pay.status = 'complete'::text))))));
+alter view private.frontend_restorable_posts owner to postgres;
+revoke all on private.frontend_restorable_posts from public;
+
 drop trigger entitlements_slot_chain_revoked on private.entitlements;
 drop function api.get_my_slots_v2();
 drop function internal.get_my_slots_v2();
@@ -708,10 +1169,12 @@ drop function api.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean);
 drop function internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean);
 drop function internal.issue_slot_line_entitlements(uuid);
 drop function internal.slot_grant_revoked();
-drop function internal.refresh_slot_chain_posts(uuid);
+drop function internal.refresh_slot_chain_documents(uuid);
+drop function internal.slot_grant_usable(uuid,text,timestamp with time zone,timestamp with time zone);
+drop function internal.individual_renewals_allowed(text,uuid,uuid,uuid[]);
 drop function internal.slot_lines_renewing(uuid);
 drop function internal.slot_lines_adding(uuid);
-drop function internal.individual_slots_extended(text,uuid,uuid,uuid[]);
+drop function internal.individual_slots_extended(text,uuid,uuid,uuid[],timestamp with time zone);
 drop function internal.slot_renewal_due(uuid,uuid);
 drop function internal.slot_chain_end(uuid);
 drop function internal.slot_chain_held(uuid);

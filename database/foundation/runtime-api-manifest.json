@@ -4651,7 +4651,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Caller-bound renewal quote: only the caller's own Individual slots that are still held (anything else reads as not found), each slot once, from 14 days before the slot ends, an Individual slot plan on sale, the renewal's cooling-off consent (with each slot's start date) recorded in the payment, an accepted ID review, the server total equal to the total shown and at most R10,000, and at most the person's limit of slots renewed ahead (every account of the same identity, renewals in open payments included); one payment with one line per slot, each naming the slot it renews. A renewal never adds a slot."
+      "authority": "Caller-bound renewal quote: only the caller's own Individual slots that are still held (anything else reads as not found), each slot once, from 14 days before the slot ends, an Individual slot plan on sale, the renewal's cooling-off consent (with each slot's start date) recorded in the payment, an accepted ID review, the server total equal to the total shown and at most R10,000, and at most the person's limit of slots renewed ahead (every account of the same identity, renewals in open payments included; while a staff-raised limit runs, at most the standard limit of renewals that start at or after it ends); one payment with one line per slot, each naming the slot it renews. A renewal never adds a slot."
     },
     {
       "name": "get_my_slots_v2",
@@ -4683,7 +4683,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Service-only sweep: moves each post whose slot period ended into the slot's next period that follows on without a break (never a post going live), and queues one renewal reminder per ending grant (once per slot end, keyed by the grant) for Individual slots ending within 3 days with no renewal following, while the account can still buy. Never starts a payment."
+      "authority": "Service-only housekeeping sweep (posts are funded through their slot at read time): moves each post that can move whose slot period ended into the slot's next period that follows on without a break (never a post going live; posts that cannot move are not picked), and queues one renewal reminder per ending grant (once per slot end, keyed by the grant) for Individual slots ending within 3 days with no renewal following, while the account can still buy. Never starts a payment."
     }
   ]
 }
