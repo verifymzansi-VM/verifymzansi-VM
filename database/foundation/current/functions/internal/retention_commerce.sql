@@ -18,10 +18,13 @@ begin
     where internal.retention_tax_year_due(i.issued_at) order by i.issued_at limit p_limit);
   get diagnostics invoices=row_count;
   delete from private.customer_invoice_payments where invoice_id in(select i.id from private.customer_invoices i
-    where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at)) order by i.issued_at limit p_limit);
+    where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at))
+      and not exists(select 1 from private.invoice_transfers t where t.customer_invoice_id=i.id)
+    order by i.issued_at limit p_limit);
   delete from private.customer_invoices where id in(select i.id from private.customer_invoices i
     where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at))
       and not exists(select 1 from private.customer_invoice_payments l where l.invoice_id=i.id)
+      and not exists(select 1 from private.invoice_transfers t where t.customer_invoice_id=i.id)
     order by i.issued_at limit p_limit);
   get diagnostics customer_invoices=row_count;
   delete from private.post_addon_windows where id in(select w.id from private.post_addon_windows w

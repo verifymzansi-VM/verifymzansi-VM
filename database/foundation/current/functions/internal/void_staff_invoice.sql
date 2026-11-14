@@ -38,6 +38,11 @@ begin
     raise exception 'a payment of this invoice is still open at Ozow; try again when it has closed'
       using errcode='PT409', detail='invoice_payment_open';
   end if;
+  if exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = inv.id
+      and t.status = 'awaiting_confirmation') then
+    raise exception 'a bank transfer to this invoice waits for confirmation; confirm or decline it first'
+      using errcode='PT409', detail='invoice_transfer_waiting';
+  end if;
   update private.payments p set status = 'cancelled', status_changed_at = pg_catalog.clock_timestamp()
     from private.customer_invoice_payments l
     where l.invoice_id = inv.id and l.payment_id = p.id and p.status = 'pending';

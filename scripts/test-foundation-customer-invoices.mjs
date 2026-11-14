@@ -24,9 +24,14 @@
 // invoice cannot be paid again; a paid invoice gives the same slots, receipt
 // event and partner commission as an Ozow checkout; later attempts, attempts
 // still being checked and a late settlement of an earlier attempt; another
-// open payment and the slot limit; voiding; refunds; the record rules; the
-// privacy export, the retention job and the audit trail; the grants; and that
-// the rollback refuses once an invoice was issued.
+// open payment and the slot limit; voiding; late money on a paid or void
+// invoice is kept but not delivered (and staff cannot deliver it); a bank
+// transfer recorded against the invoice and confirmed by a second staff member
+// pays it, and Pay now, voiding and a second transfer wait for it; two Pay now
+// requests at once; the South African year boundary; the slot checkout and an
+// invoice attempt; refunds; the record rules; the privacy export, the
+// retention job and the audit trail; the grants; and that the rollback refuses
+// once an invoice was issued.
 //
 //   node --import tsx scripts/test-foundation-customer-invoices.mjs
 //
@@ -40,6 +45,7 @@ import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 import {
   P30,
   applyAndProveRollback,
+  bankTransferCommands,
   createPaymentWorld,
   ozowPurchase,
   psqlSessions,
@@ -53,6 +59,7 @@ const UPDATE = "20261114041000_customer_invoice_pay_now.sql";
 const P90 = { id: "6a449457-2384-457e-9434-23c2b0e73127", cents: 20700 };
 const API = [
   "api.issue_staff_invoice(text,integer,integer,integer,text,uuid)",
+  "api.record_staff_invoice_transfer(text,text,text,boolean,text)",
   "api.void_staff_invoice(uuid,text)",
   "api.get_staff_invoices()",
   "api.get_staff_invoice(text)",
@@ -72,6 +79,9 @@ const INTERNAL = [
   "internal.customer_invoice_number(text)",
   "internal.customer_invoice_attempt_live(private.payments)",
   "internal.lock_my_issued_invoice(uuid,text)",
+  "internal.customer_invoice_day(timestamp with time zone)",
+  "internal.invoice_transfer_invoice_rule()",
+  "internal.customer_invoice_settled_elsewhere(uuid)",
 ];
 
 const started = Date.now();
@@ -97,6 +107,19 @@ try {
   const daysFromToday = (n) =>
     q(`select to_char((now() at time zone 'Africa/Johannesburg')::date + ${n},'YYYY-MM-DD');`);
   const number = (n) => `VM-${year}-${String(n).padStart(6, "0")}`;
+  const today = q("select to_char((now() at time zone 'Africa/Johannesburg')::date,'YYYY-MM-DD');");
+  const transfers = bankTransferCommands(kit, today);
+  /** A bank transfer recorded against an invoice (the staff invoice command). */
+  const transferSql = (
+    who,
+    invoiceNumber,
+    reference,
+    reason = "EFT cleared; written waiver on file"
+  ) =>
+    staff(
+      who,
+      `select api.record_staff_invoice_transfer(${sqlValue(invoiceNumber)},${sqlValue(reference)},'${today}',true,${sqlValue(reason)});`
+    );
 
   // ------------------------------------------------------------ commands
   const issueSql = (who, input) => {
@@ -462,7 +485,7 @@ try {
     fails(startSql(thandi, first.invoice_number, first.total_cents), "PT409", /billing details/);
     fails(saveSql(thandi, first.invoice_number, 1, { name: "x" }), "22023");
     fails(saveSql(thandi, first.invoice_number, 1, { address: "" }), "22023");
-    fails(saveSql(thandi, first.invoice_number, 1, { registration: "<script>" }), "22023");
+    fails(saveSql(thandi, first.invoice_number, 1, { registration: "2020/123456/07!" }), "22023");
     const saved = save(thandi, first.invoice_number, 1, {
       name: "  Fixture   Traders (Pty) Ltd ",
       address: "1 Example Road\r\nEmpangeni\r\n3880",
@@ -615,16 +638,30 @@ try {
     openAtOzow(lerato, three.payment_id);
     assert.equal(settle(three.payment_id).outcome, "completed");
     assert.equal(invoiceRow(invoice.invoice_number).payment_id, three.payment_id);
-    // An earlier attempt settling late: the money is kept, staff see it.
-    assert.equal(settle(two.payment_id, { key: "late" }).outcome, "completed");
+    // An earlier attempt settling late: the money is kept but nothing is
+    // delivered (staff refund it); staff cannot deliver it either.
+    assert.equal(settle(two.payment_id, { key: "late" }).outcome, "complete_unfulfillable_target");
+    assert.deepEqual(
+      [payment(two.payment_id).status, payment(two.payment_id).fulfillment],
+      ["complete", "needs_reconciliation"]
+    );
+    assert.equal(count(`private.entitlements where payment_id='${two.payment_id}'`), 0);
+    assert.equal(count(`private.partner_commissions where payment_id='${two.payment_id}'`), 0);
     assert.equal(invoiceRow(invoice.invoice_number).payment_id, three.payment_id);
-    assert.equal(
-      q(
-        `select needs_alert from private.payment_problems where payment_id='${two.payment_id}' and reason='conflicting_transaction';`
+    fails(
+      staff(
+        admin,
+        `select api.activate_staff_paid_payment('${two.payment_id}','Deliver the late payment');`
       ),
-      "t"
+      "PT409",
+      /another payment already paid this invoice/
     );
     assert.equal(mine(lerato, invoice.invoice_number).latest_attempt.attempt, 3);
+    assert.deepEqual(
+      json(staff(admin, `select api.get_staff_invoice('${invoice.invoice_number}');`))
+        .extra_payments,
+      [two.payment_id]
+    );
   });
 
   await check("another open payment for the slot term, and the slot limit, come first", () => {
@@ -714,6 +751,198 @@ try {
     assert.equal(invoiceRow(invoice.invoice_number).invoice_number, invoice.invoice_number);
   });
 
+  // ------------------------------------------------- review additions
+  await check("late money on a void invoice is kept, never delivered", () => {
+    const vusi = verified("inv-vusi");
+    const invoice = issue(admin, { email: vusi.email, term: 30, slots: 1 });
+    save(vusi, invoice.invoice_number, 1);
+    const attempt = start(vusi, invoice.invoice_number, invoice.total_cents);
+    openAtOzow(vusi, attempt.payment_id);
+    q(service(`select api.finish_unpaid_checkout('${attempt.payment_id}','expired');`));
+    json(voidSql(admin, invoice.invoice_id, "Customer chose another order"));
+    assert.equal(
+      settle(attempt.payment_id, { key: "late-void" }).outcome,
+      "complete_unfulfillable_target"
+    );
+    assert.equal(payment(attempt.payment_id).fulfillment, "needs_reconciliation");
+    assert.equal(count(`private.entitlements where payment_id='${attempt.payment_id}'`), 0);
+    assert.equal(invoiceRow(invoice.invoice_number).status, "void");
+    fails(
+      staff(
+        admin,
+        `select api.activate_staff_paid_payment('${attempt.payment_id}','Deliver the late payment');`
+      ),
+      "PT409",
+      /voided/
+    );
+  });
+
+  await check("two Pay now requests at once give one attempt", async () => {
+    const pule = verified("inv-pule");
+    const invoice = issue(admin, { email: pule.email, term: 30, slots: 1 });
+    save(pule, invoice.invoice_number, 1);
+    const payNow = startSql(pule, invoice.invoice_number, invoice.total_cents);
+    const [a, b] = await Promise.all([sessionAfter(0, payNow), sessionAfter(0, payNow)]);
+    assert.equal(a.status, 0, a.stderr);
+    assert.equal(b.status, 0, b.stderr);
+    const ids = [a, b].map((r) => JSON.parse(r.stdout.trim().split("\n").at(-1)).payment_id);
+    assert.equal(ids[0], ids[1]);
+    assert.equal(
+      count(`private.customer_invoice_payments where invoice_id='${invoice.invoice_id}'`),
+      1
+    );
+  });
+
+  await check("the invoice year is the South African year", () => {
+    assert.equal(
+      q("select internal.customer_invoice_day('2026-12-31 21:59:59+00');"),
+      "2026-12-31"
+    );
+    assert.equal(
+      q("select internal.customer_invoice_day('2026-12-31 22:00:00+00');"),
+      "2027-01-01"
+    );
+    // An invoice dated 00:00 on 1 January in South Africa cannot carry the
+    // year before; one at 23:59:59 on 31 December can (it then meets the
+    // number already used, not the year rule).
+    const insert = (
+      at
+    ) => `insert into private.customer_invoices(invoice_number,invoice_year,sequence_number,account_id,
+        plan_version_id,slots,unit_price_cents,total_cents,description,issued_at,due_on,issued_by,issue_reason,request_id,seller)
+      select 'VM-${year}-'||lpad(n.last_number::text,6,'0'),${year},n.last_number,'${thandi.id}','${P30.id}',1,6900,6900,
+        'Individual slot','${year}-12-31 ${at}+00',internal.customer_invoice_day('${year}-12-31 ${at}+00')+7,'${admin.id}',
+        'Inserted by hand',gen_random_uuid(),'{}' from private.customer_invoice_numbers n where n.invoice_year=${year};`;
+    fails(insert("22:00:00"), "23514", /next number of its year/);
+    fails(insert("21:59:59"), "23505");
+  });
+
+  await check("the slot checkout and an invoice attempt never pay an invoice twice", () => {
+    // Another number of slots: the unsent invoice attempt is closed; the
+    // invoice stays unpaid and Pay now starts a new attempt.
+    const lindi = verified("inv-lindi");
+    const invoice = issue(admin, { email: lindi.email, term: 30, slots: 2 });
+    save(lindi, invoice.invoice_number, 1);
+    const first = start(lindi, invoice.invoice_number, invoice.total_cents);
+    const ordinary = json(
+      member(lindi, `select api.start_slot_checkout('${P30.id}',1,${P30.cents},true);`)
+    );
+    assert.notEqual(ordinary.payment_id, first.payment_id);
+    assert.equal(payment(first.payment_id).status, "cancelled");
+    assert.equal(invoiceRow(invoice.invoice_number).status, "issued");
+    const second = start(lindi, invoice.invoice_number, invoice.total_cents);
+    assert.equal(second.merchant_reference, `${invoice.invoice_number}-2`);
+    assert.equal(payment(ordinary.payment_id).status, "cancelled");
+    // The same order: the checkout continues the invoice attempt, whose
+    // payment pays the invoice once.
+    const sello = verified("inv-sello");
+    const same = issue(admin, { email: sello.email, term: 30, slots: 1 });
+    save(sello, same.invoice_number, 1);
+    const attempt = start(sello, same.invoice_number, same.total_cents);
+    const checkout = json(
+      member(sello, `select api.start_slot_checkout('${P30.id}',1,${P30.cents},true);`)
+    );
+    assert.deepEqual([checkout.payment_id, checkout.reused], [attempt.payment_id, true]);
+    openAtOzow(sello, attempt.payment_id);
+    assert.equal(settle(attempt.payment_id).outcome, "completed");
+    assert.equal(invoiceRow(same.invoice_number).payment_id, attempt.payment_id);
+    assert.equal(count(`private.payments where owner_id='${sello.id}' and status='complete'`), 1);
+  });
+
+  await check(
+    "a bank transfer recorded on the invoice and confirmed by another staff member pays it",
+    () => {
+      const zanele = referred("inv-zanele");
+      const invoice = issue(admin, { email: zanele.email, term: 90, slots: 2 });
+      save(zanele, invoice.invoice_number, 1);
+      // The same order recorded without the invoice is refused: it would leave
+      // the invoice unpaid.
+      fails(
+        transfers.recordSql(admin, {
+          email: zanele.email,
+          term: 90,
+          slots: 2,
+          reference: "ZAN-0001",
+        }),
+        "PT409",
+        /unpaid invoice for this order/
+      );
+      const recorded = json(transferSql(admin, invoice.invoice_number, "ZAN-0001"));
+      assert.deepEqual(
+        [
+          recorded.status,
+          recorded.invoice_number,
+          recorded.repeated,
+          recorded.amount_received_cents,
+        ],
+        ["awaiting_confirmation", invoice.invoice_number, false, invoice.total_cents]
+      );
+      assert.match(recorded.reason, new RegExp(`^Invoice ${invoice.invoice_number}: `));
+      assert.equal(json(transferSql(admin, invoice.invoice_number, "zan 0001")).repeated, true);
+      // While it waits: no Pay now, no void, no second transfer.
+      assert.equal(mine(zanele, invoice.invoice_number).transfer_waiting, true);
+      fails(
+        startSql(zanele, invoice.invoice_number, invoice.total_cents),
+        "PT409",
+        /being checked/
+      );
+      fails(voidSql(admin, invoice.invoice_id), "PT409", /waits for confirmation/);
+      fails(transferSql(admin2, invoice.invoice_number, "ZAN-0002"), "PT409", /already waits/);
+      // The recorder cannot confirm; another admin's confirmation pays the invoice.
+      fails(transfers.confirmSql(admin, recorded.transfer_id), "42501");
+      const confirmed = transfers.confirm(admin2, recorded.transfer_id);
+      const row = invoiceRow(invoice.invoice_number);
+      assert.deepEqual([row.status, row.payment_id], ["paid", confirmed.payment_id]);
+      assert.equal(payment(confirmed.payment_id).provider, "invoice");
+      assert.equal(
+        payment(confirmed.payment_id).snapshot.customer_invoice_number,
+        invoice.invoice_number
+      );
+      const got = delivered(confirmed.payment_id);
+      assert.equal(got.slots.length, 2);
+      assert.equal(got.receipt_event, 1);
+      assert.equal(got.commissions.length, 2);
+      // Paid: no Pay now, no other transfer.
+      fails(startSql(zanele, invoice.invoice_number, invoice.total_cents), "PT409", /already paid/);
+      fails(transferSql(admin, invoice.invoice_number, "ZAN-0003"), "PT409", /already paid/);
+      assert.equal(mine(zanele, invoice.invoice_number).payment_status, "complete");
+    }
+  );
+
+  await check(
+    "an open Ozow payment and a bank transfer to the same invoice exclude each other",
+    () => {
+      const ayanda = verified("inv-ayanda");
+      const invoice = issue(admin, { email: ayanda.email, term: 30, slots: 1 });
+      save(ayanda, invoice.invoice_number, 1);
+      const attempt = start(ayanda, invoice.invoice_number, invoice.total_cents);
+      openAtOzow(ayanda, attempt.payment_id);
+      fails(transferSql(admin, invoice.invoice_number, "AYA-0001"), "PT409", /still open at Ozow/);
+      // The attempt closes; a transfer is recorded; a declined one frees Pay now.
+      q(service(`select api.finish_unpaid_checkout('${attempt.payment_id}','expired');`));
+      const recorded = json(transferSql(admin, invoice.invoice_number, "AYA-0001"));
+      json(transfers.declineSql(admin2, recorded.transfer_id, "No such credit on the statement"));
+      assert.equal(mine(ayanda, invoice.invoice_number).transfer_waiting, false);
+      // A second transfer waits; meanwhile the closed attempt settles late and
+      // pays the invoice: the transfer cannot be confirmed (decline it, refund).
+      const again = json(transferSql(admin, invoice.invoice_number, "AYA-0002"));
+      assert.equal(settle(attempt.payment_id, { key: "late-paid" }).outcome, "completed");
+      assert.equal(invoiceRow(invoice.invoice_number).payment_id, attempt.payment_id);
+      fails(transfers.confirmSql(admin2, again.transfer_id), "PT409", /already paid/);
+      json(transfers.declineSql(admin2, again.transfer_id, "Paid online instead; refund it"));
+      // A void invoice takes no transfer.
+      const other = issue(admin, { email: ayanda.email, term: 30, slots: 1 });
+      json(voidSql(admin, other.invoice_id, "Customer chose another order"));
+      fails(transferSql(admin, other.invoice_number, "AYA-0003"), "PT409", /voided/);
+      // A transfer row naming an invoice is that invoice's order.
+      fails(
+        `insert into private.invoice_transfers(account_id,plan_version_id,slots,amount_received_cents,bank_reference,cleared_on,
+        cooling_off_waiver_confirmed,reason,recorded_by,customer_invoice_id)
+       values('${ayanda.id}','${P30.id}',2,13800,'FAKE-0009',current_date,true,'Wrong order here','${admin.id}','${other.invoice_id}');`,
+        "23514"
+      );
+    }
+  );
+
   // ------------------------------------------------------------ refunds
   await check("refunds work on a paid invoice's payment as on any Ozow payment", () => {
     const busi = referred("inv-busi");
@@ -778,7 +1007,7 @@ try {
     fails(
       `update private.customer_invoices set status='paid',payment_id='${earlyPayment}',paid_at=now() where id='${issued}';`,
       "23514",
-      /names its complete Ozow payment/
+      /names its complete payment/
     );
     fails(
       `update private.customer_invoices set cooling_off_consent_at=now() where id='${issued}';`,
@@ -848,7 +1077,10 @@ try {
     const actions = json(`select jsonb_object_agg(action,n) from (select action,count(*) n
       from private.frontend_staff_audit_events where action like 'payment:customer_invoice_%' group by action) a;`);
     assert.ok(actions["payment:customer_invoice_issued"] >= 10);
-    assert.equal(actions["payment:customer_invoice_voided"], 2);
+    assert.equal(
+      actions["payment:customer_invoice_voided"],
+      count("private.customer_invoices where voided_by is not null")
+    );
     assert.match(
       q(
         `select reason from private.frontend_staff_audit_events where id='customer_invoice_issued:${first.invoice_id}';`

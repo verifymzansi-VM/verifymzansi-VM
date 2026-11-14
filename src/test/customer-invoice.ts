@@ -37,6 +37,7 @@ export const FIXTURE_INVOICE = {
   payment_id: null,
   payment_status: null,
   voided_at: null,
+  transfer_waiting: false,
   latest_attempt: null,
 } satisfies CustomerInvoice;
 

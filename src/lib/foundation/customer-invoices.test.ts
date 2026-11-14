@@ -5,6 +5,7 @@ import {
   invoiceRouteRefusal,
   issueStaffInvoice,
   readMyInvoice,
+  recordStaffInvoiceTransfer,
   readMyInvoices,
   readStaffInvoice,
   saveMyInvoiceBilling,
@@ -49,6 +50,7 @@ const staffView = {
   issue_reason: "Invoice requested by email",
   void_reason: null,
   attempts: 0,
+  extra_payments: [],
 };
 const quote = {
   payment_id: paymentId,
@@ -79,6 +81,7 @@ describe("customer invoice reads", () => {
     const { rpc, api } = fixture(refused("PT404", "invoice_unavailable", "invoice not found"));
     await expect(readMyInvoice(api, "VM-2026-000002")).resolves.toBeNull();
     await expect(readMyInvoice(api, "../admin")).resolves.toBeNull();
+    await expect(readMyInvoice(api, "%E0")).resolves.toBeNull();
     expect(rpc).toHaveBeenCalledTimes(1);
   });
 
@@ -230,6 +233,73 @@ describe("billing details and Pay now", () => {
 });
 
 describe("staff invoice commands", () => {
+  it("records a bank transfer to an invoice with the bank reference as typed", async () => {
+    const { rpc, api } = fixture(
+      ok({
+        transfer_id: invoiceId,
+        status: "awaiting_confirmation",
+        invoice_number: "VM-2026-000001",
+        repeated: false,
+        reason: "Invoice VM-2026-000001: EFT cleared",
+      })
+    );
+    await expect(
+      recordStaffInvoiceTransfer(api, {
+        invoiceNumber: "VM-2026-000001",
+        bankReference: "  FNB   2026-11 ",
+        clearedOn: "2026-11-14",
+        coolingOffWaiver: true,
+        reason: "EFT cleared on the statement",
+      })
+    ).resolves.toMatchObject({ status: "awaiting_confirmation", repeated: false });
+    expect(rpc).toHaveBeenCalledWith(
+      "record_staff_invoice_transfer",
+      {
+        p_invoice_number: "VM-2026-000001",
+        p_bank_reference: "FNB 2026-11",
+        p_cleared_on: "2026-11-14",
+        p_cooling_off_waiver: true,
+        p_reason: "EFT cleared on the statement",
+      },
+      { get: false }
+    );
+    await expect(
+      recordStaffInvoiceTransfer(api, {
+        invoiceNumber: "VM-2026-000001",
+        bankReference: "FNB 2026-11",
+        clearedOn: "2026-11-14",
+        coolingOffWaiver: false,
+        reason: "EFT cleared on the statement",
+      })
+    ).rejects.toMatchObject({ status: 422 });
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("explains a transfer or Pay now refused while another waits", async () => {
+    const { api } = fixture(
+      refused("PT409", "invoice_transfer_waiting"),
+      refused("PT409", "invoice_transfer_waiting")
+    );
+    await expect(
+      recordStaffInvoiceTransfer(api, {
+        invoiceNumber: "VM-2026-000001",
+        bankReference: "FNB 2026-11",
+        clearedOn: "2026-11-14",
+        coolingOffWaiver: true,
+        reason: "EFT cleared on the statement",
+      })
+    ).rejects.toMatchObject({ status: 409, message: /waits for a second staff member/ });
+    await expect(
+      startMyInvoicePayment(
+        api,
+        owner,
+        { invoiceNumber: "VM-2026-000001", expectedTotalCents: 62100, coolingOffConsent: true },
+        "https://verifymzansi.com",
+        service
+      )
+    ).rejects.toMatchObject({ status: 409, message: /do not need to pay again/ });
+  });
+
   it("issues an invoice with the request id and the audited reason", async () => {
     const { rpc, api } = fixture(ok({ ...staffView, repeated: false }));
     await issueStaffInvoice(api, {

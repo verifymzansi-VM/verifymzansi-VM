@@ -232,6 +232,30 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
     "invoice_amount_mismatch",
     [422, "The amount received is not the order total. Check the term and the number of slots."],
   ],
+  // Customer invoices (update 20261114041000).
+  [
+    "invoice_transfer_required",
+    [
+      409,
+      "This customer has an unpaid invoice for this order. Record the transfer on the invoice (Invoices), so it pays the invoice.",
+    ],
+  ],
+  [
+    "invoice_paid_elsewhere",
+    [
+      409,
+      "Another payment already paid this invoice, or it was voided. Refund this payment instead.",
+    ],
+  ],
+  [
+    "invoice_paid",
+    [409, "This invoice was already paid. Decline this transfer and return the money."],
+  ],
+  ["invoice_void", [409, "This invoice was voided. Decline this transfer and return the money."]],
+  [
+    "invoice_payment_open",
+    [409, "A payment of this invoice is still open at Ozow. Try again when it has closed."],
+  ],
 ]);
 
 async function settlePaymentCommand<T>(

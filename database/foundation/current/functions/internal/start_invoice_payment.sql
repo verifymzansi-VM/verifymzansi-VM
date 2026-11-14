@@ -18,6 +18,11 @@ begin
     raise exception 'cooling-off consent required before payment' using errcode='22023', detail='invoice_consent_required';
   end if;
   inv := internal.lock_my_issued_invoice(actor, p_invoice_number);
+  if exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = inv.id
+      and t.status = 'awaiting_confirmation') then
+    raise exception 'your bank transfer to this invoice is being checked; you do not need to pay again'
+      using errcode='PT409', detail='invoice_transfer_waiting';
+  end if;
   if inv.buyer_name is null then
     raise exception 'add your billing details before paying' using errcode='PT409', detail='invoice_billing_required';
   end if;

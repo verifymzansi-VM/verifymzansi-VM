@@ -3,6 +3,7 @@ import { requireStaff } from "@/lib/auth/require-staff";
 import { PageHeader } from "@/components/layout/page-header";
 import { InvoiceDocument } from "@/components/billing/invoice-document";
 import { PrintButton } from "@/components/billing/print-button";
+import { InvoiceTransferForm } from "@/components/admin/commercial/invoice-transfer-form";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readStaffInvoice } from "@/lib/foundation/customer-invoices";
 import { invoiceBankDetails, invoiceSellerAddress } from "@/lib/billing/invoice-settings";
@@ -21,10 +22,11 @@ export default async function StaffInvoicePage({
 }: {
   params: Promise<{ number: string }>;
 }) {
-  await requireStaff("payments:view");
+  const staff = await requireStaff("payments:view");
+  const canRecord = staff.assignedCapabilities?.includes("payments:refund") === true;
   const { number } = await params;
   const { api } = await readFoundationServerSession();
-  const invoice = await readStaffInvoice(api, decodeURIComponent(number));
+  const invoice = await readStaffInvoice(api, number);
   if (!invoice) notFound();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com";
   return (
@@ -74,6 +76,29 @@ export default async function StaffInvoicePage({
           </div>
         ) : null}
       </dl>
+      {invoice.extra_payments.length > 0 ? (
+        <p
+          role="alert"
+          className="no-print rounded-xl border border-destructive/40 p-3 text-sm text-destructive"
+        >
+          Paid twice: {invoice.extra_payments.length} other{" "}
+          {invoice.extra_payments.length === 1 ? "payment" : "payments"} of this invoice arrived
+          after it was paid or voided. Nothing was delivered for{" "}
+          {invoice.extra_payments.length === 1 ? "it" : "them"}; refund{" "}
+          {invoice.extra_payments.length === 1 ? "it" : "them"} on Payments &amp; Refunds (
+          {invoice.extra_payments.join(", ")}).
+        </p>
+      ) : null}
+      {invoice.status !== "issued" ? null : invoice.transfer_waiting ? (
+        <p role="status" className="no-print rounded-xl bg-muted/60 p-3 text-sm">
+          A bank transfer to this invoice waits for a second staff member on Payments &amp; Refunds.
+          Confirming it pays the invoice.
+        </p>
+      ) : canRecord ? (
+        <div className="no-print">
+          <InvoiceTransferForm invoiceNumber={invoice.invoice_number} />
+        </div>
+      ) : null}
       <InvoiceDocument
         invoice={invoice}
         sellerAddress={invoiceSellerAddress()}

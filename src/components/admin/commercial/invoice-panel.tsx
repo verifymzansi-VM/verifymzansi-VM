@@ -27,6 +27,10 @@ export type StaffInvoiceRow = {
   due_on: string;
   issued_by_me: boolean;
   latest_attempt: { status: string; checkout_open: boolean } | null;
+  /** A bank transfer to the invoice waits for a second staff member. */
+  transfer_waiting?: boolean;
+  /** Payments that arrived after the invoice was paid or voided (to refund). */
+  extra_payments?: string[];
 };
 
 const issuedDate = new Intl.DateTimeFormat("en-ZA", {
@@ -169,14 +173,22 @@ export function InvoicePanel({
                   {invoice.status === "issued" && invoice.latest_attempt?.checkout_open
                     ? " · paying now"
                     : ""}
+                  {invoice.status === "issued" && invoice.transfer_waiting
+                    ? " · bank transfer waiting"
+                    : ""}
                 </span>
+                {invoice.extra_payments?.length ? (
+                  <span className="w-full text-destructive" role="note">
+                    Paid twice: refund the later payment (open the invoice).
+                  </span>
+                ) : null}
                 <span className="w-full text-xs text-muted-foreground">
                   {invoice.description} · {invoice.customer_name ?? "Customer"} (
                   {invoice.customer_email ?? "no email"}) · issued{" "}
                   {issuedDate.format(new Date(invoice.issued_at))}
                   {invoice.issued_by_me ? " by you" : ""} · due {invoice.due_on}
                 </span>
-                {canIssue && invoice.status === "issued" ? (
+                {canIssue && invoice.status === "issued" && !invoice.transfer_waiting ? (
                   <Button
                     size="sm"
                     variant="outline"

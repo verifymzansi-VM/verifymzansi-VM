@@ -30,7 +30,7 @@ begin
   select * into prior from private.customer_invoices i where i.issued_by = actor and i.request_id = p_request_id;
   if found then
     if prior.account_id = buyer and prior.slots = p_slots and prior.issue_reason = btrim(p_reason)
-        and prior.due_on - (prior.issued_at at time zone 'Africa/Johannesburg')::date = p_due_days
+        and prior.due_on - internal.customer_invoice_day(prior.issued_at) = p_due_days
         and (select v.duration_days from private.plan_versions v where v.id = prior.plan_version_id) = p_term_days then
       return internal.customer_invoice_dto(prior, actor) || jsonb_build_object('repeated', true);
     end if;
@@ -65,7 +65,7 @@ begin
     raise exception 'the VAT registration setting changed; invoices need updating first'
       using errcode='PT409', detail='invoice_vat_status_changed';
   end if;
-  issued_on := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
+  issued_on := internal.customer_invoice_day(statement_timestamp());
   year_number := extract(year from issued_on)::integer;
   insert into private.customer_invoice_numbers as n (invoice_year, last_number) values (year_number, 1)
     on conflict (invoice_year) do update set last_number = n.last_number + 1

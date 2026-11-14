@@ -15,7 +15,7 @@ begin
   if tg_op = 'INSERT' then
     select n.last_number into counter from private.customer_invoice_numbers n
       where n.invoice_year = new.invoice_year for update;
-    issued_on := (new.issued_at at time zone 'Africa/Johannesburg')::date;
+    issued_on := internal.customer_invoice_day(new.issued_at);
     if counter is distinct from new.sequence_number
         or new.invoice_year <> extract(year from issued_on)::integer
         or new.due_on not between issued_on + 1 and issued_on + 30
@@ -48,12 +48,14 @@ begin
   end if;
   if new.status = 'paid' then
     select * into pay from private.payments p where p.id = new.payment_id;
-    if not found or pay.status <> 'complete' or pay.provider <> 'ozow' or pay.owner_id <> new.account_id
+    if not found or pay.status <> 'complete' or pay.owner_id <> new.account_id
         or pay.amount_cents <> new.total_cents or new.paid_at is distinct from pay.completed_at
-        or not exists(select 1 from private.customer_invoice_payments l
-          where l.payment_id = new.payment_id and l.invoice_id = new.id)
+        or not ((pay.provider = 'ozow' and exists(select 1 from private.customer_invoice_payments l
+            where l.payment_id = new.payment_id and l.invoice_id = new.id))
+          or (pay.provider = 'invoice' and exists(select 1 from private.invoice_transfers t
+            where t.payment_id = new.payment_id and t.customer_invoice_id = new.id and t.status = 'confirmed')))
         or new.voided_by is not null or new.voided_at is not null or new.void_reason is not null then
-      raise exception 'a paid invoice names its complete Ozow payment of that account and amount' using errcode='23514';
+      raise exception 'a paid invoice names its complete payment of that account and amount' using errcode='23514';
     end if;
   elsif new.status = 'void' then
     if new.payment_id is not null or new.paid_at is not null then

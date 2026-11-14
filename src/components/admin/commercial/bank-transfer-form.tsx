@@ -11,7 +11,15 @@ import {
   readForm,
   useCommercialAction,
 } from "./commercial-action";
-import { CustomerEmailField, SlotOrderFields, useCustomerCheck, useSlotOrder } from "./slot-order";
+import {
+  BankReferenceFields,
+  ClearedOnField,
+  CustomerEmailField,
+  SlotOrderFields,
+  southAfricanToday,
+  useCustomerCheck,
+  useSlotOrder,
+} from "./slot-order";
 
 /** Bank transfers above R50 000 are refused for now; the database decides. */
 const LIMIT_CENTS = 5_000_000;
@@ -25,11 +33,6 @@ export function randToCents(value: string): number | null {
   if (!/^\d{1,9}(\.\d{1,2})?$/.test(digits)) return null;
   const [rand, cents = ""] = digits.split(".");
   return Number(rand) * 100 + Number(cents.padEnd(2, "0"));
-}
-
-/** Today in South Africa, YYYY-MM-DD (the latest date money can have cleared). */
-function southAfricanToday(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(new Date());
 }
 
 /**
@@ -187,6 +190,10 @@ export function BankTransferPanel({
       title="Record a bank transfer"
       description="Only after the money has cleared in the bank account. Another staff member then confirms it; only then the customer's slots start and they get the receipt email."
     >
+      <p className="text-sm text-muted-foreground">
+        Paid an invoice? Record the transfer on the invoice (open it under Invoices), so it pays the
+        invoice.
+      </p>
       <WaitingTransfers waiting={waiting} canConfirm={canConfirm} />
       <ActionMessage message={check ? { tone: "error", text: check } : message} />
       {!canRecord ? null : !open ? (
@@ -280,37 +287,9 @@ export function BankTransferPanel({
                 </span>
               ) : null}
             </label>
-            <label className="block text-sm">
-              <span className="font-medium">Date it cleared</span>
-              <input
-                name="clearedOn"
-                type="date"
-                required
-                max={today}
-                defaultValue={today}
-                className="mt-1 block w-full rounded-md border bg-background p-2"
-              />
-            </label>
+            <ClearedOnField today={today} />
           </div>
-          <label className="block text-sm">
-            <span className="font-medium">Bank reference</span>
-            <input
-              name="bankReference"
-              required
-              maxLength={60}
-              autoComplete="off"
-              spellCheck={false}
-              className="mt-1 block w-full rounded-md border bg-background p-2 font-mono"
-              placeholder="As it appears on the bank statement"
-            />
-          </label>
-          <label className="flex items-start gap-2 text-sm">
-            <input name="coolingOffWaiver" type="checkbox" required className="mt-0.5 h-4 w-4" />
-            <span>
-              The customer agreed in writing that their slots start now and the 7-day cooling-off
-              does not apply.
-            </span>
-          </label>
+          <BankReferenceFields />
           <ReasonField />
           <div className="flex flex-wrap gap-2">
             <SubmitButton busy={busy || checking}>Record bank transfer</SubmitButton>

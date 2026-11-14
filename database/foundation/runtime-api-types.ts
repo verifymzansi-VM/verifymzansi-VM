@@ -122,6 +122,16 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       void_staff_invoice: { Args: { p_invoice_id: string; p_reason: string }; Returns: Json };
+      record_staff_invoice_transfer: {
+        Args: {
+          p_invoice_number: string;
+          p_bank_reference: string;
+          p_cleared_on: string;
+          p_cooling_off_waiver: boolean;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
       get_staff_invoices: { Args: Record<never, never>; Returns: Json };
       get_staff_invoice: { Args: { p_invoice_number: string }; Returns: Json };
       get_my_invoices: { Args: Record<never, never>; Returns: Json };

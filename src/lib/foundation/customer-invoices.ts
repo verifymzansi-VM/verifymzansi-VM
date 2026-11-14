@@ -76,6 +76,8 @@ export const customerInvoiceSchema = z.strictObject({
   payment_id: z.uuid().nullable(),
   payment_status: paymentStatus.nullable(),
   voided_at: instant.nullable(),
+  /** A bank transfer to this invoice waits for a second staff member. */
+  transfer_waiting: z.boolean(),
   latest_attempt: z
     .strictObject({
       payment_id: z.uuid(),
@@ -96,6 +98,8 @@ export const staffInvoiceSchema = customerInvoiceSchema.extend({
   issue_reason: z.string().min(5).max(500),
   void_reason: z.string().min(5).max(500).nullable(),
   attempts: z.number().int().min(0).max(20),
+  /** Payments of this invoice besides the one that paid it (to refund). */
+  extra_payments: z.array(z.uuid()).max(20),
 });
 export type StaffInvoice = z.infer<typeof staffInvoiceSchema>;
 
@@ -140,6 +144,10 @@ const MEMBER_REFUSALS: ReadonlyMap<
     ],
   ],
   ["invoice_billing_required", [409, "Add your billing details before you pay."]],
+  [
+    "invoice_transfer_waiting",
+    [409, "Your bank transfer to this invoice is being checked. You do not need to pay again."],
+  ],
   ["invoice_revision_changed", [409, "This invoice changed. Reload the page and try again."]],
   [
     "invoice_consent_required",
@@ -380,6 +388,33 @@ const STAFF_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new
     [409, "A payment of this invoice is still open at Ozow. Try again when it has closed."],
   ],
   [
+    "invoice_transfer_waiting",
+    [
+      409,
+      "A bank transfer to this invoice waits for a second staff member. Confirm or decline it first.",
+    ],
+  ],
+  ["bank_reference_required", [422, "Enter the bank reference from the bank statement."]],
+  [
+    "bank_reference_invalid",
+    [422, "The bank reference is 4 to 60 letters, digits, spaces or . _ : / -."],
+  ],
+  [
+    "bank_reference_used",
+    [
+      409,
+      "A bank transfer with that reference, amount and date is already waiting or confirmed. Check the payments list before recording it.",
+    ],
+  ],
+  [
+    "cleared_date_invalid",
+    [422, "Enter the date the money cleared: today or in the last 90 days."],
+  ],
+  [
+    "cooling_off_waiver_required",
+    [422, "Confirm the customer agreed in writing to the cooling-off waiver."],
+  ],
+  [
     "staff_review_required",
     [403, "You need a current accepted ID review of your own to issue invoices."],
   ],
@@ -421,6 +456,47 @@ export function issueStaffInvoice(api: FoundationAuthenticatedApi, input: IssueS
       { get: false }
     ),
     staffInvoiceSchema.extend({ repeated: z.boolean() })
+  );
+}
+
+export const invoiceTransferInput = z.strictObject({
+  invoiceNumber: invoiceNumber,
+  bankReference: z.string().max(200),
+  clearedOn: z.iso.date(),
+  coolingOffWaiver: z.boolean(),
+  reason: z.string().trim().min(5).max(478),
+});
+
+/** Records a cleared bank transfer to an invoice: the invoice's order, waiting
+ * for a second staff member, whose confirmation pays the invoice (audited). */
+export async function recordStaffInvoiceTransfer(
+  api: FoundationAuthenticatedApi,
+  input: z.infer<typeof invoiceTransferInput>
+) {
+  const value = invoiceTransferInput.parse(input);
+  if (value.coolingOffWaiver !== true)
+    throw new FoundationStaffCommandError(
+      422,
+      "Confirm the customer agreed in writing to the cooling-off waiver."
+    );
+  return settleInvoiceStaffCommand(
+    api.rpc(
+      "record_staff_invoice_transfer",
+      {
+        p_invoice_number: value.invoiceNumber,
+        p_bank_reference: value.bankReference.trim().replace(/\s+/g, " "),
+        p_cleared_on: value.clearedOn,
+        p_cooling_off_waiver: true,
+        p_reason: value.reason,
+      },
+      { get: false }
+    ),
+    z.object({
+      transfer_id: z.uuid(),
+      status: z.literal("awaiting_confirmation"),
+      invoice_number: invoiceNumber,
+      repeated: z.boolean(),
+    })
   );
 }
 

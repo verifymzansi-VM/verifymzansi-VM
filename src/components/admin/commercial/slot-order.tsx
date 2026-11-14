@@ -158,3 +158,52 @@ export function SlotOrderFields({
     </div>
   );
 }
+
+/** Today in South Africa, YYYY-MM-DD (the latest date money can have cleared). */
+export function southAfricanToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(new Date());
+}
+
+/** The date a bank transfer cleared: today or earlier. */
+export function ClearedOnField({ today }: { today: string }) {
+  return (
+    <label className="block text-sm">
+      <span className="font-medium">Date it cleared</span>
+      <input
+        name="clearedOn"
+        type="date"
+        required
+        max={today}
+        defaultValue={today}
+        className="mt-1 block w-full rounded-md border bg-background p-2"
+      />
+    </label>
+  );
+}
+
+/** The bank reference as on the statement and the written cooling-off waiver. */
+export function BankReferenceFields() {
+  return (
+    <>
+      <label className="block text-sm">
+        <span className="font-medium">Bank reference</span>
+        <input
+          name="bankReference"
+          required
+          maxLength={60}
+          autoComplete="off"
+          spellCheck={false}
+          className="mt-1 block w-full rounded-md border bg-background p-2 font-mono"
+          placeholder="As it appears on the bank statement"
+        />
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input name="coolingOffWaiver" type="checkbox" required className="mt-0.5 h-4 w-4" />
+        <span>
+          The customer agreed in writing that their slots start now and the 7-day cooling-off does
+          not apply.
+        </span>
+      </label>
+    </>
+  );
+}

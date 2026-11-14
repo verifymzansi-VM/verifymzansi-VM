@@ -91,6 +91,14 @@ begin
     raise exception 'the amount received is not the order total of % cents', plan.price_cents * p_slots
       using errcode='PT428', detail='invoice_amount_mismatch';
   end if;
+  -- A transfer for the order of one of the customer's unpaid invoices is
+  -- recorded against that invoice (api.record_staff_invoice_transfer), so it
+  -- pays the invoice.
+  if exists(select 1 from private.customer_invoices i where i.account_id = buyer and i.status = 'issued'
+      and i.plan_version_id = plan.id and i.slots = p_slots and i.total_cents = p_amount_cents) then
+    raise exception 'this customer has an unpaid invoice for this order; record the transfer on the invoice'
+      using errcode='PT409', detail='invoice_transfer_required';
+  end if;
   -- An early check of the slot limit; confirmation checks it again.
   if (internal.individual_slots_counted(fingerprint, buyer, null)->>'held')::integer + p_slots
       > internal.individual_slot_limit(fingerprint) then

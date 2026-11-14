@@ -20,6 +20,8 @@ AS $function$
     'paid_at', i.paid_at, 'payment_id', i.payment_id,
     'payment_status', (select p.status from private.payments p where p.id = i.payment_id),
     'voided_at', i.voided_at,
+    'transfer_waiting', exists(select 1 from private.invoice_transfers t
+      where t.customer_invoice_id = i.id and t.status = 'awaiting_confirmation'),
     'latest_attempt', (select jsonb_build_object('payment_id', p.id, 'attempt', l.attempt, 'status', p.status,
         'checkout_open', p.status = 'pending' and p.checkout_url is not null
           and p.checkout_expires_at > pg_catalog.clock_timestamp())
@@ -31,7 +33,10 @@ AS $function$
     'issued_by_me', internal.same_identity(i.issued_by, p_staff),
     'issued_by_name', internal.profile_public_name((select f.display_name from private.profiles f where f.account_id = i.issued_by)),
     'issue_reason', i.issue_reason, 'void_reason', i.void_reason,
-    'attempts', (select count(*) from private.customer_invoice_payments l where l.invoice_id = i.id)) end;
+    'attempts', (select count(*) from private.customer_invoice_payments l where l.invoice_id = i.id),
+    'extra_payments', coalesce((select jsonb_agg(p.id order by p.completed_at, p.id)
+      from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
+      where l.invoice_id = i.id and p.completed_at is not null and p.id is distinct from i.payment_id), '[]'::jsonb)) end;
 $function$;
 alter function internal.customer_invoice_dto(private.customer_invoices,uuid) owner to postgres;
 revoke all on function internal.customer_invoice_dto(private.customer_invoices,uuid) from public;

@@ -84,6 +84,12 @@ describe("paying an invoice", () => {
     expect(assign).not.toHaveBeenCalled();
   });
 
+  it("asks for no payment while a bank transfer to the invoice is checked", () => {
+    render(<InvoicePayPanel {...props} transferWaiting />);
+    expect(screen.getByRole("status")).toHaveTextContent("You do not need to pay again");
+    expect(screen.queryByRole("button", { name: /Pay now|Continue payment/ })).toBeNull();
+  });
+
   it("offers to continue an open payment, and only printing once paid or cancelled", () => {
     const { rerender } = render(<InvoicePayPanel {...props} checkoutOpen />);
     expect(screen.getByRole("button", { name: "Continue payment" })).toBeInTheDocument();

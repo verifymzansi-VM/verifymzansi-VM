@@ -2,11 +2,11 @@
 -- Staff issue an invoice for a customer's Individual slots; the customer adds
 -- their billing details, ticks the cooling-off box and pays it with Ozow. The
 -- payment is an ordinary Ozow payment (provider 'ozow') whose reference is the
--- invoice number, settled by the existing notice and status check
--- (internal.apply_provider_event, unchanged), so its slots, receipt email,
--- partner commission and refunds are exactly those of an Ozow checkout. A
--- bank transfer stays possible through the staff bank transfer record
--- (20261113162457), matched to the invoice number by staff.
+-- invoice number, settled by the existing notice and status check, so its
+-- slots, receipt email, partner commission and refunds are exactly those of an
+-- Ozow checkout. A bank transfer to the invoice is recorded by staff against
+-- the invoice and, once a second staff member confirms it (20261113162457),
+-- pays the invoice the same way.
 --
 -- Apply after 20261113223806_bank_transfer_and_consent_fixes.sql (it refuses
 -- with 55000 unless the bodies it builds on or replaces are the reviewed
@@ -42,9 +42,31 @@
 --    invoice attempt is completed (by Ozow's notice or the status check), the
 --    invoice becomes paid with that payment and its completion time. Money
 --    for an invoice that is already paid or void (an earlier attempt settling
---    late) is never refused: the payment completes as any Ozow payment does,
---    and is recorded as a payment problem (conflicting_transaction) so staff
---    see "paid twice" and refund it.
+--    late) is never refused, but nothing is delivered for it:
+--    internal.apply_provider_event (full body; one added condition) records
+--    the payment complete and 'needs_reconciliation' (no slots, no
+--    commission), its outcome is complete_unfulfillable_target, which the
+--    website records as a payment problem from the notice or the status check
+--    that saw it, and staff refund it. internal.activate_staff_paid_payment
+--    (full body; one added check) refuses to deliver such a payment (PT409
+--    invoice_paid_elsewhere).
+-- 4a. Bank transfers to an invoice. private.invoice_transfers gains
+--    customer_invoice_id. New staff command
+--    api.record_staff_invoice_transfer(p_invoice_number, p_bank_reference,
+--    p_cleared_on, p_cooling_off_waiver, p_reason) (the bank transfer rules
+--    of 20261113223806, capability payments:refund): the account, plan,
+--    slots and amount come from the invoice, which must be issued (PT409
+--    invoice_paid, invoice_void), have no payment attempt that could still be
+--    paid (PT409 invoice_payment_open) and no other transfer waiting (PT409
+--    invoice_transfer_waiting; one waiting or confirmed transfer per invoice,
+--    a unique index). While it waits, Pay now and voiding are refused (PT409
+--    invoice_transfer_waiting). The second staff member's confirmation
+--    (internal.confirm_staff_invoice_payment, full body) rechecks the invoice
+--    and marks it paid with the bank transfer payment; a declined transfer
+--    leaves the invoice unpaid. Recording a transfer without the invoice for
+--    the exact order of a customer's unpaid invoice is refused (PT409
+--    invoice_transfer_required; internal.record_staff_invoice_payment, full
+--    body), so a bank transfer to an invoice always pays it.
 -- 5. Staff commands (capability payments:refund, recent second factor, the
 --    staff member's own current accepted ID review, never for an account of
 --    their own identity or one a partner account of their identity referred):
@@ -75,7 +97,8 @@
 -- 8. The privacy export holds the member's invoices (customer_invoices; never
 --    the staff member or staff notes). The retention job removes invoices and
 --    their attempt links five tax years after they were paid, voided or (if
---    neither) issued, and skips payments an invoice or a recorded bank
+--    neither) issued (an invoice a recorded bank transfer names is kept, as
+--    the transfer is), and skips payments an invoice or a recorded bank
 --    transfer still names (before, such a payment would have stopped the
 --    job). internal.retention_commerce and internal.frontend_privacy_export_data
 --    are replaced (full bodies).
@@ -97,19 +120,33 @@ declare shape text;
 begin
   for shape in
     select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)),'absent')
-    from (values ('internal.retention_commerce(integer)'),('internal.frontend_privacy_export_data(uuid)')) v(sig)
+    from (values ('internal.retention_commerce(integer)'),('internal.frontend_privacy_export_data(uuid)'),
+      ('internal.apply_provider_event(jsonb)'),('internal.activate_staff_paid_payment(uuid,text)'),
+      ('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)'),
+      ('internal.confirm_staff_invoice_payment(uuid)')) v(sig)
   loop
     if shape not in (
         'internal.retention_commerce(integer) 53418aba6b15cf8fa73dc49f25a2f8c3',
-        'internal.retention_commerce(integer) f860135f948386cdecfae78110e9ccf3',
+        'internal.retention_commerce(integer) 31a0439565fcefacf87830f0f94b5008',
         'internal.frontend_privacy_export_data(uuid) d30c545386536a718e824d1ec56f03ce',
-        'internal.frontend_privacy_export_data(uuid) cea6d5d00f5def4143bde4daa5b84373') then
+        'internal.frontend_privacy_export_data(uuid) cea6d5d00f5def4143bde4daa5b84373',
+        'internal.apply_provider_event(jsonb) 8a226003da741381225c11dfd1e44308',
+        'internal.apply_provider_event(jsonb) 8654ccb29310b12224a153f1327325e4',
+        'internal.activate_staff_paid_payment(uuid,text) d388959dfaee486c2d82b3d5e6f5e709',
+        'internal.activate_staff_paid_payment(uuid,text) 355b954c1a0edc055a73485def59cd7c',
+        'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) fa71c56d4a686ea343f23d551985af9e',
+        'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) 62c68be6e97ec0e9be9b98473e971b02',
+        'internal.confirm_staff_invoice_payment(uuid) 216b293e1b4104ee91657556956b2204',
+        'internal.confirm_staff_invoice_payment(uuid) c78087aed00aff1cba013fb4b7ad419e') then
       raise exception 'customer invoice precondition: % is not a reviewed body', shape using errcode='55000';
     end if;
   end loop;
   for shape in
     select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)),'absent')
-    from (values ('internal.apply_provider_event(jsonb)'),('internal.claim_checkout_request(uuid,uuid)'),
+    from (values ('internal.claim_checkout_request(uuid,uuid)'),
+      ('internal.lock_invoice_transfer_for_review(uuid,uuid)'),('internal.invoice_transfer_dto(private.invoice_transfers,uuid)'),
+      ('internal.invoice_transfer_guard()'),('internal.payment_delivery_commission(uuid)'),
+      ('internal.payment_invoice_vat(private.payments)'),
       ('internal.complete_checkout_request(uuid,uuid,uuid,text,text)'),('internal.price_draft_actor()'),
       ('internal.staff_actor(text)'),('internal.assert_staff_payment_actor(uuid,uuid)'),
       ('internal.assert_staff_not_referrer(uuid,uuid)'),('internal.invoice_customer_by_email(text)'),
@@ -121,8 +158,12 @@ begin
       ('internal.payment_partner_commission()'),('internal.retention_tax_year_due(timestamp with time zone)')) v(sig)
   loop
     if shape not in (
-        'internal.apply_provider_event(jsonb) 8a226003da741381225c11dfd1e44308',
         'internal.claim_checkout_request(uuid,uuid) d29afcd49f72e712602914d6ecb4d8f5',
+        'internal.lock_invoice_transfer_for_review(uuid,uuid) bf73096cddd3d08eb23f6b0dd87967ee',
+        'internal.invoice_transfer_dto(private.invoice_transfers,uuid) b91dbdd96bec847ddb165d6a663cc7cb',
+        'internal.invoice_transfer_guard() 2797782f05696a8cbabcd243efb716e6',
+        'internal.payment_delivery_commission(uuid) 173b97b47147f69d097daba72def56d9',
+        'internal.payment_invoice_vat(private.payments) 8ba4ca6c4ea0207abece5a9fdc57336e',
         'internal.complete_checkout_request(uuid,uuid,uuid,text,text) d392cd27ab1a56d820b917a27118f150',
         'internal.price_draft_actor() 1d70271a4447ba5d1377f3f64a6cf029',
         'internal.staff_actor(text) 269f0871f156f57c029cedcab72f6c3f',
@@ -149,6 +190,26 @@ begin
     or to_regclass('private.invoice_merchant_config') is null
     or coalesce(pg_get_viewdef('private.frontend_staff_audit_events'::regclass) not like '%invoice_transfers%', true) then
     raise exception 'customer invoice precondition: apply 20261113162457 and 20261113223806 first' using errcode='55000';
+  end if;
+  -- The bank transfer record of 20261113162457, with or without this update's
+  -- invoice column.
+  select 'private.invoice_transfers '||coalesce((select string_agg(a.attname||':'||pg_catalog.format_type(a.atttypid,a.atttypmod)
+      ||case when a.attnotnull then '!' else '' end, ',' order by a.attnum)
+    from pg_catalog.pg_attribute a where a.attrelid=to_regclass('private.invoice_transfers') and a.attnum>0 and not a.attisdropped),'absent')
+  into shape;
+  if shape not in ('private.invoice_transfers id:uuid!,account_id:uuid!,plan_version_id:uuid!,slots:integer!,'
+        ||'amount_received_cents:bigint!,bank_reference:text!,cleared_on:date!,'
+        ||'cooling_off_waiver_confirmed:boolean!,reason:text!,recorded_by:uuid!,'
+        ||'recorded_at:timestamp with time zone!,status:text!,confirmed_by:uuid,'
+        ||'confirmed_at:timestamp with time zone,payment_id:uuid,declined_by:uuid,'
+        ||'declined_at:timestamp with time zone,decline_reason:text',
+      'private.invoice_transfers id:uuid!,account_id:uuid!,plan_version_id:uuid!,slots:integer!,'
+        ||'amount_received_cents:bigint!,bank_reference:text!,cleared_on:date!,'
+        ||'cooling_off_waiver_confirmed:boolean!,reason:text!,recorded_by:uuid!,'
+        ||'recorded_at:timestamp with time zone!,status:text!,confirmed_by:uuid,'
+        ||'confirmed_at:timestamp with time zone,payment_id:uuid,declined_by:uuid,'
+        ||'declined_at:timestamp with time zone,decline_reason:text,customer_invoice_id:uuid') then
+    raise exception 'customer invoice precondition: bank transfer table drift: %', shape using errcode='55000';
   end if;
   select 'private.customer_invoice_numbers '||coalesce((select string_agg(a.attname||':'||pg_catalog.format_type(a.atttypid,a.atttypmod)
       ||case when a.attnotnull then '!' else '' end, ',' order by a.attnum)
@@ -259,6 +320,27 @@ create table if not exists private.customer_invoice_payments (
 alter table private.customer_invoice_payments enable row level security;
 revoke all on table private.customer_invoice_payments from public, anon, authenticated, service_role;
 
+-- 3a. A recorded bank transfer may name the invoice it pays: one waiting or
+-- confirmed transfer per invoice. Added while the table is briefly locked.
+alter table private.invoice_transfers add column if not exists customer_invoice_id uuid
+  references private.customer_invoices (id) on delete restrict;
+create unique index if not exists invoice_transfers_customer_invoice_open_idx on private.invoice_transfers
+  (customer_invoice_id) where customer_invoice_id is not null and status <> 'declined';
+create index if not exists invoice_transfers_customer_invoice_idx on private.invoice_transfers
+  (customer_invoice_id) where customer_invoice_id is not null;
+
+-- The South African calendar day of an instant (the invoice's day and year).
+CREATE OR REPLACE FUNCTION internal.customer_invoice_day(p_at timestamp with time zone)
+ RETURNS date
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select (p_at at time zone 'Africa/Johannesburg')::date;
+$function$;
+alter function internal.customer_invoice_day(timestamp with time zone) owner to postgres;
+revoke all on function internal.customer_invoice_day(timestamp with time zone) from public, anon, authenticated, service_role;
+
 -- The counter starts at 1, moves up by exactly one and is never removed.
 CREATE OR REPLACE FUNCTION internal.customer_invoice_number_guard()
  RETURNS trigger
@@ -317,8 +399,8 @@ create constraint trigger customer_invoice_numbers_gapless after insert or updat
 -- billing details or consent; its issued facts never change; the customer's
 -- billing details change only while it is issued (each change a new
 -- revision) and the consent is recorded once; it becomes paid (naming its
--- complete Ozow attempt of that account and amount) or void, once. Only the
--- retention job removes it.
+-- complete Ozow attempt, or its confirmed bank transfer's payment, of that
+-- account and amount) or void, once. Only the retention job removes it.
 CREATE OR REPLACE FUNCTION internal.customer_invoice_guard()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -333,7 +415,7 @@ begin
   if tg_op = 'INSERT' then
     select n.last_number into counter from private.customer_invoice_numbers n
       where n.invoice_year = new.invoice_year for update;
-    issued_on := (new.issued_at at time zone 'Africa/Johannesburg')::date;
+    issued_on := internal.customer_invoice_day(new.issued_at);
     if counter is distinct from new.sequence_number
         or new.invoice_year <> extract(year from issued_on)::integer
         or new.due_on not between issued_on + 1 and issued_on + 30
@@ -366,12 +448,14 @@ begin
   end if;
   if new.status = 'paid' then
     select * into pay from private.payments p where p.id = new.payment_id;
-    if not found or pay.status <> 'complete' or pay.provider <> 'ozow' or pay.owner_id <> new.account_id
+    if not found or pay.status <> 'complete' or pay.owner_id <> new.account_id
         or pay.amount_cents <> new.total_cents or new.paid_at is distinct from pay.completed_at
-        or not exists(select 1 from private.customer_invoice_payments l
-          where l.payment_id = new.payment_id and l.invoice_id = new.id)
+        or not ((pay.provider = 'ozow' and exists(select 1 from private.customer_invoice_payments l
+            where l.payment_id = new.payment_id and l.invoice_id = new.id))
+          or (pay.provider = 'invoice' and exists(select 1 from private.invoice_transfers t
+            where t.payment_id = new.payment_id and t.customer_invoice_id = new.id and t.status = 'confirmed')))
         or new.voided_by is not null or new.voided_at is not null or new.void_reason is not null then
-      raise exception 'a paid invoice names its complete Ozow payment of that account and amount' using errcode='23514';
+      raise exception 'a paid invoice names its complete payment of that account and amount' using errcode='23514';
     end if;
   elsif new.status = 'void' then
     if new.payment_id is not null or new.paid_at is not null then
@@ -427,9 +511,34 @@ drop trigger if exists customer_invoice_payments_guard on private.customer_invoi
 create trigger customer_invoice_payments_guard before insert or update or delete on private.customer_invoice_payments
   for each row execute function internal.customer_invoice_payment_guard();
 
+-- A recorded bank transfer that names an invoice is that invoice's order: its
+-- account, plan, slots and total, on an issued invoice.
+CREATE OR REPLACE FUNCTION internal.invoice_transfer_invoice_rule()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare inv private.customer_invoices;
+begin
+  if new.customer_invoice_id is null then return new; end if;
+  select * into inv from private.customer_invoices i where i.id = new.customer_invoice_id;
+  if not found or inv.status <> 'issued' or inv.account_id <> new.account_id
+      or inv.plan_version_id <> new.plan_version_id or inv.slots <> new.slots
+      or inv.total_cents <> new.amount_received_cents then
+    raise exception 'a bank transfer to an invoice is that issued invoice''s order' using errcode='23514';
+  end if;
+  return new;
+end;
+$function$;
+alter function internal.invoice_transfer_invoice_rule() owner to postgres;
+revoke all on function internal.invoice_transfer_invoice_rule() from public, anon, authenticated, service_role;
+drop trigger if exists invoice_transfers_customer_invoice on private.invoice_transfers;
+create trigger invoice_transfers_customer_invoice before insert on private.invoice_transfers
+  for each row execute function internal.invoice_transfer_invoice_rule();
+
 -- 4. A completed attempt pays its invoice. Money for an invoice already paid
--- or void is kept (the payment completes as any Ozow payment) and shown to
--- staff as a payment problem, to refund.
+-- or void is kept but not delivered (internal.apply_provider_event below) and
+-- staff refund it.
 CREATE OR REPLACE FUNCTION internal.customer_invoice_payment_settled()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -444,9 +553,6 @@ begin
   if inv.status = 'issued' then
     update private.customer_invoices set status = 'paid', payment_id = new.id, paid_at = new.completed_at
       where id = inv.id;
-  elsif inv.payment_id is distinct from new.id then
-    perform internal.record_payment_problem(new.id, 'conflicting_transaction', 'notice', true,
-      coalesce(new.provider_transaction_id, new.id::text));
   end if;
   return null;
 end;
@@ -459,6 +565,22 @@ create trigger payments_customer_invoice_paid after update of status on private.
   execute function internal.customer_invoice_payment_settled();
 
 -- 5. Shared parts.
+-- An invoice attempt whose invoice is already paid by another payment, or
+-- void: money for it is kept but nothing is delivered.
+CREATE OR REPLACE FUNCTION internal.customer_invoice_settled_elsewhere(p_payment_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select exists(select 1 from private.customer_invoice_payments l
+    join private.customer_invoices i on i.id = l.invoice_id
+    where l.payment_id = p_payment_id
+      and (i.status = 'void' or (i.status = 'paid' and i.payment_id is distinct from p_payment_id)));
+$function$;
+alter function internal.customer_invoice_settled_elsewhere(uuid) owner to postgres;
+revoke all on function internal.customer_invoice_settled_elsewhere(uuid) from public, anon, authenticated, service_role;
+
 -- The cooling-off box the customer ticks before paying (wording and version
 -- stored with the consent).
 CREATE OR REPLACE FUNCTION internal.customer_invoice_consent()
@@ -495,6 +617,8 @@ AS $function$
     'paid_at', i.paid_at, 'payment_id', i.payment_id,
     'payment_status', (select p.status from private.payments p where p.id = i.payment_id),
     'voided_at', i.voided_at,
+    'transfer_waiting', exists(select 1 from private.invoice_transfers t
+      where t.customer_invoice_id = i.id and t.status = 'awaiting_confirmation'),
     'latest_attempt', (select jsonb_build_object('payment_id', p.id, 'attempt', l.attempt, 'status', p.status,
         'checkout_open', p.status = 'pending' and p.checkout_url is not null
           and p.checkout_expires_at > pg_catalog.clock_timestamp())
@@ -506,7 +630,10 @@ AS $function$
     'issued_by_me', internal.same_identity(i.issued_by, p_staff),
     'issued_by_name', internal.profile_public_name((select f.display_name from private.profiles f where f.account_id = i.issued_by)),
     'issue_reason', i.issue_reason, 'void_reason', i.void_reason,
-    'attempts', (select count(*) from private.customer_invoice_payments l where l.invoice_id = i.id)) end;
+    'attempts', (select count(*) from private.customer_invoice_payments l where l.invoice_id = i.id),
+    'extra_payments', coalesce((select jsonb_agg(p.id order by p.completed_at, p.id)
+      from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
+      where l.invoice_id = i.id and p.completed_at is not null and p.id is distinct from i.payment_id), '[]'::jsonb)) end;
 $function$;
 alter function internal.customer_invoice_dto(private.customer_invoices,uuid) owner to postgres;
 revoke all on function internal.customer_invoice_dto(private.customer_invoices,uuid) from public, anon, authenticated, service_role;
@@ -561,7 +688,7 @@ begin
   select * into prior from private.customer_invoices i where i.issued_by = actor and i.request_id = p_request_id;
   if found then
     if prior.account_id = buyer and prior.slots = p_slots and prior.issue_reason = btrim(p_reason)
-        and prior.due_on - (prior.issued_at at time zone 'Africa/Johannesburg')::date = p_due_days
+        and prior.due_on - internal.customer_invoice_day(prior.issued_at) = p_due_days
         and (select v.duration_days from private.plan_versions v where v.id = prior.plan_version_id) = p_term_days then
       return internal.customer_invoice_dto(prior, actor) || jsonb_build_object('repeated', true);
     end if;
@@ -596,7 +723,7 @@ begin
     raise exception 'the VAT registration setting changed; invoices need updating first'
       using errcode='PT409', detail='invoice_vat_status_changed';
   end if;
-  issued_on := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
+  issued_on := internal.customer_invoice_day(statement_timestamp());
   year_number := extract(year from issued_on)::integer;
   insert into private.customer_invoice_numbers as n (invoice_year, last_number) values (year_number, 1)
     on conflict (invoice_year) do update set last_number = n.last_number + 1
@@ -683,6 +810,11 @@ begin
       where l.invoice_id = inv.id and internal.customer_invoice_attempt_live(p)) then
     raise exception 'a payment of this invoice is still open at Ozow; try again when it has closed'
       using errcode='PT409', detail='invoice_payment_open';
+  end if;
+  if exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = inv.id
+      and t.status = 'awaiting_confirmation') then
+    raise exception 'a bank transfer to this invoice waits for confirmation; confirm or decline it first'
+      using errcode='PT409', detail='invoice_transfer_waiting';
   end if;
   update private.payments p set status = 'cancelled', status_changed_at = pg_catalog.clock_timestamp()
     from private.customer_invoice_payments l
@@ -948,6 +1080,11 @@ begin
     raise exception 'cooling-off consent required before payment' using errcode='22023', detail='invoice_consent_required';
   end if;
   inv := internal.lock_my_issued_invoice(actor, p_invoice_number);
+  if exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = inv.id
+      and t.status = 'awaiting_confirmation') then
+    raise exception 'your bank transfer to this invoice is being checked; you do not need to pay again'
+      using errcode='PT409', detail='invoice_transfer_waiting';
+  end if;
   if inv.buyer_name is null then
     raise exception 'add your billing details before paying' using errcode='PT409', detail='invoice_billing_required';
   end if;
@@ -1067,6 +1204,666 @@ alter function api.start_invoice_payment(text,bigint,boolean) owner to postgres;
 revoke all on function api.start_invoice_payment(text,bigint,boolean) from public, anon, authenticated, service_role;
 grant execute on function api.start_invoice_payment(text,bigint,boolean) to authenticated;
 
+-- 9a. Bodies replaced in full (each with one addition, marked in a comment):
+-- the Ozow settlement keeps money for an invoice already paid or void but
+-- delivers nothing; staff activation refuses to deliver it; a bank transfer
+-- for the order of an unpaid invoice is recorded on the invoice; the second
+-- staff member's confirmation of a transfer to an invoice pays the invoice.
+CREATE OR REPLACE FUNCTION internal.apply_provider_event(p_event jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare
+  ev jsonb := p_event;
+  pay private.payments;
+  snap jsonb;
+  outcome text;
+  window_start timestamptz;
+  vat bigint;
+  payment_owner uuid;
+  prior private.provider_events;
+  target private.posts;
+  fulfillable boolean;
+  line_count integer := 0;
+  fingerprint text;
+begin
+  if jsonb_typeof(ev) <> 'object' or not (array(select jsonb_object_keys(ev)) <@ array['payload_sha256',
+      'merchant_reference', 'provider_request_id', 'provider_transaction_id', 'status', 'amount_cents', 'currency'])
+    or ev->>'payload_sha256' !~ '^[a-f0-9]{64}$' or jsonb_typeof(ev->'amount_cents') <> 'number'
+    or ev->>'status' not in ('complete', 'cancelled', 'error', 'abandoned', 'pending')
+    or nullif(ev->>'merchant_reference', '') is null or nullif(ev->>'provider_request_id', '') is null then
+    raise exception 'invalid provider event' using errcode = '22023';
+  end if;
+  -- Serialize identical payloads, including unknown references. Then acquire
+  -- the immutable owner's fence before any payment/post row lock.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('provider_event:'||(ev->>'payload_sha256'),707));
+  select * into prior from private.provider_events e where e.provider='ozow' and e.payload_sha256=ev->>'payload_sha256';
+  if found then
+    return jsonb_build_object('outcome','duplicate_event','original_outcome',prior.outcome,'payment_id',prior.payment_id);
+  end if;
+  select p.owner_id into payment_owner from private.payments p where p.merchant_reference=ev->>'merchant_reference';
+  if payment_owner is not null then perform internal.lock_evidence_subject(payment_owner); end if;
+  select * into pay from private.payments p where p.merchant_reference = ev->>'merchant_reference' for update;
+  if not found then
+    outcome := 'unknown_reference';
+  elsif pay.provider_request_id is distinct from ev->>'provider_request_id' then
+    outcome := 'request_mismatch';
+  elsif (ev->>'amount_cents')::bigint is distinct from pay.amount_cents or ev->>'currency' is distinct from pay.currency then
+    outcome := 'amount_mismatch';
+  elsif pay.status = 'complete' then
+    outcome := case when ev->>'status' <> 'complete' then 'late_status_ignored'
+      when pay.provider_transaction_id = ev->>'provider_transaction_id' then 'already_complete'
+      else 'conflicting_transaction' end;
+  elsif pay.status in ('refunded', 'chargeback') then
+    outcome := 'reversed_ignored';
+  elsif ev->>'status' <> 'complete' then
+    -- A late failure never undoes a completion; a pending payment records the final state.
+    if pay.status = 'pending' and ev->>'status' in ('cancelled', 'error', 'abandoned') then
+      update private.payments set status = case ev->>'status' when 'cancelled' then 'cancelled' else 'failed' end,
+        status_changed_at = statement_timestamp() where id = pay.id;
+      outcome := 'not_paid';
+    else
+      outcome := 'no_change';
+    end if;
+  elsif nullif(ev->>'provider_transaction_id', '') is null then
+    outcome := 'missing_transaction';
+  elsif exists (select 1 from private.payments p where p.provider_transaction_id = ev->>'provider_transaction_id') then
+    outcome := 'transaction_reused';
+  else
+    -- Failed/expired checkouts may still fulfill on verified late payment.
+    -- Explicit cancellation never reactivates benefits: retain receipt and
+    -- route it to reconciliation, independently of current target eligibility.
+    snap := pay.snapshot;
+    -- An invoice attempt whose invoice another payment already paid (or that
+    -- was voided) is kept but not delivered: staff refund it.
+    fulfillable := pay.status<>'cancelled'
+      and exists(select 1 from private.current_account_access u where u.id=pay.owner_id)
+      and not internal.customer_invoice_settled_elsewhere(pay.id);
+    if pay.product_kind='addon' then
+      select * into target from private.posts p where p.id=pay.target_post_id for update;
+      fulfillable := fulfillable and found and target.owner_id=pay.owner_id
+        and target.owner_id::text=snap->>'target_owner_id'
+        and target.kind=snap->>'target_kind' and target.area=snap->>'target_area'
+        and (snap->>'addon'='urgent' or target.kind='event')
+        and target.published_at<=clock_timestamp() and target.visible_until>clock_timestamp()
+        and exists(select 1 from private.public_eligible_posts p where p.id=target.id)
+        and exists(select 1 from internal.post_funding(target.id) f where f.funded_until>clock_timestamp());
+      if fulfillable then
+        fulfillable:=coalesce((snap->'addon_capabilities') ? (snap->>'addon'),false)
+          and internal.addon_purchase_entitlement(pay.owner_id,target.id,snap->>'addon') is not null;
+      end if;
+    else
+      select count(*) into line_count from private.payment_lines l where l.payment_id = pay.id and l.status = 'open';
+      if line_count > 0 and fulfillable then
+        -- Slots are delivered only within the person's limit (every account
+        -- of the identity); otherwise the money goes to reconciliation.
+        fingerprint := internal.individual_slot_identity(pay.owner_id);
+        if fingerprint is not null then
+          perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
+        end if;
+        fulfillable := (internal.individual_slots_counted(fingerprint, pay.owner_id, pay.id)->>'held')::integer
+          + line_count <= internal.individual_slot_limit(fingerprint);
+      end if;
+    end if;
+    fulfillable := coalesce(fulfillable,false);
+    update private.payments set status = 'complete', completed_at = statement_timestamp(),
+      provider_transaction_id = ev->>'provider_transaction_id', status_changed_at = statement_timestamp(),
+      fulfillment_status=case when fulfillable then 'fulfilled' else 'needs_reconciliation' end
+    where id = pay.id;
+    if not fulfillable then
+      -- Receipt of verified funds is a financial fact. Never roll it back just
+      -- because the old target/account disappeared or became ineligible.
+      insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key)
+      values('payment_reconciliation_required',pay.id,pay.owner_id,'payment_reconciliation_required:'||pay.id);
+    elsif pay.product_kind = 'plan' and line_count > 0 then
+      -- One entitlement per slot, each with its own line (and so its own refund).
+      insert into private.entitlements (owner_id, source, area, payment_id, payment_line_id, slot_capacity,
+        activations_per_period, activation_period_days, max_photos, max_videos, starts_at, ends_at, addon_capabilities)
+      select pay.owner_id, 'retail_paid', snap->>'area', pay.id, l.id, (snap->>'slot_capacity')::integer,
+        (snap->>'activations_per_period')::integer, (snap->>'activation_period_days')::integer,
+        (snap->>'max_photos')::integer, (snap->>'max_videos')::integer, statement_timestamp(),
+        statement_timestamp() + make_interval(days => (snap->>'duration_days')::integer),
+        array(select jsonb_array_elements_text(coalesce(snap->'addon_capabilities','[]'::jsonb)))
+      from private.payment_lines l where l.payment_id = pay.id and l.status = 'open' order by l.line_number;
+    elsif pay.product_kind = 'plan' then
+      -- A plan payment made before slot lines existed: one entitlement.
+      insert into private.entitlements (owner_id, source, area, payment_id, slot_capacity, activations_per_period,
+        activation_period_days, max_photos, max_videos, starts_at, ends_at, addon_capabilities)
+      values (pay.owner_id, 'retail_paid', snap->>'area', pay.id, (snap->>'slot_capacity')::integer,
+        (snap->>'activations_per_period')::integer, (snap->>'activation_period_days')::integer,
+        (snap->>'max_photos')::integer, (snap->>'max_videos')::integer, statement_timestamp(),
+        statement_timestamp() + make_interval(days => (snap->>'duration_days')::integer),
+        array(select jsonb_array_elements_text(coalesce(snap->'addon_capabilities','[]'::jsonb))));
+    else
+      -- Stacking: a new window starts when the member's current window of that kind ends.
+      select greatest(statement_timestamp(), coalesce(max(w.ends_at), statement_timestamp())) into window_start
+      from private.post_addon_windows w
+      where w.post_id = pay.target_post_id and w.kind = snap->>'addon' and w.revoked_at is null;
+      insert into private.post_addon_windows (post_id, kind, payment_id, starts_at, ends_at)
+      values (pay.target_post_id, snap->>'addon', pay.id, window_start,
+        window_start + make_interval(days => (snap->>'days')::integer));
+    end if;
+    vat := internal.payment_invoice_vat(pay);
+    insert into private.invoices (payment_id, invoice_number, amount_ex_vat_cents, vat_cents, total_cents, description)
+    values (pay.id, 'INV-' || to_char(statement_timestamp() at time zone 'Africa/Johannesburg', 'YYYYMMDD') || '-'
+        || upper(left(replace(pay.id::text, '-', ''), 10)),
+      pay.amount_cents - vat, vat, pay.amount_cents,
+      coalesce(snap->>'invoice_description', snap->>'label', initcap(snap->>'addon') || ' ' || (snap->>'days') || ' days'));
+    insert into private.outbox_events (kind, subject_id, owner_id, dedupe_key)
+    values ('payment_completed', pay.id, pay.owner_id, 'payment_completed:' || pay.id);
+    outcome := case when fulfillable then 'completed' else 'complete_unfulfillable_target' end;
+  end if;
+  insert into private.provider_events (provider, payload_sha256, merchant_reference, provider_request_id,
+    provider_transaction_id, reported_status, amount_cents, currency, payment_id, outcome)
+  values ('ozow', ev->>'payload_sha256', ev->>'merchant_reference', ev->>'provider_request_id',
+    nullif(ev->>'provider_transaction_id', ''), ev->>'status', (ev->>'amount_cents')::bigint,
+    coalesce(ev->>'currency', ''), pay.id, outcome);
+  return jsonb_build_object('outcome', outcome, 'payment_id', pay.id,
+    'fulfillment_status',(select p.fulfillment_status from private.payments p where p.id=pay.id));
+end;
+$function$;
+alter function internal.apply_provider_event(jsonb) owner to postgres;
+revoke all on function internal.apply_provider_event(jsonb) from public, anon, authenticated, service_role;
+grant execute on function internal.apply_provider_event(jsonb) to service_role;
+
+CREATE OR REPLACE FUNCTION internal.activate_staff_paid_payment(p_payment_id uuid, p_reason text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid; buyer uuid; pay private.payments; snap jsonb; prior private.payment_activations;
+  target private.posts; line_count integer := 0; made integer := 0; window_start timestamptz;
+  fingerprint text; commissions integer := 0; has_lines boolean;
+begin
+  actor := internal.staff_actor('payments:refund');
+  if p_payment_id is null or not coalesce(internal.plain_text_valid(p_reason,5,500,true),false) then
+    raise exception 'payment and audit reason required' using errcode='22023';
+  end if;
+  select p.owner_id into buyer from private.payments p where p.id = p_payment_id;
+  if buyer is null then raise exception 'payment not found' using errcode='22023'; end if;
+  perform internal.assert_staff_payment_actor(actor, buyer);
+  perform internal.lock_evidence_subject(buyer);
+  select * into pay from private.payments p where p.id = p_payment_id for update;
+  perform internal.staff_actor('payments:refund'); -- authority after any lock wait
+  perform internal.assert_staff_payment_actor(actor, buyer);
+  select * into prior from private.payment_activations a where a.payment_id = pay.id;
+  if found then
+    if prior.actor_id = actor and prior.reason = btrim(p_reason) then
+      return jsonb_build_object('payment_id', pay.id, 'fulfillment_status', pay.fulfillment_status,
+        'entitlements', prior.entitlements, 'addon_window', prior.addon_window, 'commissions', prior.commissions,
+        'repeated', true);
+    end if;
+    raise exception 'this payment was already activated' using errcode='PT409', detail='payment_already_activated';
+  end if;
+  if pay.status <> 'complete' or pay.fulfillment_status <> 'needs_reconciliation' then
+    raise exception 'only a paid payment that was not delivered can be activated' using errcode='PT409', detail='payment_not_awaiting_activation';
+  end if;
+  if exists(select 1 from private.payment_refund_requests r where r.payment_id = pay.id and r.status = 'awaiting_approval') then
+    raise exception 'a refund of this payment is waiting for approval' using errcode='PT409', detail='refund_awaiting_approval';
+  end if;
+  if not exists(select 1 from private.current_account_access u where u.id = pay.owner_id) then
+    raise exception 'the account that paid cannot use it now; refund instead' using errcode='PT409', detail='payment_account_unavailable';
+  end if;
+  if internal.customer_invoice_settled_elsewhere(pay.id) then
+    raise exception 'another payment already paid this invoice (or it was voided); refund this one instead'
+      using errcode='PT409', detail='invoice_paid_elsewhere';
+  end if;
+  snap := pay.snapshot;
+  if pay.product_kind = 'addon' then
+    select * into target from private.posts p where p.id = pay.target_post_id for update;
+    if not (found and target.owner_id = pay.owner_id
+        and target.owner_id::text = snap->>'target_owner_id'
+        and target.kind = snap->>'target_kind' and target.area = snap->>'target_area'
+        and (snap->>'addon' = 'urgent' or target.kind = 'event')
+        and target.published_at <= clock_timestamp() and target.visible_until > clock_timestamp()
+        and exists(select 1 from private.public_eligible_posts p where p.id = target.id)
+        and exists(select 1 from internal.post_funding(target.id) f where f.funded_until > clock_timestamp())
+        and coalesce((snap->'addon_capabilities') ? (snap->>'addon'), false)
+        and internal.addon_purchase_entitlement(pay.owner_id, target.id, snap->>'addon') is not null) then
+      raise exception 'the post can no longer carry this add-on; refund instead' using errcode='PT409', detail='addon_target_ineligible';
+    end if;
+    select greatest(statement_timestamp(), coalesce(max(w.ends_at), statement_timestamp())) into window_start
+    from private.post_addon_windows w
+    where w.post_id = pay.target_post_id and w.kind = snap->>'addon' and w.revoked_at is null;
+    insert into private.post_addon_windows (post_id, kind, payment_id, starts_at, ends_at)
+    values (pay.target_post_id, snap->>'addon', pay.id, window_start,
+      window_start + make_interval(days => (snap->>'days')::integer));
+  else
+    has_lines := exists(select 1 from private.payment_lines l where l.payment_id = pay.id);
+    if exists(select 1 from private.entitlements e where e.payment_id = pay.id) then
+      raise exception 'this payment already has a slot; check it before activating' using errcode='PT409', detail='payment_slot_exists';
+    end if;
+    if has_lines then
+      select count(*) into line_count from private.payment_lines l where l.payment_id = pay.id and l.status = 'open';
+      if line_count = 0 then
+        raise exception 'every slot of this payment was refunded' using errcode='PT409', detail='payment_slots_refunded';
+      end if;
+      -- Within the person's Individual slot limit (every account of the identity).
+      fingerprint := internal.individual_slot_identity(pay.owner_id);
+      if fingerprint is not null then
+        perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
+      end if;
+      if (internal.individual_slots_counted(fingerprint, pay.owner_id, pay.id)->>'held')::integer + line_count
+          > internal.individual_slot_limit(fingerprint) then
+        raise exception 'more slots than the person''s limit; raise the limit or refund' using errcode='PT429', detail='slot_limit_reached';
+      end if;
+      insert into private.entitlements (owner_id, source, area, payment_id, payment_line_id, slot_capacity,
+        activations_per_period, activation_period_days, max_photos, max_videos, starts_at, ends_at, addon_capabilities)
+      select pay.owner_id, 'retail_paid', snap->>'area', pay.id, l.id, (snap->>'slot_capacity')::integer,
+        (snap->>'activations_per_period')::integer, (snap->>'activation_period_days')::integer,
+        (snap->>'max_photos')::integer, (snap->>'max_videos')::integer, statement_timestamp(),
+        statement_timestamp() + make_interval(days => (snap->>'duration_days')::integer),
+        array(select jsonb_array_elements_text(coalesce(snap->'addon_capabilities','[]'::jsonb)))
+      from private.payment_lines l where l.payment_id = pay.id and l.status = 'open' order by l.line_number;
+    else
+      insert into private.entitlements (owner_id, source, area, payment_id, slot_capacity, activations_per_period,
+        activation_period_days, max_photos, max_videos, starts_at, ends_at, addon_capabilities)
+      values (pay.owner_id, 'retail_paid', snap->>'area', pay.id, (snap->>'slot_capacity')::integer,
+        (snap->>'activations_per_period')::integer, (snap->>'activation_period_days')::integer,
+        (snap->>'max_photos')::integer, (snap->>'max_videos')::integer, statement_timestamp(),
+        statement_timestamp() + make_interval(days => (snap->>'duration_days')::integer),
+        array(select jsonb_array_elements_text(coalesce(snap->'addon_capabilities','[]'::jsonb))));
+    end if;
+    get diagnostics made = row_count;
+  end if;
+  -- The status stays complete, so the commission trigger does not fire: the
+  -- delivered purchase earns its commission here.
+  update private.payments set fulfillment_status = 'fulfilled' where id = pay.id;
+  commissions := internal.payment_delivery_commission(pay.id);
+  perform internal.staff_actor('payments:refund');
+  perform internal.assert_staff_payment_actor(actor, buyer);
+  insert into private.payment_activations (payment_id, actor_id, reason, entitlements, addon_window, commissions)
+    values (pay.id, actor, btrim(p_reason), made, pay.product_kind = 'addon', commissions);
+  return jsonb_build_object('payment_id', pay.id, 'fulfillment_status', 'fulfilled', 'entitlements', made,
+    'addon_window', pay.product_kind = 'addon', 'commissions', commissions, 'repeated', false);
+end;
+$function$;
+alter function internal.activate_staff_paid_payment(uuid,text) owner to postgres;
+revoke all on function internal.activate_staff_paid_payment(uuid,text) from public, anon, authenticated, service_role;
+grant execute on function internal.activate_staff_paid_payment(uuid,text) to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.record_staff_invoice_payment(p_account_email text, p_term_days integer, p_slots integer, p_amount_cents bigint, p_bank_reference text, p_cleared_on text, p_cooling_off_waiver boolean, p_reason text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid; buyer uuid; reference text; reference_key text; cleared date; today date;
+  plan private.plan_versions; prior private.invoice_transfers; made private.invoice_transfers; fingerprint text;
+begin
+  actor := internal.staff_actor('payments:refund');
+  if length(btrim(coalesce(p_account_email, ''))) not between 3 and 254 or p_term_days is null
+      or p_term_days not in (30, 90, 180) or p_slots is null or p_slots not between 1 and 25
+      or p_amount_cents is null or p_amount_cents <= 0 then
+    raise exception 'customer email, slot term, number of slots and amount received required'
+      using errcode='22023', detail='invoice_payment_invalid';
+  end if;
+  if p_amount_cents > 5000000 then
+    raise exception 'bank transfers above R50,000 cannot be recorded yet' using errcode='PT413', detail='invoice_amount_above_limit';
+  end if;
+  reference := regexp_replace(btrim(coalesce(p_bank_reference, '')), '\s+', ' ', 'g');
+  if reference = '' then
+    raise exception 'bank reference required' using errcode='22023', detail='bank_reference_required';
+  end if;
+  if reference !~ '^[A-Za-z0-9][A-Za-z0-9 ._:/-]{3,59}$'
+      or length(regexp_replace(reference, '[^A-Za-z0-9]', '', 'g')) < 4 then
+    raise exception 'bank reference must be 4 to 60 letters, digits, spaces or . _ : / -'
+      using errcode='22023', detail='bank_reference_invalid';
+  end if;
+  reference_key := upper(regexp_replace(reference, '[^A-Za-z0-9]', '', 'g'));
+  today := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
+  if p_cleared_on is null or p_cleared_on !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
+    raise exception 'date the money cleared required' using errcode='22023', detail='cleared_date_invalid';
+  end if;
+  begin
+    cleared := p_cleared_on::date;
+  exception when others then
+    raise exception 'date the money cleared required' using errcode='22023', detail='cleared_date_invalid';
+  end;
+  if cleared > today or cleared < today - 90 then
+    raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
+  end if;
+  if p_cooling_off_waiver is distinct from true then
+    raise exception 'confirm the customer agreed in writing to the cooling-off waiver'
+      using errcode='22023', detail='cooling_off_waiver_required';
+  end if;
+  if not coalesce(internal.plain_text_valid(p_reason, 5, 500, true), false) then
+    raise exception 'audit reason required' using errcode='22023';
+  end if;
+  buyer := internal.invoice_customer_by_email(p_account_email);
+  perform internal.assert_staff_payment_actor(actor, buyer);
+  -- One bank reference at a time, then the person.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('invoice-bank-reference:'||reference_key, 707));
+  perform internal.lock_evidence_subject(buyer);
+  perform internal.staff_actor('payments:refund'); -- authority after any lock wait
+  perform internal.assert_staff_payment_actor(actor, buyer);
+  perform internal.assert_staff_not_referrer(actor, buyer);
+  -- The same bank credit (reference, amount, date cleared) waiting or
+  -- confirmed: the same request again by the same staff member returns it;
+  -- anything else is refused. A declined record does not count.
+  select * into prior from private.invoice_transfers t
+    where upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key
+      and t.amount_received_cents = p_amount_cents and t.cleared_on = cleared and t.status <> 'declined';
+  if found then
+    if prior.recorded_by = actor and prior.account_id = buyer and prior.reason = btrim(p_reason)
+        and prior.slots = p_slots
+        and (select v.duration_days from private.plan_versions v where v.id = prior.plan_version_id) = p_term_days then
+      return internal.invoice_transfer_dto(prior, actor) || jsonb_build_object('repeated', true);
+    end if;
+    raise exception 'a bank transfer with that reference, amount and date was already recorded (%)', replace(prior.status, '_', ' ')
+      using errcode='PT409', detail='bank_reference_used';
+  end if;
+  if not exists(select 1 from private.current_account_access a where a.id = buyer) then
+    raise exception 'the customer''s account cannot use slots now' using errcode='PT409', detail='payment_account_unavailable';
+  end if;
+  select * into plan from private.plan_versions v
+    where v.plan_code = 'individual_'||p_term_days||'d' and v.retired_at is null and v.is_public
+      and internal.individual_slot_plan(v.plan_code)
+    order by v.version desc limit 1;
+  if not found then
+    raise exception 'no slot for that term is on sale' using errcode='PT409', detail='invoice_plan_unavailable';
+  end if;
+  fingerprint := internal.current_verified_identity(buyer);
+  if fingerprint is null then
+    raise exception 'the customer''s ID review must be accepted before slots are recorded'
+      using errcode='PT412', detail='invoice_buyer_unverified';
+  end if;
+  if plan.price_cents * p_slots <> p_amount_cents then
+    raise exception 'the amount received is not the order total of % cents', plan.price_cents * p_slots
+      using errcode='PT428', detail='invoice_amount_mismatch';
+  end if;
+  -- A transfer for the order of one of the customer's unpaid invoices is
+  -- recorded against that invoice (api.record_staff_invoice_transfer), so it
+  -- pays the invoice.
+  if exists(select 1 from private.customer_invoices i where i.account_id = buyer and i.status = 'issued'
+      and i.plan_version_id = plan.id and i.slots = p_slots and i.total_cents = p_amount_cents) then
+    raise exception 'this customer has an unpaid invoice for this order; record the transfer on the invoice'
+      using errcode='PT409', detail='invoice_transfer_required';
+  end if;
+  -- An early check of the slot limit; confirmation checks it again.
+  if (internal.individual_slots_counted(fingerprint, buyer, null)->>'held')::integer + p_slots
+      > internal.individual_slot_limit(fingerprint) then
+    raise exception 'more slots than the person''s limit; raise the limit first' using errcode='PT429', detail='slot_limit_reached';
+  end if;
+  insert into private.invoice_transfers (account_id, plan_version_id, slots, amount_received_cents, bank_reference,
+      cleared_on, cooling_off_waiver_confirmed, reason, recorded_by)
+    values (buyer, plan.id, p_slots, p_amount_cents, reference, cleared, true, btrim(p_reason), actor)
+    returning * into made;
+  perform internal.staff_actor('payments:refund');
+  perform internal.assert_staff_payment_actor(actor, buyer);
+  return internal.invoice_transfer_dto(made, actor) || jsonb_build_object('repeated', false);
+end;
+$function$;
+alter function internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) owner to postgres;
+revoke all on function internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) from public, anon, authenticated, service_role;
+grant execute on function internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.confirm_staff_invoice_payment(p_transfer_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid; t private.invoice_transfers; plan private.plan_versions; pay private.payments;
+  fingerprint text; made integer := 0; commissions integer := 0; vat bigint; inv private.customer_invoices;
+begin
+  actor := internal.staff_actor('payments:confirm_transfer');
+  t := internal.lock_invoice_transfer_for_review(p_transfer_id, actor);
+  if t.status = 'confirmed' and t.confirmed_by = actor then
+    return internal.invoice_transfer_dto(t, actor) || jsonb_build_object('commissions',
+      (select count(*) from private.partner_commissions c where c.payment_id = t.payment_id), 'repeated', true);
+  end if;
+  if t.status <> 'awaiting_confirmation' then
+    raise exception 'this bank transfer was already %; it cannot be confirmed', t.status
+      using errcode='PT409', detail='transfer_not_waiting';
+  end if;
+  if internal.same_identity(actor, t.recorded_by) then
+    raise exception 'a different staff member must confirm this bank transfer' using errcode='42501', detail='transfer_confirmer_same';
+  end if;
+  -- The recorder must still hold the authority to record, and must not have
+  -- come to earn commission on this customer since recording.
+  if not exists(select 1 from private.staff_roles r join private.staff_capabilities c on c.role = r.role
+      where r.user_id = t.recorded_by and r.revoked_at is null and c.capability = 'payments:refund')
+    or not exists(select 1 from private.current_account_access a where a.id = t.recorded_by) then
+    raise exception 'the staff member who recorded this bank transfer can no longer record payments; decline it'
+      using errcode='PT409', detail='transfer_recorder_inactive';
+  end if;
+  if exists(select 1 from private.account_acquisitions a join private.partners p on p.id = a.partner_id
+      where a.account_id = t.account_id and internal.same_identity(t.recorded_by, p.account_id)) then
+    raise exception 'the staff member who recorded this bank transfer referred the customer; decline it'
+      using errcode='42501', detail='staff_referred_customer';
+  end if;
+  if not exists(select 1 from private.current_account_access a where a.id = t.account_id) then
+    raise exception 'the customer''s account cannot use slots now' using errcode='PT409', detail='payment_account_unavailable';
+  end if;
+  fingerprint := internal.current_verified_identity(t.account_id);
+  if fingerprint is null then
+    raise exception 'the customer''s ID review must be accepted before slots start'
+      using errcode='PT412', detail='invoice_buyer_unverified';
+  end if;
+  select * into plan from private.plan_versions v where v.id = t.plan_version_id;
+  if plan.price_cents * t.slots <> t.amount_received_cents or not internal.individual_slot_plan(plan.plan_code) then
+    raise exception 'the recorded amount is not the order total' using errcode='PT428', detail='invoice_amount_mismatch';
+  end if;
+  -- Within the person's Individual slot limit (every account of the
+  -- identity), counting checkouts still open at Ozow as checkout does, so a
+  -- later Ozow payment is not pushed over the limit.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
+  if (internal.individual_slots_counted(fingerprint, t.account_id, null)->>'held')::integer
+      + (internal.individual_slots_counted(fingerprint, t.account_id, null)->>'pending')::integer + t.slots
+      > internal.individual_slot_limit(fingerprint) then
+    raise exception 'more slots than the person''s limit; raise the limit or decline' using errcode='PT429', detail='slot_limit_reached';
+  end if;
+  -- A transfer to an invoice pays that invoice: still issued and with no
+  -- payment attempt that could still be paid.
+  if t.customer_invoice_id is not null then
+    select * into inv from private.customer_invoices i where i.id = t.customer_invoice_id for update;
+    if inv.status = 'paid' then
+      raise exception 'this invoice was already paid; decline this transfer and return the money'
+        using errcode='PT409', detail='invoice_paid';
+    elsif inv.status = 'void' then
+      raise exception 'this invoice was voided; decline this transfer and return the money'
+        using errcode='PT409', detail='invoice_void';
+    end if;
+    if exists(select 1 from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
+        where l.invoice_id = inv.id and internal.customer_invoice_attempt_live(p)) then
+      raise exception 'a payment of this invoice is still open at Ozow; try again when it has closed'
+        using errcode='PT409', detail='invoice_payment_open';
+    end if;
+  end if;
+  insert into private.payments (owner_id, product_kind, plan_version_id, amount_cents, currency, snapshot, provider,
+      status, fulfillment_status, completed_at, status_changed_at)
+    values (t.account_id, 'plan', plan.id, t.amount_received_cents, plan.currency, jsonb_build_object('kind', 'plan',
+        'category', 'individual', 'code', plan.plan_code, 'version', plan.version, 'label', plan.label, 'area', plan.area,
+        'price_cents', plan.price_cents, 'slots', t.slots, 'total_cents', t.amount_received_cents,
+        'duration_days', plan.duration_days, 'slot_capacity', plan.slot_capacity,
+        'activations_per_period', plan.activations_per_period, 'activation_period_days', plan.activation_period_days,
+        'max_photos', plan.max_photos, 'max_videos', plan.max_videos,
+        'addon_capabilities', to_jsonb(plan.addon_capabilities),
+        'invoice_description', case when t.slots = 1 then plan.label else t.slots::text || ' × ' || plan.label end,
+        'payment_method', 'invoice', 'invoice_transfer_id', t.id,
+        'cleared_on', to_char(t.cleared_on::timestamp, 'YYYY-MM-DD'),
+        'cooling_off_consent', jsonb_build_object('method', 'written', 'recorded_by_staff_at', t.recorded_at,
+          'terms_version', (select c.version from private.posting_terms_current c where c.singleton),
+          'wording', 'My slot starts now; the 7-day cooling-off does not apply because the service starts immediately'))
+        || case when inv.id is null then '{}'::jsonb else jsonb_build_object('customer_invoice_id', inv.id,
+          'customer_invoice_number', inv.invoice_number) end,
+      'invoice', 'complete', 'fulfilled', statement_timestamp(), statement_timestamp())
+    returning * into pay;
+  insert into private.payment_lines (payment_id, line_number, plan_version_id, amount_cents)
+    select pay.id, n, plan.id, plan.price_cents from pg_catalog.generate_series(1, t.slots) n;
+  -- One slot per line, starting now, exactly as a confirmed Ozow payment.
+  insert into private.entitlements (owner_id, source, area, payment_id, payment_line_id, slot_capacity,
+    activations_per_period, activation_period_days, max_photos, max_videos, starts_at, ends_at, addon_capabilities)
+  select pay.owner_id, 'retail_paid', plan.area, pay.id, l.id, plan.slot_capacity, plan.activations_per_period,
+    plan.activation_period_days, plan.max_photos, plan.max_videos, statement_timestamp(),
+    statement_timestamp() + make_interval(days => plan.duration_days), plan.addon_capabilities
+  from private.payment_lines l where l.payment_id = pay.id order by l.line_number;
+  get diagnostics made = row_count;
+  vat := internal.payment_invoice_vat(pay);
+  insert into private.invoices (payment_id, invoice_number, amount_ex_vat_cents, vat_cents, total_cents, description)
+  values (pay.id, 'INV-' || to_char(statement_timestamp() at time zone 'Africa/Johannesburg', 'YYYYMMDD') || '-'
+      || upper(left(replace(pay.id::text, '-', ''), 10)),
+    pay.amount_cents - vat, vat, pay.amount_cents, pay.snapshot->>'invoice_description');
+  insert into private.outbox_events (kind, subject_id, owner_id, dedupe_key)
+  values ('payment_completed', pay.id, pay.owner_id, 'payment_completed:' || pay.id);
+  -- The payment is inserted complete, so the commission trigger (on a status
+  -- change) does not fire: the delivered purchase earns its commission here.
+  commissions := internal.payment_delivery_commission(pay.id);
+  update private.invoice_transfers set status = 'confirmed', confirmed_by = actor,
+      confirmed_at = statement_timestamp(), payment_id = pay.id
+    where id = t.id returning * into t;
+  if inv.id is not null then
+    update private.customer_invoices set status = 'paid', payment_id = pay.id, paid_at = pay.completed_at
+      where id = inv.id;
+  end if;
+  if internal.staff_actor('payments:confirm_transfer') is distinct from actor then
+    raise exception 'staff actor changed' using errcode='42501';
+  end if;
+  perform internal.assert_staff_payment_actor(actor, t.account_id);
+  return internal.invoice_transfer_dto(t, actor) || jsonb_build_object('commissions', commissions,
+    'slots_started', made, 'ends_at', statement_timestamp() + make_interval(days => plan.duration_days),
+    'repeated', false);
+end;
+$function$;
+alter function internal.confirm_staff_invoice_payment(uuid) owner to postgres;
+revoke all on function internal.confirm_staff_invoice_payment(uuid) from public, anon, authenticated, service_role;
+grant execute on function internal.confirm_staff_invoice_payment(uuid) to authenticated;
+
+-- 9b. Staff record a bank transfer to an invoice (the bank transfer rules of
+-- 20261113223806): the account, plan, slots and amount are the invoice's. It
+-- waits for a second staff member, whose confirmation pays the invoice.
+CREATE OR REPLACE FUNCTION internal.record_staff_invoice_transfer(p_invoice_number text, p_bank_reference text,
+  p_cleared_on text, p_cooling_off_waiver boolean, p_reason text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid; inv private.customer_invoices; plan private.plan_versions; reference text; reference_key text;
+  cleared date; today date; audit_reason text; prior private.invoice_transfers; made private.invoice_transfers;
+  fingerprint text;
+begin
+  actor := internal.staff_actor('payments:refund');
+  reference := regexp_replace(btrim(coalesce(p_bank_reference, '')), '\s+', ' ', 'g');
+  if reference = '' then
+    raise exception 'bank reference required' using errcode='22023', detail='bank_reference_required';
+  end if;
+  if reference !~ '^[A-Za-z0-9][A-Za-z0-9 ._:/-]{3,59}$'
+      or length(regexp_replace(reference, '[^A-Za-z0-9]', '', 'g')) < 4 then
+    raise exception 'bank reference must be 4 to 60 letters, digits, spaces or . _ : / -'
+      using errcode='22023', detail='bank_reference_invalid';
+  end if;
+  reference_key := upper(regexp_replace(reference, '[^A-Za-z0-9]', '', 'g'));
+  today := internal.customer_invoice_day(statement_timestamp());
+  if p_cleared_on is null or p_cleared_on !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
+    raise exception 'date the money cleared required' using errcode='22023', detail='cleared_date_invalid';
+  end if;
+  begin
+    cleared := p_cleared_on::date;
+  exception when others then
+    raise exception 'date the money cleared required' using errcode='22023', detail='cleared_date_invalid';
+  end;
+  if cleared > today or cleared < today - 90 then
+    raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
+  end if;
+  if p_cooling_off_waiver is distinct from true then
+    raise exception 'confirm the customer agreed in writing to the cooling-off waiver'
+      using errcode='22023', detail='cooling_off_waiver_required';
+  end if;
+  select * into inv from private.customer_invoices i
+    where i.invoice_number = internal.customer_invoice_number(p_invoice_number);
+  if not found then
+    raise exception 'invoice not found' using errcode='PT404', detail='invoice_unavailable';
+  end if;
+  audit_reason := 'Invoice ' || inv.invoice_number || ': ' || btrim(coalesce(p_reason, ''));
+  if not coalesce(internal.plain_text_valid(btrim(coalesce(p_reason, '')), 5, 478, true), false) then
+    raise exception 'audit reason required' using errcode='22023';
+  end if;
+  perform internal.assert_staff_payment_actor(actor, inv.account_id);
+  -- One bank reference at a time, then the person, then the invoice.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('invoice-bank-reference:'||reference_key, 707));
+  perform internal.lock_evidence_subject(inv.account_id);
+  select * into inv from private.customer_invoices i where i.id = inv.id for update;
+  perform internal.staff_actor('payments:refund'); -- authority after any lock wait
+  perform internal.assert_staff_payment_actor(actor, inv.account_id);
+  perform internal.assert_staff_not_referrer(actor, inv.account_id);
+  -- The same bank credit waiting or confirmed: the same request again by the
+  -- same staff member returns it; anything else is refused.
+  select * into prior from private.invoice_transfers t
+    where upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key
+      and t.amount_received_cents = inv.total_cents and t.cleared_on = cleared and t.status <> 'declined';
+  if found then
+    if prior.recorded_by = actor and prior.customer_invoice_id = inv.id and prior.reason = audit_reason then
+      return internal.invoice_transfer_dto(prior, actor)
+        || jsonb_build_object('invoice_number', inv.invoice_number, 'repeated', true);
+    end if;
+    raise exception 'a bank transfer with that reference, amount and date was already recorded (%)', replace(prior.status, '_', ' ')
+      using errcode='PT409', detail='bank_reference_used';
+  end if;
+  if inv.status = 'paid' then
+    raise exception 'this invoice is already paid' using errcode='PT409', detail='invoice_paid';
+  elsif inv.status = 'void' then
+    raise exception 'this invoice was voided' using errcode='PT409', detail='invoice_void';
+  end if;
+  if exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = inv.id
+      and t.status = 'awaiting_confirmation') then
+    raise exception 'a bank transfer to this invoice already waits for confirmation'
+      using errcode='PT409', detail='invoice_transfer_waiting';
+  end if;
+  if exists(select 1 from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
+      where l.invoice_id = inv.id and internal.customer_invoice_attempt_live(p)) then
+    raise exception 'a payment of this invoice is still open at Ozow; try again when it has closed'
+      using errcode='PT409', detail='invoice_payment_open';
+  end if;
+  if not exists(select 1 from private.current_account_access a where a.id = inv.account_id) then
+    raise exception 'the customer''s account cannot use slots now' using errcode='PT409', detail='payment_account_unavailable';
+  end if;
+  select * into plan from private.plan_versions v where v.id = inv.plan_version_id
+    and internal.individual_slot_plan(v.plan_code) and v.price_cents = inv.unit_price_cents;
+  if not found then
+    raise exception 'this invoice''s slot is no longer sold at its price' using errcode='PT409', detail='invoice_plan_unavailable';
+  end if;
+  fingerprint := internal.current_verified_identity(inv.account_id);
+  if fingerprint is null then
+    raise exception 'the customer''s ID review must be accepted before slots are recorded'
+      using errcode='PT412', detail='invoice_buyer_unverified';
+  end if;
+  -- An early check of the slot limit; confirmation checks it again.
+  if (internal.individual_slots_counted(fingerprint, inv.account_id, null)->>'held')::integer + inv.slots
+      > internal.individual_slot_limit(fingerprint) then
+    raise exception 'more slots than the person''s limit; raise the limit first' using errcode='PT429', detail='slot_limit_reached';
+  end if;
+  insert into private.invoice_transfers (account_id, plan_version_id, slots, amount_received_cents, bank_reference,
+      cleared_on, cooling_off_waiver_confirmed, reason, recorded_by, customer_invoice_id)
+    values (inv.account_id, plan.id, inv.slots, inv.total_cents, reference, cleared, true, audit_reason, actor, inv.id)
+    returning * into made;
+  perform internal.staff_actor('payments:refund');
+  perform internal.assert_staff_payment_actor(actor, inv.account_id);
+  return internal.invoice_transfer_dto(made, actor)
+    || jsonb_build_object('invoice_number', inv.invoice_number, 'repeated', false);
+end;
+$function$;
+alter function internal.record_staff_invoice_transfer(text,text,text,boolean,text) owner to postgres;
+revoke all on function internal.record_staff_invoice_transfer(text,text,text,boolean,text) from public, anon, authenticated, service_role;
+grant execute on function internal.record_staff_invoice_transfer(text,text,text,boolean,text) to authenticated;
+
+CREATE OR REPLACE FUNCTION api.record_staff_invoice_transfer(p_invoice_number text, p_bank_reference text,
+  p_cleared_on text, p_cooling_off_waiver boolean, p_reason text)
+ RETURNS jsonb
+ LANGUAGE sql
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select internal.record_staff_invoice_transfer(p_invoice_number, p_bank_reference, p_cleared_on,
+    p_cooling_off_waiver, p_reason);
+$function$;
+alter function api.record_staff_invoice_transfer(text,text,text,boolean,text) owner to postgres;
+revoke all on function api.record_staff_invoice_transfer(text,text,text,boolean,text) from public, anon, authenticated, service_role;
+grant execute on function api.record_staff_invoice_transfer(text,text,text,boolean,text) to authenticated;
+
 -- 9. The retention job: invoices and their attempt links go five tax years
 -- after they were paid, voided or (if neither) issued; a payment an invoice or
 -- a recorded bank transfer still names is skipped instead of stopping the job.
@@ -1087,10 +1884,13 @@ begin
     where internal.retention_tax_year_due(i.issued_at) order by i.issued_at limit p_limit);
   get diagnostics invoices=row_count;
   delete from private.customer_invoice_payments where invoice_id in(select i.id from private.customer_invoices i
-    where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at)) order by i.issued_at limit p_limit);
+    where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at))
+      and not exists(select 1 from private.invoice_transfers t where t.customer_invoice_id=i.id)
+    order by i.issued_at limit p_limit);
   delete from private.customer_invoices where id in(select i.id from private.customer_invoices i
     where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at))
       and not exists(select 1 from private.customer_invoice_payments l where l.invoice_id=i.id)
+      and not exists(select 1 from private.invoice_transfers t where t.customer_invoice_id=i.id)
     order by i.issued_at limit p_limit);
   get diagnostics customer_invoices=row_count;
   delete from private.post_addon_windows where id in(select w.id from private.post_addon_windows w

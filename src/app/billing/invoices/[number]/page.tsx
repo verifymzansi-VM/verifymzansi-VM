@@ -28,7 +28,9 @@ async function loadInvoice(number: string) {
 
 export default async function InvoicePage({ params }: { params: Promise<{ number: string }> }) {
   const { number } = await params;
-  const invoice = await loadInvoice(decodeURIComponent(number));
+  // Next has decoded the segment; anything that is not an invoice number
+  // (including malformed escapes) reads as not found.
+  const invoice = await loadInvoice(number);
   if (!invoice) notFound();
   return (
     <div className="flex min-h-screen flex-col">
@@ -56,6 +58,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ number
               buyer={invoice.buyer}
               consentWording={invoice.consent.wording}
               checkoutOpen={invoice.latest_attempt?.checkout_open === true}
+              transferWaiting={invoice.transfer_waiting}
             />
           </div>
         </div>

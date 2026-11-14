@@ -17,7 +17,12 @@ import {
   recordStaffSlotRefund,
   refundReasonCode,
 } from "@/lib/foundation/staff-payments";
-import { issueStaffInvoice, voidStaffInvoice } from "@/lib/foundation/customer-invoices";
+import {
+  invoiceTransferInput,
+  issueStaffInvoice,
+  recordStaffInvoiceTransfer,
+  voidStaffInvoice,
+} from "@/lib/foundation/customer-invoices";
 import {
   inviteFrontendStaffOrganisationAdmin,
   manageFrontendStaffOrganisation,
@@ -166,6 +171,8 @@ const schema = z.discriminatedUnion("action", [
     reason,
   }),
   z.object({ action: z.literal("invoice.void"), invoiceId: uuid, reason }),
+  // A cleared bank transfer to an invoice; a second staff member confirms it.
+  invoiceTransferInput.extend({ action: z.literal("invoice.record_transfer") }),
   z.object({ action: z.literal("payment.refund_approve"), requestId: uuid }),
   z.object({ action: z.literal("payment.refund_decline"), requestId: uuid, reason }),
   z.object({
@@ -304,6 +311,10 @@ export async function POST(request: Request) {
       if (body.action === "invoice.issue") {
         const { action: _action, ...invoice } = body;
         return { success: true, data: await issueStaffInvoice(api, invoice) };
+      }
+      if (body.action === "invoice.record_transfer") {
+        const { action: _action, ...transfer } = body;
+        return { success: true, data: await recordStaffInvoiceTransfer(api, transfer) };
       }
       if (body.action === "invoice.void")
         return {

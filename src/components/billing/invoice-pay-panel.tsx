@@ -18,6 +18,8 @@ export interface InvoicePayPanelProps {
   consentWording: string;
   /** The customer's Ozow page for this invoice is still open. */
   checkoutOpen: boolean;
+  /** A bank transfer to this invoice waits for staff to confirm it. */
+  transferWaiting?: boolean;
 }
 
 const field =
@@ -46,6 +48,7 @@ export function InvoicePayPanel({
   buyer,
   consentWording,
   checkoutOpen,
+  transferWaiting = false,
 }: InvoicePayPanelProps) {
   const router = useRouter();
   const busy = useRef(false);
@@ -88,7 +91,7 @@ export function InvoicePayPanel({
   }
 
   async function payNow() {
-    if (busy.current || !consent || !buyer || editing) return;
+    if (busy.current || !consent || !buyer || editing || transferWaiting) return;
     busy.current = true;
     setPaying(true);
     setError(null);
@@ -216,45 +219,54 @@ export function InvoicePayPanel({
             <h2 id="invoice-pay" className="font-display text-lg font-semibold">
               Pay
             </h2>
-            <div className="flex items-start gap-3 rounded-xl border border-border/80 bg-muted/40 p-3.5">
-              <input
-                type="checkbox"
-                id="invoice-cooling-off"
-                checked={consent}
-                onChange={(event) => setConsent(event.target.checked)}
-                className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-input accent-brand-green-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:accent-brand-green-400"
-              />
-              <label
-                htmlFor="invoice-cooling-off"
-                className="cursor-pointer text-sm leading-6 text-foreground/80"
-              >
-                {consentWording}{" "}
-                <Link
-                  href="/terms#refunds"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
+            {transferWaiting ? (
+              <p role="status" className="rounded-xl bg-muted/60 p-3 text-sm">
+                Your bank transfer to this invoice is being checked. You do not need to pay again;
+                your slots start once it is confirmed.
+              </p>
+            ) : (
+              <>
+                <div className="flex items-start gap-3 rounded-xl border border-border/80 bg-muted/40 p-3.5">
+                  <input
+                    type="checkbox"
+                    id="invoice-cooling-off"
+                    checked={consent}
+                    onChange={(event) => setConsent(event.target.checked)}
+                    className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-input accent-brand-green-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:accent-brand-green-400"
+                  />
+                  <label
+                    htmlFor="invoice-cooling-off"
+                    className="cursor-pointer text-sm leading-6 text-foreground/80"
+                  >
+                    {consentWording}{" "}
+                    <Link
+                      href="/terms#refunds"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
+                    >
+                      Refunds
+                    </Link>
+                  </label>
+                </div>
+                {errorBlock}
+                <Button
+                  type="button"
+                  variant="trust-verified"
+                  className="h-12 w-full rounded-full text-base"
+                  disabled={!consent || !buyer || editing || paying}
+                  onClick={() => void payNow()}
                 >
-                  Refunds
-                </Link>
-              </label>
-            </div>
-            {errorBlock}
-            <Button
-              type="button"
-              variant="trust-verified"
-              className="h-12 w-full rounded-full text-base"
-              disabled={!consent || !buyer || editing || paying}
-              onClick={() => void payNow()}
-            >
-              {paying ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : null}
-              {checkoutOpen ? "Continue payment" : "Pay now"}
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              {!buyer || editing
-                ? "Save your billing details first."
-                : "You pay on Ozow's secure page, straight from your bank."}
-            </p>
+                  {paying ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : null}
+                  {checkoutOpen ? "Continue payment" : "Pay now"}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  {!buyer || editing
+                    ? "Save your billing details first."
+                    : "You pay on Ozow's secure page, straight from your bank."}
+                </p>
+              </>
+            )}
           </section>
         </>
       ) : null}

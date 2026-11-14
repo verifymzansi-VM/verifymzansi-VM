@@ -332,6 +332,7 @@ it("issues and voids a customer invoice with the staff commands", async () => {
     payment_id: null,
     payment_status: null,
     voided_at: null,
+    transfer_waiting: false,
     latest_attempt: null,
     account_id: payment,
     customer_email: "thandi@example.test",
@@ -341,6 +342,7 @@ it("issues and voids a customer invoice with the staff commands", async () => {
     issue_reason: "Invoice requested by email",
     void_reason: null,
     attempts: 0,
+    extra_payments: [],
   };
   rpc.mockResolvedValue({ data: { ...view, repeated: false }, error: null });
   const issued = await POST(request(invoiceRequest));
@@ -374,6 +376,37 @@ it("issues and voids a customer invoice with the staff commands", async () => {
   expect(rpc).toHaveBeenLastCalledWith(
     "void_staff_invoice",
     { p_invoice_id: line, p_reason: "Wrong term" },
+    { get: false }
+  );
+});
+
+it("records a bank transfer to an invoice with the staff command", async () => {
+  rpc.mockResolvedValue({
+    data: {
+      transfer_id: line,
+      status: "awaiting_confirmation",
+      invoice_number: "VM-2026-000001",
+      repeated: false,
+    },
+    error: null,
+  });
+  const response = await POST(
+    request({
+      action: "invoice.record_transfer",
+      invoiceNumber: "VM-2026-000001",
+      bankReference: "FNB 2026-11",
+      clearedOn: "2026-11-14",
+      coolingOffWaiver: true,
+      reason: "EFT cleared on the statement",
+    })
+  );
+  expect(response.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "record_staff_invoice_transfer",
+    expect.objectContaining({
+      p_invoice_number: "VM-2026-000001",
+      p_bank_reference: "FNB 2026-11",
+    }),
     { get: false }
   );
 });

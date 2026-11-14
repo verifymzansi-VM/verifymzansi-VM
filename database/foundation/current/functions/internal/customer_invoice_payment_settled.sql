@@ -15,9 +15,6 @@ begin
   if inv.status = 'issued' then
     update private.customer_invoices set status = 'paid', payment_id = new.id, paid_at = new.completed_at
       where id = inv.id;
-  elsif inv.payment_id is distinct from new.id then
-    perform internal.record_payment_problem(new.id, 'conflicting_transaction', 'notice', true,
-      coalesce(new.provider_transaction_id, new.id::text));
   end if;
   return null;
 end;
