@@ -6,6 +6,7 @@ import { FoundationSessionError } from "@/lib/foundation/request-api";
 import {
   uploadFoundationMedia,
   FoundationMediaError,
+  IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE,
   type FoundationUploadedMedia,
 } from "@/lib/foundation/media-upload";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
@@ -59,7 +60,11 @@ export async function uploadFoundationMediaRequest(request: NextRequest) {
         objects.push(await uploadFoundationMedia(caller.api, createFoundationServiceApi(), file));
       } catch (error) {
         status = error instanceof FoundationMediaError ? error.status : 503;
-        errors.push("A file could not be uploaded. Check the format and storage allowance.");
+        errors.push(
+          error instanceof FoundationMediaError && error.reason === "images_allowance_exhausted"
+            ? IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE
+            : "A file could not be uploaded. Check the format and storage allowance."
+        );
       }
     }
     return context.respond(

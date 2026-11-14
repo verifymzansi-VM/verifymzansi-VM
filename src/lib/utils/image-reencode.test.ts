@@ -177,7 +177,7 @@ describe("reencodeImage with the Cloudflare Images binding (Workers)", () => {
   });
 
   it.each([
-    ["9422: monthly limit reached", "unavailable"],
+    ["9422: monthly limit reached", "exhausted"],
     ["9432: not available on legacy billing", "unavailable"],
     ["network connection lost", "unavailable"],
     ["ERROR 9520: unsupported image format", "undecodable"],

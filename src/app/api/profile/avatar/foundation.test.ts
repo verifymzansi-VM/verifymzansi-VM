@@ -4,7 +4,7 @@ import { NextRequest, type NextResponse } from "next/server";
 import { POST } from "./route";
 import { createFoundationRouteContext } from "@/lib/foundation/request-route";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
-import { uploadFoundationMedia } from "@/lib/foundation/media-upload";
+import { FoundationMediaError, uploadFoundationMedia } from "@/lib/foundation/media-upload";
 import { setFoundationAvatar, FoundationProfileError } from "@/lib/foundation/account-profile";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -96,6 +96,17 @@ it("keeps the previous avatar intact when a concurrent edit makes the revision s
   expect(response.status).toBe(412);
   expect((await response.json()).error).toMatch(/Reload/);
   expect(createAdminClient).not.toHaveBeenCalled();
+});
+it("tells the member when photo uploads are paused for the month, keeping the old avatar", async () => {
+  vi.mocked(uploadFoundationMedia).mockRejectedValue(
+    new FoundationMediaError(503, "images_allowance_exhausted")
+  );
+  const response = await POST(request());
+  expect(response.status).toBe(503);
+  expect((await response.json()).error).toBe(
+    "Photo uploads are paused for now. Please try again later."
+  );
+  expect(setFoundationAvatar).not.toHaveBeenCalled();
 });
 it("refuses CSRF failures, invalid revisions, oversized files and caller-selected ownership before upload", async () => {
   expect((await POST(request({ csrfValid: false }))).status).toBe(403);
