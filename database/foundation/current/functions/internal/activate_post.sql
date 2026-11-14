@@ -42,14 +42,19 @@ begin
     -- Cursor predicates may predate a row wait; re-read all authority and wall time.
     continue when not internal.entitlement_for_post_eligible(ent.id,post.id,actor);
     any_usable := true;
-    select count(*) into used from private.post_activations a where a.entitlement_id = ent.id and a.released_at is null;
+    -- A slot's posts over all its periods: a post still in the period that
+    -- just ended (waiting to move to this one) fills the slot.
+    select count(*) into used from private.post_activations a where a.released_at is null
+      and a.entitlement_id in (select c.id from private.entitlements c
+        where c.id = coalesce(ent.slot_id, ent.id) or c.slot_id = coalesce(ent.slot_id, ent.id));
     continue when used >= ent.slot_capacity;
     if ent.activations_per_period is not null then
       -- Posts going live in the period: a new post and an ended post brought
-      -- back each count; a submission that review rejected does not.
+      -- back each count; a submission that review rejected does not, nor a
+      -- post moved on into a renewed period.
       select count(*) into used from private.post_activations a where a.entitlement_id = ent.id
         and a.activated_at > statement_timestamp() - make_interval(days => ent.activation_period_days)
-        and a.release_reason is distinct from 'moderation';
+        and a.release_reason is distinct from 'moderation' and not a.continued;
       continue when used >= ent.activations_per_period;
     end if;
     insert into private.post_activations (post_id, entitlement_id, owner_id) values (post.id, ent.id, actor)

@@ -11,7 +11,9 @@ AS $function$
   from private.posts p join private.event_details e on e.post_id = p.id
   where p.id = p_post_id and p.kind = 'event'
   union all
-  select e.ends_at, e.max_photos, e.max_videos
+  -- A paid slot funds its post until the end of the slot's unbroken run of
+  -- paid periods (a renewal follows on from the period before it).
+  select internal.slot_chain_end(e.id), e.max_photos, e.max_videos
   from private.posts p
   join private.post_activations a on a.post_id = p.id and a.released_at is null and a.owner_id = p.owner_id
   join private.entitlements e on e.id = a.entitlement_id

@@ -20,6 +20,7 @@ declare
   fulfillable boolean;
   line_count integer := 0;
   fingerprint text;
+  renewing uuid[];
 begin
   if jsonb_typeof(ev) <> 'object' or not (array(select jsonb_object_keys(ev)) <@ array['payload_sha256',
       'merchant_reference', 'provider_request_id', 'provider_transaction_id', 'status', 'amount_cents', 'currency'])
@@ -90,13 +91,21 @@ begin
       select count(*) into line_count from private.payment_lines l where l.payment_id = pay.id and l.status = 'open';
       if line_count > 0 and fulfillable then
         -- Slots are delivered only within the person's limit (every account
-        -- of the identity); otherwise the money goes to reconciliation.
+        -- of the identity, each slot once); otherwise the money goes to
+        -- reconciliation. A renewal of a held slot adds no slot (so it is
+        -- delivered even to a person now over their limit), but the slots
+        -- renewed ahead stay within the limit.
         fingerprint := internal.individual_slot_identity(pay.owner_id);
         if fingerprint is not null then
           perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
         end if;
-        fulfillable := (internal.individual_slots_counted(fingerprint, pay.owner_id, pay.id)->>'held')::integer
-          + line_count <= internal.individual_slot_limit(fingerprint);
+        renewing := internal.slot_lines_renewing(pay.id);
+        fulfillable := (internal.slot_lines_adding(pay.id) = 0
+            or (internal.individual_slots_counted(fingerprint, pay.owner_id, pay.id)->>'held')::integer
+              + internal.slot_lines_adding(pay.id) <= internal.individual_slot_limit(fingerprint))
+          and (cardinality(renewing) = 0
+            or internal.individual_slots_extended(fingerprint, pay.owner_id, pay.id, renewing)
+              <= internal.individual_slot_limit(fingerprint));
       end if;
     end if;
     fulfillable := coalesce(fulfillable,false);
@@ -110,15 +119,9 @@ begin
       insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key)
       values('payment_reconciliation_required',pay.id,pay.owner_id,'payment_reconciliation_required:'||pay.id);
     elsif pay.product_kind = 'plan' and line_count > 0 then
-      -- One entitlement per slot, each with its own line (and so its own refund).
-      insert into private.entitlements (owner_id, source, area, payment_id, payment_line_id, slot_capacity,
-        activations_per_period, activation_period_days, max_photos, max_videos, starts_at, ends_at, addon_capabilities)
-      select pay.owner_id, 'retail_paid', snap->>'area', pay.id, l.id, (snap->>'slot_capacity')::integer,
-        (snap->>'activations_per_period')::integer, (snap->>'activation_period_days')::integer,
-        (snap->>'max_photos')::integer, (snap->>'max_videos')::integer, statement_timestamp(),
-        statement_timestamp() + make_interval(days => (snap->>'duration_days')::integer),
-        array(select jsonb_array_elements_text(coalesce(snap->'addon_capabilities','[]'::jsonb)))
-      from private.payment_lines l where l.payment_id = pay.id and l.status = 'open' order by l.line_number;
+      -- One entitlement per slot, each with its own line (and so its own
+      -- refund); a renewal starts when its slot's last period ends.
+      perform internal.issue_slot_line_entitlements(pay.id);
     elsif pay.product_kind = 'plan' then
       -- A plan payment made before slot lines existed: one entitlement.
       insert into private.entitlements (owner_id, source, area, payment_id, slot_capacity, activations_per_period,

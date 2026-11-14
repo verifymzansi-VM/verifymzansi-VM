@@ -9,6 +9,7 @@ create table private.post_activations (
   activated_at timestamp with time zone default statement_timestamp() not null,
   released_at timestamp with time zone,
   release_reason text,
+  continued boolean default false not null,
   constraint post_activations_check CHECK ((released_at IS NULL) = (release_reason IS NULL)),
   constraint post_activations_check1 CHECK (post_id IS NOT NULL OR released_at IS NOT NULL),
   constraint post_activations_entitlement_id_fkey FOREIGN KEY (entitlement_id) REFERENCES private.entitlements(id) ON DELETE RESTRICT,
