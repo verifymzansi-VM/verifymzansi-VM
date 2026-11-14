@@ -589,12 +589,15 @@ commands in Git Bash, or use the PowerShell equivalents noted).
    newer Deploy run: if one already fixed forward, do not roll back to an older
    release. Re-enable the workflow only after step 6.
 1. **Pick the last good release and its version IDs.** Actions → Deploy: the
-   newest successful run before the failed one. Its log prints one
-   `Current Version ID:` line per Worker; those IDs are the targets. For the
-   main Worker, the target version's message is `verified-main-deployment`
-   (inactive `inactive-main-candidate` uploads carry the same commit tag and are
-   never a target). `wrangler versions list` shows only the 10 newest versions;
-   use the Cloudflare dashboard (Worker → Deployments) for older ones.
+   newest successful run before the failed one. A run whose only failed step is
+   "Recheck live project security settings" deployed its code completely: it
+   counts as good here (that step reports a dashboard setting to fix, not a bad
+   release). Its log prints one `Current Version ID:` line per Worker; those IDs
+   are the targets. For the main Worker, the target version's message is
+   `verified-main-deployment` (inactive `inactive-main-candidate` uploads carry
+   the same commit tag and are never a target). `wrangler versions list` shows
+   only the 10 newest versions; use the Cloudflare dashboard (Worker →
+   Deployments) for older ones.
 2. **Check it is a foundation build.**
    `git show <sha>:wrangler.toml | grep NEXT_PUBLIC_DATA_BACKEND` (PowerShell:
    `git show <sha>:wrangler.toml | Select-String NEXT_PUBLIC_DATA_BACKEND`) must

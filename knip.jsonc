@@ -25,7 +25,6 @@
     "scripts/foundation-api-typecheck.ts",
     // Manual steps documented in database/foundation/README.md.
     "scripts/build-foundation-baseline.mjs",
-    "scripts/check-foundation-hosted-exposure.mjs",
     "scripts/generate-person-name-rule.mjs",
     "scripts/probe-foundation-staff-adapter.mjs",
     // Generators named in the headers of the SQL files they produce.
