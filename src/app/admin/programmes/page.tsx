@@ -1,4 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { redirect } from "next/navigation";
+import { SHOW_STAFF_PROGRAMMES } from "@/lib/hidden-features";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveCommercialSettings } from "@/lib/commercial/settings";
 import { PageHeader } from "@/components/layout/page-header";
@@ -17,6 +19,8 @@ export default async function ProgrammesPage({
   searchParams: Promise<{ account?: string }>;
 }) {
   const { user } = await requireStaff("contracts:manage");
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_STAFF_PROGRAMMES) redirect("/admin");
 
   const admin = createAdminClient();
   const { account } = await searchParams;

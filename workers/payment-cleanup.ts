@@ -4,16 +4,24 @@ import { sendHeartbeat } from "./heartbeat";
 import type { ScheduledWorker } from "./handler-types";
 
 /**
- * Cloudflare Worker — payment reconciliation, every 10 minutes. The app's
- * journal-backed reconciliation does the work; this Worker holds only the
- * scoped job credential.
+ * Cloudflare Worker — payment reconciliation, every 10 minutes, and the daily
+ * Ozow refund check (05:15 UTC, 07:15 South African time). The app's
+ * journal-backed reconciliation and the read-only refund check do the work;
+ * this Worker holds only the scoped job credential.
  */
 type Env = FoundationJobEnv & { HEARTBEAT_URL_PAYMENT_CLEANUP?: string };
+
+/** The daily refund check's schedule (wrangler.payment-cleanup.toml). */
+const DAILY_REFUND_CHECK_CRON = "15 5 * * *";
 
 const worker: ScheduledWorker<Env> = {
   async scheduled(event, env) {
     // Throws on any failure, so Cloudflare marks the run failed and no
     // heartbeat is sent. Manual runs do not count as the schedule firing.
+    if (event.cron === DAILY_REFUND_CHECK_CRON) {
+      await triggerFoundationJob(env, "/api/internal/payments/refunds/reconcile");
+      return;
+    }
     await triggerFoundationJob(env, "/api/internal/payments/reconcile");
     if (event.cron !== "manual")
       await sendHeartbeat("payment-cleanup", env.HEARTBEAT_URL_PAYMENT_CLEANUP);
@@ -31,6 +39,7 @@ const worker: ScheduledWorker<Env> = {
         worker: "verifymzansi-payment-cleanup",
         status: "healthy",
         schedule: "*/10 * * * *",
+        refundCheck: DAILY_REFUND_CHECK_CRON,
       }),
       { headers: { "Content-Type": "application/json" } }
     );

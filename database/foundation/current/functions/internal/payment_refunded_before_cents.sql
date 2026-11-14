@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION internal.payment_refunded_before_cents(p_payment_id u
  SET search_path TO 'pg_catalog'
 AS $function$
   select coalesce((select sum(r.amount_cents) from private.payment_refund_requests r
-      where r.payment_id = p_payment_id and r.status in ('applied', 'awaiting_approval')), 0)
+      where r.payment_id = p_payment_id and r.status in ('applied', 'awaiting_approval', 'approved', 'sent')), 0)
     + coalesce((select sum(l.amount_cents) from private.payment_lines l
       where l.payment_id = p_payment_id and l.status = 'reversed'
         and not exists(select 1 from private.payment_refund_requests r

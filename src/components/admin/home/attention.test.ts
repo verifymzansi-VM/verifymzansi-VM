@@ -54,10 +54,13 @@ describe("attentionItems", () => {
     const hrefs = attentionItems(dashboard, "moderator").map((i) => i.href);
     expect(hrefs).not.toContain("/admin/operations");
     expect(hrefs).not.toContain("/admin/governance/roles");
-    expect(attentionItems(dashboard, "admin").map((i) => i.href)).toContain("/admin/operations");
+    const adminHrefs = attentionItems(dashboard, "admin").map((i) => i.href);
+    expect(adminHrefs).toContain("/admin/governance/roles");
+    // Operations health is hidden until it works (SHOW_STAFF_OPERATIONS).
+    expect(adminHrefs).not.toContain("/admin/operations");
   });
 
-  it("flags a stopped expiry job, and stays quiet while it runs", () => {
+  it("leaves out a stopped expiry job while Operations health is hidden", () => {
     const platform = (lastRun: string | null) => ({
       incidents_open: 0,
       incidents_critical: 0,
@@ -68,8 +71,10 @@ describe("attentionItems", () => {
     });
     const keys = (lastRun: string | null) =>
       attentionItems({ ...base, platform: platform(lastRun) }, "admin").map((i) => i.key);
+    // Its link leads to Operations health, hidden until it works
+    // (SHOW_STAFF_OPERATIONS), so the item is left out as well.
     expect(keys(minutesAgo(4))).not.toContain("expiry-job");
-    expect(keys(minutesAgo(30))).toContain("expiry-job");
-    expect(keys(null)).toContain("expiry-job");
+    expect(keys(minutesAgo(30))).not.toContain("expiry-job");
+    expect(keys(null)).not.toContain("expiry-job");
   });
 });

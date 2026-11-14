@@ -1257,6 +1257,24 @@ test.describe("account recovery and self-service", () => {
       const guarded = await guard(context);
       await signInBrowser(context, leaver);
       await openProfileTab(page, "Account");
+      const closeLine = page.getByText("To close your account, send us a data request.");
+      await expect(
+        closeLine.or(page.getByRole("button", { name: "Delete", exact: true })).first()
+      ).toBeVisible({ timeout: 20_000 });
+      if (await closeLine.isVisible()) {
+        // Hidden until it works (SHOW_ACCOUNT_DELETION): no Delete button, a
+        // line pointing to the data request form, and the route is not served.
+        await expect(page.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+        await expect(page.getByRole("link", { name: "data request" })).toHaveAttribute(
+          "href",
+          "/dsar"
+        );
+        expect(guarded.reply(DELETE_PATH)).toEqual([]);
+        expect(await canSignIn(leaver.email, leaver.password)).toBe(true);
+        expectContained(guarded);
+        expectNoProviderSince(mark);
+        throw new KnownBreak(`${SEC02}: account deletion is hidden until it works`);
+      }
       await page.getByRole("button", { name: "Delete", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "Confirm account deletion" });
       await dialog.getByLabel("Current password").fill(leaver.password);

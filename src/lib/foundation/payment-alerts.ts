@@ -88,6 +88,13 @@ export interface PaymentAlertOptions {
 export type PaymentAlertStep = (context: PaymentAlertContext) => Promise<string[]>;
 
 const instant = z.string().pipe(z.iso.datetime({ offset: true }));
+const problemSource = z.enum([
+  "notice",
+  "status_check",
+  "refund_notice",
+  "refund_check",
+  "refund_send",
+]);
 const alertClaimSchema = z.object({
   claim: z.uuid().nullable(),
   problems: z
@@ -96,7 +103,7 @@ const alertClaimSchema = z.object({
         id: z.uuid(),
         payment_id: z.uuid(),
         reason: z.string().regex(/^[a-z_]{1,64}$/),
-        source: z.enum(["notice", "status_check"]),
+        source: problemSource,
         raised_at: instant,
         merchant_reference: z.string().min(1).max(100),
         amount_cents: z.string().regex(/^[0-9]{1,12}$/),
@@ -124,7 +131,7 @@ const digestSchema = z.object({
         z.object({
           payment_id: z.uuid().nullable(),
           reason: z.string().regex(/^[a-z_]{1,64}$/),
-          source: z.enum(["notice", "status_check"]),
+          source: problemSource,
           first_seen_at: instant,
           last_seen_at: instant,
           occurrences: z.number().int().positive(),
@@ -146,6 +153,7 @@ const ANOMALY_WORDS: Record<PaymentAnomaly, string> = {
   paid_twice: "paid twice",
   not_activated: "paid but not activated",
   refunded: "money returned after activation",
+  refund_problem: "refund through Ozow needs staff",
 };
 const OUTCOME_WORDS: Record<string, string> = {
   completed: "Paid and activated",
@@ -163,7 +171,13 @@ const OUTCOME_WORDS: Record<string, string> = {
   missing_transaction: "No transaction number",
   unknown_reference: "Unknown payment reference",
 };
-const SOURCE_WORDS = { notice: "the payment notice", status_check: "the 10-minute status check" };
+const SOURCE_WORDS = {
+  notice: "the payment notice",
+  status_check: "the 10-minute status check",
+  refund_notice: "Ozow's refund notice",
+  refund_check: "the daily refund check",
+  refund_send: "sending the refund to Ozow",
+};
 
 const label = (reason: string) =>
   isPaymentProblemReason(reason) ? PAYMENT_PROBLEM_LABELS[reason] : reason.replace(/_/g, " ");

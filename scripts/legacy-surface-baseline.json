@@ -2,10 +2,10 @@
   "$comment": "Ratchet for pnpm check:legacy-surface (roadmap M0.11). Every value may only go down. Lower it with `pnpm check:legacy-surface --update` after removing old-backend code; raising any value needs a reviewed reason. legacyClientImporters is also the frozen import list read by .dependency-cruiser.cjs.",
   "counts": {
     "backendSwitches": 0,
-    "legacyClientImports": 44,
+    "legacyClientImports": 41,
     "retiredCommandNames": 27,
     "retiredCommandCalls": 27,
-    "retiredTableReads": 125
+    "retiredTableReads": 93
   },
   "legacyClientImporters": [
     "src/app/(marketplace)/_lib/promotion-detail-page-content.tsx",
@@ -44,11 +44,8 @@
     "src/lib/auth/staff-session.ts",
     "src/lib/business-verification/admin-queries.ts",
     "src/lib/content/private-fields.ts",
-    "src/lib/notifications.ts",
-    "src/lib/promotions/public-tourism-events.ts",
     "src/lib/services/audit.ts",
     "src/lib/services/kyc-metrics.ts",
-    "src/lib/services/plan-tier.ts",
     "src/lib/utils/admin-queries.ts",
     "src/lib/utils/admin-route-guard.ts",
     "src/lib/utils/authenticated-mutation-route.ts"
@@ -99,7 +96,6 @@
     "content_views",
     "decision_records",
     "dsar_cases",
-    "entitlements",
     "feature_flags",
     "intro_trial_campaigns",
     "intro_trial_claims",
@@ -108,7 +104,6 @@
     "listing_private",
     "listings",
     "media_uploads",
-    "notifications",
     "operation_jobs",
     "ops_events",
     "ops_heartbeats",
@@ -122,7 +117,6 @@
     "slot_assignments",
     "slot_entitlement_members",
     "slot_entitlements",
-    "staff_roles",
     "trial_extension_offers",
     "verification_sessions",
     "verification_steps"

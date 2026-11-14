@@ -4,6 +4,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { FoundationStaffCommandError, staffCommandRefusal } from "@/lib/foundation/staff-command";
 import { decideRestoredCommission, saveRestoredPartner } from "@/lib/foundation/partners";
+import { assertStaffRefundApprovable } from "@/lib/foundation/ozow-refunds";
 import {
   activateStaffPaidPayment,
   approveStaffPaymentRefund,
@@ -288,11 +289,15 @@ export async function POST(request: Request) {
         };
       if (body.action === "payment.record_transfer")
         return { success: true, data: await recordStaffBankTransfer(api, body) };
-      if (body.action === "payment.refund_approve")
+      if (body.action === "payment.refund_approve") {
+        // The same rules as the Ozow refunds route: a refund through Ozow is
+        // never approved here while refunds through Ozow are switched off.
+        await assertStaffRefundApprovable(api, body.requestId.toLowerCase());
         return {
           success: true,
           data: await approveStaffPaymentRefund(api, body.requestId.toLowerCase()),
         };
+      }
       if (body.action === "payment.refund_decline")
         return {
           success: true,

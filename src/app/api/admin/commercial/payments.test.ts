@@ -142,6 +142,7 @@ it("activates a paid but undelivered payment and approves a waiting refund", asy
     { p_payment_id: payment, p_reason: "Paid after cancel" },
     { get: false }
   );
+  rpc.mockResolvedValueOnce({ data: context("manual"), error: null });
   rpc.mockResolvedValueOnce({
     data: null,
     error: { code: "42501", details: "refund_approver_same", message: "refused" },
@@ -151,6 +152,30 @@ it("activates a paid but undelivered payment and approves a waiting refund", asy
   expect(await approved.json()).toMatchObject({
     error: "Another staff member must approve this refund: you recorded it.",
   });
+  expect(rpc).toHaveBeenLastCalledWith(
+    "approve_staff_payment_refund",
+    { p_request_id: line },
+    { get: false }
+  );
+});
+
+const context = (channel: string) => ({
+  channel,
+  status: "awaiting_approval",
+  ozow_checked: false,
+  ozow_missing: false,
+});
+
+it("never approves a refund through Ozow here while refunds through Ozow are off", async () => {
+  vi.stubEnv("OZOW_API_REFUNDS_ENABLED", "false");
+  rpc.mockResolvedValueOnce({ data: context("api"), error: null });
+  const response = await POST(request({ action: "payment.refund_approve", requestId: line }));
+  expect(response.status).toBe(409);
+  expect(rpc).toHaveBeenCalledExactlyOnceWith(
+    "get_staff_refund_context",
+    { p_payment_id: null, p_line_id: null, p_request_id: line },
+    { get: false }
+  );
 });
 
 const transfer = {

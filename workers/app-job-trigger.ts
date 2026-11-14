@@ -3,7 +3,10 @@ import type { AbortSignal as WorkerAbortSignal } from "@cloudflare/workers-types
 
 type AppBinding = Pick<FoundationCompanionBindings, "APP" | "APP_URL">;
 type JobPath =
-  "/api/internal/payments/reconcile" | "/api/internal/retention/run" | "/api/webhooks/ops-jobs";
+  | "/api/internal/payments/reconcile"
+  | "/api/internal/payments/refunds/reconcile"
+  | "/api/internal/retention/run"
+  | "/api/webhooks/ops-jobs";
 export type FoundationJobEnv = AppBinding & {
   DATA_BACKEND: "foundation";
   WORKER_API_KEY: string;
@@ -12,7 +15,10 @@ export type FoundationJobEnv = AppBinding & {
  * authority stay on the app's journal-backed commands. Never forward secrets. */
 export async function triggerFoundationJob(
   env: FoundationJobEnv,
-  path: "/api/internal/payments/reconcile" | "/api/internal/retention/run"
+  path:
+    | "/api/internal/payments/reconcile"
+    | "/api/internal/payments/refunds/reconcile"
+    | "/api/internal/retention/run"
 ) {
   await triggerBoundAppJob(env, path, env.WORKER_API_KEY);
 }
@@ -37,6 +43,7 @@ export async function triggerBoundAppJob(env: AppBinding, path: JobPath, credent
     typeof env.APP.fetch !== "function" ||
     ![
       "/api/internal/payments/reconcile",
+      "/api/internal/payments/refunds/reconcile",
       "/api/internal/retention/run",
       "/api/webhooks/ops-jobs",
     ].includes(path)

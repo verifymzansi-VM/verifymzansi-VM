@@ -1,4 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { redirect } from "next/navigation";
+import { SHOW_STAFF_INTELLIGENCE } from "@/lib/hidden-features";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { PageHeader } from "@/components/layout/page-header";
@@ -14,6 +16,8 @@ export const metadata = {
 
 export default async function IntelligenceUsersPage() {
   await requireStaff("bi:view");
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_STAFF_INTELLIGENCE) redirect("/admin");
 
   const admin = createAdminClient();
 

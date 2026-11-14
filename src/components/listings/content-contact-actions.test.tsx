@@ -105,7 +105,6 @@ describe("seller contact actions", () => {
     });
   });
   it("shows the check before a number as the compact, out-of-sight widget that fits a 320 px phone", () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     render(<ListingContactActions listingId="abc" revealable={{ phone: true, whatsapp: false }} />);
     fireEvent.click(screen.getByRole("button", { name: "Show contact number" }));
     expect(widgetProps.at(-1)).toMatchObject({ size: "compact", appearance: "interaction-only" });
@@ -113,7 +112,6 @@ describe("seller contact actions", () => {
     expect(screen.getByRole("button", { name: "Show contact number" })).toBeDisabled();
   });
   it("says no number was shared when the reveal comes back empty, and points to the enquiry", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ phone: null, whatsapp: null }))
     );
