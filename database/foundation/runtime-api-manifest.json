@@ -4379,6 +4379,245 @@
         "service_role": false
       },
       "authority": "Current payment refund capability (admins) and recent authenticator proof, checked before the website asks Ozow anything for staff; for a payment (or one of its slots), its Ozow transaction id and the amount a refund of it is; for a refund record, its channel, status and whether Ozow's status of it was read or it was seen missing. No account, contact or audit details."
+    },
+    {
+      "name": "issue_staff_invoice",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_account_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_term_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_slots",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_due_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; a confirmed account with current access and an accepted ID review, the Individual slot on sale for 30, 90 or 180 days, 1 to 25 slots within the person's Individual slot limit (at most R50,000), 1 to 30 days to pay, an audit reason and the merchant VAT setting 'not registered': issues an audited invoice numbered VM-YYYY-NNNNNN, the next number of the South African year taken under the counter's lock in the same transaction (a refusal takes no number), priced by the database. The same request id again by the same staff member returns the first invoice."
+    },
+    {
+      "name": "void_staff_invoice",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never for an account of their own identity; an audit reason: voids an unpaid invoice that no payment attempt can still pay and no bank transfer waits for (an attempt never sent to Ozow is cancelled with it). A paid invoice is refunded instead. The invoice keeps its number. The same request again returns the result."
+    },
+    {
+      "name": "get_staff_invoices",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability and recent authenticator proof: the latest 50 invoices (customer email and name, who issued them and why, status, latest payment attempt) and the number unpaid."
+    },
+    {
+      "name": "get_staff_invoice",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_number",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability and recent authenticator proof: one invoice by number, as staff see it."
+    },
+    {
+      "name": "get_my_invoices",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "A signed-in account with current access and a live session, only for its own invoices (any other number, or a malformed one, reads as not found): the caller's latest 100 invoices (number, status, dates, description, total, payment status)."
+    },
+    {
+      "name": "get_my_invoice",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_number",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "A signed-in account with current access and a live session, only for its own invoices (any other number, or a malformed one, reads as not found): the invoice document (seller, billing details, slots, price, total, due date, payment reference, cooling-off consent and its wording, status and latest payment attempt); never staff details."
+    },
+    {
+      "name": "save_my_invoice_billing",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_number",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_buyer_name",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_buyer_address",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_buyer_registration_number",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "A signed-in account with current access and a live session, only for its own invoices (any other number, or a malformed one, reads as not found): saves the business or buyer name, address and optional registration number of an unpaid, not void invoice at the current revision (the same details again change nothing)."
+    },
+    {
+      "name": "start_invoice_payment",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_number",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_expected_total_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_consent",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "A signed-in account with current access and a live session, only for its own invoices (any other number, or a malformed one, reads as not found): an unpaid, not void invoice with billing details, the cooling-off box ticked (recorded once with time and wording version), the total shown equal to the invoice total, the plan still on sale at the invoice price, an accepted ID review and room within the Individual slot limit counting open checkouts: returns the attempt whose Ozow page is open or that was never sent to Ozow, refuses while an attempt is still being checked or a bank transfer to the invoice waits for confirmation or another payment for the same slot term is open at Ozow, and otherwise starts an ordinary pending Ozow payment of the invoice total with one line per slot and the invoice number as its reference (attempt n after the first: '<number>-n'; at most 20). Settled by the existing Ozow notice and status check; completion pays the invoice."
+    },
+    {
+      "name": "record_staff_invoice_transfer",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_number",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_bank_reference",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_cleared_on",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_waiver",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; the bank transfer rules (a bank reference of 4 to 60 letters, digits, spaces or . _ : / -, money cleared today or in the last 90 days, the customer's written cooling-off waiver confirmed, an audit reason): records a bank transfer of exactly the invoice's account, slot term, slots and total against an issued invoice with no payment attempt that could still be paid and no other transfer waiting, as waiting for a second staff member, whose confirmation pays the invoice. The same request again by the same staff member returns the first record."
     }
   ]
 }

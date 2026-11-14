@@ -8,6 +8,8 @@ import {
   staffPaymentListFilter,
 } from "@/lib/foundation/staff-payments";
 import { BankTransferPanel } from "@/components/admin/commercial/bank-transfer-form";
+import { InvoicePanel } from "@/components/admin/commercial/invoice-panel";
+import { readStaffInvoices } from "@/lib/foundation/customer-invoices";
 import { PaymentsPanel } from "@/components/admin/commercial/partners-panel";
 import { OzowRefundAttention } from "@/components/admin/commercial/ozow-refund-actions";
 import { PageHeader } from "@/components/layout/page-header";
@@ -35,79 +37,91 @@ export default async function PaymentsAdminPage({
   const page =
     Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
   const canConfirm = staff.assignedCapabilities?.includes("payments:confirm_transfer") === true;
-  const { rows, total, needsAttention, awaitingApproval, transfersUnavailable, waiting, ozow } =
-    await (async () => {
-      const { api } = await readFoundationServerSession();
-      const result = await readStaffPaymentList(api, page, status);
-      // Refunds through Ozow. Read while switched on; while off, only to know
-      // whether typed references retired for Ozow payments (once refunds went
-      // through Ozow). Off and never used, the page is exactly as before; a
-      // failed read while off leaves it as before too.
-      const apiRefunds = ozowApiRefundsEnabled();
-      const refunds = await readStaffOzowRefunds(
+  const {
+    rows,
+    total,
+    needsAttention,
+    awaitingApproval,
+    transfersUnavailable,
+    waiting,
+    ozow,
+    invoices,
+  } = await (async () => {
+    const { api } = await readFoundationServerSession();
+    const result = await readStaffPaymentList(api, page, status);
+    // Refunds through Ozow. Read while switched on; while off, only to know
+    // whether typed references retired for Ozow payments (once refunds went
+    // through Ozow). Off and never used, the page is exactly as before; a
+    // failed read while off leaves it as before too.
+    const apiRefunds = ozowApiRefundsEnabled();
+    const refunds = await readStaffOzowRefunds(
+      api,
+      result.items.map((item) => item.id)
+    ).catch((error: unknown) => {
+      if (apiRefunds) throw error;
+      return null;
+    });
+    const view =
+      refunds && (apiRefunds || refunds.typed_reference_retired)
+        ? {
+            api: apiRefunds,
+            retired: refunds.typed_reference_retired,
+            refundable: refunds.payments.filter((p) => p.ozow_refundable).map((p) => p.payment_id),
+            records: refunds.records,
+            attention: refunds.attention,
+          }
+        : null;
+    // Payments confirmed from a bank transfer show its reference, and the
+    // transfers waiting for a second staff member are listed; the payments
+    // list still loads if these reads fail, with a warning.
+    let unavailable = false;
+    const missing = (error: unknown) => {
+      log.warn("Bank transfer details unavailable", { error });
+      unavailable = true;
+    };
+    const [details, waitingTransfers, invoiceList] = await Promise.all([
+      readStaffBankTransfers(
         api,
         result.items.map((item) => item.id)
       ).catch((error: unknown) => {
-        if (apiRefunds) throw error;
-        return null;
-      });
-      const view =
-        refunds && (apiRefunds || refunds.typed_reference_retired)
-          ? {
-              api: apiRefunds,
-              retired: refunds.typed_reference_retired,
-              refundable: refunds.payments
-                .filter((p) => p.ozow_refundable)
-                .map((p) => p.payment_id),
-              records: refunds.records,
-              attention: refunds.attention,
-            }
-          : null;
-      // Payments confirmed from a bank transfer show its reference, and the
-      // transfers waiting for a second staff member are listed; the payments
-      // list still loads if these reads fail, with a warning.
-      let unavailable = false;
-      const missing = (error: unknown) => {
-        log.warn("Bank transfer details unavailable", { error });
-        unavailable = true;
-      };
-      const [details, waitingTransfers] = await Promise.all([
-        readStaffBankTransfers(
-          api,
-          result.items.map((item) => item.id)
-        ).catch((error: unknown) => {
+        missing(error);
+        return [];
+      }),
+      readStaffBankTransfersWaiting(api)
+        .then((read) => read.items)
+        .catch((error: unknown) => {
           missing(error);
           return [];
         }),
-        readStaffBankTransfersWaiting(api)
-          .then((read) => read.items)
-          .catch((error: unknown) => {
-            missing(error);
-            return [];
-          }),
-      ]);
-      const transfers = new Map(details.map((transfer) => [transfer.payment_id, transfer]));
-      return {
-        transfersUnavailable: unavailable,
-        waiting: waitingTransfers,
-        rows: result.items.map((item) => {
-          const transfer = transfers.get(item.id);
-          return transfer
-            ? {
-                ...item,
-                bank_transfer: {
-                  bank_reference: transfer.bank_reference,
-                  cleared_on: transfer.cleared_on,
-                },
-              }
-            : item;
-        }),
-        total: result.total,
-        needsAttention: result.needs_attention,
-        awaitingApproval: result.awaiting_approval,
-        ozow: view,
-      };
-    })();
+      // Customer invoices (P2b): the payments list still loads without them.
+      readStaffInvoices(api).catch((error: unknown) => {
+        log.warn("Invoices unavailable", { error });
+        return null;
+      }),
+    ]);
+    const transfers = new Map(details.map((transfer) => [transfer.payment_id, transfer]));
+    return {
+      transfersUnavailable: unavailable,
+      waiting: waitingTransfers,
+      rows: result.items.map((item) => {
+        const transfer = transfers.get(item.id);
+        return transfer
+          ? {
+              ...item,
+              bank_transfer: {
+                bank_reference: transfer.bank_reference,
+                cleared_on: transfer.cleared_on,
+              },
+            }
+          : item;
+      }),
+      total: result.total,
+      needsAttention: result.needs_attention,
+      awaitingApproval: result.awaiting_approval,
+      ozow: view,
+      invoices: invoiceList,
+    };
+  })();
 
   const hrefFor = (nextPage: number) => {
     const query = new URLSearchParams();
@@ -183,6 +197,13 @@ export default async function PaymentsAdminPage({
       {canRefund || canConfirm || waiting.length > 0 ? (
         <BankTransferPanel canRecord={canRefund} canConfirm={canConfirm} waiting={waiting} />
       ) : null}
+      {invoices ? (
+        <InvoicePanel canIssue={canRefund} invoices={invoices.items} unpaid={invoices.unpaid} />
+      ) : (
+        <p role="alert" className="text-sm text-destructive">
+          Invoices could not be loaded. Reload the page.
+        </p>
+      )}
       {ozow ? <OzowRefundAttention records={ozow.attention} /> : null}
       <PaymentsPanel
         payments={rows}

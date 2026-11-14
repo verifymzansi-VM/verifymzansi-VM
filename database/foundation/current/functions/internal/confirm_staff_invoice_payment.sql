@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION internal.confirm_staff_invoice_payment(p_transfer_id 
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid; t private.invoice_transfers; plan private.plan_versions; pay private.payments;
-  fingerprint text; made integer := 0; commissions integer := 0; vat bigint;
+  fingerprint text; made integer := 0; commissions integer := 0; vat bigint; inv private.customer_invoices;
 begin
   actor := internal.staff_actor('payments:confirm_transfer');
   t := internal.lock_invoice_transfer_for_review(p_transfer_id, actor);
@@ -48,6 +48,28 @@ begin
   if plan.price_cents * t.slots <> t.amount_received_cents or not internal.individual_slot_plan(plan.plan_code) then
     raise exception 'the recorded amount is not the order total' using errcode='PT428', detail='invoice_amount_mismatch';
   end if;
+  -- A transfer to an invoice pays that invoice: still issued and with no
+  -- payment attempt that could still be paid.
+  if t.customer_invoice_id is not null then
+    select * into inv from private.customer_invoices i where i.id = t.customer_invoice_id for update;
+    if inv.status = 'paid' then
+      raise exception 'this invoice was already paid; decline this transfer and return the money'
+        using errcode='PT409', detail='invoice_paid';
+    elsif inv.status = 'void' then
+      raise exception 'this invoice was voided; decline this transfer and return the money'
+        using errcode='PT409', detail='invoice_void';
+    end if;
+    if exists(select 1 from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
+        where l.invoice_id = inv.id and internal.customer_invoice_attempt_live(p)) then
+      raise exception 'a payment of this invoice is still open at Ozow; try again when it has closed'
+        using errcode='PT409', detail='invoice_payment_open';
+    end if;
+    -- An attempt never sent to Ozow is closed (as voiding does): the slot
+    -- checkout cannot continue it, and it no longer counts as open below.
+    update private.payments p set status = 'cancelled', status_changed_at = pg_catalog.clock_timestamp()
+      from private.customer_invoice_payments l
+      where l.invoice_id = inv.id and l.payment_id = p.id and p.status = 'pending';
+  end if;
   -- Within the person's Individual slot limit (every account of the
   -- identity), counting checkouts still open at Ozow as checkout does, so a
   -- later Ozow payment is not pushed over the limit.
@@ -71,7 +93,9 @@ begin
         'cleared_on', to_char(t.cleared_on::timestamp, 'YYYY-MM-DD'),
         'cooling_off_consent', jsonb_build_object('method', 'written', 'recorded_by_staff_at', t.recorded_at,
           'terms_version', (select c.version from private.posting_terms_current c where c.singleton),
-          'wording', 'My slot starts now; the 7-day cooling-off does not apply because the service starts immediately')),
+          'wording', 'My slot starts now; the 7-day cooling-off does not apply because the service starts immediately'))
+        || case when inv.id is null then '{}'::jsonb else jsonb_build_object('customer_invoice_id', inv.id,
+          'customer_invoice_number', inv.invoice_number) end,
       'invoice', 'complete', 'fulfilled', statement_timestamp(), statement_timestamp())
     returning * into pay;
   insert into private.payment_lines (payment_id, line_number, plan_version_id, amount_cents)
@@ -97,6 +121,10 @@ begin
   update private.invoice_transfers set status = 'confirmed', confirmed_by = actor,
       confirmed_at = statement_timestamp(), payment_id = pay.id
     where id = t.id returning * into t;
+  if inv.id is not null then
+    update private.customer_invoices set status = 'paid', payment_id = pay.id, paid_at = pay.completed_at
+      where id = inv.id;
+  end if;
   if internal.staff_actor('payments:confirm_transfer') is distinct from actor then
     raise exception 'staff actor changed' using errcode='42501';
   end if;

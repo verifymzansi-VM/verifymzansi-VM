@@ -410,12 +410,27 @@ function checkoutApp(appUrl: string) {
   return app;
 }
 
+/** A customer invoice's "Pay now" payment (api.start_invoice_payment, see
+ * ./customer-invoices.ts): its Ozow request is opened exactly as a checkout's.
+ * While its Ozow page is still open the member continues there. */
+export async function openFoundationInvoiceCheckout(
+  quote: unknown,
+  ownerId: string,
+  appUrl: string,
+  service: FoundationServiceApi
+) {
+  return openFoundationCheckout(quoteSchema.parse(quote), ownerId, checkoutApp(appUrl), service, {
+    continueOpen: true,
+  });
+}
+
 /** Leases the quoted payment, then reuses its Ozow request or creates one. */
 async function openFoundationCheckout(
   quote: z.infer<typeof quoteSchema>,
   ownerId: string,
   app: URL,
-  service: FoundationServiceApi
+  service: FoundationServiceApi,
+  { continueOpen = false }: { continueOpen?: boolean } = {}
 ) {
   const pay = claimSchema.parse(
     await command(service, "claim_checkout_request", {
@@ -434,6 +449,15 @@ async function openFoundationCheckout(
   if (pay.product_kind === "addon" && !areAddonSalesOpen()) throw addonSalesPaused();
   if (pay.checkout_url) {
     const checkoutUrl = checkoutRedirect(pay.checkout_url);
+    if (continueOpen) {
+      if (pay.checkout_expires_at && Date.parse(pay.checkout_expires_at) > Date.now())
+        return { paymentId: pay.id, checkoutUrl };
+      throw new FoundationBillingError(
+        409,
+        "Your last payment is still being checked. Try again in a few minutes.",
+        "PAYMENT_BEING_CHECKED"
+      );
+    }
     // A plan's open request goes back to the member as the restored page's
     // choice (continue, check or cancel), never as a silent redirect.
     if (pay.product_kind === "plan" && pay.provider_request_id)

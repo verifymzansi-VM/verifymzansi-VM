@@ -95,6 +95,25 @@ UNION ALL
     'payment:invoice_declined'::text AS action,
     (('Bank transfer '::text || t.bank_reference) || ' declined: '::text) || t.decline_reason AS reason
    FROM private.invoice_transfers t
-  WHERE t.declined_by IS NOT NULL;
+  WHERE t.declined_by IS NOT NULL
+UNION ALL
+ SELECT 'customer_invoice_issued:'::text || i.id::text AS id,
+    i.issued_at AS occurred_at,
+    i.issued_by AS actor_id,
+    i.id AS target_id,
+    'payment'::text AS target_type,
+    'payment:customer_invoice_issued'::text AS action,
+    (((((('Invoice '::text || i.invoice_number) || ' ('::text) || i.slots) || ' slots, '::text) || i.total_cents) || ' cents): '::text) || i.issue_reason AS reason
+   FROM private.customer_invoices i
+UNION ALL
+ SELECT 'customer_invoice_voided:'::text || i.id::text AS id,
+    i.voided_at AS occurred_at,
+    i.voided_by AS actor_id,
+    i.id AS target_id,
+    'payment'::text AS target_type,
+    'payment:customer_invoice_voided'::text AS action,
+    (('Invoice '::text || i.invoice_number) || ' voided: '::text) || i.void_reason AS reason
+   FROM private.customer_invoices i
+  WHERE i.voided_by IS NOT NULL;
 alter view private.frontend_staff_audit_events owner to postgres;
 revoke all on private.frontend_staff_audit_events from public;

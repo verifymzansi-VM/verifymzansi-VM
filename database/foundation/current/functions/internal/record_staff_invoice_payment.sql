@@ -9,6 +9,7 @@ CREATE OR REPLACE FUNCTION internal.record_staff_invoice_payment(p_account_email
 AS $function$
 declare actor uuid; buyer uuid; reference text; reference_key text; cleared date; today date;
   plan private.plan_versions; prior private.invoice_transfers; made private.invoice_transfers; fingerprint text;
+  open_invoice private.customer_invoices;
 begin
   actor := internal.staff_actor('payments:refund');
   if length(btrim(coalesce(p_account_email, ''))) not between 3 and 254 or p_term_days is null
@@ -90,6 +91,16 @@ begin
   if plan.price_cents * p_slots <> p_amount_cents then
     raise exception 'the amount received is not the order total of % cents', plan.price_cents * p_slots
       using errcode='PT428', detail='invoice_amount_mismatch';
+  end if;
+  -- A transfer of the total of one of the customer's unpaid invoices is
+  -- recorded against that invoice (api.record_staff_invoice_transfer), so it
+  -- pays the invoice.
+  select * into open_invoice from private.customer_invoices i
+    where i.account_id = buyer and i.status = 'issued' and i.total_cents = p_amount_cents
+    order by i.issued_at limit 1;
+  if found then
+    raise exception 'this customer has unpaid invoice % for this amount; record the transfer on the invoice',
+      open_invoice.invoice_number using errcode='PT409', detail='invoice_transfer_required';
   end if;
   -- An early check of the slot limit; confirmation checks it again.
   if (internal.individual_slots_counted(fingerprint, buyer, null)->>'held')::integer + p_slots

@@ -15,6 +15,7 @@ import {
 import {
   applyFoundationOzowNotification,
   cancelFoundationPendingPayment,
+  openFoundationInvoiceCheckout,
   paymentCheckFailureReason,
   readFoundationBilling,
   readFoundationMySlots,
@@ -199,6 +200,44 @@ it("offers no continue link once the open request's window has passed", async ()
     status: 409,
     pendingPayment: { id: payment, checkoutUrl: null, canCancel: true },
   });
+});
+// A customer invoice's "Pay now" (P2b): the same request path as a checkout.
+const invoiceQuote = { ...quote, merchant_reference: "VM-2026-000001", slots: 1, reused: false };
+it("opens an invoice payment's Ozow request exactly as a checkout's", async () => {
+  machine.mockResolvedValueOnce({
+    data: { ...claimDto(), merchant_reference: "VM-2026-000001" },
+    error: null,
+  });
+  await expect(
+    openFoundationInvoiceCheckout(invoiceQuote, owner, "https://verifymzansi.com", service)
+  ).resolves.toEqual({ paymentId: payment, checkoutUrl });
+  expect(createOzowHostedPayment).toHaveBeenCalledWith(
+    expect.objectContaining({ merchantReference: "VM-2026-000001", amountCents: 5000 })
+  );
+});
+it("continues an invoice payment whose Ozow page is open, and waits once it has passed", async () => {
+  machine.mockResolvedValueOnce({ data: openRequest(), error: null });
+  await expect(
+    openFoundationInvoiceCheckout(invoiceQuote, owner, "https://verifymzansi.com", service)
+  ).resolves.toEqual({ paymentId: payment, checkoutUrl });
+  machine.mockResolvedValueOnce({
+    data: openRequest({ checkout_expires_at: "2020-01-01T00:00:00Z" }),
+    error: null,
+  });
+  await expect(
+    openFoundationInvoiceCheckout(invoiceQuote, owner, "https://verifymzansi.com", service)
+  ).rejects.toMatchObject({ status: 409, code: "PAYMENT_BEING_CHECKED" });
+  expect(createOzowHostedPayment).not.toHaveBeenCalled();
+});
+it("never opens an invoice payment of another owner or amount", async () => {
+  machine.mockResolvedValueOnce({ data: { ...claimDto(), amount_cents: "4999" }, error: null });
+  await expect(
+    openFoundationInvoiceCheckout(invoiceQuote, owner, "https://verifymzansi.com", service)
+  ).rejects.toMatchObject({ status: 503 });
+  await expect(
+    openFoundationInvoiceCheckout(invoiceQuote, owner, "https://attacker.example", service)
+  ).rejects.toMatchObject({ status: 503 });
+  expect(createOzowHostedPayment).not.toHaveBeenCalled();
 });
 it("never offers a provider address it would not redirect to", async () => {
   machine.mockResolvedValueOnce({

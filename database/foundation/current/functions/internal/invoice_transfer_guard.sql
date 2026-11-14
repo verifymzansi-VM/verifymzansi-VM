@@ -12,6 +12,8 @@ begin
   -- waiting; changed only once, from waiting to confirmed (naming its invoice
   -- payment: that account, amount and plan) or to declined.
   if tg_op = 'DELETE' then
+    -- Only the retention job removes a record, five tax years on.
+    if pg_catalog.current_setting('vm.retention', true) = 'on' then return old; end if;
     raise exception 'recorded bank transfers are never removed' using errcode='23514';
   end if;
   if tg_op = 'INSERT' then

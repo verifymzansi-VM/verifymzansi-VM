@@ -18,6 +18,12 @@ import {
   refundReasonCode,
 } from "@/lib/foundation/staff-payments";
 import {
+  invoiceTransferInput,
+  issueStaffInvoice,
+  recordStaffInvoiceTransfer,
+  voidStaffInvoice,
+} from "@/lib/foundation/customer-invoices";
+import {
   inviteFrontendStaffOrganisationAdmin,
   manageFrontendStaffOrganisation,
   revokeFrontendStaffOrganisationInvite,
@@ -154,6 +160,19 @@ const schema = z.discriminatedUnion("action", [
     coolingOffWaiver: z.boolean(),
     reason,
   }),
+  // A customer invoice (Ozow "Pay now"); the database prices and numbers it.
+  z.object({
+    action: z.literal("invoice.issue"),
+    accountEmail: z.string().trim().min(3).max(254),
+    termDays: z.union([z.literal(30), z.literal(90), z.literal(180)]),
+    slots: z.number().int().min(1).max(25),
+    dueDays: z.number().int().min(1).max(30),
+    requestId: uuid,
+    reason,
+  }),
+  z.object({ action: z.literal("invoice.void"), invoiceId: uuid, reason }),
+  // A cleared bank transfer to an invoice; a second staff member confirms it.
+  invoiceTransferInput.extend({ action: z.literal("invoice.record_transfer") }),
   z.object({ action: z.literal("payment.refund_approve"), requestId: uuid }),
   z.object({ action: z.literal("payment.refund_decline"), requestId: uuid, reason }),
   z.object({
@@ -289,6 +308,19 @@ export async function POST(request: Request) {
         };
       if (body.action === "payment.record_transfer")
         return { success: true, data: await recordStaffBankTransfer(api, body) };
+      if (body.action === "invoice.issue") {
+        const { action: _action, ...invoice } = body;
+        return { success: true, data: await issueStaffInvoice(api, invoice) };
+      }
+      if (body.action === "invoice.record_transfer") {
+        const { action: _action, ...transfer } = body;
+        return { success: true, data: await recordStaffInvoiceTransfer(api, transfer) };
+      }
+      if (body.action === "invoice.void")
+        return {
+          success: true,
+          data: await voidStaffInvoice(api, body.invoiceId.toLowerCase(), body.reason),
+        };
       if (body.action === "payment.refund_approve") {
         // The same rules as the Ozow refunds route: a refund through Ozow is
         // never approved here while refunds through Ozow are switched off.

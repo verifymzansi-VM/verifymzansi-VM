@@ -40,6 +40,10 @@ begin
   if not exists(select 1 from private.current_account_access u where u.id = pay.owner_id) then
     raise exception 'the account that paid cannot use it now; refund instead' using errcode='PT409', detail='payment_account_unavailable';
   end if;
+  if internal.customer_invoice_settled_elsewhere(pay.id) then
+    raise exception 'another payment already paid this invoice (or it was voided); refund this one instead'
+      using errcode='PT409', detail='invoice_paid_elsewhere';
+  end if;
   snap := pay.snapshot;
   if pay.product_kind = 'addon' then
     select * into target from private.posts p where p.id = pay.target_post_id for update;

@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION internal.retention_commerce(p_limit integer)
 AS $function$
 declare provider_events integer; invoices integer; addon_windows integer; partner_events integer;
   commissions integer; acquisitions integer; sponsorships integer; trial_claims integer; activations integer;
-  entitlements integer; payments integer;
+  entitlements integer; payments integer; customer_invoices integer; bank_transfers integer;
 begin
   delete from private.provider_events where id in(select e.id from private.provider_events e
     where internal.retention_tax_year_due(e.received_at) order by e.received_at limit p_limit);
@@ -17,6 +17,24 @@ begin
   delete from private.invoices where id in(select i.id from private.invoices i
     where internal.retention_tax_year_due(i.issued_at) order by i.issued_at limit p_limit);
   get diagnostics invoices=row_count;
+  -- Recorded bank transfers: five tax years after they were confirmed,
+  -- declined or recorded, and always with the invoice they name.
+  delete from private.invoice_transfers where id in(select t.id from private.invoice_transfers t
+    where internal.retention_tax_year_due(coalesce(t.confirmed_at,t.declined_at,t.recorded_at))
+      or t.customer_invoice_id in(select i.id from private.customer_invoices i
+        where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at)))
+    order by t.recorded_at limit p_limit);
+  get diagnostics bank_transfers=row_count;
+  delete from private.customer_invoice_payments where invoice_id in(select i.id from private.customer_invoices i
+    where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at))
+      and not exists(select 1 from private.invoice_transfers t where t.customer_invoice_id=i.id)
+    order by i.issued_at limit p_limit);
+  delete from private.customer_invoices where id in(select i.id from private.customer_invoices i
+    where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at))
+      and not exists(select 1 from private.customer_invoice_payments l where l.invoice_id=i.id)
+      and not exists(select 1 from private.invoice_transfers t where t.customer_invoice_id=i.id)
+    order by i.issued_at limit p_limit);
+  get diagnostics customer_invoices=row_count;
   delete from private.post_addon_windows where id in(select w.id from private.post_addon_windows w
     where coalesce(w.revoked_at,w.ends_at)<=statement_timestamp()
       and internal.retention_tax_year_due(coalesce(w.revoked_at,w.ends_at)) order by w.ends_at limit p_limit);
@@ -60,12 +78,16 @@ begin
       and not exists(select 1 from private.partner_commissions c where c.payment_id=p.id)
       and not exists(select 1 from private.post_addon_windows w where w.payment_id=p.id)
       and not exists(select 1 from private.provider_events e where e.payment_id=p.id)
+      and not exists(select 1 from private.customer_invoice_payments l where l.payment_id=p.id)
+      and not exists(select 1 from private.customer_invoices ci where ci.payment_id=p.id)
+      and not exists(select 1 from private.invoice_transfers t where t.payment_id=p.id)
     order by p.created_at limit p_limit for update skip locked);
   get diagnostics payments=row_count;
   return jsonb_build_object('provider_events',provider_events,'invoices',invoices,'addon_windows',addon_windows,
     'partner_events',partner_events,'partner_commissions',commissions,'account_acquisitions',acquisitions,
     'sponsorships',sponsorships,'post_trial_claims',trial_claims,'post_activations',activations,
-    'entitlements',entitlements,'payments',payments);
+    'entitlements',entitlements,'payments',payments,'customer_invoices',customer_invoices,
+    'bank_transfers',bank_transfers);
 end;
 $function$;
 alter function internal.retention_commerce(integer) owner to postgres;

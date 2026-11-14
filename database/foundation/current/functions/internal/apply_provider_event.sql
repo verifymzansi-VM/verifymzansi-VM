@@ -68,8 +68,11 @@ begin
     -- Explicit cancellation never reactivates benefits: retain receipt and
     -- route it to reconciliation, independently of current target eligibility.
     snap := pay.snapshot;
+    -- An invoice attempt whose invoice another payment already paid (or that
+    -- was voided) is kept but not delivered: staff refund it.
     fulfillable := pay.status<>'cancelled'
-      and exists(select 1 from private.current_account_access u where u.id=pay.owner_id);
+      and exists(select 1 from private.current_account_access u where u.id=pay.owner_id)
+      and not internal.customer_invoice_settled_elsewhere(pay.id);
     if pay.product_kind='addon' then
       select * into target from private.posts p where p.id=pay.target_post_id for update;
       fulfillable := fulfillable and found and target.owner_id=pay.owner_id
