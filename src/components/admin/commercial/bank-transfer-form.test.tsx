@@ -241,6 +241,24 @@ describe("bank transfers waiting for a second staff member", () => {
     });
   });
 
+  it("keeps the outcome on screen when the last waiting transfer leaves the list", async () => {
+    vi.stubGlobal(
+      "prompt",
+      vi.fn(() => "Recorded by mistake")
+    );
+    const { rerender } = render(
+      <BankTransferPanel canRecord canConfirm waiting={[{ ...waiting, recorded_by_me: true }]} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    // The refreshed page has nothing waiting any more.
+    rerender(<BankTransferPanel canRecord canConfirm waiting={[]} />);
+    expect(
+      screen.queryByRole("list", { name: "Bank transfers waiting for confirmation" })
+    ).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("Bank transfer declined");
+  });
+
   it("shows the list without buttons to staff who cannot confirm", () => {
     render(<BankTransferPanel canRecord canConfirm={false} waiting={[waiting]} />);
     expect(screen.queryByRole("button", { name: "Confirm transfer" })).toBeNull();

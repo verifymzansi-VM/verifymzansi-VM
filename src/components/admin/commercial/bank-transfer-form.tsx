@@ -110,7 +110,9 @@ function WaitingTransfers({
   canConfirm: boolean;
 }) {
   const { run, busy, message } = useCommercialAction();
-  if (waiting.length === 0) return null;
+  // Confirming, declining or withdrawing the last waiting transfer empties
+  // the list when the page refreshes: the outcome stays on screen.
+  if (waiting.length === 0) return <ActionMessage message={message} />;
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold">Waiting for a second staff member</h3>
