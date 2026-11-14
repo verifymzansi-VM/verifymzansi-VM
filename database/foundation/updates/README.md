@@ -1501,11 +1501,12 @@ history; and that the rollback refuses once the new rules were used.
 
 ## Customer invoices with an Ozow "Pay now" link, 14 November 2026
 
-`20261114041000_customer_invoice_pay_now.sql` is pending (roadmap P2b, second
-slice). It needs `20261113223806_bank_transfer_and_consent_fixes.sql` and the
-payment, checkout and slot bodies it builds on with their reviewed bodies, and
-refuses (55000) otherwise. It only adds: no API command, argument or grant is
-removed or changed.
+`20261114041000_customer_invoice_pay_now.sql` was applied on 14 November 2026 at
+08:40 UTC with the owner's approval (roadmap P2b, second slice). It needs
+`20261113223806_bank_transfer_and_consent_fixes.sql` and the payment, checkout
+and slot bodies it builds on with their reviewed bodies, and refuses (55000)
+otherwise. It only adds: no API command, argument or grant is removed or
+changed.
 
 - **Invoice numbers.** `VM-YYYY-NNNNNN`, one sequence per South African calendar
   year (`VM-2026-000001`, `VM-2026-000002`, ... and again from `000001` in
@@ -3469,6 +3470,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   recorded more than once: 0; refund references with a space: 0", after "already
   applied" with the same three counts 0; production fingerprint after it matched
   the full replay (except the known schema grant difference)
-- `20261114041000_customer_invoice_pay_now.sql`: pending
+- `20261114041000_customer_invoice_pay_now.sql`: applied 2026-11-14 08:40 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file (sha256 starting d376dfa3250c2235) before the
+  pull request was merged; preflight before "update not applied", after
+  "customer invoices: already applied; invoices issued: 0 (unpaid: 0); payment
+  attempts: 0"; production fingerprint after it matched the full replay (except
+  the known schema grant difference)
 
 <!-- applied-register:end -->
