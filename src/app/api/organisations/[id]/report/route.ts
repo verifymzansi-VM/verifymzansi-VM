@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { SHOW_ORGANISATION_REPORT } from "@/lib/hidden-features";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -36,6 +37,8 @@ interface MemberRow {
  * businesses that consented to join (no identity or viewer data).
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_ORGANISATION_REPORT) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { id } = await context.params;
   if (!z.uuid().safeParse(id).success) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

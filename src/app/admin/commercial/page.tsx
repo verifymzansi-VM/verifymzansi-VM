@@ -1,4 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { redirect } from "next/navigation";
+import { SHOW_STAFF_COMMERCIAL_SETTINGS } from "@/lib/hidden-features";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -13,6 +15,8 @@ export const dynamic = "force-dynamic";
 
 export default async function CommercialSettingsPage() {
   await requireStaff("commercial:manage");
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_STAFF_COMMERCIAL_SETTINGS) redirect("/admin");
 
   const admin = createAdminClient();
   const [settings, plans] = await Promise.all([

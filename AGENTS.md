@@ -16,10 +16,11 @@ baseline. Read `FRONTEND-RESTORE.md` before continuing integration work.
 ## The live backend
 
 - **Production runs the foundation backend**: the London Supabase project
-  (`FOUNDATION_PROJECT_REF` in `wrangler.toml`) with `NEXT_PUBLIC_DATA_BACKEND`
-  set to `foundation`. Browsers have no table access: every read and write goes
-  through `api.*` database functions, called from server code in
-  `src/lib/foundation/`.
+  (`FOUNDATION_PROJECT_REF` in `wrangler.toml`), the only backend the code
+  supports: the `NEXT_PUBLIC_DATA_BACKEND` switch is gone, and `next.config.js`
+  refuses a build that sets it to anything other than `foundation`. Browsers
+  have no table access: every read and write goes through `api.*` database
+  functions, called from server code in `src/lib/foundation/`.
 - **Its SQL lives in `database/foundation/`**: `candidate.sql` is the reviewed
   baseline and `updates/` holds every later change. Generated contracts
   (`runtime-api-manifest.json`, `runtime-api-types.ts`, `api.types.ts`) live

@@ -4,7 +4,7 @@
  * Manages:
  *  - Cloudflare Pages project
  *  - R2 bucket (media storage)
- *  - Workers (KYC encryptor, rate limiter, retention cleanup)
+ *  - Workers (rate limiter, retention cleanup)
  *  - DNS records
  *  - Secrets
  *
@@ -44,14 +44,6 @@ export const kycBucket = new cloudflare.R2Bucket("verifymzansi-kyc", {
 });
 
 // ── Workers ──────────────────────────────────────────────
-
-// KYC Encryptor Worker
-export const kycEncryptorWorker = new cloudflare.WorkerScript("kyc-encryptor", {
-  accountId,
-  name: "kyc-encryptor",
-  content: "/* deployed via wrangler — see wrangler.kyc-encryptor.toml */",
-  module: true,
-});
 
 // Rate Limiter Worker
 export const rateLimiterWorker = new cloudflare.WorkerScript("rate-limiter", {

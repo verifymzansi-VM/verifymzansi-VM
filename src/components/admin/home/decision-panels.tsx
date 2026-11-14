@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { Ban, CheckCircle2, FileText, Gavel, RotateCcw, Scale, UserCog } from "lucide-react";
 import { formatRelativeTime, formatSaShortDate } from "@/lib/utils/format";
+import { SHOW_STAFF_OPERATIONS } from "@/lib/hidden-features";
 import type { StaffDashboard } from "@/lib/services/staff-dashboard";
 import { expiryJobStale } from "./attention";
 import { formatCount, MetricList, OldestLine, SectionHeading, StatCard } from "./home-cards";
+
+/** Operations health, or no link while it is hidden until it works. */
+const OPERATIONS_HREF = SHOW_STAFF_OPERATIONS ? "/admin/operations" : undefined;
 
 /** "1 appeal", "3 appeals". */
 function plural(count: number, one: string, many: string): string {
@@ -146,21 +150,26 @@ export function DecisionsPanel({
         />
       ),
     },
-    {
-      label: "Decisions not applied",
-      href: "/admin/operations",
-      value: decisions?.failed_executions,
-      card: (
-        <StatCard
-          label="Decisions not applied"
-          icon={RotateCcw}
-          value={decisions?.failed_executions}
-          href="/admin/operations"
-          urgent
-          detail="Approved, but the change did not finish. Retry it from Operations health."
-        />
-      ),
-    },
+    // Retried from Operations health, hidden until it works.
+    ...(SHOW_STAFF_OPERATIONS
+      ? [
+          {
+            label: "Decisions not applied",
+            href: "/admin/operations",
+            value: decisions?.failed_executions,
+            card: (
+              <StatCard
+                label="Decisions not applied"
+                icon={RotateCcw}
+                value={decisions?.failed_executions}
+                href="/admin/operations"
+                urgent
+                detail="Approved, but the change did not finish. Retry it from Operations health."
+              />
+            ),
+          },
+        ]
+      : []),
     {
       label: "Staff role changes",
       href: "/admin/governance/roles",
@@ -261,28 +270,28 @@ export function PlatformPanel({
         {
           label: "Open incidents",
           value: platform?.incidents_open,
-          href: "/admin/operations",
+          href: OPERATIONS_HREF,
           alarming: Boolean(platform && platform.incidents_critical > 0),
           detail: platform && `${formatCount(platform.incidents_critical)} critical`,
         },
         {
           label: "Stuck jobs",
           value: platform?.jobs_dead,
-          href: "/admin/operations",
+          href: OPERATIONS_HREF,
           urgent: true,
           detail: platform && `${formatCount(platform.jobs_waiting)} waiting to run`,
         },
         {
           label: "Evidence past purge date",
           value: retention?.evidence_overdue,
-          href: "/admin/operations",
+          href: OPERATIONS_HREF,
           urgent: true,
           detail: retention && `${formatCount(retention.deletions_stuck)} deletions stuck`,
         },
         {
           label: "Expiry job",
           value: platform ? (expiryStale ? "Not running" : "Running") : undefined,
-          href: "/admin/operations",
+          href: OPERATIONS_HREF,
           alarming: Boolean(expiryStale),
           detail:
             platform &&

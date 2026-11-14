@@ -1,4 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { redirect } from "next/navigation";
+import { SHOW_STAFF_TRIALS } from "@/lib/hidden-features";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TrialManagement } from "@/components/admin/trial-management";
 import {
@@ -22,6 +24,8 @@ export default async function TrialManagementPage({
   searchParams: Promise<{ account?: string; offer?: string }>;
 }) {
   const { user } = await requireStaff("trials:manage");
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_STAFF_TRIALS) redirect("/admin");
   const admin = createAdminClient();
   const params = await searchParams;
   const search = typeof params.account === "string" ? params.account.trim().slice(0, 254) : "";

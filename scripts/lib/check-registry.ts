@@ -238,10 +238,17 @@ export const CHECKS: Check[] = [
     ["release", "payments", "kyc"],
     { external: true, category: "live_deployment" }
   ),
-  check("schema", ["db:verify-schema"], "read-only deployed schema", ["release"], {
-    external: true,
-    category: "live_deployment",
-  }),
+  check(
+    "hosted-exposure",
+    ["exec", "node", "scripts/check-foundation-hosted-exposure.mjs", "--stage=cutover"],
+    "read-only hosted Data API exposure and Auth settings",
+    ["release"],
+    {
+      external: true,
+      category: "live_deployment",
+      dependencies: ["FOUNDATION_SUPABASE_URL and FOUNDATION_SUPABASE_PUBLISHABLE_KEY"],
+    }
+  ),
   check(
     "performance-advisor",
     ["supabase:advisor:performance"],

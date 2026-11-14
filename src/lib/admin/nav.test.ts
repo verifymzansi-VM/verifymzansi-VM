@@ -80,14 +80,12 @@ describe("admin navigation registry", () => {
     expect(hrefs).not.toContain("/admin/intelligence/users");
   });
 
-  it("gives governors decisions, compliance, oversight and commercial, but not analytics or flags", () => {
+  it("gives governors decisions, compliance and oversight, but not analytics or flags", () => {
     const hrefs = navFor("governance_controller").flatMap((s) => s.items.map((i) => i.href));
     for (const href of [
       "/admin/governance/escalations",
       "/admin/dsar",
       "/admin/governance/roles",
-      "/admin/trials",
-      "/admin/commercial",
       "/admin/support",
     ]) {
       expect(hrefs).toContain(href);
@@ -97,11 +95,36 @@ describe("admin navigation registry", () => {
     expect(hrefs).not.toContain("/admin/intelligence/revenue");
   });
 
-  it("gives admins every page", () => {
+  it("gives admins every page that is not hidden", () => {
     const hrefs = navFor("admin", { kyc_evidence_desk: true }).flatMap((s) =>
       s.items.map((i) => i.href)
     );
-    expect(hrefs.sort()).toEqual(ADMIN_NAV.map((i) => i.href).sort());
+    expect(hrefs.sort()).toEqual(
+      ADMIN_NAV.filter((i) => i.shown !== false)
+        .map((i) => i.href)
+        .sort()
+    );
+  });
+
+  it("lists no page that is hidden until it works", () => {
+    const hrefs = navFor("admin", { kyc_evidence_desk: true }).flatMap((s) =>
+      s.items.map((i) => i.href)
+    );
+    for (const href of [
+      "/admin/commercial",
+      "/admin/trials",
+      "/admin/programmes",
+      "/admin/operations",
+      "/admin/intelligence/users",
+      "/admin/intelligence/verification",
+      "/admin/intelligence/revenue",
+      "/admin/intelligence/marketplace",
+      "/admin/intelligence/trends",
+      "/admin/intelligence/operations",
+    ]) {
+      expect(hrefs).not.toContain(href);
+    }
+    expect(navFor("admin").map((section) => section.id)).not.toContain("intelligence");
   });
 
   it("uses native assignments instead of expanding the admin presentation role", () => {

@@ -26,9 +26,6 @@ vi.mock("@/components/ui/profile-video-player", () => ({ ProfileVideoPlayer: () 
 vi.mock("@/components/analytics/view-tracker", () => ({
   ViewTracker: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
-}));
 vi.mock("@/components/ui/turnstile-widget", () => ({
   // The site's test mode: the check passes without a visible widget.
   TurnstileWidget: ({ onSuccess }: { onSuccess: (token: string) => void }) => {
