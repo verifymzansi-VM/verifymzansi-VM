@@ -207,7 +207,11 @@ describe("bank transfers waiting for a second staff member", () => {
   it("lets another staff member confirm, with a duplicate warning", async () => {
     render(<BankTransferPanel canRecord={false} canConfirm waiting={[waiting]} />);
     const list = screen.getByRole("list", { name: "Bank transfers waiting for confirmation" });
-    expect(within(list).getByText(/Possible duplicate: 1 other record names/)).toBeInTheDocument();
+    expect(
+      within(list).getByText(
+        /Possible duplicate: 1 other record has this bank reference and amount, or this customer, amount and date/
+      )
+    ).toBeInTheDocument();
     expect(within(list).getByText(/thandi@example.test/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Record a bank transfer" })).toBeNull();
     fireEvent.click(within(list).getByRole("button", { name: "Confirm transfer" }));
@@ -235,6 +239,24 @@ describe("bank transfers waiting for a second staff member", () => {
       transferId: waiting.transfer_id,
       reason: "Recorded by mistake",
     });
+  });
+
+  it("keeps the outcome on screen when the last waiting transfer leaves the list", async () => {
+    vi.stubGlobal(
+      "prompt",
+      vi.fn(() => "Recorded by mistake")
+    );
+    const { rerender } = render(
+      <BankTransferPanel canRecord canConfirm waiting={[{ ...waiting, recorded_by_me: true }]} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    // The refreshed page has nothing waiting any more.
+    rerender(<BankTransferPanel canRecord canConfirm waiting={[]} />);
+    expect(
+      screen.queryByRole("list", { name: "Bank transfers waiting for confirmation" })
+    ).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("Bank transfer declined");
   });
 
   it("shows the list without buttons to staff who cannot confirm", () => {

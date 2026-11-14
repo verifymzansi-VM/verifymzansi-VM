@@ -284,7 +284,9 @@ test.describe("staff fix paid but not delivered", () => {
       })
     ).toEqual({
       status: 422,
-      body: expect.objectContaining({ error: "Enter Ozow's refund reference." }),
+      // The route does not know the payment's method, so its words name no
+      // provider; the database still refuses with Ozow's reason below.
+      body: expect.objectContaining({ error: "Enter the refund reference." }),
     });
     const staff = await signIn(copy, "moderator");
     const refused = await rpc(

@@ -11,7 +11,7 @@ import { runFoundationPrivacyNotice } from "./privacy-notice-job";
 import { runFoundationPaymentAlerts, type PaymentAlertStep } from "./payment-alerts";
 import { createLogger } from "../utils/logger";
 import { hasDatabaseMessage } from "./error-reasons";
-import { readPaymentReceipt } from "./payment-receipt";
+import { paymentNoLongerComplete, readPaymentReceipt } from "./payment-receipt";
 
 const log = createLogger("FoundationOperationJobs");
 const kind = z.enum([
@@ -307,13 +307,18 @@ export async function runFoundationOperationJobs(
     // A payment receipt shows the details api.get_payment_receipt reads for
     // the payment. The read must end before the last moment a send may start.
     let receiptDetails: PostLifecycleDetails | undefined;
+    // A payment refunded or charged back before its receipt went out gets no
+    // "Payment received" email at all (the member is told of the reversal).
+    let receiptWithdrawn = false;
     if (job.recipient && job.kind === "payment_completed" && job.subject_id) {
       const read = await call("get_payment_receipt", { p_payment_id: job.subject_id }, claimSignal);
-      const receipt = read.error
-        ? null
-        : readPaymentReceipt(read.data, { paymentId: job.subject_id, ownerId: job.owner_id });
+      const expected = { paymentId: job.subject_id, ownerId: job.owner_id };
+      const receipt = read.error ? null : readPaymentReceipt(read.data, expected);
       if (receipt) receiptDetails = { receipt };
-      else {
+      else if (!read.error && paymentNoLongerComplete(read.data, expected)) {
+        receiptWithdrawn = true;
+        log.info("Payment no longer complete; receipt not sent", { id: job.id });
+      } else {
         fail("outbox:receipt");
         // A failed read is retried while attempts remain. On the last
         // attempt, or when the read does not match the payment, the member
@@ -323,13 +328,15 @@ export async function runFoundationOperationJobs(
           id: job.id,
         });
       }
-      if (tooLate()) return giveBack("deferred");
+      if (!receiptWithdrawn && tooLate()) return giveBack("deferred");
     }
-    let success = job.recipient === null;
+    // Nothing to send: no recipient, or a receipt no longer due. The message
+    // is finished as handled.
+    let success = job.recipient === null || receiptWithdrawn;
     // The provider refused a repeat of an earlier request with the same key:
     // that earlier request may have been delivered.
     let unknown = false;
-    if (job.recipient) {
+    if (job.recipient && !receiptWithdrawn) {
       const recipient = job.recipient;
       const key = `foundation-outbox/${job.id}`;
       try {

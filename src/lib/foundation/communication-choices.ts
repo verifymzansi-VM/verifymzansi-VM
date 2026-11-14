@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
-import { hasDatabaseReason } from "./error-reasons";
+import { hasDatabaseMessage, hasDatabaseReason } from "./error-reasons";
 
 /**
  * The version of the switch wording on the communication page. Every saved
@@ -52,19 +52,34 @@ export type RestoredEmailActivityItem = {
 
 export class FoundationCommunicationError extends Error {
   override name = "FoundationCommunicationError";
-  constructor(readonly reason: "invalid" | "limited" | "forbidden" | "unavailable") {
+  constructor(
+    readonly reason: "invalid" | "limited" | "session" | "restricted" | "forbidden" | "unavailable"
+  ) {
     super(reason);
   }
 }
 
-function refused(error: { code?: string | null; details?: string | null } | null): never {
+function refused(
+  error: { code?: string | null; details?: string | null; message?: string | null } | null
+): never {
   if (error?.code === "PT429" && hasDatabaseReason(error, "choice_limit"))
     throw new FoundationCommunicationError("limited");
   if (error?.code === "22023" && hasDatabaseReason(error, "choice_invalid"))
     throw new FoundationCommunicationError("invalid");
-  // The database refused this account (restricted, or no longer active):
-  // opting in needs an active account; reading and withdrawing do not.
-  if (error?.code === "42501") throw new FoundationCommunicationError("forbidden");
+  if (error?.code === "42501") {
+    // The session ended (or the account is no longer a signed-in, confirmed
+    // member): sign in again.
+    if (
+      hasDatabaseMessage(error, "liveSessionRequired") ||
+      hasDatabaseMessage(error, "signedInMemberRequired")
+    )
+      throw new FoundationCommunicationError("session");
+    // A restricted account: turning a choice on needs an active account
+    // (reading, withdrawing and, from 20261113223806, the email history do not).
+    if (hasDatabaseMessage(error, "activeMemberRequired"))
+      throw new FoundationCommunicationError("restricted");
+    throw new FoundationCommunicationError("forbidden");
+  }
   throw new FoundationCommunicationError("unavailable");
 }
 

@@ -1385,6 +1385,120 @@ refused; the refund commands on a confirmed payment (one slot, a whole order, a
 second approver above R1,000); the record and payment rules; the grants; and
 that the rollback refuses once a transfer was recorded.
 
+The bank reference rule, the refund reference of a bank transfer, the receipt
+date and the privacy export were changed afterwards by
+`20261113223806_bank_transfer_and_consent_fixes.sql` (next section).
+
+## Bank transfer and consent fixes, 13 November 2026
+
+`20261113223806_bank_transfer_and_consent_fixes.sql` was applied on 14 November
+2026 at 02:35 UTC with the owner's approval. It fixes review findings in
+`20261113162457_staff_invoice_payments.sql` and
+`20261113134500_communication_choices_and_signup_terms.sql`, needs both (and the
+refund commands of `20261113085340`) with their reviewed bodies and refuses
+(55000) otherwise. It does not depend on `20261113172356_ozow_api_refunds.sql`
+(pull request #221) and changes nothing that update changes. No API command,
+argument, return type or grant changes.
+
+- **A bank credit is recorded once; a declined record frees it.** Before, a bank
+  reference was used once across every record, declined ones included, so a
+  reference declined by mistake could never be recorded again (although staff
+  are told to "decline it and record it again"), and two customers using a
+  common reference ("VerifyMzansi", a name) could not both be recorded. Now one
+  bank credit is its reference (letters and digits, whatever the case, spaces or
+  punctuation), the amount and the date it cleared: among the waiting and
+  confirmed records that combination is unique (the partial unique index
+  `invoice_transfers_open_reference_idx` replaces
+  `invoice_transfers_reference_idx`). The same credit can never wait or be
+  confirmed twice, for any customer; a declined record's reference can be
+  recorded again; the same reference may be recorded for another amount or day.
+  Two genuine transfers with the same reference, amount and day are refused
+  (PT409 `bank_reference_used`), the safe side. The one case the index no longer
+  stops is the same credit recorded again with a wrongly typed date, so the
+  confirmer's "Possible duplicate" count (`similar_records`) now counts the
+  other waiting or confirmed records with the same reference and amount (any
+  customer or date), besides those of the same customer, amount and date under
+  another reference. Two-person confirmation and the repeat of the same request
+  by the same staff member are unchanged. Owner's choice: the stricter
+  alternative is the reference alone unique among waiting and confirmed records
+  (no wrong date can pass, but a common reference is refused for every second
+  customer).
+- **Bank refund references may have spaces.** For a payment made by bank
+  transfer, the refund (or chargeback) reference may hold single spaces (4 to
+  100 letters, digits, spaces or `. _ : / -`, at least four letters or digits;
+  runs of spaces are stored as one); its refusals are
+  `refund_reference_required`, `refund_reference_invalid` and
+  `refund_reference_used` and never mention Ozow. Ozow references keep exactly
+  their rules and messages. The check
+  `payment_refund_requests_ozow_reference_check` accepts single inner spaces and
+  the new trigger `payment_refund_requests_reference_rule` refuses a reference
+  with a space unless the payment was made by bank transfer.
+- **Receipt date.** `api.get_payment_receipt` also returns `cleared_on` for a
+  bank transfer; the receipt email shows it as "Date paid" instead of the time
+  of the second staff member's confirmation. The payment's `completed_at`, its
+  slots and invoice are unchanged.
+- **Privacy export.** It also holds `communication_choices` (each change, with
+  its wording version and time), `signup_terms` (version, document hash, method,
+  time) and `bank_transfers` (the member's own records: amount, slots, term,
+  reference, dates, the waiver confirmation and the outcome; never which staff
+  member handled it, nor staff notes, as for the other payment records).
+- **Retention (lawyer to confirm).** The retention job now deletes the sign-up
+  Terms acceptance and the communication choice history of a closed account 30
+  days after closure, with its posting-terms acceptances and under the same
+  legal-hold exception, so the three consent records are kept and deleted alike.
+  Before, the two newer ones stayed until the Auth user was deleted. Each batch
+  now takes only closed accounts that still hold such rows (also for the home
+  area and posting-terms deletes), so the sweep cannot stall behind accounts it
+  already cleared. Recorded bank transfers are payment records and are never
+  purged. If the owner's lawyer wants consent proof kept longer, change all
+  three in one later update.
+- **Email history.** `api.list_my_email_history` needs only a signed-in,
+  confirmed account with a live session (`internal.consent_actor`), like reading
+  and withdrawing communication choices, so a restricted member can read it.
+
+**Order: apply first, then deploy.** The website release from the same pull
+request works with or without it (before it, a bank refund reference with a
+space is refused as before and the receipt shows the confirmation date). Record
+it after `20261113172356_ozow_api_refunds.sql` if that is applied first.
+
+**Applying.**
+
+1. Run `../preflight/20261113223806_bank_transfer_and_consent_fixes.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row starting "bank transfer and consent fixes: update
+   not applied".
+2. Run the update. It waits at most 5 seconds for any lock (it briefly locks
+   `private.invoice_transfers` and `private.payment_refund_requests`). Run the
+   preflight again: it must start "bank transfer and consent fixes: already
+   applied".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261113223806_bank_transfer_and_consent_fixes.down.sql` (only with
+the owner's decision; prefer a forward fix). It refuses once a bank reference is
+recorded more than once or a refund reference holds a space (the preflight
+counts both), because the earlier rules would refuse those records; otherwise it
+puts back every earlier body, index and check and drops what the update added.
+Consent records the retention job deleted stay deleted.
+
+`node --import tsx scripts/test-foundation-bank-transfer-consent-fixes.mjs`
+(part of `pnpm db:foundation:lifecycle-test`) proves on the throwaway database:
+the preflight before and after, read only; the refusals with a drifted body or
+index, changing nothing; apply, rollback and re-apply return the same
+fingerprints; a declined reference can be recorded again, while a waiting or
+confirmed one cannot (also written differently, by another staff member or for
+another customer); a common reference is recorded for two customers with
+different amounts or days and the confirmer sees the same reference and amount;
+two staff recording the same credit at once give one record; a bank refund
+reference with spaces is accepted and an Ozow one is refused with the Ozow
+message; the receipt read's cleared date, and a refunded payment reads as
+refunded; the privacy export holds the three new datasets of the member only;
+the retention job deletes the three consent records 30 days after closure and
+keeps them under a legal hold or before; a restricted member reads their email
+history; and that the rollback refuses once the new rules were used.
+
 ## Individual slots at R69, 12 November 2026
 
 `20261113002421_individual_slots_r69.sql` is not applied yet. It was first
@@ -3130,5 +3244,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   refunds through Ozow not settled: 0"; production fingerprint after it matched
   the full replay (except the known schema grant difference); refunds through
   Ozow stay switched off (`OZOW_API_REFUNDS_ENABLED`)
+- `20261113223806_bank_transfer_and_consent_fixes.sql`: applied 2026-11-14 02:35
+  UTC; applied with the owner's approval, from the reviewed file (sha256
+  starting 8d025150d48e7dcd), before the pull request was merged; preflight
+  before "update not applied; declined bank transfers: 0; bank references
+  recorded more than once: 0; refund references with a space: 0", after "already
+  applied" with the same three counts 0; production fingerprint after it matched
+  the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->

@@ -80,15 +80,67 @@ describe("staff payment adapters", () => {
     await expect(readStaffPaymentList(api, 1)).rejects.toMatchObject({ status: 503 });
   });
 
-  it("refuses a refund without Ozow's reference before calling the database", async () => {
+  it("refuses a refund without a usable reference before calling the database", async () => {
     const { rpc, api } = fixture({});
     await expect(
       recordStaffPaymentRefund(api, id, { ...refund, ozowReference: "  " })
-    ).rejects.toMatchObject({ status: 422, message: "Enter Ozow's refund reference." });
-    await expect(
-      recordStaffSlotRefund(api, id, { ...refund, ozowReference: "has spaces in it" })
-    ).rejects.toMatchObject({ status: 422 });
+    ).rejects.toMatchObject({ status: 422, message: "Enter the refund reference." });
+    for (const ozowReference of ["has;semicolon", " A.", "x".repeat(101)])
+      await expect(
+        recordStaffSlotRefund(api, id, { ...refund, ozowReference })
+      ).rejects.toMatchObject({
+        status: 422,
+        message: "The reference is 4 to 100 letters, digits, spaces or . _ : / -.",
+      });
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("sends a bank refund reference with its spaces collapsed; the database decides by method", async () => {
+    const { rpc, api } = fixture({
+      request_id: other,
+      status: "applied",
+      kind: "refunded",
+      line_id: other,
+      released_activations: 0,
+      payment_status: "complete",
+      repeated: false,
+    });
+    await recordStaffSlotRefund(api, id, { ...refund, ozowReference: "  FNB   Refund\t001 " });
+    expect(rpc).toHaveBeenCalledWith(
+      "record_staff_slot_refund",
+      expect.objectContaining({ p_ozow_reference: "FNB Refund 001" }),
+      { get: false }
+    );
+    // A bank transfer's refusals never mention Ozow; an Ozow payment's keep their words.
+    const cases: [ReturnType<typeof refused>, number, string][] = [
+      [
+        refused("22023", "refund_reference_invalid"),
+        422,
+        "The bank reference is 4 to 100 letters, digits, spaces or . _ : / -.",
+      ],
+      [
+        refused("22023", "refund_reference_required"),
+        422,
+        "Enter the bank reference of the transfer back.",
+      ],
+      [
+        refused("PT409", "refund_reference_used"),
+        409,
+        "That bank reference was already recorded for another refund.",
+      ],
+      [
+        refused("22023", "ozow_reference_invalid"),
+        422,
+        "Ozow's reference is 4 to 100 letters, digits or . _ : / - with no spaces.",
+      ],
+    ];
+    for (const [error, status, message] of cases) {
+      rpc.mockResolvedValueOnce(error);
+      await expect(recordStaffPaymentRefund(api, id, refund)).rejects.toMatchObject({
+        status,
+        message,
+      });
+    }
   });
 
   it("sends the reference, reason code and note, and accepts a waiting refund", async () => {

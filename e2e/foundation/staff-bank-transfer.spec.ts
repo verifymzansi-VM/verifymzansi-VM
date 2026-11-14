@@ -19,8 +19,8 @@ import {
 //   transfer waits: no payment, slot, invoice or receipt yet;
 // - the recorder sees it waiting with Confirm switched off, and the route and
 //   the database refuse the recorder's confirmation;
-// - the recorder can withdraw it, and its bank reference is never recorded
-//   again.
+// - the recorder can withdraw it; a withdrawn (declined) transfer can be
+//   recorded again, while a waiting one cannot be recorded a second time.
 //
 // A second staff member's confirmation (slots, receipt, commission) is proven
 // by scripts/test-foundation-staff-invoice-payments.mjs: the copy's admin has
@@ -189,24 +189,55 @@ test.describe("staff record a cleared bank transfer", () => {
     expect(outside).toEqual([]);
   });
 
-  test("a declined bank reference cannot be recorded again", async ({ context, page }) => {
+  test("a withdrawn bank transfer can be recorded again; a waiting one cannot", async ({
+    context,
+    page,
+  }) => {
     const outside = await guard(context);
+    // Waiting records of this transfer, and all its records.
+    const records = () =>
+      queryTestCopy(
+        `select count(*) filter (where status = 'awaiting_confirmation') || ',' || count(*)
+           from private.invoice_transfers where account_id = '${member.id}';`
+      );
+    const [, before] = records().split(",").map(Number);
     await signInBrowser(context, "moderator");
+    page.on("dialog", (dialog) =>
+      dialog.type() === "prompt" ? dialog.accept("Recorded twice by mistake") : dialog.accept()
+    );
+    // The same bank credit as the withdrawn record: recorded again, waiting.
     await page.goto("/admin/payments");
     await page.getByRole("button", { name: "Record a bank transfer" }).click();
-    const form = await fillTransfer(page, "69", "1");
-    page.on("dialog", (dialog) => dialog.accept());
+    let form = await fillTransfer(page, "138.00");
     await form.getByRole("button", { name: "Record bank transfer" }).click();
     await expect(
-      page.getByRole("alert").filter({ hasText: "That bank reference was already recorded" })
+      page.getByRole("status").filter({ hasText: "It waits for another staff member" })
+    ).toBeVisible();
+    expect(records()).toBe(`1,${before + 1}`);
+    // While it waits, the same credit cannot be recorded a second time.
+    await page.goto("/admin/payments");
+    await page.getByRole("button", { name: "Record a bank transfer" }).click();
+    form = await fillTransfer(page, "138.00");
+    await form.getByLabel("Reason (audited)").fill("A second record of the same transfer");
+    await form.getByRole("button", { name: "Record bank transfer" }).click();
+    await expect(
+      page.getByRole("alert").filter({ hasText: "A bank transfer with that reference" })
     ).toHaveText(
-      "That bank reference was already recorded. Check the payments list before recording it."
+      "A bank transfer with that reference, amount and date is already waiting or confirmed. Check the payments list before recording it."
     );
-    expect(
-      queryTestCopy(
-        `select count(*) from private.invoice_transfers where account_id = '${member.id}';`
-      )
-    ).toBe("1");
+    expect(records()).toBe(`1,${before + 1}`);
+    // Withdrawn again, so nothing of this spec stays waiting.
+    await page.goto("/admin/payments");
+    await page
+      .getByRole("list", { name: "Bank transfers waiting for confirmation" })
+      .getByRole("listitem")
+      .filter({ hasText: `Bank transfer ${reference}` })
+      .getByRole("button", { name: "Withdraw" })
+      .click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "Bank transfer declined" })
+    ).toBeVisible();
+    expect(records()).toBe(`0,${before + 1}`);
     expect(outside).toEqual([]);
   });
 });

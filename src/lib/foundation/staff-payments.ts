@@ -37,11 +37,13 @@ export const REFUND_REASON_CODES = [
 export type RefundReasonCode = (typeof REFUND_REASON_CODES)[number];
 export const refundReasonCode = z.enum(REFUND_REASON_CODES);
 
-/** Ozow's refund (or chargeback) reference, as the database accepts it. */
-const ozowReference = z
+/** A refund (or chargeback) reference: Ozow's, or for a bank-transfer payment
+ * the bank's, which may hold single spaces. The database applies the rule of
+ * the payment's method (Ozow references never have spaces). */
+const refundReference = z
   .string()
-  .trim()
-  .regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]{3,99}$/);
+  .transform((value) => value.trim().replace(/\s+/g, " "))
+  .pipe(z.string().regex(/^[A-Za-z0-9][A-Za-z0-9 ._:/-]{3,99}$/));
 
 const cents = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -195,8 +197,17 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   [
     "bank_reference_used",
-    [409, "That bank reference was already recorded. Check the payments list before recording it."],
+    [
+      409,
+      "A bank transfer with that reference, amount and date is already waiting or confirmed. Check the payments list before recording it.",
+    ],
   ],
+  ["refund_reference_required", [422, "Enter the bank reference of the transfer back."]],
+  [
+    "refund_reference_invalid",
+    [422, "The bank reference is 4 to 100 letters, digits, spaces or . _ : / -."],
+  ],
+  ["refund_reference_used", [409, "That bank reference was already recorded for another refund."]],
   ["invoice_plan_unavailable", [409, "No slot for that term is on sale now."]],
   [
     "invoice_buyer_unverified",
@@ -289,14 +300,14 @@ export function activateStaffPaidPayment(
   );
 }
 
-/** Ozow's reference, or a plain refusal: nothing is recorded without it. */
+/** The refund reference, or a plain refusal: nothing is recorded without it. */
 function checkedReference(value: string) {
-  if (!value.trim()) throw new FoundationStaffCommandError(422, "Enter Ozow's refund reference.");
-  const parsed = ozowReference.safeParse(value);
+  if (!value.trim()) throw new FoundationStaffCommandError(422, "Enter the refund reference.");
+  const parsed = refundReference.safeParse(value);
   if (!parsed.success)
     throw new FoundationStaffCommandError(
       422,
-      "Ozow's reference is 4 to 100 letters, digits or . _ : / - with no spaces."
+      "The reference is 4 to 100 letters, digits, spaces or . _ : / -."
     );
   return parsed.data;
 }

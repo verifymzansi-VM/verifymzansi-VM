@@ -110,7 +110,9 @@ function WaitingTransfers({
   canConfirm: boolean;
 }) {
   const { run, busy, message } = useCommercialAction();
-  if (waiting.length === 0) return null;
+  // Confirming, declining or withdrawing the last waiting transfer empties
+  // the list when the page refreshes: the outcome stays on screen.
+  if (waiting.length === 0) return <ActionMessage message={message} />;
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold">Waiting for a second staff member</h3>
@@ -127,8 +129,8 @@ function WaitingTransfers({
               {t.similar_records > 0 ? (
                 <span className="w-full text-destructive" role="note">
                   Possible duplicate: {t.similar_records} other{" "}
-                  {t.similar_records === 1 ? "record names" : "records name"} this customer, amount
-                  and date under another reference. Check the bank statement.
+                  {t.similar_records === 1 ? "record has" : "records have"} this bank reference and
+                  amount, or this customer, amount and date. Check the bank statement.
                 </span>
               ) : null}
               <span className="w-full text-xs text-muted-foreground">

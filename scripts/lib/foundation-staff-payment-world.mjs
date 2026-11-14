@@ -126,6 +126,83 @@ export function createPaymentWorld({ q, json }) {
   };
 }
 
+/** An Ozow purchase through the slot checkout and the website server's
+ * settlement notice (as `service_role`, with synthetic Ozow ids); returns the
+ * payment id. `kit` is updateCheckKit's result. */
+export function ozowPurchase({ q, json, member, service }, owner, plan, slots) {
+  const quoted = json(
+    member(
+      owner,
+      `select api.start_slot_checkout('${plan.id}',${slots},${plan.cents * slots},true);`
+    )
+  );
+  const lease = json(
+    service(`select api.claim_checkout_request('${quoted.payment_id}','${owner.id}');`)
+  );
+  q(
+    service(
+      `select api.complete_checkout_request('${quoted.payment_id}','${owner.id}','${lease.claim_token}','req-${quoted.payment_id}','https://one.ozow.com/checkout/req-${quoted.payment_id}');`
+    )
+  );
+  const ref = q(`select merchant_reference from private.payments where id='${quoted.payment_id}';`);
+  const event = {
+    payload_sha256: sha(`event-${quoted.payment_id}`),
+    merchant_reference: ref,
+    provider_request_id: `req-${quoted.payment_id}`,
+    provider_transaction_id: `tx-${quoted.payment_id}`,
+    status: "complete",
+    amount_cents: plan.cents * slots,
+    currency: "ZAR",
+  };
+  assert.equal(
+    json(service(`select api.apply_provider_event($e$${JSON.stringify(event)}$e$::jsonb);`))
+      .outcome,
+    "completed"
+  );
+  return quoted.payment_id;
+}
+
+/** An SQL literal, or null. */
+export const sqlValue = (value) =>
+  value === null || value === undefined ? "null" : `'${String(value).replace(/'/g, "''")}'`;
+
+/**
+ * The staff bank transfer commands as SQL (record, confirm, decline) for a
+ * staff member, with every record argument overridable; the amount defaults to
+ * the order total of the Individual slot. `today` is the South African date.
+ */
+export function bankTransferCommands({ json, staff }, today) {
+  const recordSql = (who, input) => {
+    const a = {
+      email: null,
+      term: 180,
+      slots: 1,
+      amount: null,
+      reference: null,
+      cleared: today,
+      waiver: true,
+      reason: "EFT cleared; customer agreed in writing",
+      ...input,
+    };
+    const amount = a.amount ?? (a.term === 30 ? 6900 : a.term === 90 ? 20700 : 41400) * a.slots;
+    const number = (value) => (value === null ? "null" : value);
+    return staff(
+      who,
+      `select api.record_staff_invoice_payment(${sqlValue(a.email)},${number(a.term)},${number(a.slots)},${amount},${sqlValue(a.reference)},${sqlValue(a.cleared)},${number(a.waiver)},${sqlValue(a.reason)});`
+    );
+  };
+  const confirmSql = (who, id) => staff(who, `select api.confirm_staff_invoice_payment('${id}');`);
+  const declineSql = (who, id, reason = "The bank shows no such transfer") =>
+    staff(who, `select api.decline_staff_invoice_payment('${id}',${sqlValue(reason)});`);
+  return {
+    recordSql,
+    record: (who, input) => json(recordSql(who, input)),
+    confirmSql,
+    confirm: (who, id) => json(confirmSql(who, id)),
+    declineSql,
+  };
+}
+
 /** A separate psql session in the container (for races), and one started after a delay. */
 export function psqlSessions(database) {
   const session = (sql) =>

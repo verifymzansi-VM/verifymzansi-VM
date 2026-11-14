@@ -165,7 +165,32 @@ describe("communication choices", () => {
     expect(response.status).toBe(403);
     let body = await response.json();
     expect(JSON.stringify(body)).not.toContain("active authenticated");
+    expect(body).toMatchObject({
+      reason: "restricted",
+      error: "Your account can't turn this on right now",
+    });
+
+    // A session that ended, on any call: sign in again (not "can't turn this on").
+    for (const message of ["live session required", "signed-in member required"]) {
+      rpc.mockResolvedValueOnce({ data: null, error: { code: "42501", details: null, message } });
+      response = await getPreferences(preferences());
+      expect(response.status).toBe(401);
+      expect(await response.json()).toMatchObject({
+        reason: "session",
+        error: "Your session has ended. Sign in again.",
+      });
+    }
+
+    // Any other refusal of this account: no claim about turning something on.
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "42501", details: null, message: "permission denied for function x" },
+    });
+    response = await savePreferences(preferences("PATCH", { analytics: false }));
+    expect(response.status).toBe(403);
+    body = await response.json();
     expect(body).toMatchObject({ reason: "forbidden" });
+    expect(body.error).not.toContain("turn this on");
 
     rpc.mockResolvedValueOnce({
       data: null,
@@ -231,5 +256,25 @@ describe("email history", () => {
     const response = await getEmailActivity(activity());
     expect(response.status).toBe(503);
     expect(JSON.stringify(await response.json())).not.toContain("someone@example.com");
+  });
+
+  it("words its refusals for the history, never 'turn this on'", async () => {
+    const cases: Array<[string, number, string]> = [
+      ["live session required", 401, "Your session has ended. Sign in again."],
+      // A database before 20261113223806 still refuses a restricted account.
+      [
+        "active authenticated member required",
+        403,
+        "Your account can't see its email history right now",
+      ],
+    ];
+    for (const [message, status, error] of cases) {
+      rpc.mockResolvedValueOnce({ data: null, error: { code: "42501", details: null, message } });
+      const response = await getEmailActivity(activity());
+      expect(response.status).toBe(status);
+      const body = await response.json();
+      expect(body).toMatchObject({ error });
+      expect(JSON.stringify(body)).not.toContain("turn this on");
+    }
   });
 });

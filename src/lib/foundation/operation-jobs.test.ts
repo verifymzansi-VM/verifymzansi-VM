@@ -1046,6 +1046,31 @@ describe("payment receipts (M3.7)", () => {
     );
   });
 
+  it.each(["refunded", "chargeback"])(
+    "sends no receipt at all for a payment %s before the email went out",
+    async (status) => {
+      queueWithReceipt(() => ({ data: { ...row, status }, error: null }), paymentJob());
+      expect(await run()).toMatchObject({ succeeded: 1, retrying: 0, failed: [] });
+      expect(deliver).not.toHaveBeenCalled();
+      expect(calls("complete_notification_outbox")).toEqual([
+        ["complete_notification_outbox", { p_id: id, p_claim: claim, p_ok: true }],
+      ]);
+    }
+  );
+
+  it("still sends the notice without details when another member's payment is refunded", async () => {
+    queueWithReceipt(
+      () => ({
+        data: { ...row, status: "refunded", owner_id: "00000000-0000-4000-8000-0000000000c3" },
+        error: null,
+      }),
+      paymentJob()
+    );
+    const error = await run().catch((e) => e);
+    expect(error.failed).toEqual(["outbox:receipt"]);
+    expect(deliver).toHaveBeenCalledOnce();
+  });
+
   it("reads no receipt for a removed recipient or another kind", async () => {
     queueWithReceipt(
       () => ({ data: row, error: null }),

@@ -1,6 +1,6 @@
 /** @vitest-environment node */
 import { describe, expect, it } from "vitest";
-import { readPaymentReceipt } from "./payment-receipt";
+import { paymentNoLongerComplete, readPaymentReceipt } from "./payment-receipt";
 
 const paymentId = "00000000-0000-4000-8000-0000000000a1";
 const ownerId = "00000000-0000-4000-8000-0000000000b2";
@@ -50,6 +50,50 @@ describe("readPaymentReceipt", () => {
     expect(
       readPaymentReceipt({ ...row, payment_method: "ozow", bank_reference: null }, expected)
     ).toMatchObject({ bankReference: "abcdef12345678" });
+  });
+
+  it("dates a bank transfer by the day its money cleared, not the confirmation", () => {
+    const transfer = {
+      ...row,
+      provider_transaction_id: null,
+      payment_method: "invoice",
+      bank_reference: "FNB 2026-11 A1",
+      cleared_on: "2026-11-10",
+    };
+    const receipt = readPaymentReceipt(transfer, expected);
+    expect(receipt).toMatchObject({ paidAt: "2026-11-10T12:00:00+02:00" });
+    expect(
+      new Date(receipt!.paidAt).toLocaleDateString("en-ZA", { timeZone: "Africa/Johannesburg" })
+    ).toBe(
+      new Date("2026-11-10T10:00:00Z").toLocaleDateString("en-ZA", {
+        timeZone: "Africa/Johannesburg",
+      })
+    );
+    // A database without the cleared date: the confirmation time, as before.
+    expect(readPaymentReceipt({ ...transfer, cleared_on: undefined }, expected)).toMatchObject({
+      paidAt: row.completed_at,
+    });
+    // An Ozow payment is dated by its settlement whatever else the read holds.
+    expect(readPaymentReceipt({ ...row, cleared_on: "2026-11-10" }, expected)).toMatchObject({
+      paidAt: row.completed_at,
+    });
+    expect(readPaymentReceipt({ ...transfer, cleared_on: "10/11/2026" }, expected)).toBeNull();
+  });
+
+  it("gives no receipt for a payment that is no longer complete", () => {
+    for (const status of ["refunded", "chargeback"]) {
+      expect(readPaymentReceipt({ ...row, status }, expected)).toBeNull();
+      expect(paymentNoLongerComplete({ ...row, status }, expected)).toBe(true);
+    }
+    expect(paymentNoLongerComplete(row, expected)).toBe(false);
+    // Only for that payment of that member.
+    expect(
+      paymentNoLongerComplete(
+        { ...row, status: "refunded", payment_id: "00000000-0000-4000-8000-0000000000c3" },
+        expected
+      )
+    ).toBe(false);
+    expect(paymentNoLongerComplete(null, expected)).toBe(false);
   });
 
   it("falls back to the label and the invoice time when those are missing", () => {

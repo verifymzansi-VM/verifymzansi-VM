@@ -7,7 +7,8 @@ import { brandedEmail, detailList, paragraph, sanitizeAppUrl } from "./email-tem
 export type PaymentReceipt = {
   kind: "plan" | "addon";
   invoiceNumber: string;
-  /** When the payment settled (ISO time). */
+  /** When the payment was made (ISO time): when it settled, or for a bank
+   * transfer the day its money cleared. */
   paidAt: string;
   /** The invoice line, for example "Individual slot — 30 days". */
   item: string;

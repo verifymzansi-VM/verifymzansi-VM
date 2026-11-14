@@ -8,10 +8,11 @@ CREATE OR REPLACE FUNCTION internal.record_staff_payment_refund(p_payment_id uui
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid; buyer uuid; pay private.payments; repeat jsonb; request private.payment_refund_requests;
-  result jsonb; approval boolean; refunded_before bigint;
+  result jsonb; approval boolean; refunded_before bigint; reference text;
 begin
   actor := internal.staff_actor('payments:refund');
-  perform internal.assert_staff_refund_input(p_kind, p_reason_code, p_reason, p_ozow_reference);
+  reference := internal.staff_refund_reference(p_payment_id, p_ozow_reference);
+  perform internal.assert_staff_refund_reason(p_kind, p_reason_code, p_reason);
   if p_payment_id is null then raise exception 'payment required' using errcode='22023'; end if;
   select p.owner_id into buyer from private.payments p where p.id = p_payment_id;
   if buyer is null then raise exception 'payment not found' using errcode='22023'; end if;
@@ -21,7 +22,7 @@ begin
   select * into pay from private.payments p where p.id = p_payment_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, buyer);
-  repeat := internal.staff_refund_repeat(actor, pay.id, null, p_kind, p_reason_code, p_reason, p_ozow_reference);
+  repeat := internal.staff_refund_repeat(actor, pay.id, null, p_kind, p_reason_code, p_reason, reference);
   if repeat is not null then return repeat; end if;
   if exists(select 1 from private.frontend_payment_reversals v where v.payment_id = pay.id) or pay.status <> 'complete' then
     raise exception 'only a completed payment that was not reversed can be refunded' using errcode='PT409', detail='payment_not_refundable';
@@ -43,7 +44,7 @@ begin
   perform internal.assert_staff_payment_actor(actor, buyer);
   insert into private.payment_refund_requests (payment_id, account_id, kind, reason_code, reason, ozow_reference,
       amount_cents, recorded_before_cents, needs_approval, status, requested_by, applied_at, released_activations)
-    values (pay.id, pay.owner_id, p_kind, p_reason_code, btrim(p_reason), btrim(p_ozow_reference), pay.amount_cents, refunded_before,
+    values (pay.id, pay.owner_id, p_kind, p_reason_code, btrim(p_reason), reference, pay.amount_cents, refunded_before,
       approval, case when approval then 'awaiting_approval' else 'applied' end, actor,
       case when approval then null else statement_timestamp() end,
       case when approval then null else (result->>'released_activations')::integer end)

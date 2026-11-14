@@ -1,7 +1,7 @@
 {
   "description": "Fingerprint of the production (foundation) schema rebuilt from this repository: platform-prelude.sql, candidate.sql, baseline-supplement.sql and updates/*.sql in filename order. Produced by `pnpm db:foundation:replay -- --write` with database/foundation/fingerprint.sql. CI fails when the replay differs.",
   "productionCheck": {
-    "capturedOn": "2026-11-13",
+    "capturedOn": "2026-11-14",
     "method": "Read-only catalogue capture of production, same query formats. table_grants returns no row in production or in the replay (no table privileges for the API roles), so it is listed as matching without a fingerprint.",
     "matching": [
       "function_bodies",
@@ -19,19 +19,19 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261113172356_ozow_api_refunds.sql",
+    "matchedThroughUpdate": "20261113223806_bank_transfer_and_consent_fixes.sql",
     "matchedFingerprints": {
       "column_grants": "11724f805587a82326eae936e0200f0c",
       "columns": "faa17421c5c8dbb7517f2b60eb3734f2",
-      "constraints": "5506e0617429999cfade723ba20024b7",
+      "constraints": "78f0c5909e0598adac600b1eec9f18e7",
       "event_triggers": "821f7d069c595c075754fad9309136ac",
-      "function_bodies": "044f5a8a0dd4b973fbf2c454a6e1a897",
+      "function_bodies": "3e9ceadc3b291af9defd34fe1e419672",
       "function_grants": "f1d2f5a53dbf5be3a7d5e95a881832bf",
-      "function_metadata": "5cd23985c4579a8c8f21e213693ca183",
-      "indexes": "6023378d0f2ca7f4ada8f355f2e14f1b",
+      "function_metadata": "c7c084eeb5d1f2a69997df36928c3e98",
+      "indexes": "768c829b864d0963d5e72366b6bb25ae",
       "policies": "2c1b773d5ffe29f172271087b1f36e04",
       "row_level_security": "21b60c97063eb3fa39331921b2c59782",
-      "triggers": "8e30899c01c04079ae72d90fde99214d"
+      "triggers": "ef0e4012174d8dae1f53b675ba1c74f9"
     },
     "pendingApplication": []
   },
@@ -39,8 +39,8 @@
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 69,
-  "lastUpdate": "20261113172356_ozow_api_refunds.sql",
+  "updateCount": 70,
+  "lastUpdate": "20261113223806_bank_transfer_and_consent_fixes.sql",
   "categories": {
     "column_grants": {
       "items": 2,
@@ -52,27 +52,27 @@
     },
     "constraints": {
       "items": 1074,
-      "fingerprint": "5506e0617429999cfade723ba20024b7"
+      "fingerprint": "78f0c5909e0598adac600b1eec9f18e7"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 864,
-      "fingerprint": "044f5a8a0dd4b973fbf2c454a6e1a897"
+      "items": 867,
+      "fingerprint": "3e9ceadc3b291af9defd34fe1e419672"
     },
     "function_grants": {
       "items": 675,
       "fingerprint": "f1d2f5a53dbf5be3a7d5e95a881832bf"
     },
     "function_metadata": {
-      "items": 864,
-      "fingerprint": "5cd23985c4579a8c8f21e213693ca183"
+      "items": 867,
+      "fingerprint": "c7c084eeb5d1f2a69997df36928c3e98"
     },
     "indexes": {
       "items": 481,
-      "fingerprint": "6023378d0f2ca7f4ada8f355f2e14f1b"
+      "fingerprint": "768c829b864d0963d5e72366b6bb25ae"
     },
     "policies": {
       "items": 1,
@@ -87,8 +87,8 @@
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 107,
-      "fingerprint": "8e30899c01c04079ae72d90fde99214d"
+      "items": 108,
+      "fingerprint": "ef0e4012174d8dae1f53b675ba1c74f9"
     }
   }
 }

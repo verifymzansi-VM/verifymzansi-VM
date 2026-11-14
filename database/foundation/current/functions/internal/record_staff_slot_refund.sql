@@ -8,10 +8,12 @@ CREATE OR REPLACE FUNCTION internal.record_staff_slot_refund(p_line_id uuid, p_k
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid; buyer uuid; payment uuid; pay private.payments; line private.payment_lines; repeat jsonb;
-  request private.payment_refund_requests; result jsonb; approval boolean; refunded_before bigint;
+  request private.payment_refund_requests; result jsonb; approval boolean; refunded_before bigint; reference text;
 begin
   actor := internal.staff_actor('payments:refund');
-  perform internal.assert_staff_refund_input(p_kind, p_reason_code, p_reason, p_ozow_reference);
+  reference := internal.staff_refund_reference((select l.payment_id from private.payment_lines l where l.id = p_line_id),
+    p_ozow_reference);
+  perform internal.assert_staff_refund_reason(p_kind, p_reason_code, p_reason);
   if p_line_id is null then raise exception 'slot required' using errcode='22023'; end if;
   select p.owner_id, p.id into buyer, payment from private.payment_lines l join private.payments p on p.id = l.payment_id
     where l.id = p_line_id;
@@ -23,7 +25,7 @@ begin
   select * into line from private.payment_lines l where l.id = p_line_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, buyer);
-  repeat := internal.staff_refund_repeat(actor, pay.id, line.id, p_kind, p_reason_code, p_reason, p_ozow_reference);
+  repeat := internal.staff_refund_repeat(actor, pay.id, line.id, p_kind, p_reason_code, p_reason, reference);
   if repeat is not null then return repeat; end if;
   if pay.status <> 'complete' or line.status <> 'open' then
     raise exception 'only an open slot of a completed payment can be refunded' using errcode='PT409', detail='payment_not_refundable';
@@ -40,7 +42,7 @@ begin
   perform internal.assert_staff_payment_actor(actor, buyer);
   insert into private.payment_refund_requests (payment_id, payment_line_id, account_id, kind, reason_code, reason,
       ozow_reference, amount_cents, recorded_before_cents, needs_approval, status, requested_by, applied_at, released_activations)
-    values (pay.id, line.id, pay.owner_id, p_kind, p_reason_code, btrim(p_reason), btrim(p_ozow_reference),
+    values (pay.id, line.id, pay.owner_id, p_kind, p_reason_code, btrim(p_reason), reference,
       line.amount_cents, refunded_before, approval, case when approval then 'awaiting_approval' else 'applied' end, actor,
       case when approval then null else statement_timestamp() end,
       case when approval then null else (result->>'released_activations')::integer end)
