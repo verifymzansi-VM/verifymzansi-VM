@@ -74,20 +74,31 @@ begin
       if line_count = 0 then
         raise exception 'every slot of this payment was refunded' using errcode='PT409', detail='payment_slots_refunded';
       end if;
-      -- Within the person's Individual slot limit (every account of the
-      -- identity, each slot once; a renewal of a held slot adds none, and
-      -- the slots renewed ahead stay within the limit).
-      fingerprint := internal.individual_slot_identity(pay.owner_id);
-      if fingerprint is not null then
-        perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
-      end if;
-      renewing := internal.slot_lines_renewing(pay.id);
-      if (internal.slot_lines_adding(pay.id) > 0
-          and (internal.individual_slots_counted(fingerprint, pay.owner_id, pay.id)->>'held')::integer
-            + internal.slot_lines_adding(pay.id) > internal.individual_slot_limit(fingerprint))
-        or (cardinality(renewing) > 0
-          and not internal.individual_renewals_allowed(fingerprint, pay.owner_id, pay.id, renewing)) then
-        raise exception 'more slots than the person''s limit; raise the limit or refund' using errcode='PT429', detail='slot_limit_reached';
+      if exists(select 1 from private.plan_versions v
+          where v.id = pay.plan_version_id and internal.slot_package_plan(v.plan_code)) then
+        -- A Multi-listing package (20261114154823): one package per account
+        -- at a time.
+        perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||pay.owner_id::text, 707));
+        if internal.slot_package_open(pay.owner_id) then
+          raise exception 'the account already has a package; refund this payment, or activate it once that package has ended'
+            using errcode='PT409', detail='package_active';
+        end if;
+      else
+        -- Within the person's Individual slot limit (every account of the
+        -- identity, each slot once; a renewal of a held slot adds none, and
+        -- the slots renewed ahead stay within the limit).
+        fingerprint := internal.individual_slot_identity(pay.owner_id);
+        if fingerprint is not null then
+          perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
+        end if;
+        renewing := internal.slot_lines_renewing(pay.id);
+        if (internal.slot_lines_adding(pay.id) > 0
+            and (internal.individual_slots_counted(fingerprint, pay.owner_id, pay.id)->>'held')::integer
+              + internal.slot_lines_adding(pay.id) > internal.individual_slot_limit(fingerprint))
+          or (cardinality(renewing) > 0
+            and not internal.individual_renewals_allowed(fingerprint, pay.owner_id, pay.id, renewing)) then
+          raise exception 'more slots than the person''s limit; raise the limit or refund' using errcode='PT429', detail='slot_limit_reached';
+        end if;
       end if;
       made := internal.issue_slot_line_entitlements(pay.id);
     else

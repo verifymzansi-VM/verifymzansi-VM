@@ -9,9 +9,13 @@ CREATE OR REPLACE FUNCTION internal.slot_posts_started(p_entitlement uuid, p_sin
 AS $function$
   select count(*)::integer from private.post_activations a
   where a.activated_at > p_since and a.release_reason is distinct from 'moderation' and not a.continued
-    and a.entitlement_id in (select c.id from private.entitlements t
-    join private.entitlements c on c.id = coalesce(t.slot_id, t.id) or c.slot_id = coalesce(t.slot_id, t.id)
-    where t.id = p_entitlement);
+    and a.entitlement_id in (
+      select c.id from private.entitlements t
+        join private.entitlements c on c.id = coalesce(t.slot_id, t.id) or c.slot_id = coalesce(t.slot_id, t.id)
+      where t.id = p_entitlement and t.package_id is null
+      union all
+      select c.id from private.entitlements t join private.entitlements c on c.package_id = t.package_id
+      where t.id = p_entitlement and t.package_id is not null);
 $function$;
 alter function internal.slot_posts_started(uuid,timestamp with time zone) owner to postgres;
 revoke all on function internal.slot_posts_started(uuid,timestamp with time zone) from public;

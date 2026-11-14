@@ -24,6 +24,7 @@ create table private.entitlements (
   payment_line_id uuid,
   renews_entitlement_id uuid,
   slot_id uuid,
+  package_id uuid,
   constraint entitlements_activation_period_days_check CHECK (activation_period_days >= 1 AND activation_period_days <= 366),
   constraint entitlements_activations_per_period_check CHECK (activations_per_period >= 1 AND activations_per_period <= 10000),
   constraint entitlements_addon_capabilities_check CHECK (
@@ -43,6 +44,8 @@ END),
   constraint entitlements_max_photos_check CHECK (max_photos >= 1 AND max_photos <= 50),
   constraint entitlements_max_videos_check CHECK (max_videos >= 0 AND max_videos <= 10),
   constraint entitlements_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES auth.users(id) ON DELETE RESTRICT,
+  constraint entitlements_package_grant CHECK (package_id IS NULL OR source = 'retail_paid'::text AND payment_line_id IS NOT NULL),
+  constraint entitlements_package_id_fkey FOREIGN KEY (package_id) REFERENCES private.slot_packages(id) ON DELETE RESTRICT,
   constraint entitlements_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES private.payments(id) ON DELETE RESTRICT,
   constraint entitlements_payment_line_id_fkey FOREIGN KEY (payment_line_id, payment_id) REFERENCES private.payment_lines(id, payment_id) ON DELETE RESTRICT,
   constraint entitlements_payment_line_source CHECK (payment_line_id IS NULL OR source = 'retail_paid'::text AND payment_id IS NOT NULL),
@@ -60,6 +63,8 @@ CREATE INDEX entitlements_active_ends_idx ON private.entitlements USING btree (e
 CREATE INDEX entitlements_granted_by_idx ON private.entitlements USING btree (granted_by) WHERE (granted_by IS NOT NULL);
 CREATE INDEX entitlements_owner_id_idx ON private.entitlements USING btree (owner_id);
 CREATE INDEX entitlements_owner_usable_idx ON private.entitlements USING btree (owner_id, ends_at) WHERE (status = 'active'::text);
+CREATE INDEX entitlements_package_ends_idx ON private.entitlements USING btree (ends_at) WHERE ((package_id IS NOT NULL) AND (status = 'active'::text));
+CREATE INDEX entitlements_package_idx ON private.entitlements USING btree (package_id) WHERE (package_id IS NOT NULL);
 CREATE INDEX entitlements_payment_id_idx ON private.entitlements USING btree (payment_id) WHERE (payment_id IS NOT NULL);
 CREATE UNIQUE INDEX entitlements_payment_line_idx ON private.entitlements USING btree (payment_line_id) WHERE (payment_line_id IS NOT NULL);
 CREATE INDEX entitlements_payment_line_payment_idx ON private.entitlements USING btree (payment_line_id, payment_id) WHERE (payment_line_id IS NOT NULL);

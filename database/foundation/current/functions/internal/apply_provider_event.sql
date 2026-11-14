@@ -89,7 +89,14 @@ begin
       end if;
     else
       select count(*) into line_count from private.payment_lines l where l.payment_id = pay.id and l.status = 'open';
-      if line_count > 0 and fulfillable then
+      if line_count > 0 and fulfillable and exists(select 1 from private.plan_versions v
+          where v.id = pay.plan_version_id and internal.slot_package_plan(v.plan_code)) then
+        -- A Multi-listing package (20261114154823): one package per account at
+        -- a time. A second one's money goes to reconciliation: staff refund
+        -- it, or activate it once the first has ended.
+        perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||pay.owner_id::text, 707));
+        fulfillable := not internal.slot_package_open(pay.owner_id);
+      elsif line_count > 0 and fulfillable then
         -- Slots are delivered only within the person's limit (every account
         -- of the identity, each slot once); otherwise the money goes to
         -- reconciliation. A renewal of a held slot adds no slot (so it is
