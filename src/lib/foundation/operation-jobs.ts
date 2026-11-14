@@ -35,6 +35,7 @@ const kind = z.enum([
   "post_sold",
   "post_kept",
   "verification_returned",
+  "slot_renewal_reminder",
 ]);
 type Kind = z.infer<typeof kind>;
 // Payment messages are claimed before every other kind.
@@ -48,6 +49,8 @@ const otherKinds = kind.options.filter((k) => !paymentKinds.includes(k));
 // such a database the job drops them one update at a time until the claim is
 // accepted, and keeps that list.
 const laterKinds: ReadonlyArray<ReadonlySet<Kind>> = [
+  // 20261114093742_renew_slots_early.sql
+  new Set<Kind>(["slot_renewal_reminder"]),
   // 20261110173012_verification_returned_notice.sql
   new Set<Kind>(["verification_returned"]),
   // 20261109104020_post_expiry_rules.sql
@@ -104,6 +107,9 @@ const ALERT_RESERVE_MS = 2_000;
 const MAX_ALERTS_PER_RUN = 2;
 
 const SWEEPS = [
+  // Posts move into a renewed slot's next period; renewal reminders are
+  // queued (20261114093742_renew_slots_early.sql).
+  ["run_slot_renewals", { p_limit: 100 }],
   ["run_post_lifecycle", { p_limit: 100 }],
   ["sweep_sponsorships", { p_limit: 100 }],
   ["purge_expired_inbox", { p_limit: 100 }],
@@ -128,6 +134,10 @@ const jobSchema = z
     // Only for trial_started, from update 20261110045944 on.
     trial_ends_at: z.iso.datetime({ offset: true }).nullable().optional(),
     trial_funds_post: z.boolean().nullable().optional(),
+    // Only for slot_renewal_reminder: when the slot ends, and whether more
+    // than one slot ends within 7 days (the email links to "Renew all").
+    slot_ends_at: z.iso.datetime({ offset: true }).nullable().optional(),
+    slot_renew_all: z.boolean().nullable().optional(),
   })
   .refine(
     (job) =>
@@ -348,14 +358,20 @@ export async function runFoundationOperationJobs(
                   deletesAt: job.deletes_at ?? null,
                   holdsSlot: job.holds_slot ?? null,
                 })
-              : job.kind === "trial_started"
+              : job.kind === "slot_renewal_reminder" && job.subject_id
                 ? deliver(recipient, job.kind, key, undefined, {
-                    trialEndsAt: job.trial_ends_at ?? null,
-                    trialFundsPost: job.trial_funds_post ?? null,
+                    slotEndsAt: job.slot_ends_at ?? null,
+                    slotRenewAll: job.slot_renew_all ?? null,
+                    renewSlotId: job.subject_id,
                   })
-                : receiptDetails
-                  ? deliver(recipient, job.kind, key, undefined, receiptDetails)
-                  : deliver(recipient, job.kind, key)
+                : job.kind === "trial_started"
+                  ? deliver(recipient, job.kind, key, undefined, {
+                      trialEndsAt: job.trial_ends_at ?? null,
+                      trialFundsPost: job.trial_funds_post ?? null,
+                    })
+                  : receiptDetails
+                    ? deliver(recipient, job.kind, key, undefined, receiptDetails)
+                    : deliver(recipient, job.kind, key)
         );
         success = result.success;
         unknown = !success && result.outcomeUnknown === true;

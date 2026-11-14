@@ -9,7 +9,8 @@ AS $function$
 begin
   return exists(select 1 from private.entitlements e join private.posts p on p.id=p_post
     where e.id=p_ent and p.owner_id=p_owner
-      and e.status='active' and e.starts_at<=clock_timestamp() and e.ends_at>clock_timestamp()
+      and e.status='active' and e.starts_at<=clock_timestamp()
+      and (e.ends_at>clock_timestamp() or coalesce(internal.slot_chain_end(e.id)>clock_timestamp(), false))
       and (e.area is null or e.area=p.area)
       and (e.owner_id=p_owner or exists(select 1 from private.entitlement_members m
         where m.entitlement_id=e.id and m.member_id=p_owner))

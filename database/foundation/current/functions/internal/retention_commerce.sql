@@ -62,6 +62,8 @@ begin
       and not exists(select 1 from private.post_trial_claims c where c.converted_by_activation_id=a.id)
     order by a.released_at limit p_limit for update skip locked);
   get diagnostics activations=row_count;
+  -- A slot's periods go newest first: a grant stays while a later renewal (or
+  -- a payment line) still names it.
   delete from private.entitlements where id in(select e.id from private.entitlements e
     where (e.status='revoked' or e.ends_at<=statement_timestamp())
       and internal.retention_tax_year_due(coalesce(e.ends_at,e.created_at))
@@ -69,6 +71,8 @@ begin
       and not exists(select 1 from private.post_activations a where a.entitlement_id=e.id)
       and not exists(select 1 from private.post_trial_claims c where c.trial_entitlement_id=e.id)
       and not exists(select 1 from private.trial_identities t where t.entitlement_id=e.id)
+      and not exists(select 1 from private.entitlements r where r.renews_entitlement_id=e.id or r.slot_id=e.id)
+      and not exists(select 1 from private.payment_lines l where l.renews_entitlement_id=e.id)
     order by e.created_at limit p_limit for update skip locked);
   get diagnostics entitlements=row_count;
   delete from private.payments where id in(select p.id from private.payments p

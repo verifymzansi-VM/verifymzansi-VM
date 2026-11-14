@@ -14,7 +14,7 @@ begin
   select jsonb_build_object('items',coalesce((select jsonb_agg(jsonb_build_object(
     'id',p.id,'kind',p.kind,'area',p.area,'category',p.category_key,'title',p.title,
     'status',p.status,'revision',p.revision,'created_at',p.created_at,
-    'published_at',p.published_at,'visible_until',p.visible_until,
+    'published_at',p.published_at,'visible_until',internal.post_shown_until(p.id,p.kind,p.visible_until),
     'price_mode',d.price_mode,'price_cents',d.price_cents::text,
     'cover_object_key',(select m.object_key from private.post_media pm join private.media_objects m on m.id=pm.object_id
       where pm.post_id=p.id and m.state='ready' and m.kind='image' order by (pm.purpose='cover') desc,pm.position limit 1)

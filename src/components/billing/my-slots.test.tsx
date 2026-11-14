@@ -25,10 +25,21 @@ const slot = (overrides: Partial<Slot> = {}): Slot => ({
   state: "active",
   places: 1,
   sponsor: null,
+  renewable: false,
+  renew_opens_at: "2026-11-26T10:00:00Z",
+  renewed_until: null,
+  renewals: [],
   posts: [],
   ...overrides,
 });
-const individual = { verified: true, held: 2, pending: 0, limit: 4, limit_ends_at: null };
+const individual = {
+  verified: true,
+  held: 2,
+  pending: 0,
+  renewed_ahead: 0,
+  limit: 4,
+  limit_ends_at: null,
+};
 const buyHref = `/billing/checkout?plan=${uuid(9)}`;
 
 describe("MySlots", () => {
@@ -69,9 +80,10 @@ describe("MySlots", () => {
       "href",
       "/post/create"
     );
-    // One buy action for the page, no renew per slot (early renewal is P3).
+    // One buy action for the page; renewing opens 14 days before the end.
     expect(screen.getByRole("link", { name: "Buy a slot" })).toHaveAttribute("href", buyHref);
     expect(screen.queryByRole("link", { name: /Renew/ })).toBeNull();
+    expect(within(first).getByText("You can renew from 26 November 2026.")).toBeInTheDocument();
     expect(screen.getByText(/of 4 Individual slots/)).toBeInTheDocument();
   });
 
@@ -153,6 +165,78 @@ describe("MySlots", () => {
       "href",
       "/verification"
     );
+  });
+
+  it("offers Renew on each slot that can be renewed, and Renew all for several (P3)", () => {
+    render(
+      <MySlots
+        now={now}
+        buyHref={buyHref}
+        individual={{ ...individual, renewed_ahead: 1 }}
+        slots={[
+          slot({ id: uuid(1), ends_at: "2026-11-20T10:00:00Z", renewable: true }),
+          slot({
+            id: uuid(2),
+            ends_at: "2026-11-15T10:00:00Z",
+            renewable: true,
+            renewed_until: "2026-12-15T10:00:00Z",
+            renewals: [
+              { id: uuid(7), starts_at: "2026-11-15T10:00:00Z", ends_at: "2026-12-15T10:00:00Z" },
+            ],
+          }),
+          slot({ id: uuid(3), source: "intro_trial", individual: false, renewable: false }),
+        ]}
+      />
+    );
+    const [first, second, third] = screen.getAllByTestId("my-slot");
+    expect(within(first).getByRole("link", { name: "Renew" })).toHaveAttribute(
+      "href",
+      `/billing/checkout?renew=${uuid(1)}`
+    );
+    expect(within(second).getByText("Renewed until 15 December 2026")).toBeInTheDocument();
+    expect(within(second).getByRole("link", { name: "Renew" })).toHaveAttribute(
+      "href",
+      `/billing/checkout?renew=${uuid(2)}`
+    );
+    // The free first post is not an Individual slot: nothing to renew.
+    expect(within(third).queryByRole("link", { name: /Renew/ })).toBeNull();
+    expect(within(third).queryByText(/You can renew/)).toBeNull();
+    expect(screen.getByRole("link", { name: "Renew all" })).toHaveAttribute(
+      "href",
+      "/billing/checkout?renew=all"
+    );
+  });
+
+  it("shows a renewal waiting to start, and no renewing before the ID review", () => {
+    const { rerender } = render(
+      <MySlots
+        now={now}
+        buyHref={buyHref}
+        individual={individual}
+        slots={[
+          slot({
+            state: "upcoming",
+            starts_at: "2026-11-20T10:00:00Z",
+            ends_at: "2026-12-20T10:00:00Z",
+            renewable: true,
+          }),
+        ]}
+      />
+    );
+    const card = screen.getByTestId("my-slot");
+    expect(within(card).getByText("Starts 20 November 2026")).toBeInTheDocument();
+    expect(within(card).getByText("Not started")).toBeInTheDocument();
+    expect(within(card).queryByText("Empty")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Renew all" })).toBeNull();
+    rerender(
+      <MySlots
+        now={now}
+        buyHref={buyHref}
+        individual={{ ...individual, verified: false }}
+        slots={[slot({ renewable: true }), slot({ id: uuid(2), renewable: true })]}
+      />
+    );
+    expect(screen.queryByRole("link", { name: /Renew/ })).toBeNull();
   });
 
   it("shows a staff-raised limit with its end date", () => {

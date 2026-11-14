@@ -11,7 +11,7 @@ AS $function$
     'activity', p.activity_key, 'title', p.title, 'description', p.description, 'province', p.province_id,
     'city', p.city_id, 'locality', d.locality_label, 'price_mode', d.price_mode, 'price_cents', d.price_cents::text,
     'price_negotiable', d.price_negotiable,
-    'published_at', p.published_at, 'visible_until', p.visible_until,
+    'published_at', p.published_at, 'visible_until', internal.post_shown_until(p.id, p.kind, p.visible_until),
     'event_window',case when p.kind='event' then jsonb_build_object(
       'starts_at',to_char(e.starts_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
       'ends_at',to_char(e.ends_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),

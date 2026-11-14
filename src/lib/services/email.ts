@@ -120,8 +120,18 @@ const platformNotices = {
     "Your ID check needs another look",
     "We could not complete your ID check, so we have sent it back to you. Sign in and open the verification page to see why and what to do next.",
   ],
+  // Renew early (P3), 3 days before a slot ends; worded with its end date when
+  // the notification job knows it (postLifecycleIntro). Wording awaiting the
+  // owner's approval.
+  slot_renewal_reminder: [
+    "Your slot ends soon",
+    "One of your Individual slots ends within 3 days. Renew it now and your new days start when the current ones end, so your post stays live without a break.",
+  ],
 } as const;
 export type PlatformNoticeKind = keyof typeof platformNotices;
+/** The renewal reminder's second paragraph (awaiting the owner's approval). */
+const RENEWAL_REMINDER_BODY =
+  "Nothing renews automatically. If you do not renew, the post in this slot is hidden when the slot ends and deleted 3 days later, with its photos and videos.";
 /** What the notification job knows about the post a lifecycle notice is about,
  * or, for trial_started, when the introductory trial ends and whether it
  * already pays for a post (a staff or service grant does not), or, for
@@ -132,6 +142,11 @@ export type PostLifecycleDetails = {
   trialEndsAt?: string | null;
   trialFundsPost?: boolean | null;
   receipt?: PaymentReceipt;
+  /** slot_renewal_reminder: the slot that ends, when, and whether more than
+   * one slot ends within 7 days (the email then offers "Renew all"). */
+  renewSlotId?: string | null;
+  slotEndsAt?: string | null;
+  slotRenewAll?: boolean | null;
 };
 function deletionTime(iso: string | null | undefined): string | null {
   const ms = iso ? Date.parse(iso) : Number.NaN;
@@ -154,6 +169,13 @@ function postLifecycleIntro(kind: PlatformNoticeKind, details?: PostLifecycleDet
     return details?.trialFundsPost === true
       ? `Your free introductory post is live until ${ends} (South African time). After that, buy a plan within 3 days to reactivate it, or it is deleted with its photos and videos.`
       : `Your introductory posting allowance runs until ${ends} (South African time).`;
+  }
+  if (kind === "slot_renewal_reminder") {
+    const ends = deletionTime(details?.slotEndsAt);
+    if (!ends) return null;
+    return details?.slotRenewAll
+      ? `Your Individual slot ends on ${ends} (South African time), and another of your slots ends within 7 days. Renew them together in one payment: each slot's new days start when its current days end, so your posts stay live without a break.`
+      : `Your Individual slot ends on ${ends} (South African time). Renew it now and your new days start when the current ones end, so your post stays live without a break.`;
   }
   const when = deletionTime(details?.deletesAt);
   if (!when) return null;
@@ -188,6 +210,14 @@ export async function sendPlatformNotice(
     "account_banned",
     "appeal_decided",
   ].includes(kind);
+  // The renewal reminder links to the renewal checkout: that slot, or every
+  // slot ending within 7 days ("Renew all").
+  const renewal = kind === "slot_renewal_reminder";
+  const renewPath = details?.slotRenewAll
+    ? "/billing/checkout?renew=soon"
+    : details?.renewSlotId && /^[0-9a-f-]{36}$/i.test(details.renewSlotId)
+      ? `/billing/checkout?renew=${details.renewSlotId}`
+      : "/dashboard/slots";
   const path =
     kind === "business_check_update"
       ? "/dashboard/businesses"
@@ -203,7 +233,20 @@ export async function sendPlatformNotice(
                   kind === "verification_phone_confirmed" ||
                   kind === "verification_returned"
                 ? "/verification"
-                : "/dashboard";
+                : renewal
+                  ? renewPath
+                  : "/dashboard";
+  const body =
+    kind === "account_warning"
+      ? noticeReason!
+      : renewal
+        ? RENEWAL_REMINDER_BODY
+        : "Sign in to your account to view the details.";
+  const cta = renewal
+    ? details?.slotRenewAll
+      ? "Renew all"
+      : "Renew my slot"
+    : "View your account";
   return sendEmail({
     to,
     subject,
@@ -211,13 +254,11 @@ export async function sendPlatformNotice(
     html: brandedEmail({
       title: subject,
       intro,
-      bodyHtml: paragraph(
-        kind === "account_warning" ? noticeReason! : "Sign in to your account to view the details."
-      ),
-      cta: { label: "View your account", href: appUrl + path },
+      bodyHtml: paragraph(body),
+      cta: { label: cta, href: appUrl + path },
       reason: "This is an operational update about your VerifyMzansi account.",
     }),
-    text: `${subject}\n\n${intro}${kind === "account_warning" ? `\n\n${noticeReason}` : ""}\n\nSign in to view the details: ${appUrl}${path}`,
+    text: `${subject}\n\n${intro}${kind === "account_warning" || renewal ? `\n\n${body}` : ""}\n\n${renewal ? `${cta}: ` : "Sign in to view the details: "}${appUrl}${path}`,
   });
 }
 

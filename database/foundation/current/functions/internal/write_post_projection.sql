@@ -22,7 +22,7 @@ begin
     post.title, left(coalesce(post.description, ''), 300), price.price_mode,
     case when price.price_mode = 'on_request' then null else price.price_cents end,
     coalesce(price.price_negotiable,false),
-    post.published_at, post.visible_until, post.status = 'live', public_facets)
+    post.published_at, internal.post_shown_until(post.id, post.kind, post.visible_until), post.status = 'live', public_facets)
   on conflict (post_id) do update set kind = excluded.kind, area = excluded.area,
     category_key = excluded.category_key, activity_key = excluded.activity_key, province_id = excluded.province_id,
     city_id = excluded.city_id, locality_label = excluded.locality_label, title = excluded.title,

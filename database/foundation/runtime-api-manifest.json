@@ -4618,6 +4618,72 @@
         "service_role": false
       },
       "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; the bank transfer rules (a bank reference of 4 to 60 letters, digits, spaces or . _ : / -, money cleared today or in the last 90 days, the customer's written cooling-off waiver confirmed, an audit reason): records a bank transfer of exactly the invoice's account, slot term, slots and total against an issued invoice with no payment attempt that could still be paid and no other transfer waiting, as waiting for a second staff member, whose confirmation pays the invoice. The same request again by the same staff member returns the first record."
+    },
+    {
+      "name": "start_slot_renewal_checkout",
+      "updates": ["updates/20261114093742_renew_slots_early.sql"],
+      "arguments": [
+        {
+          "name": "p_entitlement_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        },
+        {
+          "name": "p_plan_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_total_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_consent",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound renewal quote: only the caller's own Individual slots that are still held (anything else reads as not found), each slot once, from 14 days before the slot ends, an Individual slot plan on sale, the renewal's cooling-off consent (with each slot's start date) recorded in the payment, an accepted ID review, the server total equal to the total shown and at most R10,000, and at most the person's limit of slots renewed ahead (every account of the same identity, renewals in open payments included; while a staff-raised limit runs, at most the standard limit of renewals that start at or after it ends); one payment with one line per slot, each naming the slot it renews. A renewal never adds a slot."
+    },
+    {
+      "name": "get_my_slots_v2",
+      "updates": ["updates/20261114093742_renew_slots_early.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound read of the member's own slots (the current period of each slot, ended in the last 3 days unless the next period followed on, or a renewal waiting to start when the slot has no current period) with the posts in them, whether each can be renewed and from when, its renewed end and queued renewals, the sponsor's name for a sponsored place, and the person's Individual slot count, open-payment slots, slots renewed ahead and limit; no other account's data."
+    },
+    {
+      "name": "run_slot_renewals",
+      "updates": ["updates/20261114093742_renew_slots_early.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only housekeeping sweep (posts are funded through their slot at read time): moves each post that can move whose slot period ended into the slot's next period that follows on without a break (never a post going live; posts that cannot move are not picked), and queues one renewal reminder per ending grant (once per slot end, keyed by the grant) for Individual slots ending within 3 days with no renewal following, while the account can still buy. Never starts a payment."
     }
   ]
 }

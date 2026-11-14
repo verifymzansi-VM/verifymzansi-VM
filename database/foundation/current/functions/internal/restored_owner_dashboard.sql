@@ -22,25 +22,26 @@ begin
       'location_province',province.label,'location_city',city.label,
       'location_confirmed_at',locality.confirmed_at),
     'counts',(select jsonb_build_object(
-      'active_listings',count(*) filter(where kind='listing' and status='live' and visible_until>statement_timestamp()),
+      'active_listings',count(*) filter(where kind='listing' and status='live' and s.shown_until>statement_timestamp()),
       'active_events',count(*) filter(where kind='event' and status='live' and visible_until>statement_timestamp()
         and exists(select 1 from private.event_details e where e.post_id=posts.id and e.ends_at>statement_timestamp())),
       'rejected_listings',count(*) filter(where kind='listing' and status='rejected'),
       'pending_listings',count(*) filter(where kind='listing' and status='pending_moderation'),
-      'expiring_listings',count(*) filter(where kind='listing' and status='live' and visible_until>statement_timestamp()
-        and visible_until<statement_timestamp()+interval '7 days'),
+      'expiring_listings',count(*) filter(where kind='listing' and status='live' and s.shown_until>statement_timestamp()
+        and s.shown_until<statement_timestamp()+interval '7 days'),
       'expiring_events',count(*) filter(where kind='event' and status='live' and visible_until>statement_timestamp()
         and exists(select 1 from private.event_details e where e.post_id=posts.id and e.ends_at>statement_timestamp()
           and e.ends_at<statement_timestamp()+interval '48 hours')),
       'businesses',count(*) filter(where kind='business' and area='business'),
       'tourism_businesses',count(*) filter(where kind='business' and area='tourism_events'))
-      from private.posts posts where owner_id=actor and edit_of is null),
+      from private.posts posts cross join lateral (select internal.post_shown_until(posts.id,posts.kind,posts.visible_until) as shown_until) s
+      where owner_id=actor and edit_of is null),
     'unread_leads',(select count(*) from private.enquiries e where e.owner_id=actor and e.status='new'),
     'unread_notifications',(select count(*) from private.notifications n where n.account_id=actor and n.read_at is null),
     'organisation_admin_count',(select count(*) from private.organisation_admins a where a.account_id=actor),
     'posts',coalesce((select jsonb_agg(jsonb_build_object(
       'id',post.id,'title',post.title,'status',post.status,'created_at',post.created_at,
-      'updated_at',post.content_updated_at,'expires_at',post.visible_until,
+      'updated_at',post.content_updated_at,'expires_at',internal.post_shown_until(post.id,post.kind,post.visible_until),
       'area','MZANSI_MARKET','cover_object_key',(select m.object_key from private.post_media pm
         join private.media_objects m on m.id=pm.object_id
         where pm.post_id=post.id and m.owner_id=actor and m.state='ready' and m.kind='image'

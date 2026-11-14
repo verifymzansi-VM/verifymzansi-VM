@@ -28,6 +28,7 @@ import {
   reconcileFoundationPayment,
   startFoundationCheckout,
   startFoundationSlotCheckout,
+  startFoundationSlotRenewalCheckout,
 } from "./billing-runtime";
 
 type Operation =
@@ -192,6 +193,8 @@ export async function handleFoundationBillingRoute(
         slots: z.number().int().min(1).max(25),
         expectedTotalCents: z.number().int().positive().max(100_000_000),
         coolingOffConsent: z.boolean().optional(),
+        // Renewing early (P3): the slots to renew, one line each.
+        renewSlotIds: z.array(z.uuid()).min(1).max(25).optional(),
       })
       .parse(input);
     const product = selectFoundationBillingPlan(catalogue, value.planId);
@@ -200,6 +203,32 @@ export async function handleFoundationBillingRoute(
       (value.area && product.area !== null && product.area !== foundationArea(value.area))
     )
       throw new FoundationBillingError(400, "This plan is not available in the selected section");
+    if (value.renewSlotIds) {
+      if (
+        value.renewSlotIds.length !== value.slots ||
+        new Set(value.renewSlotIds).size !== value.slots
+      )
+        throw new FoundationBillingError(400, "Check the slots to renew");
+      // The renewal's own box: the new days start later; the database records it.
+      if (value.coolingOffConsent !== true)
+        throw new FoundationBillingError(
+          400,
+          "Tick the box to confirm when your new days start.",
+          "CONSENT_REQUIRED"
+        );
+      const renewed = await startFoundationSlotRenewalCheckout(
+        caller.api,
+        caller.accountId,
+        {
+          planId: product.id,
+          entitlementIds: value.renewSlotIds,
+          expectedTotalCents: value.expectedTotalCents,
+          coolingOffConsent: true,
+        },
+        appUrl
+      );
+      return context.respond(NextResponse.json({ ...renewed, account_id: caller.accountId }));
+    }
     // posting-v4: no payment without the consent; the database records it.
     if (value.coolingOffConsent !== true)
       throw new FoundationBillingError(
