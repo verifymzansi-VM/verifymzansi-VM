@@ -44,9 +44,15 @@ async function prepareVideoForUpload(file: File): Promise<File> {
     return existing;
   }
 
-  const prepared = compressVideoForUpload(file, {
-    requireCompatibleOutput: true,
-  })
+  // A video whose length cannot be read is always converted, so that what is
+  // uploaded can be measured (an empty track or a trailer can hide it).
+  const prepared = readVideoLengthSeconds(file)
+    .then((seconds) =>
+      compressVideoForUpload(file, {
+        requireCompatibleOutput: true,
+        ...(seconds === null ? { forceConversion: true } : {}),
+      })
+    )
     .then((preparedFile) => {
       if (!preparedFile.size || preparedFile.size > MAX_VIDEO_UPLOAD_BYTES) {
         throw new VideoTranscodeError(

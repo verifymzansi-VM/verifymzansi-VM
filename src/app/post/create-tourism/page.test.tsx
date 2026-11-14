@@ -1014,7 +1014,8 @@ describe("CreateTourismPage type switch behavior", () => {
 
   it("refuses a 90 s video at submit when the post is an event (1-minute limit)", async () => {
     mediaFilesByLabel.set("Upload video", [new File(["video"], "clip.mp4", { type: "video/mp4" })]);
-    vi.mocked(readVideoLengthSeconds).mockResolvedValueOnce(90);
+    // Read once when the pick starts its background conversion, once at submit.
+    vi.mocked(readVideoLengthSeconds).mockResolvedValueOnce(90).mockResolvedValueOnce(90);
 
     searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);

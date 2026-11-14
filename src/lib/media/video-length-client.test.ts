@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { describe, expect, it } from "vitest";
 import { checkPickedVideoLength } from "./video-length-client";
+import { readVideoBytesSeconds } from "./video-length";
 import { syntheticMp4, syntheticWebm } from "@/test/synthetic-video";
 
 const picked = (bytes: Uint8Array, name: string, type: string) =>
@@ -32,5 +33,11 @@ describe("checkPickedVideoLength (the phone check at pick)", () => {
         120
       )
     ).toBeNull();
+  });
+
+  it("accepts an MP4 with trailing bytes after its last box (some phones), which is then converted", async () => {
+    const trailer = new Uint8Array([...syntheticMp4(30), 0, 0, 0, 0, 7]);
+    expect(await readVideoBytesSeconds(trailer)).toBeNull();
+    expect(await checkPickedVideoLength(picked(trailer, "phone.mp4", "video/mp4"), 120)).toBeNull();
   });
 });

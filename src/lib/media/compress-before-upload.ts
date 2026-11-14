@@ -57,9 +57,19 @@ function createTimeoutSignal(ms: number): {
   };
 }
 
+type VideoPreparationOptions = {
+  requireCompatibleOutput?: boolean;
+  timeoutMs?: number;
+  /**
+   * Convert even a compatible MP4: its length cannot be read (an empty track,
+   * a phone's trailer after the last box), and the converted MP4 can be.
+   */
+  forceConversion?: boolean;
+};
+
 export function compressVideoForUpload(
   file: File,
-  options?: { requireCompatibleOutput?: boolean; timeoutMs?: number }
+  options?: VideoPreparationOptions
 ): Promise<File> {
   // A WASM instance holds both the input and output in memory. Multiple phone
   // videos must not compete for CPU/memory, or consume their timeout in a queue.
@@ -78,7 +88,7 @@ export function compressVideoForUpload(
  * compatible (H.264/AAC) MP4 within the 50 MB stored-file cap. WebM is
  * converted like MOV: browser-made WebM often has no readable length.
  */
-export async function videoNeedsConversion(file: Blob): Promise<boolean> {
+async function videoNeedsConversion(file: Blob): Promise<boolean> {
   return (
     file.type !== "video/mp4" ||
     file.size > MAX_VIDEO_UPLOAD_BYTES ||
@@ -86,12 +96,9 @@ export async function videoNeedsConversion(file: Blob): Promise<boolean> {
   );
 }
 
-async function prepareVideo(
-  file: File,
-  options?: { requireCompatibleOutput?: boolean; timeoutMs?: number }
-): Promise<File> {
+async function prepareVideo(file: File, options?: VideoPreparationOptions): Promise<File> {
   const { compressVideo } = await import("@/lib/media/video-compressor");
-  const needsConversion = await videoNeedsConversion(file);
+  const needsConversion = options?.forceConversion || (await videoNeedsConversion(file));
   const timeout = createTimeoutSignal(
     options?.timeoutMs ??
       (needsConversion ? REQUIRED_CONVERSION_TIMEOUT_MS : DEFAULT_COMPRESSION_TIMEOUT_MS)

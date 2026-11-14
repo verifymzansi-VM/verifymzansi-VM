@@ -14,6 +14,7 @@ const {
   mockOn,
   mockFetchFile,
   mockMount,
+  mockUnmount,
 } = vi.hoisted(() => ({
   mockExec: vi.fn().mockResolvedValue(0),
   mockWriteFile: vi.fn().mockResolvedValue(undefined),
@@ -25,6 +26,7 @@ const {
   mockFetchFile: vi.fn().mockResolvedValue(new Uint8Array(10)),
   // Undefined: the encoder has no mount support, so inputs are copied in.
   mockMount: { current: undefined as ReturnType<typeof vi.fn> | undefined },
+  mockUnmount: vi.fn(async () => true),
 }));
 
 vi.mock("@ffmpeg/ffmpeg", () => ({
@@ -32,7 +34,7 @@ vi.mock("@ffmpeg/ffmpeg", () => ({
   FFmpeg: class MockFFmpeg {
     createDir = vi.fn(async () => true);
     deleteDir = vi.fn(async () => true);
-    unmount = vi.fn(async () => true);
+    unmount = mockUnmount;
     get mount() {
       return mockMount.current;
     }
@@ -413,5 +415,14 @@ describe("compressVideo", () => {
     expect(result.file).toBe(file);
     expect(mockWriteFile).not.toHaveBeenCalled();
     expect(mockExec).not.toHaveBeenCalled();
+  });
+
+  it("unmounts the picked file when the encoder fails", async () => {
+    mockMount.current = vi.fn(async () => true);
+    mockExec.mockResolvedValueOnce(1);
+    const file = fakeFile(10, "phone.mov", "video/quicktime");
+    const result = await compressVideo(file, { forceTranscode: true });
+    expect(result.skipped).toBe(true);
+    expect(mockUnmount).toHaveBeenCalledWith("/upload");
   });
 });

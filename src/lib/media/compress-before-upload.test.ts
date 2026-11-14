@@ -213,4 +213,16 @@ describe("M4.4: stored videos are MP4 and a failed conversion never publishes th
       vi.useRealTimers();
     }
   });
+
+  it("forces conversion of a compatible MP4 whose length cannot be read, and never returns that original", async () => {
+    const original = new File(["mp4"], "trailer.mp4", { type: "video/mp4" });
+    compressVideo.mockResolvedValueOnce({ file: original, skipped: true });
+    await expect(
+      compressVideoForUpload(original, { requireCompatibleOutput: true, forceConversion: true })
+    ).rejects.toBeInstanceOf(VideoTranscodeError);
+    expect(compressVideo).toHaveBeenLastCalledWith(
+      original,
+      expect.objectContaining({ forceTranscode: true })
+    );
+  });
 });

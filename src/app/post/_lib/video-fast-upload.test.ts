@@ -168,7 +168,7 @@ describe("uploadVideoWithFastPath", () => {
 
   it("refuses a video whose length cannot be read even after conversion", async () => {
     const uploadViaServer = vi.fn();
-    mockReadLength.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    mockReadLength.mockResolvedValue(null);
     await expect(
       uploadVideoWithFastPath({
         file: new File(["?"], "unknown.webm", { type: "video/webm" }),
@@ -177,6 +177,22 @@ describe("uploadVideoWithFastPath", () => {
       })
     ).rejects.toThrow("We couldn't read this video's length; please export it as MP4");
     expect(uploadViaServer).not.toHaveBeenCalled();
+  });
+
+  it("converts a compatible MP4 whose length cannot be read (a phone trailer) and uploads the measured result", async () => {
+    const original = new File(["mp4+trailer"], "samsung.mp4", { type: "video/mp4" });
+    const converted = new File(["mp4"], "samsung-converted.mp4", { type: "video/mp4" });
+    mockCompressVideoForUpload.mockResolvedValueOnce(converted);
+    mockReadLength.mockImplementation(async (file: Blob) => (file === original ? null : 40));
+    const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/samsung.mp4");
+    await expect(
+      uploadVideoWithFastPath({ file: original, area: "listing", uploadViaServer })
+    ).resolves.toBe("https://media.example.com/samsung.mp4");
+    expect(mockCompressVideoForUpload).toHaveBeenCalledWith(original, {
+      requireCompatibleOutput: true,
+      forceConversion: true,
+    });
+    expect(uploadViaServer).toHaveBeenCalledWith(converted);
   });
 
   it("converts a WebM with no duration (MediaRecorder) and measures the converted MP4", async () => {

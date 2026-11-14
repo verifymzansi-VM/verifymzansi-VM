@@ -338,8 +338,7 @@ export async function compressVideo(
 
     // Clean up virtual filesystem
     try {
-      if (mountedInput) await mountedInput();
-      else await ffmpeg.deleteFile(inputName);
+      if (!mountedInput) await ffmpeg.deleteFile(inputName);
       await ffmpeg.deleteFile(outputName);
     } catch {
       // Best-effort cleanup
@@ -397,6 +396,11 @@ export async function compressVideo(
       skipReason: `Compression failed: ${err instanceof Error ? err.message : "Unknown error"}`,
     };
   } finally {
+    // Unmount on every path, errors included, so an encoder is never left
+    // holding the picked file through a stale mount.
+    await mountedInput?.().catch(() => {
+      // Best-effort: the encoder is terminated next either way.
+    });
     dispose?.();
     if (wasmURL) URL.revokeObjectURL(wasmURL);
   }
