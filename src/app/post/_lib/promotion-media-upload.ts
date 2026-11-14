@@ -120,9 +120,12 @@ export async function uploadRequiredPromotionMedia({
 export async function uploadPromotionVideoFiles({
   files,
   area,
+  maxSeconds,
 }: {
   files: File[];
   area: UploadArea;
+  /** Event posts 60 s; tourism businesses 120 s (the default). */
+  maxSeconds?: number;
 }): Promise<string[]> {
   if (files.length === 0) return [];
 
@@ -132,6 +135,7 @@ export async function uploadPromotionVideoFiles({
         uploadVideoWithFastPath({
           file,
           area,
+          maxSeconds,
           uploadViaServer: (uploadFile) =>
             uploadPromotionVideosViaServer({ files: [uploadFile], area }).then(
               (urls) => urls[0] ?? ""

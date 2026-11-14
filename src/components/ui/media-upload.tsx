@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Film, ImagePlus, Play, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { MAX_VIDEO_ORIGINAL_BYTES } from "@/lib/media/upload-policy";
+import {
+  formatVideoLimit,
+  MAX_VIDEO_SECONDS,
+  UNREADABLE_VIDEO_LENGTH_MESSAGE,
+} from "@/lib/media/video-length";
+import { checkPickedVideoLength } from "@/lib/media/video-length-client";
 import { cn } from "@/lib/utils";
 
 const IMAGE_TYPES = [
@@ -24,7 +31,8 @@ const HEIC_TYPES = new Set(["image/heic", "image/heif"]);
 const WEBP_CONVERT_TYPES = new Set(["image/gif", "image/avif"]);
 const ALL_ACCEPT = [...IMAGE_TYPES, ...VIDEO_TYPES].join(",");
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
-const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
+/** A larger phone original is accepted only to be converted; the stored file stays within 50 MB. */
+const MAX_VIDEO_SIZE = MAX_VIDEO_ORIGINAL_BYTES;
 const VIDEO_URL_PATTERN = /\.(mp4|webm|ogg|mov)(?:[?#]|$)/i;
 
 /** Map MIME types to a canonical extension for files missing one (e.g. Android content-picker). */
@@ -169,6 +177,8 @@ interface MediaUploadProps {
   onRemoveExisting?: (index: number) => void;
   /** Thumbnail shape. Defaults to square. Use "wide" for banners. */
   previewShape?: MediaPreviewShape;
+  /** Longest video this field accepts, in seconds (events 60; every other video 120). */
+  maxVideoSeconds?: number;
 }
 
 type Tile =
@@ -206,6 +216,7 @@ export function MediaUpload({
   existing = [],
   onRemoveExisting,
   previewShape = "square",
+  maxVideoSeconds = MAX_VIDEO_SECONDS,
 }: MediaUploadProps) {
   const generatedId = useId();
   const inputId = id ?? `media-upload-${generatedId}`;
@@ -302,7 +313,7 @@ export function MediaUpload({
         } else if (accept && accept.startsWith("video/") && !VIDEO_TYPES.includes(file.type)) {
           rejectFile(
             "Unsupported file type",
-            `"${file.name}" is not supported. Use MP4, WebM, or MOV videos up to 50 MB.`
+            `"${file.name}" is not supported. Use MP4, WebM, or MOV videos.`
           );
           continue;
         } else if (!accept && ![...IMAGE_TYPES, ...VIDEO_TYPES].includes(file.type)) {
@@ -319,7 +330,7 @@ export function MediaUpload({
         if (file.size > maxSize) {
           rejectFile(
             "File too large",
-            `"${file.name}" exceeds the ${isVideo ? "50 MB video" : "5 MB image"} limit.`
+            `"${file.name}" exceeds the ${isVideo ? "300 MB video" : "5 MB image"} limit.`
           );
           continue;
         }
@@ -335,6 +346,20 @@ export function MediaUpload({
           continue;
         }
         let normalized = stable;
+
+        // The phone check of the video length rule; the server checks again.
+        if (isVideo) {
+          const problem = await checkPickedVideoLength(normalized, maxVideoSeconds);
+          if (problem) {
+            rejectFile(
+              problem === UNREADABLE_VIDEO_LENGTH_MESSAGE
+                ? "Video length unknown"
+                : "Video too long",
+              `"${file.name}": ${problem}.`
+            );
+            continue;
+          }
+        }
 
         // Convert HEIC/HEIF → JPEG client-side (iOS camera default format)
         if (HEIC_TYPES.has(normalized.type)) {
@@ -398,6 +423,7 @@ export function MediaUpload({
       files,
       isSingleFileMode,
       maxFiles,
+      maxVideoSeconds,
       noun,
       onChange,
       onRejectedFiles,
@@ -451,11 +477,12 @@ export function MediaUpload({
     else onRemoveExisting?.(tile.index);
   };
 
+  // A video field states its length in its description (the seller guidance).
   const defaultAcceptedLabel = isVideoOnly
-    ? "Videos (MP4, WebM, MOV) up to 50 MB"
+    ? "Videos (MP4, WebM, MOV)"
     : isImageOnly
       ? "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB"
-      : "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB; videos (MP4, WebM, MOV) up to 50 MB";
+      : `Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB; videos (MP4, WebM, MOV) up to ${formatVideoLimit(maxVideoSeconds)}`;
   const guidance = [acceptedLabel ?? defaultAcceptedLabel, maxSizeLabel].filter(Boolean).join("; ");
   const describedBy = [
     description ? descriptionId : null,

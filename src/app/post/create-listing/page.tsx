@@ -69,6 +69,7 @@ import type { ListingDraftData } from "@/lib/post-drafts/storage";
 import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
+import { VIDEO_GUIDANCE } from "@/lib/media/video-length";
 
 const STEPS: PostFormStep[] = [
   {
@@ -1394,7 +1395,7 @@ export default function CreateListingPage() {
                         <MediaUpload
                           id="listing-video-input"
                           label={`Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                          description="Optional. Use clear portrait clips that show the item, property, or service honestly."
+                          description={`Optional. Use clear portrait clips that show the item, property, or service honestly. ${VIDEO_GUIDANCE}`}
                           error={fieldErrors.videos}
                           maxFiles={maxVideos}
                           files={videoFile}

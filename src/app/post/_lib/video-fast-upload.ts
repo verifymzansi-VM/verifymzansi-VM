@@ -1,5 +1,7 @@
 import { compressVideoForUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
-import { MAX_VIDEO_UPLOAD_BYTES } from "@/lib/media/upload-policy";
+import { MAX_VIDEO_ORIGINAL_BYTES, MAX_VIDEO_UPLOAD_BYTES } from "@/lib/media/upload-policy";
+import { MAX_VIDEO_SECONDS, videoLengthProblem } from "@/lib/media/video-length";
+import { readVideoLengthSeconds } from "@/lib/media/video-length-client";
 import { normalizeSelectedFile } from "@/lib/utils/media-upload";
 import { createLogger } from "@/lib/utils/logger";
 import type { UploadArea } from "@/types/enums";
@@ -26,9 +28,16 @@ async function withUploadSlot<T>(upload: () => Promise<T>): Promise<T> {
   }
 }
 
+/** The form's length rule, checked again at submit: a post's kind can change after the pick. */
+async function assertVideoLength(file: File, maxSeconds: number): Promise<void> {
+  const problem = videoLengthProblem(await readVideoLengthSeconds(file), maxSeconds);
+  if (problem) throw new VideoTranscodeError(`${problem}.`);
+}
+
 async function prepareVideoForUpload(file: File): Promise<File> {
-  if (!file.size || file.size > MAX_VIDEO_UPLOAD_BYTES) {
-    throw new VideoTranscodeError("Select a non-empty video up to 50 MB.");
+  // A larger original is accepted only to be converted; 50 MB caps the stored file.
+  if (!file.size || file.size > MAX_VIDEO_ORIGINAL_BYTES) {
+    throw new VideoTranscodeError("Select a non-empty video up to 300 MB.");
   }
   const existing = preparedVideoUploads.get(file);
   if (existing) {
@@ -41,7 +50,7 @@ async function prepareVideoForUpload(file: File): Promise<File> {
     .then((preparedFile) => {
       if (!preparedFile.size || preparedFile.size > MAX_VIDEO_UPLOAD_BYTES) {
         throw new VideoTranscodeError(
-          "The converted video exceeds the 50 MB upload limit. Try a shorter clip."
+          "The converted video is larger than 50 MB. Film it in 720p or export it as MP4, then try again."
         );
       }
       return normalizeSelectedFile(preparedFile);
@@ -73,11 +82,15 @@ export async function uploadVideoWithFastPath({
   file,
   area,
   uploadViaServer,
+  maxSeconds = MAX_VIDEO_SECONDS,
 }: {
   file: File;
   area: UploadArea;
   uploadViaServer: (file: File) => Promise<string>;
+  /** The post kind's limit: events 60 s, every other video 120 s. */
+  maxSeconds?: number;
 }): Promise<string> {
+  await assertVideoLength(file, maxSeconds);
   let uploads = uploadedVideos.get(file);
   if (!uploads) {
     uploads = new Map();

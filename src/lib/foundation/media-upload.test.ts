@@ -1,7 +1,8 @@
 /** @vitest-environment node */
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { syntheticMp4, syntheticWebm } from "@/test/synthetic-video";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationServiceApi } from "./service-api";
 import { IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE, uploadFoundationMedia } from "./media-upload";
@@ -343,6 +344,74 @@ it("refuses a photo with a clear reason, storing nothing, when the Images allowa
   expect(allowance.add).not.toHaveBeenCalled();
   expect(allowance.markUsedUp).toHaveBeenCalledTimes(1);
   expect(IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE).toMatch(/paused/);
+});
+
+describe("video length and stored size at upload (M4.4)", () => {
+  const videoIntent = () =>
+    vi.fn(async (_name: string, args: { p_bytes: number }) => ({
+      data: {
+        object_id: objectId,
+        object_key: key,
+        max_bytes: args.p_bytes,
+        state: "intent",
+        kind: "video",
+        width: null,
+        height: null,
+        sha256: null,
+        size_bytes: null,
+        mime: null,
+      },
+      error: null,
+    }));
+  const send = (bytes: Uint8Array, rpc: ReturnType<typeof videoIntent>, type = "video/mp4") =>
+    uploadFoundationMedia(
+      { rpc } as unknown as FoundationAuthenticatedApi,
+      { rpc: attested() } as unknown as FoundationServiceApi,
+      new File([bytes.slice().buffer], type === "video/mp4" ? "clip.mp4" : "clip.webm", { type }),
+      vi.fn(async (input: { key: string }) => ({
+        key: input.key,
+        url: `https://media.verifymzansi.com/${input.key}`,
+      }))
+    );
+
+  it("refuses a 121 s video before reserving storage, with the real length", async () => {
+    const rpc = videoIntent();
+    await expect(send(syntheticMp4(121), rpc)).rejects.toMatchObject({
+      status: 400,
+      reason: "video_length",
+      detail: "Your video is 2 min 1 s; the limit is 2 minutes",
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("stores a 119 s video", async () => {
+    const rpc = videoIntent();
+    await expect(send(syntheticMp4(119), rpc)).resolves.toMatchObject({ kind: "video" });
+    expect(rpc).toHaveBeenCalledWith(
+      "reserve_frontend_media_upload",
+      expect.objectContaining({ p_kind: "video" })
+    );
+  });
+
+  it("refuses a video whose length cannot be read (no movie header; WebM without duration)", async () => {
+    const rpc = videoIntent();
+    const noHeader = syntheticMp4(30).slice(0, 80);
+    await expect(send(noHeader, rpc)).rejects.toMatchObject({
+      reason: "video_length",
+      detail: "We couldn't read this video's length; please export it as MP4",
+    });
+    await expect(send(syntheticWebm(null), rpc, "video/webm")).rejects.toMatchObject({
+      reason: "video_length",
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses a converted file over 50 MB before reserving storage", async () => {
+    const rpc = videoIntent();
+    const oversized = syntheticMp4(60, { padding: 50 * 1024 * 1024 });
+    await expect(send(oversized, rpc)).rejects.toMatchObject({ status: 400 });
+    expect(rpc).not.toHaveBeenCalled();
+  });
 });
 
 it("passes other re-encode failures on unchanged", async () => {

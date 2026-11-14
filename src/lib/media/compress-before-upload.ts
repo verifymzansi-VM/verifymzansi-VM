@@ -2,23 +2,30 @@
  * Thin adapter that compresses a video file before upload.
  *
  * Lazy-loads the FFmpeg WASM compressor so non-upload pages pay zero cost.
- * Returns the (possibly compressed) File ready for presigned-URL PUT.
- * MP4 originals need recognized H.264/AAC sample descriptions to allow fallback;
- * WebM originals retain the existing fallback policy. Required conversions block
- * upload on failure. Track inspection is not a full decode/integrity check.
+ * Returns the (possibly compressed) File ready for upload.
+ * Every stored video is MP4 (roadmap M4.4). Only a compatible MP4 (H.264/AAC
+ * sample descriptions) within the 50 MB stored-file cap may be uploaded
+ * unchanged when the optional compression is slow or fails. Everything else
+ * (MOV, WebM, other MP4 codecs, an MP4 over 50 MB) must convert, and a failed
+ * conversion blocks the upload: the original is never published. Track
+ * inspection is not a full decode/integrity check.
  */
 import { hasCompatibleMp4Tracks } from "@/lib/media/mp4-compatibility";
+import { MAX_VIDEO_UPLOAD_BYTES } from "@/lib/media/upload-policy";
+
+/** Shown when a required conversion fails. */
+const VIDEO_CONVERSION_FAILED_MESSAGE =
+  "We couldn't convert this video. Film it in 720p or export it as MP4, then try again.";
+
 export class VideoTranscodeError extends Error {
-  constructor(
-    message = "This video could not be converted to a compatible MP4. Export it as H.264 MP4 and try again."
-  ) {
+  constructor(message = VIDEO_CONVERSION_FAILED_MESSAGE) {
     super(message);
     this.name = "VideoTranscodeError";
   }
 }
 
-const WEB_UPLOAD_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
-const DEFAULT_COMPRESSION_TIMEOUT_MS = 60_000;
+/** Optional compression of a compatible MP4; a 2-minute clip needs about this long. */
+const DEFAULT_COMPRESSION_TIMEOUT_MS = 2 * 60_000;
 // MOV conversion is mandatory, unlike optional MP4/WebM compression. Phone
 // encodes can take several minutes, especially on a cold WASM download.
 const REQUIRED_CONVERSION_TIMEOUT_MS = 10 * 60_000;
@@ -71,9 +78,11 @@ async function prepareVideo(
   options?: { requireCompatibleOutput?: boolean; timeoutMs?: number }
 ): Promise<File> {
   const { compressVideo } = await import("@/lib/media/video-compressor");
+  // WebM is converted like MOV: browser-made WebM often has no readable length.
   const needsConversion =
-    !WEB_UPLOAD_VIDEO_TYPES.has(file.type) ||
-    (file.type === "video/mp4" && !(await hasCompatibleMp4Tracks(file)));
+    file.type !== "video/mp4" ||
+    file.size > MAX_VIDEO_UPLOAD_BYTES ||
+    !(await hasCompatibleMp4Tracks(file));
   const timeout = createTimeoutSignal(
     options?.timeoutMs ??
       (needsConversion ? REQUIRED_CONVERSION_TIMEOUT_MS : DEFAULT_COMPRESSION_TIMEOUT_MS)
@@ -91,7 +100,7 @@ async function prepareVideo(
         return file;
       }
       throw new VideoTranscodeError(
-        "This video took too long to convert to MP4. Try a shorter clip or export it as MP4 first."
+        "This video took too long to convert. Film it in 720p or export it as MP4, then try again."
       );
     }
     throw error;
@@ -100,7 +109,7 @@ async function prepareVideo(
   }
 
   if (needsConversion && (result.skipped || result.file === file)) throw new VideoTranscodeError();
-  if (options?.requireCompatibleOutput && !WEB_UPLOAD_VIDEO_TYPES.has(result.file.type)) {
+  if (options?.requireCompatibleOutput && result.file.type !== "video/mp4") {
     throw new VideoTranscodeError();
   }
   return result.file;

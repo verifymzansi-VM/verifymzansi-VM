@@ -152,3 +152,65 @@ describe("compressVideoForUpload", () => {
     vi.useRealTimers();
   });
 });
+
+describe("M4.4: stored videos are MP4 and a failed conversion never publishes the original", () => {
+  it("converts WebM like MOV, so the stored video is MP4", async () => {
+    const original = new File(["webm"], "clip.webm", { type: "video/webm" });
+    const converted = new File(["mp4"], "clip.mp4", { type: "video/mp4" });
+    compressVideo.mockResolvedValueOnce({ file: converted, skipped: false });
+    await expect(compressVideoForUpload(original, { requireCompatibleOutput: true })).resolves.toBe(
+      converted
+    );
+    expect(compressVideo).toHaveBeenLastCalledWith(
+      original,
+      expect.objectContaining({ forceTranscode: true })
+    );
+  });
+
+  it("refuses a WebM when its conversion fails instead of uploading the WebM", async () => {
+    const original = new File(["webm"], "clip.webm", { type: "video/webm" });
+    compressVideo.mockResolvedValueOnce({ file: original, skipped: true });
+    await expect(
+      compressVideoForUpload(original, { requireCompatibleOutput: true })
+    ).rejects.toThrow("Film it in 720p or export it as MP4");
+  });
+
+  it("forces conversion of a compatible MP4 over 50 MB, and never returns that original", async () => {
+    const original = new File(["mp4"], "big.mp4", { type: "video/mp4" });
+    Object.defineProperty(original, "size", { value: 50 * 1024 * 1024 + 1 });
+    compressVideo.mockResolvedValueOnce({ file: original, skipped: true });
+    await expect(
+      compressVideoForUpload(original, { requireCompatibleOutput: true })
+    ).rejects.toBeInstanceOf(VideoTranscodeError);
+    expect(compressVideo).toHaveBeenLastCalledWith(
+      original,
+      expect.objectContaining({ forceTranscode: true })
+    );
+  });
+
+  it("refuses any conversion output that is not MP4", async () => {
+    const original = new File(["mov"], "clip.mov", { type: "video/quicktime" });
+    const webm = new File(["webm"], "clip.webm", { type: "video/webm" });
+    compressVideo.mockResolvedValueOnce({ file: webm, skipped: false });
+    await expect(
+      compressVideoForUpload(original, { requireCompatibleOutput: true })
+    ).rejects.toBeInstanceOf(VideoTranscodeError);
+  });
+
+  it("gives optional compression about 2 minutes before keeping a compatible MP4", async () => {
+    vi.useFakeTimers();
+    try {
+      const original = new File(["mp4"], "clip.mp4", { type: "video/mp4" });
+      const compressed = new File(["small"], "clip.mp4", { type: "video/mp4" });
+      compressVideo.mockImplementationOnce(
+        () => new Promise((resolve) => setTimeout(() => resolve({ file: compressed }), 100_000))
+      );
+      const result = compressVideoForUpload(original, { requireCompatibleOutput: true });
+      const expectation = expect(result).resolves.toBe(compressed);
+      await vi.advanceTimersByTimeAsync(100_001);
+      await expectation;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

@@ -24,6 +24,12 @@ import {
 } from "../media/photo-variants";
 import { openImagesAllowance, type ImagesAllowance } from "../media/images-allowance";
 import { createLogger } from "../utils/logger";
+import {
+  MAX_VIDEO_SECONDS,
+  readVideoBytesSeconds,
+  UNREADABLE_VIDEO_LENGTH_MESSAGE,
+  videoLengthProblem,
+} from "../media/video-length";
 
 const log = createLogger("FoundationMediaUpload");
 const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
@@ -50,13 +56,16 @@ export const foundationUploadedMediaSchema = z.strictObject({
 });
 export type FoundationUploadedMedia = z.infer<typeof foundationUploadedMediaSchema>;
 /** `images_allowance_exhausted`: photos cannot be re-encoded until the next
- * month (Cloudflare Images error 9422); routes tell the member so. */
-export type FoundationMediaRefusal = "images_allowance_exhausted";
+ * month (Cloudflare Images error 9422); routes tell the member so.
+ * `video_length`: the video is longer than any post allows, or its length
+ * cannot be read from the file (roadmap M4.4); `detail` holds the message. */
+export type FoundationMediaRefusal = "images_allowance_exhausted" | "video_length";
 export class FoundationMediaError extends Error {
   override name = "FoundationMediaError";
   constructor(
     readonly status: 400 | 403 | 409 | 429 | 503,
-    readonly reason?: FoundationMediaRefusal
+    readonly reason?: FoundationMediaRefusal,
+    readonly detail?: string
   ) {
     super("Media upload could not be completed");
   }
@@ -203,6 +212,18 @@ async function uploadCheckedMedia(
     !scanForMalware(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), file.type).safe
   )
     throw new FoundationMediaError(400);
+  if (kind === "video") {
+    // Every video on the platform is at most 2 minutes (whole seconds, so the
+    // phone's rounding passes). The event limit (1 minute) needs the post's
+    // kind, which only the database knows at submit (part B of M4.4).
+    const problem = videoLengthProblem(await readVideoBytesSeconds(bytes), MAX_VIDEO_SECONDS);
+    if (problem) {
+      log.info("Video refused at upload", {
+        reason: problem === UNREADABLE_VIDEO_LENGTH_MESSAGE ? "length_unreadable" : "too_long",
+      });
+      throw new FoundationMediaError(400, "video_length", problem);
+    }
+  }
   if (isReencodableImageType(file.type)) {
     usage.allowance = await openImagesAllowance();
     bytes = new Uint8Array(await reencodeUploadedPhoto(bytes, file.type, usage.allowance));
