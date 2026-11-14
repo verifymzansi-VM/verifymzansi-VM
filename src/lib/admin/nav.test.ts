@@ -43,6 +43,7 @@ const SUB_PAGES: Record<string, string> = {
   "/admin/governance/appeals/[id]": "/admin/governance/appeals",
   "/admin/governance/escalations/[id]": "/admin/governance/escalations",
   "/admin/organisations/[id]": "/admin/organisations",
+  "/admin/payments/invoices/[number]": "/admin/payments",
 };
 
 describe("admin navigation registry", () => {
