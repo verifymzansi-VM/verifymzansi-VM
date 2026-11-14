@@ -37,24 +37,14 @@ describe("EnterprisePricing", () => {
     expect(screen.getByText("Custom proposal")).toBeInTheDocument();
   });
 
-  it("lets people choose a multi-listing plan straight to checkout", () => {
-    const buyable = plans.map((plan, index) => ({ ...plan, planId: `plan-${index}` }));
-    render(<EnterprisePricing plans={buyable} checkoutEnabled retailFromCents={5000} />);
+  it("lets people choose a multi-listing package straight to the package checkout", () => {
+    render(<EnterprisePricing plans={plans} checkoutEnabled retailFromCents={5000} />);
 
-    const choose = screen.getByRole("link", { name: /Choose 10 live posts for 90 days, R1\s200/ });
-    expect(choose).toHaveAttribute("href", "/billing/checkout?plan=plan-0");
-    expect(screen.getAllByRole("link", { name: /^Choose \d+ live posts/ })).toHaveLength(
-      buyable.length
-    );
+    const choose = screen.getByRole("link", { name: /Choose 10 slots for 90 days, R3\s000/ });
+    expect(choose).toHaveAttribute("href", "/billing/package?slots=10&days=90");
     expect(screen.getByRole("link", { name: "Choose a multi-listing plan" })).toHaveAttribute(
       "href",
       "#multi-listing-prices"
     );
-  });
-
-  it("keeps prices visible without checkout links when online checkout is off", () => {
-    render(<EnterprisePricing plans={plans} checkoutEnabled={false} retailFromCents={5000} />);
-    expect(screen.queryAllByRole("link", { name: /^Choose \d+ live posts/ })).toHaveLength(0);
-    expect(screen.getByText(/Online checkout for these plans is paused/)).toBeInTheDocument();
   });
 });

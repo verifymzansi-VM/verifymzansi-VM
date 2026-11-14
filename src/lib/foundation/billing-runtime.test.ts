@@ -18,10 +18,12 @@ import {
   openFoundationInvoiceCheckout,
   paymentCheckFailureReason,
   readFoundationBilling,
+  readFoundationMySlotPackage,
   readFoundationMySlots,
   reconcileFoundationPayment,
   runFoundationPaymentReconciliation,
   startFoundationCheckout,
+  startFoundationPackageCheckout,
   startFoundationSlotCheckout,
   startFoundationSlotRenewalCheckout,
 } from "./billing-runtime";
@@ -1316,5 +1318,150 @@ describe("My slots", () => {
       error: null,
     });
     await expect(readFoundationMySlots(api)).rejects.toThrow();
+  });
+});
+
+describe("the Multi-listing package checkout (P4a)", () => {
+  const order = { planId: product, slots: 25, expectedTotalCents: 750000, coolingOffConsent: true };
+  const packageCheckout = (value: Record<string, unknown> = order) =>
+    startFoundationPackageCheckout(
+      api,
+      owner,
+      value as typeof order,
+      "https://verifymzansi.com",
+      service
+    );
+  it("quotes the typed slots with the total shown and the consent, then opens Ozow for that total", async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ...quote, amount_cents: "750000", slots: 25, package: true },
+      error: null,
+    });
+    machine.mockImplementationOnce(async () => ({
+      data: { ...claimDto(), amount_cents: "750000" },
+      error: null,
+    }));
+    expect(await packageCheckout()).toEqual({ paymentId: payment, checkoutUrl });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("start_package_checkout", {
+      p_plan_id: product,
+      p_slots: 25,
+      p_expected_total_cents: 750000,
+      p_cooling_off_consent: true,
+    });
+    expect(createOzowHostedPayment).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ paymentId: payment, amountCents: 750000 })
+    );
+  });
+  it.each([
+    ["without the consent", { ...order, coolingOffConsent: false }],
+    ["with fewer than 5 slots", { ...order, slots: 4 }],
+    ["with more than 100 slots online", { ...order, slots: 101 }],
+    ["above R10,000", { ...order, expectedTotalCents: 1_000_100 }],
+  ])("refuses a package %s before any command", async (_label, value) => {
+    await expect(packageCheckout(value)).rejects.toThrow();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(createOzowHostedPayment).not.toHaveBeenCalled();
+  });
+  it.each([
+    [
+      { code: "PT403", details: "packages_not_on_sale" },
+      403,
+      "PACKAGES_NOT_ON_SALE",
+      /not on sale/,
+    ],
+    [{ code: "PT412" }, 403, "ID_REVIEW_REQUIRED", /before you buy a package/],
+    [{ code: "PT413", details: "package_invoice_required" }, 400, "INVOICE_REQUIRED", /by invoice/],
+    [{ code: "PT428" }, 409, "PRICE_CHANGED", /price changed/],
+    [
+      { code: "PT409", details: "package_active" },
+      409,
+      "PACKAGE_ACTIVE",
+      /already has a Multi-listing package/,
+    ],
+  ])("tells the member why the database refused (%o)", async (error, status, code, message) => {
+    rpc.mockResolvedValueOnce({ data: null, error });
+    const refused = packageCheckout();
+    await expect(refused).rejects.toMatchObject({ status, code });
+    await expect(refused).rejects.toThrow(message);
+    expect(machine).not.toHaveBeenCalled();
+  });
+  it("keeps a busy checkout generic", async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "PT409" } });
+    await expect(packageCheckout()).rejects.toMatchObject({ status: 409, code: undefined });
+  });
+  it("names an unpaid package open at Ozow", async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ...quote, amount_cents: "50000", slots: 5, package: true, reused: true },
+      error: null,
+    });
+    machine.mockResolvedValueOnce({
+      data: { ...openRequest(), amount_cents: "50000" },
+      error: null,
+    });
+    await expect(packageCheckout()).rejects.toMatchObject({
+      status: 409,
+      code: "PENDING_PAYMENT_EXISTS",
+      pendingPayment: { id: payment, slots: 5, amountCents: 50000, package: true },
+    });
+  });
+  it("tells the member why an Individual slot cannot be bought while a package runs (E3)", async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "PT409", details: "package_active" } });
+    const refused = startFoundationSlotCheckout(
+      api,
+      owner,
+      { planId: product, slots: 1, expectedTotalCents: 6900, coolingOffConsent: true },
+      "https://verifymzansi.com",
+      service
+    );
+    await expect(refused).rejects.toMatchObject({ status: 409, code: "PACKAGE_ACTIVE" });
+    await expect(refused).rejects.toThrow(/cannot be bought or renewed until its last 7 days/);
+  });
+});
+
+describe("My package (P4a)", () => {
+  const mine = {
+    verified: true,
+    on_sale: false,
+    can_buy: false,
+    individual_blocked_until: "2026-12-05T10:00:00Z",
+    package: {
+      id: uuid(40),
+      term_days: 30,
+      slots_bought: 5,
+      state: "active",
+      places: 5,
+      starts_at: "2026-11-12T10:00:00Z",
+      ends_at: "2026-12-12T10:00:00Z",
+      new_posts_limit: 20,
+      new_posts_started: 3,
+      grants: [uuid(41)],
+      posts: [
+        {
+          id: uuid(42),
+          kind: "listing",
+          area: "market",
+          title: "Bakkie",
+          status: "live",
+          deletes_at: null,
+          moving: false,
+        },
+      ],
+    },
+  };
+  it("reads the member's package", async () => {
+    rpc.mockResolvedValueOnce({ data: mine, error: null });
+    expect(await readFoundationMySlotPackage(api)).toEqual(mine);
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("get_my_slot_package", {});
+  });
+  it("reads a member without a package", async () => {
+    const none = { ...mine, can_buy: true, individual_blocked_until: null, package: null };
+    rpc.mockResolvedValueOnce({ data: none, error: null });
+    expect((await readFoundationMySlotPackage(api)).package).toBeNull();
+  });
+  it("refuses an unexpected shape", async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ...mine, package: { ...mine.package, owner_id: owner } },
+      error: null,
+    });
+    await expect(readFoundationMySlotPackage(api)).rejects.toThrow();
   });
 });

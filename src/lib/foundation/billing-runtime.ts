@@ -45,7 +45,9 @@ type BillingRpcName =
   | "start_checkout"
   | "start_slot_checkout"
   | "start_slot_renewal_checkout"
-  | "get_my_slots_v2";
+  | "get_my_slots_v2"
+  | "start_package_checkout"
+  | "get_my_slot_package";
 type BillingRpc = {
   rpc: (
     name: BillingRpcName,
@@ -154,6 +156,8 @@ export interface FoundationPendingPayment {
   amountCents?: number;
   /** The unpaid order renews slots (one order per term can be open). */
   renewal?: boolean;
+  /** The unpaid order is a Multi-listing package (one can be open). */
+  package?: boolean;
 }
 export class FoundationPendingPaymentError extends FoundationBillingError {
   override name = "FoundationPendingPaymentError";
@@ -209,6 +213,34 @@ const RENEWAL_CHECKOUT_REFUSALS: Readonly<
     "RENEWAL_LIMIT_REACHED",
   ],
 };
+/** The package checkout's refusals (api.start_package_checkout). */
+const PACKAGE_CHECKOUT_REFUSALS: Readonly<
+  Record<string, readonly [status: 400 | 403 | 409, message: string, code: string]>
+> = {
+  PT403: [403, "Multi-listing packages are not on sale yet.", "PACKAGES_NOT_ON_SALE"],
+  PT412: [
+    403,
+    "Your ID review must be accepted before you buy a package, so you never pay for days you cannot use.",
+    "ID_REVIEW_REQUIRED",
+  ],
+  PT413: [
+    400,
+    "Packages above 100 slots or R10,000 are paid by invoice. Email billing@verifymzansi.com to ask for one.",
+    "INVOICE_REQUIRED",
+  ],
+  PT428: [409, "The price changed. Check the total and try again.", "PRICE_CHANGED"],
+  PT409: [
+    409,
+    "This account already has a Multi-listing package. Its slots are on My slots.",
+    "PACKAGE_ACTIVE",
+  ],
+};
+/** While a package runs, Individual slots are not bought or renewed (E3). */
+const PACKAGE_ACTIVE = [
+  409,
+  "While your Multi-listing package runs, new posts use its slots: Individual slots cannot be bought or renewed until its last 7 days.",
+  "PACKAGE_ACTIVE",
+] as const;
 const RENEWAL_NOT_OPEN = [
   409,
   `A slot can be renewed from ${RENEWAL_WINDOW_DAYS} days before it ends.`,
@@ -236,13 +268,21 @@ async function command(
   const { data, error } = await billingRpc(api).rpc(name, args);
   const refusal = !error
     ? null
-    : name === "start_slot_checkout"
-      ? SLOT_CHECKOUT_REFUSALS[error.code ?? ""]
-      : name === "start_slot_renewal_checkout"
-        ? error.code === "PT409" && hasDatabaseReason(error, "renewal_not_open")
-          ? RENEWAL_NOT_OPEN
-          : RENEWAL_CHECKOUT_REFUSALS[error.code ?? ""]
-        : null;
+    : (name === "start_slot_checkout" || name === "start_slot_renewal_checkout") &&
+        error.code === "PT409" &&
+        hasDatabaseReason(error, "package_active")
+      ? PACKAGE_ACTIVE
+      : name === "start_slot_checkout"
+        ? SLOT_CHECKOUT_REFUSALS[error.code ?? ""]
+        : name === "start_slot_renewal_checkout"
+          ? error.code === "PT409" && hasDatabaseReason(error, "renewal_not_open")
+            ? RENEWAL_NOT_OPEN
+            : RENEWAL_CHECKOUT_REFUSALS[error.code ?? ""]
+          : name === "start_package_checkout"
+            ? error.code === "PT409" && !hasDatabaseReason(error, "package_active")
+              ? null
+              : PACKAGE_CHECKOUT_REFUSALS[error.code ?? ""]
+            : null;
   if (refusal) throw new FoundationBillingCommandError(...refusal);
   if (error)
     throw new FoundationBillingCommandError(
@@ -374,10 +414,13 @@ const quoteSchema = z.object({
   amount_cents: cents,
   currency: z.literal("ZAR"),
   status: z.literal("pending"),
-  // The slot checkout says how many slots the payment holds.
-  slots: z.number().int().min(1).max(25).optional(),
+  // The slot checkout says how many slots the payment holds (a package up
+  // to 250 in one line).
+  slots: z.number().int().min(1).max(250).optional(),
   // ...and whether they are renewals (also for an earlier order it returns).
   renewal: z.boolean().optional(),
+  // ...and the package checkout that it is a package.
+  package: z.boolean().optional(),
 });
 const claimSchema = foundationPaymentSchema.extend({
   claim_token: z.uuid().nullable(),
@@ -492,6 +535,76 @@ export async function startFoundationSlotRenewalCheckout(
   return openFoundationCheckout(quote, ownerId, app, service);
 }
 
+/** One Multi-listing package (P4a): the term (30, 90 or 180 days), the
+ * typed number of slots, the total the member was shown and their consent. */
+export interface FoundationPackageOrder {
+  planId: string;
+  slots: number;
+  expectedTotalCents: number;
+  coolingOffConsent: boolean;
+}
+const packageOrderSchema = z.strictObject({
+  planId: z.uuid(),
+  slots: z.number().int().min(5).max(100),
+  expectedTotalCents: z.number().int().positive().max(1_000_000),
+  coolingOffConsent: z.literal(true),
+});
+
+/** SQL owns the sales switch, the price (R100 per slot per 30 days), the
+ * consent record, the ID review, the 5 to 100 slots and R10,000 online limits
+ * and one package per account; a total other than the one shown is refused. */
+export async function startFoundationPackageCheckout(
+  api: FoundationAuthenticatedApi,
+  ownerId: string,
+  order: FoundationPackageOrder,
+  appUrl: string,
+  service = createFoundationServiceApi()
+) {
+  const app = checkoutApp(appUrl);
+  const value = packageOrderSchema.parse(order);
+  const quote = quoteSchema.parse(
+    await command(api, "start_package_checkout", {
+      p_plan_id: value.planId,
+      p_slots: value.slots,
+      p_expected_total_cents: value.expectedTotalCents,
+      p_cooling_off_consent: value.coolingOffConsent,
+    })
+  );
+  return openFoundationCheckout(quote, ownerId, app, service);
+}
+
+const packagePostSchema = slotPostSchema.extend({ moving: z.boolean() });
+const mySlotPackageSchema = z.strictObject({
+  verified: z.boolean(),
+  on_sale: z.boolean(),
+  can_buy: z.boolean(),
+  individual_blocked_until: instant.nullable(),
+  package: z
+    .strictObject({
+      id: z.uuid(),
+      term_days: z.union([z.literal(30), z.literal(90), z.literal(180)]),
+      slots_bought: z.number().int().min(5).max(250),
+      state: z.enum(["active", "ended"]),
+      places: z.number().int().min(0).max(1000),
+      starts_at: instant,
+      ends_at: instant,
+      new_posts_limit: z.number().int().min(0).max(10000),
+      new_posts_started: z.number().int().min(0),
+      grants: z.array(z.uuid()).max(1000),
+      posts: z.array(packagePostSchema).max(1000),
+    })
+    .nullable(),
+});
+export type FoundationMySlotPackage = z.infer<typeof mySlotPackageSchema>;
+/** The member's Multi-listing package, whether they could buy one and until
+ * when their Individual slots stay closed (api.get_my_slot_package,
+ * 20261114154823_slot_packages.sql). */
+export async function readFoundationMySlotPackage(
+  api: FoundationAuthenticatedApi
+): Promise<FoundationMySlotPackage> {
+  return mySlotPackageSchema.parse(await command(api, "get_my_slot_package"));
+}
+
 function checkoutApp(appUrl: string) {
   const app = new URL(appUrl);
   if (
@@ -568,6 +681,7 @@ async function openFoundationCheckout(
           amountCents: Number(pay.amount_cents),
         }),
         ...(quote.renewal === true && { renewal: true }),
+        ...(quote.package === true && { package: true }),
       });
     return { paymentId: pay.id, checkoutUrl };
   }

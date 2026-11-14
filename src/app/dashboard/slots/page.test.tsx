@@ -6,7 +6,11 @@ import {
   FoundationServerSessionError,
   readFoundationServerSession,
 } from "@/lib/foundation/server-session";
-import { FoundationBillingError, readFoundationMySlots } from "@/lib/foundation/billing-runtime";
+import {
+  FoundationBillingError,
+  readFoundationMySlotPackage,
+  readFoundationMySlots,
+} from "@/lib/foundation/billing-runtime";
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn(() => {
@@ -23,6 +27,7 @@ vi.mock("@/lib/foundation/server-session", () => ({
 }));
 vi.mock("@/lib/foundation/billing-runtime", () => ({
   readFoundationMySlots: vi.fn(),
+  readFoundationMySlotPackage: vi.fn(async () => ({ package: null })),
   FoundationBillingError: class extends Error {
     constructor(readonly status: number) {
       super(`billing ${status}`);
@@ -35,7 +40,13 @@ vi.mock("@/lib/foundation/billing-catalogue", () => ({
   individualSlotPlans: vi.fn(() => []),
 }));
 vi.mock("@/components/billing/my-slots", () => ({
-  MySlots: ({ slots }: { slots: unknown[] }) => <p>{`${slots.length} slots`}</p>,
+  MySlots: ({
+    slots,
+    slotPackage,
+  }: {
+    slots: unknown[];
+    slotPackage: { package: unknown } | null;
+  }) => <p>{`${slots.length} slots${slotPackage?.package ? " and a package" : ""}`}</p>,
 }));
 vi.mock("@/components/layout/page-header", () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
@@ -83,5 +94,17 @@ describe("My slots page", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Your slots cannot be shown right now. Please try again in a few minutes."
     );
+  });
+
+  it("shows the member's package beside the slots, and the slots alone when it cannot be read", async () => {
+    vi.mocked(readFoundationServerSession).mockResolvedValue({ api: {} } as never);
+    vi.mocked(readFoundationMySlots).mockResolvedValue({ slots: [{}], individual: {} } as never);
+    vi.mocked(readFoundationMySlotPackage).mockResolvedValueOnce({ package: { id: "p" } } as never);
+    const { unmount } = render(await MySlotsPage());
+    expect(screen.getByText("1 slots and a package")).toBeInTheDocument();
+    unmount();
+    vi.mocked(readFoundationMySlotPackage).mockRejectedValueOnce(new Billing(503));
+    render(await MySlotsPage());
+    expect(screen.getByText("1 slots")).toBeInTheDocument();
   });
 });

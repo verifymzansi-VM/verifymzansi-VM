@@ -17,6 +17,9 @@ import { readFoundationBillingCatalogue } from "./billing-catalogue";
 import { selectFoundationBillingPlan } from "./billing-plan-selection";
 import { toFoundationPaymentStatusView } from "../payments/status-view";
 import { readPostingAllowance } from "./posting-allowance";
+import { readFoundationSlotPackageOffer } from "./slot-package-offer";
+import { createFoundationServiceApi } from "./service-api";
+import { isPackageTerm, packageTotalCents } from "../billing/slot-packages";
 import {
   cancelFoundationPendingPayment,
   FoundationBillingError,
@@ -27,12 +30,14 @@ import {
   readFoundationPayment,
   reconcileFoundationPayment,
   startFoundationCheckout,
+  startFoundationPackageCheckout,
   startFoundationSlotCheckout,
   startFoundationSlotRenewalCheckout,
 } from "./billing-runtime";
 
 type Operation =
   | "checkout"
+  | "package-checkout"
   | "payment-status"
   | "cancel-pending"
   | "overview"
@@ -167,6 +172,52 @@ export async function handleFoundationBillingRoute(
       return context.respond(
         NextResponse.json(await manageFoundationPlanMember(caller.api, input))
       );
+    if (operation === "package-checkout") {
+      // Multi-listing (P4a): only while the owner's sales switch is on; the
+      // database checks it again with everything else.
+      const offer = await readFoundationSlotPackageOffer(createFoundationServiceApi());
+      if (!offer.on_sale)
+        throw new FoundationBillingError(
+          403,
+          "Multi-listing packages are not on sale yet.",
+          "PACKAGES_NOT_ON_SALE"
+        );
+      const value = z
+        .strictObject({
+          planId: z.uuid(),
+          slots: z.number().int().min(5).max(100),
+          expectedTotalCents: z.number().int().positive().max(1_000_000),
+          coolingOffConsent: z.boolean().optional(),
+        })
+        .parse(input);
+      const plan = offer.plans.find((entry) => entry.id === value.planId);
+      if (!plan || !isPackageTerm(plan.term_days))
+        throw new FoundationBillingError(400, "This package term is not available");
+      if (packageTotalCents(value.slots, plan.term_days) !== value.expectedTotalCents)
+        throw new FoundationBillingError(
+          409,
+          "The price changed. Check the total and try again.",
+          "PRICE_CHANGED"
+        );
+      if (value.coolingOffConsent !== true)
+        throw new FoundationBillingError(
+          400,
+          "Tick the box to confirm that your slots start now.",
+          "CONSENT_REQUIRED"
+        );
+      const result = await startFoundationPackageCheckout(
+        caller.api,
+        caller.accountId,
+        {
+          planId: plan.id,
+          slots: value.slots,
+          expectedTotalCents: value.expectedTotalCents,
+          coolingOffConsent: true,
+        },
+        process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com"
+      );
+      return context.respond(NextResponse.json({ ...result, account_id: caller.accountId }));
+    }
     const catalogue = await readFoundationBillingCatalogue(createFoundationPublicApi(connection));
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com";
     if (addon) {
