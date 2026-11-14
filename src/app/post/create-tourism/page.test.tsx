@@ -8,6 +8,7 @@ import CreateTourismPage from "./page";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { compressVideoForUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
+import { readVideoLengthSeconds } from "@/lib/media/video-length-client";
 
 const { restoreDraftMock } = vi.hoisted(() => ({ restoreDraftMock: vi.fn() }));
 
@@ -27,6 +28,12 @@ const { searchParamGetMock, routerPushMock } = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPushMock }),
   useSearchParams: () => ({ get: searchParamGetMock }),
+}));
+
+// jsdom cannot read real video headers: the test clips are 30 s long.
+vi.mock("@/lib/media/video-length-client", () => ({
+  checkPickedVideoLength: vi.fn(async () => null),
+  readVideoLengthSeconds: vi.fn(async () => 30),
 }));
 
 vi.mock("@/hooks/use-auth", () => ({
@@ -949,11 +956,14 @@ describe("CreateTourismPage type switch behavior", () => {
     mediaFilesByLabel.set("Upload video", [
       new File(["video"], "clip.mov", { type: "video/quicktime" }),
     ]);
-    (compressVideoForUpload as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new VideoTranscodeError(
-        "This MOV video could not be converted to MP4. Export it as MP4 and try again."
-      )
+    // Both the background preparation on pick and the attempt at submit fail
+    // (the submit checks the video's length first, so it starts its own attempt).
+    const transcodeFailure = new VideoTranscodeError(
+      "This MOV video could not be converted to MP4. Export it as MP4 and try again."
     );
+    (compressVideoForUpload as unknown as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(transcodeFailure)
+      .mockRejectedValueOnce(transcodeFailure);
 
     searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
@@ -997,6 +1007,49 @@ describe("CreateTourismPage type switch behavior", () => {
         screen.getAllByText(
           "This MOV video could not be converted to MP4. Export it as MP4 and try again."
         ).length
+      ).toBeGreaterThan(0);
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a 90 s video at submit when the post is an event (1-minute limit)", async () => {
+    mediaFilesByLabel.set("Upload video", [new File(["video"], "clip.mp4", { type: "video/mp4" })]);
+    // Read once when the pick starts its background conversion, once at submit.
+    vi.mocked(readVideoLengthSeconds).mockResolvedValueOnce(90).mockResolvedValueOnce(90);
+
+    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
+    render(<CreateTourismPage />);
+    await termsLoaded();
+    fireEvent.change(screen.getByLabelText("Event name (Required)"), {
+      target: { value: "Soweto Food Festival" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A detailed event description with enough content to pass validation." },
+    });
+    fireEvent.change(screen.getByLabelText("Event category (Required)"), {
+      target: { value: "festival_concert" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText("Start date (Required)"), {
+      target: { value: "2099-12-01" },
+    });
+    fireEvent.change(screen.getByLabelText("Start time (Required)"), {
+      target: { value: "18:00" },
+    });
+    fireEvent.click(screen.getByLabelText("Free entry"));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload video/i }));
+    acceptPostingTerms();
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("Your video is 1 min 30 s; the limit is 1 minute.").length
       ).toBeGreaterThan(0);
     });
     expect(fetchMock).not.toHaveBeenCalled();

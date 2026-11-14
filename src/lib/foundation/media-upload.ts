@@ -15,7 +15,6 @@ import {
 } from "../utils/image-reencode";
 import { getImageDimensions } from "../utils/image-dimensions";
 import { scrubVideoLocationMetadata } from "../utils/isobmff-metadata";
-import { scrubWebmMetadata } from "../utils/webm-metadata";
 import {
   createPhotoVariants,
   photoVariantsEnabled,
@@ -24,6 +23,12 @@ import {
 } from "../media/photo-variants";
 import { openImagesAllowance, type ImagesAllowance } from "../media/images-allowance";
 import { createLogger } from "../utils/logger";
+import {
+  MAX_VIDEO_SECONDS,
+  readVideoBytesSeconds,
+  UNREADABLE_VIDEO_LENGTH_MESSAGE,
+  videoLengthProblem,
+} from "../media/video-length";
 
 const log = createLogger("FoundationMediaUpload");
 const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
@@ -50,13 +55,19 @@ export const foundationUploadedMediaSchema = z.strictObject({
 });
 export type FoundationUploadedMedia = z.infer<typeof foundationUploadedMediaSchema>;
 /** `images_allowance_exhausted`: photos cannot be re-encoded until the next
- * month (Cloudflare Images error 9422); routes tell the member so. */
-export type FoundationMediaRefusal = "images_allowance_exhausted";
+ * month (Cloudflare Images error 9422); routes tell the member so.
+ * `video_length`: the video is longer than any post allows, or its length
+ * cannot be read from the file (roadmap M4.4); `video_format`: a video that is
+ * not MP4. `detail` holds the message the member sees. */
+export type FoundationMediaRefusal = "images_allowance_exhausted" | "video_length" | "video_format";
+/** Stored videos are MP4 (H.264/AAC); the posting forms convert others first. */
+const VIDEO_FORMAT_MESSAGE = "Videos are stored as MP4; please export it as MP4 and try again";
 export class FoundationMediaError extends Error {
   override name = "FoundationMediaError";
   constructor(
     readonly status: 400 | 403 | 409 | 429 | 503,
-    readonly reason?: FoundationMediaRefusal
+    readonly reason?: FoundationMediaRefusal,
+    readonly detail?: string
   ) {
     super("Media upload could not be completed");
   }
@@ -190,9 +201,13 @@ async function uploadCheckedMedia(
   environment: NodeJS.ProcessEnv,
   usage: { allowance?: ImagesAllowance }
 ): Promise<FoundationUploadedMedia> {
+  // Stored videos are MP4 only (M4.4): the site converts WebM and MOV on the
+  // phone first, and browser-made WebM often has no readable length.
+  if (file.type === "video/webm" || file.type === "video/quicktime")
+    throw new FoundationMediaError(400, "video_format", VIDEO_FORMAT_MESSAGE);
   const kind = isReencodableImageType(file.type)
     ? "image"
-    : ["video/mp4", "video/webm"].includes(file.type)
+    : file.type === "video/mp4"
       ? "video"
       : null;
   const maximum = kind === "image" ? 5242880 : 52428800;
@@ -203,14 +218,26 @@ async function uploadCheckedMedia(
     !scanForMalware(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), file.type).safe
   )
     throw new FoundationMediaError(400);
+  if (kind === "video") {
+    // Every video on the platform is at most 2 minutes (whole seconds, so the
+    // phone's rounding passes). The event limit (1 minute) needs the post's
+    // kind, which this upload does not carry (a file may be reused by any of
+    // the member's posts): the database enforces it at submit (part B of M4.4).
+    const problem = videoLengthProblem(await readVideoBytesSeconds(bytes), MAX_VIDEO_SECONDS);
+    if (problem) {
+      log.info("Video refused at upload", {
+        reason: problem === UNREADABLE_VIDEO_LENGTH_MESSAGE ? "length_unreadable" : "too_long",
+      });
+      throw new FoundationMediaError(400, "video_length", problem);
+    }
+  }
   if (isReencodableImageType(file.type)) {
     usage.allowance = await openImagesAllowance();
     bytes = new Uint8Array(await reencodeUploadedPhoto(bytes, file.type, usage.allowance));
     usage.allowance.add(1);
   } else {
     try {
-      if (file.type === "video/webm") scrubWebmMetadata(bytes);
-      else scrubVideoLocationMetadata(bytes);
+      scrubVideoLocationMetadata(bytes);
     } catch {
       throw new FoundationMediaError(400);
     }

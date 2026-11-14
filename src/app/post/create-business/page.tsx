@@ -104,6 +104,7 @@ import {
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
+import { VIDEO_GUIDANCE } from "@/lib/media/video-length";
 
 const SELECT_CLASS =
   "flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
@@ -2037,7 +2038,7 @@ function CreateBusinessContent() {
                         <MediaUpload
                           id="business-cover-video-input"
                           label={`Video (optional)${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                          description="One short intro clip. Portrait 9:16 works best."
+                          description={`One short intro clip. Portrait 9:16 works best. ${VIDEO_GUIDANCE}`}
                           error={fieldErrors.cover_video}
                           maxFiles={1}
                           files={promoVideoFile}

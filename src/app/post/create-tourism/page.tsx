@@ -72,6 +72,7 @@ import {
   uploadRequiredPromotionMedia,
 } from "@/app/post/_lib/promotion-media-upload";
 import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
+import { VIDEO_GUIDANCE, videoLimitSeconds } from "@/lib/media/video-length";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
@@ -1125,6 +1126,7 @@ function CreateTourismContent() {
           uploadPromotionVideoFiles({
             files: videoFiles,
             area: uploadArea,
+            maxSeconds: videoLimitSeconds(listingType === "event" ? "event" : "other"),
           }).then((urls) => {
             if (videoFiles.length > 0) {
               setUploadStatuses((current) => ({ ...current, videos: "done" }));
@@ -3521,9 +3523,12 @@ function CreateTourismContent() {
                         <MediaUpload
                           id="tourism-videos-input"
                           label="Upload video"
-                          description={`Up to ${maxVideos}. One portrait 9:16 clip works best.`}
+                          description={`Up to ${maxVideos}. One portrait 9:16 clip works best. ${VIDEO_GUIDANCE}`}
                           error={fieldErrors.videos}
                           maxFiles={maxVideos}
+                          maxVideoSeconds={videoLimitSeconds(
+                            listingType === "event" ? "event" : "other"
+                          )}
                           files={videoFiles}
                           onChange={(files) => {
                             setVideoFiles(files);

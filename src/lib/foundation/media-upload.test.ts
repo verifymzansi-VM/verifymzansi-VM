@@ -1,7 +1,8 @@
 /** @vitest-environment node */
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { syntheticMp4 } from "@/test/synthetic-video";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationServiceApi } from "./service-api";
 import { IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE, uploadFoundationMedia } from "./media-upload";
@@ -34,14 +35,11 @@ beforeEach(() => {
 });
 const objectId = "00000000-0000-4000-8000-000000000001";
 const key = "media/00000000-0000-4000-8000-000000000002";
+/** A 30 s phone MP4 carrying a location in its user data. */
 function fixture() {
-  const camera = readFileSync("src/lib/utils/__fixtures__/chrome-vp9.webm");
-  const segment = camera.indexOf(Buffer.from([0x18, 0x53, 0x80, 0x67]));
-  camera.fill(255, segment + 5, segment + 12);
-  const metadata = Buffer.from("PRIVATE GPS=-33.9,18.4");
-  return new Uint8Array([...camera, 0x12, 0x54, 0xc3, 0x67, 0x80 | metadata.length, ...metadata]);
+  return syntheticMp4(30, { location: "PRIVATE GPS=-33.9,18.4" });
 }
-it("stores and attests scrubbed bytes, rather than the original WebM metadata", async () => {
+it("stores and attests scrubbed bytes, rather than the original MP4 location", async () => {
   const bytes = fixture();
   const rpc = vi.fn().mockResolvedValue({
     data: {
@@ -70,10 +68,11 @@ it("stores and attests scrubbed bytes, rather than the original WebM metadata", 
   await uploadFoundationMedia(
     { rpc } as unknown as FoundationAuthenticatedApi,
     { rpc: attest } as unknown as FoundationServiceApi,
-    new File([bytes], "synthetic.webm", { type: "video/webm" }),
+    new File([bytes.slice().buffer], "synthetic.mp4", { type: "video/mp4" }),
     write
   );
   expect(stored.length).toBe(bytes.length);
+  expect(new TextDecoder().decode(bytes)).toContain("PRIVATE GPS");
   expect(new TextDecoder().decode(stored)).not.toContain("PRIVATE GPS");
   expect(attest).toHaveBeenCalledWith(
     "complete_frontend_media_upload",
@@ -81,15 +80,12 @@ it("stores and attests scrubbed bytes, rather than the original WebM metadata", 
       p_object_id: objectId,
       p_size: stored.length,
       p_sha256: createHash("sha256").update(stored).digest("hex"),
-      p_mime: "video/webm",
+      p_mime: "video/mp4",
     })
   );
 });
-it("rejects malformed WebM before reserving quota or storing any bytes", async () => {
-  const bytes = fixture();
-  const tags = Buffer.from(bytes).lastIndexOf(Buffer.from([0x12, 0x54, 0xc3, 0x67]));
-  expect(tags).toBeGreaterThan(0);
-  bytes[tags + 4] = 0xff; // Unknown-size Tags cannot be safely scrubbed
+it("refuses WebM (stored videos are MP4 only) before reserving quota or storing any bytes", async () => {
+  const bytes = new Uint8Array(readFileSync("src/lib/utils/__fixtures__/chrome-vp9.webm"));
   const rpc = vi.fn();
   const attest = vi.fn();
   const write = vi.fn();
@@ -97,10 +93,14 @@ it("rejects malformed WebM before reserving quota or storing any bytes", async (
     uploadFoundationMedia(
       { rpc } as unknown as FoundationAuthenticatedApi,
       { rpc: attest } as unknown as FoundationServiceApi,
-      new File([bytes], "malformed.webm", { type: "video/webm" }),
+      new File([bytes], "camera.webm", { type: "video/webm" }),
       write
     )
-  ).rejects.toMatchObject({ status: 400 });
+  ).rejects.toMatchObject({
+    status: 400,
+    reason: "video_format",
+    detail: "Videos are stored as MP4; please export it as MP4 and try again",
+  });
   expect(rpc).not.toHaveBeenCalled();
   expect(attest).not.toHaveBeenCalled();
   expect(write).not.toHaveBeenCalled();
@@ -119,7 +119,7 @@ it("resolves a committed upload after a lost completion reply without writing or
       height: null,
       sha256: committed ? args.p_digest : null,
       size_bytes: committed ? args.p_bytes : null,
-      mime: committed ? "video/webm" : null,
+      mime: committed ? "video/mp4" : null,
     },
     error: null,
   }));
@@ -127,7 +127,7 @@ it("resolves a committed upload after a lost completion reply without writing or
     committed = true;
     throw new Error("completion reply lost");
   });
-  const file = new File([fixture()], "fixture.webm", { type: "video/webm" });
+  const file = new File([fixture().slice().buffer], "fixture.mp4", { type: "video/mp4" });
   await expect(
     uploadFoundationMedia(
       { rpc } as unknown as FoundationAuthenticatedApi,
@@ -170,7 +170,7 @@ it("keeps an uncertain transfer reserved instead of rejecting its potentially st
     uploadFoundationMedia(
       { rpc } as unknown as FoundationAuthenticatedApi,
       { rpc: attest } as unknown as FoundationServiceApi,
-      new File([fixture()], "fixture.webm", { type: "video/webm" })
+      new File([fixture().slice().buffer], "fixture.mp4", { type: "video/mp4" })
     )
   ).rejects.toMatchObject({ status: 503 });
   expect(attest).not.toHaveBeenCalled();
@@ -343,6 +343,85 @@ it("refuses a photo with a clear reason, storing nothing, when the Images allowa
   expect(allowance.add).not.toHaveBeenCalled();
   expect(allowance.markUsedUp).toHaveBeenCalledTimes(1);
   expect(IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE).toMatch(/paused/);
+});
+
+describe("video length and stored size at upload (M4.4)", () => {
+  const videoIntent = () =>
+    vi.fn(async (_name: string, args: { p_bytes: number }) => ({
+      data: {
+        object_id: objectId,
+        object_key: key,
+        max_bytes: args.p_bytes,
+        state: "intent",
+        kind: "video",
+        width: null,
+        height: null,
+        sha256: null,
+        size_bytes: null,
+        mime: null,
+      },
+      error: null,
+    }));
+  const send = (bytes: Uint8Array, rpc: ReturnType<typeof videoIntent>) =>
+    uploadFoundationMedia(
+      { rpc } as unknown as FoundationAuthenticatedApi,
+      { rpc: attested() } as unknown as FoundationServiceApi,
+      new File([bytes.slice().buffer], "clip.mp4", { type: "video/mp4" }),
+      vi.fn(async (input: { key: string }) => ({
+        key: input.key,
+        url: `https://media.verifymzansi.com/${input.key}`,
+      }))
+    );
+
+  it("refuses a 121 s video before reserving storage, with the real length", async () => {
+    const rpc = videoIntent();
+    await expect(send(syntheticMp4(121), rpc)).rejects.toMatchObject({
+      status: 400,
+      reason: "video_length",
+      detail: "Your video is 2 min 1 s; the limit is 2 minutes",
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("measures the samples, so a header declaring 30 s does not hide 150 s", async () => {
+    const rpc = videoIntent();
+    await expect(send(syntheticMp4(150, { declaredSeconds: 30 }), rpc)).rejects.toMatchObject({
+      detail: "Your video is 2 min 30 s; the limit is 2 minutes",
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("stores a 119 s video", async () => {
+    const rpc = videoIntent();
+    await expect(send(syntheticMp4(119), rpc)).resolves.toMatchObject({ kind: "video" });
+    expect(rpc).toHaveBeenCalledWith(
+      "reserve_frontend_media_upload",
+      expect.objectContaining({ p_kind: "video" })
+    );
+  });
+
+  it("refuses a video whose length cannot be read (no movie header; fragmented; forged sample table)", async () => {
+    const rpc = videoIntent();
+    const noHeader = syntheticMp4(30).slice(0, 80);
+    await expect(send(noHeader, rpc)).rejects.toMatchObject({
+      reason: "video_length",
+      detail: "We couldn't read this video's length; please export it as MP4",
+    });
+    for (const forged of [
+      syntheticMp4(30, { fragmented: true }),
+      syntheticMp4(30, { badSizes: true }),
+    ]) {
+      await expect(send(forged, rpc)).rejects.toMatchObject({ reason: "video_length" });
+    }
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses a converted file over 50 MB before reserving storage", async () => {
+    const rpc = videoIntent();
+    const oversized = syntheticMp4(60, { padding: 50 * 1024 * 1024 });
+    await expect(send(oversized, rpc)).rejects.toMatchObject({ status: 400 });
+    expect(rpc).not.toHaveBeenCalled();
+  });
 });
 
 it("passes other re-encode failures on unchanged", async () => {

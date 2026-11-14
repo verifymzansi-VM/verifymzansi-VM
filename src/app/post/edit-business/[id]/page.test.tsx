@@ -17,6 +17,12 @@ vi.mock("@/components/business-verification/use-registered-office", () => ({
   UseRegisteredOffice: () => null,
 }));
 
+// jsdom cannot read real video headers: the test clips are 30 s long.
+vi.mock("@/lib/media/video-length-client", () => ({
+  checkPickedVideoLength: vi.fn(async () => null),
+  readVideoLengthSeconds: vi.fn(async () => 30),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
   useParams: vi.fn(),
