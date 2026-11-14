@@ -17,6 +17,25 @@ export const COOLING_OFF_CONSENT =
 /** Posts going live per paid slot per 30 days (posting-v4 fair use). */
 export const POSTS_PER_SLOT_PER_30_DAYS = 4;
 
+/**
+ * Renewing (roadmap P3, owner's rule of 14 November 2026): a slot can be
+ * renewed from this many days before it ends. The database's one setting is
+ * internal.slot_renewal_window(); keep the two equal.
+ */
+export const RENEWAL_WINDOW_DAYS = 14;
+
+/**
+ * The renewal's own checkout box. Never the new-slot wording above: renewed
+ * days start on a later date, and cancelling before they start means a full
+ * refund. The database records the version renewal-cooling-off-v1 with each
+ * slot's start date. Wording awaiting the owner's approval (lawyer later).
+ */
+export function renewalConsent(startDates: readonly string[]): string {
+  return startDates.length === 1
+    ? `My new days start on ${startDates[0]}, when my current days end. If I cancel before they start, I get a full refund; once they start, the 7-day cooling-off no longer applies.`
+    : "My new days for each slot start when its current days end (dates above). If I cancel before they start, I get a full refund; once they start, the 7-day cooling-off no longer applies.";
+}
+
 /** One term of the Individual slot on sale. */
 export interface SlotCheckoutTerm {
   planId: string;

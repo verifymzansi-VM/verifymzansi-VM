@@ -21,6 +21,8 @@ import {
   BILLING_EMAIL,
   COOLING_OFF_CONSENT,
   ONLINE_ORDER_LIMIT_CENTS,
+  RENEWAL_WINDOW_DAYS,
+  renewalConsent,
   slotOrderTotalCents,
   slotsAvailable,
   type SlotCheckoutStatus,
@@ -45,6 +47,16 @@ export interface CheckoutSummary {
   slotTerms?: SlotCheckoutTerm[];
   /** The member's Individual slots; null when they could not be read. */
   slotStatus?: SlotCheckoutStatus | null;
+  /** Renewing early (P3): the slots to renew, each starting when its current
+   * days end; null when the member's slots could not be read. */
+  renewal?: RenewalSlot[] | null;
+}
+
+/** One slot on the renewal checkout: its new days start at `startsAt`. */
+export interface RenewalSlot {
+  id: string;
+  startsAt: string;
+  postTitle: string | null;
 }
 
 /** Most slots one order offers; the database applies the person's limit. */
@@ -62,6 +74,8 @@ interface PendingPayment {
   /** An unpaid slot order: its number of slots and its total. */
   slots?: number;
   amountCents?: number;
+  /** The unpaid order renews slots. */
+  renewal?: boolean;
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
@@ -121,6 +135,77 @@ function SlotBlockNotice({
   );
 }
 
+/** The slots a renewal checkout renews, each with its new days; with more
+ * than one, each can be left out ("Renew all" renews every ticked slot). */
+function RenewalSlotList({
+  slots,
+  unreadable,
+  selected,
+  onToggle,
+  newEnd,
+}: {
+  slots: RenewalSlot[];
+  unreadable: boolean;
+  selected: string[];
+  onToggle: (id: string) => void;
+  newEnd: (startsAt: string) => string;
+}) {
+  if (slots.length === 0)
+    return (
+      <div
+        role="status"
+        data-testid="renewal-none"
+        className="flex flex-col gap-3 rounded-xl border border-border/80 bg-muted/40 p-3.5 text-sm leading-6 text-foreground/80"
+      >
+        <p>
+          {unreadable
+            ? "Your slots cannot be shown right now. Please try again in a few minutes."
+            : `Nothing to renew right now. A slot can be renewed from ${RENEWAL_WINDOW_DAYS} days before it ends.`}
+        </p>
+        <Button asChild variant="outline" className="h-11 rounded-full">
+          <Link href="/dashboard/slots">My slots</Link>
+        </Button>
+      </div>
+    );
+  const many = slots.length > 1;
+  return (
+    <fieldset>
+      <legend className="text-xs font-semibold text-muted-foreground">
+        {many ? "Slots to renew" : "Slot to renew"}
+      </legend>
+      <ul className="mt-2 space-y-2" data-testid="renewal-slots">
+        {slots.map((slot) => {
+          const label = slot.postTitle ?? "Empty slot";
+          const dates = `New days: ${formatSaLongDate(slot.startsAt)} – ${newEnd(slot.startsAt)}`;
+          return (
+            <li key={slot.id}>
+              <label
+                className={cn(
+                  "flex min-h-11 items-start gap-3 rounded-xl border border-border/70 bg-card p-3 text-sm",
+                  many && "cursor-pointer"
+                )}
+              >
+                {many ? (
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(slot.id)}
+                    onChange={() => onToggle(slot.id)}
+                    className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-input accent-brand-green-600 dark:accent-brand-green-400"
+                  />
+                ) : null}
+                <span className="min-w-0">
+                  <span className="block truncate font-medium text-foreground">{label}</span>
+                  <span className="block text-xs text-muted-foreground">{dates}</span>
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+    </fieldset>
+  );
+}
+
 /** Explicit confirmation before Ozow: price, dates, slots, renewal and expiry. */
 export function CheckoutConfirm({
   summary,
@@ -168,27 +253,42 @@ export function CheckoutConfirm({
   const available = slotsAvailable(status);
   const maxSlots = Math.max(1, Math.min(MAX_SLOTS_PER_ORDER, available ?? STANDARD_SLOT_LIMIT));
   const allHeld = status !== null && status.held >= status.limit;
-  const [slots, setSlots] = useState(1);
+  const [slotCount, setSlots] = useState(1);
   const [consent, setConsent] = useState(false);
+  // Renewing early (P3): the slots listed, and those still ticked. Each
+  // renewal starts when its slot's current days end; a renewal adds no slot.
+  const renewing = term && summary?.renewal !== undefined ? (summary.renewal ?? []) : null;
+  const [renewIds, setRenewIds] = useState<string[]>(() => renewing?.map((slot) => slot.id) ?? []);
+  const renewSelected = renewing?.filter((slot) => renewIds.includes(slot.id)) ?? [];
+  const slots = renewing ? renewSelected.length : slotCount;
   const totalCents = term ? slotOrderTotalCents(term, slots) : (summary?.priceCents ?? 0);
   const durationDays = term?.durationDays ?? summary?.durationDays ?? 0;
   const slotBlock: SlotBlock | null = !term
     ? null
     : summary?.slotStatus?.verified === false
       ? "id_review"
-      : allHeld
+      : allHeld && !renewing
         ? "limit"
         : totalCents > ONLINE_ORDER_LIMIT_CENTS
           ? "invoice"
           : null;
-  const checkoutHref = `/billing/checkout?plan=${term?.planId ?? summary?.planId ?? ""}`;
+  const checkoutHref = renewing
+    ? `/billing/checkout?plan=${term?.planId ?? ""}&renew=${renewing.map((slot) => slot.id).join(",") || "all"}`
+    : `/billing/checkout?plan=${term?.planId ?? summary?.planId ?? ""}`;
+  const backHref = renewing ? "/dashboard/slots" : "/pricing";
+  const backLabel = renewing ? "Back to My slots" : "Back to pricing";
 
   // Dates use the deterministic SA formatter so server and browser render the same text.
   const [start] = useState(() => new Date());
   const expiry = summary ? new Date(start.getTime() + durationDays * 86_400_000) : null;
+  const renewedEnd = (startsAt: string) =>
+    formatSaLongDate(new Date(Date.parse(startsAt) + durationDays * 86_400_000));
+  const consentText = renewing
+    ? renewalConsent(renewSelected.map((slot) => formatSaLongDate(slot.startsAt)))
+    : COOLING_OFF_CONSENT;
 
   async function pay() {
-    if (!summary || pending.current || slotBlock || (term && !consent)) return;
+    if (!summary || pending.current || slotBlock || (term && !consent) || slots < 1) return;
     pending.current = true;
     setState("submitting");
     setError(null);
@@ -204,6 +304,7 @@ export function CheckoutConfirm({
                 slots,
                 expectedTotalCents: totalCents,
                 coolingOffConsent: consent,
+                ...(renewing && { renewSlotIds: renewSelected.map((slot) => slot.id) }),
               }
             : { planId: summary.planId }
         ),
@@ -309,7 +410,11 @@ export function CheckoutConfirm({
                 Review before you pay
               </p>
               <h1 className="mt-4 font-display text-2xl font-bold tracking-tight text-foreground">
-                Confirm your plan
+                {renewing
+                  ? renewing.length > 1
+                    ? "Renew your slots"
+                    : "Renew your slot"
+                  : "Confirm your plan"}
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">{term?.label ?? summary.name}</p>
               <div className="mt-5 flex items-end justify-between gap-3 rounded-2xl bg-muted/60 px-4 py-3.5">
@@ -359,49 +464,63 @@ export function CheckoutConfirm({
                       })}
                     </div>
                   </fieldset>
-                  <div className="flex items-center justify-between gap-3">
-                    <p
-                      id="slot-count-label"
-                      className="text-xs font-semibold text-muted-foreground"
-                    >
-                      Slots
-                    </p>
-                    <div
-                      role="group"
-                      aria-labelledby="slot-count-label"
-                      className="flex items-center gap-1 rounded-full border border-border/70 bg-card p-1"
-                    >
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-11 w-11 rounded-full"
-                        aria-label="One slot fewer"
-                        disabled={slots <= 1}
-                        onClick={() => setSlots((value) => Math.max(1, value - 1))}
+                  {renewing ? (
+                    <RenewalSlotList
+                      slots={renewing}
+                      unreadable={summary.renewal === null}
+                      selected={renewIds}
+                      onToggle={(id) =>
+                        setRenewIds((ids) =>
+                          ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
+                        )
+                      }
+                      newEnd={renewedEnd}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-between gap-3">
+                      <p
+                        id="slot-count-label"
+                        className="text-xs font-semibold text-muted-foreground"
                       >
-                        <Minus aria-hidden="true" className="h-4 w-4" />
-                      </Button>
-                      <output
-                        aria-live="polite"
-                        data-testid="checkout-slots"
-                        className="w-8 text-center font-display text-lg font-bold"
+                        Slots
+                      </p>
+                      <div
+                        role="group"
+                        aria-labelledby="slot-count-label"
+                        className="flex items-center gap-1 rounded-full border border-border/70 bg-card p-1"
                       >
-                        {slots}
-                      </output>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-11 w-11 rounded-full"
-                        aria-label="One slot more"
-                        disabled={slots >= maxSlots}
-                        onClick={() => setSlots((value) => Math.min(maxSlots, value + 1))}
-                      >
-                        <Plus aria-hidden="true" className="h-4 w-4" />
-                      </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-11 w-11 rounded-full"
+                          aria-label="One slot fewer"
+                          disabled={slots <= 1}
+                          onClick={() => setSlots((value) => Math.max(1, value - 1))}
+                        >
+                          <Minus aria-hidden="true" className="h-4 w-4" />
+                        </Button>
+                        <output
+                          aria-live="polite"
+                          data-testid="checkout-slots"
+                          className="w-8 text-center font-display text-lg font-bold"
+                        >
+                          {slots}
+                        </output>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-11 w-11 rounded-full"
+                          aria-label="One slot more"
+                          disabled={slots >= maxSlots}
+                          onClick={() => setSlots((value) => Math.min(maxSlots, value + 1))}
+                        >
+                          <Plus aria-hidden="true" className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               ) : null}
             </div>
@@ -422,8 +541,30 @@ export function CheckoutConfirm({
                   label="Duration"
                   value={term ? formatDurationDays(term.durationDays) : summary.durationLabel}
                 />
-                <SummaryRow label="Starts" value={`${formatSaLongDate(start)} (on payment)`} />
-                <SummaryRow label="Expires" value={formatSaLongDate(expiry)} />
+                {renewing ? (
+                  renewSelected.length === 1 ? (
+                    <>
+                      <SummaryRow
+                        label="Starts"
+                        value={`${formatSaLongDate(renewSelected[0].startsAt)} (when your current days end)`}
+                      />
+                      <SummaryRow label="Expires" value={renewedEnd(renewSelected[0].startsAt)} />
+                    </>
+                  ) : (
+                    <>
+                      <SummaryRow label="Starts" value="When each slot's current days end" />
+                      <SummaryRow
+                        label="Expires"
+                        value={`${formatDurationDays(durationDays)} after each start`}
+                      />
+                    </>
+                  )
+                ) : (
+                  <>
+                    <SummaryRow label="Starts" value={`${formatSaLongDate(start)} (on payment)`} />
+                    <SummaryRow label="Expires" value={formatSaLongDate(expiry)} />
+                  </>
+                )}
                 {term ? (
                   <SummaryRow
                     label="Each slot"
@@ -479,7 +620,7 @@ export function CheckoutConfirm({
                     htmlFor="cooling-off-consent"
                     className="cursor-pointer text-sm leading-6 text-foreground/80"
                   >
-                    {COOLING_OFF_CONSENT}{" "}
+                    {consentText}{" "}
                     <Link
                       href="/terms#refunds"
                       target="_blank"
@@ -495,7 +636,7 @@ export function CheckoutConfirm({
               typeof pendingPayment.slots === "number" &&
               typeof pendingPayment.amountCents === "number" ? (
                 <p data-testid="unpaid-order" className="text-sm font-medium text-foreground">
-                  {`Unpaid order: ${pendingPayment.slots} ${pendingPayment.slots === 1 ? "slot" : "slots"}, ${formatPlanPrice(pendingPayment.amountCents)}`}
+                  {`${pendingPayment.renewal ? "Unpaid renewal" : "Unpaid order"}: ${pendingPayment.slots} ${pendingPayment.slots === 1 ? "slot" : "slots"}, ${formatPlanPrice(pendingPayment.amountCents)}`}
                 </p>
               ) : null}
               {pendingPayment ? (
@@ -527,7 +668,12 @@ export function CheckoutConfirm({
                   variant="trust-verified"
                   size="lg"
                   className="h-12 rounded-full"
-                  disabled={state !== "idle" || slotBlock !== null || (term !== null && !consent)}
+                  disabled={
+                    state !== "idle" ||
+                    slotBlock !== null ||
+                    (term !== null && !consent) ||
+                    slots < 1
+                  }
                   onClick={pay}
                 >
                   {state === "idle" ? (
@@ -545,7 +691,7 @@ export function CheckoutConfirm({
                   )}
                 </Button>
                 <Button asChild variant="ghost" className="h-11 rounded-full">
-                  <Link href="/pricing">Back to pricing</Link>
+                  <Link href={backHref}>{backLabel}</Link>
                 </Button>
               </div>
               <ul className="hidden space-y-2 text-xs leading-5 text-muted-foreground sm:block">
@@ -555,7 +701,9 @@ export function CheckoutConfirm({
                 </li>
                 <li className="flex gap-2.5">
                   <CalendarClock aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                  Posts go live once payment is confirmed and they pass review.
+                  {renewing
+                    ? "Your post stays in its slot when the new days start."
+                    : "Posts go live once payment is confirmed and they pass review."}
                 </li>
               </ul>
             </div>
