@@ -15,6 +15,17 @@ begin
     raise exception 'pending checkout unavailable' using errcode='PT409'; end if;
   if pay.checkout_url is null and pay.checkout_claim_until>clock_timestamp() then
     raise exception 'checkout is being created' using errcode='PT409'; end if;
+  -- A Multi-listing package (20261114154823) reaches Ozow only while packages
+  -- are on sale and the member's ID review is still accepted.
+  if exists(select 1 from private.plan_versions v where v.id=pay.plan_version_id
+      and internal.slot_package_plan(v.plan_code)) then
+    if not internal.slot_packages_on_sale() then
+      raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
+    end if;
+    if internal.current_verified_identity(pay.owner_id) is null then
+      raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
+    end if;
+  end if;
   if pay.checkout_url is null then
     -- No request is attached, so every earlier attempt ended before Ozow's
     -- page reached the member. Each attempt gets a fresh 30-minute window;

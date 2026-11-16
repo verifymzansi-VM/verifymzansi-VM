@@ -7,7 +7,7 @@
 -- summary is the only row and reads "update not applied".
 --
 -- The summary says whether the update is absent (its new functions, tables,
--- columns, constraints, indexes and trigger are absent and the eleven
+-- columns, constraints, indexes and trigger are absent and the twenty
 -- functions it replaces have the earlier bodies) or applied (every body,
 -- table, column, constraint, index and trigger is the update's), whether
 -- packages are on sale, and counts the packages and the package payments once
@@ -27,11 +27,15 @@ with added as (
     ('internal.slot_chain_paid_end(uuid)', 'de3528681a1ad52128c6db296e413d12'),
     ('internal.slot_package_now(uuid)', 'a561555c6a51e7b33dfe29dbc55f32de'),
     ('internal.slot_package_posts(uuid)', '4571c82bda496cfa2ea35058be045d9a'),
-    ('internal.slot_package_waiting(uuid)', 'b3b3d6620c2b570c79220f4ed6decab6'),
+    ('internal.slot_package_waiting(uuid,interval)', '90cd762132b7d7a4abc43dbd1c25ab95'),
+    ('internal.slot_package_release_dates(uuid)', '1ac622530ea299d7d511e08845503fb6'),
+    ('internal.slot_package_grant_revoked()', '9cf14c5d2537f7839e2dc50824c43baf'),
+    ('internal.slot_package_leaving(uuid)', 'eb4f4cfd0ba7bda9931ec9731f2cffae'),
+    ('internal.individual_free_places(uuid)', '94a6acaa2a052aa6cb13df7a434907ec'),
     ('internal.slot_package_takeover_end(uuid)', '0a77a9c7ebbf989e9441f7c55586a716'),
     ('internal.slot_package_open(uuid)', 'caeeac35f9854e2c7c4155e73bf01a5d'),
     ('internal.slot_package_blocks_individual(text,uuid)', 'aaacd9fa58c26ece264cca8ed0340102'),
-    ('internal.refresh_package_documents(uuid)', 'ceae4e189bc8732a085dcad30f76faab'),
+    ('internal.refresh_package_documents(uuid)', 'f77541c993abcff9ac23695d27f34dbf'),
     ('internal.start_package_checkout(uuid,integer,bigint,boolean)', 'feb6e6f31e0bc1f6a1de41e8c927acb8'),
     ('api.start_package_checkout(uuid,integer,bigint,boolean)', 'fd80319b7272002223740642d8e6f2e1'),
     ('internal.get_slot_package_offer()', '2e254cb01e76b57f42c0505fc8561867'),
@@ -47,14 +51,23 @@ changed as (
     ('internal.slot_chain_end(uuid)', 'de3528681a1ad52128c6db296e413d12', 'fe36eb29f4128a1eef3c967c9c501c76'),
     ('internal.slot_posts_held(uuid)', '991f2a39a08f79399bb502e1a382d2dc', '79a8a8cbd5e2a5208cb885bcfce222ef'),
     ('internal.slot_posts_started(uuid,timestamp with time zone)', '1792e3af738c40f7f412198a47859398', 'b4c766fe4de985334272296045f529e8'),
-    ('internal.activate_post(uuid)', 'bc99d728b6a6e4465b87b0fd607aeb08', '2092e9b1814073bb1c3239e03013235e'),
+    ('internal.activate_post(uuid)', 'bc99d728b6a6e4465b87b0fd607aeb08', '114605168a14a5cf9b7619f23d3d198e'),
     ('internal.issue_slot_line_entitlements(uuid)', '85ae00308b9abb35c6c13bc67821d39d', 'e4041c30d7297bc4b4da74791701627d'),
-    ('internal.apply_provider_event(jsonb)', '19d5c2eb7e1a75210bc2b77d2cbb961b', 'ac38c2c9eceb3bed2df1083fabeeb4e8'),
-    ('internal.activate_staff_paid_payment(uuid,text)', '03c8a3314cd99f02fb465a391ca2942f', 'c892a45c4769f7f140b59ce6ba8d1a7c'),
+    ('internal.apply_provider_event(jsonb)', '19d5c2eb7e1a75210bc2b77d2cbb961b', '7f33edbb6bcafaecb519eef80c9b3633'),
+    ('internal.activate_staff_paid_payment(uuid,text)', '03c8a3314cd99f02fb465a391ca2942f', '324f8855e844937190754f70c03fcd2e'),
     ('internal.start_slot_checkout(uuid,integer,bigint,boolean)', '4ce514eae4c2fb3fd9b0a0ecc40ac498', 'cae84c17b05a49fc3937064eaaff38f2'),
     ('internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean)', '94de32ca80099d59db23aed33c6e7ee2', 'e014633dd37ebb3fa212fc2944dd7ed6'),
-    ('internal.run_slot_renewals(integer)', 'db9fd3d09dd015c5de40da964d6f8825', '0fb5f68336aab1f1f43b58c9acafb083'),
-    ('internal.manage_plan_member(uuid,text,text)', '39d6eba6a1db025d4ae0655d34870f96', '285ce1cc4dc56a1e262811362a345da8')
+    ('internal.run_slot_renewals(integer)', 'db9fd3d09dd015c5de40da964d6f8825', '6883b7f62518b33caaf127d300ea0864'),
+    ('internal.manage_plan_member(uuid,text,text)', '39d6eba6a1db025d4ae0655d34870f96', '285ce1cc4dc56a1e262811362a345da8'),
+    ('internal.claim_checkout_request(uuid,uuid)', 'd29afcd49f72e712602914d6ecb4d8f5', '0234950a11ec46ce9ccb0e707b940e72'),
+    ('internal.get_my_frontend_post_manager()', 'a435e97820a6788e8203c2af447c0f42', 'c408ccd9ee1a2cc4f135f2b4032f6583'),
+    ('internal.retention_commerce(integer)', '06d7529db4898b7bb3b158d38a1d5929', '422a63c6d6fd2be5a1556893a8975d3f'),
+    ('internal.frontend_privacy_export_data(uuid)', '03c73dba3ba38c4866186a8b84b4a521', '1a16274c11f77a9a6d72482ca43d6753'),
+    ('internal.issue_staff_invoice(text,integer,integer,integer,text,uuid)', '2c707542a6b970d11d278df749674b9b', 'cd64d93855e2db900d3600321759a07f'),
+    ('internal.start_invoice_payment(text,bigint,boolean)', '1bc2224ded0d1a5ddd03382f1fc2a46f', '157a3a3a51c3abfdef565e37a2af3785'),
+    ('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)', 'e02d131400fd0ac64c4d50e616dc4be7', '594b47bc794e335a3f3be505a4b1637e'),
+    ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)', '368a7de259a913eddf339bf718abba24', '171c0ad6f18a7f5329ff00dcfff4608d'),
+    ('internal.confirm_staff_invoice_payment(uuid)', 'cae341b6ac2373b82529618276d0bfb5', 'e0c308df14f38f1de76bdced4e8683f2')
   ) v(sig, before, after)
 ),
 needed as (
@@ -127,7 +140,8 @@ others as (
     ('index', 'private.entitlements_package_idx'),
     ('index', 'private.entitlements_package_ends_idx'),
     ('index', 'private.post_activations_owner_held_idx'),
-    ('trigger', 'slot_packages_immutable on private.slot_packages')
+    ('trigger', 'slot_packages_immutable on private.slot_packages'),
+    ('trigger', 'entitlements_package_revoked on private.entitlements')
   ) v(kind, name)
 ),
 state as (

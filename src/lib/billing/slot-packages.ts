@@ -21,8 +21,6 @@ export type PackageTerm = (typeof PACKAGE_TERMS)[number];
 export const PACKAGE_QUICK_SIZES = [5, 10, 25, 50, 100] as const;
 /** Posts going live per slot per 30 days, counted across the whole package. */
 export const PACKAGE_POSTS_PER_SLOT_PER_30_DAYS = 4;
-/** Adding slots part-way is allowed while this many days are left (P4b). */
-export const PACKAGE_ADD_SLOTS_MIN_DAYS_LEFT = 7;
 
 /** The checkout box (ECT Act s42(2)); the database records it as
  * package-starts-now-v1. */
@@ -70,10 +68,4 @@ export function parseSlotCount(value: string): number | null {
   const text = value.trim();
   if (!/^[0-9]{1,4}$/.test(text)) return null;
   return Number(text);
-}
-
-/** Team size included (owner's decision 9: the owner counts): you + 1 person,
- * you + 4 people from 50 slots. The team itself comes with P4c. */
-export function packageTeamSize(slots: number) {
-  return slots >= 50 ? 5 : 2;
 }

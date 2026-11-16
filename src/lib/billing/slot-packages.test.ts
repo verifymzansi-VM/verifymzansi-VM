@@ -3,7 +3,6 @@ import {
   isPackageTerm,
   packageOnlineMaxSlots,
   packageQuote,
-  packageTeamSize,
   packageTotalCents,
   parseSlotCount,
 } from "./slot-packages";
@@ -42,10 +41,8 @@ describe("Multi-listing package rules (P4a)", () => {
     for (const value of ["", "2.5", "-3", "1e2", "abc", "12345"])
       expect(parseSlotCount(value)).toBeNull();
   });
-  it("knows the terms and the team included (you + 1, or you + 4 from 50 slots)", () => {
+  it("knows the terms", () => {
     expect(isPackageTerm(90)).toBe(true);
     expect(isPackageTerm(60)).toBe(false);
-    expect(packageTeamSize(49)).toBe(2);
-    expect(packageTeamSize(50)).toBe(5);
   });
 });

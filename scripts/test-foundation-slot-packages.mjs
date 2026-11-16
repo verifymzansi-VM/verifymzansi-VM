@@ -44,7 +44,6 @@
 // Needs a local Docker daemon; it takes no connection settings at all. Nothing
 // contacts Ozow or sends email.
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
@@ -55,6 +54,7 @@ import {
   sqlHelpers,
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
+import { psqlSessions } from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261114154823_slot_packages.sql";
 const companion = (folder, suffix) =>
@@ -91,37 +91,7 @@ try {
   const truth = (sql) => scalar(`select (${sql});`) === "t";
   const same = (a, b) => truth(`'${a}'::timestamptz='${b}'::timestamptz`);
   // A separate psql session, for the concurrency check.
-  const session = (sql) =>
-    new Promise((resolve) => {
-      const child = spawn(
-        "docker",
-        [
-          "exec",
-          "-i",
-          database.name,
-          "psql",
-          "-X",
-          "-q",
-          "-A",
-          "-t",
-          "-v",
-          "ON_ERROR_STOP=1",
-          "-U",
-          "postgres",
-          "-d",
-          "postgres",
-        ],
-        { windowsHide: true }
-      );
-      let stdout = "",
-        stderr = "";
-      child.stdout.on("data", (data) => (stdout += data));
-      child.stderr.on("data", (data) => (stderr += data));
-      child.on("close", (status) => resolve({ status, stdout, stderr }));
-      child.stdin.end(`\\set VERBOSITY verbose\n${sql}`);
-    });
-  const later = (ms, sql) =>
-    new Promise((resolve) => setTimeout(resolve, ms)).then(() => session(sql));
+  const { session, sessionAfter: later } = psqlSessions(database);
 
   // ------------------------------------------------------- synthetic world
   q(`create schema vmtest;
@@ -190,6 +160,7 @@ try {
     return m;
   };
   q(`select vmtest.verified('${admin.id}','${admin2.id}','${fingerprintOf("package-admin")}');`);
+  q(`select vmtest.verified('${admin2.id}','${admin.id}','${fingerprintOf("package-admin2")}');`);
   const post = (owner, kind = "listing", area = "market") =>
     q(`select vmtest.post('${owner.id}','${kind}','${area}');`);
   const travel = (owner, by) => q(`select vmtest.travel('${owner.id}','${by}'::interval);`);
@@ -698,10 +669,16 @@ try {
       // New posts go into the package first, not the Individual slot ending soon.
       const fresh = post(kagiso);
       assert.equal(live(kagiso, fresh), pkg.id);
-      // Delivery moved the Individual post's search document to the package's end.
-      assert.ok(same(docUntil(listing), pkg.ends));
-      // The Individual slot ends a second ago; no job has run.
-      travel(kagiso, "30 days 1 second");
+      // Delivery leaves the Individual post's search document alone: the
+      // package takes the post only when its slot ends.
+      assert.ok(same(docUntil(listing), slotGrant.ends));
+      // The minute sweep before the slot's end moves the document to the
+      // package's end, because the package will take the post.
+      travel(kagiso, "29 days 23 hours 59 minutes");
+      sweep();
+      assert.ok(same(docUntil(listing), grantOf(paymentId).ends));
+      // The Individual slot ends a second ago; no job has run since.
+      travel(kagiso, "1 minute 1 second");
       const pkgNow = grantOf(paymentId);
       assert.ok(eligible(listing), "public view");
       assert.ok(
@@ -773,6 +750,10 @@ try {
     assert.equal(live(naledi, listing), grantOf(slot).id);
     buyPackage(naledi, K90, 5);
     for (let i = 0; i < 5; i += 1) live(naledi, post(naledi));
+    const ownEnd = docUntil(listing);
+    // Its document keeps its own end: the package will not take it.
+    sweep();
+    assert.ok(same(docUntil(listing), ownEnd));
     travel(naledi, "30 days 1 second");
     assert.equal(eligible(listing), false);
     assert.equal(
@@ -886,6 +867,274 @@ try {
     assert.equal(mine(thembi).individual_blocked_until, null);
     travel(thembi, "30 days 1 second");
     assert.equal(eligible(listing), false, "no package: the post is not taken");
+  });
+
+  // ------------------------------------------------------------ review fixes
+  const emailOf = (owner) => scalar(`select email from auth.users where id='${owner.id}';`);
+  await check(
+    "E3 at delivery: an Individual slot or renewal paid after a package started is not delivered",
+    () => {
+      const sizwe = verified("sizwe");
+      const kept = buySlot(sizwe);
+      // A new slot and a renewal left open at Ozow, then a package.
+      const quotedSlot = json(slotSql(sizwe, I30, 1));
+      open(sizwe, quotedSlot.payment_id);
+      travel(sizwe, "17 days");
+      const renewal = json(
+        member(
+          sizwe,
+          `select api.start_slot_renewal_checkout(array['${grantOf(kept).id}']::uuid[],'6a449457-2384-457e-9434-23c2b0e73127',20700,true);`
+        )
+      );
+      open(sizwe, renewal.payment_id);
+      buyPackage(sizwe, K90, 5);
+      for (const paymentId of [quotedSlot.payment_id, renewal.payment_id]) {
+        const paid = notice(paymentId);
+        assert.deepEqual(
+          [paid.outcome, paid.fulfillment_status],
+          ["complete_unfulfillable_target", "needs_reconciliation"]
+        );
+        assert.equal(count(`private.entitlements where payment_id='${paymentId}'`), 0);
+        assert.equal(
+          count(
+            `private.outbox_events where kind='payment_reconciliation_required' and subject_id='${paymentId}'`
+          ),
+          1
+        );
+        fails(
+          staff(
+            admin,
+            `select api.activate_staff_paid_payment('${paymentId}','Deliver the slot paid late');`
+          ),
+          "PT409",
+          /package_active/
+        );
+      }
+      assert.equal(json(member(sizwe, "select api.get_my_slots_v2();")).individual.held, 1);
+    }
+  );
+
+  await check(
+    "E3 on invoices: no Individual invoice is issued, paid, recorded or confirmed while a package runs",
+    () => {
+      const lwazi = verified("lwazi");
+      // Issued and recorded before the package.
+      const invoice = json(
+        staff(
+          admin,
+          `select api.issue_staff_invoice('${emailOf(lwazi)}',30,2,7,'Invoice requested by email',gen_random_uuid());`
+        )
+      );
+      const today = q(
+        "select to_char((now() at time zone 'Africa/Johannesburg')::date,'YYYY-MM-DD');"
+      );
+      const transfer = json(
+        staff(
+          admin,
+          `select api.record_staff_invoice_payment('${emailOf(lwazi)}',30,1,6900,'EFT LWAZI 01','${today}',true,'EFT cleared; customer agreed in writing');`
+        )
+      );
+      q(
+        member(
+          lwazi,
+          `select api.save_my_invoice_billing('${invoice.invoice_number}',1,'Fixture Traders (Pty) Ltd','1 Example Road\nEmpangeni\n3880','2020/123456/07');`
+        )
+      );
+      buyPackage(lwazi, K90, 5);
+      fails(
+        staff(
+          admin,
+          `select api.issue_staff_invoice('${emailOf(lwazi)}',30,1,7,'Invoice requested by email',gen_random_uuid());`
+        ),
+        "PT409",
+        /package_active/
+      );
+      fails(
+        member(lwazi, `select api.start_invoice_payment('${invoice.invoice_number}',13800,true);`),
+        "PT409",
+        /package_active/
+      );
+      fails(
+        staff(
+          admin,
+          `select api.record_staff_invoice_payment('${emailOf(lwazi)}',30,1,6900,'EFT LWAZI 02','${today}',true,'EFT cleared; customer agreed in writing');`
+        ),
+        "PT409",
+        /package_active/
+      );
+      fails(
+        staff(
+          admin,
+          `select api.record_staff_invoice_transfer('${invoice.invoice_number}','EFT LWAZI 03','${today}',true,'EFT cleared; written waiver on file');`
+        ),
+        "PT409",
+        /package_active/
+      );
+      fails(
+        staff(admin2, `select api.confirm_staff_invoice_payment('${transfer.transfer_id}');`),
+        "PT409",
+        /package_active/
+      );
+      assert.equal(json(member(lwazi, "select api.get_my_slots_v2();")).individual.held, 0);
+    }
+  );
+
+  await check(
+    "a package reaches Ozow and is delivered only while on sale and with an accepted ID review",
+    () => {
+      const mandla = verified("mandla");
+      const first = json(packageSql(mandla, K30, 5));
+      onSale(false);
+      fails(
+        service(`select api.claim_checkout_request('${first.payment_id}','${mandla.id}');`),
+        "PT403",
+        /packages_not_on_sale/
+      );
+      onSale(true);
+      open(mandla, first.payment_id);
+      onSale(false);
+      const paid = notice(first.payment_id);
+      assert.deepEqual(
+        [paid.outcome, paid.fulfillment_status],
+        ["complete_unfulfillable_target", "needs_reconciliation"]
+      );
+      assert.equal(count(`private.slot_packages where owner_id='${mandla.id}'`), 0);
+      fails(
+        staff(
+          admin,
+          `select api.activate_staff_paid_payment('${first.payment_id}','Deliver the package paid late');`
+        ),
+        "PT403",
+        /packages_not_on_sale/
+      );
+      onSale(true);
+      // The ID review revoked while the Ozow page is open.
+      const thabo = verified("thabo");
+      const second = json(packageSql(thabo, K30, 5));
+      open(thabo, second.payment_id);
+      q(
+        `update private.accepted_identity_facts set revoked_at=now() where owner_id='${thabo.id}';`
+      );
+      fails(
+        service(`select api.claim_checkout_request('${second.payment_id}','${thabo.id}');`),
+        "PT412"
+      );
+      assert.equal(notice(second.payment_id).fulfillment_status, "needs_reconciliation");
+      assert.equal(count(`private.slot_packages where owner_id='${thabo.id}'`), 0);
+    }
+  );
+
+  await check("a refunded package gives back the post it took: it expires on its real date", () => {
+    const ntombi = verified("ntombi");
+    const slot = buySlot(ntombi);
+    const listing = post(ntombi);
+    live(ntombi, listing);
+    const paymentId = buyPackage(ntombi, K90, 5);
+    travel(ntombi, "30 days 1 second");
+    assert.ok(eligible(listing));
+    // The lifecycle job catches its end date up to the package's (it is taken).
+    lifecycle();
+    assert.ok(
+      same(
+        scalar(`select visible_until from private.posts where id='${listing}';`),
+        grantOf(paymentId).ends
+      )
+    );
+    // Refunded before the sweep moved it in: its dates go back at once.
+    q(
+      `select internal.reverse_payment_line('${grantOf(paymentId).line}','refunded','Billing error on the package','${admin.id}');`
+    );
+    const own = scalar(`select ends_at from private.entitlements where id='${grantOf(slot).id}';`);
+    assert.ok(same(scalar(`select visible_until from private.posts where id='${listing}';`), own));
+    assert.ok(same(docUntil(listing), own));
+    assert.equal(eligible(listing), false);
+    lifecycle();
+    assert.equal(scalar(`select status from private.posts where id='${listing}';`), "expired");
+    assert.ok(
+      truth(
+        `(select deletes_at from private.posts where id='${listing}')<=now()+interval '3 days 1 minute'`
+      )
+    );
+  });
+
+  await check(
+    "going below 5: in a package's last 7 days new posts and its posts move into Individual slots",
+    () => {
+      const zanele = verified("zanele");
+      const paymentId = buyPackage(zanele, K30, 5);
+      const pkg = grantOf(paymentId);
+      const posts = [post(zanele), post(zanele), post(zanele)];
+      for (const [i, id] of posts.entries()) {
+        live(zanele, id);
+        q(
+          `update private.posts set published_at=now()-interval '${10 - i} hours' where id='${id}';`
+        );
+      }
+      travel(zanele, "24 days");
+      // Individual slots can be bought again; a new post goes into one.
+      const two = buySlot(zanele);
+      const extraSlot = buySlot(zanele);
+      const fresh = post(zanele);
+      assert.notEqual(live(zanele, fresh), pkg.id);
+      // The sweep moves the most recently approved package post into the free place.
+      const result = sweep();
+      assert.equal(result.package_downsized, 1);
+      const moved = posts[2];
+      const where = (id) =>
+        scalar(`select e.package_id is null from private.post_activations a join private.entitlements e on e.id=a.entitlement_id
+        where a.post_id='${id}' and a.released_at is null;`);
+      assert.equal(where(moved), "t");
+      assert.equal(where(posts[0]), "f");
+      assert.equal(
+        scalar(
+          `select continued from private.post_activations where post_id='${moved}' and released_at is null;`
+        ),
+        "t"
+      );
+      assert.equal(sweep().package_downsized, 0, "no free place left");
+      // At the package's end the moved post stays; the others follow the grace.
+      travel(zanele, "6 days 1 hour");
+      assert.ok(eligible(moved));
+      assert.ok(eligible(fresh));
+      assert.equal(eligible(posts[0]), false);
+      lifecycle();
+      assert.equal(scalar(`select status from private.posts where id='${moved}';`), "live");
+      assert.equal(scalar(`select status from private.posts where id='${posts[0]}';`), "expired");
+      assert.ok([two, extraSlot].every((p) => grantOf(p).status === "active"));
+    }
+  );
+
+  await check(
+    "retention removes a package with its last grant; the privacy export lists packages",
+    () => {
+      const olwethu = verified("olwethu");
+      const paymentId = buyPackage(olwethu, K30, 5);
+      const grant = grantOf(paymentId);
+      const exported = json(`select internal.frontend_privacy_export_data('${olwethu.id}');`);
+      assert.deepEqual(
+        exported.slot_packages.map((p) => [p.id, p.term_days, p.slot_count]),
+        [[grant.package, 30, 5]]
+      );
+      assert.equal(exported.entitlements.find((e) => e.id === grant.id).package_id, grant.package);
+      assert.equal(exported.payments.find((p) => p.id === paymentId).lines[0].slot_count, 5);
+      // Six years later its grant goes, and the package with it.
+      q(`set session_replication_role=replica;
+      update private.entitlements set starts_at=starts_at-interval '6 years',ends_at=ends_at-interval '6 years' where id='${grant.id}';
+      update private.slot_packages set created_at=created_at-interval '6 years' where id='${grant.package}';
+      set session_replication_role=origin;`);
+      const removed = json("select internal.retention_commerce(500);");
+      assert.ok(removed.slot_packages >= 1, JSON.stringify(removed));
+      assert.equal(count(`private.slot_packages where id='${grant.package}'`), 0);
+    }
+  );
+
+  await check("the post manager lists no package grant among plans with administrators", () => {
+    const busi = verified("busi");
+    buyPackage(busi, K30, 5);
+    assert.deepEqual(
+      json(member(busi, "select api.get_my_frontend_post_manager();")).plan_admins,
+      []
+    );
   });
 
   // --------------------------------------------------------------- rollback

@@ -39,8 +39,10 @@ begin
       and (e.source<>'retail_paid' or exists(select 1 from private.payments pay
         where pay.id=e.payment_id and pay.owner_id=e.owner_id and pay.status='complete'))
     -- A Multi-listing package's places first (20261114154823, E3): an
-    -- Individual slot beside it is often about to end.
-    order by (e.package_id is null), e.ends_at, e.id
+    -- Individual slot beside it is often about to end. In the package's last
+    -- 7 days, Individual slots bought to go below 5 come first (decision 11).
+    order by case when e.package_id is not null and e.ends_at > statement_timestamp() + interval '7 days' then 0
+        when e.package_id is null then 1 else 2 end, e.ends_at, e.id
     for update
   loop
     -- Cursor predicates may predate a row wait; re-read all authority and wall time.

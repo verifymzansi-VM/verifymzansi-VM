@@ -83,6 +83,13 @@ begin
           raise exception 'the account already has a package; refund this payment, or activate it once that package has ended'
             using errcode='PT409', detail='package_active';
         end if;
+        if not internal.slot_packages_on_sale() then
+          raise exception 'Multi-listing packages are not on sale; refund this payment' using errcode='PT403',
+            detail='packages_not_on_sale';
+        end if;
+        if internal.current_verified_identity(pay.owner_id) is null then
+          raise exception 'the member''s ID review is not accepted; refund this payment' using errcode='PT412';
+        end if;
       else
         -- Within the person's Individual slot limit (every account of the
         -- identity, each slot once; a renewal of a held slot adds none, and
@@ -98,6 +105,11 @@ begin
           or (cardinality(renewing) > 0
             and not internal.individual_renewals_allowed(fingerprint, pay.owner_id, pay.id, renewing)) then
           raise exception 'more slots than the person''s limit; raise the limit or refund' using errcode='PT429', detail='slot_limit_reached';
+        end if;
+        -- E3: never while the person's package runs (until its last 7 days).
+        if internal.slot_package_blocks_individual(fingerprint, pay.owner_id) then
+          raise exception 'the person''s Multi-listing package runs; refund this payment' using errcode='PT409',
+            detail='package_active';
         end if;
       end if;
       made := internal.issue_slot_line_entitlements(pay.id);

@@ -74,5 +74,6 @@ CREATE UNIQUE INDEX entitlements_renews_active_idx ON private.entitlements USING
 CREATE INDEX entitlements_renews_entitlement_idx ON private.entitlements USING btree (renews_entitlement_id) WHERE (renews_entitlement_id IS NOT NULL);
 CREATE INDEX entitlements_slot_idx ON private.entitlements USING btree (slot_id) WHERE (slot_id IS NOT NULL);
 CREATE TRIGGER entitlement_capabilities_immutable BEFORE UPDATE OF addon_capabilities ON private.entitlements FOR EACH ROW EXECUTE FUNCTION internal.entitlement_capability_guard();
+CREATE TRIGGER entitlements_package_revoked AFTER UPDATE OF status ON private.entitlements FOR EACH ROW WHEN (new.package_id IS NOT NULL AND new.status = 'revoked'::text AND old.status IS DISTINCT FROM 'revoked'::text) EXECUTE FUNCTION internal.slot_package_grant_revoked();
 CREATE TRIGGER entitlements_slot_chain_revoked AFTER UPDATE OF status ON private.entitlements FOR EACH ROW EXECUTE FUNCTION internal.slot_grant_revoked();
 revoke all on private.entitlements from public;

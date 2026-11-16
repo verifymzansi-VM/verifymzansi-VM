@@ -19,7 +19,6 @@ const offer = z.strictObject({
   plans: z.array(plan).max(3),
 });
 export type FoundationSlotPackageOffer = z.infer<typeof offer>;
-export type FoundationSlotPackagePlan = FoundationSlotPackageOffer["plans"][number];
 
 /** Multi-listing packages on offer (api.get_slot_package_offer, a trusted
  * server read: browsers and the publishable key get nothing): whether they are
