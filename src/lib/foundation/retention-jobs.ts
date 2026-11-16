@@ -159,6 +159,11 @@ export async function runFoundationRetention(
   const failures: string[] = [];
   if (swept.status === "rejected" || swept.value.error) failures.push("retention_sweep");
   if (drafts.status === "rejected" || drafts.value.error) failures.push("draft_purge");
+  // Account erasures that failed and wait for staff (the sweep records the
+  // error code; 20261116175757_close_and_erase_account.sql): an alert, not a
+  // failed run, so storage cleanup and the other sweeps carry on.
+  const stuckErasures =
+    swept.status === "fulfilled" && !swept.value.error ? erasureErrors(swept.value.data) : 0;
 
   const context: RunContext = {
     service,
@@ -182,6 +187,7 @@ export async function runFoundationRetention(
     ...(media.batchFallback ? ["batch_fallback"] : []),
     ...(media.storageBusy ? ["storage_busy"] : []),
     ...(media.failed + evidence.failed > 0 ? ["objects_retrying"] : []),
+    ...(stuckErasures > 0 ? ["account_erasure_errors"] : []),
   ];
   (alerts.length > 0 ? log.warn : log.info)("Storage cleanup run", {
     alerts,
@@ -196,6 +202,7 @@ export async function runFoundationRetention(
       claimMs: media.claimMs,
     },
     evidence: { claimed: evidence.claimed, deleted: evidence.deleted, failed: evidence.failed },
+    accountErasureErrors: stuckErasures,
     subrequests: budget.used,
     durationMs: now() - started,
   });
@@ -206,6 +213,15 @@ export async function runFoundationRetention(
     retrying: media.failed + media.deferred + evidence.failed,
     backlog: media.drained ? ("drained" as const) : ("remaining" as const),
   };
+}
+
+/** Erasures recorded as failed, from the retention sweep's result (0 when the
+ * database does not report them yet). */
+function erasureErrors(data: unknown) {
+  const parsed = z
+    .object({ accounts: z.object({ stuck: z.number().int().nonnegative() }) })
+    .safeParse(data);
+  return parsed.success ? parsed.data.accounts.stuck : 0;
 }
 
 async function cleanEvidence({

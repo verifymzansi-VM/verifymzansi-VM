@@ -7,6 +7,13 @@ CREATE OR REPLACE FUNCTION internal.individual_slot_limit_guard()
  SET search_path TO 'pg_catalog'
 AS $function$
 begin
+  -- An erasure unlinks the erased account from this kept record (20261116175757_close_and_erase_account.sql);
+  -- nothing else may change with it.
+  if tg_op = 'UPDATE' and coalesce(pg_catalog.current_setting('vm.erasure', true), '') <> '' then
+    if internal.erasure_unlinks(to_jsonb(old), to_jsonb(new), array['account_id']) then
+      return new;
+    end if;
+  end if;
   -- The audit trail of raised limits: a raise is only ever ended, once.
   if tg_op = 'DELETE' then
     raise exception 'slot limit history is retained' using errcode='23514';

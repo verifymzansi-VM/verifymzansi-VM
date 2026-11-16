@@ -20,7 +20,7 @@ begin
   end if;
   perform internal.assert_staff_payment_actor(actor, request.account_id);
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('frontend-payment-reversal:'||request.payment_id::text, 0));
-  perform internal.lock_evidence_subject(request.account_id);
+  perform internal.lock_kept_record_subject(request.account_id, request.payment_id);
   select * into request from private.payment_refund_requests r where r.id = p_request_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, request.account_id);

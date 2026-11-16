@@ -48,9 +48,18 @@ begin
     answer:=case p_action when 'approve' then 'in_progress' else 'rejected' end;
     if answer='rejected' then delivery:=answer;end if;
     update private.privacy_requests set status=answer,response_summary=note,processed_by=actor,revision=revision+1 where id=r.id;
+    -- A rejected deletion request never lets its account be erased later on
+    -- its own: the rejection is recorded and a legal hold placed (20261116175757_close_and_erase_account.sql).
+    if answer='rejected' and r.type='deletion' then perform internal.reject_account_erasure(r.id,actor);end if;
   else
     if r.status<>'in_progress' or not r.identity_verified then raise exception 'verified in-progress privacy request required' using errcode='PT409';end if;
     if r.type='deletion' then
+      -- An account named by the request is erased first (20261116175757_close_and_erase_account.sql).
+      if exists(select 1 from private.account_erasure_requests l join private.account_erasures e on e.user_id=l.user_id
+          where l.request_id=r.id and e.erased_at is null) then
+        raise exception 'the account is not erased yet' using errcode='PT409',detail='erasure_pending';end if;
+      if r.subject_user_id is not null and not exists(select 1 from private.account_erasure_requests l where l.request_id=r.id) then
+        raise exception 'order the account erasure first' using errcode='PT409',detail='erasure_required';end if;
       note:=concat_ws(E'\n\n',note,'Deletion attestation: '||internal.privacy_text(p_attestation,10,2000));
     elsif p_attestation is not null then raise exception 'attestation applies only to deletion' using errcode='22023';end if;
     update private.privacy_requests set status='completed',response_summary=note,processed_by=actor,completed_at=now_at,revision=revision+1 where id=r.id;

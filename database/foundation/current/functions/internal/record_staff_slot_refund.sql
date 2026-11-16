@@ -17,10 +17,10 @@ begin
   if p_line_id is null then raise exception 'slot required' using errcode='22023'; end if;
   select p.owner_id, p.id into buyer, payment from private.payment_lines l join private.payments p on p.id = l.payment_id
     where l.id = p_line_id;
-  if buyer is null then raise exception 'slot payment line not found' using errcode='22023'; end if;
+  if payment is null then raise exception 'slot payment line not found' using errcode='22023'; end if;
   perform internal.assert_staff_payment_actor(actor, buyer);
   perform pg_advisory_xact_lock(hashtextextended('frontend-payment-reversal:'||payment::text, 0));
-  perform internal.lock_evidence_subject(buyer);
+  perform internal.lock_kept_record_subject(buyer, payment);
   select * into pay from private.payments p where p.id = payment for update;
   select * into line from private.payment_lines l where l.id = p_line_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
@@ -34,7 +34,8 @@ begin
     raise exception 'a refund of this payment is waiting for approval' using errcode='PT409', detail='refund_awaiting_approval';
   end if;
   refunded_before := internal.payment_refunded_before_cents(pay.id);
-  approval := internal.refund_needs_approval(p_kind, refunded_before, line.amount_cents);
+  -- A payment of an erased account: always a second staff member.
+  approval := internal.refund_needs_approval(p_kind, refunded_before, line.amount_cents) or pay.owner_id is null;
   if not approval then
     result := internal.record_staff_slot_reversal(line.id, p_kind, btrim(p_reason));
   end if;

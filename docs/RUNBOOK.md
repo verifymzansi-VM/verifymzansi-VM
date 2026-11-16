@@ -406,47 +406,167 @@ The feature flag rollback playbook is kept outside the public repository.
 
 ## DSAR Processing (POPIA)
 
-> South African POPIA law requires responding to Data Subject Access Requests
-> within **30 days**.
+> Privacy requests (access, correction, deletion, objection) are answered within
+> **30 days**. An access request may be extended once, before its deadline, with
+> written notice; a deletion request cannot be extended.
+
+Everything below uses the live (foundation) backend. The old tables
+(`dsar_requests`, `seller_profiles`, `verification_sessions`, `listings`,
+`audit_events`) and "soft delete" no longer exist; never use them.
 
 ### Processing a Request
 
-1. Requests arrive via `/dsar` page or email
-2. Check the Admin Panel → DSAR queue (or `dsar_requests` table)
-3. Verify the requester's identity using their SA ID number (Luhn-validated)
-4. Gather all personal data:
+1. Requests arrive from the `/dsar` page (a signed-in member: the account is
+   checked by its session), by email (staff record it in **Admin → DSAR**, with
+   a manual identity check), or, once M1.6c ships, from **Delete account** (a
+   deletion request is recorded automatically when the member closes the
+   account).
+2. Work in **Admin → DSAR** (`/admin/dsar`). You need the admin or governor role
+   and an authenticator code from the last 15 minutes. You can never process
+   your own request, and the database refuses it.
+3. Verify the identity: a session request is already tied to its account; a
+   manual (email) request is matched to the one confirmed account with exactly
+   that email address. If there is no match or more than one, ask for more
+   information; never guess the account.
+4. Access: use **Export** (the database builds the member's own data), check it,
+   and send it to the address on the request.
+5. Correction or objection: make the change through the normal staff screens and
+   complete the request with a short note.
+6. Deletion: follow the two-person procedure below.
+7. Complete the request on the screen. The database sends the "completed" notice
+   to the address on the request; nothing else needs logging.
+
+### Deletion requests: two-person procedure
+
+What "delete my account" does (owner decision OD-10, database update
+`20261116175757_close_and_erase_account.sql`):
+
+- **At once:** the account is closed. Its posts leave the site, sign-in is
+  blocked and every session ends.
+- **After 30 days:** the retention job (every 5 minutes) erases the account:
+  posts, enquiries it received and sent, photos and videos (queued for deletion
+  from storage), profile, drafts, notifications, consent records, organisation
+  roles and the sign-in itself. Paid time ends.
+- **Kept:** payment records, invoices, Multi-listing packages and partner
+  commissions for 5 tax years, with no link to the person; the identity-ban
+  fingerprint and the trial fingerprint for their own periods; the verification
+  history for 5 years after closure; reports and released legal holds for their
+  own periods. The empty Auth row is deleted automatically once nothing kept
+  names it.
+- **Waits:** the erasure does not run while any of these applies: a legal hold,
+  an open fraud hold, a staff content hold, an open report about the person or
+  their posts, a staff role, a rejected deletion request, a pending payment, a
+  paid order still to be delivered, an open refund, a bank transfer waiting for
+  confirmation, an unpaid invoice, or an unpaid commission owed to the person as
+  a partner. The reason is recorded and the job tries again an hour later.
+- **Deadline:** a deletion request is due 7 days after the 30-day grace period
+  ends.
+- **Rejected requests:** rejecting a deletion request of a closed account places
+  a legal hold ("Deletion request rejected; review by <date>", 12 months on) and
+  records the rejection, so nothing erases the account on its own. At the review
+  date decide: keep the hold, or release it and handle a new request. Privacy
+  staff place this hold by rejecting the request; releasing it needs the
+  legal-hold role (`legal_hold:manage`).
+- **Closed requests:** once a completed or rejected request's last notice is
+  sent (or 30 days after it closed), its email is replaced by "removed" and its
+  phone and description are cleared; the record is deleted 5 years after it
+  closed (provisional periods; the lawyer confirms).
+- **Cannot be undone.** Take a fresh backup before the first real use in
+  production, and rehearse this procedure once on staging with a test account.
+
+Two staff members take part: **Person A** checks the identity, **Person B**
+orders the erasure. The database refuses Person B if Person B also verified the
+identity.
+
+1. **Person A: check the identity** (step 3 above) and press **Verify
+   identity**.
+2. **Person A: check what must be kept.** Look for open reports, fraud holds or
+   a legal reason to keep data (a dispute, a court order, a police request). If
+   there is one, place a legal hold with the reason and tell the person what is
+   kept and why. A hold makes the erasure wait; it does not stop the closure.
+3. **Person A: approve** the request (it moves to "in progress").
+4. **Person A: paid time.** If the account still has paid time and belongs to a
+   natural person, closing counts as a cancellation request (refund policy, rule
+   8): after 20 business days the unused whole days are credited at the plan's
+   daily rate, minus R50. Record the credit with the slot refund (reason
+   "s14_cancellation") before the erasure runs. Companies, close corporations
+   and trusts get no credit. An open refund makes the erasure wait.
+5. **Person B: order the erasure.** Once M1.6c ships this is the **Erase
+   account** button on the request. Until then Person B runs this reviewed
+   command in the owner's Supabase SQL editor, with Person A watching and
+   checking each value (replace the two placeholders):
 
    ```sql
-   -- User profile
-   SELECT * FROM auth.users WHERE id = '<user_id>';
-   -- Seller profile
-   SELECT * FROM seller_profiles WHERE user_id = '<user_id>';
-   -- Verification data
-   SELECT * FROM verification_sessions WHERE user_id = '<user_id>';
-   -- Listings
-   SELECT * FROM listings WHERE user_id = '<user_id>';
-   -- Audit trail
-   SELECT * FROM audit_events WHERE actor_id = '<user_id>';
+   select internal.order_account_erasure('<request id>', null, '<Person B staff account id>');
    ```
 
-5. Export data in a portable format (JSON or CSV)
-6. For deletion requests:
-   - Soft-delete user records (set `deleted_at` timestamp)
-   - Queue R2 file cleanup via the retention-cleanup worker
-   - Retain audit logs for compliance (anonymize the actor)
-7. Respond to the requester within 30 days
-8. Log the DSAR completion in `audit_events`
+   It does exactly what the button will do: it refuses unless the request is a
+   verified deletion request in progress, Person B holds the privacy role, is
+   not the requester and did not verify the identity, and the account is not a
+   staff account; then it closes the account, links the request, records the
+   order on the request and sets its deadline. It returns the erasure state.
+
+6. **Wait 30 days.** The retention job erases the account on its own. To see
+   where it stands, read the state (read only):
+
+   ```sql
+   select internal.account_erasure_state(user_id)
+   from private.account_erasure_requests where request_id = '<request id>';
+   ```
+
+   `scheduled` waits for the 30 days, `held` names what it waits for
+   (`held_by`), `erased` means the content and sign-in are gone, `removed` means
+   the Auth user is deleted too. If it stays `held` with `error` (the retention
+   job also logs the alert `account_erasure_errors`), report it as an incident.
+   What to do for the other reasons:
+
+   - `invoice_unpaid`: void the unpaid invoice (Admin → Payments → Invoices), or
+     record its payment if the money arrived.
+   - `commission_unpaid` (the person is a partner): pay out the commission and
+     record the payout, or forfeit it (reverse it with the reason), so nothing
+     is owed.
+   - `report_open`: decide the open reports about the person or their posts.
+     Open reports can delay the erasure past the request's deadline: decide them
+     before the deadline, and if one needs longer, tell the person in writing
+     that the erasure waits for the review and why.
+   - `payment_pending`, `payment_unresolved`, `refund_open`, `transfer_waiting`:
+     finish the payment step (wait for Ozow, deliver or refund, confirm or
+     decline the transfer).
+   - `legal_hold`, `fraud_hold`, `content_hold`: the erasure waits until staff
+     release the hold.
+
+   A refund or chargeback of a payment whose account was erased always needs a
+   second staff member's approval.
+
+   The Auth sign-in log is cleared in one bounded batch (entries since the
+   account was created, up to 10,000); older or further entries leave with the
+   normal Auth log retention.
+
+7. **Person A: complete the request** with the attestation ("Erased under the
+   deletion rules on <date>; payment records kept 5 years without the person").
+   The database refuses to complete a deletion request before the account is
+   erased, or one naming an account before the erasure was ordered. A request
+   that names no account (no match) is completed with the attestation only.
+
+A staff member's own account is never erased this way: end their roles first
+(staff governance), then process the request.
 
 ### Monitoring DSAR Deadlines
 
+**Admin → DSAR** lists open requests with their deadlines, earliest first. Read
+only, in the SQL editor:
+
 ```sql
-SELECT id, created_at, status,
-       created_at + INTERVAL '30 days' AS deadline,
-       CASE WHEN NOW() > created_at + INTERVAL '30 days' THEN 'OVERDUE' ELSE 'OK' END AS compliance
-FROM dsar_requests
-WHERE status != 'completed'
-ORDER BY created_at ASC;
+select id, type, status, received_at, effective_due_at,
+       case when now() > effective_due_at then 'OVERDUE' else 'OK' end as compliance
+from private.privacy_requests
+where status in ('submitted', 'identity_pending', 'in_progress')
+order by effective_due_at;
 ```
+
+A deletion request closed by the member is answered after the 30-day grace
+period, so it can show as overdue by a day or so; complete it as soon as the
+erasure has run.
 
 ---
 

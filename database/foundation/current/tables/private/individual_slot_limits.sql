@@ -4,7 +4,7 @@
 create table private.individual_slot_limits (
   id uuid default gen_random_uuid() not null,
   identity_hmac text not null,
-  account_id uuid not null,
+  account_id uuid,
   slot_limit integer not null,
   ends_at timestamp with time zone not null,
   reason text not null,

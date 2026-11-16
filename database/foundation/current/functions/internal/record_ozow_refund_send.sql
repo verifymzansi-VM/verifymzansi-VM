@@ -21,7 +21,7 @@ begin
   select r.payment_id into payment from private.payment_refund_requests r where r.id = p_request_id and r.channel = 'api';
   if payment is null then raise exception 'refund request not found' using errcode='22023'; end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('frontend-payment-reversal:'||payment::text, 0));
-  perform internal.lock_evidence_subject(r.account_id) from private.payment_refund_requests r where r.id = p_request_id;
+  perform internal.lock_kept_record_subject(r.account_id, r.payment_id) from private.payment_refund_requests r where r.id = p_request_id;
   select * into request from private.payment_refund_requests r where r.id = p_request_id for update;
   if request.send_attempts = 0 then
     raise exception 'this refund was not sent' using errcode='PT409', detail='refund_not_sent';

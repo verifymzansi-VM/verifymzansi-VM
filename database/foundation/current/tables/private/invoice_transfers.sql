@@ -3,7 +3,7 @@
 
 create table private.invoice_transfers (
   id uuid default gen_random_uuid() not null,
-  account_id uuid not null,
+  account_id uuid,
   plan_version_id uuid not null,
   slots integer not null,
   amount_received_cents bigint not null,
