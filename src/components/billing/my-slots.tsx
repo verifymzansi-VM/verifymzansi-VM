@@ -3,7 +3,8 @@ import { BadgeCheck, Building2, Gift, Layers, Plus, RefreshCw } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { formatSaLongDate, saCalendarDaysBetween } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
-import type { FoundationMySlots } from "@/lib/foundation/billing-runtime";
+import type { FoundationMySlotPackage, FoundationMySlots } from "@/lib/foundation/billing-runtime";
+import { MySlotPackage } from "./my-slot-package";
 
 type Slot = FoundationMySlots["slots"][number];
 type SlotPost = Slot["posts"][number];
@@ -42,25 +43,46 @@ function daysLeft(endsAt: string, now: Date) {
  * it ends ("Renew", and "Renew all" when several can): the new days start when
  * its current days end, and a renewed slot shows until when it is renewed. One
  * "Buy a slot" buys a new slot with its own end date.
+ *
+ * With a Multi-listing package (P4a) the package comes first as one group;
+ * Individual slots run beside it to their own end dates, cannot be bought or
+ * renewed while it runs (until its last 7 days), and the post of one that
+ * ends moves into a free place of the package.
  */
 export function MySlots({
   slots,
   individual,
   buyHref,
+  slotPackage = null,
   now = new Date(),
 }: {
   slots: FoundationMySlots["slots"];
   individual: FoundationMySlots["individual"];
   /** The checkout for a 30-day Individual slot; null when none is on sale. */
   buyHref: string | null;
+  /** The member's Multi-listing package (api.get_my_slot_package). */
+  slotPackage?: FoundationMySlotPackage | null;
   now?: Date;
 }) {
   const room = individual.limit - individual.held - individual.pending;
-  const renewable = individual.verified
-    ? slots.filter((slot) => slot.individual && slot.renewable)
-    : [];
+  const pkg = slotPackage?.package ?? null;
+  // While a package runs (until its last 7 days) Individual slots are closed.
+  const closed = Boolean(slotPackage?.individual_blocked_until);
+  const packageGrants = new Set(pkg?.grants ?? []);
+  const moving = new Set(pkg?.posts.filter((post) => post.moving).map((post) => post.id) ?? []);
+  const packageRoom =
+    pkg && pkg.state === "active" ? Math.max(0, pkg.places - pkg.posts.length) : 0;
+  const listed = slots.filter((slot) => !packageGrants.has(slot.id));
+  const renewable =
+    individual.verified && !closed
+      ? listed.filter((slot) => slot.individual && slot.renewable)
+      : [];
   return (
     <div className="space-y-5">
+      {pkg ? <MySlotPackage slotPackage={pkg} now={now} /> : null}
+      {pkg ? (
+        <h2 className="font-display text-lg font-bold text-foreground">Individual slots</h2>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-muted/60 px-4 py-3.5">
         <p className="text-sm text-muted-foreground">
           <span className="font-display text-2xl font-bold text-foreground">{individual.held}</span>{" "}
@@ -80,7 +102,7 @@ export function MySlots({
             <Button asChild variant="outline" className="h-11 rounded-full">
               <Link href="/verification">Finish my ID review</Link>
             </Button>
-          ) : buyHref && room > 0 ? (
+          ) : buyHref && room > 0 && !closed ? (
             <Button asChild variant="trust-verified" className="h-11 rounded-full">
               <Link href={buyHref}>
                 <Plus aria-hidden="true" className="h-4 w-4" />
@@ -91,20 +113,23 @@ export function MySlots({
         </div>
       </div>
 
-      {slots.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border p-5 text-sm text-muted-foreground">
-          No slots yet. Your first post is free for 7 days once your ID review is accepted.
-        </p>
+      {listed.length === 0 ? (
+        pkg ? null : (
+          <p className="rounded-2xl border border-dashed border-border p-5 text-sm text-muted-foreground">
+            No slots yet. Your first post is free for 7 days once your ID review is accepted.
+          </p>
+        )
       ) : (
         <ul className="space-y-3" aria-label="Your slots">
-          {slots.map((slot) => {
+          {listed.map((slot) => {
             const Icon = SOURCE[slot.source].icon;
             const ended = slot.state === "ended";
             const upcoming = slot.state === "upcoming";
             const empty = Math.max(0, slot.places - slot.posts.length);
-            const canRenew = individual.verified && slot.individual && slot.renewable;
+            const canRenew = individual.verified && !closed && slot.individual && slot.renewable;
             const opensLater =
               individual.verified &&
+              !closed &&
               slot.individual &&
               !slot.renewable &&
               slot.renew_opens_at !== null &&
@@ -132,7 +157,7 @@ export function MySlots({
                             ? `Starts ${formatSaLongDate(slot.starts_at)}`
                             : `Ends ${formatSaLongDate(slot.ends_at)}`}
                       </p>
-                      {slot.renewed_until ? (
+                      {slot.renewed_until && slot.renewals.length > 0 ? (
                         <p className="text-xs font-medium text-brand-green-700 dark:text-brand-gold-300">
                           {`Renewed until ${formatSaLongDate(slot.renewed_until)}`}
                         </p>
@@ -159,9 +184,17 @@ export function MySlots({
                       >
                         {post.title ?? "Untitled post"}
                       </Link>
-                      {ended && post.deletes_at ? (
+                      {moving.has(post.id) ? (
+                        <span className="text-xs font-medium text-brand-green-700 dark:text-brand-gold-300">
+                          Moving into your package
+                        </span>
+                      ) : ended && post.deletes_at ? (
                         <span className="text-xs text-muted-foreground">
                           {`Hidden; kept until ${formatSaLongDate(post.deletes_at)}`}
+                        </span>
+                      ) : !ended && slot.individual && packageRoom > 0 ? (
+                        <span className="text-xs text-muted-foreground">
+                          Moves to a free package slot when it ends
                         </span>
                       ) : null}
                     </li>
@@ -195,6 +228,12 @@ export function MySlots({
           })}
         </ul>
       )}
+      {closed && listed.length > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Individual slots run to their own end dates. New ones can&apos;t be bought while your
+          package is active.
+        </p>
+      ) : null}
     </div>
   );
 }

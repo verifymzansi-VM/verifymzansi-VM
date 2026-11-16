@@ -1,7 +1,7 @@
 {
   "description": "Fingerprint of the production (foundation) schema rebuilt from this repository: platform-prelude.sql, candidate.sql, baseline-supplement.sql and updates/*.sql in filename order. Produced by `pnpm db:foundation:replay -- --write` with database/foundation/fingerprint.sql. CI fails when the replay differs.",
   "productionCheck": {
-    "capturedOn": "2026-11-14",
+    "capturedOn": "2026-11-16",
     "method": "Read-only catalogue capture of production, same query formats. table_grants returns no row in production or in the replay (no table privileges for the API roles), so it is listed as matching without a fingerprint.",
     "matching": [
       "function_bodies",
@@ -19,19 +19,19 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261114093742_renew_slots_early.sql",
+    "matchedThroughUpdate": "20261114154823_slot_packages.sql",
     "matchedFingerprints": {
       "column_grants": "11724f805587a82326eae936e0200f0c",
-      "columns": "db814b172912f87e30806baf81d66543",
-      "constraints": "355a0278983f883749c00bc0b984db89",
+      "columns": "e55ab1842d7f74de01274b47d708ece4",
+      "constraints": "f29a9c79098c60fc9b62df35d3ad9527",
       "event_triggers": "821f7d069c595c075754fad9309136ac",
-      "function_bodies": "949290b42ace24291f743c74cae6730b",
-      "function_grants": "17e255740438ebfb6bd588df3fded93b",
-      "function_metadata": "b3875014fbb98844f30be9f6444f96b9",
-      "indexes": "2d4a590d42cbbc1945320466ec70fd4c",
+      "function_bodies": "5b3e8506e36928b2eeded01d3ecf7260",
+      "function_grants": "b3ddaf87473dce8e24697ae0f3b9f517",
+      "function_metadata": "99fada3a5cb71c34f2c0351da9f2700f",
+      "indexes": "a44a9c160e3686ff10d9ac1f98c912a7",
       "policies": "2c1b773d5ffe29f172271087b1f36e04",
-      "row_level_security": "5e49482710e27dd124302c3e4d11ed4f",
-      "triggers": "c12ca215785a1b62ce1ad8ee59b9ff69"
+      "row_level_security": "41cf131c70e9c1698c69209efa22b2a9",
+      "triggers": "abc6d169ce1ad81e57a81286b12d8607"
     },
     "pendingApplication": [
       "20261116194000_phone_in_use_before_sms.sql"
@@ -41,7 +41,7 @@
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 73,
+  "updateCount": 74,
   "lastUpdate": "20261116194000_phone_in_use_before_sms.sql",
   "categories": {
     "column_grants": {
@@ -49,48 +49,48 @@
       "fingerprint": "11724f805587a82326eae936e0200f0c"
     },
     "columns": {
-      "items": 1258,
-      "fingerprint": "db814b172912f87e30806baf81d66543"
+      "items": 1269,
+      "fingerprint": "e55ab1842d7f74de01274b47d708ece4"
     },
     "constraints": {
-      "items": 1119,
-      "fingerprint": "355a0278983f883749c00bc0b984db89"
+      "items": 1129,
+      "fingerprint": "f29a9c79098c60fc9b62df35d3ad9527"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 921,
-      "fingerprint": "7c15373b8fa2d79acbffc3be8457b13d"
+      "items": 942,
+      "fingerprint": "a388d973e8e724da42868c076331bf54"
     },
     "function_grants": {
-      "items": 699,
-      "fingerprint": "17e255740438ebfb6bd588df3fded93b"
+      "items": 705,
+      "fingerprint": "b3ddaf87473dce8e24697ae0f3b9f517"
     },
     "function_metadata": {
-      "items": 921,
-      "fingerprint": "b3875014fbb98844f30be9f6444f96b9"
+      "items": 942,
+      "fingerprint": "99fada3a5cb71c34f2c0351da9f2700f"
     },
     "indexes": {
-      "items": 504,
-      "fingerprint": "2d4a590d42cbbc1945320466ec70fd4c"
+      "items": 510,
+      "fingerprint": "a44a9c160e3686ff10d9ac1f98c912a7"
     },
     "policies": {
       "items": 1,
       "fingerprint": "2c1b773d5ffe29f172271087b1f36e04"
     },
     "row_level_security": {
-      "items": 137,
-      "fingerprint": "5e49482710e27dd124302c3e4d11ed4f"
+      "items": 139,
+      "fingerprint": "41cf131c70e9c1698c69209efa22b2a9"
     },
     "schema_grants": {
       "items": 7,
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 115,
-      "fingerprint": "c12ca215785a1b62ce1ad8ee59b9ff69"
+      "items": 117,
+      "fingerprint": "abc6d169ce1ad81e57a81286b12d8607"
     }
   }
 }

@@ -21,10 +21,10 @@ const PROPOSAL_HREF = "/contact?topic=organisation_proposal";
  */
 export function EnterprisePricing({
   plans,
-  checkoutEnabled,
   retailFromCents,
 }: {
   plans: EnterpriseCatalogPlan[];
+  /** Kept for callers; packages are bought on the checkout only while on sale. */
   checkoutEnabled: boolean;
   /** Cheapest retail price, shown on the Individual card; null when no retail offer is live. */
   retailFromCents: number | null;
@@ -125,7 +125,7 @@ export function EnterprisePricing({
 
       <div id="multi-listing-prices" className="mt-6 scroll-mt-28 space-y-3">
         <h3 className="font-display text-lg font-bold text-foreground">Multi-listing plans</h3>
-        <MultiListingPlans plans={plans} checkoutEnabled={checkoutEnabled} />
+        <MultiListingPlans />
       </div>
 
       <div id="programme-prices" className="mt-4 scroll-mt-28 space-y-4">

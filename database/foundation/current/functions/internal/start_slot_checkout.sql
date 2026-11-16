@@ -32,6 +32,12 @@ begin
   if fingerprint is null then
     raise exception 'your ID review must be accepted before you buy a slot' using errcode='PT412';
   end if;
+  -- E3 (20261114154823): while the person's Multi-listing package runs, posts
+  -- use its places; Individual slots can be bought again in its last 7 days.
+  if internal.slot_package_blocks_individual(fingerprint, actor) then
+    raise exception 'Individual slots cannot be bought while your Multi-listing package runs'
+      using errcode='PT409', detail='package_active';
+  end if;
   total := plan.price_cents * p_slots;
   if total > 1000000 then
     raise exception 'orders above R10,000 are paid by invoice' using errcode='PT413';

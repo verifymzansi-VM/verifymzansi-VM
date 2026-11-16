@@ -12,7 +12,10 @@ begin
   if p_action not in ('add','remove') or length(btrim(coalesce(p_email,''))) not between 3 and 254 then
     raise exception 'invalid member command' using errcode='22023'; end if;
   select * into ent from private.entitlements e where e.id=p_entitlement_id and e.owner_id=actor for update;
+  -- A Multi-listing package's team belongs to the package, not to one of its
+  -- grants (20261114154823): it is never added here.
   if not found or ent.slot_capacity<2 or ent.source<>'retail_paid' or ent.status<>'active' or ent.ends_at<=clock_timestamp()
+    or ent.package_id is not null
     or internal.current_verified_identity(actor) is null then raise exception 'shared plan unavailable' using errcode='42501'; end if;
   select u.id into target from auth.users u where lower(u.email)=lower(btrim(p_email))
     and u.email_confirmed_at is not null and u.id<>actor

@@ -184,6 +184,13 @@ const MEMBER_REFUSALS: ReadonlyMap<
       "Paying this invoice would give you more Individual slots than your limit, counting payments still open. Finish or cancel an open payment, or wait until a slot ends.",
     ],
   ],
+  [
+    "package_active",
+    [
+      409,
+      "While your Multi-listing package runs, new posts use its slots: Individual slots cannot be bought until its last 7 days.",
+    ],
+  ],
 ]);
 
 type RpcResult = PromiseLike<{
@@ -371,6 +378,13 @@ const STAFF_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new
   [
     "slot_limit_reached",
     [409, "The person would hold more slots than their limit. Raise the limit first."],
+  ],
+  [
+    "package_active",
+    [
+      409,
+      "The person's Multi-listing package runs: Individual slots cannot be sold until its last 7 days.",
+    ],
   ],
   [
     "invoice_vat_status_changed",
