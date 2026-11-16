@@ -14,10 +14,13 @@ describe("Multi-listing package rules (P4a)", () => {
     expect(packageTotalCents(100, 30)).toBe(1_000_000);
     expect(packageTotalCents(16, 180)).toBe(960_000);
   });
-  it("pays online up to R10,000 for each term (100, 33 and 16 slots)", () => {
-    expect([30, 90, 180].map((days) => packageOnlineMaxSlots(days as 30 | 90 | 180))).toEqual([
-      100, 33, 16,
-    ]);
+  it("pays online up to Ozow's maximum for each term, and at most 100 slots", () => {
+    const terms = [30, 90, 180] as const;
+    // R1,300 (today's maximum): 13, 4 and 2 slots.
+    expect(terms.map((days) => packageOnlineMaxSlots(days, 130_000))).toEqual([13, 4, 2]);
+    expect(terms.map((days) => packageOnlineMaxSlots(days, 1_000_000))).toEqual([100, 33, 16]);
+    // Unknown limit: only the 100-slot rule (the database still applies the limit).
+    expect(terms.map((days) => packageOnlineMaxSlots(days))).toEqual([100, 100, 100]);
   });
   it.each([
     [null, 30, "invalid"],
@@ -32,8 +35,16 @@ describe("Multi-listing package rules (P4a)", () => {
     [17, 180, "invoice"],
     [250, 30, "invoice"],
     [251, 30, "too_large"],
-  ] as const)("%s slots for %s days: %s", (slots, days, kind) => {
-    expect(packageQuote(slots, days).kind).toBe(kind);
+  ] as const)("%s slots for %s days: %s (limit R10,000)", (slots, days, kind) => {
+    expect(packageQuote(slots, days, 1_000_000).kind).toBe(kind);
+  });
+  it.each([
+    [13, 30, "online"],
+    [14, 30, "invoice"],
+    [5, 90, "invoice"],
+    [5, 180, "invoice"],
+  ] as const)("%s slots for %s days: %s (limit R1,300)", (slots, days, kind) => {
+    expect(packageQuote(slots, days, 130_000).kind).toBe(kind);
   });
   it("reads only whole numbers from the box", () => {
     expect(parseSlotCount("25")).toBe(25);

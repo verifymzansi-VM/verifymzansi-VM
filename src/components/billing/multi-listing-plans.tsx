@@ -28,10 +28,17 @@ export function packageCheckoutHref(slots: number, days: PackageTerm) {
  * Multi-listing packages (roadmap P4a, the owner's decisions of 14 November
  * 2026): R100 per slot per 30 days, from 5 slots, for 30, 90 or 180 days. One
  * card per common size with the total for each term; any number from 5 can be
- * typed at checkout. Totals above R10,000 (or above 100 slots) are paid by
- * invoice at the same price.
+ * typed at checkout. Totals above Ozow's maximum for one payment (or above 100
+ * slots) are paid by invoice at the same price. The maximum is known only for
+ * a signed-in member (`onlineMaxCents`); otherwise the checkout says so.
  */
-export function MultiListingPlans({ headingLevel = "h3" }: { headingLevel?: "h2" | "h3" }) {
+export function MultiListingPlans({
+  headingLevel = "h3",
+  onlineMaxCents = null,
+}: {
+  headingLevel?: "h2" | "h3";
+  onlineMaxCents?: number | null;
+}) {
   const Heading = headingLevel;
   return (
     <div className="space-y-4">
@@ -49,7 +56,7 @@ export function MultiListingPlans({ headingLevel = "h3" }: { headingLevel?: "h2"
             </p>
             <ul className="mt-3 flex flex-1 flex-col gap-2">
               {PACKAGE_TERMS.map((days) => {
-                const quote = packageQuote(slots, days);
+                const quote = packageQuote(slots, days, onlineMaxCents);
                 if (quote.kind !== "online" && quote.kind !== "invoice") return null;
                 const price = formatPlanPrice(quote.totalCents);
                 return (
@@ -82,7 +89,7 @@ export function MultiListingPlans({ headingLevel = "h3" }: { headingLevel?: "h2"
         ))}
       </ul>
       <p className="text-xs leading-5 text-muted-foreground">
-        {`${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days, from ${PACKAGE_MIN_SLOTS} slots; type any number at checkout. All slots end together. Prepaid; does not renew automatically. Refunds only where the law requires — see Terms. Every poster is ID reviewed and every post reviewed before it goes live. Up to R10,000 is paid online; more than that, or more than ${PACKAGE_MAX_ONLINE_SLOTS} slots, by invoice at the same price.`}{" "}
+        {`${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days, from ${PACKAGE_MIN_SLOTS} slots; type any number at checkout. All slots end together. Prepaid; does not renew automatically. Refunds only where the law requires — see Terms. Every poster is ID reviewed and every post reviewed before it goes live. Paid online up to the most our payment provider, Ozow, accepts in one payment; more than that, or more than ${PACKAGE_MAX_ONLINE_SLOTS} slots, by invoice at the same price.`}{" "}
         <a
           href={`mailto:${BILLING_EMAIL}?subject=Invoice%20for%20a%20Multi-listing%20package`}
           className="font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-green-300"

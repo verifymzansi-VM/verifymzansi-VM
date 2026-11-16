@@ -218,6 +218,38 @@ try {
   );
 
   await check(
+    "a package above the limit is bought by invoice; 100 slots stays the other rule",
+    () => {
+      // The 30- and 90-day package terms of 20261114154823_slot_packages.sql (R100 per slot per 30 days).
+      const K30 = "5b0f4c1e-2a7d-4c43-9b51-7e0d3f6a9c11";
+      const K90 = "8c3e1a52-6f0b-4d29-a7c4-2b9e5d1f7a33";
+      const pkg = (owner, plan, slots, cents) =>
+        member(owner, `select api.start_package_checkout('${plan}',${slots},${cents},true);`);
+      q(
+        "update private.slot_package_sales set on_sale=true,changed_at=now(),reason='Fixture: switched for the checks';"
+      );
+      try {
+        const nandi = verified("limit-nandi");
+        // 13 slots for 30 days: R1,300 exactly, online.
+        assert.equal(json(pkg(nandi, K30, 13, 130000)).amount_cents, "130000");
+        const zola = verified("limit-zola");
+        fails(
+          pkg(zola, K30, 14, 140000),
+          "PT413",
+          /online payment limit of 130000 cents are paid by invoice/
+        );
+        // 5 slots for 90 days: R1,500, by invoice.
+        fails(pkg(zola, K90, 5, 150000), "PT413", /package_invoice_required|paid by invoice/);
+        assert.equal(payments(zola), 0);
+      } finally {
+        q(
+          "update private.slot_package_sales set on_sale=false,changed_at=now(),reason='Fixture: switched back';"
+        );
+      }
+    }
+  );
+
+  await check(
     "invoice Pay now above the limit is refused (bank transfer only); at or below it starts",
     () => {
       const lerato = verified("limit-lerato");

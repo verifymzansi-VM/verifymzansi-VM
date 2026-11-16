@@ -2176,7 +2176,7 @@ in one setting; the Terms say so.
 
 ### 1. The limit and posting-v5 published: `20261116211438_online_payment_limit.sql`
 
-It needs `20261114154823_slot_packages.sql` (the three function bodies it
+It needs `20261114154823_slot_packages.sql` (the four function bodies it
 replaces, with that update's package check, are checked by md5 and it refuses
 with 55000 otherwise) and `posting-v4` current. It only adds: no API command,
 argument or grant is removed or changed.
@@ -2190,8 +2190,11 @@ argument or grant is removed or changed.
   setting with PT413, detail `online_payment_above_limit` (before: above
   1,000,000 cents, R10,000, without a detail). A total exactly at the setting is
   accepted. Nothing else in them changes. The Multi-listing package checkout
-  (`internal.start_package_checkout`) keeps its own rule for now (above 100
-  slots or R10,000 by invoice).
+  (`internal.start_package_checkout`, full body) uses the same setting instead
+  of R10,000: a package above it is bought by invoice (PT413
+  `package_invoice_required`, as before); more than 100 slots stays by invoice.
+  With R1,300 that means at most 13 slots for 30 days online, and every 90- or
+  180-day package by invoice.
 - **Invoice "Pay now".** `internal.start_invoice_payment` (full body) refuses an
   invoice whose total is above the setting with the same PT413
   `online_payment_above_limit`, before writing anything, so it is paid by bank

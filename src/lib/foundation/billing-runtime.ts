@@ -231,7 +231,7 @@ const PACKAGE_CHECKOUT_REFUSALS: Readonly<
   ],
   PT413: [
     400,
-    "Packages above 100 slots or R10,000 are paid by invoice. Email billing@verifymzansi.com to ask for one.",
+    "Packages of more than 100 slots, or above what Ozow accepts in one payment, are paid by invoice. Email billing@verifymzansi.com to ask for one.",
     "INVOICE_REQUIRED",
   ],
   PT428: [409, "The price changed. Check the total and try again.", "PRICE_CHANGED"],

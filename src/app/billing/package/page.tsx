@@ -2,7 +2,10 @@ import { notFound } from "next/navigation";
 import { PackageCheckout, type PackageCheckoutBlock } from "./package-checkout";
 import { readPackagesOnSale } from "@/lib/foundation/slot-package-offer";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
-import { readFoundationMySlotPackage } from "@/lib/foundation/billing-runtime";
+import {
+  readFoundationMySlotPackage,
+  readFoundationPaymentLimits,
+} from "@/lib/foundation/billing-runtime";
 import { isPackageTerm, PACKAGE_MAX_SLOTS, PACKAGE_MIN_SLOTS } from "@/lib/billing/slot-packages";
 import { createLogger } from "@/lib/utils/logger";
 import { logDegradedRead } from "@/lib/utils/request-failure";
@@ -27,6 +30,18 @@ async function packageBlock(): Promise<PackageCheckoutBlock | null> {
   }
 }
 
+/** The most one online (Ozow) payment may be; null when it cannot be read
+ * (signed out included): the database still refuses above it. */
+async function onlineMax(): Promise<number | null> {
+  try {
+    return (await readFoundationPaymentLimits((await readFoundationServerSession()).api))
+      .onlineMaxCents;
+  } catch (error) {
+    logDegradedRead(log, "Package payment limit unavailable", error);
+    return null;
+  }
+}
+
 /**
  * The Multi-listing checkout (roadmap P4a). Hidden (not found) while packages
  * are not on sale: the owner's switch in the database, off until business
@@ -46,13 +61,14 @@ export default async function PackageCheckoutPage({
       ? typed
       : 25;
   const term = Number(days);
-  const block = await packageBlock();
+  const [block, onlineMaxCents] = await Promise.all([packageBlock(), onlineMax()]);
   return (
     <PackageCheckout
       terms={offer.plans.map((plan) => ({ planId: plan.id, days: plan.term_days }))}
       initialSlots={initialSlots}
       initialDays={isPackageTerm(term) ? term : 30}
       block={block}
+      onlineMaxCents={onlineMaxCents}
     />
   );
 }

@@ -4696,7 +4696,10 @@
     },
     {
       "name": "start_package_checkout",
-      "updates": ["updates/20261114154823_slot_packages.sql"],
+      "updates": [
+        "updates/20261114154823_slot_packages.sql",
+        "updates/20261116211438_online_payment_limit.sql"
+      ],
       "arguments": [
         {
           "name": "p_plan_id",
@@ -4726,7 +4729,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Caller-bound Multi-listing package quote: only while the owner's sales switch is on; a package term on sale; a typed number of slots, 5 to 100 online (more by invoice, at most 250), R100 per slot per 30 days and at most R10,000; an accepted ID review; the server total equal to the total shown; the 'my slots start now' cooling-off consent recorded in the payment; no package of the account that has not ended. One payment with one line holding every slot; one package order open at a time (the same order continued, another cancelled when never sent to Ozow, otherwise returned)."
+      "authority": "Caller-bound Multi-listing package quote: only while the owner's sales switch is on; a package term on sale; a typed number of slots, 5 to 100 online (more by invoice, at most 250), R100 per slot per 30 days and at most internal.online_payment_max_cents() (the most Ozow accepts in one payment); an accepted ID review; the server total equal to the total shown; the 'my slots start now' cooling-off consent recorded in the payment; no package of the account that has not ended. One payment with one line holding every slot; one package order open at a time (the same order continued, another cancelled when never sent to Ozow, otherwise returned)."
     },
     {
       "name": "get_slot_package_offer",

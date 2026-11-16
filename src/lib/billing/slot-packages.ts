@@ -10,12 +10,6 @@ export const PACKAGE_MIN_SLOTS = 5;
 /** At most this many slots are bought online; more by invoice. */
 export const PACKAGE_MAX_ONLINE_SLOTS = 100;
 
-/**
- * Packages keep their own R10,000 online rule (package_invoice_required in
- * internal.start_package_checkout); the owner's 16 November 2026 decision
- * removed it for Individual slots only. Follow-up: Ozow's maximum for packages.
- */
-export const PACKAGE_ONLINE_LIMIT_CENTS = 1_000_000;
 /** The most slots one business can hold for now (staff review capacity). */
 export const PACKAGE_MAX_SLOTS = 250;
 /** R100 per slot per 30 days. */
@@ -42,12 +36,16 @@ export function packageTotalCents(slots: number, days: PackageTerm) {
   return PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS * slots * (days / 30);
 }
 
-/** The most slots that can be paid online for this term (R10,000 or less). */
-export function packageOnlineMaxSlots(days: PackageTerm) {
-  return Math.min(
-    PACKAGE_MAX_ONLINE_SLOTS,
-    Math.floor(PACKAGE_ONLINE_LIMIT_CENTS / packageTotalCents(1, days))
-  );
+/**
+ * The most slots that can be paid online for this term: at most 100, and a
+ * total within the most Ozow accepts in one payment (`onlineMaxCents`, the
+ * database's one setting, api.get_payment_limits). Unknown (null), only the
+ * 100-slot rule applies here; the database still refuses above the limit.
+ */
+export function packageOnlineMaxSlots(days: PackageTerm, onlineMaxCents: number | null = null) {
+  return onlineMaxCents === null
+    ? PACKAGE_MAX_ONLINE_SLOTS
+    : Math.min(PACKAGE_MAX_ONLINE_SLOTS, Math.floor(onlineMaxCents / packageTotalCents(1, days)));
 }
 
 export type PackageQuote =
@@ -59,12 +57,16 @@ export type PackageQuote =
 
 /** What the typed number buys: nothing below 5 or above 250, online up to
  * the term's online maximum, otherwise by invoice. */
-export function packageQuote(slots: number | null, days: PackageTerm): PackageQuote {
+export function packageQuote(
+  slots: number | null,
+  days: PackageTerm,
+  onlineMaxCents: number | null = null
+): PackageQuote {
   if (slots === null || !Number.isSafeInteger(slots) || slots < 1) return { kind: "invalid" };
   if (slots < PACKAGE_MIN_SLOTS) return { kind: "too_small" };
   if (slots > PACKAGE_MAX_SLOTS) return { kind: "too_large" };
   const totalCents = packageTotalCents(slots, days);
-  return slots <= packageOnlineMaxSlots(days)
+  return slots <= packageOnlineMaxSlots(days, onlineMaxCents)
     ? { kind: "online", totalCents }
     : { kind: "invoice", totalCents };
 }
