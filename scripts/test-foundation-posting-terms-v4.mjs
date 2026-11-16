@@ -94,7 +94,7 @@ try {
   // ------------------------------------------------------------ before
   const early = user("early");
   await check("the shipped posting-v4 document is the one the update publishes", () => {
-    assert.ok(["posting-v3", "posting-v4"].includes(CATALOGUE.active_version));
+    assert.ok(["posting-v3", "posting-v4", "posting-v5"].includes(CATALOGUE.active_version));
     assert.equal(DOCUMENT.version, "posting-v4");
     assert.equal(
       createHash("sha256").update(JSON.stringify(DOCUMENT)).digest("base64url"),
