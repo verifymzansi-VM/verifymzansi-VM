@@ -14,6 +14,11 @@ begin
     raise exception 'active subject required' using errcode='42501'; end if;
   if p_phone is null or p_phone !~ '^\+27[0-9]{9}$' or p_hash is null or length(p_hash) not between 16 and 512 then
     raise exception 'valid phone challenge required' using errcode='22023'; end if;
+  -- Refuse a number another account has proved before any SMS is paid for.
+  -- Finalization's unique index stays the authority for concurrent attempts.
+  if exists(select 1 from private.verification_phone_proofs f
+      where f.phone=p_phone and f.revoked_at is null and f.owner_id<>p_owner) then
+    raise exception 'phone number in use' using errcode='PT409'; end if;
   -- New delivery invalidates older pending challenges for this subject.
   update private.verification_phone_challenges set expires_at=greatest(created_at+interval '1 microsecond',clock_timestamp())
     where owner_id=p_owner and verified_at is null and expires_at>clock_timestamp();

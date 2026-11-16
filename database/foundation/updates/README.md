@@ -1928,6 +1928,65 @@ tax years after confirmation, keeps a recent transfer, and no delete works
 outside the job; the audit trail; the grants; and that the rollback refuses once
 an invoice was issued.
 
+## A number already verified by someone else gets no SMS, 16 November 2026
+
+`20261116194000_phone_in_use_before_sms.sql` is pending.
+
+Until now, a member who entered a phone number that another account had already
+verified was sent an SMS code (which we pay for), typed it in, and only then was
+told the number was linked to another account: the check lived only in
+`internal.finalize_verification_phone`, through the unique index on active phone
+proofs.
+
+From this update, `internal.create_verification_phone_challenge` (same
+signature, grants and owner) refuses such a number with PT409 "phone number in
+use" before it stores a challenge or expires the member's open code, so the
+website sends no SMS and says at once "This phone number is already linked to
+another account." The member's own active proof for the same number is not a
+refusal. The check is not a lock: the unique index at finalization stays the
+authority for two accounts that start on a free number at the same moment.
+
+It tells a signed-in member with a confirmed email whether a number is verified
+on some other account (never which one) without holding the phone; before, only
+someone who received the code learned it. That is the price of not paying for an
+SMS that can never succeed, and the source backend answered the same way. Every
+send request, refused or not, counts against the SMS limits (per account 5 an
+hour and 10 a day, per network 10 an hour and 30 a day), which bounds probing.
+
+No API command changes, so the order does not matter: the website release before
+this update shows its generic refusal for the new PT409 (still with no SMS), and
+the release with it works without the update (the number is then refused at the
+last step, as before).
+
+**Applying.**
+
+1. Run `../preflight/20261116194000_phone_in_use_before_sms.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "phone in use before sms: update not applied; active
+   phone proofs: N; open codes for a number in use: M" (any counts; open codes
+   expire within five minutes and are not changed).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "phone in use before sms: already applied; ...".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261116194000_phone_in_use_before_sms.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update's body is
+present, and puts back the earlier body byte for byte.
+
+`node --import tsx scripts/test-foundation-phone-in-use-before-sms.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: before
+the update a held number gets a code and is refused only at finalization; the
+preflight before and after, read only; the refusals with a drifted body and a
+premature rollback, changing nothing; apply, rollback and re-apply return the
+same fingerprints; afterwards a held number is refused before a challenge is
+stored and the member's open code stays usable; the holder may prove their own
+number again; a free number, and a number its holder released, still work;
+account and number validation still come first; and the grants, owner and
+settings are unchanged.
+
 ## Individual slots at R69, 12 November 2026
 
 `20261113002421_individual_slots_r69.sql` is not applied yet. It was first
@@ -3694,5 +3753,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   "update not applied", after "slot renewals: already applied; renewal payment
   lines: 0; renewals issued: 0; reminders queued: 0"; production fingerprint
   after it matched the full replay (except the known schema grant difference)
+- `20261116194000_phone_in_use_before_sms.sql`: pending
 
 <!-- applied-register:end -->

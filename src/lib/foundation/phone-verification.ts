@@ -21,7 +21,11 @@ const proof = z.strictObject({
 
 export class FoundationPhoneError extends Error {
   override name = "FoundationPhoneError";
-  constructor(readonly status: 400 | 403 | 409 | 429 | 503) {
+  constructor(
+    readonly status: 400 | 403 | 409 | 429 | 503,
+    /** Set when the number is held by another account's active proof. */
+    readonly phoneInUse = false
+  ) {
     super("Phone verification could not be completed");
   }
 }
@@ -64,7 +68,10 @@ function failed(error: { code?: string }) {
 /** Caller id comes only from the verified server account context. No code,
  * stored digest or recipient is ever returned to the browser. The separate
  * random key stays outside the database; a copied DB digest cannot test codes.
- * Delivery is attempted once. A failure never retries the SMS implicitly. */
+ * Delivery is attempted once. A failure never retries the SMS implicitly.
+ * SQL refuses (PT409) a number another account has already verified, before
+ * any challenge is stored, so no SMS is paid for a number that cannot be
+ * proved; the unique index at finalization stays the authority. */
 export async function issueFoundationPhoneChallenge(
   api: FoundationServiceApi,
   owner: string,
@@ -89,6 +96,8 @@ export async function issueFoundationPhoneChallenge(
     p_phone: parsed.data.phone,
     p_hash: hash,
   });
+  // Creating a challenge raises PT409 only for a number held by another account.
+  if (result.error?.code === "PT409") throw new FoundationPhoneError(409, true);
   if (result.error) failed(result.error);
   const created = foundationPhoneChallengeSchema.safeParse(result.data);
   if (!created.success) throw new FoundationPhoneError(503);

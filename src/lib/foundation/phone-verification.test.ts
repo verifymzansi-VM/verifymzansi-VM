@@ -118,6 +118,21 @@ it("does not retry failed delivery or expose a challenge as successfully deliver
   expect(deliver).toHaveBeenCalledTimes(1);
   expect(rpc).toHaveBeenCalledTimes(1);
 });
+it("sends no SMS for a number another account has verified", async () => {
+  rpc.mockResolvedValue({ data: null, error: { code: "PT409" } });
+  await expect(issued()).rejects.toMatchObject({ status: 409, phoneInUse: true });
+  expect(rpc).toHaveBeenCalledTimes(1);
+  expect(deliver).not.toHaveBeenCalled();
+});
+it.each([
+  ["42501", 403],
+  ["22023", 400],
+  ["unavailable", 503],
+] as const)("a %s refusal while creating a challenge sends no SMS", async (code, status) => {
+  rpc.mockResolvedValue({ data: null, error: { code } });
+  await expect(issued()).rejects.toMatchObject({ status, phoneInUse: false });
+  expect(deliver).not.toHaveBeenCalled();
+});
 it.each([
   ["PT409", 409],
   ["42501", 403],

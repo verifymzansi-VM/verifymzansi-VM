@@ -20,7 +20,7 @@ import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { otpVerifySchema } from "@/lib/validations/auth";
 import { saPhoneSchema } from "@/lib/validations/shared";
-import { normalizeSaPhone } from "@/lib/utils/phone";
+import { ACCOUNT_PHONE_IN_USE_ERROR, normalizeSaPhone } from "@/lib/utils/phone";
 import { z } from "zod";
 import {
   FOUNDATION_PHONE_CHALLENGE_COOKIE,
@@ -113,6 +113,8 @@ export async function handleFoundationPhoneRoute(
       return restoredForm ? { success: true, ...verified } : verified;
     },
     refusal(error) {
+      if (error instanceof FoundationPhoneError && error.phoneInUse)
+        return { status: 409, reason: "phone_in_use", error: ACCOUNT_PHONE_IN_USE_ERROR };
       const status =
         error instanceof FoundationPhoneError
           ? error.status
