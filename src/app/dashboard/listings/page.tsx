@@ -19,19 +19,12 @@ import {
   XCircle,
   Package,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
-import { getDataBackend } from "@/lib/data-backend";
 import {
   readFoundationServerSession,
   FoundationServerSessionError,
 } from "@/lib/foundation/server-session";
 import { readRestoredPostManager } from "@/lib/foundation/post-manager";
-import { tryCreateAdminClient } from "@/lib/supabase/admin";
-import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
-import {
-  PlanAdministratorsCard,
-  type MultiListingPlanAdmins,
-} from "@/components/dashboard/plan-administrators-card";
+import { PlanAdministratorsCard } from "@/components/dashboard/plan-administrators-card";
 import { ExpiryCountdownBadge } from "@/components/dashboard/expiry-countdown-badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -47,11 +40,7 @@ import { UrgentButton } from "@/components/listings/urgent-button";
 import { ResubmitButton } from "@/components/listings/resubmit-button";
 import { DeletePostButton } from "@/components/listings/delete-post-button";
 import { ContentLifecycleButton } from "@/components/listings/content-lifecycle-button";
-import {
-  SlotUsageCard,
-  parseSlotUsage,
-  type SlotUsageEntry,
-} from "@/components/dashboard/slot-usage-card";
+import { SlotUsageCard } from "@/components/dashboard/slot-usage-card";
 import { PostAccountButton } from "@/components/listings/post-account-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AreaFilter } from "@/components/dashboard/area-filter";
@@ -60,10 +49,6 @@ import {
   canFeatured as checkCanFeatured,
   canUrgent as checkCanUrgent,
 } from "@/lib/services/entitlements";
-import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
-import { getActivePlanTierForArea } from "@/lib/services/plan-tier";
-import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
-import { queryWithSelectFallbacks } from "@/lib/utils/marketplace-select-fallback";
 import {
   AREA_LABELS,
   PROMOTION_TYPE_LABELS,
@@ -73,10 +58,6 @@ import {
 } from "@/types/enums";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
-
-const LISTING_DASHBOARD_FALLBACK_FIELDS = ["view_count", "featured_until", "urgent_until"] as const;
-const BUSINESS_DASHBOARD_FALLBACK_FIELDS = ["view_count", "expires_at"] as const;
-const PROMOTION_DASHBOARD_FALLBACK_FIELDS = ["view_count", "urgent_until", "expires_at"] as const;
 
 export const metadata = {
   title: "My posts",
@@ -134,77 +115,6 @@ type BusinessDashboardRow = {
 
 type ContentSource = DashboardItem["source"];
 
-/** Posts whose active slot is funded by an organisation sponsorship. */
-async function loadSponsoredContentIds(
-  admin: ReturnType<typeof tryCreateAdminClient>,
-  userId: string
-): Promise<Set<string>> {
-  if (!admin) return new Set();
-  try {
-    const { data } = await admin
-      .from("slot_assignments")
-      .select("content_id, slot_entitlements!inner(source)")
-      .eq("owner_id", userId)
-      .is("released_at", null)
-      .eq("slot_entitlements.source", "SPONSORED_ORGANISATION_MEMBER");
-    return new Set(((data ?? []) as Array<{ content_id: string }>).map((row) => row.content_id));
-  } catch {
-    return new Set();
-  }
-}
-
-/** Multi-listing plans the member bought, with their second administrator. */
-async function loadPlanAdmins(
-  admin: ReturnType<typeof tryCreateAdminClient>,
-  userId: string
-): Promise<MultiListingPlanAdmins[]> {
-  if (!admin) return [];
-  try {
-    const { data } = await admin
-      .from("slot_entitlements")
-      .select("id, slot_capacity, expires_at, slot_entitlement_members(user_id)")
-      .eq("user_id", userId)
-      .eq("source", "ENTERPRISE_PLAN")
-      .in("status", ["active", "pending_verification"])
-      .gt("expires_at", new Date().toISOString());
-    const rows = (data ?? []) as Array<{
-      id: string;
-      slot_capacity: number;
-      expires_at: string;
-      slot_entitlement_members: Array<{ user_id: string }> | null;
-    }>;
-    return await Promise.all(
-      rows.map(async (row) => ({
-        entitlementId: row.id,
-        slotCapacity: row.slot_capacity,
-        expiresAt: row.expires_at,
-        admins: await Promise.all(
-          (row.slot_entitlement_members ?? []).map(async (member) => {
-            const summary = await getAuthAdminUserSummary(admin, member.user_id);
-            return { name: summary.accountName, email: summary.email };
-          })
-        ),
-      }))
-    );
-  } catch {
-    return [];
-  }
-}
-
-/** Slot summary is informational: a failure must never block the dashboard. */
-async function loadSlotUsage(
-  admin: ReturnType<typeof tryCreateAdminClient>,
-  userId: string
-): Promise<SlotUsageEntry[]> {
-  if (!admin) return [];
-  try {
-    const result = await admin.rpc("slot_usage_summary", { p_user: userId });
-    return parseSlotUsage(result?.data ?? null);
-  } catch {
-    return [];
-  }
-}
-
 function dashboardActionLabel(source: ContentSource) {
   return source === "business"
     ? "business profile"
@@ -223,33 +133,6 @@ function sortByNewest(items: DashboardItem[]) {
 
 function toDashboardItems(input: unknown): DashboardItem[] {
   return Array.isArray(input) ? (input as DashboardItem[]) : [];
-}
-
-function getViewCountForItem(
-  item: DashboardItem,
-  viewCounts: Record<ContentSource, Map<string, number>>
-) {
-  const summaryCount = viewCounts[item.source].get(item.id);
-  const tableCount = item.view_count;
-
-  if (typeof summaryCount === "number" && typeof tableCount === "number") {
-    return Math.max(summaryCount, tableCount);
-  }
-
-  return summaryCount ?? tableCount ?? null;
-}
-
-async function getOwnerViewCountMap(
-  admin: ReturnType<typeof tryCreateAdminClient>,
-  targetType: ContentSource,
-  targetIds: string[]
-) {
-  if (targetIds.length === 0) {
-    return new Map<string, number>();
-  }
-
-  const result = await getOptionalContentViewCountMap(admin, targetType, targetIds);
-  return result.data;
 }
 
 function getEditHref(item: DashboardItem) {
@@ -368,156 +251,19 @@ export default async function ListingsPage({
         }
       : null;
 
-  let nativeSession: Awaited<ReturnType<typeof readFoundationServerSession>> | null = null;
-  if (getDataBackend() === "foundation") {
-    try {
-      nativeSession = await readFoundationServerSession();
-    } catch (error) {
-      if (error instanceof FoundationServerSessionError && error.status === 401) redirect("/login");
-      throw error;
-    }
-  }
-  const supabase = nativeSession ? null : await createClient();
-  const {
-    data: { user },
-  } = nativeSession ? { data: { user: nativeSession.user } } : await supabase!.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-    return null;
+  let nativeSession: Awaited<ReturnType<typeof readFoundationServerSession>>;
+  try {
+    nativeSession = await readFoundationServerSession();
+  } catch (error) {
+    if (error instanceof FoundationServerSessionError && error.status === 401) redirect("/login");
+    throw error;
   }
 
-  const nativeData = nativeSession
-    ? await readRestoredPostManager(nativeSession.api, nativeSession.account.account_id)
-    : null;
-  const [listingOwnerColumn, businessOwnerColumn, promotionOwnerColumn] = nativeData
-    ? (["owner_id", "owner_id", "owner_id"] as const)
-    : await Promise.all([
-        getOwnerColumn(supabase!, "listings"),
-        getOwnerColumn(supabase!, "businesses"),
-        getOwnerColumn(supabase!, "promotions"),
-      ]);
-
-  const listingSelectAttempts = [
-    {
-      select:
-        "id, title, status, price_cents, category, created_at, area, photos, view_count, boost_until, featured_until, urgent_until, expires_at, status_reason",
-      omittedFields: [] as const,
-    },
-    {
-      select:
-        "id, title, status, price_cents, category, created_at, area, photos, boost_until, featured_until, urgent_until, expires_at, status_reason",
-      omittedFields: ["view_count"] as const,
-    },
-    {
-      select:
-        "id, title, status, price_cents, category, created_at, area, photos, view_count, boost_until, featured_until, expires_at, status_reason",
-      omittedFields: ["urgent_until"] as const,
-    },
-    {
-      select:
-        "id, title, status, price_cents, category, created_at, area, photos, view_count, boost_until, expires_at, status_reason",
-      omittedFields: ["featured_until", "urgent_until"] as const,
-    },
-    {
-      select:
-        "id, title, status, price_cents, category, created_at, area, photos, boost_until, featured_until, expires_at, status_reason",
-      omittedFields: ["view_count", "urgent_until"] as const,
-    },
-    {
-      select:
-        "id, title, status, price_cents, category, created_at, area, photos, boost_until, expires_at, status_reason",
-      omittedFields: ["view_count", "featured_until", "urgent_until"] as const,
-    },
-  ] as const;
-
-  const businessSelectAttempts = [
-    {
-      select:
-        "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, view_count, boost_until, featured_until, urgent_until, expires_at, status_reason",
-      omittedFields: [] as const,
-    },
-    {
-      select:
-        "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, boost_until, featured_until, urgent_until, expires_at, status_reason",
-      omittedFields: ["view_count"] as const,
-    },
-    {
-      select:
-        "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, view_count, boost_until, featured_until, urgent_until, status_reason",
-      omittedFields: ["expires_at"] as const,
-    },
-    {
-      select:
-        "id, business_name, status, category, created_at, area, cover_photo, logo_url, gallery_photos, boost_until, featured_until, urgent_until, status_reason",
-      omittedFields: ["view_count", "expires_at"] as const,
-    },
-  ] as const;
-
-  const [listingResponse, businessResponse, promotionResponse] = nativeData
-    ? nativeData.responses
-    : await Promise.all([
-        queryWithSelectFallbacks({
-          attempts: listingSelectAttempts,
-          fallbackFields: LISTING_DASHBOARD_FALLBACK_FIELDS,
-          runQuery: (selectClause) =>
-            applyOwnerFilter(
-              supabase!
-                .from("listings")
-                .select(selectClause)
-                .order("created_at", { ascending: false }),
-              listingOwnerColumn,
-              user.id
-            ),
-        }),
-        queryWithSelectFallbacks({
-          attempts: businessSelectAttempts,
-          fallbackFields: BUSINESS_DASHBOARD_FALLBACK_FIELDS,
-          runQuery: (selectClause) =>
-            applyOwnerFilter(
-              supabase!
-                .from("businesses")
-                .select(selectClause)
-                .order("created_at", { ascending: false }),
-              businessOwnerColumn,
-              user.id
-            ),
-        }),
-        queryWithSelectFallbacks({
-          attempts: [
-            {
-              select:
-                "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, urgent_until, expires_at, start_date, end_date, status_reason, promotion_type",
-              omittedFields: [] as const,
-            },
-            {
-              select:
-                "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, urgent_until, start_date, end_date, status_reason, promotion_type",
-              omittedFields: ["expires_at"] as const,
-            },
-            {
-              select:
-                "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, expires_at, start_date, end_date, status_reason, promotion_type",
-              omittedFields: ["urgent_until"] as const,
-            },
-            {
-              select:
-                "id, title, status, price_cents, category, created_at, published_at, photos, view_count, boost_until, featured_until, start_date, end_date, status_reason, promotion_type",
-              omittedFields: ["urgent_until", "expires_at"] as const,
-            },
-          ] as const,
-          fallbackFields: PROMOTION_DASHBOARD_FALLBACK_FIELDS,
-          runQuery: (selectClause) =>
-            applyOwnerFilter(
-              supabase!
-                .from("promotions")
-                .select(selectClause)
-                .order("created_at", { ascending: false }),
-              promotionOwnerColumn,
-              user.id
-            ),
-        }),
-      ]);
+  const nativeData = await readRestoredPostManager(
+    nativeSession.api,
+    nativeSession.account.account_id
+  );
+  const [listingResponse, businessResponse, promotionResponse] = nativeData.responses;
 
   const baseItems = [
     ...toDashboardItems(listingResponse.data).map((listing) => ({
@@ -573,38 +319,12 @@ export default async function ListingsPage({
     })),
   ];
 
-  const engagementAdmin = nativeData ? null : tryCreateAdminClient();
-  const [listingViewCounts, businessViewCounts, promotionViewCounts] = await Promise.all([
-    getOwnerViewCountMap(
-      engagementAdmin,
-      "listing",
-      baseItems.filter((item) => item.source === "listing").map((item) => item.id)
-    ),
-    getOwnerViewCountMap(
-      engagementAdmin,
-      "business",
-      baseItems.filter((item) => item.source === "business").map((item) => item.id)
-    ),
-    getOwnerViewCountMap(
-      engagementAdmin,
-      "promotion",
-      baseItems.filter((item) => item.source === "promotion").map((item) => item.id)
-    ),
-  ]);
-
-  const viewCounts: Record<ContentSource, Map<string, number>> = {
-    listing: listingViewCounts,
-    business: businessViewCounts,
-    promotion: promotionViewCounts,
-  };
-
-  const sponsoredIds =
-    nativeData?.sponsoredIds ?? (await loadSponsoredContentIds(engagementAdmin, user.id));
+  const sponsoredIds = nativeData.sponsoredIds;
   const items = sortByNewest(
     baseItems
       .map((item) => ({
         ...item,
-        view_count: getViewCountForItem(item, viewCounts),
+        view_count: item.view_count ?? null,
         sponsored: sponsoredIds.has(item.id),
       }))
       .map((item) => applyDashboardExpiryStatus(item))
@@ -630,30 +350,13 @@ export default async function ListingsPage({
   const filteredExpired = byArea(expired);
   const filteredRejected = byArea(rejected);
 
-  const [mzansiTier, mzansiBusinessTier, promotionsTier] = nativeData
-    ? ([
-        nativeData.tiers.MZANSI_MARKET,
-        nativeData.tiers.MZANSI_BUSINESS,
-        nativeData.tiers.PROMOTIONS_EVENTS,
-      ] as const)
-    : await Promise.all([
-        getActivePlanTierForArea(user.id, "MZANSI_MARKET"),
-        getActivePlanTierForArea(user.id, "MZANSI_BUSINESS"),
-        getActivePlanTierForArea(user.id, "PROMOTIONS_EVENTS"),
-      ]);
-
   const planTiers: Record<MarketplaceArea, PlanTier> = {
-    MZANSI_MARKET: mzansiTier,
-    MZANSI_BUSINESS: mzansiBusinessTier,
-    PROMOTIONS_EVENTS: promotionsTier,
+    MZANSI_MARKET: nativeData.tiers.MZANSI_MARKET,
+    MZANSI_BUSINESS: nativeData.tiers.MZANSI_BUSINESS,
+    PROMOTIONS_EVENTS: nativeData.tiers.PROMOTIONS_EVENTS,
   };
 
-  const [slotUsage, planAdmins] = nativeData
-    ? ([nativeData.slotUsage, nativeData.planAdmins] as const)
-    : await Promise.all([
-        loadSlotUsage(engagementAdmin, user.id),
-        loadPlanAdmins(engagementAdmin, user.id),
-      ]);
+  const { slotUsage, planAdmins } = nativeData;
 
   const hasAnyItems = items.length > 0;
   const areaLabel = areaFilter ? AREA_LABELS[areaFilter] : null;

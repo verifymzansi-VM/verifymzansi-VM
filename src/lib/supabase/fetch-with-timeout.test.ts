@@ -1,10 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTimeoutFetch } from "./fetch-with-timeout";
 
-vi.mock("@/lib/supabase/playwright-mode", () => ({
-  isPlaywrightSupabaseStubMode: () => false,
-}));
-
 function hangingFetch() {
   return vi.fn(
     (_input: RequestInfo | URL, init?: RequestInit) =>

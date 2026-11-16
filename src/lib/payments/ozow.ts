@@ -3,12 +3,13 @@ import { Webhook } from "svix";
 import { env } from "@/lib/config/env";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { testCopyCheckout } from "./checkout-origins";
+import { toOzowReferenceField } from "./ozow-reference";
 import { createLogger } from "@/lib/utils/logger";
 import { fetchWithoutRedirects } from "@/lib/utils/fetch-without-redirects";
 
 const log = createLogger("Ozow");
 
-export class OzowConfigurationError extends Error {
+class OzowConfigurationError extends Error {
   readonly code = "ozow_configuration_error" as const;
 
   constructor(
@@ -21,7 +22,7 @@ export class OzowConfigurationError extends Error {
   }
 }
 
-export class OzowAuthenticationError extends Error {
+class OzowAuthenticationError extends Error {
   readonly code = "ozow_authentication_error" as const;
 
   constructor(
@@ -34,7 +35,7 @@ export class OzowAuthenticationError extends Error {
   }
 }
 
-export class OzowProviderError extends Error {
+class OzowProviderError extends Error {
   readonly code = "ozow_provider_error" as const;
 
   constructor(
@@ -56,7 +57,6 @@ type CachedToken = {
 const MAX_CACHED_TOKENS = 20;
 const cachedTokens = new Map<string, CachedToken>();
 const pendingTokenFetches = new Map<string, Promise<string>>();
-const OZOW_REFERENCE_FIELD_MAX_LENGTH = 14;
 const DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE = "payments";
 
 const OZOW_ALLOWED_HOSTS = {
@@ -101,7 +101,7 @@ function getOzowEnvironment(): "staging" | "production" {
   return env("OZOW_ENV") === "production" ? "production" : "staging";
 }
 
-function getOzowBaseUrlContext(): {
+export function getOzowBaseUrlContext(): {
   baseUrl: string;
   baseUrlHost: string;
   ozowEnv: "staging" | "production";
@@ -290,21 +290,48 @@ function shouldFallbackToMockHostedPayment(error: unknown): boolean {
   );
 }
 
-async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<string> {
+/**
+ * The One API client credentials a token is requested with. Payments use the
+ * payment key (OZOW_CLIENT_ID/OZOW_CLIENT_SECRET); refunds use their own key
+ * (src/lib/payments/ozow-refunds.ts), so the payment key never carries the
+ * refunds scope. Tokens are cached per client and scope.
+ */
+export type OzowClientCredentials = {
+  clientId: string | undefined;
+  clientSecret: string | undefined;
+  /** Setting names, for the "missing" log line only (never the values). */
+  names: readonly [string, string];
+};
+
+function paymentCredentials(): OzowClientCredentials {
+  return {
+    clientId: env("OZOW_CLIENT_ID"),
+    clientSecret: env("OZOW_CLIENT_SECRET"),
+    names: ["OZOW_CLIENT_ID", "OZOW_CLIENT_SECRET"],
+  };
+}
+
+export async function getOzowAccessToken(
+  scope: string,
+  forceRefresh = false,
+  credentials: OzowClientCredentials = paymentCredentials()
+): Promise<string> {
   const normalizedScope = normalizeScope(scope);
-  const cachedToken = cachedTokens.get(normalizedScope);
+  // The cache key names the client (never its secret) and the scope.
+  const cacheKey = `${credentials.clientId ?? ""}\u0000${normalizedScope}`;
+  const cachedToken = cachedTokens.get(cacheKey);
   if (!forceRefresh && cachedToken && cachedToken.expiresAt > Date.now() + 5_000) {
     return cachedToken.accessToken;
   }
 
-  // Coalesce concurrent requests for the same scope into a single fetch
-  const pendingKey = forceRefresh ? `${normalizedScope}:force` : normalizedScope;
+  // Coalesce concurrent requests for the same client and scope into a single fetch
+  const pendingKey = forceRefresh ? `${cacheKey}:force` : cacheKey;
   const pending = pendingTokenFetches.get(pendingKey);
   if (pending) {
     return pending;
   }
 
-  const fetchPromise = fetchOzowAccessToken(normalizedScope);
+  const fetchPromise = fetchOzowAccessToken(normalizedScope, cacheKey, credentials);
   pendingTokenFetches.set(pendingKey, fetchPromise);
 
   try {
@@ -314,12 +341,15 @@ async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<
   }
 }
 
-async function fetchOzowAccessToken(normalizedScope: string): Promise<string> {
+async function fetchOzowAccessToken(
+  normalizedScope: string,
+  cacheKey: string,
+  credentials: OzowClientCredentials
+): Promise<string> {
   const { baseUrl, baseUrlHost, ozowEnv } = getOzowBaseUrlContext();
-  const clientId = env("OZOW_CLIENT_ID");
-  const clientSecret = env("OZOW_CLIENT_SECRET");
+  const { clientId, clientSecret } = credentials;
   if (!clientId || !clientSecret) {
-    const missing = [!clientId && "OZOW_CLIENT_ID", !clientSecret && "OZOW_CLIENT_SECRET"]
+    const missing = [!clientId && credentials.names[0], !clientSecret && credentials.names[1]]
       .filter(Boolean)
       .join(", ");
     log.error("Ozow credentials missing", { missing, ozowEnv, baseUrlHost });
@@ -391,7 +421,7 @@ async function fetchOzowAccessToken(normalizedScope: string): Promise<string> {
       if (firstKey !== undefined) cachedTokens.delete(firstKey);
     }
   }
-  cachedTokens.set(normalizedScope, {
+  cachedTokens.set(cacheKey, {
     accessToken,
     // An invalid lifetime is usable for this request only; never guess an expiry.
     expiresAt: Date.now() + (Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn * 1000 : 0),
@@ -438,10 +468,6 @@ export function fromOzowMerchantReference(merchantReference: string): string | n
   }
   const m = merchantReference;
   return `${m.slice(0, 8)}-${m.slice(8, 12)}-${m.slice(12, 16)}-${m.slice(16, 20)}-${m.slice(20)}`;
-}
-
-export function toOzowReferenceField(value: string): string {
-  return value.replace(/[^A-Za-z0-9 -]/g, "").slice(0, OZOW_REFERENCE_FIELD_MAX_LENGTH);
 }
 
 export async function createOzowHostedPayment(
@@ -737,7 +763,20 @@ export function verifyOzowWebhookSignature(body: string, headers: Pick<Headers, 
     log.error("OZOW_WEBHOOK_SECRET is not configured — all webhooks will be rejected");
     return false;
   }
+  return verifyOzowSignature(body, headers, secret);
+}
 
+/**
+ * Ozow's Svix signature over the raw body with one webhook's own secret (each
+ * Ozow webhook subscription has its own). False when anything is missing,
+ * stale (more than five minutes either way) or wrong.
+ */
+export function verifyOzowSignature(
+  body: string,
+  headers: Pick<Headers, "get">,
+  secret: string
+): boolean {
+  if (!secret) return false;
   const signed = readOzowSignatureHeaders(headers);
   if (!signed) {
     return false;

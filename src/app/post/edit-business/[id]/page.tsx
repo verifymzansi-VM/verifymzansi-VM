@@ -88,6 +88,7 @@ import {
   parseHoursValue,
 } from "@/components/ui/operating-hours-input";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
+import { VIDEO_GUIDANCE } from "@/lib/media/video-length";
 
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
@@ -1400,7 +1401,7 @@ export default function EditBusinessPage() {
                 <MediaUpload
                   id="edit-business-video-input"
                   label={`Video${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                  description="Auto-plays muted on your profile. Max 50 MB."
+                  description={`Auto-plays muted on your profile. ${VIDEO_GUIDANCE}`}
                   maxFiles={1}
                   files={newPromoVideoFile}
                   existing={

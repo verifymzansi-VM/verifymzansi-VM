@@ -14,11 +14,6 @@
 export type AddonKind = "boost" | "featured" | "urgent";
 export type AddonTarget = "listing" | "business" | "promotion";
 
-export const ADDON_UNAVAILABLE_CODE = "addon_unavailable";
-
-export const ADDON_UNAVAILABLE_MESSAGE =
-  "Boost and Featured are only offered for events. Urgent is still available for this post.";
-
 export function isAddonOffered(
   kind: AddonKind,
   target: AddonTarget,

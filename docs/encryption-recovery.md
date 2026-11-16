@@ -1,10 +1,11 @@
 # Encryption and verification recovery
 
-The upload route, storage service, KYC engine and `workers/kyc-encryptor.ts`
-must agree on the encrypted document format and key interpretation. Run
-`pnpm test:kyc` for Node/worker compatibility, malformed/truncated ciphertext,
-authenticated evidence access and upload compensation tests. Never use a real
-customer document for an audit fixture or expose a key in evidence.
+The upload route, storage service and KYC engine must agree on the encrypted
+document format and key interpretation. Documents written by the former
+`kyc-encryptor` Worker (removed; it used 100 000 key-derivation iterations)
+still decrypt. Run `pnpm test:kyc` for format compatibility, malformed/truncated
+ciphertext, authenticated evidence access and upload compensation tests. Never
+use a real customer document for an audit fixture or expose a key in evidence.
 
 Key availability validation happens before storage. Review encrypted R2 writes,
 AES authentication failures and the cleanup journal when a database or risk

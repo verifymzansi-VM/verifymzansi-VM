@@ -36,7 +36,6 @@ export async function POST(request: Request) {
     // These direct references are inlined by Next.js. A matching runtime URL
     // alone cannot prove that the browser bundle was rebuilt for this project.
     const compiledPublic = {
-      backend: process.env.NEXT_PUBLIC_DATA_BACKEND === "foundation",
       url: process.env.NEXT_PUBLIC_SUPABASE_URL === "https://gntzjtuncsyefujajmjy.supabase.co",
       publishable:
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ===

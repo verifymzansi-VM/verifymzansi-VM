@@ -48,10 +48,6 @@ const date = new Intl.DateTimeFormat("en-ZA", {
   timeZone: "Africa/Johannesburg",
 });
 
-export function parseSlotUsage(raw: unknown): SlotUsageEntry[] {
-  return Array.isArray(raw) ? (raw as SlotUsageEntry[]) : [];
-}
-
 /** Active posting slots: capacity, usage, activations and expiry per plan. */
 export function SlotUsageCard({ entries }: { entries: SlotUsageEntry[] }) {
   const current = entries.filter((entry) => entry.status === "active");

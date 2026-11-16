@@ -70,7 +70,8 @@ export function triggersOnPullRequestToMain(text) {
  * Lists the check-run names a workflow produces on a pull request. Jobs whose
  * job-level `if:` mentions `github.event_name == 'push'` (or another non-PR
  * event) are push-only and excluded. Matrix jobs expand to "name (value)" for
- * a single inline-list dimension, which is all this repository uses.
+ * a single inline-list dimension, which is all this repository uses, or to
+ * the name itself with the value filled in when it names `${{ matrix.* }}`.
  */
 export function pullRequestCheckNames(text) {
   const lines = text.split(/\r?\n/);

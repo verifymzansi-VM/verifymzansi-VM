@@ -12,8 +12,8 @@ const mockSupabase = {
   removeChannel: mockRemoveChannel,
 };
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: vi.fn(() => mockSupabase),
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: vi.fn(() => mockSupabase),
 }));
 
 mockChannel.mockReturnValue({
@@ -96,32 +96,5 @@ describe("useRealtime", () => {
       }),
       expect.any(Function)
     );
-  });
-
-  it("uses separate channel topics for duplicate subscriptions", () => {
-    const onEvent = vi.fn();
-    renderHook(() =>
-      useRealtime({
-        table: "notifications",
-        event: "INSERT",
-        filterColumn: "user_id",
-        filterValue: "user-123",
-        onEvent,
-      })
-    );
-    renderHook(() =>
-      useRealtime({
-        table: "notifications",
-        event: "INSERT",
-        filterColumn: "user_id",
-        filterValue: "user-123",
-        onEvent,
-      })
-    );
-
-    const topics = mockChannel.mock.calls.map(([topic]) => topic);
-    expect(topics[0]).toContain("realtime:notifications:INSERT:user_id=eq.user-123");
-    expect(topics[1]).toContain("realtime:notifications:INSERT:user_id=eq.user-123");
-    expect(topics[0]).not.toBe(topics[1]);
   });
 });

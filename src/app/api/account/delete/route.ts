@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { SHOW_ACCOUNT_DELETION } from "@/lib/hidden-features";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -182,6 +183,8 @@ async function removeUserStoredFiles(
 }
 
 export async function POST(request: NextRequest) {
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_ACCOUNT_DELETION) return NextResponse.json({ error: "Not found" }, { status: 404 });
   try {
     const sameOriginFailure = enforceSameOriginMutation(request, log);
     if (sameOriginFailure) return sameOriginFailure;

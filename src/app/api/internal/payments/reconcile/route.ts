@@ -1,70 +1,68 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getDataBackend } from "@/lib/data-backend";
 import {
   paymentCheckFailureReason,
   runFoundationPaymentReconciliation,
 } from "@/lib/foundation/billing-runtime";
-import { reconcileOzowPayment } from "@/lib/payments/reconciliation";
-import type { PaymentRecordShape } from "@/lib/payments/types";
+import { runOzowRefundJobs } from "@/lib/foundation/ozow-refunds";
+import { createFoundationServiceApi } from "@/lib/foundation/service-api";
+import {
+  createOzowRefundClient,
+  ozowApiRefundsEnabled,
+  ozowRefundKeyConfigured,
+} from "@/lib/payments/ozow-refunds";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("OzowReconciliation");
 
+/** Refunds through Ozow (null while the refund key is not set): approved
+ * refunds whose own send did not happen and unknown sends due a retry with the
+ * same Idempotency-Key (only while switched on), and refunds without a final
+ * answer read back from Ozow (also while switched off). Never throws: a failure is logged and counted. */
+async function runRefundJobs() {
+  // Reading refunds back needs only the refund key; sending needs the switch.
+  if (!ozowRefundKeyConfigured()) return null;
+  try {
+    return await runOzowRefundJobs(
+      createFoundationServiceApi(),
+      createOzowRefundClient(),
+      undefined,
+      ozowApiRefundsEnabled()
+    );
+  } catch (error) {
+    log.error("Ozow refund jobs failed", {
+      error: error instanceof Error ? error.name : "unknown",
+    });
+    return { attempted: 0, checked: 0, failures: 1 };
+  }
+}
+
 export async function POST(request: Request) {
-  // Companion worker WORKER_API_KEY already matches the app's rate limiter key.
-  const secret =
-    getDataBackend() === "foundation"
-      ? process.env.INTERNAL_JOBS_SECRET
-      : process.env.RATE_LIMITER_API_KEY;
+  const secret = process.env.INTERNAL_JOBS_SECRET;
   const expected = Buffer.from(secret ? `Bearer ${secret}` : "");
   const received = Buffer.from(request.headers.get("authorization") || "");
   if (!secret || expected.length !== received.length || !timingSafeEqual(expected, received)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (getDataBackend() === "foundation") {
-    try {
-      // Per-payment failures are logged with their payment number and reason
-      // and listed in `errors` (payment numbers and reason codes only).
-      const result = await runFoundationPaymentReconciliation();
-      return NextResponse.json(result, {
-        status: result.failures ? 503 : 200,
-        headers: { "Cache-Control": "no-store" },
-      });
-    } catch (error) {
-      log.error("Payment status job failed", { reason: paymentCheckFailureReason(error) });
-      return NextResponse.json({ error: "Payment reconciliation unavailable" }, { status: 503 });
-    }
-  }
-  const admin = createAdminClient();
-  // Small rotating batch; last-check ordering prevents pending bank transactions
-  // from starving other rows. Failed/expired rows recover missed late successes.
-  const { data, error } = await admin
-    .from("payments")
-    .select(
-      "id,user_id,area,amount_cents,status,provider,provider_payment_id,provider_reference,provider_data,created_at"
-    )
-    .eq("provider", "ozow")
-    .in("status", ["pending", "failed", "expired"])
-    .not("provider_payment_id", "is", null)
-    .gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-    .order("provider_data->>reconciliation_checked_at", { ascending: true, nullsFirst: true })
-    .limit(10);
-  if (error)
+  let result: Awaited<ReturnType<typeof runFoundationPaymentReconciliation>>;
+  try {
+    // Per-payment failures are logged with their payment number and reason
+    // and listed in `errors` (payment numbers and reason codes only).
+    result = await runFoundationPaymentReconciliation();
+  } catch (error) {
+    log.error("Payment status job failed", { reason: paymentCheckFailureReason(error) });
+    // Refunds still go out and are still followed when the payment check fails.
+    await runRefundJobs();
     return NextResponse.json({ error: "Payment reconciliation unavailable" }, { status: 503 });
-  const results = await Promise.allSettled(
-    (data || []).map((payment) => reconcileOzowPayment(payment as PaymentRecordShape, admin))
-  );
-  const failures = results.filter((result) => result.status === "rejected");
-  for (const failure of failures) {
-    if (failure.status === "rejected")
-      log.error("Payment reconciliation failed", {
-        error: failure.reason instanceof Error ? failure.reason.message : "Unknown error",
-      });
   }
-  return NextResponse.json(
-    { checked: results.length - failures.length, failures: failures.length },
-    { status: failures.length ? 503 : 200, headers: { "Cache-Control": "no-store" } }
-  );
+  const refunds = await runRefundJobs();
+  // Refund job failures are reported on their own (logged, and counted in
+  // refundJobs): they never fail the payment check or its heartbeat. Refunds
+  // without an answer are read again on the next run and in the daily check.
+  if (refunds?.failures) log.error("Ozow refund jobs had failures", { failures: refunds.failures });
+  // While API refunds are off the answer is exactly as before.
+  return NextResponse.json(refunds ? { ...result, refundJobs: refunds } : result, {
+    status: result.failures ? 503 : 200,
+    headers: { "Cache-Control": "no-store" },
+  });
 }

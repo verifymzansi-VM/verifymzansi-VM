@@ -14,11 +14,10 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import { requireStaff } from "@/lib/auth/require-staff";
-import { listQueue, QUEUE_TABS, type QueueTab } from "@/lib/business-verification/admin-queries";
-import { countMyClaims, getClaimsForItems, getMyClaimedItems } from "@/lib/services/queue-claims";
+import { QUEUE_TABS, type QueueTab } from "@/lib/business-verification/admin-queries";
+import { countMyClaims, getClaimsForItems } from "@/lib/services/queue-claims";
 import { cn } from "@/lib/utils";
 import { createLogger } from "@/lib/utils/logger";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readStaffSeenQueue } from "@/lib/foundation/business-seen";
 
@@ -48,25 +47,14 @@ export default async function AdminBusinessVerificationPage({
     ? (requested as QueueTab)
     : "review";
 
-  let data: Awaited<ReturnType<typeof listQueue>>;
+  let data: Awaited<ReturnType<typeof readStaffSeenQueue>>;
   let myClaims = 0;
   try {
-    if (getDataBackend() === "foundation") {
-      const { api } = await readFoundationServerSession();
-      [data, myClaims] = await Promise.all([
-        readStaffSeenQueue(api, user.id, tab),
-        countMyClaims(user.id, "business_kyc"),
-      ]);
-    } else {
-      const mine = await getMyClaimedItems(user.id, "business_kyc");
-      [data, myClaims] = await Promise.all([
-        listQueue(
-          tab,
-          mine.map((m) => m.id)
-        ),
-        countMyClaims(user.id, "business_kyc"),
-      ]);
-    }
+    const { api } = await readFoundationServerSession();
+    [data, myClaims] = await Promise.all([
+      readStaffSeenQueue(api, user.id, tab),
+      countMyClaims(user.id, "business_kyc"),
+    ]);
   } catch (error) {
     createLogger("AdminBusinessVerificationPage").error("Queue read failed", {
       error: error instanceof Error ? error.message : "unknown",

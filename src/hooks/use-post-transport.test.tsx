@@ -2,7 +2,6 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, it, expect, vi } from "vitest";
 import { usePostTransport } from "./use-post-transport";
 beforeEach(() => {
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue({
@@ -42,10 +41,4 @@ it("requires the actually loaded revision for edits without inventing consent", 
   expect(() => result.current.captureRevision({ revision: "8" })).toThrow(
     "revision could not be loaded"
   );
-});
-it("keeps the isolated original-interface fixtures independent of native services", () => {
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "source");
-  const { result } = renderHook(() => usePostTransport());
-  expect(result.current.fields()).toEqual({});
-  expect(fetch).not.toHaveBeenCalled();
 });

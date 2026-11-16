@@ -7,6 +7,32 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
 
+/** jsdom cannot read real video headers; each test states the picked clip's length. */
+const pickedLength = vi.hoisted(() => ({ seconds: 30 as number | null }));
+vi.mock("@/lib/media/video-length-client", async () => {
+  const { videoLengthProblem } = await import("@/lib/media/video-length");
+  return {
+    checkPickedVideoLength: vi.fn(async (_file: Blob, limit: number) =>
+      videoLengthProblem(pickedLength.seconds, limit)
+    ),
+  };
+});
+
+function EventVideoHarness({ maxVideoSeconds }: { maxVideoSeconds?: number }) {
+  const [files, setFiles] = useState<File[]>([]);
+  return (
+    <MediaUpload
+      id="event-video-upload"
+      label="Event video"
+      files={files}
+      onChange={setFiles}
+      accept="video/*"
+      maxFiles={1}
+      maxVideoSeconds={maxVideoSeconds}
+    />
+  );
+}
+
 function Harness() {
   const [files, setFiles] = useState<File[]>([]);
 
@@ -41,8 +67,63 @@ function SingleVideoHarness() {
 describe("MediaUpload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    pickedLength.seconds = 30;
     global.URL.createObjectURL = vi.fn(() => "blob:preview-url");
     global.URL.revokeObjectURL = vi.fn();
+  });
+
+  describe("video length (M4.4)", () => {
+    const pick = (name = "clip.mp4") => {
+      fireEvent.change(screen.getByLabelText("Event video"), {
+        target: { files: [new File(["video"], name, { type: "video/mp4" })] },
+      });
+    };
+
+    it("accepts 119 s and refuses 121 s with the real length in the message", async () => {
+      pickedLength.seconds = 121;
+      render(<EventVideoHarness />);
+      pick("long.mp4");
+      expect(
+        await screen.findByText('"long.mp4": Your video is 2 min 1 s; the limit is 2 minutes.')
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Remove long.mp4" })).not.toBeInTheDocument();
+
+      pickedLength.seconds = 119;
+      pick("ok.mp4");
+      expect(await screen.findByRole("button", { name: "Remove ok.mp4" })).toBeInTheDocument();
+    });
+
+    it("uses the event limit: 59 s accepted, 61 s refused", async () => {
+      pickedLength.seconds = 61;
+      render(<EventVideoHarness maxVideoSeconds={60} />);
+      pick("event.mp4");
+      expect(
+        await screen.findByText('"event.mp4": Your video is 1 min 1 s; the limit is 1 minute.')
+      ).toBeInTheDocument();
+
+      pickedLength.seconds = 59;
+      pick("short.mp4");
+      expect(await screen.findByRole("button", { name: "Remove short.mp4" })).toBeInTheDocument();
+    });
+
+    it("refuses a video whose length cannot be read", async () => {
+      pickedLength.seconds = null;
+      render(<EventVideoHarness />);
+      pick("unknown.mp4");
+      expect(
+        await screen.findByText(
+          "\"unknown.mp4\": We couldn't read this video's length; please export it as MP4."
+        )
+      ).toBeInTheDocument();
+    });
+
+    it("accepts a phone original over 50 MB so it can be converted before upload", async () => {
+      render(<EventVideoHarness />);
+      const original = new File(["video"], "phone.mp4", { type: "video/mp4" });
+      Object.defineProperty(original, "size", { value: 120 * 1024 * 1024 });
+      fireEvent.change(screen.getByLabelText("Event video"), { target: { files: [original] } });
+      expect(await screen.findByRole("button", { name: "Remove phone.mp4" })).toBeInTheDocument();
+    });
   });
 
   it("normalizes extensionless mobile filenames before storing them in form state", async () => {

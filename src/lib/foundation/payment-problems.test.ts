@@ -25,14 +25,20 @@ beforeEach(() => {
 });
 
 describe("the reason list", () => {
-  const update = readdirSync("database/foundation/updates").find((name) =>
-    name.endsWith("_payment_problem_alerts.sql")
-  );
+  // The latest update that sets the list (the table constraint and the command).
+  const update = readdirSync("database/foundation/updates")
+    .filter((name) =>
+      readFileSync(`database/foundation/updates/${name}`, "utf8").includes(
+        "payment_problems_reason_check"
+      )
+    )
+    .sort()
+    .at(-1);
   const sql = readFileSync(`database/foundation/updates/${update}`, "utf8");
 
   it("is exactly the list the database accepts, in the table and in the command", () => {
-    const lists = [...sql.matchAll(/reason (?:not )?in \(([^)]*)\)/g)].map((match) =>
-      [...match[1].matchAll(/'([a-z_]+)'/g)].map((reason) => reason[1])
+    const lists = [...sql.matchAll(/(?<![a-z_.])(?:p_)?reason (?:not )?in \(([^)]*)\)/g)].map(
+      (match) => [...match[1].matchAll(/'([a-z_]+)'/g)].map((reason) => reason[1])
     );
     expect(lists).toHaveLength(2);
     for (const list of lists) expect(list).toEqual([...PAYMENT_PROBLEM_REASONS]);

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import VerificationPage from "./page";
 import { useSearchParams } from "next/navigation";
 import type { VerificationStatus } from "@/types/enums";
+import type * as HiddenFeatures from "@/lib/hidden-features";
 import {
   VERIFICATION_EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
   VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE,
@@ -39,6 +40,15 @@ vi.mock("next/link", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: mockToast }),
+}));
+
+// "Detect province and city" is hidden until it works; its tests switch it on.
+const hidden = vi.hoisted(() => ({ detect: false }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_LOCATION_DETECTION() {
+    return hidden.detect;
+  },
 }));
 
 vi.mock("@/components/layout/header", () => ({
@@ -128,6 +138,7 @@ describe("VerificationPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
+    hidden.detect = false;
     vi.stubGlobal(
       "URL",
       class MockURL extends OriginalURL {
@@ -1255,7 +1266,25 @@ describe("VerificationPage", () => {
     await screen.findByRole("button", { name: /Save location/i });
   }
 
+  it("hides location detection until it works; the list still saves", async () => {
+    await openLocationStep();
+    expect(
+      screen.queryByRole("button", { name: /Detect province and city/i })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Detection is approximate/i)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^Province$/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City$/i), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save location/i }));
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Location approved" })
+      )
+    );
+    expect(fetchCalls().some(([url]) => String(url).includes("location/detect"))).toBe(false);
+  });
+
   it("suggests province and city without submitting or requesting GPS", async () => {
+    hidden.detect = true;
     gpsResponse = jsonResponse({ detected: true, province: "Gauteng", city: "Johannesburg" });
     await openLocationStep();
     expect(screen.queryByLabelText(/Town \/ Suburb/i)).not.toBeInTheDocument();
@@ -1275,6 +1304,7 @@ describe("VerificationPage", () => {
   });
 
   it.each([200, 503])("allows manual selection when detection fails (%s)", async (status) => {
+    hidden.detect = true;
     gpsResponse = jsonResponse({ detected: false, province: null, city: null }, status);
     await openLocationStep();
     fireEvent.click(screen.getByRole("button", { name: /Detect province and city/i }));

@@ -26,7 +26,6 @@ import { dependencyAuditVerdict } from "./dependency-audit-policy";
 import { qualityRegressions } from "./lib/quality-policy";
 import { socialWatermarks } from "./lib/social-watermarks";
 import sharp from "sharp";
-import { scenariosFromReport } from "./lib/browser-report-scenarios";
 import { missingBuiltRoutes, REQUIRED_BUILT_ROUTES } from "./lib/built-routes.mjs";
 
 test("responsive CSS includes both mobile dialog docking and short-screen spacing", async () => {
@@ -48,46 +47,6 @@ test("responsive CSS includes both mobile dialog docking and short-screen spacin
   };
   assert.equal(mediaFor(".max-sm\\:bottom-0").params, "not all and (min-width: 640px)");
   assert.equal(mediaFor(".short\\:p-4").params, "(max-height: 820px)");
-});
-
-test("a Playwright JSON report gives one scenario row per test and project, with its last result", () => {
-  const report = {
-    suites: [
-      {
-        suites: [
-          {
-            specs: ["first title", "second title"].map((title, line) => ({
-              file: "e2e/foundation/sign-in.spec.ts",
-              line,
-              title,
-              tests: [
-                {
-                  status: "expected",
-                  projectName: "chromium",
-                  expectedStatus: "passed",
-                  results: [{ status: "failed" }, { status: "passed" }],
-                },
-                { status: "skipped", projectName: "mobile-chrome", expectedStatus: "skipped" },
-              ],
-            })),
-          },
-        ],
-      },
-    ],
-  };
-  const rows = scenariosFromReport(report);
-  assert.equal(rows.length, 4);
-  assert.deepEqual(rows[0], {
-    key: "e2e/foundation/sign-in.spec.ts:0:first title",
-    status: "expected",
-    file: "e2e/foundation/sign-in.spec.ts",
-    title: "first title",
-    project: "chromium",
-    expectedStatus: "passed",
-    resultStatus: "passed",
-  });
-  assert.equal(rows[1].resultStatus, "missing");
-  assert.deepEqual(scenariosFromReport({}), []);
 });
 
 test("the build must contain the payment, KYC, verification and pricing routes", () => {

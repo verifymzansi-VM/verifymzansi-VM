@@ -39,13 +39,10 @@ vi.mock("@/lib/auth/staff-mfa-guard", () => ({
   checkStaffApiMfa: vi.fn(async () => null),
 }));
 
-// Queue claims are enforced on every decision route. Route tests default to
-// an actor who holds the claim; src/lib/services/queue-claims.test.ts and
-// the claim assertions in route tests cover the real behaviour.
+// Queue screens read claims from the foundation. Page tests default to no
+// claims; src/lib/services/queue-claims.test.ts covers the real reads.
 vi.mock("@/lib/services/queue-claims", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  checkQueueClaim: vi.fn(async () => null),
-  releaseDecidedClaim: vi.fn(async () => undefined),
   getClaimsForItems: vi.fn(async () => ({})),
   countMyClaims: vi.fn(async () => 0),
   getMyClaimedItems: vi.fn(async () => []),

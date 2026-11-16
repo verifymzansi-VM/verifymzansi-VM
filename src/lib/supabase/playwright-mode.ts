@@ -40,20 +40,7 @@ export function isPlaywrightFoundationCopy(): boolean {
   if (typeof window !== "undefined" || process.env.ENVIRONMENT === "production") return false;
   return (
     isPlaywrightTestMode() &&
-    process.env.NEXT_PUBLIC_DATA_BACKEND === "foundation" &&
     process.env.FOUNDATION_PROJECT_REF === "local-foundation" &&
     /^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(process.env.FOUNDATION_SUPABASE_URL ?? "")
   );
-}
-
-export function isPlaywrightSupabaseStubMode(): boolean {
-  if (typeof window !== "undefined") {
-    return process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE === "stub" && isPlaywrightTestMode();
-  }
-
-  if (process.env.NODE_ENV === "production") {
-    return isExplicitE2eRuntime() && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub";
-  }
-
-  return process.env.PLAYWRIGHT_SUPABASE_MODE === "stub";
 }

@@ -619,48 +619,7 @@ const ADMIN_ROUTE_TARGETS: RouteTarget[] = [
     readySelectors: ["main"],
     titleIncludes: ["Role Management"],
   },
-  {
-    name: "admin-intelligence-users",
-    path: "/admin/intelligence/users",
-    scope: "admin",
-    readySelectors: ["main"],
-    titleIncludes: ["Users & Growth"],
-  },
-  {
-    name: "admin-intelligence-verification",
-    path: "/admin/intelligence/verification",
-    scope: "admin",
-    readySelectors: ["main"],
-    titleIncludes: ["Verification Metrics"],
-  },
-  {
-    name: "admin-intelligence-marketplace",
-    path: "/admin/intelligence/marketplace",
-    scope: "admin",
-    readySelectors: ["main"],
-    titleIncludes: ["Marketplace Health"],
-  },
-  {
-    name: "admin-intelligence-trends",
-    path: "/admin/intelligence/trends",
-    scope: "admin",
-    readySelectors: ["main"],
-    titleIncludes: ["Trend Analysis"],
-  },
-  {
-    name: "admin-intelligence-revenue",
-    path: "/admin/intelligence/revenue",
-    scope: "admin",
-    readySelectors: ["main"],
-    titleIncludes: ["Revenue & Costs"],
-  },
-  {
-    name: "admin-intelligence-operations",
-    path: "/admin/intelligence/operations",
-    scope: "admin",
-    readySelectors: ["main"],
-    titleIncludes: ["Ops Summary"],
-  },
+  // The Intelligence pages are hidden until they work (src/lib/hidden-features.ts).
 ];
 
 const BOUNDARY_CHECKS: BoundaryCheck[] = [

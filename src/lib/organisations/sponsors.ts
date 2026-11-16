@@ -1,18 +1,15 @@
 import "server-only";
-import { getDataBackend } from "@/lib/data-backend";
 import { restoredOrganisationDirectory } from "@/lib/foundation/marketplace-server";
 import { foundationMediaUrl } from "@/lib/foundation/public-cards";
 import { publicProvinceLabel } from "@/lib/foundation/marketplace-read";
-
-import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("Sponsors");
 
 /**
- * A Business Sponsor as returned by `public_sponsor_directory()`. That one
- * database function decides eligibility for the strip, the home section and
- * /sponsors, so the surfaces never disagree. `logo_url` is null unless written
+ * A Business Sponsor from the foundation organisation directory. That one
+ * read decides eligibility for the strip, the home section and /sponsors, so
+ * the surfaces never disagree. `logo_url` is null unless written
  * logo permission is on record.
  */
 export interface PublicSponsor {
@@ -39,29 +36,19 @@ export interface PublicSponsor {
  */
 export async function getPublicSponsors(): Promise<PublicSponsor[]> {
   try {
-    if (getDataBackend() === "foundation") {
-      const entries = await restoredOrganisationDirectory();
-      const sponsors = entries.map((entry): PublicSponsor | null => {
-        if (entry.programme_status !== "founding_trial" && entry.programme_status !== "active_paid")
-          return null;
-        return {
-          ...entry,
-          programme_status: entry.programme_status,
-          logo_url: foundationMediaUrl(entry.logo_object_key),
-          province: entry.province ? publicProvinceLabel(entry.province) : null,
-          places_available: null,
-        };
-      });
-      return sponsors.filter((row): row is PublicSponsor => row !== null);
-    }
-    const supabase = tryCreateAdminClient();
-    if (!supabase) return [];
-    const { data, error } = await supabase.rpc("public_sponsor_directory");
-    if (error) {
-      log.warn("Sponsor directory unavailable", { code: error.code });
-      return [];
-    }
-    return Array.isArray(data) ? (data as PublicSponsor[]) : [];
+    const entries = await restoredOrganisationDirectory();
+    const sponsors = entries.map((entry): PublicSponsor | null => {
+      if (entry.programme_status !== "founding_trial" && entry.programme_status !== "active_paid")
+        return null;
+      return {
+        ...entry,
+        programme_status: entry.programme_status,
+        logo_url: foundationMediaUrl(entry.logo_object_key),
+        province: entry.province ? publicProvinceLabel(entry.province) : null,
+        places_available: null,
+      };
+    });
+    return sponsors.filter((row): row is PublicSponsor => row !== null);
   } catch (error) {
     log.warn("Sponsor directory unavailable", {
       error: error instanceof Error ? error.message : "Unknown error",

@@ -24,7 +24,6 @@ const fontBody = Plus_Jakarta_Sans({
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { SessionHintProvider } from "@/components/providers/session-hint-provider";
 import { hasAuthSessionCookie } from "@/lib/supabase/auth-session-cookie";
-import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { PublicRuntimeConfigBridge } from "@/components/providers/public-runtime-config";
 import { VideoPlaybackProvider } from "@/contexts/video-playback-context";
 import { Toaster } from "@/components/ui/toaster";
@@ -252,8 +251,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Lets the header render its signed-in shell on the first paint instead of
   // swapping to it once the browser finishes its session lookup.
   const hasSessionCookie = hasAuthSessionCookie(
-    (await cookies()).getAll().map((cookie) => cookie.name),
-    isPlaywrightSupabaseStubMode()
+    (await cookies()).getAll().map((cookie) => cookie.name)
   );
 
   return (

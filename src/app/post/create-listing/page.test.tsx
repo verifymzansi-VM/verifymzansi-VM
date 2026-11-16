@@ -29,6 +29,12 @@ vi.mock("next/navigation", () => ({
   useSearchParams: vi.fn().mockReturnValue(new URLSearchParams()),
 }));
 
+// jsdom cannot read real video headers: the test clips are 30 s long.
+vi.mock("@/lib/media/video-length-client", () => ({
+  checkPickedVideoLength: vi.fn(async () => null),
+  readVideoLengthSeconds: vi.fn(async () => 30),
+}));
+
 vi.mock("@/hooks/use-toast", () => ({
   useToast: vi.fn(),
 }));

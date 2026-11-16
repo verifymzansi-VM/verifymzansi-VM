@@ -8,8 +8,10 @@ import { businessContactConfig } from "@/components/listings/contact-action-conf
 const { widgetProps } = vi.hoisted(() => ({
   widgetProps: [] as Array<Record<string, unknown>>,
 }));
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({
+    auth: { getUser: async () => ({ data: { user: null } }) },
+  }),
 }));
 
 vi.mock("@/components/ui/turnstile-widget", () => ({
@@ -27,7 +29,6 @@ describe("seller contact actions", () => {
   });
   afterEach(() => vi.unstubAllEnvs());
   it("requests a fresh challenge before revealing private foundation contact numbers", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(
@@ -104,7 +105,6 @@ describe("seller contact actions", () => {
     });
   });
   it("shows the check before a number as the compact, out-of-sight widget that fits a 320 px phone", () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     render(<ListingContactActions listingId="abc" revealable={{ phone: true, whatsapp: false }} />);
     fireEvent.click(screen.getByRole("button", { name: "Show contact number" }));
     expect(widgetProps.at(-1)).toMatchObject({ size: "compact", appearance: "interaction-only" });
@@ -112,7 +112,6 @@ describe("seller contact actions", () => {
     expect(screen.getByRole("button", { name: "Show contact number" })).toBeDisabled();
   });
   it("says no number was shared when the reveal comes back empty, and points to the enquiry", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ phone: null, whatsapp: null }))
     );

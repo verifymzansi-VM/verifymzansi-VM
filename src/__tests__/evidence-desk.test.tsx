@@ -30,6 +30,11 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 
+// The staff-account check on evidence responses has its own tests.
+vi.mock("@/lib/auth/staff-evidence-fetch", () => ({
+  fetchStaffEvidence: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
 }));

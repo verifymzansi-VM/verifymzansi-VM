@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { readFoundationServerUser } from "@/lib/foundation/server-session";
 import { PageHeader } from "@/components/layout/page-header";
 import { CommunicationHub } from "@/components/dashboard/communication-hub";
 
@@ -9,10 +9,8 @@ export const metadata = {
 };
 
 export default async function CommunicationPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // The account the sign-in gate already verified for this request.
+  const user = await readFoundationServerUser();
 
   if (!user) redirect("/login");
 

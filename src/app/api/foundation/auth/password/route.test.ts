@@ -19,7 +19,6 @@ const { authenticate, context, readAccount, limit, breach, update, notice, legac
   })
 );
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => "foundation" }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: legacy, createPublicClient: legacy }));
 vi.mock("@/lib/foundation/runtime-connection", () => ({
   readFoundationRuntimeConnection: () => ({}),

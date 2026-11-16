@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION internal.frontend_owner_post(p_post uuid, p_actor uui
 AS $function$
  select jsonb_build_object('id',p.id,'kind',p.kind,'area',p.area,'category',p.category_key,'activity',p.activity_key,
    'status',p.status,'status_reason',p.status_reason,'revision',p.revision,'edit_of',p.edit_of,
-   'created_at',p.created_at,'updated_at',p.content_updated_at,'published_at',p.published_at,'expires_at',case when p.status='pending_moderation' then (select f.funded_until from internal.post_funding(p.id) f) else coalesce(p.visible_until,(select f.funded_until from internal.post_funding(p.id) f)) end,
+   'created_at',p.created_at,'updated_at',p.content_updated_at,'published_at',p.published_at,'expires_at',case when p.status='pending_moderation' then (select f.funded_until from internal.post_funding(p.id) f) else coalesce(internal.post_shown_until(p.id,p.kind,p.visible_until),(select f.funded_until from internal.post_funding(p.id) f)) end,
    'content',jsonb_build_object('title',p.title,'description',p.description,'province_id',p.province_id,'city_id',p.city_id,'locality_label',p.locality_label),
    'listing',case when p.kind='listing' then (select to_jsonb(d)-array['post_id','post_kind'] from private.listing_details d where d.post_id=p.id) end,
    'business_type',(select d.business_type from private.business_details d where d.post_id=p.id),

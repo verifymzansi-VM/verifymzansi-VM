@@ -45,7 +45,6 @@ jobs:
       NODE_ENV: production
       DEPLOY_TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       WRANGLER_SEND_ERROR_REPORTS: "false"
-      NEXT_PUBLIC_DATA_BACKEND: foundation
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}

@@ -9,10 +9,7 @@ export interface SecretScanMatchContext {
   ruleName: string;
 }
 
-const FIXTURE_FILE_PATTERNS = [
-  /(?:^|[\\/])scripts[\\/]start-playwright-server\.cjs$/i,
-  /(?:^|[\\/])src[\\/].*?\.(?:test|spec)\.[jt]sx?$/i,
-];
+const FIXTURE_FILE_PATTERNS = [/(?:^|[\\/])src[\\/].*?\.(?:test|spec)\.[jt]sx?$/i];
 
 const FIXTURE_RULES = new Set([
   "Hardcoded service role key assignment",

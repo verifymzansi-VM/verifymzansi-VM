@@ -786,6 +786,1148 @@ updates publish a copy of it first (`planOnSale` in
 Individual slot of the same length instead, and the browser test copy's checkout
 specs buy the Individual slots.
 
+## Staff refunds are sent to Ozow by the server, 13 November 2026
+
+`20261113172356_ozow_api_refunds.sql` was applied on 14 November 2026. It needs
+`20261113085340_retire_old_staff_reversal_commands.sql` applied and the staff
+payment fixes of `20261113021223_staff_payment_fixes.sql` with their reviewed
+bodies, and refuses (55000) otherwise. It only adds: no API command, argument or
+grant is removed or changed, and every existing refund record keeps its meaning
+(channel `manual`). The website uses the new commands only while the Worker
+variable `OZOW_API_REFUNDS_ENABLED` is `"true"` and the Ozow refund key is set
+(`src/lib/payments/ozow-refunds.ts`); while it is off, staff record refunds with
+Ozow's reference exactly as before.
+
+- **Refund records gain a channel and Ozow's facts.**
+  `private.payment_refund_requests` gets `channel` (`manual`, `api`,
+  `dashboard`), the Ozow transaction refunded, Ozow's refund id (unique), its
+  status and times, and the send bookkeeping. A refund through Ozow goes
+  `awaiting_approval` (above R1,000 returned on the payment, as before) ->
+  `approved` -> `sent` -> `applied` (Ozow reported it complete), `failed` or
+  `returned`. Its reference is `vm-refund-<record id>`, which is also the
+  `Idempotency-Key` the server sends, so a retried send of the same record can
+  never make a second refund at Ozow. One refund of a payment is in flight at a
+  time (a unique index over waiting, approved and sent records), money in flight
+  counts towards the R1,000 rule, and nothing else may reverse the payment or a
+  slot while it is in flight (`internal.payment_reversal_waiting_guard`, detail
+  `refund_in_flight`). The record guard
+  (`internal.payment_refund_request_guard`) allows only these transitions and
+  only the columns each one sets; the facts of a record (payment, slot, account,
+  amount, channel, transaction, reference) never change, Ozow's refund id is set
+  once and send attempts only rise.
+- **Staff commands** (capability `payments:refund`, admins, recent second
+  factor, own accepted ID review, never a payment of their own identity, checked
+  again after the lock waits):
+  `api.request_staff_ozow_refund(p_payment_id, p_line_id, p_reason_code, p_reason)`
+  (a whole Ozow payment, or one open slot; no reference; PT409
+  `payment_not_ozow` for a payment without an Ozow transaction id, such as a
+  bank transfer, which keeps the reference form), and
+  `api.record_staff_dashboard_refund(p_payment_id, p_line_id, p_reason_code, p_reason, p_ozow_refund_id, p_ozow_fact)`
+  for a refund an admin already made by hand in the Ozow dashboard (Ozow's
+  refund id, used once, PT409 `ozow_refund_id_used`; the same R1,000 rule; it
+  takes effect as today's refunds do). `p_ozow_fact` is the refund as the server
+  read it from Ozow (null only while the refund key is not set): it must name
+  the same id, this payment's Ozow transaction and its amount (PT409
+  `ozow_refund_mismatch`) and must not have failed (`refund_ozow_failed`). It
+  only refuses: Ozow's status is stored only when the server's follow-up reads
+  the refund back. New staff read
+  `api.get_staff_refund_context(p_payment_id, p_line_id, p_request_id)`
+  (`payments:refund`): a payment's Ozow transaction and refund amount, or a
+  refund record's channel, status and whether Ozow's status was read; the
+  website calls it before it asks Ozow anything for staff, and before an
+  approval (a refund through Ozow is approved only while the switch is on; a
+  dashboard refund, when the refund key is set, only once Ozow's status was
+  read). `api.approve_staff_payment_refund` now approves a refund through Ozow
+  into `approved` (the server then sends it) instead of reversing; for every
+  other record it is unchanged. New staff read
+  `api.get_staff_ozow_refunds(p_payment_ids)` (`payments:view`): which of up to
+  50 payments can be refunded through Ozow, their API and dashboard refund
+  records, and up to 20 refunds through Ozow that need staff.
+- **Service commands** (`service_role` only):
+  `api.claim_ozow_refund_send(p_request_id)` hands an approved record to the
+  sender once (`sent`); an unknown send may be handed over again, with the same
+  key, at most twice more, 30 minutes apart and within six hours (the server
+  then first reads Ozow's refunds of the transaction since the first send,
+  `sent_at`, and sends again only when Ozow's complete list has none that could
+  be it, so a retry never relies on Ozow keeping the key); a payment that
+  changed before the first send fails the record without contacting Ozow.
+  `api.list_ozow_refund_sends_due(p_limit)` lists approved records not sent for
+  two minutes and unknown sends due a retry (the 10-minute payment job sends up
+  to two per run). `api.record_ozow_refund_send(p_request_id, p_result)` stores
+  Ozow's answer: accepted (Ozow's refund id, checked against the record's
+  transaction and amount), refused (only a first send fails the record; a
+  refused retry only stops retries and alerts) or unknown.
+  `api.apply_ozow_refund_status(p_event)` applies a refund status the server
+  read back from Ozow after a signed `refund.complete` notice: only `Complete`
+  reverses the payment (`internal.reverse_payment`) or the slot
+  (`internal.reverse_payment_line`, the single-slot reversal without a staff
+  session, audited as the approver or requester); `Failed`, `Error`, `Invalid`
+  and `Cancelled` fail the record and `Returned` returns it, both with a staff
+  alert; the same status twice changes nothing; an Ozow refund with no record,
+  or with another transaction or amount, alerts staff.
+  `api.reconcile_ozow_refunds(p_refunds)` is the daily check (05:15 UTC, the
+  payment-cleanup Worker): it changes no refund and alerts staff for each Ozow
+  refund in the last three days with no record, each record that differs, and
+  each refund through Ozow approved or sent more than a day ago.
+- **Nothing is left waiting forever.** `api.claim_ozow_refund_checks(p_limit)`
+  (service) hands the 10-minute job sent refunds with no final answer after ten
+  minutes (and each dashboard refund once), at most every 30 minutes each; the
+  server reads them back from Ozow (by refund id, or among the transaction's
+  refunds for a send whose answer was lost) and applies Ozow's status, or calls
+  `api.report_ozow_refund_missing(p_request_id)` when Ozow has no such refund
+  (recorded on the record, staff alerted). A lost send links only to a refund
+  Ozow says was requested at most ten minutes before it was sent, and never to a
+  refund id already recorded in any way (`internal.ozow_refund_link_candidate`).
+  A final Ozow status is never replaced by a non-final one. New staff command
+  `api.close_staff_ozow_refund(p_request_id, p_reason)` lets a staff member
+  other than the requester close a refund that never reached Ozow: approved and
+  never sent, or a lost send that Ozow, read more than a day after it was sent,
+  does not have (`refund_not_closable` otherwise); the record fails
+  (`closed_by_staff`) with the closer and reason.
+- **Closing and dashboard records are guarded.** A lost send cannot be closed
+  while an unmatched or mismatched Ozow refund of the payment has been seen
+  since it was sent (it may be that refund). The server reports "missing" only
+  when Ozow's complete list of the transaction's refunds has none requested
+  after (or ten minutes before) the send and none without a request time. A
+  dashboard refund that Ozow does not have or did not pay is never approved
+  (`refund_ozow_failed`), dashboard refunds are read back from Ozow until Ozow
+  gives a final status (30 days at most), and the daily check also alerts for a
+  refund recorded as made that Ozow lists as failed or returned. One unique
+  index keeps an Ozow refund recorded once, whichever way
+  (`lower(coalesce(ozow_refund_id::text, ozow_reference))`, and Ozow's refund
+  id), leaving out declined records, which took no effect: a dashboard record's
+  reference is `<refund id>:<record id>`, so a refund id recorded on the wrong
+  payment and declined can be recorded again. A later read that finds the refund
+  clears an earlier "missing". A typed reference whose payment is not the one
+  Ozow refunded raises `refund_mismatch`. Refunds through Ozow are read back
+  before dashboard records; a dashboard record Ozow does not have is read again
+  every six hours for seven days, and a waiting dashboard record whose id Ozow
+  reports for another transaction or amount is marked missing too (never
+  approved). The dashboard record stays available while refunds through Ozow are
+  switched off, and the 10-minute follow-up and the daily check keep reading
+  refunds back (never sending) whenever the refund key is set; without the key,
+  a dashboard record is not read back from Ozow (accepted, noted for the owner).
+- **Typed references retire for Ozow refunds.** Once the server has sent any
+  refund to Ozow, a refund of an Ozow payment can no longer be recorded with a
+  typed reference (PT409 `ozow_reference_retired`); chargebacks and payments
+  made outside Ozow keep it, and a typed reference may never be a refund id
+  already recorded.
+- **Alerts.** `private.payment_problems` and `internal.record_payment_problem`
+  accept the reasons `refund_failed`, `refund_returned`, `refund_unmatched`,
+  `refund_stuck` and `refund_mismatch` and the sources `refund_notice`,
+  `refund_check` and `refund_send`; they reach staff through the existing
+  payment alert emails. The website no longer watches for a "Refunded" payment
+  status (`refunded_after_completion`), which never fires because Ozow keeps a
+  refunded payment "Complete".
+
+**Order: apply, then merge.** Apply after
+`20261113085340_retire_old_staff_reversal_commands.sql` and before the pull
+request that uses it is merged. The read-only preflight
+`../preflight/20261113172356_ozow_api_refunds.check.sql` must read "update not
+applied" with no problem row before, and "already applied" after. The rollback
+`../rollback/20261113172356_ozow_api_refunds.down.sql` refuses once a refund
+through Ozow or from the dashboard was recorded or a refund problem was raised.
+`scripts/test-foundation-ozow-api-refunds.mjs`
+(`pnpm db:foundation:lifecycle-test`) proves the preflight, the refusal, apply
+-> rollback -> apply and the rules above on the replayed schema, standing in for
+Ozow.
+
+## Staff fix paid but not delivered, and refunds with Ozow's reference, 13 November 2026
+
+`20261113021223_staff_payment_fixes.sql` is not applied yet. It needs
+`20261113002421_individual_slots_r69.sql` with its reviewed bodies and refuses
+(55000) without them. It only adds: no existing command, argument, grant or
+function body changes (roadmap M3.4, with the receipt read for M3.7).
+
+- **Paid but not delivered, on the staff list.** New staff read
+  `api.get_staff_payment_list(p_page, p_filter)` (capability `payments:view`):
+  each payment with its delivery status (`fulfillment_status`), product kind,
+  merchant reference, slot lines, the refund waiting for approval (and whether
+  the caller's identity recorded it) and when staff activated it. The filter
+  takes a payment status, `needs_attention` (complete and
+  `needs_reconciliation`: the money arrived and nothing was delivered) or
+  `awaiting_approval`; both counts come with every page.
+  `api.get_frontend_staff_payments` stays for the release before this one.
+- **Activate what was paid for.** New staff command
+  `api.activate_staff_paid_payment(p_payment_id, p_reason)` (capability
+  `payments:refund`, recent second factor): only a complete,
+  `needs_reconciliation` payment of an account with current access. A plan: one
+  entitlement per open slot line, refused (PT429) when the person would hold
+  more Individual slots than their limit; a plan payment without lines: one
+  entitlement; an add-on: its window, refused (PT409) unless the post can still
+  carry it. The payment becomes fulfilled, a row goes to
+  `private.payment_activations` (immutable) and to the staff audit trail, and
+  the partner commission the purchase earns is created here
+  (`internal.payment_delivery_commission`, the same rule as the commission
+  trigger, which fires only on a status change and activation leaves the status
+  `complete`). A repeat by the same staff member with the same reason returns
+  the result; anything else is refused.
+- **Refunds and chargebacks need Ozow's reference and a reason code.** New staff
+  commands
+  `api.record_staff_payment_refund(p_payment_id, p_kind, p_reason_code, p_reason, p_ozow_reference)`
+  (whole payment) and `api.record_staff_slot_refund(p_line_id, ...)` (one slot
+  of an order). Without a reference (22023 `ozow_reference_required`), or with
+  one that is not 4 to 100 letters, digits or `. _ : / -`, or already recorded
+  (PT409; references are compared without letter case), nothing is recorded.
+  Reason codes: `billing_error`, `duplicate`, `our_failure_after_fix_offered`,
+  `s14_cancellation`, `breach_credit`. The amount is always the payment's or the
+  slot's own, and the record names the account that paid (a trigger refuses
+  anything else). **When the money returned on the payment would exceed R1,000**
+  (100,000 cents: every applied or waiting refund and chargeback record, slots
+  reversed earlier, and this one), the record is stored as waiting and changes
+  nothing until a second staff member approves it
+  (`api.approve_staff_payment_refund(p_request_id)`: never the requester or
+  another account of the requester's identity, checked again after the lock
+  waits), so a large refund cannot be split slot by slot. Chargebacks follow the
+  same rule while `internal.chargebacks_need_approval()` returns true (the safe
+  default until the owner decides; one function to change). Any staff member
+  with the capability can decline a waiting record with a reason, the requester
+  included (`api.decline_staff_payment_refund`). A payment with a refund waiting
+  accepts no other refund and cannot be activated, and **nothing else reverses
+  it**: new triggers `payments_refund_waiting` and
+  `payment_lines_refund_waiting` refuse (PT409 `refund_awaiting_approval`) any
+  reversal of that payment or its slots, including the earlier staff commands
+  and the service's `api.reverse_payment`. The approval marks the record applied
+  before it reverses, in one transaction (a failed reversal leaves it waiting).
+  An approval that finds the payment changed (for example after an owner SQL
+  fix) refuses with PT409 `refund_payment_changed`; the record can still be
+  declined. A refund record needs approval exactly when the total exceeds R1,000
+  (a constraint); for chargebacks the constraint only allows approval above that
+  amount, because the switch must not live in a constraint. Records are kept in
+  `private.payment_refund_requests` (immutable except for the one approval or
+  decline) and listed in the staff audit trail. The earlier
+  `api.record_frontend_staff_payment_reversal` and
+  `api.record_staff_slot_reversal` stay until a later contract step; the website
+  release in the same pull request no longer calls them.
+- **Staff never act for themselves.** Every new staff command needs a current
+  (not ended) accepted ID review of the staff member's own and refuses a payment
+  of their own identity, compared over every fingerprint either account has had
+  (`internal.assert_staff_payment_actor`), before the lock waits and again after
+  the last authority check.
+- **Audit trail.** `private.frontend_staff_audit_events` also lists activations
+  (`payment:activated`), recorded, approved and declined refunds and every
+  single-slot reversal (`payment:slot_refunded`, also those recorded with
+  `api.record_staff_slot_reversal`).
+- **Receipt read.** New service read `api.get_payment_receipt(p_payment_id)`:
+  one payment's amount, currency, completion time, product kind, label, slot
+  count, statuses, merchant reference, Ozow transaction id and invoice number,
+  description and issue time, with its owner id; null for an unknown payment.
+  Only `service_role` may call it (for the receipt email of M3.7).
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the new commands and the deploy preflight probes every command in
+`../runtime-api-manifest.json`, so a deploy without the update stops there.
+Earlier releases do not use them and keep working with the update applied.
+
+**Applying.**
+
+1. Run `../preflight/20261113021223_staff_payment_fixes.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff payment fixes: update not applied (apply before
+   the website release that uses it is deployed); paid but not delivered: N;
+   refunds waiting for approval: none (table absent)".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "staff payment fixes: already applied; ...; refunds
+   waiting for approval: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261113021223_staff_payment_fixes.down.sql` (only with the owner's
+decision; prefer a forward fix). Revert and deploy the website release first:
+the rollback removes the commands that release calls. It refuses once a payment
+was activated or a refund recorded with the new commands (those are audit
+records); otherwise it puts back the earlier staff audit view and drops the
+update's functions, its triggers (also the two on payments and payment lines)
+and two tables.
+
+`node --import tsx scripts/test-foundation-staff-payment-fixes.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals without the reviewed slot
+bodies and with a drifted table; apply, rollback and re-apply return the same
+fingerprints; a payment completed at the bank after its checkout was cancelled
+is listed under "needs attention" and activated by staff (two slots, an audit
+row, two commissions matching the trigger's), seen by the member in "My slots";
+the refusals (a member, a moderator, staff without their own ID review, staff of
+the same identity, over the slot limit, an already delivered payment, an add-on
+whose post ended); refunds without a reference, with a bad one, with an unknown
+reason code, a reused reference (also in other letter case), staff whose only
+review has ended; a R69 refund and a small chargeback at once, a R1,656
+chargeback and a R1,656 refund that wait, refused to its requester and to
+another account of the requester's identity, approved by a second admin, and a
+declined one recorded again; one slot of three refunded alone and the whole
+order refused after it; a refund split slot by slot (the third R414 slot waits
+after two went through); the earlier whole-payment and slot commands and the
+service reversal refused while a refund waits, an approval after the payment
+changed refused with `refund_payment_changed` and the record still declined;
+activation refused while a refund waits; an approval racing the earlier commands
+(the money goes back once); a table with this update's columns but not its
+constraints refused; the account and amount rule; the receipt read against the
+invoice (a two-slot order and an add-on) and its service-only grant; the grants;
+and that the rollback refuses once the commands were used.
+
+## Earlier staff reversal commands retired, 13 November 2026
+
+`20261113085340_retire_old_staff_reversal_commands.sql` is not applied yet. It
+is the contract step of `20261113021223_staff_payment_fixes.sql` (applied 13
+November 2026, pull request 213), recorded in `../contract-steps.json`, and
+refuses (55000) unless that update's replacement commands are present with their
+reviewed bodies.
+
+- **Removed.** The earlier staff commands
+  `api.record_frontend_staff_payment_reversal(p_id, p_kind, p_reason)`,
+  `api.record_staff_slot_reversal(p_line_id, p_kind, p_reason)` and
+  `api.get_frontend_staff_payments(p_page, p_status)` are dropped. They could
+  still reverse a whole payment or one slot without Ozow's reference or a reason
+  code whenever no refund was waiting for approval. The website has called only
+  the replacements since pull request 213: `api.record_staff_payment_refund`,
+  `api.record_staff_slot_refund`, `api.get_staff_payment_list`,
+  `api.approve_staff_payment_refund`, `api.decline_staff_payment_refund` and
+  `api.activate_staff_paid_payment`. Every API command keeps exactly one
+  audience (`../runtime-api-manifest.json` and the native access matrix require
+  it), so a command nobody may call is removed rather than left without a grant.
+- **Closed.** The internal functions behind them
+  (`internal.record_frontend_staff_payment_reversal`,
+  `internal.get_frontend_staff_payments` and
+  `internal.record_staff_slot_reversal`) lose their execute grant to
+  `authenticated`. The single-slot step stays: the slot refund and the approval
+  call it through internal functions that run as their owner. No function body
+  and no data change; the service's `api.reverse_payment` is unchanged.
+
+**Order: merge, then apply.** No website release calls the three commands, and
+the release from this pull request no longer lists them in its runtime manifest.
+Applied before the merge, the deploy preflight of any other release in between
+would find them missing.
+
+**Applying.**
+
+1. Run
+   `../preflight/20261113085340_retire_old_staff_reversal_commands.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "retire old staff reversal commands: update
+   not applied; refunds waiting for approval: N".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "retire old staff reversal commands: already applied;
+   refunds waiting for approval: N" with the same N.
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261113085340_retire_old_staff_reversal_commands.down.sql` (only
+with the owner's decision; prefer a forward fix). It puts back the three
+commands exactly as they were and the internal grants, and changes no data.
+
+`node --import tsx scripts/test-foundation-retire-old-staff-reversals.mjs` (part
+of `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusal without the replacement
+commands' reviewed bodies and with a changed earlier wrapper, changing nothing;
+that afterwards staff cannot call the three commands or the internal functions
+behind them, while a slot refund and an approved refund still reverse one slot
+through the retained internal step; and that apply, rollback and re-apply return
+the same fingerprints.
+
+## Communication choices and Terms accepted at sign-up, 13 November 2026
+
+`20261113134500_communication_choices_and_signup_terms.sql` was applied on 13
+November 2026 (roadmap M1.7, finding SEC-09). It needs the reviewed member check
+`internal.price_draft_actor()` and refuses (55000) without it. It only adds: no
+existing command, argument, grant, table or function body changes.
+
+- **Communication choices are saved, with their history.** New table
+  `private.communication_choice_events`: one row each time a member turns an
+  optional choice on or off (`marketing_email`, `marketing_sms`, `analytics`,
+  `third_party_sharing`), with the version of the switch wording the member saw
+  (`wording_version`, set by the website: `communication-2026-11`) and the time.
+  Rows never change and are deleted only with the Auth user or by the retention
+  job (`vm.retention`), never one by one (trigger
+  `communication_choice_events_immutable`). The current choice is the latest row
+  of its purpose; with none it is off, so everything optional starts off
+  (opt-in) and turning a choice off is as easy as turning it on.
+- **Member commands.** `api.get_my_communication_choices()` and
+  `api.save_my_communication_choices(p_wording, p_marketing_email, p_marketing_sms, p_analytics, p_third_party_sharing)`
+  (a null choice stays as it is; at least one is needed, 22023
+  `choice_invalid`). Only a real change adds a row, so repeating a save adds
+  nothing. Reading and turning a choice off need only a signed-in, confirmed,
+  not deleted account with a live session (new `internal.consent_actor()`), so a
+  restricted member can still withdraw, and withdrawals are never limited.
+  Turning a choice on also needs an active account
+  (`internal.price_draft_actor()`) and is limited to 20 a day per account (PT429
+  `choice_limit`). Each account only ever reaches its own choices.
+- **Email history.** `api.list_my_email_history(p_limit)` (1 to 50, default 20):
+  the caller's own finished account emails from `private.outbox_events`, sent,
+  or failed for good after the email job's 8 attempts, with the message kind and
+  time; never the address, the record it was about or the provider's error. New
+  index `outbox_owner_history_idx` (owner, newest first).
+- **Terms accepted at sign-up.** New table `private.signup_terms_acceptances`
+  (one row per account, never changed): the version and document hash of the
+  current Terms (`private.posting_terms_current`, the single set shown at
+  `/terms`), how (`email_form` or `google`) and when. New trigger
+  `record_signup_terms` on `auth.users` fills it as the Auth user is created:
+  `email_form` when the website's sign-up form, whose Terms box must be ticked,
+  sent the sign-up detail `terms_accepted: true`; `google` for a Google sign-up,
+  whose button says that continuing accepts the Terms. The version is always
+  read in the database, never taken from the sign-up details. Anonymous users,
+  other sign-ups and accounts created before the update get no row; the trigger
+  never refuses a sign-up. `email_form` means the sign-up said the box was
+  ticked: someone signing up straight at Auth can claim it for their own new
+  account only. A repeated sign-up of an address Auth already holds (not yet
+  confirmed) creates no user, so it keeps the first sign-up's record, or none.
+  The acceptance asked for before a first post
+  (`private.posting_terms_acceptances`) is separate and unchanged.
+
+Both tables are closed to every API role. Not yet included (needed before public
+sign-up): the privacy export (`internal.frontend_privacy_export_data`, whose
+dataset count the website checks), a staff read of a member's recorded Terms,
+and the closed-account retention sweep; both tables are kept, like the profile,
+until the Auth user is deleted. An email the job finished without a recipient
+(an unconfirmed address at the time) also shows as sent.
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the three new commands and the deploy preflight probes every
+command in `../runtime-api-manifest.json`, so a deploy without the update stops
+there. Earlier releases do not use them and keep working with the update
+applied; sign-ups through them record their Terms too (the form already sends
+the ticked box only from that release on, so earlier releases record Google
+sign-ups only).
+
+**Applying.**
+
+1. Run
+   `../preflight/20261113134500_communication_choices_and_signup_terms.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "communication choices and signup terms:
+   update not applied; current terms: posting-v4".
+2. Run the update. It waits at most 5 seconds for any lock (it adds a trigger to
+   `auth.users` and an index to `private.outbox_events`). Run the preflight
+   again: it must read "communication choices and signup terms: already applied;
+   current terms: posting-v4; choice changes recorded: 0; sign-up acceptances
+   recorded: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261113134500_communication_choices_and_signup_terms.down.sql`
+(only with the owner's decision; prefer a forward fix). Revert and deploy the
+website release first: the rollback removes the commands that release calls. It
+deletes both tables, which are the record of what members agreed to: export them
+first, as the file says.
+
+`node --import tsx scripts/test-foundation-communication-choices.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; refusals for a drifted command, member
+check or table, and a premature rollback, changing nothing; accounts made before
+the update get no acceptance; the website form and Google sign-ups record the
+current version (never one named in the sign-up details); no row without the
+ticked box (also `"true"` as text) or for anonymous users; rows never change,
+are not deleted one by one and go with the Auth user (or the retention job); no
+API role reads or writes either table; choices start off, save only for the
+caller, add a row only on a change, record the wording version, and the latest
+row decides; invalid saves record nothing; the limit of 20 choices turned on a
+day (also two with one place left), while turning off stays possible at the
+limit; a restricted member reads and withdraws but cannot opt in, and a deleted
+one is refused; anon, `service_role`, an ended session, an anonymous claim and
+an unconfirmed email are refused; the email history lists only the caller's sent
+and failed emails (not a last attempt still running or of unknown outcome), with
+exactly id, kind, status and time; the grants and owners; and that apply,
+rollback and re-apply return the same fingerprints.
+
+## Staff record a cleared bank transfer; a second staff member confirms it, 13 November 2026
+
+`20261113162457_staff_invoice_payments.sql` was applied on 13 November 2026. It
+needs `20261113021223_staff_payment_fixes.sql` and the Individual slot rules
+with their reviewed bodies and refuses (55000) without them, or when the payment
+rules, its new table or the new capability differ from the reviewed ones
+(roadmap P2b, first slice; the manual fallback to the Ozow payment link that a
+later slice puts on each invoice). It only adds: no API command, argument or
+grant is removed or changed.
+
+- **A payment can be a bank transfer.** `private.payments` accepts the provider
+  `invoice` besides `ozow`. A complete invoice payment has no Ozow transaction
+  id (`payments_check1` changed for that case only), and the new constraint
+  `payments_invoice_without_ozow` refuses Ozow's request, transaction and
+  checkout fields on it. Ozow payments meet every rule unchanged.
+- **Record (first person).** New staff command
+  `api.record_staff_invoice_payment(p_account_email, p_term_days, p_slots, p_amount_cents, p_bank_reference, p_cleared_on, p_cooling_off_waiver, p_reason)`
+  (capability `payments:refund`, recent second factor), used only after the
+  money has cleared. It needs a confirmed account with current access and an
+  accepted ID review (PT404 `invoice_account_unavailable`, PT409
+  `payment_account_unavailable`, PT412 `invoice_buyer_unverified`), the
+  Individual slot on sale for 30, 90 or 180 days (PT409
+  `invoice_plan_unavailable`), 1 to 25 slots within the person's slot limit
+  (PT429 `slot_limit_reached`), the amount received equal to the order total
+  (PT428 `invoice_amount_mismatch`) and at most R50,000 (PT413
+  `invoice_amount_above_limit`), a date the money cleared from 90 days ago to
+  today (`cleared_date_invalid`), the staff member's confirmation that the
+  customer agreed in writing to the cooling-off waiver
+  (`cooling_off_waiver_required`), a bank reference of 4 to 60 letters, digits,
+  spaces or `. _ : / -` and an audit reason. It stores a row in the new table
+  `private.invoice_transfers` as `awaiting_confirmation`. **Nothing else
+  happens**: no payment, slot, invoice, receipt email or commission.
+- **Confirm (second person).** New capability `payments:confirm_transfer` (admin
+  only, recent second factor) and staff command
+  `api.confirm_staff_invoice_payment(p_transfer_id)`. Never the recorder or
+  another account of the recorder's identity (42501 `transfer_confirmer_same`),
+  never the customer or a partner who referred the customer
+  (`staff_referred_customer`), with the staff member's own current accepted ID
+  review; every check runs again after the lock waits (bank reference, then the
+  person, then the row). It refuses when the recorder no longer holds
+  `payments:refund` (PT409 `transfer_recorder_inactive`) or has since come to
+  refer the customer, and rechecks the customer's access, ID review and slot
+  limit, counting checkouts still open at Ozow. Only then it records a complete,
+  fulfilled payment with provider `invoice` on the recorded plan version, one
+  line and one slot per slot starting now, its invoice, the `payment_completed`
+  outbox event (the receipt email of M3.7) and the partner commission
+  (`internal.payment_delivery_commission`, the rule of the commission trigger),
+  exactly as a confirmed Ozow payment of the same order, and marks the record
+  `confirmed`.
+- **Decline.** `api.decline_staff_invoice_payment(p_transfer_id, p_reason)`
+  (same capability and checks; the recorder may withdraw their own record) marks
+  a waiting record `declined` with the reason. Nothing is paid.
+- **One record per bank reference, ever.** References are compared on their
+  letters and digits only, whatever the case, spaces or punctuation (a unique
+  index), across waiting, confirmed and declined records: the safest rule, so a
+  declined reference can never be recorded again (a transfer recorded with wrong
+  details is declined, and the owner decides how to correct it; see the pull
+  request). The command serialises on the reference before reading it. The same
+  request again by the same staff member returns the first record with
+  `repeated: true` (and its status); anything else with that reference is
+  refused (PT409 `bank_reference_used`). A declined record cannot be confirmed
+  and a confirmed one cannot be declined (PT409 `transfer_not_waiting`); the
+  same confirmer or decliner repeating returns the result.
+- **The record.** `private.invoice_transfers` keeps the customer, plan version,
+  slots, amount, bank reference, date cleared, the waiver confirmation, the
+  reason, who recorded it and when, then who confirmed or declined it and when
+  (and the payment, or the decline reason). Rows are never removed and change
+  only once, from waiting to confirmed (naming its own complete invoice payment:
+  that account, amount, plan, slots and record) or to declined (trigger); the
+  recorder is never the customer and the confirmer never the recorder or the
+  customer (constraints).
+- **Reads.** `api.get_staff_invoice_customer(p_account_email)`
+  (`payments:refund`) shows whose account an email names before recording
+  (public name, ID review, slots held, limit).
+  `api.get_staff_invoice_transfers()` (`payments:view`) lists the waiting
+  records with the customer's account email (to match the bank statement) and
+  how many other waiting or confirmed records name the same customer, amount and
+  date (a possible duplicate under another reference).
+  `api.get_staff_invoice_payments(p_payment_ids)` (`payments:view`) gives the
+  bank transfer details of listed payments, so `api.get_staff_payment_list`
+  stays unchanged. The staff audit trail lists `payment:invoice_recorded`,
+  `payment:invoice_confirmed` and `payment:invoice_declined`.
+- **Receipt read.** `api.get_payment_receipt` also returns `payment_method`
+  (`ozow` or `invoice`) and, for a bank transfer, `bank_reference`, which the
+  receipt email shows instead of the Ozow reference.
+- **Refunds.** The existing staff refund commands work on a confirmed invoice
+  payment unchanged: whole payment, one slot, a second approver above R1,000,
+  the commission reversed. The reference they need is that of the transfer back
+  to the customer.
+- **Dates.** The payment, its invoice and the receipt carry the confirmation
+  time; the date the money cleared is kept in the record and in the payment
+  snapshot (`cleared_on`).
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the new commands and the deploy preflight probes every command in
+`../runtime-api-manifest.json`, so a deploy without the update stops there.
+Earlier releases do not call them and keep working with the update applied
+(`api.get_staff_payment_list` is unchanged; the receipt read only gains fields).
+It is recorded after
+`20261113134500_communication_choices_and_signup_terms.sql`.
+
+**Applying.**
+
+1. Run `../preflight/20261113162457_staff_invoice_payments.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff invoice payments: update not applied (apply
+   before the website release that uses it is deployed); bank transfers waiting
+   for confirmation: none (table absent); payments confirmed from a bank
+   transfer: 0".
+2. Run the update. It waits at most 5 seconds for any lock (it briefly locks
+   `private.payments` to change its rules). Run the preflight again: it must
+   read "staff invoice payments: already applied; bank transfers waiting for
+   confirmation: 0; payments confirmed from a bank transfer: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261113162457_staff_invoice_payments.down.sql` (only with the
+owner's decision; prefer a forward fix). Revert and deploy the website release
+first: the rollback removes the commands that release calls. It refuses once a
+bank transfer was recorded (waiting, confirmed or declined: payment and audit
+records); otherwise it puts back the receipt read, the staff audit view and the
+payment rules of `20261113021223_staff_payment_fixes.sql`, removes the
+capability and drops the update's functions and table.
+
+`node --import tsx scripts/test-foundation-staff-invoice-payments.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals without the reviewed bodies,
+with a drifted table, payment rule or capability, changing nothing; apply,
+rollback and re-apply return the same fingerprints; a recorded transfer waits
+and starts nothing (no payment, slot, commission or receipt event); the
+recorder, another account of the recorder's identity, a moderator, the customer
+and staff without their own ID review cannot confirm it; another admin's
+confirmation gives the same lines, slots, invoice, receipt event and partner
+commissions as an Ozow payment of the same order, with both audit rows; repeats
+of the record (also with the reference written differently) and of the
+confirmation return the first result, while another staff member, order,
+customer, date or reason with that reference is refused; a declined record
+cannot be confirmed, its decline repeats, its reference is never recorded again,
+and a recorder may withdraw; a confirmed record cannot be declined; the reads
+and the receipt (also for an Ozow payment); every refusal records nothing; the
+slot limit at recording and again at confirmation (an open Ozow checkout
+counts); a recorder who lost the role or came to refer the customer blocks
+confirmation; a possible duplicate under another reference is flagged; staff who
+referred the customer can neither record nor confirm; two staff recording the
+same transfer at once give one record, and a decline racing a confirmation is
+refused; the refund commands on a confirmed payment (one slot, a whole order, a
+second approver above R1,000); the record and payment rules; the grants; and
+that the rollback refuses once a transfer was recorded.
+
+The bank reference rule, the refund reference of a bank transfer, the receipt
+date and the privacy export were changed afterwards by
+`20261113223806_bank_transfer_and_consent_fixes.sql` (next section).
+
+## Bank transfer and consent fixes, 13 November 2026
+
+`20261113223806_bank_transfer_and_consent_fixes.sql` was applied on 14 November
+2026 at 02:35 UTC with the owner's approval. It fixes review findings in
+`20261113162457_staff_invoice_payments.sql` and
+`20261113134500_communication_choices_and_signup_terms.sql`, needs both (and the
+refund commands of `20261113085340`) with their reviewed bodies and refuses
+(55000) otherwise. It does not depend on `20261113172356_ozow_api_refunds.sql`
+(pull request #221) and changes nothing that update changes. No API command,
+argument, return type or grant changes.
+
+- **A bank credit is recorded once; a declined record frees it.** Before, a bank
+  reference was used once across every record, declined ones included, so a
+  reference declined by mistake could never be recorded again (although staff
+  are told to "decline it and record it again"), and two customers using a
+  common reference ("VerifyMzansi", a name) could not both be recorded. Now one
+  bank credit is its reference (letters and digits, whatever the case, spaces or
+  punctuation), the amount and the date it cleared: among the waiting and
+  confirmed records that combination is unique (the partial unique index
+  `invoice_transfers_open_reference_idx` replaces
+  `invoice_transfers_reference_idx`). The same credit can never wait or be
+  confirmed twice, for any customer; a declined record's reference can be
+  recorded again; the same reference may be recorded for another amount or day.
+  Two genuine transfers with the same reference, amount and day are refused
+  (PT409 `bank_reference_used`), the safe side. The one case the index no longer
+  stops is the same credit recorded again with a wrongly typed date, so the
+  confirmer's "Possible duplicate" count (`similar_records`) now counts the
+  other waiting or confirmed records with the same reference and amount (any
+  customer or date), besides those of the same customer, amount and date under
+  another reference. Two-person confirmation and the repeat of the same request
+  by the same staff member are unchanged. Owner's choice: the stricter
+  alternative is the reference alone unique among waiting and confirmed records
+  (no wrong date can pass, but a common reference is refused for every second
+  customer).
+- **Bank refund references may have spaces.** For a payment made by bank
+  transfer, the refund (or chargeback) reference may hold single spaces (4 to
+  100 letters, digits, spaces or `. _ : / -`, at least four letters or digits;
+  runs of spaces are stored as one); its refusals are
+  `refund_reference_required`, `refund_reference_invalid` and
+  `refund_reference_used` and never mention Ozow. Ozow references keep exactly
+  their rules and messages. The check
+  `payment_refund_requests_ozow_reference_check` accepts single inner spaces and
+  the new trigger `payment_refund_requests_reference_rule` refuses a reference
+  with a space unless the payment was made by bank transfer.
+- **Receipt date.** `api.get_payment_receipt` also returns `cleared_on` for a
+  bank transfer; the receipt email shows it as "Date paid" instead of the time
+  of the second staff member's confirmation. The payment's `completed_at`, its
+  slots and invoice are unchanged.
+- **Privacy export.** It also holds `communication_choices` (each change, with
+  its wording version and time), `signup_terms` (version, document hash, method,
+  time) and `bank_transfers` (the member's own records: amount, slots, term,
+  reference, dates, the waiver confirmation and the outcome; never which staff
+  member handled it, nor staff notes, as for the other payment records).
+- **Retention (lawyer to confirm).** The retention job now deletes the sign-up
+  Terms acceptance and the communication choice history of a closed account 30
+  days after closure, with its posting-terms acceptances and under the same
+  legal-hold exception, so the three consent records are kept and deleted alike.
+  Before, the two newer ones stayed until the Auth user was deleted. Each batch
+  now takes only closed accounts that still hold such rows (also for the home
+  area and posting-terms deletes), so the sweep cannot stall behind accounts it
+  already cleared. Recorded bank transfers are payment records and are never
+  purged. If the owner's lawyer wants consent proof kept longer, change all
+  three in one later update.
+- **Email history.** `api.list_my_email_history` needs only a signed-in,
+  confirmed account with a live session (`internal.consent_actor`), like reading
+  and withdrawing communication choices, so a restricted member can read it.
+
+**Order: apply first, then deploy.** The website release from the same pull
+request works with or without it (before it, a bank refund reference with a
+space is refused as before and the receipt shows the confirmation date). Record
+it after `20261113172356_ozow_api_refunds.sql` if that is applied first.
+
+**Applying.**
+
+1. Run `../preflight/20261113223806_bank_transfer_and_consent_fixes.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row starting "bank transfer and consent fixes: update
+   not applied".
+2. Run the update. It waits at most 5 seconds for any lock (it briefly locks
+   `private.invoice_transfers` and `private.payment_refund_requests`). Run the
+   preflight again: it must start "bank transfer and consent fixes: already
+   applied".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261113223806_bank_transfer_and_consent_fixes.down.sql` (only with
+the owner's decision; prefer a forward fix). It refuses once a bank reference is
+recorded more than once or a refund reference holds a space (the preflight
+counts both), because the earlier rules would refuse those records; otherwise it
+puts back every earlier body, index and check and drops what the update added.
+Consent records the retention job deleted stay deleted.
+
+`node --import tsx scripts/test-foundation-bank-transfer-consent-fixes.mjs`
+(part of `pnpm db:foundation:lifecycle-test`) proves on the throwaway database:
+the preflight before and after, read only; the refusals with a drifted body or
+index, changing nothing; apply, rollback and re-apply return the same
+fingerprints; a declined reference can be recorded again, while a waiting or
+confirmed one cannot (also written differently, by another staff member or for
+another customer); a common reference is recorded for two customers with
+different amounts or days and the confirmer sees the same reference and amount;
+two staff recording the same credit at once give one record; a bank refund
+reference with spaces is accepted and an Ozow one is refused with the Ozow
+message; the receipt read's cleared date, and a refunded payment reads as
+refunded; the privacy export holds the three new datasets of the member only;
+the retention job deletes the three consent records 30 days after closure and
+keeps them under a legal hold or before; a restricted member reads their email
+history; and that the rollback refuses once the new rules were used.
+
+## Renew early and renewal reminders, 14 November 2026
+
+`20261114093742_renew_slots_early.sql` was applied on 14 November 2026 at 14:35
+UTC with the owner's approval (roadmap P3, with the owner's renewal rule of 14
+November 2026). It needs `20261114041000_customer_invoice_pay_now.sql` and the
+slot, payment, post and mail bodies it builds on with their reviewed bodies, and
+refuses (55000) otherwise (the two post funding views it replaces are checked by
+an md5 of each whole definition, so a view changed in any other way is refused,
+not overwritten). It only adds: no API command, argument or grant is removed or
+changed.
+
+- **A renewal is a new grant of the same slot.** `private.payment_lines` gains
+  `renews_entitlement_id` (the slot a line renews, chosen at checkout).
+  `private.entitlements` gains `renews_entitlement_id` (the grant a renewal
+  follows) and `slot_id` (the slot's first grant), with foreign keys, the check
+  `entitlements_renewal_link` and a unique index so that at most one active
+  renewal follows a grant. Issued grants are never edited.
+- **Renewing.** New member command
+  `api.start_slot_renewal_checkout(p_entitlement_ids, p_plan_id, p_expected_total_cents, p_cooling_off_consent)`:
+  one payment with one line per slot ("Renew all": up to 25 slots, each once,
+  22023 otherwise) for 30, 90 or 180 days. Only the member's own Individual
+  slots that are still held can be renewed; another account's slot, an ended
+  slot, a free first post, a staff grant or a sponsored place reads as not found
+  (PT404 `slot_unavailable`). Renewing opens 14 days before the slot ends
+  (`internal.slot_renewal_window()`, the one setting; earlier: PT409
+  `renewal_not_open`). It needs an accepted ID review (PT412), the renewal's own
+  consent (22023; never the new-slot "starts now" wording: the payment's
+  snapshot keeps the wording `renewal-cooling-off-v1`, its time and each slot's
+  start date), the total the member was shown (PT428) and at most R10,000 for
+  the total (PT413, larger by invoice). A renewal never adds a slot, but the
+  slots renewed ahead (queued renewals and renewals in payments still open at
+  Ozow) may not exceed the person's limit (PT429), so a person over their limit
+  after a staff-raised limit ended renews at most as many slots as the limit,
+  and while a raised limit runs at most the standard limit (4) of renewals may
+  start at or after it ends (`internal.individual_renewals_allowed`, rechecked
+  at delivery). Only one order per term can be pending
+  (`payments_one_pending_idx`): a renewal of the same slots for the same term is
+  continued; another order for that term or another renewal naming the same
+  slots is cancelled when it was never sent to Ozow and otherwise returned with
+  `renewal` (continue, check or cancel it). `api.start_slot_checkout` (full
+  body) never reuses a renewal as an order of new slots.
+- **Delivery.** `internal.apply_provider_event` (full body, from
+  `20261114041000` with its invoice condition) and
+  `internal.activate_staff_paid_payment` (full body) issue lines through the new
+  `internal.issue_slot_line_entitlements`: a new slot starts at payment; a
+  renewal starts exactly when the slot's last active period ends (at payment if
+  that has already passed). `internal.individual_slots_counted` (full body)
+  counts each slot once over all its periods; open payments count only lines
+  that would add a slot; a renewal of a held slot is delivered even to a person
+  now over their limit, as long as the slots renewed ahead stay within it; a
+  renewal whose slot ended or was refunded meanwhile counts as a new slot.
+- **Posts stay live across the boundary, decided at read time.** A paid post is
+  funded while its own period runs or, once that has ended, while a period of
+  the same slot that follows on from it without a break runs
+  (`internal.slot_grant_usable` over `internal.slot_chain_end`). The public view
+  `private.public_eligible_posts` (search, post page, phone reveal, enquiries),
+  `private.frontend_restorable_posts` (hold release), `internal.post_funding`
+  (edits, moderation, reactivation), `internal.entitlement_for_post_eligible`
+  (the activation a post keeps) and `internal.set_post_media` (full bodies) use
+  it, so a renewed post stays public, reachable and editable before any job
+  runs; an event keeps its own end date. Confirming a renewal writes no post (so
+  no post check can stop a payment): it moves only the slot's search documents
+  to the end of the renewal (`internal.refresh_slot_chain_documents`, locking
+  grants then documents as a reversal does); a renewal revoked by a refund or
+  chargeback moves them back (trigger `entitlements_slot_chain_revoked`).
+  `internal.run_post_lifecycle` (full body) does not expire a post whose end
+  date passed while its slot runs on (its end date catches up) and expires one
+  whose slot run ended early; `internal.release_frontend_content_hold` (full
+  body) first brings a held post's end date up to its slot's run, so a post held
+  across the boundary is restored with its days. The 3-day grace after expiry
+  therefore starts only when the last renewal ends. The new service sweep
+  `api.run_slot_renewals(p_limit)` (in the website's operation job, every
+  minute) only tidies up: it moves posts that can move into the next period (the
+  old activation released as `entitlement_ended`, the new one marked `continued`
+  in the new column `private.post_activations.continued`), and picks only those,
+  so posts that cannot move never crowd them out. `internal.activate_post` (full
+  body) counts a slot's posts over all its periods (a post waiting to move still
+  fills the slot) and the 4 posts going live per rolling 30 days over the slot's
+  whole renewal chain (a renewal does not restart the count; a continued
+  activation is not a post going live); so do `internal.my_posting_capacity`,
+  `internal.get_my_frontend_posting_allowance_v2` and
+  `internal.get_my_frontend_post_manager` (full bodies, through the new
+  `internal.slot_posts_held` and `internal.slot_posts_started`), so a place is
+  never shown free while a post waits to move into it.
+- **Every end date a post shows is the end of its slot's run**
+  (`internal.post_shown_until`, the same `internal.slot_chain_end` as its
+  funding; an event keeps its own end date): the search document
+  (`internal.write_post_projection`, full body, so an edit approved, moderation
+  or any other rewrite before the boundary keeps the renewed end), the post page
+  (`internal.get_public_post`), My posts (`internal.list_my_posts`), the owner's
+  post (`internal.frontend_owner_post`) and the dashboard
+  (`internal.restored_owner_dashboard`, active and ending-soon listings), full
+  bodies.
+- **Cost.** The funding views compare the period's own dates first and follow
+  the slot only once the period has ended. The lifecycle job reads by date only:
+  posts whose own end date has passed (new partial index
+  `posts_paid_run_due_idx`) and visible search documents whose end has passed
+  (`post_search_documents_due_idx`; a revoked renewal moves it back before the
+  post's own end date). The sweep reads the renewals that have not ended
+  (`entitlements_renewals_current_idx`) and the reminders the grants ending
+  within 3 days (`entitlements_active_ends_idx`). Measured on 20,000 live posts
+  in the pull request.
+- **Refunds.** A member who asks to cancel a renewal before it starts gets a
+  full refund: staff record the one-slot refund with the existing commands (the
+  full line amount), which withdraws the queued grant, reverses that line's
+  commission and moves the slot's search documents back. A chargeback or refund
+  of the current period leaves a queued renewal with the dates it was sold for
+  (the slot then has a gap until the renewal starts).
+- **Reminders.** The sweep queues one email (new outbox kind
+  `slot_renewal_reminder`, keyed by the ending grant, so at most one per slot
+  end however often the job runs) for each ending grant the member can renew
+  (`internal.slot_renewal_due`: today Individual slots, interim ones included;
+  Multi-listing packages are added there later, G5) that ends within 3 days with
+  no renewal following it, while the account can still buy.
+  `internal.claim_supported_notification_outbox` (full body) gives it a
+  recipient only for a confirmed, non-anonymous address and only while the slot
+  still ends unrenewed (otherwise the message is finished without a send), with
+  `slot_ends_at`, `renewal_kind` and `slot_renew_all` (more than one slot ends
+  unrenewed within 7 days, so the email links to "Renew all"). The claim takes
+  up to 21 kinds, each once (a repeated kind is refused, as a list that was too
+  long was before). It is a service notice about the member's own paid slot: the
+  optional marketing choices do not apply. The job never starts a payment.
+- **My slots.** New member read `api.get_my_slots_v2()`: `api.get_my_slots`
+  plus, per slot, `renewable` and `renew_opens_at`, `renewed_until` and the
+  queued `renewals`; a period that ended because the next one followed on is not
+  listed again, a renewal waiting to start is listed (state `upcoming`) when its
+  slot has no current period, and `individual.renewed_ahead`. `api.get_my_slots`
+  is unchanged.
+- **Retention.** `internal.retention_commerce` (full body) keeps a grant while a
+  later renewal or a payment line still names it, so a slot's periods are
+  removed newest first.
+- **Privacy export.** `internal.frontend_privacy_export_data` (full body) gives
+  each payment its cooling-off consent (new-slot or renewal), its renewal start
+  dates and its lines with the slots they renew, each grant its renewal links
+  and each activation whether it was moved on (no new dataset).
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the new commands and the deploy preflight probes every command in
+`../runtime-api-manifest.json`, so a deploy without the update stops there.
+Earlier releases do not call them and keep working with the update applied (the
+renewal checkout is reached only from the new release). It is recorded after
+`20261114041000_customer_invoice_pay_now.sql`. Merge the pull request right
+after applying.
+
+**Applying.**
+
+1. Run `../preflight/20261114093742_renew_slots_early.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "slot renewals: update not applied (apply before the
+   website release that uses it is deployed); renewal payment lines: none
+   (column absent); renewals issued: none (column absent); reminders queued: 0".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "slot renewals: already applied; renewal payment lines:
+   0; renewals issued: 0; reminders queued: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261114093742_renew_slots_early.down.sql`
+(only with the owner's decision; prefer a forward fix). Revert and deploy the
+website release first: the rollback removes the commands that release calls. It
+refuses once a slot was renewed, an activation was moved into a renewed period
+or a reminder was queued, or when a body or a funding view (by an md5 of its
+whole definition) is not the update's; otherwise it puts back the twenty-one
+earlier bodies, the two post funding views and the outbox kinds and drops the
+update's functions, trigger, indexes, constraints and columns.
+
+`node --import tsx scripts/test-foundation-slot-renewals.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted body, a
+drifted column or a funding view changed in any way, changing nothing; apply,
+rollback and re-apply return the same fingerprints; renewing opens 14 days
+before the end; an early renewal starts exactly at the old end, with the
+renewal's consent and start date in the snapshot, one payment and the slot
+counted once; confirming writes no post (its search document moves at once);
+after the boundary and before any job runs the public view, the restorable view,
+the post page, search, phone reveal, an enquiry, post funding and the owner's
+kept activation all serve the post; the lifecycle job does not expire it but
+moves its end date on; it still fills the slot while it waits to move, moves
+once into the next period, the moved activation is not a post going live, and
+the 3-day grace starts only when the last renewal ends; an edit approved by a
+moderator before the boundary keeps the renewed end in the search document, the
+post page, My posts, the owner's post and the dashboard show the renewed end
+before and after the boundary with no job run (and the post is not ending soon),
+it stays in search and on its page, the capacity, allowance and post manager
+count it while it waits to move, and a chargeback of the renewal after its end
+date caught up moves the document's end back and the lifecycle job expires it;
+renewing twice queues one period after the other, also from the old period's id;
+an overlapping renewal checkout returns the open one, one never sent to Ozow is
+replaced, and the new-slot checkout never takes a renewal (one order per term);
+"Renew all" for three slots with different ends makes one payment, each slot
+ends exactly its own period later, refunding one queued line (full amount)
+withdraws only that slot and moves its post back, and the slot can be renewed
+again; a chargeback of the current period keeps the queued renewal's dates; the
+R10,000 limit on the total and the shown total; a person over their limit renews
+at most the limit; consent, ID review, duplicates, retired plans; another
+account, anonymous callers, staff grants and ended slots; a renewal paid after
+the slot ended starts at payment; staff deliver a renewal sent to reconciliation
+after the slot's last period; one reminder per slot end when the job runs twice,
+only within 3 days, never for a staff grant, "Renew all" only when another slot
+ends within 7 days, no payment started by the job; no recipient for an
+unconfirmed address or a slot renewed after queueing; the mail claim with every
+earlier kind; retention removes a renewed slot's periods newest first; the sweep
+moves a post that can move although 101 posts of owners who lost access ended
+earlier; a post held by staff across the boundary is restored with its renewed
+days and not expired; the 4 posts going live per 30 days count over a slot's
+renewals; a staff-raised limit never carries more than 4 renewals past its end;
+the privacy export holds renewal links and each payment's consent; the grants;
+and that the rollback refuses once a slot was renewed.
+
+## Customer invoices with an Ozow "Pay now" link, 14 November 2026
+
+`20261114041000_customer_invoice_pay_now.sql` was applied on 14 November 2026 at
+08:40 UTC with the owner's approval (roadmap P2b, second slice). It needs
+`20261113223806_bank_transfer_and_consent_fixes.sql` and the payment, checkout
+and slot bodies it builds on with their reviewed bodies, and refuses (55000)
+otherwise. It only adds: no API command, argument or grant is removed or
+changed.
+
+- **Invoice numbers.** `VM-YYYY-NNNNNN`, one sequence per South African calendar
+  year (`VM-2026-000001`, `VM-2026-000002`, ... and again from `000001` in
+  2027). The number is taken in the transaction that issues the invoice, under
+  the row lock of the year's counter in the new table
+  `private.customer_invoice_numbers`, so a refused or failed issue takes no
+  number and two staff issuing at once get consecutive numbers. The counter
+  starts at 1 and only moves up by one (trigger), every invoice takes the
+  counter's current value (trigger) and at commit a year's invoices are exactly
+  1 to its counter (deferred constraint trigger). Invoices are never removed
+  (only the retention job, five tax years later); a cancelled invoice stays as
+  `void` with its number.
+- **The invoice.** New table `private.customer_invoices`: number, customer
+  account, the Individual slot plan version, slots (1 to 25), price per slot and
+  total (at most R50,000; today 25 x 180 days is R10,350), the description ("3 ×
+  Individual slot — 90 days"), issue date, due date (1 to 30 days), who issued
+  it and why, the seller (Verifymzansi (Pty) Ltd, 2026/155305/07, not registered
+  for VAT; issuing refuses with PT409 `invoice_vat_status_changed` unless the
+  merchant VAT setting `private.invoice_merchant_config` says not registered),
+  the buyer's billing details, the cooling-off consent (time and wording version
+  `invoice-cooling-off-v1`) and its status. Issued facts never change; billing
+  details change only while it is issued (each change a new revision); the
+  consent is recorded once; it becomes `paid` (naming its complete Ozow payment
+  of that account and amount) or `void` once (trigger). The seller's street
+  address and the bank account are not stored: the website shows them from
+  server-side settings, and leaves them out when they are not set.
+- **Issue and void (staff).**
+  `api.issue_staff_invoice(p_account_email, p_term_days, p_slots, p_due_days, p_reason, p_request_id)`
+  and `api.void_staff_invoice(p_invoice_id, p_reason)`: capability
+  `payments:refund` with a recent second factor, the staff member's own current
+  accepted ID review, never for an account of their own identity (and, to issue,
+  never for a customer a partner account of their identity referred). Issuing
+  needs a confirmed account with current access and an accepted ID review (PT404
+  `invoice_account_unavailable`, PT409 `payment_account_unavailable`, PT412
+  `invoice_buyer_unverified`), the Individual slot on sale for 30, 90 or 180
+  days (PT409 `invoice_plan_unavailable`) and room within the person's slot
+  limit (PT429 `slot_limit_reached`); the same request id again by the same
+  staff member returns the first invoice (`repeated: true`), with other details
+  PT409 `invoice_request_conflict`. Voiding refuses a paid invoice (PT409
+  `invoice_paid`: refund the payment instead) and one with a payment attempt
+  that could still be paid (PT409 `invoice_payment_open`); an attempt never sent
+  to Ozow is cancelled with it.
+- **Reads.** Staff (`payments:view`): `api.get_staff_invoices()` (latest 50, and
+  the number unpaid) and `api.get_staff_invoice(p_invoice_number)`. The
+  customer: `api.get_my_invoices()` and `api.get_my_invoice(p_invoice_number)`,
+  only for the signed-in account's own invoices; another account's number, or a
+  malformed one, reads as not found (PT404 `invoice_unavailable`), so a guessed
+  number shows nothing.
+- **Billing details.**
+  `api.save_my_invoice_billing(p_invoice_number, p_revision, p_buyer_name, p_buyer_address, p_buyer_registration_number)`:
+  the owner of an issued invoice saves the business or buyer name (2 to 160
+  characters), the address (5 to 300, lines allowed) and an optional
+  registration number (letters, digits, spaces, `/ . -`), at the current
+  revision (PT409 `invoice_revision_changed`); the same details again change
+  nothing.
+- **Pay now.**
+  `api.start_invoice_payment(p_invoice_number, p_expected_total_cents, p_cooling_off_consent)`:
+  the owner of an issued invoice with billing details (PT409
+  `invoice_billing_required`), the box ticked (22023
+  `invoice_consent_required`), the total shown equal to the invoice total (PT428
+  `invoice_amount_mismatch`), the plan version still on sale at the invoice
+  price (PT409 `invoice_plan_unavailable`), an accepted ID review and room
+  within the slot limit counting open checkouts. It returns the attempt whose
+  Ozow page is still open (`reused: true`), or one never sent to Ozow; refuses
+  while an attempt is still being checked (PT409 `invoice_payment_checking`:
+  pending after its Ozow window, being sent, or failed while Ozow's page may
+  take another try) or another payment for the same slot term is open at Ozow
+  (PT409 `invoice_checkout_open`; one never sent to Ozow is cancelled instead);
+  and otherwise starts an ordinary pending Ozow payment of the invoice total
+  with one line per slot, linked in the new table
+  `private.customer_invoice_payments`. The first attempt's reference is the
+  invoice number; a later attempt (after an earlier one expired, failed or was
+  cancelled) is `<number>-<attempt>`, which Ozow shows on the bank statement as
+  the invoice number (its payer reference holds 14 characters). At most 20
+  attempts (PT429 `invoice_attempts_exhausted`). The website opens the Ozow
+  request with the existing service commands; online orders above R10,000 are
+  allowed here (the R10,000 limit is the ordinary checkout's).
+- **Paid.** The attempt is settled by the existing Ozow notice and status check
+  (`internal.apply_provider_event`): the same amount check, idempotency, slots
+  (one per line, starting at payment), invoice record, receipt event and partner
+  commission as any Ozow checkout. The new trigger
+  `payments_customer_invoice_paid` then marks the invoice paid with that payment
+  and its completion time.
+- **Late money for a paid or void invoice.** An earlier attempt that settles
+  after another payment paid the invoice, or after it was voided, is never
+  refused but nothing is delivered for it: `internal.apply_provider_event` (full
+  body; one added condition, `internal.customer_invoice_settled_elsewhere`)
+  records it complete and `needs_reconciliation` (no slots, no commission, the
+  member's "payment review" email), its outcome `complete_unfulfillable_target`
+  is recorded by the website as a payment problem from the notice or the status
+  check that saw it (staff alert), the staff invoice read lists it under
+  `extra_payments`, and staff refund it. `internal.activate_staff_paid_payment`
+  (full body; one added check) refuses to deliver it (PT409
+  `invoice_paid_elsewhere`).
+- **Bank transfer to an invoice.** `private.invoice_transfers` gains
+  `customer_invoice_id` (one waiting or confirmed transfer per invoice, a
+  partial unique index; a trigger checks that a transfer naming an invoice is
+  exactly that issued invoice's account, slot term, slots and total). New staff
+  command
+  `api.record_staff_invoice_transfer(p_invoice_number, p_bank_reference, p_cleared_on, p_cooling_off_waiver, p_reason)`
+  (`payments:refund`, the bank transfer rules of `20261113223806`, the reason
+  stored as "Invoice <number>: <reason>") records it against an issued invoice
+  (PT409 `invoice_paid`, `invoice_void`) with no payment attempt that could
+  still be paid (PT409 `invoice_payment_open`) and no other transfer waiting
+  (PT409 `invoice_transfer_waiting`); an attempt never sent to Ozow is cancelled
+  with it. While it waits, Pay now and voiding are refused (PT409
+  `invoice_transfer_waiting`). The second staff member's confirmation
+  (`internal.confirm_staff_invoice_payment`, full body; its answer unchanged)
+  rechecks the invoice (paid or void: PT409, decline the transfer and return the
+  money; an attempt open at Ozow: PT409 `invoice_payment_open`), cancels an
+  attempt never sent to Ozow before it checks the slot limit (so the slot
+  checkout cannot continue it, and it does not count as open), and marks the
+  invoice paid with the bank transfer payment, whose slots, receipt and
+  commission are those of 20261113162457. A declined transfer leaves the invoice
+  unpaid. Recording a transfer without the invoice for the total of one of the
+  customer's unpaid invoices (any order of that total) is refused with that
+  invoice's number (PT409 `invoice_transfer_required`;
+  `internal.record_staff_invoice_payment`, full body), so a bank transfer to an
+  invoice always pays it.
+- **Refunds.** The existing staff refund commands (whole payment, one slot,
+  through Ozow or recorded) work on the payment unchanged; the invoice stays
+  paid and its read shows the payment's status (for example `refunded`).
+- **Privacy export and retention.** The privacy export holds the member's
+  invoices (`customer_invoices`: number, status, slots, amounts, dates, billing
+  details, consent, payment and attempts; never the staff member or the
+  reasons). The retention job (`internal.retention_commerce`, full body) removes
+  invoices and their attempt links five tax years after they were paid, voided
+  or (if neither) issued, and recorded bank transfers (`bank_transfers` in its
+  answer) five tax years after they were confirmed, declined or (if neither)
+  recorded, and always with the invoice they name (declined ones too), before
+  the payment. This replaces "rows are never removed" of 20261113162457: the
+  guard `internal.invoice_transfer_guard` (full body) allows a delete only
+  within the retention job, as the other payment records. The job no longer
+  stops on a payment that an invoice or a recorded bank transfer still names (it
+  skips it; before, such a payment would have made the delete fail).
+- **Audit.** The staff audit trail lists `payment:customer_invoice_issued` and
+  `payment:customer_invoice_voided`.
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the new commands and the deploy preflight probes every command in
+`../runtime-api-manifest.json`, so a deploy without the update stops there.
+Earlier releases do not call them and keep working with the update applied. It
+is recorded after `20261113223806_bank_transfer_and_consent_fixes.sql`. Merge
+the pull request right after applying (another merge in between fails the
+deploy's API exposure check).
+
+**Applying.**
+
+1. Run `../preflight/20261114041000_customer_invoice_pay_now.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "customer invoices: update not applied
+   (apply before the website release that uses it is deployed); invoices issued:
+   none (table absent); payment attempts: none (table absent)".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "customer invoices: already applied; invoices issued: 0
+   (unpaid: 0); payment attempts: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261114041000_customer_invoice_pay_now.down.sql` (only with the
+owner's decision; prefer a forward fix). Revert and deploy the website release
+first: the rollback removes the commands that release calls. It refuses once an
+invoice was issued (numbered financial records); otherwise it puts back the
+retention job, the privacy export, the bank transfer guard and the staff audit
+view and drops the update's functions, tables and triggers.
+
+`node --import tsx scripts/test-foundation-customer-invoices.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted body or
+table, changing nothing; apply, rollback and re-apply return the same
+fingerprints; issuing and its refusals (wrong staff, own identity, no ID review
+of their own, a referred customer, unknown, unreviewed or blocked customer, slot
+limit, term, due days, request id, VAT setting), none of which takes a number; a
+repeated request; five staff issuing at once and an issue rolled back give
+consecutive numbers, and the counter cannot skip, step back or lose an invoice;
+another account (and a malformed number) reads nothing and cannot change or pay
+the invoice, staff read with `payments:view` only; billing details (normalised,
+revision-fenced, repeat-safe) and the consent before payment; Pay now binds the
+total, the lines and the invoice number; the same attempt while open or unsent;
+a wrong amount is refused, the payment pays the invoice once and a repeated or
+second notice changes nothing; the paid invoice delivered exactly what an Ozow
+checkout of the same order delivered (slots, invoice record, receipt event,
+partner commissions); a paid invoice cannot be paid, changed or voided; attempts
+being checked, later attempts (`-2`, `-3`) and a late earlier attempt (money
+kept but not delivered, staff cannot deliver it, listed as an extra payment);
+another open checkout, the slot limit, the ID review and the catalogue at
+payment; voiding (and its refusals, the unsent attempt cancelled); late money on
+a void invoice (kept, not delivered); two Pay now requests at once give one
+attempt; the South African year boundary (23:59:59 on 31 December and 00:00 on 1
+January); the slot checkout and an invoice attempt (another number of slots
+closes the unsent attempt, the same order continues it and pays the invoice
+once); a bank transfer recorded on the invoice (the same order, and another
+order of the same total, without the invoice refused, a repeat, Pay now, voiding
+and a second transfer refused while it waits, the recorder cannot confirm,
+another admin's confirmation pays the invoice with its slots, receipt event and
+commissions, then Pay now and another transfer refused); an open Ozow payment
+refuses a transfer, a declined transfer frees the invoice, a late Ozow payment
+while a transfer waits pays the invoice and the transfer cannot be confirmed, a
+void invoice takes no transfer, a transfer row of another order is refused;
+recording and confirming a transfer close an unsent invoice attempt
+(confirmation also at the slot limit, and the slot checkout cannot continue it);
+refunds of one slot and of a whole payment; the record rules; the privacy
+export; the retention job keeps a payment an invoice names and removes the
+invoice five tax years on, and an invoice paid by bank transfer with its
+transfers (a declined one too) and payment, a transfer without an invoice five
+tax years after confirmation, keeps a recent transfer, and no delete works
+outside the job; the audit trail; the grants; and that the rollback refuses once
+an invoice was issued.
+
 ## Individual slots at R69, 12 November 2026
 
 `20261113002421_individual_slots_r69.sql` is not applied yet. It was first
@@ -2497,5 +3639,60 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   bodies matched the update's and exactly individual_30d, individual_90d and
   individual_180d were on sale at 6900, 20700 and 41400 cents; production
   fingerprint after it matched the full replay
+- `20261113021223_staff_payment_fixes.sql`: applied 2026-11-13 07:15 UTC; time
+  approximate, applied by the coordinator with the owner's approval through the
+  Supabase query API, from the reviewed file, before the pull request was
+  merged; preflight before "update not applied; paid but not delivered: 0;
+  refunds waiting for approval: none (table absent)", after "already applied"
+  (all 24 function bodies matched the update's, both new tables, the audit view
+  and both waiting triggers present; no problem rows); production fingerprint
+  after it matched the full replay
+- `20261113085340_retire_old_staff_reversal_commands.sql`: applied 2026-11-13
+  14:37 UTC; applied with the owner's approval, from the reviewed file, after
+  the pull request was merged; preflight before "update not applied; refunds
+  waiting for approval: 0", after "already applied" (no problem rows);
+  production fingerprint after it matched the full replay
+- `20261113134500_communication_choices_and_signup_terms.sql`: applied
+  2026-11-13 15:54 UTC; applied with the owner's approval, from the reviewed
+  file, before the pull request was merged; preflight before "update not
+  applied; current terms: posting-v4", after "already applied; current terms:
+  posting-v4; choice changes recorded: 0; sign-up acceptances recorded: 0";
+  production fingerprint after it matched the full replay
+- `20261113162457_staff_invoice_payments.sql`: applied 2026-11-13 19:05 UTC;
+  applied with the owner's approval, from the reviewed file, before the pull
+  request was merged; preflight before "update not applied (apply before the
+  website release that uses it is deployed); bank transfers waiting for
+  confirmation: none (table absent); payments confirmed from a bank transfer:
+  0", after "already applied; bank transfers waiting for confirmation: 0;
+  payments confirmed from a bank transfer: 0"; production fingerprint after it
+  matched the full replay
+- `20261113172356_ozow_api_refunds.sql`: applied 2026-11-14 00:25 UTC; applied
+  with the owner's approval, from the reviewed file (sha256 starting
+  d0595c11cd8bd9bb), before the pull request was merged; preflight before
+  "update not applied", after "already applied; refunds waiting for approval: 0;
+  refunds through Ozow not settled: 0"; production fingerprint after it matched
+  the full replay (except the known schema grant difference); refunds through
+  Ozow stay switched off (`OZOW_API_REFUNDS_ENABLED`)
+- `20261113223806_bank_transfer_and_consent_fixes.sql`: applied 2026-11-14 02:35
+  UTC; applied with the owner's approval, from the reviewed file (sha256
+  starting 8d025150d48e7dcd), before the pull request was merged; preflight
+  before "update not applied; declined bank transfers: 0; bank references
+  recorded more than once: 0; refund references with a space: 0", after "already
+  applied" with the same three counts 0; production fingerprint after it matched
+  the full replay (except the known schema grant difference)
+- `20261114041000_customer_invoice_pay_now.sql`: applied 2026-11-14 08:40 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file (sha256 starting d376dfa3250c2235) before the
+  pull request was merged; preflight before "update not applied", after
+  "customer invoices: already applied; invoices issued: 0 (unpaid: 0); payment
+  attempts: 0"; production fingerprint after it matched the full replay (except
+  the known schema grant difference)
+- `20261114093742_renew_slots_early.sql`: applied 2026-11-14 14:35 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file (sha256 starting 8cb30b16b330f1fe, files from
+  raw GitHub at 0f4fcd28) before the pull request was merged; preflight before
+  "update not applied", after "slot renewals: already applied; renewal payment
+  lines: 0; renewals issued: 0; reminders queued: 0"; production fingerprint
+  after it matched the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->

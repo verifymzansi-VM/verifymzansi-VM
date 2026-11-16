@@ -1,4 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+// The route is hidden until it works (src/lib/hidden-features.ts); these
+// tests switch it on to keep the code behind the switch checked.
+const hiddenFeature = vi.hoisted(() => ({ shown: true }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_STAFF_TRIALS() {
+    return hiddenFeature.shown;
+  },
+}));
 const { guard, rpc } = vi.hoisted(() => ({ guard: vi.fn(), rpc: vi.fn() }));
 vi.mock("@/lib/utils/admin-route-guard", () => ({ enforceAdminMutationGuard: guard }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc }) }));
@@ -15,6 +25,21 @@ const configuration = {
   reason: "Launch allocation",
   values: { slotLimit: 50, launchEnabled: true, sevenDayEnabled: true },
 };
+describe("trial management API while hidden", () => {
+  it("answers 404 before any other check", async () => {
+    hiddenFeature.shown = false;
+    try {
+      const res = await POST(
+        new Request("https://verifymzansi.com/api/admin/trials", { method: "POST", body: "{}" })
+      );
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: "Not found" });
+    } finally {
+      hiddenFeature.shown = true;
+    }
+  });
+});
+
 describe("trial management API", () => {
   beforeEach(() => {
     vi.clearAllMocks();

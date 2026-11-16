@@ -1,6 +1,4 @@
 import { requireStaff } from "@/lib/auth/require-staff";
-import { roleHasCapability } from "@/lib/auth/admin-access";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Inbox } from "lucide-react";
@@ -8,7 +6,6 @@ import { SupportInboxClient } from "./support-inbox-client";
 import Link from "next/link";
 import { uuidSchema } from "@/lib/validations/shared";
 import { createLogger } from "@/lib/utils/logger";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFrontendSupportInbox } from "@/lib/foundation/support-inbox";
 
@@ -29,58 +26,12 @@ export interface SupportSubmission {
 }
 
 const pageSize = 50;
-async function readSourceSupport(page: number, selected?: string) {
-  const admin = createAdminClient();
-
-  let query = admin
-    .from("contact_submissions")
-    .select("id, name, email, message, status, created_at", { count: "exact" })
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false });
-  if (selected) query = query.eq("id", selected);
-  const {
-    data: submissions,
-    error,
-    count,
-  } = await query.range(selected ? 0 : (page - 1) * pageSize, selected ? 0 : page * pageSize - 1);
-  if (error) throw new Error("Source support inbox unavailable");
-
-  const rows: SupportSubmission[] = Array.isArray(submissions)
-    ? (submissions as SupportSubmission[])
-    : [];
-  let activityUnavailable = false;
-  if (rows.length) {
-    const { data: activity, error: activityError } = await admin
-      .from("audit_logs")
-      .select("target_id, action, created_at, metadata")
-      .eq("target_type", "contact_submission")
-      .in(
-        "target_id",
-        rows.map((r) => r.id)
-      )
-      .in("action", ["communication_email_sent", "communication_email_failed"])
-      .order("created_at", { ascending: false })
-      .limit(pageSize * 4);
-    activityUnavailable = Boolean(activityError);
-    for (const row of rows) {
-      row.emailActivity = (activity || [])
-        .filter((event) => event.target_id === row.id)
-        .map((event) => ({
-          template: String(event.metadata?.template || "email"),
-          accepted: event.action === "communication_email_sent",
-          created_at: event.created_at,
-        }));
-    }
-  }
-  return { rows, count: count ?? rows.length, activityUnavailable };
-}
-
 export default async function AdminSupportPage({
   searchParams,
 }: {
   searchParams: Promise<{ page?: string; submission?: string }>;
 }) {
-  const { role, user } = await requireStaff();
+  const { user } = await requireStaff();
   const params = await searchParams;
   const parsedPage = Number(params.page || 1);
   const page =
@@ -88,17 +39,12 @@ export default async function AdminSupportPage({
   const selected = uuidSchema.safeParse(params.submission);
   let rows: SupportSubmission[], count: number, canRespond: boolean, activityUnavailable: boolean;
   try {
-    if (getDataBackend() === "foundation") {
-      const { api } = await readFoundationServerSession();
-      const result = await readFrontendSupportInbox(api, user.id, page, selected.data);
-      rows = result.items;
-      count = result.total;
-      canRespond = result.can_update;
-      activityUnavailable = false;
-    } else {
-      ({ rows, count, activityUnavailable } = await readSourceSupport(page, selected.data));
-      canRespond = roleHasCapability(role, "case:recommend");
-    }
+    const { api } = await readFoundationServerSession();
+    const result = await readFrontendSupportInbox(api, user.id, page, selected.data);
+    rows = result.items;
+    count = result.total;
+    canRespond = result.can_update;
+    activityUnavailable = false;
   } catch {
     createLogger("SupportInbox").error("Support inbox read failed");
     return (

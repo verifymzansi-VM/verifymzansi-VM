@@ -23,9 +23,8 @@ begin
   )
   select jsonb_build_object(
     'capacity', coalesce(sum(u.slot_capacity), 0),
-    'active', (select count(*) from private.post_activations a where a.released_at is null
-      and a.entitlement_id in (select id from usable)),
-    'ends_at', max(u.ends_at),
+    'active', coalesce(sum(internal.slot_posts_held(u.id)), 0),
+    'ends_at', max(internal.slot_chain_end(u.id)),
     'sources', coalesce(jsonb_agg(distinct u.source) filter (where u.source is not null), '[]'))
   from usable u);
 end;

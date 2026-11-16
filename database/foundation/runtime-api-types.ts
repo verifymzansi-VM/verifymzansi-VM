@@ -32,11 +32,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       get_public_frontend_business_affiliations: { Args: { p_post_ids: string[] }; Returns: Json };
       get_frontend_staff_organisation_directory: { Args: Record<never, never>; Returns: Json };
       get_frontend_staff_organisation_detail: { Args: { p_id: string }; Returns: Json };
-      get_frontend_staff_payments: { Args: { p_page: number; p_status?: string }; Returns: Json };
-      record_frontend_staff_payment_reversal: {
-        Args: { p_id: string; p_kind: string; p_reason: string };
-        Returns: Json;
-      };
       start_slot_checkout: {
         Args: {
           p_plan_id: string;
@@ -47,12 +42,155 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_my_slots: { Args: Record<never, never>; Returns: Json };
-      record_staff_slot_reversal: {
-        Args: { p_line_id: string; p_kind: string; p_reason: string };
+      start_slot_renewal_checkout: {
+        Args: {
+          p_entitlement_ids: string[];
+          p_plan_id: string;
+          p_expected_total_cents: number;
+          p_cooling_off_consent: boolean;
+        };
         Returns: Json;
       };
+      get_my_slots_v2: { Args: Record<never, never>; Returns: Json };
+      get_my_communication_choices: { Args: Record<never, never>; Returns: Json };
+      save_my_communication_choices: {
+        Args: {
+          p_wording: string;
+          p_marketing_email?: boolean;
+          p_marketing_sms?: boolean;
+          p_analytics?: boolean;
+          p_third_party_sharing?: boolean;
+        };
+        Returns: Json;
+      };
+      list_my_email_history: { Args: { p_limit?: number }; Returns: Json };
       staff_set_individual_slot_limit: {
         Args: { p_account_id: string; p_slot_limit: number; p_ends_at: string; p_reason: string };
+        Returns: Json;
+      };
+      get_staff_payment_list: { Args: { p_page: number; p_filter?: string }; Returns: Json };
+      request_staff_ozow_refund: {
+        Args: {
+          p_payment_id: string;
+          p_line_id: string | null;
+          p_reason_code: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      record_staff_invoice_payment: {
+        Args: {
+          p_account_email: string;
+          p_term_days: number;
+          p_slots: number;
+          p_amount_cents: number;
+          p_bank_reference: string;
+          p_cleared_on: string;
+          p_cooling_off_waiver: boolean;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      record_staff_dashboard_refund: {
+        Args: {
+          p_payment_id: string;
+          p_line_id: string | null;
+          p_reason_code: string;
+          p_reason: string;
+          p_ozow_refund_id: string;
+          p_ozow_fact: Json | null;
+        };
+        Returns: Json;
+      };
+      get_staff_ozow_refunds: { Args: { p_payment_ids: string[] }; Returns: Json };
+      close_staff_ozow_refund: { Args: { p_request_id: string; p_reason: string }; Returns: Json };
+      get_staff_refund_context: {
+        Args: {
+          p_payment_id: string | null;
+          p_line_id: string | null;
+          p_request_id: string | null;
+        };
+        Returns: Json;
+      };
+      confirm_staff_invoice_payment: { Args: { p_transfer_id: string }; Returns: Json };
+      decline_staff_invoice_payment: {
+        Args: { p_transfer_id: string; p_reason: string };
+        Returns: Json;
+      };
+      get_staff_invoice_transfers: { Args: Record<never, never>; Returns: Json };
+      get_staff_invoice_customer: { Args: { p_account_email: string }; Returns: Json };
+      get_staff_invoice_payments: { Args: { p_payment_ids: string[] }; Returns: Json };
+      issue_staff_invoice: {
+        Args: {
+          p_account_email: string;
+          p_term_days: number;
+          p_slots: number;
+          p_due_days: number;
+          p_reason: string;
+          p_request_id: string;
+        };
+        Returns: Json;
+      };
+      void_staff_invoice: { Args: { p_invoice_id: string; p_reason: string }; Returns: Json };
+      record_staff_invoice_transfer: {
+        Args: {
+          p_invoice_number: string;
+          p_bank_reference: string;
+          p_cleared_on: string;
+          p_cooling_off_waiver: boolean;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      get_staff_invoices: { Args: Record<never, never>; Returns: Json };
+      get_staff_invoice: { Args: { p_invoice_number: string }; Returns: Json };
+      get_my_invoices: { Args: Record<never, never>; Returns: Json };
+      get_my_invoice: { Args: { p_invoice_number: string }; Returns: Json };
+      save_my_invoice_billing: {
+        Args: {
+          p_invoice_number: string;
+          p_revision: number;
+          p_buyer_name: string;
+          p_buyer_address: string;
+          p_buyer_registration_number: string | null;
+        };
+        Returns: Json;
+      };
+      start_invoice_payment: {
+        Args: {
+          p_invoice_number: string;
+          p_expected_total_cents: number;
+          p_cooling_off_consent: boolean;
+        };
+        Returns: Json;
+      };
+      activate_staff_paid_payment: {
+        Args: { p_payment_id: string; p_reason: string };
+        Returns: Json;
+      };
+      record_staff_payment_refund: {
+        Args: {
+          p_payment_id: string;
+          p_kind: string;
+          p_reason_code: string;
+          p_reason: string;
+          p_ozow_reference: string;
+        };
+        Returns: Json;
+      };
+      record_staff_slot_refund: {
+        Args: {
+          p_line_id: string;
+          p_kind: string;
+          p_reason_code: string;
+          p_reason: string;
+          p_ozow_reference: string;
+        };
+        Returns: Json;
+      };
+      approve_staff_payment_refund: { Args: { p_request_id: string }; Returns: Json };
+      decline_staff_payment_refund: {
+        Args: { p_request_id: string; p_reason: string };
         Returns: Json;
       };
       save_frontend_organisation_profile: {
@@ -506,6 +644,15 @@ export type FoundationRuntimeServiceDatabase = {
       complete_payment_alerts: { Args: { p_claim: string; p_sent: boolean }; Returns: number };
       claim_payment_digest: { Args: { p_from_hour: number; p_limit: number }; Returns: Json };
       complete_payment_digest: { Args: { p_claim: string }; Returns: boolean };
+      get_payment_receipt: { Args: { p_payment_id: string }; Returns: Json };
+      claim_ozow_refund_send: { Args: { p_request_id: string }; Returns: Json };
+      run_slot_renewals: { Args: { p_limit: number }; Returns: Json };
+      list_ozow_refund_sends_due: { Args: { p_limit: number }; Returns: Json };
+      record_ozow_refund_send: { Args: { p_request_id: string; p_result: Json }; Returns: Json };
+      apply_ozow_refund_status: { Args: { p_event: Json }; Returns: Json };
+      reconcile_ozow_refunds: { Args: { p_refunds: Json }; Returns: Json };
+      claim_ozow_refund_checks: { Args: { p_limit: number }; Returns: Json };
+      report_ozow_refund_missing: { Args: { p_request_id: string }; Returns: Json };
       start_frontend_cipc_email: {
         Args: {
           p_owner: string;

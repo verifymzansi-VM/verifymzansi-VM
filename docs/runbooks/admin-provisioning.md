@@ -32,33 +32,14 @@ the last 15 minutes.
 
 The last active admin can never be removed. Add a second admin first.
 
-## First admins and recovery: `pnpm bootstrap:operator`
+## First admins and recovery
 
-Use the script only when the app cannot be used to make the change:
-
-- **First launch.** The first admin cannot approve their own promotion. Create
-  the first admin with the script, then create a second admin with it too. After
-  that, use Role Management.
-- **Recovery.** Use it when only one admin is left and they need a second admin,
-  or when every admin is locked out.
-
-```bash
-pnpm bootstrap:operator -- \
-  --email=second.admin@verifymzansi.com \
-  --password='temporary-strong-password' \
-  --display-name='Second Admin' \
-  --role=admin \
-  --reason='Second admin so role changes have an independent approver' \
-  --confirm-project=<project-ref>
-```
-
-- The script uses the service role key, so only the platform owner runs it, from
-  a trusted machine.
-- It refuses to run unless `--confirm-project` matches the configured project.
-- Each run writes a role-history row and an audit entry with action
-  `role_provisioned_by_owner`. Review these entries in the audit log after every
-  use; nobody should run the script routinely.
-- Ask the new staff member to change the temporary password straight away.
+The source backend's `pnpm bootstrap:operator` script has been removed. On the
+foundation backend the first administrator is granted once, in a reviewed owner
+SQL session, with `internal.bootstrap_first_administrator(email)`; later admins
+are added through the native staff governance commands. See "Retired source
+schema and first administrator" in
+[database/foundation/README.md](../../database/foundation/README.md).
 
 ## Two-step verification
 

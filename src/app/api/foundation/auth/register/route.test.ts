@@ -94,11 +94,11 @@ it("uses native CAPTCHA and PKCE in one signup call, without a legacy profile wr
   expect(body).toMatchObject({
     email: submission.email,
     password: submission.password,
-    data: { display_name: submission.displayName },
+    data: { display_name: submission.displayName, terms_accepted: true },
     code_challenge_method: "s256",
     gotrue_meta_security: { captcha_token: submission.turnstileToken },
   });
-  expect(Object.keys(body.data)).toEqual(["display_name"]);
+  expect(Object.keys(body.data)).toEqual(["display_name", "terms_accepted"]);
   expect(body.code_challenge).toMatch(/^[A-Za-z0-9_-]{43}$/);
   expect(new Headers(options?.headers).get("apikey")).toBe(publicKey);
   expect(options).toMatchObject({ cache: "no-store", credentials: "omit", redirect: "manual" });

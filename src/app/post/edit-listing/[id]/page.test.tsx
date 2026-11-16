@@ -123,8 +123,8 @@ vi.mock("./load-own-listing", () => ({
   },
 }));
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({
     auth: {
       getUser: () => Promise.resolve({ data: { user: { id: "user-1" } } }),
     },

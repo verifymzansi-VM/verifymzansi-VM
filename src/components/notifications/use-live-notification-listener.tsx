@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef } from "react";
 import { ToastAction, type ToastProps } from "@/components/ui/toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { toast } from "@/hooks/use-toast";
-import { getDataBackend } from "@/lib/data-backend";
 
 export type NotificationInsertRow = {
   id?: string;
@@ -73,7 +72,7 @@ export function useLiveNotificationListener({
   }, [userId]);
 
   function receive(payload: Record<string, unknown>) {
-    if (getDataBackend() === "foundation" && payload.eventType === "REVALIDATE") {
+    if (payload.eventType === "REVALIDATE") {
       const version = generation.current;
       const readVersion = ++nativeReadVersion.current;
       void fetch("/api/notifications?limit=25", { cache: "no-store", credentials: "same-origin" })

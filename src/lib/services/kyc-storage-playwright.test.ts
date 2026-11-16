@@ -23,7 +23,9 @@ describe("isolated KYC encrypted storage lifecycle", () => {
     vi.stubEnv("ENVIRONMENT", "test");
     vi.stubEnv("VERIFYMZANSI_RUNTIME_MODE", "e2e");
     vi.stubEnv("PLAYWRIGHT_TEST_MODE", "1");
-    vi.stubEnv("PLAYWRIGHT_SUPABASE_MODE", "stub");
+    // The local foundation test copy.
+    vi.stubEnv("FOUNDATION_PROJECT_REF", "local-foundation");
+    vi.stubEnv("FOUNDATION_SUPABASE_URL", "http://127.0.0.1:55443");
     vi.stubEnv("R2_PRIVATE_BUCKET", "verifymzansi-private");
     vi.stubEnv("R2_PUBLIC_BUCKET", "verifymzansi-public");
   });

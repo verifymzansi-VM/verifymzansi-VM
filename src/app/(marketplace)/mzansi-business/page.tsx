@@ -4,7 +4,6 @@ import { SponsorStrip } from "@/components/organisations/sponsor-strip";
 import { mzansiBusinessShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
 import { StreamedShowroom } from "@/components/showrooms/streamed-showroom";
 import { Suspense } from "react";
-import { cookies } from "next/headers";
 import { PageHeader } from "@/components/layout";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
 import { MzansiBusinessGrid } from "./grid";
@@ -18,10 +17,6 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-import {
-  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
-  shouldHidePlaywrightFixtures,
-} from "@/lib/supabase/playwright-visual-fixtures";
 import { getRequiredVerifyMzansiCategorySeo } from "@/lib/seo/public-categories";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
@@ -55,10 +50,6 @@ export default async function MzansiBusinessPage() {
     },
     about: ["business directory", "local services", "verified representatives", "South Africa"],
   };
-  const cookieStore = await cookies();
-  const hideFixtures = shouldHidePlaywrightFixtures(
-    cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
-  );
 
   return (
     <DisableMobileAutoplay>
@@ -75,7 +66,6 @@ export default async function MzansiBusinessPage() {
         <StreamedShowroom
           feed="business"
           surface="showroom:business"
-          hideFixtures={hideFixtures}
           emptyTitle="Mzansi Business"
           emptyDescription={categorySeo.description}
           emptyItem={{

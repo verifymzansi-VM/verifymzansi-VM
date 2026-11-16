@@ -1,26 +1,15 @@
 /** @type {import('next').NextConfig} */
 const { withSentryConfig } = require("@sentry/nextjs/config");
 const { shouldSkipNextTypecheck } = require("./scripts/lib/next-typecheck-skip.cjs");
-const dataBackend = process.env.NEXT_PUBLIC_DATA_BACKEND || "foundation";
-if (!["source", "foundation"].includes(dataBackend))
-  throw new Error("Invalid NEXT_PUBLIC_DATA_BACKEND");
-if (dataBackend === "source") {
-  let isolatedApp = false;
-  try {
-    const app = new URL(process.env.NEXT_PUBLIC_APP_URL || "invalid");
-    isolatedApp = app.protocol === "http:" && ["127.0.0.1", "localhost"].includes(app.hostname);
-  } catch {}
-  if (
-    !isolatedApp ||
-    process.env.ENVIRONMENT !== "test" ||
-    process.env.VERIFYMZANSI_RUNTIME_MODE !== "e2e" ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://playwright.supabase.stub" ||
-    process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE !== "1" ||
-    process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE !== "stub"
-  )
-    throw new Error("The retired backend is restricted to isolated browser fixtures");
-}
-if (dataBackend === "foundation") {
+// The retired ("source") backend has been removed. A leftover backend setting
+// fails the build instead of passing silently.
+if (
+  process.env.NEXT_PUBLIC_DATA_BACKEND !== undefined &&
+  process.env.NEXT_PUBLIC_DATA_BACKEND !== "foundation"
+)
+  throw new Error("The retired backend has been removed; unset NEXT_PUBLIC_DATA_BACKEND");
+// Builds use only the approved London project, or the isolated local test copy.
+(function assertApprovedPublicConnection() {
   let targetUrl;
   try {
     targetUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "invalid");
@@ -54,11 +43,10 @@ if (dataBackend === "foundation") {
     !/^sb_publishable_[A-Za-z0-9_-]+$/.test(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "")
   )
     throw new Error("Foundation builds require the approved public connection");
-}
+})();
 
 const clientEnv = Object.fromEntries(
   Object.entries({
-    NEXT_PUBLIC_DATA_BACKEND: dataBackend,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
@@ -124,9 +112,9 @@ const nextConfig = {
     // Cloudflare Workers does not support the default Next.js image
     // optimisation endpoint (/_next/image), and the zone has no Cloudflare
     // Image Resizing. The custom loader maps media to 400/800/1600px variant
-    // keys (the media route serves the original when a variant is missing;
-    // uploads through the new backend create none yet) and leaves other
-    // images at their own URL. Nothing is resized on the fly.
+    // keys (made at upload by src/lib/media/photo-variants.ts; the media route
+    // serves the original when a variant is missing) and leaves other images
+    // at their own URL. Nothing is resized on the fly.
     loader: "custom",
     loaderFile: "./src/lib/image-loader.ts",
     // Only the 400/800/1600px media variants can differ and local assets are
@@ -137,10 +125,6 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "media.verifymzansi.com",
-      },
-      {
-        protocol: "https",
-        hostname: "tnygdgormnofpgjknlhr.supabase.co",
       },
       {
         protocol: "https",

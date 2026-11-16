@@ -4,7 +4,6 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LegalBlocks, LegalDocument, type LegalSection } from "@/components/safety/legal-document";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
-import { getDataBackend } from "@/lib/data-backend";
 
 export const metadata = {
   title: "Privacy Policy",
@@ -14,10 +13,8 @@ export const metadata = {
 
 export default function PrivacyPolicyPage() {
   const trustConfig = getTrustPublicConfig();
-  const foundation = getDataBackend() === "foundation";
-  const evidenceRetention = foundation
-    ? "ID images, selfies and the encrypted ID number are scheduled for deletion 30 days after the case decision. Unfinished evidence expires after 90 days. Open fraud or legal holds pause deletion. The decision and a keyed identity fingerprint are retained separately."
-    : "Approved: deleted 30 days after review. Rejected: deleted 30 days after upload. Unfinished uploads: deleted after 90 days. Longer only if a fraud, dispute or legal hold applies";
+  const evidenceRetention =
+    "ID images, selfies and the encrypted ID number are scheduled for deletion 30 days after the case decision. Unfinished evidence expires after 90 days. Open fraud or legal holds pause deletion. The decision and a keyed identity fingerprint are retained separately.";
   const dataHandlingRows = [
     {
       dataType: "Introductory-offer identity token",
@@ -31,12 +28,8 @@ export default function PrivacyPolicyPage() {
       dataType: "ID number",
       purpose: "Identity verification, duplicate-account checks, fraud prevention",
       recipients: "Internal reviewers and KYC/infrastructure providers where required",
-      retention: foundation
-        ? evidenceRetention
-        : "Kept encrypted while your account exists, to stop one ID being used for several accounts; deleted with the account (see the identity token above)",
-      deletion: foundation
-        ? "Deleted with the case evidence; open fraud or legal holds pause deletion"
-        : "Deleted when you delete your account, unless a fraud, dispute or legal hold applies",
+      retention: evidenceRetention,
+      deletion: "Deleted with the case evidence; open fraud or legal holds pause deletion",
     },
     {
       dataType: "ID document image",
@@ -131,9 +124,7 @@ export default function PrivacyPolicyPage() {
       content: [
         "We retain account data while your account is active. After account deletion, some records may be retained for fraud prevention, accounting, dispute handling, legal obligations, or platform integrity before deletion or anonymisation.",
         "Posts are deleted 3 days after their plan ends or after you mark them sold, and events when they end, together with their photos, videos and enquiries. A pending payment, an open report or a legal hold can delay deletion.",
-        foundation
-          ? evidenceRetention
-          : "ID and selfie files are deleted 30 days after an approved review, and 30 days after upload if rejected; unfinished uploads are deleted after 90 days. A fraud, dispute, security or legal hold can pause deletion.",
+        evidenceRetention,
         "Security and moderation audit logs are kept for up to 24 months.",
         "When you delete your account, your posts, enquiries and media are deleted with it. Payments and invoices are kept for tax and accounting, no longer linked to you. Limited records may remain where the law, abuse prevention or an unresolved dispute requires it.",
       ],

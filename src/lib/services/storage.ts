@@ -10,18 +10,14 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { R2Bucket } from "@cloudflare/workers-types";
 import { encryptFile, decryptFile } from "@/lib/utils/encryption";
 import { createLogger } from "@/lib/utils/logger";
-import {
-  isPlaywrightFoundationCopy,
-  isPlaywrightSupabaseStubMode,
-  isPlaywrightTestMode,
-} from "@/lib/supabase/playwright-mode";
+import { isPlaywrightFoundationCopy } from "@/lib/supabase/playwright-mode";
 
 const log = createLogger("Storage");
 
-/** Local files instead of R2: the stub browser suite and the local foundation
- * test copy only. Both require test mode, which production can never enable. */
+/** Local files instead of R2: the local foundation test copy only. It requires
+ * test mode, which production can never enable. */
 function shouldUsePlaywrightStorage(): boolean {
-  return isPlaywrightTestMode() && (isPlaywrightSupabaseStubMode() || isPlaywrightFoundationCopy());
+  return isPlaywrightFoundationCopy();
 }
 
 async function playwrightStoragePath(bucket: string, key: string): Promise<string | null> {
@@ -751,7 +747,9 @@ export async function getR2ObjectBytes(
 export async function generatePresignedDownloadUrl(
   bucket: string,
   key: string,
-  expiresIn: number = 3600
+  expiresIn: number = 3600,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  maxContentLength?: number
 ): Promise<string> {
   // Clamp expiresIn to safe range: 60s–86400s (1 min–24 hours)
   const safeExpiry = Math.max(60, Math.min(86400, expiresIn));
@@ -861,7 +859,7 @@ export async function downloadKycDocument(key: string): Promise<Buffer> {
   return result.buffer;
 }
 
-export async function downloadKycDocumentWithMetrics(
+async function downloadKycDocumentWithMetrics(
   key: string
 ): Promise<{ buffer: Buffer; downloadMs: number; decryptMs: number }> {
   assertSafeStorageKey(key);

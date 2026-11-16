@@ -64,7 +64,6 @@ async function main() {
   if (process.argv.length !== 2) throw new Error("Unsupported backend alignment argument");
   const connection = verifyFoundationDeploymentConnection(process.env);
   const expected = {
-    NEXT_PUBLIC_DATA_BACKEND: "foundation",
     NEXT_PUBLIC_SUPABASE_URL: connection.url,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: connection.publishableKey,
     FOUNDATION_SUPABASE_URL: connection.url,

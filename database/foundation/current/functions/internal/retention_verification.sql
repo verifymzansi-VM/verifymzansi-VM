@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION internal.retention_verification(p_limit integer)
  SET search_path TO 'pg_catalog'
 AS $function$
 declare candidate record; numbers integer:=0; challenges integer; proofs integer; localities integer;
-  acceptances integer; histories integer:=0; cases uuid[];
+  acceptances integer; signup_acceptances integer; choice_events integer; histories integer:=0; cases uuid[];
 begin
   for candidate in
     select s.id,s.owner_id,s.case_id from private.verification_identity_submissions s
@@ -41,17 +41,35 @@ begin
     order by c.expires_at limit p_limit for update skip locked);
   get diagnostics challenges=row_count;
 
-  -- Thirty days after closure: home area and terms acceptance go.
+  -- Thirty days after closure: home area and the consent records go
+  -- (posting-terms acceptances, the sign-up Terms acceptance and the
+  -- communication choice history, together). Each batch takes the oldest
+  -- closed accounts that still hold such rows, so the sweep never stalls on
+  -- accounts already cleared.
   delete from private.verification_localities where owner_id in(select x.user_id from private.account_closures x
     where x.closed_at<statement_timestamp()-interval '30 days'
       and not exists(select 1 from private.legal_holds h where h.subject_id=x.user_id and h.released_at is null)
+      and exists(select 1 from private.verification_localities l where l.owner_id=x.user_id)
     order by x.closed_at limit p_limit);
   get diagnostics localities=row_count;
   delete from private.posting_terms_acceptances where owner_id in(select x.user_id from private.account_closures x
     where x.closed_at<statement_timestamp()-interval '30 days'
       and not exists(select 1 from private.legal_holds h where h.subject_id=x.user_id and h.released_at is null)
+      and exists(select 1 from private.posting_terms_acceptances a where a.owner_id=x.user_id)
     order by x.closed_at limit p_limit);
   get diagnostics acceptances=row_count;
+  delete from private.signup_terms_acceptances where account_id in(select x.user_id from private.account_closures x
+    where x.closed_at<statement_timestamp()-interval '30 days'
+      and not exists(select 1 from private.legal_holds h where h.subject_id=x.user_id and h.released_at is null)
+      and exists(select 1 from private.signup_terms_acceptances a where a.account_id=x.user_id)
+    order by x.closed_at limit p_limit);
+  get diagnostics signup_acceptances=row_count;
+  delete from private.communication_choice_events where account_id in(select x.user_id from private.account_closures x
+    where x.closed_at<statement_timestamp()-interval '30 days'
+      and not exists(select 1 from private.legal_holds h where h.subject_id=x.user_id and h.released_at is null)
+      and exists(select 1 from private.communication_choice_events e where e.account_id=x.user_id)
+    order by x.closed_at limit p_limit);
+  get diagnostics choice_events=row_count;
 
   -- Five years after closure: the verification history of the account, once
   -- every file is deleted and no ban still depends on it.
@@ -98,6 +116,7 @@ begin
   end loop;
   return jsonb_build_object('identity_numbers_erased',numbers,'phone_proofs',proofs,'phone_challenges',challenges,
     'closed_account_localities',localities,'closed_account_terms_acceptances',acceptances,
+    'closed_account_signup_terms',signup_acceptances,'closed_account_communication_choices',choice_events,
     'closed_account_verification_histories',histories);
 end;
 $function$;

@@ -1,20 +1,9 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { logAuditEvent } from "@/lib/services/audit";
-import { sendDsarSubmissionEmail } from "@/lib/services/email";
 import { dsarRequestSchema } from "@/lib/validations/verification";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { createLogger } from "@/lib/utils/logger";
-import { maskIdNumber } from "@/lib/utils/mask";
-import { getClientIp, checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
-import { notifyStaffForAdminEvent } from "@/lib/notifications";
-import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { getDataBackend } from "@/lib/data-backend";
+import { getClientIp } from "@/lib/utils/rate-limit";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 
@@ -39,249 +28,79 @@ class PrivacySubmissionRefusal extends Error {
  * Requires an authenticated account session.
  */
 export async function POST(request: NextRequest) {
-  if (getDataBackend() === "foundation") {
-    return handleFoundationOwnerRoute({
-      request,
-      log,
-      action: "dsar:submit",
-      mutate: true,
-      requireCaller: true,
-      maxBytes: 15000,
-      signInMessage: "Sign in to submit a data request",
-      unavailableMessage:
-        "Your data request could not be confirmed. Try again or contact the privacy team.",
-      refusal: (error) => {
-        if (error instanceof PrivacySubmissionRefusal)
-          return {
-            status: error.status,
-            error: error.message,
-            reason: "privacy_submission_refused",
-          };
-        if (error instanceof z.ZodError)
-          return {
-            status: 422,
-            error: "Check the data request details",
-            reason: "invalid_privacy_request",
-          };
-        return null;
-      },
-      command: async (_api, body, caller) => {
-        if (!caller) throw new Error("Verified privacy caller required");
-        const input = dsarSubmitSchema.strict().parse(body);
-        const captcha = await verifyTurnstileToken({
-          token: input.turnstileToken,
-          remoteIp: getClientIp(request),
-        });
-        const hostname = new URL(process.env.NEXT_PUBLIC_APP_URL ?? request.url).hostname;
-        if (captcha.temporary)
-          throw new PrivacySubmissionRefusal(503, "CAPTCHA service unavailable");
-        if (
-          !captcha.success ||
-          ((process.env.NODE_ENV === "production" || captcha.hostname) &&
-            captcha.hostname !== hostname)
-        )
-          throw new PrivacySubmissionRefusal(400, "CAPTCHA verification failed");
-        const { data, error } = await createFoundationServiceApi().rpc(
-          "record_frontend_privacy_request",
-          {
-            p_account: caller.accountId,
-            p_session: caller.sessionId,
-            p_type: input.type,
-            p_name: input.name.trim(),
-            p_last_four: input.idNumber.slice(-4),
-            p_details: input.details?.trim() || null,
-          },
-          { get: false }
-        );
-        if (error?.code === "42501")
-          throw new PrivacySubmissionRefusal(403, "Confirm your email and sign in again.");
-        if (error?.code === "22023")
-          throw new PrivacySubmissionRefusal(400, "Check your request details.");
-        if (error?.code === "PT429")
-          throw new PrivacySubmissionRefusal(429, "Too many data requests. Try again later.");
-        if (error) throw new Error("Privacy request unavailable");
-        const row = z
-          .strictObject({
-            id: z.uuid(),
-            due_by: z.iso.datetime({ offset: true }),
-            reused: z.boolean().optional(),
-          })
-          .safeParse(data);
-        if (!row.success) throw new Error("Privacy request receipt unavailable");
+  return handleFoundationOwnerRoute({
+    request,
+    log,
+    action: "dsar:submit",
+    mutate: true,
+    requireCaller: true,
+    maxBytes: 15000,
+    signInMessage: "Sign in to submit a data request",
+    unavailableMessage:
+      "Your data request could not be confirmed. Try again or contact the privacy team.",
+    refusal: (error) => {
+      if (error instanceof PrivacySubmissionRefusal)
         return {
-          success: true,
-          requestId: row.data.id,
-          reference: `DSAR-${row.data.id.slice(0, 8).toUpperCase()}`,
-          dueBy: new Date(row.data.due_by).toISOString(),
+          status: error.status,
+          error: error.message,
+          reason: "privacy_submission_refused",
         };
-      },
-    });
-  }
-  try {
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) {
-      return originBlock;
-    }
-
-    // Defense-in-depth: double-submit CSRF token alongside the Origin/Fetch-Site
-    // check, matching every other authenticated mutation on the platform.
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) {
-      return csrfBlock;
-    }
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user || user.is_anonymous) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!user.email_confirmed_at) {
-      return NextResponse.json(
-        { error: "Please confirm your email address before submitting a data request." },
-        { status: 403 }
-      );
-    }
-
-    const clientIp = getClientIp(request) || "unknown";
-    const rl = checkLocalRateLimit(clientIp, "dsar:submit");
-    if (rl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter ?? 60) } }
-      );
-    }
-
-    const parsedBody = await parseAndValidateJsonRequest(request, dsarSubmitSchema, {
-      invalidJsonMessage: "Invalid JSON payload",
-      validationErrorMessage: "Invalid request",
-      includeValidationDetails: false,
-    });
-
-    if (!parsedBody.success) {
-      return parsedBody.response;
-    }
-
-    const { type, name, idNumber, details, turnstileToken } = parsedBody.data;
-    // The session is the identity check, so replies (and any data export) go
-    // to the account's confirmed address, never to an address typed here.
-    const email = user.email ?? parsedBody.data.email;
-
-    // Per-email rate limit to prevent mass DSAR submissions with different addresses
-    const emailRl = checkLocalRateLimit(email.toLowerCase(), "dsar:submit:email");
-    if (emailRl.limited) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429, headers: { "Retry-After": String(emailRl.retryAfter ?? 60) } }
-      );
-    }
-
-    // Validate ID number format if provided (must be 13 digits for SA ID)
-    if (idNumber && !/^\d{13}$/.test(idNumber)) {
-      return NextResponse.json({ error: "ID number must be exactly 13 digits" }, { status: 400 });
-    }
-
-    // Mask the ID number for safe persistence (show only last 4 digits)
-    const maskedId = idNumber ? maskIdNumber(idNumber) : undefined;
-
-    // ── Turnstile CAPTCHA verification ───────────────────
-    if (process.env.TURNSTILE_SECRET_KEY) {
-      const remoteIp = getClientIp(request);
-
-      const captchaResult = await verifyTurnstileToken({
-        token: turnstileToken,
-        remoteIp,
+      if (error instanceof z.ZodError)
+        return {
+          status: 422,
+          error: "Check the data request details",
+          reason: "invalid_privacy_request",
+        };
+      return null;
+    },
+    command: async (_api, body, caller) => {
+      if (!caller) throw new Error("Verified privacy caller required");
+      const input = dsarSubmitSchema.strict().parse(body);
+      const captcha = await verifyTurnstileToken({
+        token: input.turnstileToken,
+        remoteIp: getClientIp(request),
       });
-
-      if (!captchaResult.success) {
-        return NextResponse.json({ error: "CAPTCHA verification failed" }, { status: 400 });
-      }
-    } else if (process.env.NODE_ENV === "production") {
-      log.error("TURNSTILE_SECRET_KEY not configured in production");
-      return NextResponse.json({ error: "CAPTCHA service unavailable" }, { status: 503 });
-    }
-
-    // ── Insert DSAR record ───────────────────────────────────
-    const admin = createAdminClient();
-
-    const { data: dsarRecord, error: insertError } = await admin
-      .from("dsar_cases")
-      .insert({
-        type,
-        requester_email: email,
-        requester_phone: "not_provided",
-        identity_verified: false,
-        description: [
-          `Name: ${sanitizeUserMessage(name)}`,
-          maskedId ? `ID: ${maskedId}` : null,
-          details ? sanitizeUserMessage(details) : null,
-        ]
-          .filter(Boolean)
-          .join(" | "),
-        status: "submitted",
-        // The database sets due_by and legal_basis from dsar_deadline_rules;
-        // this placeholder satisfies the column and is always replaced.
-        due_by: new Date().toISOString(),
-        subject_user_id: user.id,
-        identity_check: "session",
-      })
-      .select("id, due_by")
-      .single();
-
-    if (insertError || !dsarRecord) {
-      log.error("Insert error", { error: insertError?.message ?? "No data returned" });
-      return NextResponse.json({ error: "Failed to submit request" }, { status: 500 });
-    }
-    const dueBy = new Date(dsarRecord.due_by);
-
-    // ── Audit log (best-effort) ────────────────────────────────
-    try {
-      await logAuditEvent({
-        actorId: user.id,
-        actorRole: "member",
-        action: "dsar_requested",
-        targetType: "dsar_case",
-        targetId: dsarRecord.id,
-        metadata: {
-          type,
-          dueBy: dueBy.toISOString(),
+      const hostname = new URL(process.env.NEXT_PUBLIC_APP_URL ?? request.url).hostname;
+      if (captcha.temporary) throw new PrivacySubmissionRefusal(503, "CAPTCHA service unavailable");
+      if (
+        !captcha.success ||
+        ((process.env.NODE_ENV === "production" || captcha.hostname) &&
+          captcha.hostname !== hostname)
+      )
+        throw new PrivacySubmissionRefusal(400, "CAPTCHA verification failed");
+      const { data, error } = await createFoundationServiceApi().rpc(
+        "record_frontend_privacy_request",
+        {
+          p_account: caller.accountId,
+          p_session: caller.sessionId,
+          p_type: input.type,
+          p_name: input.name.trim(),
+          p_last_four: input.idNumber.slice(-4),
+          p_details: input.details?.trim() || null,
         },
-      });
-    } catch (auditErr) {
-      log.error("Audit log failed (non-fatal)", {
-        error: auditErr instanceof Error ? auditErr.message : "Unknown",
-      });
-    }
-
-    // Generate a human-readable reference
-    const reference = `DSAR-${dsarRecord.id.slice(0, 8).toUpperCase()}`;
-
-    await sendDsarSubmissionEmail(email, reference, dueBy.toISOString()).catch((emailError) => {
-      log.warn("Failed to send DSAR submission confirmation email", {
-        requestId: dsarRecord.id,
-        error: emailError instanceof Error ? emailError.message : "unknown error",
-      });
-    });
-
-    await notifyStaffForAdminEvent({
-      capability: "dsar:manage",
-      title: "New data request submitted",
-      message: `${type.replace(/_/g, " ")} request ${reference} is ready for review.`,
-      href: "/admin/dsar",
-      excludeUserId: user.id,
-    });
-
-    return NextResponse.json({
-      success: true,
-      requestId: dsarRecord.id,
-      reference,
-      dueBy: dueBy.toISOString(),
-    });
-  } catch (error) {
-    logApiError(log, "Unexpected DSAR submit error", error);
-    return internalApiError("Failed to submit DSAR request");
-  }
+        { get: false }
+      );
+      if (error?.code === "42501")
+        throw new PrivacySubmissionRefusal(403, "Confirm your email and sign in again.");
+      if (error?.code === "22023")
+        throw new PrivacySubmissionRefusal(400, "Check your request details.");
+      if (error?.code === "PT429")
+        throw new PrivacySubmissionRefusal(429, "Too many data requests. Try again later.");
+      if (error) throw new Error("Privacy request unavailable");
+      const row = z
+        .strictObject({
+          id: z.uuid(),
+          due_by: z.iso.datetime({ offset: true }),
+          reused: z.boolean().optional(),
+        })
+        .safeParse(data);
+      if (!row.success) throw new Error("Privacy request receipt unavailable");
+      return {
+        success: true,
+        requestId: row.data.id,
+        reference: `DSAR-${row.data.id.slice(0, 8).toUpperCase()}`,
+        dueBy: new Date(row.data.due_by).toISOString(),
+      };
+    },
+  });
 }

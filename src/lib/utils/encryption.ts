@@ -17,7 +17,7 @@ import { env } from "@/lib/config/env";
  *
  * **v1 (legacy):** PBKDF2-SHA512 with 600 000 iterations.  Retained in the
  * decrypt path so any files encrypted with the old scheme can still be read.
- * The kyc-encryptor worker used 100 000 iterations — also supported.
+ * The former kyc-encryptor worker (removed) used 100 000 iterations — also supported.
  */
 
 const ALGORITHM = "aes-256-gcm";
@@ -199,7 +199,7 @@ function decryptV2(encryptedData: Buffer): Buffer {
 
 /**
  * Decrypt legacy v1-format data (PBKDF2 derived key).
- * Tries 600k iterations first (main app), then 100k (kyc-encryptor worker).
+ * Tries 600k iterations first (main app), then 100k (former kyc-encryptor worker).
  */
 async function decryptLegacy(encryptedData: Buffer): Promise<Buffer> {
   const minLength = SALT_LENGTH + IV_LENGTH + TAG_LENGTH + 1;
@@ -226,7 +226,7 @@ async function decryptLegacy(encryptedData: Buffer): Promise<Buffer> {
     // Fall through to worker iteration count
   }
 
-  // Try worker iteration count (100k — kyc-encryptor worker)
+  // Try the former worker's iteration count (100k — kyc-encryptor worker, removed)
   const key = await deriveKeyLegacy(masterKey, salt, LEGACY_ITERATIONS_WORKER);
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(tag);

@@ -17,6 +17,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SHOW_OWNER_METRICS } from "@/lib/hidden-features";
 import { Button } from "@/components/ui/button";
 
 export interface DashboardNavItem {
@@ -37,7 +38,10 @@ export const DASHBOARD_MANAGE_NAV: DashboardNavItem[] = [
   },
   { href: "/dashboard/slots", icon: Layers, label: "My slots" },
   { href: "/dashboard/leads", icon: MessageSquare, label: "Leads" },
-  { href: "/dashboard/metrics", icon: BarChart3, label: "Performance" },
+  // Hidden until it works (src/lib/hidden-features.ts).
+  ...(SHOW_OWNER_METRICS
+    ? [{ href: "/dashboard/metrics", icon: BarChart3, label: "Performance" }]
+    : []),
 ];
 
 export const DASHBOARD_ACCOUNT_NAV: DashboardNavItem[] = [

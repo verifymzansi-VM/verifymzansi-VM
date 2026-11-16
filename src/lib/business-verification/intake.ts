@@ -11,6 +11,7 @@ import {
   isReencodableImageType,
   reencodeImage,
 } from "@/lib/utils/image-reencode";
+import { recordImagesTransformations } from "@/lib/media/images-allowance";
 import { createLogger } from "@/lib/utils/logger";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 
@@ -65,7 +66,9 @@ async function reencodePhoto(bytes: Uint8Array, mime: string): Promise<Uint8Arra
     if (!isReencodableImageType(mime)) {
       throw new ImageReencodeError("undecodable", `Unsupported image type ${mime}`);
     }
-    return await reencodeImage(bytes, mime);
+    const reencoded = await reencodeImage(bytes, mime);
+    await recordImagesTransformations(1);
+    return reencoded;
   } catch (error) {
     log.warn("Photo re-encode refused upload", {
       error: error instanceof Error ? error.message : String(error),

@@ -14,7 +14,7 @@ const PATH_KINDS: Record<string, FeedRefKind> = {
   "tourism-events": "t",
 };
 
-export const TABLE_REF_KINDS: Record<FeedTable, Exclude<FeedRefKind, "t">> = {
+const TABLE_REF_KINDS: Record<FeedTable, Exclude<FeedRefKind, "t">> = {
   listings: "l",
   businesses: "b",
   promotions: "p",

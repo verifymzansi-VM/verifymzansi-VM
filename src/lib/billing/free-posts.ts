@@ -72,14 +72,6 @@ export async function releaseFreePostSlot(
   if (error) throw new Error(error.message);
   return data === true;
 }
-export function releaseRejectedDeletedFreePost(
-  admin: SupabaseClient,
-  userId: string,
-  area: MarketplaceArea,
-  contentId: string
-): Promise<boolean> {
-  return releaseFreePostSlot(admin, { userId, area, contentId, reason: "rejected_deleted" });
-}
 export function trialAvailabilityMessage(offer: IntroTrialOffer): string {
   const long = offer.longDays ?? 30;
   if (offer.remaining === null) return `${long}-day trial available once per verified identity.`;

@@ -1,55 +1,51 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// src/test/setup.ts replaces two exports globally; test the real module here.
+// src/test/setup.ts replaces the reads globally; test the real module here.
 vi.unmock("@/lib/services/queue-claims");
 
-const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc }) }));
+const { readFrontendStaffClaimViews, readMyFrontendStaffClaims } = vi.hoisted(() => ({
+  readFrontendStaffClaimViews: vi.fn(),
+  readMyFrontendStaffClaims: vi.fn(),
+}));
+vi.mock("@/lib/foundation/staff-claims-server", () => ({
+  readFrontendStaffClaimViews,
+  readMyFrontendStaffClaims,
+}));
 
-import { checkQueueClaim, claimNextItems, releaseDecidedClaim } from "./queue-claims";
+import { countMyClaims, getClaimsForItems, getMyClaimedItems } from "./queue-claims";
 
 const ACTOR = "11111111-1111-4111-8111-111111111111";
 const ITEM = { type: "report" as const, id: "22222222-2222-4222-8222-222222222222" };
 
 describe("queue claims", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("lets the holder decide", async () => {
-    rpc.mockResolvedValue({ data: { ok: true, claimed: true }, error: null });
-    await expect(checkQueueClaim(ACTOR, ITEM)).resolves.toBeNull();
-    expect(rpc).toHaveBeenCalledWith("check_queue_claim", {
-      p_actor: ACTOR,
-      p_item_type: "report",
-      p_item_id: ITEM.id,
+  beforeEach(() => {
+    vi.clearAllMocks();
+    readMyFrontendStaffClaims.mockResolvedValue({
+      items: [
+        { item_type: "report", id: "a", mine: true, queue: "reports" },
+        { item_type: "verification_step", id: "b", mine: true, queue: "kyc" },
+        { item_type: "report", id: "c", mine: false, queue: "reports" },
+      ],
     });
   });
 
-  it.each([
-    ["claim_required", 409],
-    ["claimed_by_other", 409],
-    ["not_independent", 403],
-  ])("refuses %s with %i", async (error, status) => {
-    rpc.mockResolvedValue({ data: { ok: false, error }, error: null });
-    const res = await checkQueueClaim(ACTOR, ITEM);
-    expect(res?.status).toBe(status);
-    await expect(res?.json()).resolves.toMatchObject({ code: error });
+  it("reads no claims for an empty page", async () => {
+    await expect(getClaimsForItems(ACTOR, [])).resolves.toEqual({});
+    expect(readFrontendStaffClaimViews).not.toHaveBeenCalled();
   });
 
-  it("fails closed when the check itself fails", async () => {
-    rpc.mockResolvedValue({ data: null, error: { message: "down" } });
-    expect((await checkQueueClaim(ACTOR, ITEM))?.status).toBe(503);
+  it("reads claim views for the listed items", async () => {
+    const views = { [`report:${ITEM.id}`]: { mine: true, holderName: "you", expiresAt: "x" } };
+    readFrontendStaffClaimViews.mockResolvedValue(views);
+    await expect(getClaimsForItems(ACTOR, [ITEM])).resolves.toBe(views);
+    expect(readFrontendStaffClaimViews).toHaveBeenCalledExactlyOnceWith(ACTOR, [ITEM]);
   });
 
-  it("maps a governor's claim attempt to forbidden", async () => {
-    rpc.mockResolvedValue({ data: null, error: { message: "claim_forbidden" } });
-    await expect(claimNextItems(ACTOR, "reports", 10)).resolves.toEqual({
-      ok: false,
-      error: "forbidden",
-    });
-  });
-
-  it("never fails a decision because the release failed", async () => {
-    rpc.mockResolvedValue({ data: null, error: { message: "down" } });
-    await expect(releaseDecidedClaim(ACTOR, ITEM)).resolves.toBeUndefined();
+  it("lists and counts only the viewer's own claims in one queue", async () => {
+    await expect(getMyClaimedItems(ACTOR, "reports")).resolves.toEqual([
+      { type: "report", id: "a" },
+    ]);
+    await expect(countMyClaims(ACTOR, "kyc")).resolves.toBe(1);
+    expect(readMyFrontendStaffClaims).toHaveBeenCalledWith(ACTOR);
   });
 });

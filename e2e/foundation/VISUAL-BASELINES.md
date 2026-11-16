@@ -77,5 +77,5 @@ that the data does not explain.**
 - The footer shows the current year ("© 2026"), as the old pictures did: on
   1 January every picture with the footer will differ and needs an approved
   refresh. Not masked here, to keep the screens as they were.
-- The old pictures (`e2e/visual-regression.spec.ts-snapshots/`) and spec stay
-  until the stub suite is removed in its own change; CI no longer runs them.
+- The old pictures (`e2e/visual-regression.spec.ts-snapshots/`) and spec were
+  deleted with the stub suite on 2026-11-11; the git history keeps them.

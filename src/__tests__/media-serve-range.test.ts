@@ -354,7 +354,6 @@ describe("GET /api/media/serve for keys without a file extension", () => {
       const spy = vi.spyOn(process, "cwd").mockReturnValue(root);
       restoreCwd = () => spy.mockRestore();
       vi.stubEnv("PLAYWRIGHT_TEST_MODE", "1");
-      vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
       vi.stubEnv("FOUNDATION_PROJECT_REF", "local-foundation");
       vi.stubEnv("FOUNDATION_SUPABASE_URL", "http://127.0.0.1:55443");
     });

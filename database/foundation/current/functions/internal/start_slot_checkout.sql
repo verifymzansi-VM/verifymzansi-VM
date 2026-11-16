@@ -16,6 +16,7 @@ declare
   slot_limit integer;
   total bigint;
   lines integer;
+  renewal boolean;
 begin
   if p_plan_id is null or p_slots is null or p_slots not between 1 and 25 or p_expected_total_cents is null then
     raise exception 'slot plan, number of slots and total required' using errcode='22023';
@@ -46,14 +47,18 @@ begin
     for update;
   if found then
     select count(*) into lines from private.payment_lines l where l.payment_id=pay.id;
-    if lines <> p_slots then
+    renewal := exists(select 1 from private.payment_lines l where l.payment_id=pay.id and l.renews_entitlement_id is not null);
+    -- A renewal (api.start_slot_renewal_checkout) is never reused as an order
+    -- of new slots: like an order of another number of slots it is continued,
+    -- checked or cancelled first.
+    if lines <> p_slots or renewal then
       if pay.checkout_url is not null then
-        -- Open at Ozow for another number of slots: the member continues,
-        -- checks or cancels it first.
+        -- Open at Ozow for another order: the member continues, checks or
+        -- cancels it first.
         perform internal.price_draft_actor();
         return jsonb_build_object('payment_id', pay.id, 'merchant_reference', pay.merchant_reference,
           'amount_cents', pay.amount_cents::text, 'currency', pay.currency, 'status', pay.status,
-          'slots', lines, 'reused', true);
+          'slots', lines, 'renewal', renewal, 'reused', true);
       elsif pay.checkout_claim_until > clock_timestamp() then
         raise exception 'checkout is being created' using errcode='PT409';
       end if;

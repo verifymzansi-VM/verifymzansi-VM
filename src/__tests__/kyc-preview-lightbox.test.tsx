@@ -4,10 +4,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
-import {
-  clearCachedKycArtifactBlobs,
-  setCachedKycArtifactBlob,
-} from "@/lib/utils/kyc-artifact-blob-cache";
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -87,6 +83,11 @@ vi.mock("next/link", () => ({
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
+// The staff-account check on evidence responses has its own tests.
+vi.mock("@/lib/auth/staff-evidence-fetch", () => ({
+  fetchStaffEvidence: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+  handleStaffEvidenceResponse: async (response: Response) => response,
+}));
 
 const mockCreateObjectURL = vi.fn(() => "blob:mock-lightbox-url");
 const mockRevokeObjectURL = vi.fn();
@@ -105,6 +106,15 @@ const { KycPreviewLightbox, EVIDENCE_FETCH_TIMEOUT_MS } =
   await import("@/components/admin/kyc-preview-lightbox");
 
 // ── Test data ────────────────────────────────────────────────
+
+// Evidence loads only for a claimed identity submission.
+const SCOPE = {
+  caseId: "11111111-1111-4111-8111-000000000001",
+  caseVersion: 7,
+  submissionId: "11111111-1111-4111-8111-000000000002",
+  claimGeneration: "4",
+  claimNonce: "11111111-1111-4111-8111-000000000003",
+};
 
 const MOCK_STEP = {
   id: "step-1",
@@ -127,6 +137,7 @@ const MOCK_ARTIFACT = {
   created_at: "2025-01-01T00:00:00Z",
   purge_after: null,
   sha256: "abc123",
+  foundation: SCOPE,
 };
 
 async function renderOpenLightbox(
@@ -150,7 +161,6 @@ async function renderOpenLightbox(
 describe("KycPreviewLightbox", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    clearCachedKycArtifactBlobs();
   });
 
   it("does not render when open is false", () => {
@@ -182,7 +192,7 @@ describe("KycPreviewLightbox", () => {
         "/api/admin/verification/evidence",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ artifactId: "art-1" }),
+          body: JSON.stringify({ artifactId: "art-1", foundation: SCOPE }),
         })
       );
     });
@@ -202,19 +212,6 @@ describe("KycPreviewLightbox", () => {
 
     expect(screen.getByText("Test Account")).toBeDefined();
     expect(screen.getByText("ID Document")).toBeDefined();
-  });
-
-  it("displays a cached selfie without leaving the loading spinner visible", async () => {
-    setCachedKycArtifactBlob(MOCK_ARTIFACT.id, new Blob(["img"], { type: "image/jpeg" }));
-
-    await renderOpenLightbox({
-      step: { ...MOCK_STEP, step_type: "selfie" },
-      artifact: { ...MOCK_ARTIFACT, step_type: "selfie" },
-    });
-
-    expect(screen.queryByText(/decrypting and loading/i)).toBeNull();
-    expect(screen.getByAltText("Evidence: selfie")).toBeDefined();
-    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it.each(["high", "critical"])(
@@ -249,6 +246,8 @@ describe("KycPreviewLightbox", () => {
             stepId: "step-1",
             decision: "approved",
             overrideReasonCode: "supporting_evidence",
+            foundation: SCOPE,
+            stepMatches: true,
           }),
         })
       );
@@ -286,7 +285,9 @@ describe("KycPreviewLightbox", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Confirm Approve")).toBeDefined();
-      expect(screen.getByText(/this will mark the step as approved/i)).toBeDefined();
+      expect(
+        screen.getByText(/confirm that the id number and legal name match the submitted details/i)
+      ).toBeDefined();
     });
   });
 

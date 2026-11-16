@@ -16,9 +16,10 @@ begin
       'invalid_json', 'missing_merchant_reference', 'missing_transaction_status', 'unknown_payment',
       'unknown_reference', 'request_mismatch', 'missing_transaction', 'conflicting_transaction',
       'transaction_reused', 'complete_unfulfillable_target', 'refunded_after_completion',
-      'multiple_settlements')
-    or p_source is null or p_source not in ('notice', 'status_check') or p_alert is null
-    or length(p_transaction) not between 1 and 100 then
+      'multiple_settlements', 'refund_failed', 'refund_returned', 'refund_unmatched', 'refund_stuck',
+      'refund_mismatch')
+    or p_source is null or p_source not in ('notice', 'status_check', 'refund_notice', 'refund_check', 'refund_send')
+    or p_alert is null or length(p_transaction) not between 1 and 100 then
     raise exception 'invalid payment problem' using errcode='22023';
   end if;
   if p_payment_id is not null and not exists(select 1 from private.payments p where p.id=p_payment_id) then
@@ -39,8 +40,8 @@ begin
       and (p.payment_id=p_payment_id or (p_payment_id is null and p.payment_id is null))
     for update;
   -- Seen before: the first source and first time stay; the mark only rises.
-  -- Once emailed, a marked repeat from another Ozow transaction raises it
-  -- again (at most 5 times); the same transaction never does.
+  -- Once emailed, a marked repeat from another Ozow transaction (or another
+  -- refund record) raises it again (at most 5 times); the same one never does.
   raise_now := alert and not problem.needs_alert;
   rearm := alert and problem.needs_alert and problem.alerted_at is not null and p_transaction is not null
     and problem.alert_transaction is distinct from p_transaction and problem.alert_rearms<5;

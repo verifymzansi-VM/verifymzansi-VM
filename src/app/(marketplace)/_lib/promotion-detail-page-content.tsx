@@ -1,5 +1,4 @@
 import { publicPersonName } from "@/lib/account/public-name";
-import { getDataBackend } from "@/lib/data-backend";
 import {
   restoredEventDetail,
   restoredEventHostBusiness,
@@ -12,36 +11,14 @@ import type { Metadata } from "next";
 
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
-import { ACCOUNT_PROFILE_TABLE, normalizeOwnerRecord, readOwnerId } from "@/lib/account/compat";
-import {
-  getOptionalContentShareCountMap,
-  getOptionalContentLikeSummaryMap,
-  getOptionalContentViewCountMap,
-} from "@/lib/engagement-server";
-import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
-import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
+import { normalizeOwnerRecord, readOwnerId } from "@/lib/account/compat";
 import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
 import { presentEventSlide } from "@/lib/feed/presenters";
-import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
-import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { PROMOTION_DETAIL_SELECT } from "@/lib/promotions/detail-select";
-import { CARD_STICKER_COLUMNS, toPublicVerification } from "@/lib/business-verification/public";
+import { toPublicVerification } from "@/lib/business-verification/public";
 
 export async function generatePromotionDetailMetadata(id: string): Promise<Metadata> {
-  const supabase = await createClient();
-  const { data: promotion } =
-    getDataBackend() === "foundation"
-      ? { data: await restoredEventDetail(id) }
-      : await applyVisibleExpiryFilter(
-          supabase
-            .from("promotions")
-            .select(
-              "title, description, photos, videos, video_thumbnail, media_width, media_height"
-            )
-            .eq("id", id)
-            .eq("status", "live")
-        ).single();
+  const promotion = await restoredEventDetail(id);
 
   if (!promotion) {
     return { title: "Tourism & Events Listing Not Found" };
@@ -60,17 +37,7 @@ export async function generatePromotionDetailMetadata(id: string): Promise<Metad
 
 export async function PromotionDetailPageContent({ id }: { id: string }) {
   const supabase = await createClient();
-  const foundation = getDataBackend() === "foundation";
-  const engagementAdmin = foundation ? null : tryCreateAdminClient();
-  const { data: rawPromotion } = foundation
-    ? { data: await restoredEventDetail(id) }
-    : await applyVisibleExpiryFilter(
-        supabase
-          .from("promotions")
-          .select(PROMOTION_DETAIL_SELECT)
-          .eq("id", id)
-          .eq("status", "live")
-      ).single();
+  const rawPromotion = await restoredEventDetail(id);
 
   const promotion = rawPromotion ? normalizeOwnerRecord(rawPromotion) : null;
 
@@ -79,56 +46,25 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
   }
 
   const promotionOwnerId = readOwnerId(promotion);
-  const publicPost = foundation ? await restoredPublicDetail(id) : null;
-  const { data: advertiserProfile } = publicPost
+  const publicPost = await restoredPublicDetail(id);
+  const advertiserProfile = publicPost
     ? {
-        data: {
-          display_name: publicPost.seller.public_name,
-          account_verification_status: publicPost.seller.identity_verified ? "verified" : null,
-          phone: null,
-        },
+        display_name: publicPost.seller.public_name,
+        account_verification_status: publicPost.seller.identity_verified
+          ? ("verified" as const)
+          : null,
+        phone: null,
       }
-    : promotionOwnerId
-      ? await (engagementAdmin ?? supabase)
-          .from(ACCOUNT_PROFILE_TABLE)
-          .select("display_name, account_verification_status, phone")
-          .eq("user_id", promotionOwnerId)
-          .maybeSingle()
-      : { data: null };
+    : null;
 
-  const linkedBusinessRow = !promotion.business_id
-    ? null
-    : foundation
-      ? await restoredEventHostBusiness(promotion.business_id)
-      : (
-          await applyVisibleExpiryFilter(
-            supabase
-              .from("businesses")
-              .select(
-                `id, owner_id, business_name, logo_url, ${CARD_STICKER_COLUMNS}, owner_verified_role, owner_position_title`
-              )
-              .eq("id", promotion.business_id)
-              .eq("status", "live")
-          ).maybeSingle()
-        ).data;
+  const linkedBusinessRow = promotion.business_id
+    ? await restoredEventHostBusiness(promotion.business_id)
+    : null;
   const linkedBusiness = linkedBusinessRow ? toPublicVerification(linkedBusinessRow) : null;
-  const cookieStore = await getOptionalCookieStore();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const viewerId = readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null;
-  const [promotionViewCounts, promotionLikes] = await Promise.all([
-    getOptionalContentViewCountMap(engagementAdmin, "promotion", [promotion.id]),
-    getOptionalContentLikeSummaryMap(
-      engagementAdmin,
-      "promotion",
-      [promotion.id],
-      buildViewerKey(viewerId, user?.id)
-    ),
-  ]);
-  const promotionViewCount = promotionViewCounts.ok
-    ? (promotionViewCounts.data.get(promotion.id) ?? 0)
-    : (promotion.view_count ?? 0);
+  const promotionViewCount = promotion.view_count ?? 0;
 
   const locationName = [promotion.location_city, promotion.location_province]
     .filter(Boolean)
@@ -164,19 +100,15 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
         ...advertiserProfile,
         display_name: publicPersonName(advertiserProfile.display_name),
         phone: publishesPhone && viewerIsAdvertiser ? advertiserProfile.phone : null,
-        has_phone: foundation ? publishesPhone : publishesPhone && Boolean(advertiserProfile.phone),
+        has_phone: publishesPhone,
         masked_phone_public: null,
       }
     : null;
-  const ownLikes = promotionLikes.ok ? promotionLikes.data.get(promotion.id) : undefined;
-  const shareCounts = await getOptionalContentShareCountMap(engagementAdmin, "promotion", [
-    promotion.id,
-  ]);
   const immersiveSlide = presentEventSlide(promotion, safeAdvertiser, linkedBusiness, {
     views: promotionViewCount,
-    likes: ownLikes?.likeCount ?? 0,
-    viewerHasLiked: ownLikes?.viewerHasLiked ?? false,
-    shares: shareCounts.get(promotion.id) ?? null,
+    likes: 0,
+    viewerHasLiked: false,
+    shares: null,
   });
 
   const page = (

@@ -3,12 +3,8 @@ import { resetOzowTokenCacheForTesting } from "@/lib/payments/ozow";
 import { NextRequest } from "next/server";
 import { Webhook } from "svix";
 
-const mockCreateAdminClient = vi.fn();
-const mockFulfillPayment = vi.fn();
-const mockSendPaymentReceiptEmail = vi.fn();
-const mockSendPaymentFailedEmail = vi.fn();
-const mockGetUserById = vi.fn();
-const mockScheduleBackgroundTask = vi.fn();
+const mockApplyNotification = vi.fn();
+const mockRecordProblem = vi.fn();
 const mockCheckRateLimit = vi.fn();
 
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -16,16 +12,12 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   getClientIp: () => "127.0.0.1",
 }));
 
-vi.mock("@/lib/utils/background-task", () => ({
-  scheduleBackgroundTask: (...args: unknown[]) => mockScheduleBackgroundTask(...args),
+vi.mock("@/lib/foundation/billing-runtime", () => ({
+  applyFoundationOzowNotification: (...args: unknown[]) => mockApplyNotification(...args),
 }));
 
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => mockCreateAdminClient(),
-}));
-
-vi.mock("@/lib/payments/fulfillment", () => ({
-  fulfillPayment: (...args: unknown[]) => mockFulfillPayment(...args),
+vi.mock("@/lib/foundation/payment-problems", () => ({
+  recordPaymentProblem: (...args: unknown[]) => mockRecordProblem(...args),
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -50,791 +42,144 @@ vi.mock("@/lib/config/env", () => ({
   }),
 }));
 
-vi.mock("@/lib/services/audit", () => ({
-  logAuditEvent: vi.fn(),
-}));
-
-vi.mock("@/lib/services/email", () => ({
-  sendPaymentReceiptEmail: (...args: unknown[]) => mockSendPaymentReceiptEmail(...args),
-  sendPaymentFailedEmail: (...args: unknown[]) => mockSendPaymentFailedEmail(...args),
-}));
-
 import { POST } from "./route";
 
 const webhookSecret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
 
-function createSvixHeaders(body: Record<string, unknown>, signature?: string) {
-  const raw = JSON.stringify(body);
+function signedRequest(raw: string, signature?: string) {
   const webhook = new Webhook(webhookSecret);
   const timestamp = new Date();
   const webhookId = "msg_test_123";
-
-  return {
-    "Content-Type": "application/json",
-    "svix-id": webhookId,
-    "svix-timestamp": Math.floor(timestamp.getTime() / 1000).toString(),
-    "svix-signature": signature ?? webhook.sign(webhookId, timestamp, raw),
-  };
-}
-
-function createSignedRequest(body: Record<string, unknown>, signature?: string) {
-  if (body.data && typeof body.data === "object" && !("TransactionId" in body.data)) {
-    body = { ...body, data: { siteCode: "site-code", ...body.data } };
-  }
   return new NextRequest("http://localhost/api/webhooks/ozow", {
     method: "POST",
-    body: JSON.stringify(body),
-    headers: createSvixHeaders(body, signature),
+    body: raw,
+    headers: {
+      "Content-Type": "application/json",
+      "svix-id": webhookId,
+      "svix-timestamp": Math.floor(timestamp.getTime() / 1000).toString(),
+      "svix-signature": signature ?? webhook.sign(webhookId, timestamp, raw),
+    },
   });
 }
 
+const createSignedRequest = (body: Record<string, unknown>, signature?: string) =>
+  signedRequest(JSON.stringify(body), signature);
+
+const completion = {
+  eventType: "transaction.complete",
+  data: {
+    siteCode: "site-code",
+    merchantReference: "payment-1",
+    id: "ozow-tx-1",
+    paymentRequestId: "ozow-request-1",
+    status: "successful",
+    amount: { value: 25, currency: "ZAR" },
+  },
+};
+
+// Production runs the foundation backend: the route authenticates and
+// normalises the notification, then hands it to the foundation payment runtime
+// (tested in src/lib/foundation/billing-runtime.test.ts).
 describe("POST /api/webhooks/ozow", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
   beforeEach(() => {
     resetOzowTokenCacheForTesting();
     vi.clearAllMocks();
-    mockFulfillPayment.mockReset().mockResolvedValue({ outcome: "completed" });
     mockCheckRateLimit.mockReset().mockResolvedValue({ limited: false });
-    process.env.OZOW_WEBHOOK_SECRET = webhookSecret;
-    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
-    mockGetUserById.mockResolvedValue({
-      data: {
-        user: {
-          email: "payer@example.com",
-          user_metadata: { full_name: "Payer One" },
-        },
-      },
-      error: null,
-    });
-    mockSendPaymentReceiptEmail.mockResolvedValue({ success: true });
-    mockSendPaymentFailedEmail.mockResolvedValue({ success: true });
+    mockApplyNotification.mockReset().mockResolvedValue({ success: true, result: "completed" });
+    vi.stubEnv("OZOW_WEBHOOK_SECRET", webhookSecret);
+    vi.stubEnv("NODE_ENV", "development");
+  });
+
+  it("hands a signed completion and its raw body to the foundation payment runtime", async () => {
+    const raw = JSON.stringify(completion);
+    const response = await POST(signedRequest(raw));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true, result: "completed" });
+    expect(mockApplyNotification).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        eventType: "transaction.complete",
+        merchantReference: "payment-1",
+        transactionId: "ozow-tx-1",
+      }),
+      raw
+    );
   });
 
   it("rejects webhooks when the secret is not configured", async () => {
-    delete process.env.OZOW_WEBHOOK_SECRET;
-
-    const response = await POST(
-      createSignedRequest({
-        eventType: "transaction.complete",
-        data: {
-          merchantReference: "payment-1",
-          status: "successful",
-          amount: { value: 25, currency: "ZAR" },
-        },
-      })
-    );
-
+    vi.stubEnv("OZOW_WEBHOOK_SECRET", "");
+    const response = await POST(createSignedRequest(completion));
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({ error: "Webhook secret not configured" });
+    expect(mockApplyNotification).not.toHaveBeenCalled();
+  });
+
+  it("answers production callers without naming the missing secret", async () => {
+    vi.stubEnv("OZOW_WEBHOOK_SECRET", "");
+    vi.stubEnv("NODE_ENV", "production");
+    const response = await POST(createSignedRequest(completion));
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: "Ozow webhook temporarily unavailable",
+    });
   });
 
   it("returns 401 for malformed payloads that fail webhook signature verification", async () => {
-    const raw = '{"eventType":"transaction.complete",';
-    const webhook = new Webhook(webhookSecret);
-    const timestamp = new Date();
-    const webhookId = "msg_bad_json";
-    const signature = webhook.sign(webhookId, timestamp, raw);
-
-    const response = await POST(
-      new NextRequest("http://localhost/api/webhooks/ozow", {
-        method: "POST",
-        body: raw,
-        headers: {
-          "Content-Type": "application/json",
-          "svix-id": webhookId,
-          "svix-timestamp": Math.floor(timestamp.getTime() / 1000).toString(),
-          "svix-signature": signature,
-        },
-      })
-    );
-
+    const response = await POST(signedRequest('{"eventType":"transaction.complete",'));
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "Invalid webhook signature" });
+    expect(mockApplyNotification).not.toHaveBeenCalled();
   });
 
   it("rejects invalid signatures", async () => {
-    const response = await POST(
-      createSignedRequest(
-        {
-          eventType: "transaction.complete",
-          data: {
-            merchantReference: "payment-1",
-            status: "successful",
-            amount: { value: 25, currency: "ZAR" },
-          },
-        },
-        "v1,bad-signature"
-      )
-    );
-
+    const response = await POST(createSignedRequest(completion, "v1,bad-signature"));
     expect(response.status).toBe(401);
+    expect(mockApplyNotification).not.toHaveBeenCalled();
   });
 
-  it("ignores unknown payments after successful verification", async () => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        status: "successful",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-          }),
-        }),
-      }),
-    });
-
-    const response = await POST(createSignedRequest(body));
-    const data = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(data.ignored).toBe(true);
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
+  it("honors the rate limiter before reading or applying a notification", async () => {
+    mockCheckRateLimit.mockResolvedValue({ limited: true, retryAfter: 60 });
+    const response = await POST(createSignedRequest(completion));
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("60");
+    expect(mockApplyNotification).not.toHaveBeenCalled();
   });
 
-  it("returns duplicate when payment is already complete for the same provider transaction", async () => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        paymentRequestId: "ozow-request-1",
-        status: "successful",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                id: "payment-1",
-                area: "PROMOTIONS_EVENTS",
-                status: "complete",
-                provider: "ozow",
-                provider_payment_id: "ozow-request-1",
-                provider_reference: "payment-1",
-                created_at: "2026-03-26T10:00:00.000Z",
-                provider_data: { transaction_id: "ozow-tx-1" },
-                amount_cents: 2500,
-                user_id: "user-1",
-              },
-            }),
-          }),
-        }),
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-    });
-
-    const response = await POST(createSignedRequest(body));
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ success: true, duplicate: true });
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
+  it("refuses an oversized body before checking its signature", async () => {
+    const response = await POST(signedRequest("x".repeat(256 * 1024 + 1)));
+    expect(response.status).toBe(413);
+    expect(mockApplyNotification).not.toHaveBeenCalled();
   });
 
-  it("rejects currency mismatches before fulfillment", async () => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        paymentRequestId: "ozow-request-1",
-        status: "successful",
-        amount: { value: 25, currency: "USD" },
-      },
-    };
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                id: "payment-1",
-                area: "PROMOTIONS_EVENTS",
-                status: "pending",
-                provider: "ozow",
-                provider_payment_id: "ozow-request-1",
-                provider_reference: "payment-1",
-                created_at: "2026-03-26T10:00:00.000Z",
-                provider_data: {},
-                amount_cents: 2500,
-                user_id: "user-1",
-              },
-            }),
-          }),
-        }),
-      }),
-    });
-
-    const response = await POST(createSignedRequest(body));
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "Currency mismatch" });
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
+  it("acknowledges and ignores event types other than transaction completion", async () => {
+    const response = await POST(createSignedRequest({ ...completion, eventType: "other.event" }));
+    expect(await response.json()).toEqual({ success: true, ignored: true });
+    expect(mockApplyNotification).not.toHaveBeenCalled();
   });
 
+  // A signed notice that can never be applied is acknowledged (so the sender
+  // stops retrying) and kept as a payment problem with its reason.
   it.each([
-    ["missing", { value: 25 }],
-    ["blank", { value: 25, currency: "" }],
-  ])("rejects a successful completion with a %s currency", async (_kind, amount) => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        paymentRequestId: "ozow-request-1",
-        status: "successful",
-        amount,
-      },
-    };
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                id: "payment-1",
-                area: "PROMOTIONS_EVENTS",
-                status: "pending",
-                provider: "ozow",
-                provider_payment_id: "ozow-request-1",
-                provider_reference: "payment-1",
-                created_at: "2026-03-26T10:00:00.000Z",
-                provider_data: {},
-                amount_cents: 2500,
-                user_id: "user-1",
-              },
-            }),
-          }),
-        }),
-      }),
-    });
-
-    const response = await POST(createSignedRequest(body));
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "Missing currency" });
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
-  });
-
-  it.each([24, 24.999, 25.001])("rejects amount %s before fulfillment", async (amount) => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        paymentRequestId: "ozow-request-1",
-        status: "successful",
-        amount: { value: amount, currency: "ZAR" },
-      },
-    };
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                id: "payment-1",
-                area: "PROMOTIONS_EVENTS",
-                status: "pending",
-                provider: "ozow",
-                provider_payment_id: "ozow-request-1",
-                provider_reference: "payment-1",
-                created_at: "2026-03-26T10:00:00.000Z",
-                provider_data: {},
-                amount_cents: 2500,
-                user_id: "user-1",
-              },
-            }),
-          }),
-        }),
-      }),
-    });
-
-    const response = await POST(createSignedRequest(body));
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "Amount mismatch" });
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
-  });
-
-  it("marks failed Ozow transaction completions without attempting fulfillment", async () => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        paymentRequestId: "ozow-request-1",
-        status: "error",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
-
-    const updateSelect = vi.fn().mockResolvedValue({ data: [{ id: "payment-1" }], error: null });
-    const updateInStatus = vi.fn().mockReturnValue({ select: updateSelect });
-    const updateEqProvider = vi.fn().mockReturnValue({ in: updateInStatus });
-    const updateEqId = vi.fn().mockReturnValue({ eq: updateEqProvider });
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "payments") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: {
-                    id: "payment-1",
-                    area: "PROMOTIONS_EVENTS",
-                    status: "pending",
-                    provider: "ozow",
-                    provider_payment_id: "ozow-request-1",
-                    provider_reference: "payment-1",
-                    created_at: "2026-03-26T10:00:00.000Z",
-                    provider_data: {},
-                    amount_cents: 2500,
-                    user_id: "user-1",
-                  },
-                }),
-              }),
-            }),
-            update: vi.fn().mockReturnValue({ eq: updateEqId }),
-          };
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-    });
-
-    const response = await POST(createSignedRequest(body));
-
+    [["merchantReference", "id"], "missing_merchant_reference"],
+    [["status"], "missing_transaction_status"],
+  ])("acknowledges and records a completion without %j", async (fields, reason) => {
+    const data: Record<string, unknown> = { ...completion.data };
+    for (const field of fields) delete data[field];
+    const response = await POST(createSignedRequest({ ...completion, data }));
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ success: true });
-    expect(updateInStatus).toHaveBeenCalledWith("status", ["pending"]);
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
-    expect(mockSendPaymentFailedEmail).toHaveBeenCalledWith(
-      "payer@example.com",
-      "Payer One",
-      25,
-      "Tourism & Events"
-    );
+    expect(await response.json()).toEqual({ success: true, rejected: reason });
+    expect(mockRecordProblem).toHaveBeenCalledExactlyOnceWith(expect.any(Function), {
+      paymentId: null,
+      reason,
+      source: "notice",
+    });
+    expect(mockApplyNotification).not.toHaveBeenCalled();
   });
 
-  it("ignores failure webhooks for already-completed payments", async () => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-late",
-        status: "error",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
-
-    const paymentsUpdate = vi.fn();
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "payments") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: {
-                    id: "payment-1",
-                    area: "PROMOTIONS_EVENTS",
-                    status: "complete",
-                    provider: "ozow",
-                    provider_payment_id: "ozow-request-1",
-                    provider_reference: "payment-1",
-                    created_at: "2026-03-26T10:00:00.000Z",
-                    provider_data: {},
-                    amount_cents: 2500,
-                    user_id: "user-1",
-                  },
-                }),
-              }),
-            }),
-            update: paymentsUpdate,
-          };
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-    });
-
-    const response = await POST(createSignedRequest(body));
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ success: true, ignored: true });
-    expect(paymentsUpdate).not.toHaveBeenCalled();
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
-    expect(mockSendPaymentFailedEmail).not.toHaveBeenCalled();
-  });
-
-  it("ignores error-status payloads that are missing an eventType instead of fulfilling", async () => {
-    const body = {
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        paymentRequestId: "ozow-request-1",
-        status: "error",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
-
-    const paymentsUpdate = vi.fn();
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "payments") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: {
-                    id: "payment-1",
-                    area: "PROMOTIONS_EVENTS",
-                    status: "pending",
-                    provider: "ozow",
-                    provider_payment_id: "ozow-request-1",
-                    provider_reference: "payment-1",
-                    created_at: "2026-03-26T10:00:00.000Z",
-                    provider_data: {},
-                    amount_cents: 2500,
-                    user_id: "user-1",
-                  },
-                }),
-              }),
-            }),
-            update: paymentsUpdate,
-          };
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-    });
-
-    const response = await POST(createSignedRequest(body));
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ success: true, ignored: true });
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
-    expect(paymentsUpdate).not.toHaveBeenCalled();
-    expect(mockSendPaymentFailedEmail).not.toHaveBeenCalled();
-  });
-
-  it("ignores successful-status payloads that are missing an eventType instead of fulfilling", async () => {
-    const body = {
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        paymentRequestId: "ozow-request-1",
-        status: "successful",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
-
-    const paymentsUpdate = vi.fn();
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "payments") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: {
-                    id: "payment-1",
-                    area: "PROMOTIONS_EVENTS",
-                    status: "pending",
-                    provider: "ozow",
-                    provider_payment_id: "ozow-request-1",
-                    provider_reference: "payment-1",
-                    created_at: "2026-03-26T10:00:00.000Z",
-                    provider_data: {},
-                    amount_cents: 2500,
-                    user_id: "user-1",
-                  },
-                }),
-              }),
-            }),
-            update: paymentsUpdate,
-          };
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-    });
-
-    const response = await POST(createSignedRequest(body));
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ success: true, ignored: true });
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
-    expect(paymentsUpdate).not.toHaveBeenCalled();
-  });
-
-  it("returns a retryable 500 when the payment lookup hits a database error", async () => {
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        paymentRequestId: "ozow-request-1",
-        status: "successful",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "payments") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: null,
-                  error: { message: "connection reset by peer" },
-                }),
-              }),
-            }),
-          };
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-    });
-
-    const response = await POST(createSignedRequest(body));
-
-    expect(response.status).toBe(500);
-    expect(response.headers.get("Retry-After")).toBe("30");
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
-  });
-
-  it("keeps successful fulfillment intact when a failure callback read pending before the atomic commit", async () => {
-    const payment: Record<string, unknown> = {
-      id: "payment-1",
-      area: "PROMOTIONS_EVENTS",
-      status: "pending",
-      provider: "ozow",
-      provider_payment_id: "ozow-request-1",
-      provider_reference: "payment-1",
-      created_at: "2026-03-26T10:00:00.000Z",
-      amount_cents: 2500,
-      user_id: "user-1",
-      provider_data: { type: "featured_promotion", promotion_id: "promotion-1", feature_days: 7 },
-    };
-    let releaseFailureRead!: () => void;
-    const failureReadGate = new Promise<void>((resolve) => {
-      releaseFailureRead = resolve;
-    });
-    let capturedFailureRead!: () => void;
-    const failureReadCaptured = new Promise<void>((resolve) => {
-      capturedFailureRead = resolve;
-    });
-    let releaseFulfillment!: () => void;
-    const fulfillmentGate = new Promise<void>((resolve) => {
-      releaseFulfillment = resolve;
-    });
-    let enteredFulfillment!: () => void;
-    const fulfillmentEntered = new Promise<void>((resolve) => {
-      enteredFulfillment = resolve;
-    });
-    let firstRead = true;
-    const updateRows: Record<string, unknown>[] = [];
-    const client = {
-      auth: { admin: { getUserById: mockGetUserById } },
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            maybeSingle: async () => {
-              const snapshot = { ...payment };
-              if (firstRead) {
-                firstRead = false;
-                capturedFailureRead();
-                await failureReadGate;
-              }
-              return { data: snapshot, error: null };
-            },
-          }),
-        }),
-        update: (patch: Record<string, unknown>) => {
-          const filters: Array<(row: Record<string, unknown>) => boolean> = [];
-          const chain = {
-            eq(column: string, value: unknown) {
-              filters.push((row) => row[column] === value);
-              return chain;
-            },
-            in(column: string, values: unknown[]) {
-              filters.push((row) => values.includes(row[column]));
-              return chain;
-            },
-            async select() {
-              if (!filters.every((filter) => filter(payment))) return { data: [], error: null };
-              Object.assign(payment, patch);
-              updateRows.push(patch);
-              return { data: [{ id: payment.id }], error: null };
-            },
-          };
-          return chain;
-        },
-      }),
-    };
-    mockCreateAdminClient.mockReturnValue(client);
-    mockFulfillPayment.mockImplementation(async () => {
-      enteredFulfillment();
-      await fulfillmentGate;
-      payment.status = "complete";
-      payment.provider_payment_id = "ozow-tx-1";
-      return { outcome: "completed" };
-    });
-    const body = (status: string) => ({
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        paymentRequestId: "ozow-request-1",
-        status,
-        amount: { value: 25, currency: "ZAR" },
-      },
-    });
-    const failureRequest = POST(createSignedRequest(body("error")));
-    await failureReadCaptured;
-    const successRequest = POST(createSignedRequest(body("successful")));
-    await fulfillmentEntered;
-    releaseFulfillment();
-    const successResponse = await successRequest;
-    releaseFailureRead();
-    const failedResponse = await failureRequest;
-    expect(failedResponse.status).toBe(200);
-    expect(payment.status).toBe("complete");
-    expect(mockSendPaymentFailedEmail).not.toHaveBeenCalled();
-    expect(successResponse.status).toBe(200);
-    expect(payment.status).toBe("complete");
-    expect(updateRows.some((row) => row.status === "failed")).toBe(false);
-    expect(mockFulfillPayment).toHaveBeenCalledTimes(1);
-    expect(mockScheduleBackgroundTask).toHaveBeenCalledWith(
-      expect.any(Promise),
-      "payment status email"
-    );
-  });
-  function atomicFixture(
-    status = "pending",
-    providerData: Record<string, unknown> = {
-      type: "featured_promotion",
-      promotion_id: "promotion-1",
-      feature_days: 7,
-    }
-  ) {
-    const payment = {
-      id: "payment-1",
-      user_id: "user-1",
-      area: "PROMOTIONS_EVENTS",
-      provider: "ozow",
-      status,
-      provider_payment_id: "ozow-request-1",
-      provider_reference: "payment-1",
-      amount_cents: 2500,
-      created_at: "2026-03-26T10:00:00.000Z",
-      provider_data: providerData,
-    };
-    const update = vi.fn();
-    const client = {
-      auth: { admin: { getUserById: mockGetUserById } },
-      from: () => ({
-        select: () => ({
-          eq: () => ({ maybeSingle: async () => ({ data: payment, error: null }) }),
-        }),
-        update,
-      }),
-    };
-    mockCreateAdminClient.mockReturnValue(client);
-    const body = {
-      eventType: "transaction.complete",
-      data: {
-        merchantReference: "payment-1",
-        id: "ozow-tx-1",
-        paymentRequestId: "ozow-request-1",
-        status: "successful",
-        amount: { value: 25, currency: "ZAR" },
-      },
-    };
-    return { payment, client, body, update };
-  }
-
-  function fullBody(overrides: Record<string, string> = {}) {
-    return {
-      type: "transaction.complete",
-      data: {
-        SiteCode: "site-code",
-        TransactionId: "ozow-tx-1",
-        TransactionReference: "payment-1",
-        Amount: "25.00",
-        Status: "Successful",
-        Optional1: "",
-        Optional2: "",
-        Optional3: "",
-        Optional4: "",
-        Optional5: "",
-        CurrencyCode: "ZAR",
-        IsTest: "True",
-        StatusMessage: "",
-        Hash: "covered-by-svix",
-        ...overrides,
-      },
-    };
-  }
-
-  it("fulfills a signed official full payload with distinct payment-request and transaction IDs", async () => {
-    const fixture = atomicFixture();
-    const body = fullBody();
-    const response = await POST(createSignedRequest(body));
-    expect(response.status).toBe(200);
-    expect(mockFulfillPayment).toHaveBeenCalledWith(fixture.client, fixture.payment, body, {
-      id: "ozow-tx-1",
-      merchantReference: "payment-1",
-    });
-    expect(fixture.payment.provider_payment_id).toBe("ozow-request-1");
-  });
-
-  it.each([
-    [{ SiteCode: "other-site" }, "Site code mismatch"],
-    [{ IsTest: "False" }, "Test mode mismatch"],
-    [{ IsTest: "invalid" }, "Test mode mismatch"],
-    [{ Amount: "24.999" }, "Amount mismatch"],
-    [{ CurrencyCode: "USD" }, "Currency mismatch"],
-    [{ TransactionReference: "other-reference" }, "Merchant reference mismatch"],
-  ])(
-    "rejects an authenticated full payload with incorrect identity or charge %j",
-    async (overrides, error) => {
-      atomicFixture();
-      const response = await POST(createSignedRequest(fullBody(overrides)));
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({ error });
-      expect(mockFulfillPayment).not.toHaveBeenCalled();
-    }
-  );
-
-  it("resolves a signed thin notification through the transaction API before fulfillment", async () => {
-    const fixture = atomicFixture();
+  it("resolves a signed thin notification through the transaction API first", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -859,16 +204,16 @@ describe("POST /api/webhooks/ozow", () => {
       })
     );
     expect(response.status).toBe(200);
-    expect(mockFulfillPayment).toHaveBeenCalledWith(
-      fixture.client,
-      fixture.payment,
-      expect.objectContaining({ resolvedTransaction: expect.any(Object) }),
-      { id: "ozow-tx-1", merchantReference: "payment-1" }
+    expect(mockApplyNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        merchantReference: "payment-1",
+        rawPayload: expect.objectContaining({ resolvedTransaction: expect.any(Object) }),
+      }),
+      expect.any(String)
     );
   });
 
   it("returns a retryable error when thin transaction resolution fails", async () => {
-    atomicFixture();
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network unavailable")));
     const response = await POST(
       createSignedRequest({
@@ -877,126 +222,15 @@ describe("POST /api/webhooks/ozow", () => {
       })
     );
     expect(response.status).toBe(500);
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
+    expect(response.headers.get("Retry-After")).toBe("30");
+    expect(mockApplyNotification).not.toHaveBeenCalled();
   });
 
-  it.each(["Pending", "Incomplete"])(
-    "acknowledges the documented %s full notification without activating access",
-    async (Status) => {
-      atomicFixture();
-      const response = await POST(createSignedRequest(fullBody({ Status })));
-      expect(await response.json()).toEqual({ success: true, ignored: true });
-      expect(mockFulfillPayment).not.toHaveBeenCalled();
-    }
-  );
-
-  it("passes the original payment status, creation date and metadata to the atomic operation", async () => {
-    const fixture = atomicFixture();
-    const response = await POST(createSignedRequest(fixture.body));
-    expect(response.status).toBe(200);
-    expect(mockFulfillPayment).toHaveBeenCalledWith(
-      fixture.client,
-      fixture.payment,
-      expect.any(Object),
-      { id: "ozow-tx-1", merchantReference: "payment-1" }
-    );
-    expect(fixture.update).not.toHaveBeenCalled();
-    expect(mockScheduleBackgroundTask).toHaveBeenCalledWith(
-      expect.any(Promise),
-      "payment status email"
-    );
-  });
-
-  it.each(["duplicate", "ignored"])(
-    "acknowledges a concurrent %s result without sending another receipt",
-    async (outcome) => {
-      const fixture = atomicFixture();
-      mockFulfillPayment.mockResolvedValue({ outcome });
-      const response = await POST(createSignedRequest(fixture.body));
-      expect(await response.json()).toEqual({ success: true, [outcome]: true });
-      expect(mockSendPaymentReceiptEmail).not.toHaveBeenCalled();
-      expect(fixture.update).not.toHaveBeenCalled();
-    }
-  );
-
-  it("returns a retryable error on a transaction failure without a separate rollback write", async () => {
-    const fixture = atomicFixture();
-    mockFulfillPayment.mockRejectedValue(new Error("invoice unavailable"));
-    const response = await POST(createSignedRequest(fixture.body));
+  it("returns a retryable error without details when the runtime fails", async () => {
+    mockApplyNotification.mockRejectedValue(new Error("database unavailable"));
+    const response = await POST(createSignedRequest(completion));
     expect(response.status).toBe(500);
     expect(response.headers.get("Retry-After")).toBe("30");
-    expect(fixture.update).not.toHaveBeenCalled();
-    expect(mockSendPaymentReceiptEmail).not.toHaveBeenCalled();
-  });
-
-  it("acknowledges legacy marked recovery after the database confirms it", async () => {
-    const fixture = atomicFixture("processing", {
-      fulfillment_completed_at: "2026-03-26T10:01:00Z",
-    });
-    mockFulfillPayment.mockResolvedValue({ outcome: "recovered" });
-    const response = await POST(createSignedRequest(fixture.body));
-    expect(await response.json()).toEqual({ success: true, recovered: true });
-    expect(fixture.update).not.toHaveBeenCalled();
-  });
-
-  it.each(["2020-01-01T00:00:00Z", new Date().toISOString()])(
-    "does not infer legacy recovery safety from processing age %s",
-    async (startedAt) => {
-      const fixture = atomicFixture("processing", { processing_started_at: startedAt });
-      mockFulfillPayment.mockRejectedValue(new Error("Legacy payment requires reconciliation"));
-      const response = await POST(createSignedRequest(fixture.body));
-      expect(response.status).toBe(500);
-      expect(fixture.update).not.toHaveBeenCalled();
-      expect(mockSendPaymentReceiptEmail).not.toHaveBeenCalled();
-    }
-  );
-
-  it("requires the successful provider transaction ID", async () => {
-    const fixture = atomicFixture();
-    const { id: _id, ...data } = fixture.body.data;
-    const response = await POST(createSignedRequest({ ...fixture.body, data }));
-    expect(response.status).toBe(400);
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
-  });
-
-  it("honors the rate limiter before reading or fulfilling a payment", async () => {
-    const fixture = atomicFixture();
-    mockCheckRateLimit.mockResolvedValue({ limited: true, retryAfter: 60 });
-    const response = await POST(createSignedRequest(fixture.body));
-    expect(response.status).toBe(429);
-    expect(response.headers.get("Retry-After")).toBe("60");
-    expect(mockCreateAdminClient).not.toHaveBeenCalled();
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
-  });
-
-  it("rejects a successful callback with no amount", async () => {
-    const fixture = atomicFixture();
-    const { amount: _amount, ...data } = fixture.body.data;
-    const response = await POST(createSignedRequest({ ...fixture.body, data }));
-    expect(response.status).toBe(400);
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
-  });
-
-  it("rejects a substituted provider payment ID", async () => {
-    const fixture = atomicFixture();
-    Object.assign(fixture.payment, { provider_payment_id: "different" });
-    const response = await POST(createSignedRequest(fixture.body));
-    expect(response.status).toBe(400);
-    expect(mockFulfillPayment).not.toHaveBeenCalled();
-  });
-
-  it("anchors receipt expiry to the same creation date used by the transaction", async () => {
-    const fixture = atomicFixture("pending", { type: "subscription" });
-    const response = await POST(createSignedRequest(fixture.body));
-    expect(response.status).toBe(200);
-    await Promise.resolve();
-    expect(mockSendPaymentReceiptEmail).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(String),
-      25,
-      expect.any(String),
-      undefined,
-      { kind: "subscription", expiresAt: "2026-04-25T10:00:00.000Z" }
-    );
+    expect(await response.json()).toEqual({ error: "Webhook processing failed" });
   });
 });

@@ -377,7 +377,9 @@ test.describe("pricing and organisations", () => {
   // section, so every section's card links to the same checkout.
   test("pricing shows the R69 slots with their checkout, and no old price", async ({ page }) => {
     await page.goto("/pricing", { waitUntil: "domcontentloaded" });
-    const main = page.locator("main");
+    // The page area itself: while the page streams in, the loading screen has
+    // its own <main>, which made a check on the whole of "main" ambiguous.
+    const main = page.locator("#main-content");
     await expect(main.getByTestId("retail-offer-month")).toContainText("R69");
     await expect(main.getByTestId("retail-offer-quarter")).toContainText("R207");
     await expect(main.getByTestId("retail-offer-half_year")).toContainText("R414");

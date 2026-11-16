@@ -247,6 +247,30 @@ function originalKeyForVariant(key: string): string | null {
 /** Candidate original extensions to probe when a variant key is missing. */
 const VARIANT_ORIGINAL_EXTS = ["jpg", "jpeg", "png", "webp", "avif", "gif"];
 
+/** Keys made by the live backend's upload (`media/<uuid>`) have no extension. */
+const LIVE_MEDIA_KEY = /^media\/[0-9a-f-]{36}$/;
+
+/**
+ * The keys that may hold the original of a missing variant. A live-backend
+ * key is its own original; older keys are probed with each raster extension.
+ */
+function originalCandidates(stem: string): string[] {
+  if (LIVE_MEDIA_KEY.test(stem)) return [stem];
+  return VARIANT_ORIGINAL_EXTS.map((originalExt) => `${stem}.${originalExt}`);
+}
+
+/**
+ * Live-backend copies are made only during the upload, before the photo can
+ * be shown, so a missing one stays missing (an old photo, a failed copy or a
+ * width not smaller than the original): cache that original for a day. Older
+ * keys could gain a variant at any time, so keep their five minutes.
+ */
+function fallbackCacheControl(stem: string): string {
+  return LIVE_MEDIA_KEY.test(stem)
+    ? "public, max-age=86400, s-maxage=86400"
+    : "public, max-age=300, s-maxage=300";
+}
+
 /**
  * Derive a filename for the Content-Disposition header from the storage key.
  * Generated keys never contain the original filename (e.g.
@@ -360,15 +384,11 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
 
   const ext = key.split(".").pop()?.toLowerCase() ?? "";
 
-  // ── Playwright e2e stub: serve uploads written to public/e2e-media ──
-  // uploadToR2 writes to the local filesystem in stub mode, but this route
-  // otherwise falls through to the S3 API with fake credentials — producing
-  // TLS handshake errors and test timeouts. Serve the local file directly.
-  // The local foundation test copy (M0.7) stores its media the same way.
-  if (
-    (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") ||
-    isPlaywrightFoundationCopy()
-  ) {
+  // ── Local foundation test copy (M0.7): serve uploads written to
+  // public/e2e-media. uploadToR2 writes to the local filesystem there, but this
+  // route otherwise falls through to the S3 API with fake credentials. Serve
+  // the local file directly.
+  if (isPlaywrightFoundationCopy()) {
     try {
       const fs = await import("node:fs/promises");
       const path = await import("node:path");
@@ -597,14 +617,9 @@ async function getMediaResponse(
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
-  // Rate-limit: generous threshold (public CDN-cached content). The Playwright
-  // e2e suite issues hundreds of media requests (image retries, video range
-  // probes, retries of failed tests) from a single IP, so skip the local
-  // in-memory limiter in stub mode to avoid starving the server.
-  const isE2eStub =
-    process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub";
+  // Rate-limit: generous threshold (public CDN-cached content).
   const ip = getClientIp(request);
-  const rl = isE2eStub ? { limited: false } : checkLocalRateLimit(ip, "media:serve", 300);
+  const rl = checkLocalRateLimit(ip, "media:serve", 300);
   if (rl.limited) {
     return NextResponse.json(
       { error: "Too many requests" },
@@ -628,9 +643,7 @@ async function getMediaResponse(
       // loop added up to 6 serial R2/S3 round-trips of latency per image for
       // legacy media without pre-generated variants.
       const probes = await Promise.all(
-        VARIANT_ORIGINAL_EXTS.map((originalExt) =>
-          serveMediaForKey(request, `${stem}.${originalExt}`)
-        )
+        originalCandidates(stem).map((candidate) => serveMediaForKey(request, candidate))
       );
       // A failure probing one extension must not hide an existing original.
       const hit =
@@ -643,7 +656,7 @@ async function getMediaResponse(
         // The original can be replaced by a generated variant at this URL.
         // Do not cache the temporary fallback as immutable for a year.
         if (hit.ok || hit.status === 304) {
-          hit.headers.set("Cache-Control", "public, max-age=300, s-maxage=300");
+          hit.headers.set("Cache-Control", fallbackCacheControl(stem));
         }
         return hit;
       }

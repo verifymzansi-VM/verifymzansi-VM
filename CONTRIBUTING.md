@@ -182,7 +182,7 @@ pass.
 ```bash
 pnpm test              # Unit tests
 pnpm test:coverage     # With coverage report
-pnpm test:e2e          # Playwright E2E
+pnpm test:e2e          # Playwright E2E (local foundation test copy; needs Docker)
 pnpm test:all          # Everything
 ```
 

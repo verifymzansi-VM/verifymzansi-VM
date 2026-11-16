@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { redirect } from "next/navigation";
+import { SHOW_STAFF_OPERATIONS } from "@/lib/hidden-features";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { formatDateTime } from "@/lib/utils/format";
@@ -38,6 +40,8 @@ interface RetentionOverview {
 
 export default async function OperationsHealthPage() {
   const { role } = await requireStaff("audit:view");
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_STAFF_OPERATIONS) redirect("/admin");
   const admin = createAdminClient();
 
   const [deadJobs, failedDecisions, events, heartbeat, backlog, retentionResult] =

@@ -17,6 +17,7 @@ import { readStaffIdentityContext } from "./staff-identity";
 import { foundationEvidenceMetadataSchema } from "./evidence-metadata";
 import { foundationVerificationStatusSchema } from "./verification-status";
 import { processIdentityNumber } from "../domains/verification/identity-processing";
+import { recordImagesTransformations } from "../media/images-allowance";
 
 const encryptedNumber = z.strictObject({
   ciphertext: z.string().regex(/^[a-f0-9]{26}$/),
@@ -60,7 +61,10 @@ export async function cleanEvidence(file: File, selfie: boolean) {
       400,
       "Choose a clear JPEG, PNG or WebP image. ID documents may also be PDF."
     );
-  if (isReencodableImageType(mime)) bytes = Buffer.from(await reencodeImage(bytes, mime));
+  if (isReencodableImageType(mime)) {
+    bytes = Buffer.from(await reencodeImage(bytes, mime));
+    await recordImagesTransformations(1);
+  }
   return bytes;
 }
 async function persistEvidence(

@@ -1,13 +1,11 @@
 /**
- * Feature flags service — database-backed feature toggles with staged canary.
+ * Feature flags, read from the foundation's audited feature controls.
  * Supports modes: off, on, percent (deterministic bucketing), allowlist.
- * Uses an in-memory TTL cache to avoid hitting the DB on every check.
+ * Changes go through the native audited settings endpoint.
  */
 
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import type { FeatureFlagMode } from "@/types/database";
-import { getDataBackend } from "@/lib/data-backend";
 
 const log = createLogger("FeatureFlags");
 
@@ -18,30 +16,11 @@ interface FlagRow {
   allowlist_roles: string[] | null;
 }
 
-interface CacheEntry {
-  value: FlagRow;
-  expiresAt: number;
-}
-
 /** Optional context for percent/allowlist evaluation. */
 export interface FlagContext {
   userId?: string;
   role?: string;
   bucketKey?: string;
-}
-
-const FLAG_CACHE = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 60_000; // 60 seconds
-const MAX_FLAG_CACHE_SIZE = 200; // Defensive cap on cache entries
-
-/**
- * Evict the oldest cache entry if the cache exceeds the maximum size.
- */
-function evictOldestIfNeeded(): void {
-  if (FLAG_CACHE.size > MAX_FLAG_CACHE_SIZE) {
-    const oldest = FLAG_CACHE.keys().next().value;
-    if (oldest !== undefined) FLAG_CACHE.delete(oldest);
-  }
 }
 
 /**
@@ -90,150 +69,17 @@ function evaluateFlag(flag: FlagRow, flagKey: string, context?: FlagContext): bo
 }
 
 /**
- * Check if a feature flag is enabled.
- * Results are cached for 60 seconds to minimize DB queries.
+ * Check if a feature flag is enabled. Only the evidence desk flag is served
+ * by the foundation; every other key, and any read failure, reads as off.
  */
 export async function isFeatureEnabled(key: string, context?: FlagContext): Promise<boolean> {
-  if (getDataBackend() === "foundation") {
-    if (key !== "kyc_evidence_desk") return false;
-    try {
-      const { readNativeDisplayFlags } = await import("@/lib/foundation/feature-controls-server");
-      const flag = (await readNativeDisplayFlags()).find((f) => f.key === key);
-      return flag ? evaluateFlag(flag, key, context) : false;
-    } catch {
-      return false;
-    }
-  }
-  const now = Date.now();
-  const cached = FLAG_CACHE.get(key);
-
-  if (cached && cached.expiresAt > now) {
-    return evaluateFlag(cached.value, key, context);
-  }
-
+  if (key !== "kyc_evidence_desk") return false;
   try {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("feature_flags")
-      .select("enabled, mode, rollout_percent, allowlist_roles")
-      .eq("key", key)
-      .single();
-
-    if (error || !data) {
-      log.warn(`Flag "${key}" query returned no data`, {
-        error: error?.message ?? "no row",
-      });
-      // Prefer stale cached value over hardcoded false
-      if (cached) return evaluateFlag(cached.value, key, context);
-      const fallback: FlagRow = {
-        enabled: false,
-        mode: "off",
-        rollout_percent: 0,
-        allowlist_roles: [],
-      };
-      FLAG_CACHE.set(key, { value: fallback, expiresAt: now + CACHE_TTL_MS });
-      evictOldestIfNeeded();
-      return false;
-    }
-
-    FLAG_CACHE.set(key, {
-      value: data as FlagRow,
-      expiresAt: now + CACHE_TTL_MS,
-    });
-    evictOldestIfNeeded();
-
-    return evaluateFlag(data as FlagRow, key, context);
-  } catch (err) {
-    log.error(`Failed to check flag "${key}"`, {
-      error: err instanceof Error ? err.message : "unknown error",
-    });
-    // On error, return cached value if available (even if expired), otherwise false
-    if (cached) return evaluateFlag(cached.value, key, context);
+    const { readNativeDisplayFlags } = await import("@/lib/foundation/feature-controls-server");
+    const flag = (await readNativeDisplayFlags()).find((f) => f.key === key);
+    return flag ? evaluateFlag(flag, key, context) : false;
+  } catch {
     return false;
-  }
-}
-
-/**
- * Toggle a feature flag (legacy boolean mode).
- * Sets mode to 'on' or 'off' accordingly.
- */
-export async function toggleFeatureFlag(
-  key: string,
-  enabled: boolean
-): Promise<{ success: boolean; error?: string }> {
-  if (getDataBackend() === "foundation")
-    return { success: false, error: "Use the native audited settings endpoint" };
-  try {
-    const supabase = createAdminClient();
-    const { error, data } = await supabase
-      .from("feature_flags")
-      .update({ enabled, mode: enabled ? "on" : "off" })
-      .eq("key", key)
-      .select("key");
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-    if (!data || data.length === 0) {
-      return { success: false, error: `Flag "${key}" does not exist` };
-    }
-
-    // Invalidate cache immediately
-    FLAG_CACHE.delete(key);
-
-    return { success: true };
-  } catch (err) {
-    log.error(`Failed to toggle flag "${key}"`, {
-      error: err instanceof Error ? err.message : "unknown error",
-    });
-    return { success: false, error: "Internal error toggling flag" };
-  }
-}
-
-/**
- * Update a feature flag with canary configuration.
- */
-export async function updateFeatureFlagConfig(
-  key: string,
-  config: {
-    mode: "off" | "on" | "percent" | "allowlist";
-    percent?: number;
-    allowlistRoles?: string[];
-    updatedBy?: string;
-    reason?: string;
-  }
-): Promise<{ success: boolean; error?: string }> {
-  if (getDataBackend() === "foundation")
-    return { success: false, error: "Use the native audited settings endpoint" };
-  try {
-    const supabase = createAdminClient();
-    const { error, data } = await supabase
-      .from("feature_flags")
-      .update({
-        mode: config.mode,
-        enabled: config.mode !== "off",
-        rollout_percent: config.percent ?? 0,
-        allowlist_roles: config.allowlistRoles ?? [],
-        updated_by: config.updatedBy ?? null,
-        updated_reason: config.reason ?? null,
-      })
-      .eq("key", key)
-      .select("key");
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-    if (!data || data.length === 0) {
-      return { success: false, error: `Flag "${key}" does not exist` };
-    }
-
-    FLAG_CACHE.delete(key);
-    return { success: true };
-  } catch (err) {
-    log.error(`Failed to update flag config "${key}"`, {
-      error: err instanceof Error ? err.message : "unknown error",
-    });
-    return { success: false, error: "Internal error updating flag config" };
   }
 }
 
@@ -254,36 +100,6 @@ export async function getAllFeatureFlags(): Promise<
     revision?: number;
   }>
 > {
-  if (getDataBackend() === "foundation") {
-    const { readNativeAdminFlags } = await import("@/lib/foundation/feature-controls-server");
-    return readNativeAdminFlags();
-  }
-  try {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("feature_flags")
-      .select(
-        "id, key, enabled, description, mode, rollout_percent, allowlist_roles, updated_at, updated_reason"
-      )
-      .order("key", { ascending: true });
-
-    if (error) {
-      log.error("Failed to list flags", { error: error?.message });
-      return [];
-    }
-
-    return data || [];
-  } catch (err) {
-    log.error("Failed to list flags", {
-      error: err instanceof Error ? err.message : "unknown error",
-    });
-    return [];
-  }
-}
-
-/**
- * Clear the in-memory flag cache. Useful for testing.
- */
-export function clearFlagCache(): void {
-  FLAG_CACHE.clear();
+  const { readNativeAdminFlags } = await import("@/lib/foundation/feature-controls-server");
+  return readNativeAdminFlags();
 }

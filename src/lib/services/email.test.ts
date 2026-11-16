@@ -128,6 +128,43 @@ describe("email service", () => {
     expect(sold.text).toContain("deleted, with its photos and videos, shortly");
     expect(`${expired.text}${sold.text}`).not.toMatch(/3 days|30 days/);
   });
+  it("sends the payment receipt under the outbox key, or a plain notice without one", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "payment_completed",
+      "foundation-outbox/paid",
+      undefined,
+      {
+        receipt: {
+          kind: "plan",
+          invoiceNumber: "INV-20261113-ABCDEF1234",
+          paidAt: "2026-11-13T07:15:00+00:00",
+          item: "Individual slot — 30 days",
+          amountCents: 6900,
+          bankReference: "abcdef12345678",
+        },
+      }
+    );
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "payment_completed",
+      "foundation-outbox/plain"
+    );
+    const [[receipt, receiptOptions], [plain, plainOptions]] = mockSend.mock.calls.slice(-2);
+    expect(receipt.subject).toBe("Payment received");
+    expect(receipt.text).toContain("Invoice number: INV-20261113-ABCDEF1234");
+    expect(receipt.text).toContain("Amount paid: R 69.00");
+    expect(receiptOptions.idempotencyKey).toBe("foundation-outbox/paid");
+    expect(plain.subject).toBe("Payment received");
+    expect(plain.text).toContain(
+      "We received your payment. Need your invoice? Reply to this email."
+    );
+    expect(plain.text).toContain("https://verifymzansi.com/dashboard");
+    expect(`${receipt.text}${plain.text}`).not.toContain("/billing");
+    expect(plainOptions.idempotencyKey).toBe("foundation-outbox/plain");
+    vi.unstubAllEnvs();
+  });
   it("tells a member their ID was sent back and links to verification, without the reason", async () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
     await sendPlatformNotice(
@@ -141,6 +178,45 @@ describe("email service", () => {
     expect(message.text).toContain("https://verifymzansi.com/verification");
     expect(message.html).toContain("https://verifymzansi.com/verification");
     expect(options.idempotencyKey).toBe("foundation-outbox/returned");
+    vi.unstubAllEnvs();
+  });
+  it("reminds a member that a slot ends, with its date and a renew link (P3)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    const slot = "00000000-0000-4000-8000-0000000000a1";
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "slot_renewal_reminder",
+      "foundation-outbox/reminder",
+      undefined,
+      { slotEndsAt: "2026-11-17T12:00:00Z", slotRenewAll: false, renewSlotId: slot }
+    );
+    let [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.subject).toBe("Your slot ends soon");
+    expect(message.text).toContain("Your Individual slot ends on 17 November 2026");
+    expect(message.text).toContain("Nothing renews automatically.");
+    expect(message.text).toContain(
+      `Renew my slot: https://verifymzansi.com/billing/checkout?renew=${slot}`
+    );
+    expect(message.html).toContain(`https://verifymzansi.com/billing/checkout?renew=${slot}`);
+    expect(options.idempotencyKey).toBe("foundation-outbox/reminder");
+    // More than one slot ending within 7 days: "Renew all".
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "slot_renewal_reminder",
+      "foundation-outbox/reminder-all",
+      undefined,
+      { slotEndsAt: "2026-11-17T12:00:00Z", slotRenewAll: true, renewSlotId: slot }
+    );
+    [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.text).toContain("another of your slots ends within 7 days");
+    expect(message.text).toContain(
+      "Renew all: https://verifymzansi.com/billing/checkout?renew=soon"
+    );
+    // Without a date: the plain wording, and My slots without a slot id.
+    await sendPlatformNotice("member@example.invalid", "slot_renewal_reminder", "outbox/plain");
+    [message] = mockSend.mock.calls.at(-1)!;
+    expect(message.text).toContain("One of your Individual slots ends within 3 days.");
+    expect(message.text).toContain("https://verifymzansi.com/dashboard/slots");
     vi.unstubAllEnvs();
   });
   it("passes durable job keys to Resend for repeatable notices", async () => {

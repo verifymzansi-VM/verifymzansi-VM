@@ -274,9 +274,11 @@ To register or update the VerifyMzansi webhook endpoint with Ozow:
 
 ### KYC Provider Webhook Secret
 
-Before deploying the callback handler, apply
-`20260930170000_atomic_kyc_provider_webhook.sql` through the normal backed-up
-migration workflow (`pnpm supabase:db:push:safe`). The service-only
+Historical: describes the retired source backend. Before deploying the callback
+handler, `20260930170000_atomic_kyc_provider_webhook.sql` was applied through
+the source backend's backed-up migration command (`supabase:db:push:safe`, since
+removed). Foundation database updates follow
+[AGENTS.md](../AGENTS.md#database-changes). The service-only
 `apply_kyc_provider_webhook` RPC commits provider evidence, pending-step risk
 and audit in one transaction. Missing migrations or failed writes return HTTP
 500 so the provider retries; duplicates return HTTP 200 without replaying risk
@@ -512,9 +514,9 @@ code; the owner applies it after the merge and before that code is deployed
 ([AGENTS.md](../AGENTS.md#database-changes)).
 
 Historical: describes the retired source backend. For the 30 September 2026
-audit changes, the pending migrations were applied through
-`pnpm supabase:db:push:safe` before deploying the application (the database test
-lanes run then were removed on 11 November 2026).
+audit changes, the pending migrations were applied through the source backend's
+`supabase:db:push:safe` command (since removed) before deploying the application
+(the database test lanes run then were removed on 11 November 2026).
 `20260930170000_atomic_kyc_provider_webhook.sql` supplies the callback RPC;
 `20260930180000_role_predicates_security_invoker.sql` removes unnecessary
 elevation from three caller-scoped predicates while preserving their grants. The
@@ -532,7 +534,7 @@ pnpm secret-scan
 pnpm security:audit
 pnpm licenses:check
 pnpm build
-pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome
+pnpm test:e2e --project=chromium
 
 # 2. Run the deep lane when the change set warrants it
 pnpm test:coverage:core
@@ -550,7 +552,6 @@ pnpm run build:cloudflare
 # 5. Deploy the main OpenNext worker and auxiliary workers
 pnpm exec opennextjs-cloudflare deploy
 pnpm exec wrangler deploy --config wrangler.rate-limiter.toml
-pnpm exec wrangler deploy --config wrangler.kyc-encryptor.toml
 pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 ```
 
@@ -600,7 +601,8 @@ commands in Git Bash, or use the PowerShell equivalents noted).
 2. **Check it is a foundation build.**
    `git show <sha>:wrangler.toml | grep NEXT_PUBLIC_DATA_BACKEND` (PowerShell:
    `git show <sha>:wrangler.toml | Select-String NEXT_PUBLIC_DATA_BACKEND`) must
-   print `foundation`;
+   print `foundation` or nothing (builds after the retired backend was removed
+   no longer set it; they cannot run the retired backend at all);
    `pnpm exec wrangler versions view <version-id> --env production` shows the
    version's own variables. Never roll back to a build made for the retired
    source backend.
@@ -666,14 +668,12 @@ records and heartbeats establish job health (see
 
 ```bash
 # Deploy individual workers
-pnpm exec wrangler deploy --config wrangler.kyc-encryptor.toml
 pnpm exec wrangler deploy --config wrangler.rate-limiter.toml
 pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 pnpm exec wrangler deploy --config wrangler.payment-cleanup.toml
 pnpm exec wrangler deploy --config wrangler.ops-jobs.toml
 
 # Check worker health
-curl https://verifymzansi-kyc-encryptor.verifymzansi.workers.dev/
 curl https://verifymzansi-rate-limiter.verifymzansi.workers.dev/
 curl https://verifymzansi-retention-cleanup.verifymzansi.workers.dev/
 curl https://verifymzansi-payment-cleanup.verifymzansi.workers.dev/
@@ -1118,6 +1118,6 @@ permission prompt appears, or the UI shows camera denied/blocked messages.
 Quick validation commands:
 
 ```bash
-pnpm test:e2e --project=chromium --project=mobile-chrome --grep "KYC Verification Flows"
-pnpm test:e2e --project=firefox --project=webkit --project=mobile-safari --grep "KYC Verification Flows"
+pnpm test:e2e --project=chromium --project=mobile-chrome e2e/foundation/staff-review.spec.ts
+pnpm foundation:e2e:down   # delete the local test copy afterwards
 ```

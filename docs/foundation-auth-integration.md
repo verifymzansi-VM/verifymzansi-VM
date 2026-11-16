@@ -79,14 +79,15 @@ recovery markers cannot grant recovery authorization through this signup path.
 
 ## Browser integration
 
-`NEXT_PUBLIC_DATA_BACKEND` selects the compiled browser integration. Its default
-is `source`. The `foundation` build requires the approved target URL and a
-publishable key; changing the selection requires a new build. The browser uses
-its own API-schema client, never the source client's singleton. Old-project
-cookies cannot identify a foundation session. The account store reads the
-verified `/api/foundation/auth/session` response and drops stale account data
-when accounts change or requests fail. Role hints come from the canonical
-account context; each protected server operation still enforces authorization.
+The foundation is the only browser integration; the retired source backend and
+its `NEXT_PUBLIC_DATA_BACKEND` switch have been removed (a build with that
+variable set to anything but `foundation` fails). The build requires the
+approved target URL and a publishable key. The browser uses its own API-schema
+client. Old-project cookies cannot identify a foundation session. The account
+store reads the verified `/api/foundation/auth/session` response and drops stale
+account data when accounts change or requests fail. Role hints come from the
+canonical account context; each protected server operation still enforces
+authorization.
 
 The foundation registration screen sends the shared validated registration
 payload. The sign-in screen uses the native endpoint and refreshes the document

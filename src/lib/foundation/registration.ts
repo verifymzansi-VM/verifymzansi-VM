@@ -29,9 +29,10 @@ export class FoundationRegistrationError extends Error {
   }
 }
 
-/** The target's auth.users trigger creates its private profile. Display name
- * is an unverified claim, never authority. The authenticated posting-terms
- * command separately records acceptance of each posting-terms version.
+/** The target's auth.users triggers create its private profile and record the
+ * current Terms version as accepted at sign-up. Display name is an unverified
+ * claim, never authority. The authenticated posting-terms command separately
+ * records acceptance of each posting-terms version before a first post.
  */
 export async function registerFoundationAccount(
   connection: unknown,
@@ -69,7 +70,10 @@ export async function registerFoundationAccount(
       email,
       password,
       options: {
-        data: { ...registrationHints, display_name: displayName },
+        // terms_accepted: the form's Terms box was ticked (the schema requires
+        // it). The database records the current Terms version against the new
+        // account when Auth creates it; the detail can say nothing else.
+        data: { ...registrationHints, display_name: displayName, terms_accepted: true },
         emailRedirectTo: redirectTo,
         captchaToken: turnstileToken,
       },

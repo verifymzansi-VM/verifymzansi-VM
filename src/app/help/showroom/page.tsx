@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
 import { Button } from "@/components/ui/button";
+import { SHOW_OWNER_METRICS } from "@/lib/hidden-features";
 
 export const metadata: Metadata = {
   title: "How the showroom works",
@@ -71,9 +72,12 @@ export default function ShowroomHelpPage() {
           description="Fair turns for every post, local posts first, and views counted honestly."
           breadcrumbs={[{ label: "Help" }, { label: "Showroom" }]}
           actions={
-            <Button asChild variant="trust-verified" size="lg">
-              <Link href="/dashboard/metrics">See your post&apos;s turns</Link>
-            </Button>
+            // Hidden until it works (src/lib/hidden-features.ts).
+            SHOW_OWNER_METRICS ? (
+              <Button asChild variant="trust-verified" size="lg">
+                <Link href="/dashboard/metrics">See your post&apos;s turns</Link>
+              </Button>
+            ) : undefined
           }
         />
 

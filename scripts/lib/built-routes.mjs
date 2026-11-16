@@ -1,8 +1,7 @@
 // Routes the production build must contain: the payment and KYC provider
 // callbacks, the verification start and the pricing page. A build that drops
 // one of them (for example through a bad route-group move) still compiles.
-// Checked by CI (build-route-verify, scripts/check-built-routes.mjs) and by
-// the local isolated browser run (scripts/test-isolated-browser.ts).
+// Checked by CI (build-route-verify, scripts/check-built-routes.mjs).
 export const REQUIRED_BUILT_ROUTES = [
   "/api/webhooks/ozow/route",
   "/api/webhooks/kyc/provider/route",

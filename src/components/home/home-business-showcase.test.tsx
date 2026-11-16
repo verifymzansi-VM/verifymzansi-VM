@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeBusinessShowcase } from "./home-business-showcase";
-import { createClient } from "@/lib/supabase/server";
+import { restoredHomeCollection } from "@/lib/foundation/marketplace-server";
 
 const { businessCardSpy } = vi.hoisted(() => ({
   businessCardSpy: vi.fn(),
@@ -25,8 +25,8 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(),
+vi.mock("@/lib/foundation/marketplace-server", () => ({
+  restoredHomeCollection: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -48,18 +48,8 @@ vi.mock("./business-preview-card", () => ({
   },
 }));
 
-function createSupabaseMock(data: unknown[]) {
-  const builder = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    not: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue({ data }),
-  };
-
-  return {
-    from: vi.fn().mockReturnValue(builder),
-  };
+function homeCollection(data: unknown[]) {
+  return { data, error: null } as never;
 }
 
 describe("HomeBusinessShowcase", () => {
@@ -68,8 +58,8 @@ describe("HomeBusinessShowcase", () => {
   });
 
   it("prefers business video when available on the homepage", async () => {
-    vi.mocked(createClient).mockResolvedValue(
-      createSupabaseMock([
+    vi.mocked(restoredHomeCollection).mockResolvedValue(
+      homeCollection([
         {
           id: "biz-1",
           business_name: "Nomsa Fashion",
@@ -82,7 +72,7 @@ describe("HomeBusinessShowcase", () => {
           boost_until: null,
           business_type: "standalone_shop",
         },
-      ]) as never
+      ])
     );
 
     const ui = await HomeBusinessShowcase();
@@ -104,7 +94,7 @@ describe("HomeBusinessShowcase", () => {
   });
 
   it("collapses to one 'be the first' card when there are no live businesses", async () => {
-    vi.mocked(createClient).mockResolvedValue(createSupabaseMock([]) as never);
+    vi.mocked(restoredHomeCollection).mockResolvedValue(homeCollection([]));
 
     const ui = await HomeBusinessShowcase();
     render(ui);
@@ -118,8 +108,8 @@ describe("HomeBusinessShowcase", () => {
   });
 
   it("renders businesses inside the shared auto-scroll rail", async () => {
-    vi.mocked(createClient).mockResolvedValue(
-      createSupabaseMock([
+    vi.mocked(restoredHomeCollection).mockResolvedValue(
+      homeCollection([
         {
           id: "biz-2",
           business_name: "Mandla Mechanics",
@@ -132,7 +122,7 @@ describe("HomeBusinessShowcase", () => {
           boost_until: null,
           business_type: "general_store",
         },
-      ]) as never
+      ])
     );
 
     const ui = await HomeBusinessShowcase();
@@ -142,8 +132,8 @@ describe("HomeBusinessShowcase", () => {
   });
 
   it("filters placeholder businesses before rendering the rail", async () => {
-    vi.mocked(createClient).mockResolvedValue(
-      createSupabaseMock([
+    vi.mocked(restoredHomeCollection).mockResolvedValue(
+      homeCollection([
         {
           id: "biz-seed",
           business_name: "[seed] Service Hub",
@@ -170,7 +160,7 @@ describe("HomeBusinessShowcase", () => {
           boost_until: null,
           business_type: "general_store",
         },
-      ]) as never
+      ])
     );
 
     const ui = await HomeBusinessShowcase();

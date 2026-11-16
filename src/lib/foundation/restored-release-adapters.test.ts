@@ -7,7 +7,6 @@ import {
   manageFrontendStaffOrganisation,
   saveFrontendStaffOrganisation,
 } from "./staff-organisation-commands";
-import { readFrontendStaffPayments, recordFrontendStaffPaymentReversal } from "./staff-payments";
 import { readRestoredBusinessAffiliations } from "./public-business-affiliations";
 import {
   readAffiliationOrganisationDashboard,
@@ -148,38 +147,6 @@ it("keeps organisation programme writes revision fenced and rejects an unsupport
     })
   ).rejects.toMatchObject({ status: 501 });
   expect(rpc).not.toHaveBeenCalled();
-});
-
-it("accepts a scoped payment page and rejects a mismatched reversal receipt", async () => {
-  const { rpc, api } = fixture({
-    page: 2,
-    total: 51,
-    items: [
-      {
-        id,
-        user_id: other,
-        area: "market",
-        status: "complete",
-        amount_cents: 5500,
-        created_at: date,
-        description: "Listing",
-      },
-    ],
-  });
-  await expect(readFrontendStaffPayments(api, 2, "complete")).resolves.toMatchObject({ total: 51 });
-  expect(rpc).toHaveBeenCalledWith(
-    "get_frontend_staff_payments",
-    { p_page: 2, p_status: "complete" },
-    { get: false }
-  );
-  rpc.mockResolvedValueOnce(ok({ status: "chargeback", released_activations: 1 }));
-  await expect(
-    recordFrontendStaffPaymentReversal(api, id, "refunded", reason)
-  ).rejects.toMatchObject({ status: 503 });
-  rpc.mockResolvedValueOnce(ok({ status: "refunded", released_activations: 1 }));
-  await expect(
-    recordFrontendStaffPaymentReversal(api, id, "refunded", reason)
-  ).resolves.toMatchObject({ released_activations: 1 });
 });
 
 it("publishes affiliation badges for requested businesses only and strips storage keys", async () => {

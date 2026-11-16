@@ -3,3 +3,4 @@
 
 CREATE TRIGGER claim_owner_admin_invitation AFTER INSERT OR UPDATE OF status ON auth.mfa_factors FOR EACH ROW EXECUTE FUNCTION internal.claim_owner_admin_invitation();
 CREATE TRIGGER create_account_profile AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION internal.create_account_profile();
+CREATE TRIGGER record_signup_terms AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION internal.record_signup_terms();

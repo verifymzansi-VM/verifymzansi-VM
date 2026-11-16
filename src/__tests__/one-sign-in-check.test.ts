@@ -14,7 +14,6 @@ import { FOUNDATION_PAGE_SESSION_HEADER } from "@/lib/foundation/page-session-ha
 // network calls the real gate, bridge and page session make.
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => "foundation" }));
 let render: { cookies: Map<string, string>; headers: Headers } | null = null;
 vi.mock("next/headers", () => ({
   cookies: async () => ({

@@ -195,6 +195,35 @@ describe("uploadFoundationMediaRequest", () => {
     });
   });
 
+  it("tells the member when photo uploads are paused for the month", async () => {
+    vi.mocked(uploadFoundationMedia).mockRejectedValue(
+      new FoundationMediaError(503, "images_allowance_exhausted")
+    );
+    const response = await uploadFoundationMediaRequest(request([file("a.png")]));
+    expect(await json(response)).toMatchObject({
+      status: 503,
+      body: {
+        success: false,
+        errors: ["Photo uploads are paused for now. Please try again later."],
+      },
+    });
+  });
+
+  it("tells the seller the video's real length when it is over the limit (M4.4)", async () => {
+    vi.mocked(uploadFoundationMedia).mockRejectedValue(
+      new FoundationMediaError(
+        400,
+        "video_length",
+        "Your video is 2 min 40 s; the limit is 2 minutes"
+      )
+    );
+    const response = await uploadFoundationMediaRequest(request([file("a.mp4")]));
+    expect(await json(response)).toMatchObject({
+      status: 400,
+      body: { success: false, errors: ["Your video is 2 min 40 s; the limit is 2 minutes"] },
+    });
+  });
+
   it.each([
     [new FoundationMediaError(400), 400],
     [new FoundationMediaError(403), 403],

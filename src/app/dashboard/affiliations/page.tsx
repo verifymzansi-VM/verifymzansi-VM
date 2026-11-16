@@ -1,107 +1,12 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
-import {
-  AffiliationRequestPanel,
-  type MemberApplication,
-  type MemberAffiliation,
-} from "@/components/organisations/affiliation-request-panel";
+import { AffiliationRequestPanel } from "@/components/organisations/affiliation-request-panel";
 import { SHARED_WITH_ORGANISATION } from "@/lib/organisations/affiliations";
-import { createLogger } from "@/lib/utils/logger";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readAffiliationWorkspace } from "@/lib/foundation/affiliation-workspace";
 
-const log = createLogger("AffiliationsPage");
-
 export const metadata = { title: "Organisation affiliations" };
 export const dynamic = "force-dynamic";
-
-async function readSourceWorkspace(orgSlug: string | null) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    const back = `/dashboard/affiliations${orgSlug ? `?org=${orgSlug}` : ""}`;
-    redirect(`/login?returnUrl=${encodeURIComponent(back)}`);
-  }
-
-  const db = createAdminClient();
-  const [businesses, applications, adminOf, preselected] = await Promise.all([
-    db
-      .from("businesses")
-      .select("id, business_name, status")
-      .eq("owner_id", user.id)
-      .order("created_at", { ascending: false }),
-    db
-      .from("organisation_applications")
-      .select(
-        "id, organisation_id, business_id, status, info_request, decision_note, created_at, organisations(name, slug)"
-      )
-      .eq("applicant_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(100),
-    db
-      .from("organisation_admins")
-      .select("organisations(name, slug, programme_status)")
-      .eq("user_id", user.id),
-    orgSlug
-      ? supabase.from("organisations").select("slug, name").eq("slug", orgSlug).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
-  const loadError = businesses.error ?? applications.error ?? adminOf.error;
-  if (loadError) {
-    log.error("Failed to load affiliation dashboard", {
-      userId: user.id,
-      error: loadError.message,
-    });
-    throw new Error("Affiliations are temporarily unavailable");
-  }
-  const businessIds = (businesses.data ?? []).map((b) => b.id);
-  const affiliations = businessIds.length
-    ? await db
-        .from("organisation_affiliations")
-        .select(
-          "id, organisation_id, business_id, confirmed_at, organisations(name, slug, affiliation_wording)"
-        )
-        .in("business_id", businessIds)
-        .eq("status", "active")
-    : { data: [], error: null };
-  if (affiliations.error) {
-    log.error("Failed to load confirmed affiliations", {
-      userId: user.id,
-      error: affiliations.error.message,
-    });
-    throw new Error("Affiliations are temporarily unavailable");
-  }
-
-  const administered = (adminOf.data ?? [])
-    .map(
-      (row) =>
-        row.organisations as unknown as {
-          name: string;
-          slug: string;
-          programme_status: string;
-        } | null
-    )
-    .filter((org): org is { name: string; slug: string; programme_status: string } =>
-      Boolean(org && org.programme_status !== "ended")
-    );
-  return {
-    businesses: (businesses.data ?? []).map((b) => ({
-      id: b.id,
-      name: b.business_name,
-      status: b.status,
-    })),
-    applications: (applications.data ?? []) as unknown as MemberApplication[],
-    affiliations: (affiliations.data ?? []) as unknown as MemberAffiliation[],
-    administered,
-    preselected: preselected.data ?? null,
-  };
-}
 
 async function readNativeWorkspace(orgSlug: string | null) {
   const { api, user } = await readFoundationServerSession();
@@ -120,10 +25,7 @@ export default async function AffiliationsPage({
     orgParam && orgParam.length <= 80 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(orgParam)
       ? orgParam
       : null;
-  const data =
-    getDataBackend() === "foundation"
-      ? await readNativeWorkspace(orgSlug)
-      : await readSourceWorkspace(orgSlug);
+  const data = await readNativeWorkspace(orgSlug);
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader

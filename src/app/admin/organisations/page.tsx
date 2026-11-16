@@ -1,12 +1,10 @@
 import { requireStaff } from "@/lib/auth/require-staff";
 import Link from "next/link";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { OrganisationCreateForm } from "@/components/admin/commercial/organisation-forms";
 
 import { redirect } from "next/navigation";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFrontendStaffOrganisationDirectory } from "@/lib/foundation/staff-organisations";
 import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
@@ -36,49 +34,9 @@ async function readNativeDirectory() {
   };
 }
 
-async function readSourceDirectory() {
-  const admin = createAdminClient();
-  const orgs = await admin
-    .from("organisations")
-    .select(
-      "id, slug, name, organisation_type, programme_status, is_public, trial_ends_at, sponsored_capacity",
-      { count: "exact" }
-    )
-    .order("created_at", { ascending: false })
-    .limit(200);
-  if (orgs.error) throw new Error("Unable to load organisations");
-
-  // Counts for the organisations shown, computed in the database.
-  const ids = (orgs.data ?? []).map((org) => org.id);
-  const { data: countRows, error: countError } = ids.length
-    ? await admin.rpc("organisation_list_counts", { p_ids: ids })
-    : { data: [], error: null };
-  const counts = new Map(
-    (
-      (countRows ?? []) as Array<{
-        organisation_id: string;
-        affiliated: number;
-        sponsored: number;
-        pending: number;
-      }>
-    ).map((row) => [row.organisation_id, row] as const)
-  );
-  return {
-    total: orgs.count ?? ids.length,
-    items: (orgs.data ?? []).map((row) => ({
-      ...row,
-      affiliated: countError ? "—" : (counts.get(row.id)?.affiliated ?? 0),
-      sponsored: countError ? "—" : (counts.get(row.id)?.sponsored ?? 0),
-      pending: countError ? "—" : (counts.get(row.id)?.pending ?? 0),
-    })),
-    countError: Boolean(countError),
-  };
-}
-
 export default async function OrganisationsAdminPage() {
   await requireStaff("organisations:manage");
-  const { total, items, countError } =
-    getDataBackend() === "foundation" ? await readNativeDirectory() : await readSourceDirectory();
+  const { total, items, countError } = await readNativeDirectory();
 
   return (
     <div className="space-y-6">

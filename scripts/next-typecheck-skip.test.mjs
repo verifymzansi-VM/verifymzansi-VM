@@ -58,7 +58,7 @@ test("a Cloudflare build refuses to start when the skip is requested", () => {
   assert.match(run.stderr, /must run Next's TypeScript check/);
 });
 
-test("only the browser-test and bundle builds in CI opt in; release builds never do", () => {
+test("only the bundle build in CI opts in; release builds never do", () => {
   const yaml = (dir) =>
     readdirSync(dir, { recursive: true })
       .map(String)
@@ -79,7 +79,7 @@ test("only the browser-test and bundle builds in CI opt in; release builds never
     const optedIn = Object.entries(jobs)
       .filter(([, job]) => JSON.stringify(job).includes(SKIP_NEXT_TYPECHECK))
       .map(([id]) => id);
-    assert.deepEqual(optedIn.sort(), ["build-e2e", "bundle-analysis"]);
+    assert.deepEqual(optedIn.sort(), ["bundle-analysis"]);
     for (const id of optedIn) {
       assert.equal(jobs[id].env?.[SKIP_NEXT_TYPECHECK], "1", id);
       assert.doesNotMatch(JSON.stringify(jobs[id].steps), /build:cloudflare/, id);

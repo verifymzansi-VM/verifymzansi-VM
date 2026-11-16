@@ -52,7 +52,6 @@ NEXT_PUBLIC_MEDIA_URL = "https://media.verifymzansi.com"
 R2_PUBLIC_URL = "https://media.verifymzansi.com"
 R2_PUBLIC_BUCKET = "verifymzansi-public"
 R2_PRIVATE_BUCKET = "verifymzansi-private"
-NEXT_PUBLIC_DATA_BACKEND = "foundation"
 NEXT_PUBLIC_SUPABASE_URL = "https://gntzjtuncsyefujajmjy.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_0nTWArCyTVta1nDx_U3u1Q_YOdMfZpi"
 FOUNDATION_SUPABASE_URL = "https://gntzjtuncsyefujajmjy.supabase.co"
@@ -69,6 +68,10 @@ FOUNDATION_PHONE_VERIFICATION_ENABLED = "true"
 # Paid add-on sales (Urgent, Boost, Featured) stay paused until visitors can
 # see what they deliver. Only "true" opens them (src/lib/billing/addon-sales.ts).
 ADDON_SALES_ENABLED = "false"
+# Staff refunds sent to Ozow through its API stay off until the owner has set
+# the Ozow refund key (OZOW_REFUND_CLIENT_ID/_SECRET, refunds scope) and the
+# refund webhook secret. Only "true" turns them on (src/lib/payments/ozow-refunds.ts).
+OZOW_API_REFUNDS_ENABLED = "false"
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
 # Not image resizing: the zone has no Cloudflare Image Resizing and nothing
 # resizes images on the fly (src/lib/image-loader.ts). "true" only makes the
@@ -121,8 +124,11 @@ new_classes = ["RateLimiterDO"]
 
 # ────────────────────────────────────────────────────────────────────────────
 # KV Namespace for OTP Rate Limiting
-# Exists only to satisfy the RateLimiterDO re-export in
-# workers/open-next-entry.mjs — see the [durable_objects] note above.
+# Exists to satisfy the RateLimiterDO re-export in
+# workers/open-next-entry.mjs — see the [durable_objects] note above. The site
+# also keeps its rough monthly Cloudflare Images count here (one key per
+# month, `images-transformations:YYYY-MM`; src/lib/media/images-allowance.ts),
+# which stops photo copies before they use the allowance re-encodes need.
 # ────────────────────────────────────────────────────────────────────────────
 [[kv_namespaces]]
 binding = "OTP_RATE_LIMITS"
@@ -133,7 +139,9 @@ id = "247144b6d9b1406093351378a57c62fa"
 # sharp cannot load in Workers, so src/lib/utils/image-reencode.ts uses this
 # binding to re-save photos (dropping metadata and hidden content). Without it
 # photo uploads are refused. Images Free: 5,000 unique transformations a
-# month; over that, uploads fail until the next month (no charge).
+# month; over that, new ones fail (error 9422) until the next month (no
+# charge), so photo uploads are refused with a clear message. The 800 px
+# display copy stops at 60% of the month (src/lib/media/images-allowance.ts).
 # Bindings are not inherited: keep [env.*.images] below in step.
 # ────────────────────────────────────────────────────────────────────────────
 [images]
@@ -185,6 +193,17 @@ service = "verifymzansi-offload"
 #   pnpm wrangler secret put RATE_LIMITER_API_KEY
 # Optional (the app keeps working and logs instead when unset):
 #   pnpm wrangler secret put PAYMENT_ALERT_EMAILS   # staff payment alert addresses
+#   # Only when turning on API refunds (OZOW_API_REFUNDS_ENABLED); never in code:
+#   pnpm wrangler secret put OZOW_REFUND_CLIENT_ID      # Ozow API key with the refunds scope
+#   pnpm wrangler secret put OZOW_REFUND_CLIENT_SECRET
+#   pnpm wrangler secret put OZOW_REFUND_WEBHOOK_SECRET  # the refund.complete webhook's whsec_ secret
+#   # Customer invoices (src/lib/billing/invoice-settings.ts); never in code.
+#   # Unset, the invoice leaves the seller's address or the bank transfer out:
+#   pnpm wrangler secret put INVOICE_SELLER_ADDRESS        # one line, commas between parts
+#   pnpm wrangler secret put INVOICE_BANK_ACCOUNT_NAME     # all four bank settings, or none
+#   pnpm wrangler secret put INVOICE_BANK_NAME
+#   pnpm wrangler secret put INVOICE_BANK_ACCOUNT_NUMBER
+#   pnpm wrangler secret put INVOICE_BANK_BRANCH_CODE
 #   # NEVER set in production:
 #   # PLAYWRIGHT_E2E_AUTH, PLAYWRIGHT_TEST_MODE, PLAYWRIGHT_SUPABASE_MODE,
 #   # NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE,
@@ -256,7 +275,6 @@ NEXT_PUBLIC_MEDIA_URL = "https://media.verifymzansi.com"
 R2_PUBLIC_URL = "https://media.verifymzansi.com"
 R2_PUBLIC_BUCKET = "verifymzansi-public"
 R2_PRIVATE_BUCKET = "verifymzansi-private"
-NEXT_PUBLIC_DATA_BACKEND = "foundation"
 NEXT_PUBLIC_SUPABASE_URL = "https://gntzjtuncsyefujajmjy.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_0nTWArCyTVta1nDx_U3u1Q_YOdMfZpi"
 FOUNDATION_SUPABASE_URL = "https://gntzjtuncsyefujajmjy.supabase.co"
@@ -271,6 +289,7 @@ FOUNDATION_AUTH_CALLBACK_ENABLED = "true"
 FOUNDATION_RECOVERY_ENABLED = "true"
 FOUNDATION_PHONE_VERIFICATION_ENABLED = "true"
 ADDON_SALES_ENABLED = "false"
+OZOW_API_REFUNDS_ENABLED = "false"
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
 NEXT_PUBLIC_CF_IMAGE_RESIZING = "true"
 OTP_RATE_LIMITER_URL = "https://verifymzansi-rate-limiter.verifymzansi.workers.dev"

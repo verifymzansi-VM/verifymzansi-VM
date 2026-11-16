@@ -1,7 +1,6 @@
 /** @vitest-environment node */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { handleFoundationBillingRoute } from "@/lib/foundation/billing-route";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -79,15 +78,12 @@ describe("while paid add-on sales are paused (the default)", () => {
     }
     expect(handleFoundationBillingRoute).not.toHaveBeenCalled();
   });
-  it("refuses the existing add-on URLs before the backend is chosen", async () => {
+  it("refuses the existing add-on URLs before any other work", async () => {
     const route = createAddonCheckoutRouteCore({
-      paramsSchema: z.object({ id: z.uuid() }),
-      activeUntilField: "urgent_until",
       paymentType: "urgent",
       durationDays: 7,
-      getEntityId: (value: { id: string }) => value.id,
       validationErrorMessage: "Invalid post",
-    } as never);
+    });
     const response = await route(request({}), { params: Promise.resolve({ id }) });
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual(paused);
@@ -122,15 +118,12 @@ describe("once paid add-on sales are switched on", () => {
     expect((await POST(request(body, true, "https://untrusted.example.invalid"))).status).toBe(403);
     expect(handleFoundationBillingRoute).not.toHaveBeenCalled();
   });
-  it("selects foundation before any legacy table client in the existing add-on URLs", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+  it("hands the existing add-on URLs to foundation billing without a legacy table client", async () => {
     const route = createAddonCheckoutRouteCore({
-      paramsSchema: z.object({ id: z.uuid() }),
-      activeUntilField: "featured_until",
+      paymentType: "featured_business",
       durationDays: 7,
-      getEntityId: (value: { id: string }) => value.id,
       validationErrorMessage: "Invalid post",
-    } as never);
+    });
     const incoming = request({});
     expect((await route(incoming, { params: Promise.resolve({ id }) })).status).toBe(200);
     expect(handleFoundationBillingRoute).toHaveBeenCalledExactlyOnceWith(incoming, "checkout", {

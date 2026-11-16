@@ -1,8 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ensureCsrfCookie, CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import { env } from "@/lib/config/env";
-import { PLAYWRIGHT_SESSION_COOKIE } from "@/lib/supabase/playwright-session";
-import { shouldUsePlaywrightStubForRequest } from "@/lib/middleware/playwright-stub";
 
 // -- Nonce & CSP helpers -----------------------------------------------------
 
@@ -191,6 +189,9 @@ export function applySecurityHeaders(
 
 // -- Cookie helpers ----------------------------------------------------------
 
+/** The retired stub browser suite's session cookie; a stale one is cleared. */
+const PLAYWRIGHT_SESSION_COOKIE = "vmz_pw_session";
+
 function clearPlaywrightSessionCookie(response: NextResponse): void {
   response.cookies.set({
     name: PLAYWRIGHT_SESSION_COOKIE,
@@ -212,9 +213,7 @@ export function withSecurityHeaders(
   proxyResponse: NextResponse
 ): NextResponse {
   const pathname = request.nextUrl.pathname;
-  const shouldClearPlaywrightSession =
-    !shouldUsePlaywrightStubForRequest(request) &&
-    !!request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value;
+  const shouldClearPlaywrightSession = !!request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value;
 
   if (proxyResponse.headers.has("location") || proxyResponse.status >= 400) {
     if (shouldClearPlaywrightSession) {

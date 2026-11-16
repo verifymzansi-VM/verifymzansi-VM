@@ -1,4 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { redirect } from "next/navigation";
+import { SHOW_STAFF_INTELLIGENCE } from "@/lib/hidden-features";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +43,8 @@ function monthLabel(month: string) {
 
 export default async function IntelligenceRevenuePage() {
   await requireStaff("bi:view");
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_STAFF_INTELLIGENCE) redirect("/admin");
 
   // Totals are summed in the database; the page never reads payment rows.
   const { data, error } = await createAdminClient().rpc("revenue_summary");

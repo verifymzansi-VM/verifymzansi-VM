@@ -52,15 +52,18 @@ exist. Unsupported provider names fail instead of falling back silently.
 `test:kyc` discovers maintained KYC/encryption/review regression files. The
 retired source schema's database lanes (`test:kyc:db`, `test:db:isolated`) were
 removed; the live schema is checked by `foundation-replay` and
-`foundation-native`. `test:browser:isolated` records local deterministic KYC
-flows and any skips. The signed-in KYC journey (ID and selfie through the
-website, staff claim and review, acceptance) runs on the production schema in
-the foundation browser suite (`e2e/foundation/member-post-publish.spec.ts`,
+`foundation-native`. The retired stub suite's synthetic KYC scenarios
+(`test:browser:isolated`) were removed on 2026-11-11. The signed-in KYC journey
+(ID and selfie through the website, staff claim and review, acceptance) runs on
+the production schema in the foundation browser suite
+(`e2e/foundation/member-post-publish.spec.ts`,
 `e2e/foundation/staff-review.spec.ts`), part of the main release gate. The
-high-risk governance screens have no browser test there yet; their database
-rules and routes have their own tests. Fixture storage uses the shared E2E mode
-guard, and cannot be enabled by test flags in a production environment. Reports
-live under `tmp/kyc-audit`; INCOMPLETE is required when tools or credentials are
-unavailable. Preserve only synthetic fixtures and redacted metadata in tracked
-evidence. See [encryption and recovery](encryption-recovery.md) and
+high-risk governance screens have no browser test there yet
+(`e2e/foundation/PORTING.md`); their database rules and routes have their own
+tests. Genuine provider behavior remains a separate coverage requirement.
+Fixture storage uses the shared E2E mode guard, and cannot be enabled by test
+flags in a production environment. Reports live under `tmp/kyc-audit`;
+INCOMPLETE is required when tools or credentials are unavailable. Preserve only
+synthetic fixtures and redacted metadata in tracked evidence. See
+[encryption and recovery](encryption-recovery.md) and
 [audit policy](audit-tools.md).

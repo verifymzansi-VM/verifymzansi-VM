@@ -5,10 +5,6 @@
  * unless the owner chose to show them.
  */
 
-/** Columns added by 20261006124457_business_verifications.sql. */
-export const BUSINESS_VERIFICATION_COLUMNS =
-  "cipc_verified_at, cipc_expires_at, cipc_registration_number, cipc_registered_name, cipc_registered_office, show_full_registered_office, seen_verified_at, seen_expires_at, seen_method, seen_city, owner_verified_role, owner_position_title";
-
 export type RegisteredOfficeView = {
   streetLines?: string[];
   suburb?: string | null;
@@ -102,7 +98,3 @@ export type BusinessStickerState = {
   seenMethod?: "visit" | "video" | string | null;
   seenCity?: string | null;
 };
-
-/** Sticker columns business cards need (no registered office or position). */
-export const CARD_STICKER_COLUMNS =
-  "cipc_verified_at, cipc_expires_at, seen_verified_at, seen_expires_at, seen_method, seen_city";

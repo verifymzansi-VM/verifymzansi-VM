@@ -1,41 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import ListingsPage from "./page";
-import { createClient } from "@/lib/supabase/server";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readRestoredPostManager } from "@/lib/foundation/post-manager";
-import { tryCreateAdminClient } from "@/lib/supabase/admin";
 vi.mock("@/lib/foundation/server-session", () => ({
   readFoundationServerSession: vi.fn(),
   FoundationServerSessionError: class extends Error {},
 }));
 vi.mock("@/lib/foundation/post-manager", () => ({ readRestoredPostManager: vi.fn() }));
-
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(),
-}));
-
-vi.mock("@/lib/supabase/admin", () => ({
-  tryCreateAdminClient: vi.fn(() => ({ rpc: vi.fn() })),
-}));
-
-vi.mock("@/lib/engagement-server", () => ({
-  getOptionalContentViewCountMap: vi.fn(
-    (_admin: unknown, targetType: string, targetIds: string[]) => ({
-      ok: true,
-      data: new Map(
-        targetIds.map((targetId) => {
-          const counts: Record<string, Record<string, number>> = {
-            listing: { "listing-active": 37 },
-            business: { "business-pending": 12 },
-            promotion: { "promo-rejected": 14 },
-          };
-          return [targetId, counts[targetType]?.[targetId] ?? 0];
-        })
-      ),
-    })
-  ),
-}));
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
@@ -74,15 +46,6 @@ vi.mock("@/components/layout/page-header", () => ({
       {children}
     </div>
   ),
-}));
-
-vi.mock("@/lib/account/compat", () => ({
-  applyOwnerFilter: vi.fn((query) => query),
-  getOwnerColumn: vi.fn().mockResolvedValue("owner_id"),
-}));
-
-vi.mock("@/lib/services/plan-tier", () => ({
-  getActivePlanTierForArea: vi.fn().mockResolvedValue("starter"),
 }));
 
 vi.mock("@/lib/services/entitlements", () => ({
@@ -127,28 +90,35 @@ vi.mock("@/components/ui/alert", () => ({
   AlertDescription: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
 
-function createOrderedQuery(data: unknown[]) {
-  return {
-    select: vi.fn().mockReturnValue({
-      order: vi.fn().mockResolvedValue({ data, error: null, count: null }),
-    }),
-  };
+const session = {
+  user: { id: "native-owner" },
+  account: { account_id: "native-owner" },
+  api: { rpc: vi.fn() },
+};
+
+/** The owner's posts as the post manager reads them, one list per area. */
+function postManager(listings: unknown[], businesses: unknown[] = [], promotions: unknown[] = []) {
+  vi.mocked(readFoundationServerSession).mockResolvedValue(
+    session as unknown as Awaited<ReturnType<typeof readFoundationServerSession>>
+  );
+  vi.mocked(readRestoredPostManager).mockResolvedValue({
+    responses: [
+      { data: listings, error: null },
+      { data: businesses, error: null },
+      { data: promotions, error: null },
+    ],
+    sponsoredIds: new Set(),
+    slotUsage: [],
+    planAdmins: [],
+    tiers: { MZANSI_MARKET: "starter", MZANSI_BUSINESS: "starter", PROMOTIONS_EVENTS: "starter" },
+  } as unknown as Awaited<ReturnType<typeof readRestoredPostManager>>);
 }
 
 describe("Dashboard listings page", () => {
-  const mockSupabase = {
-    auth: { getUser: vi.fn() },
-    from: vi.fn(),
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-05T00:00:00.000Z"));
-    vi.mocked(createClient).mockResolvedValue(
-      mockSupabase as unknown as Awaited<ReturnType<typeof createClient>>
-    );
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
   });
 
   afterEach(() => {
@@ -156,172 +126,138 @@ describe("Dashboard listings page", () => {
     vi.useRealTimers();
   });
 
-  it("loads the preserved post manager from the verified native owner without source clients", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
-    const session = {
-      user: { id: "native-owner" },
-      account: { account_id: "native-owner" },
-      api: { rpc: vi.fn() },
-    };
-    vi.mocked(readFoundationServerSession).mockResolvedValue(
-      session as unknown as Awaited<ReturnType<typeof readFoundationServerSession>>
-    );
-    vi.mocked(readRestoredPostManager).mockResolvedValue({
-      responses: [
-        {
-          data: [
-            {
-              id: "native-listing",
-              title: "Native owner listing",
-              status: "live",
-              created_at: "2026-03-04T00:00:00Z",
-              expires_at: "2026-04-04T00:00:00Z",
-              area: "MZANSI_MARKET",
-              photos: [],
-              price_cents: 1000,
-            },
-          ],
-          error: null,
-        },
-        { data: [], error: null },
-        { data: [], error: null },
-      ],
-      sponsoredIds: new Set(),
-      slotUsage: [],
-      planAdmins: [],
-      tiers: { MZANSI_MARKET: "starter", MZANSI_BUSINESS: "starter", PROMOTIONS_EVENTS: "starter" },
-    } as unknown as Awaited<ReturnType<typeof readRestoredPostManager>>);
+  it("loads the preserved post manager from the verified native owner", async () => {
+    postManager([
+      {
+        id: "native-listing",
+        title: "Native owner listing",
+        status: "live",
+        created_at: "2026-03-04T00:00:00Z",
+        expires_at: "2026-04-04T00:00:00Z",
+        area: "MZANSI_MARKET",
+        photos: [],
+        price_cents: 1000,
+      },
+    ]);
     render(await ListingsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Native owner listing")).toBeInTheDocument();
-    expect(createClient).not.toHaveBeenCalled();
-    expect(tryCreateAdminClient).not.toHaveBeenCalled();
     expect(readRestoredPostManager).toHaveBeenCalledWith(session.api, "native-owner");
   });
 
   it("aggregates mixed-area content and exposes rejected recovery actions", async () => {
-    mockSupabase.from.mockImplementation((table: string) => {
-      if (table === "listings") {
-        return createOrderedQuery([
-          {
-            id: "listing-active",
-            title: "City Hatchback",
-            status: "active",
-            price_cents: 12990000,
-            category: "Cars",
-            created_at: "2026-03-05T00:00:00.000Z",
-            area: "MZANSI_MARKET",
-            photos: ["https://example.com/car.jpg"],
-            boost_until: null,
-            featured_until: null,
-            urgent_until: null,
-            expires_at: "2026-03-07T00:00:00.000Z",
-            status_reason: null,
-          },
-          {
-            id: "listing-rejected",
-            title: "Needs VIN photo",
-            status: "rejected",
-            price_cents: 9800000,
-            category: "Cars",
-            created_at: "2026-03-04T00:00:00.000Z",
-            area: "MZANSI_MARKET",
-            photos: [],
-            boost_until: null,
-            featured_until: null,
-            urgent_until: null,
-            expires_at: null,
-            status_reason: "Add a clear VIN photo before resubmitting.",
-          },
-          {
-            id: "listing-expired",
-            title: "Old trailer",
-            status: "expired",
-            price_cents: 2500000,
-            category: "Trailers",
-            created_at: "2026-02-15T00:00:00.000Z",
-            area: "MZANSI_MARKET",
-            photos: [],
-            boost_until: null,
-            featured_until: null,
-            urgent_until: null,
-            expires_at: "2026-03-01T00:00:00.000Z",
-            status_reason: null,
-          },
-        ]);
-      }
-
-      if (table === "businesses") {
-        return createOrderedQuery([
-          {
-            id: "business-pending",
-            business_name: "Senzo Repairs",
-            status: "pending_review",
-            category: "Services",
-            created_at: "2026-03-06T00:00:00.000Z",
-            cover_photo: null,
-            logo_url: null,
-            gallery_photos: [],
-            view_count: 18,
-            boost_until: null,
-            featured_until: null,
-            status_reason: null,
-          },
-          {
-            id: "business-rejected",
-            business_name: "Township Tutors",
-            status: "rejected",
-            category: "Education",
-            created_at: "2026-03-03T00:00:00.000Z",
-            cover_photo: null,
-            logo_url: null,
-            gallery_photos: [],
-            view_count: 0,
-            boost_until: null,
-            featured_until: null,
-            status_reason: null,
-          },
-        ]);
-      }
-
-      if (table === "promotions") {
-        return createOrderedQuery([
-          {
-            id: "promo-active",
-            title: "Nkambeni",
-            status: "live",
-            price_cents: null,
-            category: "tourism_hospitality",
-            created_at: "2026-03-01T00:00:00.000Z",
-            published_at: "2026-03-01T00:00:00.000Z",
-            photos: [],
-            view_count: 8,
-            boost_until: null,
-            featured_until: null,
-            urgent_until: null,
-            expires_at: null,
-            end_date: null,
-            status_reason: null,
-            promotion_type: "general",
-          },
-          {
-            id: "promo-rejected",
-            title: "Youth Market Day",
-            status: "rejected",
-            price_cents: null,
-            category: "Events",
-            created_at: "2026-03-02T00:00:00.000Z",
-            photos: [],
-            view_count: 14,
-            boost_until: null,
-            featured_until: null,
-            status_reason: "Clarify the event venue before review.",
-            promotion_type: "EVENT",
-          },
-        ]);
-      }
-
-      return createOrderedQuery([]);
-    });
+    postManager(
+      [
+        {
+          id: "listing-active",
+          title: "City Hatchback",
+          status: "active",
+          price_cents: 12990000,
+          category: "Cars",
+          created_at: "2026-03-05T00:00:00.000Z",
+          area: "MZANSI_MARKET",
+          photos: ["https://example.com/car.jpg"],
+          boost_until: null,
+          featured_until: null,
+          urgent_until: null,
+          expires_at: "2026-03-07T00:00:00.000Z",
+          status_reason: null,
+        },
+        {
+          id: "listing-rejected",
+          title: "Needs VIN photo",
+          status: "rejected",
+          price_cents: 9800000,
+          category: "Cars",
+          created_at: "2026-03-04T00:00:00.000Z",
+          area: "MZANSI_MARKET",
+          photos: [],
+          boost_until: null,
+          featured_until: null,
+          urgent_until: null,
+          expires_at: null,
+          status_reason: "Add a clear VIN photo before resubmitting.",
+        },
+        {
+          id: "listing-expired",
+          title: "Old trailer",
+          status: "expired",
+          price_cents: 2500000,
+          category: "Trailers",
+          created_at: "2026-02-15T00:00:00.000Z",
+          area: "MZANSI_MARKET",
+          photos: [],
+          boost_until: null,
+          featured_until: null,
+          urgent_until: null,
+          expires_at: "2026-03-01T00:00:00.000Z",
+          status_reason: null,
+        },
+      ],
+      [
+        {
+          id: "business-pending",
+          business_name: "Senzo Repairs",
+          status: "pending_review",
+          category: "Services",
+          created_at: "2026-03-06T00:00:00.000Z",
+          cover_photo: null,
+          logo_url: null,
+          gallery_photos: [],
+          view_count: 18,
+          boost_until: null,
+          featured_until: null,
+          status_reason: null,
+        },
+        {
+          id: "business-rejected",
+          business_name: "Township Tutors",
+          status: "rejected",
+          category: "Education",
+          created_at: "2026-03-03T00:00:00.000Z",
+          cover_photo: null,
+          logo_url: null,
+          gallery_photos: [],
+          view_count: 0,
+          boost_until: null,
+          featured_until: null,
+          status_reason: null,
+        },
+      ],
+      [
+        {
+          id: "promo-active",
+          title: "Nkambeni",
+          status: "live",
+          price_cents: null,
+          category: "tourism_hospitality",
+          created_at: "2026-03-01T00:00:00.000Z",
+          published_at: "2026-03-01T00:00:00.000Z",
+          photos: [],
+          view_count: 8,
+          boost_until: null,
+          featured_until: null,
+          urgent_until: null,
+          expires_at: null,
+          end_date: null,
+          status_reason: null,
+          promotion_type: "general",
+        },
+        {
+          id: "promo-rejected",
+          title: "Youth Market Day",
+          status: "rejected",
+          price_cents: null,
+          category: "Events",
+          created_at: "2026-03-02T00:00:00.000Z",
+          photos: [],
+          view_count: 14,
+          boost_until: null,
+          featured_until: null,
+          status_reason: "Clarify the event venue before review.",
+          promotion_type: "EVENT",
+        },
+      ]
+    );
 
     render(await ListingsPage({ searchParams: Promise.resolve({}) }));
 

@@ -33,7 +33,7 @@ begin
     select e.max_photos,e.max_videos into photo_limit,video_limit
     from private.post_activations a join private.entitlements e on e.id=a.entitlement_id
     where a.post_id=post.id and a.owner_id=actor and a.released_at is null
-      and internal.entitlement_usable(e.status,e.starts_at,e.ends_at)
+      and internal.slot_grant_usable(e.id,e.status,e.starts_at,e.ends_at)
       and (e.area is null or e.area=post.area)
       and (e.owner_id=actor or exists(select 1 from private.entitlement_members m where m.entitlement_id=e.id and m.member_id=actor))
       and exists(select 1 from private.current_account_access u where u.id=e.owner_id)

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { cache } from "react";
-import { getDataBackend } from "@/lib/data-backend";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import { readFoundationPublicOrganisation } from "@/lib/foundation/organisations";
 import { foundationMediaUrl } from "@/lib/foundation/public-cards";
@@ -14,19 +13,14 @@ import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { BrandSurface, brandOutlineButtonClassName } from "@/components/brand";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CARD_STICKER_COLUMNS, toPublicVerification } from "@/lib/business-verification/public";
+import { toPublicVerification } from "@/lib/business-verification/public";
 import {
   BusinessCardGridItem,
   type BusinessCardGridRow,
 } from "@/components/listings/business-card-grid-item";
 import { SponsorLogo } from "@/components/organisations/sponsor-logo";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
-import {
-  DEFAULT_COMMERCIAL_SETTINGS,
-  getCommercialSettings,
-  organisationsPublicEnabled,
-} from "@/lib/commercial/settings";
-import { createClient } from "@/lib/supabase/server";
+import { DEFAULT_COMMERCIAL_SETTINGS } from "@/lib/commercial/settings";
 import { ALL_BUSINESS_CATEGORIES, BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { getProvinceNames } from "@/lib/constants/sa-provinces";
 import {
@@ -35,9 +29,6 @@ import {
   sponsorArea,
 } from "@/lib/organisations/sponsors";
 import { cn } from "@/lib/utils";
-
-/** Card fields only: never select("*") into a public page. */
-const ORG_CARD_COLUMNS = `id, business_type, business_name, description, cover_photo, cover_video, video_thumbnail, logo_url, gallery_photos, location_province, location_city, category, subcategory, boost_until, featured_until, service_areas, focal_x, focal_y, media_width, media_height, view_count, ${CARD_STICKER_COLUMNS}`;
 
 const PAGE_SIZE = 24;
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -78,56 +69,22 @@ interface PublicOrganisation {
   programmes?: { id: string; name: string }[];
 }
 
-interface DirectoryRow {
-  business_id: string;
-  total_count: number;
-}
-
 const loadOrganisation = cache(async (slug: string): Promise<PublicOrganisation | null> => {
   if (!SLUG.test(slug)) return null;
-  if (getDataBackend() === "foundation") {
-    const org = await readFoundationPublicOrganisation(foundationServerPublicApi(), { slug });
-    return org
-      ? {
-          ...org,
-          province: org.province ? publicProvinceLabel(org.province) : null,
-          logo_url: foundationMediaUrl(org.logo_object_key),
-          logo_permission_at: null,
-          sponsorship_wording: "Supported by",
-        }
-      : null;
-  }
-  const supabase = await createClient();
-  if (!(await organisationsPublicEnabled(supabase as never))) return null;
-  const { data } = await supabase
-    .from("organisations")
-    .select(
-      "id, slug, name, organisation_type, description, programme_description, service_area, province, website, public_email, public_phone, logo_url, logo_permission_at, programme_status, affiliation_wording, sponsorship_wording, accepting_applications, is_public"
-    )
-    .eq("slug", slug)
-    .maybeSingle();
-  // RLS only returns listed organisations to the public; re-check explicitly.
-  if (
-    !data ||
-    !data.is_public ||
-    !["founding_trial", "active_paid", "affiliation_only"].includes(data.programme_status)
-  ) {
-    return null;
-  }
-  return data as PublicOrganisation;
+  const org = await readFoundationPublicOrganisation(foundationServerPublicApi(), { slug });
+  return org
+    ? {
+        ...org,
+        province: org.province ? publicProvinceLabel(org.province) : null,
+        logo_url: foundationMediaUrl(org.logo_object_key),
+        logo_permission_at: null,
+        sponsorship_wording: "Supported by",
+      }
+    : null;
 });
 
-async function liveCount(org: PublicOrganisation): Promise<number> {
-  if (getDataBackend() === "foundation") return org.live_businesses ?? 0;
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("organisation_public_stats", { p_org: org.id });
-  return Number((data as { affiliatedCount?: number } | null)?.affiliatedCount ?? 0);
-}
-
-async function minimumLive(): Promise<number> {
-  if (getDataBackend() === "foundation") return DEFAULT_COMMERCIAL_SETTINGS.sponsors.stripMinLive;
-  const supabase = await createClient();
-  return (await getCommercialSettings(supabase as never)).sponsors.stripMinLive;
+function liveCount(org: PublicOrganisation): number {
+  return org.live_businesses ?? 0;
 }
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
@@ -138,7 +95,8 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
     org.description?.slice(0, 155) ??
     `Local businesses supported by ${org.name} on VerifyMzansi.`;
   // Kept out of search engines until the showcase has real content.
-  const [live, minimum] = await Promise.all([liveCount(org), minimumLive()]);
+  const live = liveCount(org);
+  const minimum = DEFAULT_COMMERCIAL_SETTINGS.sponsors.stripMinLive;
   return {
     title: `Businesses supported by ${org.name}`,
     description,
@@ -181,8 +139,6 @@ export default async function OrganisationPage({
   const page = Math.max(1, Math.min(200, Number.parseInt(query.page ?? "1", 10) || 1));
   const filtered = Object.values(filters).some((value) => value !== undefined);
 
-  const supabase = await createClient();
-  const foundation = getDataBackend() === "foundation";
   const directoryParams = new URLSearchParams({
     org: org.slug,
     limit: String(PAGE_SIZE),
@@ -191,56 +147,23 @@ export default async function OrganisationPage({
   for (const key of ["q", "category", "subcategory", "province", "city"] as const)
     if (filters[key]) directoryParams.set(key, filters[key]);
   if (filters.sponsored) directoryParams.set("sponsored", "1");
-  if (filters.programme && foundation) {
+  if (filters.programme) {
     const programme = org.programmes?.find((row) => row.id === filters.programme);
     if (programme) directoryParams.set("programme_name", programme.name);
   }
-  const publicDirectory = foundation
-    ? filters.programme && !org.programmes?.some((row) => row.id === filters.programme)
+  const publicDirectory =
+    filters.programme && !org.programmes?.some((row) => row.id === filters.programme)
       ? { rows: [], total: 0, page, limit: PAGE_SIZE }
-      : await readRestoredCollection(foundationServerPublicApi(), "businesses", directoryParams)
-    : null;
-  const [directory, live, sponsors, programmes] = await Promise.all([
-    publicDirectory
-      ? Promise.resolve({
-          data: publicDirectory.rows.map((row) => ({
-            business_id: row.id,
-            total_count: publicDirectory.total,
-          })),
-        })
-      : supabase.rpc("organisation_directory", {
-          p_org: org.id,
-          p_search: filters.q ?? null,
-          p_category: filters.category ?? null,
-          p_subcategory: filters.subcategory ?? null,
-          p_province: filters.province ?? null,
-          p_city: filters.city ?? null,
-          p_programme: filters.programme ?? null,
-          p_sponsored: filters.sponsored ?? null,
-          p_limit: PAGE_SIZE,
-          p_offset: (page - 1) * PAGE_SIZE,
-        }),
-    liveCount(org),
-    getPublicSponsors(),
-    foundation
-      ? Promise.resolve({ data: org.programmes ?? [] })
-      : supabase
-          .from("organisation_programmes")
-          .select("id, name")
-          .eq("organisation_id", org.id)
-          .eq("active", true),
-  ]);
-  const rows = (directory.data ?? []) as DirectoryRow[];
-  const total = publicDirectory?.total ?? Number(rows[0]?.total_count ?? 0);
-  const ids = rows.map((row) => row.business_id);
-  const { data: businessRows } = publicDirectory
-    ? { data: publicDirectory.rows as unknown as BusinessCardGridRow[] }
-    : ids.length
-      ? await supabase.from("businesses").select(ORG_CARD_COLUMNS).in("id", ids)
-      : { data: [] as BusinessCardGridRow[] };
+      : await readRestoredCollection(foundationServerPublicApi(), "businesses", directoryParams);
+  const sponsors = await getPublicSponsors();
+  const live = liveCount(org);
+  const programmes = { data: org.programmes ?? [] };
+  const total = publicDirectory.total;
+  const ids = publicDirectory.rows.map((row) => row.id);
+  const businessRows = publicDirectory.rows as unknown as BusinessCardGridRow[];
   // Keep the directory order (the RPC sorts and filters).
   const businesses = ids
-    .map((id) => (businessRows ?? []).find((row) => row.id === id))
+    .map((id) => businessRows.find((row) => row.id === id))
     .filter(Boolean)
     // Expired stickers never show, even before the daily job clears them.
     .map((row) => toPublicVerification(row as BusinessCardGridRow));
@@ -251,7 +174,7 @@ export default async function OrganisationPage({
   // businesses that are live are always shown — only an empty grid is replaced.
   const onboarding = live === 0;
   const placesAvailable = sponsor?.places_available ?? true;
-  const logo = foundation ? org.logo_url : org.logo_permission_at ? org.logo_url : null;
+  const logo = org.logo_url;
   const area = sponsorArea(org);
   const pageHref = (next: number) => {
     const params = new URLSearchParams();

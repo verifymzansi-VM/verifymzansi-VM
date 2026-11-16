@@ -1,5 +1,5 @@
 // Whether `next build` may skip its own TypeScript pass. Only CI builds whose
-// sole purpose is serving browser tests or measuring the bundle opt in, with
+// sole purpose is measuring the bundle opt in, with
 // VERIFYMZANSI_SKIP_NEXT_TYPECHECK=1; the same commit's lint-type-security
 // job runs the full typecheck (tsc). Production builds never skip it:
 // build:cloudflare (used by deploy and the Cloudflare candidate) starts with

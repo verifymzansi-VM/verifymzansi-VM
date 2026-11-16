@@ -102,7 +102,9 @@ describe("public trust pages", () => {
     expect(screen.getByRole("heading", { name: "Third parties" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "What other people can see" })).toBeInTheDocument();
     expect(screen.getByText(/If we discover a data breach/i)).toBeInTheDocument();
-    expect(screen.getByText(/deleted 30 days after an approved review/i)).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/scheduled for deletion 30 days after the case decision/i).length
+    ).toBeGreaterThan(0);
   });
 
   it("renders payment and verification disclaimers in terms", async () => {

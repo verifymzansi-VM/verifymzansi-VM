@@ -21,7 +21,6 @@ const { authenticate, context, readAccount, limit, legacy } = vi.hoisted(() => (
   legacy: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => "foundation" }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: legacy, createPublicClient: legacy }));
 vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: context }));
 vi.mock("@/lib/foundation/account-context", async (original) => ({

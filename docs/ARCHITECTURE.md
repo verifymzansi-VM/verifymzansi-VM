@@ -46,44 +46,38 @@ Postgres data, RLS, and migrations.
 - `src/app/api/businesses/route.ts` and `src/app/api/promotions/route.ts`:
   business and tourism/events content flows.
 - `src/app/post/*`: user-facing create/edit pages.
-- `src/app/api/listings/_lib/listing-route-helpers.ts`: shared listing route
-  helpers for query filtering, compatibility fallbacks, placeholder filtering,
-  and insert fallback handling.
 - `src/lib/validations/*`: Zod schemas for all major mutation inputs.
 - `src/lib/services/entitlements.ts`, `src/lib/billing/free-posts.ts`: plan
   limits and free-post accounting.
 
 ## KYC And Trust Flow
 
-- `src/app/api/verification/upload/route.ts`: KYC document/selfie/proof upload
-  endpoint. It validates form data, checks file integrity, strips metadata,
-  encrypts evidence, stores it in private R2, and updates verification state.
-- `src/app/api/verification/upload/_lib/kyc-upload-cleanup.ts`: cleanup and
-  retry handling for failed KYC artifact/R2 writes.
-- `src/lib/services/kyc-engine.ts`: risk engine for SHA-256 duplicates,
-  perceptual-hash similarity, velocity, ID HMAC reuse, provider results,
-  EXIF/liveness/blur signals, and aggregate risk score.
-- `src/app/api/admin/verification/decide/route.ts`: admin review path that
-  approves/rejects/resubmits verification steps and propagates verified account
-  status.
+- `src/app/api/verification/upload/route.ts`: KYC document and selfie upload. It
+  hands the request to `src/lib/foundation/restored-verification-upload.ts`,
+  which validates the form, cleans the image, encrypts the evidence, stores it
+  in private R2 and records it through the foundation `api.*` commands.
+- `src/app/api/admin/verification/decide/route.ts`: staff review of a
+  verification step, handled by
+  `src/lib/foundation/restored-identity-decision-route.ts`. The database applies
+  the decision and its policy (staff role, two-step check, overrides).
 
 ## Payment Flow
 
-- `src/app/api/billing/create-checkout/route.ts`: authenticated checkout
-  creation after profile, email, duplicate entitlement, and duplicate
-  pending-payment checks.
-- `src/lib/payments/checkout.ts`: creates pending payment rows and Ozow hosted
-  checkout sessions.
-- `src/app/api/webhooks/ozow/route.ts`: signed Ozow webhook handler; validates
-  amount/currency/provider IDs, claims processing, fulfills entitlements,
-  finalizes payment state, and sends receipt/failure emails.
-- `src/lib/payments/store.ts` and `src/lib/payments/fulfillment.ts`: payment
-  state transitions and entitlement creation.
+- `src/app/api/billing/create-checkout/route.ts` and the add-on routes
+  (`src/app/api/{listings,businesses,promotions}/[id]/{boost,featured,urgent}`):
+  hand checkout to the foundation billing handler
+  (`src/lib/foundation/billing-route.ts`).
+- `src/app/api/webhooks/ozow/route.ts`: signed Ozow webhook handler; rate
+  limits, checks the webhook secret and signature, normalises the payload, then
+  hands it to the foundation payment runtime.
+- `src/lib/foundation/billing-runtime.ts`: Ozow checkout creation, notification
+  handling and payment reconciliation against the foundation `api.*` commands.
 
 ## Media Flow
 
 - `src/app/api/media/upload/route.ts`: server-mediated media upload path, used
-  for photos and videos (the direct-to-R2 upload routes are retired).
+  for photos and videos (`src/app/api/media/upload/foundation.ts`; the
+  direct-to-R2 upload routes are retired).
 - `src/app/api/media/serve/[...key]/route.ts`: media proxy/serving path.
 - `src/lib/services/storage.ts`: native R2 binding support, S3-compatible R2
   fallback, encrypted KYC upload/download, and safe storage key checks.

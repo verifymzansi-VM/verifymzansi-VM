@@ -33,8 +33,8 @@ vi.mock("@/components/layout/page-header", () => ({
   ),
 }));
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({
     auth: { getUser: mockGetUser },
     from: mockFrom,
   }),

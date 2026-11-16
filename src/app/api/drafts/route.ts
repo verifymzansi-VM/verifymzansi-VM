@@ -1,12 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { createLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
-import { unauthorizedResponse, badRequestResponse, internalApiError } from "@/lib/utils/api";
+import { badRequestResponse } from "@/lib/utils/api";
 import { readBoundedRequestText, RequestBodyTooLargeError } from "@/lib/utils/request-body";
-import { getDataBackend } from "@/lib/data-backend";
 import { handleFoundationOwnerRoute, type FoundationRefusal } from "@/lib/foundation/owner-route";
 
 const logger = createLogger("Drafts");
@@ -99,35 +97,7 @@ export async function GET(request: NextRequest) {
   if (!flow || !VALID_FLOWS.has(flow)) {
     return badRequestResponse("Invalid flow");
   }
-  if (getDataBackend() === "foundation")
-    return handleRestoredDraft(request, flow, { action: "read" });
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return unauthorizedResponse();
-  }
-
-  const { data, error } = await supabase
-    .from("listing_drafts")
-    .select("step, data, saved_at")
-    .eq("user_id", user.id)
-    .eq("flow", flow)
-    .maybeSingle();
-
-  if (error) {
-    logger.error("Failed to load draft", { error: error.message, flow });
-    return NextResponse.json({ error: "Failed to load draft" }, { status: 500 });
-  }
-
-  return NextResponse.json(
-    { draft: data },
-    {
-      headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },
-    }
-  );
+  return handleRestoredDraft(request, flow, { action: "read" });
 }
 
 /**
@@ -166,30 +136,7 @@ export async function PUT(request: NextRequest) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return badRequestResponse("Invalid data");
   }
-  if (getDataBackend() === "foundation")
-    return handleRestoredDraft(request, flow, { action: "save", step, data });
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return unauthorizedResponse();
-  }
-
-  const { error } = await supabase
-    .from("listing_drafts")
-    .upsert(
-      { user_id: user.id, flow, step, data, saved_at: new Date().toISOString() },
-      { onConflict: "user_id,flow" }
-    );
-
-  if (error) {
-    logger.error("Failed to save draft", { error: error.message, flow });
-    return internalApiError("Failed to save draft");
-  }
-
-  return NextResponse.json({ ok: true });
+  return handleRestoredDraft(request, flow, { action: "save", step, data });
 }
 
 /**
@@ -206,27 +153,5 @@ export async function DELETE(request: NextRequest) {
   if (!flow || !VALID_FLOWS.has(flow)) {
     return badRequestResponse("Invalid flow");
   }
-  if (getDataBackend() === "foundation")
-    return handleRestoredDraft(request, flow, { action: "discard" });
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return unauthorizedResponse();
-  }
-
-  const { error } = await supabase
-    .from("listing_drafts")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("flow", flow);
-
-  if (error) {
-    logger.error("Failed to delete draft", { error: error.message, flow });
-    return internalApiError("Failed to delete draft");
-  }
-
-  return NextResponse.json({ ok: true });
+  return handleRestoredDraft(request, flow, { action: "discard" });
 }

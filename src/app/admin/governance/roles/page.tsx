@@ -3,7 +3,6 @@ import { requireStaff } from "@/lib/auth/require-staff";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { formatSaLongDate } from "@/lib/utils/format";
 import { PageHeader } from "@/components/layout/page-header";
@@ -13,7 +12,6 @@ import { UserPlus, UserMinus, Clock, Hourglass } from "lucide-react";
 import { RoleAssignForm } from "@/components/admin/role-assign-form";
 import { RoleChangeReviewActions } from "@/components/admin/role-change-review-actions";
 import type { StaffRole } from "@/types/enums";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readRestoredStaffRoles } from "@/lib/foundation/staff-role-review";
 import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
@@ -55,76 +53,6 @@ interface Person {
 }
 
 type RoleFilter = (typeof ROLE_FILTERS)[number];
-async function readSourceStaffRoles(page: number, roleFilter?: RoleFilter) {
-  const admin = createAdminClient();
-
-  let staffQuery = admin
-    .from("staff_roles")
-    .select("user_id, role, granted_at, mfa_required_after", { count: "exact" })
-    .eq("status", "active");
-  if (roleFilter) staffQuery = staffQuery.eq("role", roleFilter);
-
-  const [staffResult, pendingResult, historyResult] = await Promise.all([
-    staffQuery
-      .order("granted_at", { ascending: false })
-      .order("user_id", { ascending: true })
-      .range((page - 1) * STAFF_PAGE_SIZE, page * STAFF_PAGE_SIZE - 1),
-    admin
-      .from("decision_records")
-      .select("id, payload, payload_version, recommender_id, rationale, created_at, expires_at")
-      .eq("case_type", "staff_role")
-      .eq("status", "pending_approval")
-      .order("created_at", { ascending: true })
-      .limit(100),
-    admin
-      .from("role_assignments_history")
-      .select("id, target_user_id, previous_role, new_role, assigned_by, reason, created_at")
-      .order("created_at", { ascending: false })
-      .limit(25),
-  ]);
-
-  if (staffResult.error || pendingResult.error || historyResult.error)
-    throw new Error("Staff roster unavailable");
-
-  const staff = staffResult.data ?? [];
-  const staffTotal = staffResult.count ?? staff.length;
-  const pending = (pendingResult.data ?? []).map((row) => {
-    const payload = (row.payload ?? {}) as Record<string, unknown>;
-    return {
-      ...row,
-      targetId: String(payload.target_user_id ?? ""),
-      from: String(payload.from_role ?? "member"),
-      to: String(payload.to_role ?? ""),
-    };
-  });
-  const history = historyResult.data ?? [];
-
-  // Names and emails for everyone shown on the page, in one query.
-  const ids = [
-    ...new Set([
-      ...staff.map((s) => s.user_id),
-      ...pending.flatMap((p) => [p.targetId, p.recommender_id]),
-      ...history.flatMap((h) => [h.target_user_id, h.assigned_by]),
-    ]),
-  ].filter(Boolean);
-  const { data: directory } = ids.length
-    ? await admin.rpc("staff_directory", { p_ids: ids })
-    : { data: [] };
-  const people = new Map<string, Person>(
-    (
-      (directory ?? []) as Array<{
-        user_id: string;
-        email: string | null;
-        display_name: string | null;
-      }>
-    ).map((d) => [
-      d.user_id,
-      { name: d.display_name || d.email || `${d.user_id.slice(0, 8)}…`, email: d.email },
-    ])
-  );
-  return { staff, staffTotal, pending, history, people };
-}
-
 async function readNativeStaffRoles(actorId: string, page: number, filter?: RoleFilter) {
   const { api } = await readFoundationServerSession();
   const dto = await readRestoredStaffRoles(
@@ -185,10 +113,7 @@ export default async function GovernanceRolesPage({
     : roleHasCapability(role, "role:assign");
   let data;
   try {
-    data =
-      getDataBackend() === "foundation"
-        ? await readNativeStaffRoles(user.id, page, roleFilter)
-        : await readSourceStaffRoles(page, roleFilter);
+    data = await readNativeStaffRoles(user.id, page, roleFilter);
   } catch (error) {
     if (error instanceof FoundationStaffCommandError && error.mfaRequired)
       redirect(staffVerifyHref("/staff/two-step", "/admin/governance/roles"));

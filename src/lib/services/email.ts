@@ -15,6 +15,7 @@ import {
   paragraph,
   sanitizeAppUrl,
 } from "@/lib/services/email-template";
+import { buildPaymentReceiptEmail, type PaymentReceipt } from "./payment-receipt-email";
 
 const log = createLogger("Email");
 
@@ -56,9 +57,11 @@ const platformNotices = {
     "Your appeal has been decided",
     "An independent reviewer has decided your appeal. Sign in to read the outcome.",
   ],
+  // Sent only when the receipt details cannot be read; the receipt itself is
+  // built in ./payment-receipt-email.ts.
   payment_completed: [
     "Payment received",
-    "Your payment has been recorded. View your posting allowance and invoice in Billing.",
+    "We received your payment. Need your invoice? Reply to this email.",
   ],
   payment_reversed: [
     "Payment update",
@@ -117,16 +120,33 @@ const platformNotices = {
     "Your ID check needs another look",
     "We could not complete your ID check, so we have sent it back to you. Sign in and open the verification page to see why and what to do next.",
   ],
+  // Renew early (P3), 3 days before a slot ends; worded with its end date when
+  // the notification job knows it (postLifecycleIntro). Wording awaiting the
+  // owner's approval.
+  slot_renewal_reminder: [
+    "Your slot ends soon",
+    "One of your Individual slots ends within 3 days. Renew it now and your new days start when the current ones end, so your post stays live without a break.",
+  ],
 } as const;
 export type PlatformNoticeKind = keyof typeof platformNotices;
+/** The renewal reminder's second paragraph (awaiting the owner's approval). */
+const RENEWAL_REMINDER_BODY =
+  "Nothing renews automatically. If you do not renew, the post in this slot is hidden when the slot ends and deleted 3 days later, with its photos and videos.";
 /** What the notification job knows about the post a lifecycle notice is about,
  * or, for trial_started, when the introductory trial ends and whether it
- * already pays for a post (a staff or service grant does not). */
+ * already pays for a post (a staff or service grant does not), or, for
+ * payment_completed, the payment's receipt. */
 export type PostLifecycleDetails = {
   deletesAt?: string | null;
   holdsSlot?: boolean | null;
   trialEndsAt?: string | null;
   trialFundsPost?: boolean | null;
+  receipt?: PaymentReceipt;
+  /** slot_renewal_reminder: the slot that ends, when, and whether more than
+   * one slot ends within 7 days (the email then offers "Renew all"). */
+  renewSlotId?: string | null;
+  slotEndsAt?: string | null;
+  slotRenewAll?: boolean | null;
 };
 function deletionTime(iso: string | null | undefined): string | null {
   const ms = iso ? Date.parse(iso) : Number.NaN;
@@ -150,6 +170,13 @@ function postLifecycleIntro(kind: PlatformNoticeKind, details?: PostLifecycleDet
       ? `Your free introductory post is live until ${ends} (South African time). After that, buy a plan within 3 days to reactivate it, or it is deleted with its photos and videos.`
       : `Your introductory posting allowance runs until ${ends} (South African time).`;
   }
+  if (kind === "slot_renewal_reminder") {
+    const ends = deletionTime(details?.slotEndsAt);
+    if (!ends) return null;
+    return details?.slotRenewAll
+      ? `Your Individual slot ends on ${ends} (South African time), and another of your slots ends within 7 days. Renew them together in one payment: each slot's new days start when its current days end, so your posts stay live without a break.`
+      : `Your Individual slot ends on ${ends} (South African time). Renew it now and your new days start when the current ones end, so your post stays live without a break.`;
+  }
   const when = deletionTime(details?.deletesAt);
   if (!when) return null;
   if (kind === "post_expired")
@@ -172,6 +199,8 @@ export async function sendPlatformNotice(
     (!noticeReason || noticeReason.length < 10 || noticeReason.length > 500)
   )
     throw new Error("Account warning details unavailable");
+  if (kind === "payment_completed" && details?.receipt)
+    return sendEmail({ to, idempotencyKey, ...buildPaymentReceiptEmail(details.receipt) });
   const [subject, fallbackIntro] = platformNotices[kind];
   const intro = postLifecycleIntro(kind, details) ?? fallbackIntro;
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
@@ -181,20 +210,43 @@ export async function sendPlatformNotice(
     "account_banned",
     "appeal_decided",
   ].includes(kind);
+  // The renewal reminder links to the renewal checkout: that slot, or every
+  // slot ending within 7 days ("Renew all").
+  const renewal = kind === "slot_renewal_reminder";
+  const renewPath = details?.slotRenewAll
+    ? "/billing/checkout?renew=soon"
+    : details?.renewSlotId && /^[0-9a-f-]{36}$/i.test(details.renewSlotId)
+      ? `/billing/checkout?renew=${details.renewSlotId}`
+      : "/dashboard/slots";
   const path =
     kind === "business_check_update"
       ? "/dashboard/businesses"
       : moderation
         ? "/appeals"
-        : kind.startsWith("payment_")
-          ? "/billing"
-          : kind === "enquiry_received"
-            ? "/dashboard/leads"
-            : kind === "identity_accepted" ||
-                kind === "verification_phone_confirmed" ||
-                kind === "verification_returned"
-              ? "/verification"
-              : "/dashboard";
+        : kind === "payment_completed"
+          ? "/dashboard"
+          : kind.startsWith("payment_")
+            ? "/billing"
+            : kind === "enquiry_received"
+              ? "/dashboard/leads"
+              : kind === "identity_accepted" ||
+                  kind === "verification_phone_confirmed" ||
+                  kind === "verification_returned"
+                ? "/verification"
+                : renewal
+                  ? renewPath
+                  : "/dashboard";
+  const body =
+    kind === "account_warning"
+      ? noticeReason!
+      : renewal
+        ? RENEWAL_REMINDER_BODY
+        : "Sign in to your account to view the details.";
+  const cta = renewal
+    ? details?.slotRenewAll
+      ? "Renew all"
+      : "Renew my slot"
+    : "View your account";
   return sendEmail({
     to,
     subject,
@@ -202,13 +254,11 @@ export async function sendPlatformNotice(
     html: brandedEmail({
       title: subject,
       intro,
-      bodyHtml: paragraph(
-        kind === "account_warning" ? noticeReason! : "Sign in to your account to view the details."
-      ),
-      cta: { label: "View your account", href: appUrl + path },
+      bodyHtml: paragraph(body),
+      cta: { label: cta, href: appUrl + path },
       reason: "This is an operational update about your VerifyMzansi account.",
     }),
-    text: `${subject}\n\n${intro}${kind === "account_warning" ? `\n\n${noticeReason}` : ""}\n\nSign in to view the details: ${appUrl}${path}`,
+    text: `${subject}\n\n${intro}${kind === "account_warning" || renewal ? `\n\n${body}` : ""}\n\n${renewal ? `${cta}: ` : "Sign in to view the details: "}${appUrl}${path}`,
   });
 }
 
@@ -725,30 +775,6 @@ export async function sendDsarRejectedEmail(
   return sendEmail({ to: email, subject, html, text, idempotencyKey });
 }
 
-export async function sendAlreadyRegisteredEmail(email: string): Promise<SendEmailResult> {
-  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  const subject = "VerifyMzansi - Sign-in attempt with your email";
-  const html = brandedEmail({
-    tone: "info",
-    eyebrow: "Account notice",
-    title: "Account already exists",
-    intro: "This security notice was sent because this email address was used on VerifyMzansi.",
-    bodyHtml: `
-      ${paragraph("Hi,")}
-      ${paragraph("Someone tried to create a new VerifyMzansi account with this email address, but you already have an account.")}
-      ${paragraph("If this was you, sign in or reset your password. If it was not you, you can safely ignore this email.")}
-    `,
-    cta: { label: "Sign in", href: `${appUrl}/login`, tone: "success" },
-    secondaryCta: { label: "Reset password", href: `${appUrl}/forgot-password`, tone: "info" },
-    reason:
-      "A registration attempt used an email address that already belongs to a VerifyMzansi account.",
-  });
-
-  const text = `Hi,\n\nSomeone tried to create a new VerifyMzansi account with this email address, but you already have an account.\n\nSign in: ${appUrl}/login\nReset password: ${appUrl}/forgot-password\n\nIf you did not attempt to register, you can safely ignore this email.`;
-
-  return sendEmail({ to: email, subject, html, text });
-}
-
 export async function sendContactFormNotification(
   email: string,
   ownerName: string,
@@ -1008,19 +1034,6 @@ export async function sendPasswordChangeNotification(email: string): Promise<Sen
   });
 }
 
-/** The verified phone is the number buyers reach, so a change is announced by email. */
-export async function sendPhoneChangeNotification(
-  email: string,
-  newPhoneLast3: string
-): Promise<SendEmailResult> {
-  return sendAccountChangeNotice(email, {
-    thing: "phone number",
-    title: "Phone number changed",
-    changed: `The verified phone number on your VerifyMzansi account was changed to a number ending in ${newPhoneLast3}. Buyers who tap to see your number now see this one.`,
-    ifNotYou: "reset your password immediately and contact support:",
-  });
-}
-
 export async function sendSupportRequestNotification(
   category: keyof typeof CONTACT_CATEGORY_EMAILS,
   submissionId: string
@@ -1212,157 +1225,6 @@ export async function sendOrganisationAdminInviteEmail(params: {
     text,
     idempotencyKey: params.idempotencyKey,
   });
-}
-
-export type TrialExtensionEmailEvent = "offered" | "accepted";
-
-/**
- * Extension offer and confirmation. The offer links to the dashboard and never
- * accepts from a link alone (mail scanners open links).
- */
-export async function sendTrialExtensionEmail(params: {
-  email: string;
-  accountName: string;
-  event: TrialExtensionEmailEvent;
-  label: string;
-  days: number;
-  currentEndsAt: string;
-  proposedEndsAt: string;
-  respondBy: string | null;
-  reviewUrl: string;
-  idempotencyKey?: string;
-}): Promise<SendEmailResult> {
-  const current = formatSast(params.currentEndsAt);
-  const proposed = formatSast(params.proposedEndsAt);
-  const respondBy = params.respondBy ? formatSast(params.respondBy) : null;
-  const offered = params.event === "offered";
-  const subject = offered
-    ? `Your VerifyMzansi free access can be extended by ${params.days} days`
-    : `Your VerifyMzansi free access now ends on ${proposed}`;
-  const body = offered
-    ? `We'd like to extend your free founding access for ${params.label} by ${params.days} days. If you accept, your access will end on ${proposed} instead of ${current}. Nothing is charged and nothing renews automatically. Please accept or decline from your dashboard${respondBy ? ` by ${respondBy}` : ""}. If you do nothing, your access ends on ${current} as planned.`
-    : `Your free access for ${params.label} has been extended by ${params.days} days and now ends on ${proposed}. Nothing is charged and nothing renews automatically.`;
-  const html = brandedEmail({
-    tone: offered ? "info" : "success",
-    eyebrow: "Free access",
-    title: offered ? "Extension offered" : "Extension confirmed",
-    intro: offered
-      ? "VerifyMzansi has offered to extend your free access."
-      : "Your free access has been extended.",
-    bodyHtml: `
-      ${paragraph(`Hi ${params.accountName},`)}
-      ${paragraph(body)}
-      ${detailList([
-        [offered ? "Current end" : "Previous end", `${current} SAST`],
-        [offered ? "New end if you accept" : "New end", `${proposed} SAST`],
-        ...(offered && respondBy
-          ? ([["Respond by", `${respondBy} SAST`]] as Array<[string, string]>)
-          : []),
-      ])}
-    `,
-    cta: { label: offered ? "Review offer" : "Open dashboard", href: params.reviewUrl },
-    reason: "You have free founding or introductory access on VerifyMzansi.",
-  });
-  const text = [
-    `Hi ${params.accountName},`,
-    body,
-    `${offered ? "Review offer" : "Open dashboard"}: ${params.reviewUrl}`,
-  ].join("\n\n");
-  return sendEmail({
-    to: params.email,
-    subject,
-    html,
-    text,
-    idempotencyKey: params.idempotencyKey,
-  });
-}
-
-export type BusinessVerificationEmailKind =
-  "approved" | "info_requested" | "message" | "rejected" | "revoked";
-
-const BUSINESS_VERIFICATION_COPY: Record<
-  BusinessVerificationEmailKind,
-  { tone: "success" | "warning" | "danger"; title: string; body: string; cta: string }
-> = {
-  approved: {
-    tone: "success",
-    title: "Your sticker is live",
-    body: "Our team reviewed your business and the sticker now shows on your profile.",
-    cta: "See your verification",
-  },
-  info_requested: {
-    tone: "warning",
-    title: "We need something from you",
-    body: "Our team has a question about your business verification. Reply on your Verify page.",
-    cta: "Reply now",
-  },
-  message: {
-    tone: "success",
-    title: "A message from our team",
-    body: "Our team sent you a message about your business verification. Nothing else changed.",
-    cta: "Read it",
-  },
-  rejected: {
-    tone: "danger",
-    title: "Verification not approved",
-    body: "We couldn't approve this request. The reason is below, and you can try again.",
-    cta: "Try again",
-  },
-  revoked: {
-    tone: "danger",
-    title: "A sticker was removed",
-    body: "We removed a verification sticker from your business. The reason is below.",
-    cta: "See your verification",
-  },
-};
-
-/** Owner notice for a business verification decision or staff question. */
-export async function sendBusinessVerificationEmail(params: {
-  email: string;
-  accountName: string;
-  businessName: string;
-  businessId: string;
-  sticker: string;
-  kind: BusinessVerificationEmailKind;
-  note?: string | null;
-}): Promise<SendEmailResult> {
-  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  const copy = BUSINESS_VERIFICATION_COPY[params.kind];
-  const href = `${appUrl}/dashboard/businesses/${encodeURIComponent(params.businessId)}/verification`;
-  const details: Array<[string, string]> = [
-    ["Business", params.businessName],
-    ["Sticker", params.sticker],
-  ];
-  if (params.note)
-    details.push([
-      params.kind === "info_requested" || params.kind === "message" ? "Message" : "Reason",
-      params.note,
-    ]);
-
-  const html = brandedEmail({
-    tone: copy.tone,
-    eyebrow: "Business verification",
-    title: copy.title,
-    intro: "This email is about verifying your business on VerifyMzansi.",
-    bodyHtml: `
-      ${paragraph(`Hi ${params.accountName},`)}
-      ${paragraph(copy.body)}
-      ${detailList(details)}
-    `,
-    cta: { label: copy.cta, href, tone: copy.tone },
-    reason: "Your business verification changed on VerifyMzansi.",
-  });
-  const text = [
-    `Hi ${params.accountName},`,
-    "",
-    copy.body,
-    "",
-    ...details.map(([label, value]) => `${label}: ${value}`),
-    "",
-    `${copy.cta}: ${href}`,
-  ].join("\n");
-
-  return sendEmail({ to: params.email, subject: `VerifyMzansi: ${copy.title}`, html, text });
 }
 
 /** One-time code proving a company representative controls a work mailbox. */

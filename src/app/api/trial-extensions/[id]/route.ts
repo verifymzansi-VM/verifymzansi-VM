@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SHOW_TRIAL_EXTENSION_OFFERS } from "@/lib/hidden-features";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -18,6 +19,9 @@ const schema = z.object({ decision: z.enum(["accept", "decline"]) });
  * and moves the end date only on acceptance.
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_TRIAL_EXTENSION_OFFERS)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   const blocked = enforceMutationRequest(request, log);
   if (blocked) return blocked;
   const { id } = await context.params;

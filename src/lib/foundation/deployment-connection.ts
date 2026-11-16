@@ -4,8 +4,6 @@ import { parseFoundationConnection } from "./connection";
 export function verifyFoundationDeploymentConnection(
   env: Readonly<Record<string, string | undefined>>
 ) {
-  if (env.NEXT_PUBLIC_DATA_BACKEND !== "foundation")
-    throw new Error("Foundation backend selection is required");
   const connection = parseFoundationConnection({
     url: env.FOUNDATION_SUPABASE_URL,
     expectedProjectRef: env.FOUNDATION_PROJECT_REF,

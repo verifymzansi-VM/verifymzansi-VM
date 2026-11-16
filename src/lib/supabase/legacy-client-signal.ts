@@ -1,12 +1,11 @@
 import "server-only";
 
 import { workAsyncStorage } from "next/dist/server/app-render/work-async-storage.external";
-import { getDataBackend } from "@/lib/data-backend";
 import { createLogger } from "@/lib/utils/logger";
 
 /**
  * One structured warning when a retired ("source") Supabase client is created
- * while the app runs the foundation backend (roadmap M0.11). In production the
+ * (roadmap M0.11). In production the
  * retired clients reach an empty schema, so this shows which routes still run
  * old-backend code instead of letting them fail silently.
  *
@@ -49,7 +48,6 @@ function shouldLog(route: string, now: number): boolean {
 
 export function noteLegacyClientCreated(client: LegacyClientKind): void {
   try {
-    if (getDataBackend() !== "foundation") return;
     const route = currentRoute();
     if (!shouldLog(route, Date.now())) return;
     logger.warn(LEGACY_CLIENT_EVENT, { route, client });

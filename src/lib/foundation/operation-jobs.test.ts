@@ -28,6 +28,7 @@ const rpc = vi.fn(),
   paymentAlerts = vi.fn();
 const service = { rpc } as unknown as FoundationServiceApi;
 const SWEEPS = [
+  "run_slot_renewals",
   "run_post_lifecycle",
   "sweep_sponsorships",
   "purge_expired_inbox",
@@ -746,8 +747,9 @@ it("declares and delivers the sold-post notice within the database's kind limit"
   expect(await run()).toMatchObject({ succeeded: 1 });
   const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
   expect(lists.flat()).toEqual(expect.arrayContaining(["post_sold", "post_kept"]));
-  expect(new Set(lists.flat()).size).toBe(20);
-  for (const list of lists) expect(list.length).toBeLessThanOrEqual(20);
+  // 21 kinds since the renewal reminder (20261114093742), each claim within it.
+  expect(new Set(lists.flat()).size).toBe(21);
+  for (const list of lists) expect(list.length).toBeLessThanOrEqual(21);
   expect(deliver).toHaveBeenCalledExactlyOnceWith(
     "synthetic@example.invalid",
     "post_sold",
@@ -776,6 +778,31 @@ it("passes the deletion date and slot of a lifecycle notice to the email", async
     { deletesAt: "2026-11-12T08:30:00+00:00", holdsSlot: false }
   );
 });
+it("passes the renewal reminder's slot, end date and Renew all to the email", async () => {
+  const slot = "00000000-0000-4000-8000-0000000000a1";
+  queue(
+    job({
+      kind: "slot_renewal_reminder",
+      subject_id: slot,
+      slot_ends_at: "2026-11-17T12:00:00+00:00",
+      slot_renew_all: true,
+      renewal_kind: "individual",
+    })
+  );
+  expect(await run()).toMatchObject({ succeeded: 1 });
+  expect(deliver).toHaveBeenCalledExactlyOnceWith(
+    "synthetic@example.invalid",
+    "slot_renewal_reminder",
+    `foundation-outbox/${id}`,
+    undefined,
+    { slotEndsAt: "2026-11-17T12:00:00+00:00", slotRenewAll: true, renewSlotId: slot }
+  );
+});
+it("finishes a renewal reminder the database no longer addresses without sending it", async () => {
+  queue(job({ kind: "slot_renewal_reminder", recipient: null, subject_id: id }));
+  expect(await run()).toMatchObject({ succeeded: 1 });
+  expect(deliver).not.toHaveBeenCalled();
+});
 describe("a database without the newer kinds", () => {
   const refuse = (message: string) => {
     queue(job({ kind: "enquiry_received" }));
@@ -790,19 +817,37 @@ describe("a database without the newer kinds", () => {
     refuse("unsupported mail kind");
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    // The newest kind is dropped first, then the sold and kept notices.
-    expect(lists.map((l) => l.length)).toEqual([3, 17, 16, 14, 14]);
-    expect(lists[2]).not.toContain("verification_returned");
-    expect(lists[2]).toContain("post_sold");
-    expect(lists[3]).not.toContain("post_sold");
-    expect(lists[3]).not.toContain("post_kept");
+    // The newest kinds are dropped first (the renewal reminder, then the
+    // ID-returned notice), then the sold and kept notices.
+    expect(lists.map((l) => l.length)).toEqual([3, 18, 17, 16, 14, 14]);
+    expect(lists[2]).not.toContain("slot_renewal_reminder");
+    expect(lists[2]).toContain("verification_returned");
+    expect(lists[3]).not.toContain("verification_returned");
+    expect(lists[3]).toContain("post_sold");
+    expect(lists[4]).not.toContain("post_sold");
+    expect(lists[4]).not.toContain("post_kept");
   });
   it("claims the earlier kinds after a list-length refusal, and keeps using them", async () => {
     refuse("supported mail kinds required");
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
     // The follow-up claim keeps the earlier list instead of asking again.
-    expect(lists.map((l) => l.length)).toEqual([3, 17, 16, 14, 14]);
+    expect(lists.map((l) => l.length)).toEqual([3, 18, 17, 16, 14, 14]);
+  });
+  it("drops only the renewal reminder for a database without that update", async () => {
+    queue(job({ kind: "verification_returned" }));
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "claim_supported_notification_outbox" &&
+      args.p_supported_kinds.includes("slot_renewal_reminder")
+        ? { data: null, error: { code: "22023", message: "unsupported mail kind" } }
+        : base(name, args)
+    );
+    expect(await run()).toMatchObject({ succeeded: 1 });
+    const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
+    expect(lists.map((l) => l.length)).toEqual([3, 18, 17, 17]);
+    expect(lists[3]).toContain("verification_returned");
+    expect(lists[3]).not.toContain("slot_renewal_reminder");
   });
   it("drops only the ID-returned notice for a database without that update", async () => {
     queue(job({ kind: "post_kept" }));
@@ -815,9 +860,9 @@ describe("a database without the newer kinds", () => {
     );
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 17, 16, 16]);
-    expect(lists[3]).toContain("post_kept");
-    expect(lists[3]).not.toContain("verification_returned");
+    expect(lists.map((l) => l.length)).toEqual([3, 18, 17, 16, 16]);
+    expect(lists[4]).toContain("post_kept");
+    expect(lists[4]).not.toContain("verification_returned");
   });
   it("does not retry the claim after another invalid-parameter refusal", async () => {
     rpc.mockImplementation(async (name) =>
@@ -932,5 +977,185 @@ describe("payment alerts", () => {
       ["claim_payment_digest", { p_from_hour: 7, p_limit: 20 }],
     ]);
     expect(sendStaffOperationsEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe("payment receipts (M3.7)", () => {
+  const payment = "00000000-0000-4000-8000-0000000000a1";
+  const owner = "00000000-0000-4000-8000-0000000000b2";
+  const row = {
+    payment_id: payment,
+    owner_id: owner,
+    amount_cents: 6900,
+    currency: "ZAR",
+    completed_at: "2026-11-13T07:15:00.123456+00:00",
+    product_kind: "plan",
+    label: "Individual slot — 30 days",
+    slots: 1,
+    invoice_description: "Individual slot — 30 days",
+    invoice_number: "INV-20261113-ABCDEF1234",
+    issued_at: "2026-11-13T07:15:00.123456+00:00",
+    merchant_reference: "abcdef12345678901234567890abcdef",
+    provider_transaction_id: "synthetic-transaction",
+    status: "complete",
+    fulfillment_status: "fulfilled",
+  };
+  const receipt = {
+    kind: "plan",
+    invoiceNumber: "INV-20261113-ABCDEF1234",
+    paidAt: "2026-11-13T07:15:00.123456+00:00",
+    item: "Individual slot — 30 days",
+    amountCents: 6900,
+    bankReference: "abcdef12345678",
+  };
+  const paymentJob = (extra: Record<string, unknown> = {}) =>
+    job({ subject_id: payment, owner_id: owner, ...extra });
+  // Queues the jobs and answers the receipt read with `reply`.
+  function queueWithReceipt(reply: () => unknown, ...items: Array<Record<string, unknown>>) {
+    queue(...items);
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "get_payment_receipt" ? reply() : base(name, args)
+    );
+  }
+
+  it("reads the payment's receipt and sends it under the message's own key", async () => {
+    queueWithReceipt(() => ({ data: row, error: null }), paymentJob());
+    expect(await run()).toMatchObject({ succeeded: 1, retrying: 0, failed: [] });
+    expect(calls("get_payment_receipt")).toEqual([
+      ["get_payment_receipt", { p_payment_id: payment }],
+    ]);
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(
+      "synthetic@example.invalid",
+      "payment_completed",
+      `foundation-outbox/${id}`,
+      undefined,
+      { receipt }
+    );
+  });
+
+  it("sends the same request under the same key when a delivery is retried", async () => {
+    queueWithReceipt(() => ({ data: row, error: null }), paymentJob());
+    deliver.mockResolvedValueOnce({ success: false });
+    expect(await run()).toMatchObject({ succeeded: 0, retrying: 1 });
+    queueWithReceipt(() => ({ data: row, error: null }), paymentJob({ attempts: 2 }));
+    expect(await run()).toMatchObject({ succeeded: 1 });
+    expect(deliver).toHaveBeenCalledTimes(2);
+    expect(deliver.mock.calls[1]).toEqual(deliver.mock.calls[0]);
+  });
+
+  it("gives the message back without sending when the receipt read fails", async () => {
+    queueWithReceipt(() => ({ data: null, error: { message: "unavailable" } }), paymentJob());
+    const error = await run().catch((e) => e);
+    expect(error).toBeInstanceOf(OperationJobsIncompleteError);
+    expect(error.failed).toEqual(["outbox:receipt"]);
+    expect(error.summary).toMatchObject({ succeeded: 0, retrying: 1, lost: 0 });
+    expect(deliver).not.toHaveBeenCalled();
+    expect(calls("complete_notification_outbox")).toEqual([
+      [
+        "complete_notification_outbox",
+        { p_id: id, p_claim: claim, p_ok: false, p_error: "receipt_unavailable" },
+      ],
+    ]);
+  });
+
+  it("sends the notice without details on the last attempt when the read still fails", async () => {
+    queueWithReceipt(
+      () => ({ data: null, error: { message: "unavailable" } }),
+      paymentJob({ attempts: OUTBOX_FINAL_ATTEMPT })
+    );
+    const error = await run().catch((e) => e);
+    expect(error.failed).toEqual(["outbox:receipt"]);
+    expect(error.summary).toMatchObject({ succeeded: 1, lost: 0 });
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(
+      "synthetic@example.invalid",
+      "payment_completed",
+      `foundation-outbox/${id}`
+    );
+  });
+
+  it.each([
+    ["an unknown payment", null],
+    ["another member's payment", { ...row, owner_id: "00000000-0000-4000-8000-0000000000c3" }],
+    ["another payment", { ...row, payment_id: "00000000-0000-4000-8000-0000000000d4" }],
+    ["a payment without an invoice", { ...row, invoice_number: null }],
+    ["a payment in another currency", { ...row, currency: "USD" }],
+  ])("sends the notice without details for %s", async (_name, data) => {
+    queueWithReceipt(() => ({ data, error: null }), paymentJob());
+    const error = await run().catch((e) => e);
+    expect(error.failed).toEqual(["outbox:receipt"]);
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(
+      "synthetic@example.invalid",
+      "payment_completed",
+      `foundation-outbox/${id}`
+    );
+  });
+
+  it.each(["refunded", "chargeback"])(
+    "sends no receipt at all for a payment %s before the email went out",
+    async (status) => {
+      queueWithReceipt(() => ({ data: { ...row, status }, error: null }), paymentJob());
+      expect(await run()).toMatchObject({ succeeded: 1, retrying: 0, failed: [] });
+      expect(deliver).not.toHaveBeenCalled();
+      expect(calls("complete_notification_outbox")).toEqual([
+        ["complete_notification_outbox", { p_id: id, p_claim: claim, p_ok: true }],
+      ]);
+    }
+  );
+
+  it("still sends the notice without details when another member's payment is refunded", async () => {
+    queueWithReceipt(
+      () => ({
+        data: { ...row, status: "refunded", owner_id: "00000000-0000-4000-8000-0000000000c3" },
+        error: null,
+      }),
+      paymentJob()
+    );
+    const error = await run().catch((e) => e);
+    expect(error.failed).toEqual(["outbox:receipt"]);
+    expect(deliver).toHaveBeenCalledOnce();
+  });
+
+  it("reads no receipt for a removed recipient or another kind", async () => {
+    queueWithReceipt(
+      () => ({ data: row, error: null }),
+      paymentJob({ recipient: null }),
+      paymentJob({ id: "00000000-0000-4000-8000-0000000000e5", kind: "payment_reversed" })
+    );
+    expect(await run()).toMatchObject({ succeeded: 2, failed: [] });
+    expect(calls("get_payment_receipt")).toHaveLength(0);
+  });
+
+  it("gives the message back when the read leaves too little time to send", async () => {
+    let t = 0;
+    queueWithReceipt(() => {
+      t += 20_000;
+      return { data: row, error: null };
+    }, paymentJob());
+    expect(await run({ now: () => t })).toMatchObject({ succeeded: 0, retrying: 1 });
+    expect(deliver).not.toHaveBeenCalled();
+    expect(calls("complete_notification_outbox")).toEqual([
+      [
+        "complete_notification_outbox",
+        { p_id: id, p_claim: claim, p_ok: false, p_error: "deferred" },
+      ],
+    ]);
+  });
+
+  it("matches what the database's claim and receipt read return", () => {
+    const read = (file: string) =>
+      readFileSync(join(process.cwd(), "database/foundation/current/functions", file), "utf8");
+    const claimSql = read("internal/claim_supported_notification_outbox.sql");
+    expect(claimSql).toContain("'subject_id',o.subject_id");
+    expect(claimSql).toContain("'owner_id',o.owner_id");
+    const settle = read("internal/apply_provider_event.sql");
+    expect(settle).toContain(
+      "values ('payment_completed', pay.id, pay.owner_id, 'payment_completed:' || pay.id)"
+    );
+    const receiptSql = read("internal/get_payment_receipt.sql");
+    for (const field of Object.keys(row)) expect(receiptSql).toContain(`'${field}'`);
+    expect(read("api/get_payment_receipt.sql")).toContain(
+      "grant execute on function api.get_payment_receipt(uuid) to service_role;"
+    );
   });
 });
