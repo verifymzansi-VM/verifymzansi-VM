@@ -201,10 +201,9 @@ export function checkStagingIsolation(config, { requireStaging = false } = {}) {
   for (const key of Object.keys(vars))
     flag(BYPASS_SETTING.test(key), `${key} switches on a test shortcut`);
   flag(vars.NODE_ENV !== "production", `NODE_ENV must be "production" in staging`);
-  flag(
-    "ENVIRONMENT" in vars && vars.ENVIRONMENT !== "staging",
-    `ENVIRONMENT must be "staging" in staging`
-  );
+  // Required: the website approves the staging project only on a Worker
+  // whose ENVIRONMENT is "staging" (src/lib/foundation/hosted-projects.ts).
+  flag(vars.ENVIRONMENT !== "staging", `ENVIRONMENT must be "staging" in staging`);
   return failures;
 }
 
@@ -230,22 +229,145 @@ export function checkCompanionIsolation(config, label, { requireStaging = false 
   return failures;
 }
 
+// ── Resolved configuration (what wrangler would actually deploy) ──────────────
+// Wrangler inherits some top-level keys into an environment (for example
+// `routes`, `triggers`, `build`, `assets`). Reading the raw TOML misses that: a
+// staging section without `routes = []` would inherit production's custom
+// domains, and a CI deploy would move them to the staging Worker. So the
+// staging environment is also resolved with wrangler's own reader.
+
+// Binding kinds and the field naming the shared resource.
+const RESOURCE_FIELDS = [
+  ["kv_namespaces", "id"],
+  ["r2_buckets", "bucket_name"],
+  ["d1_databases", "database_id"],
+  ["services", "service"],
+  ["hyperdrive", "id"],
+  ["vectorize", "index_name"],
+  ["analytics_engine_datasets", "dataset"],
+];
+
+const stripAnsi = (text) => String(text).replace(/\u001b\[[0-9;]*m/g, "");
+
+function resourceIds(config) {
+  const out = new Set();
+  for (const [kind, field] of RESOURCE_FIELDS)
+    for (const item of Array.isArray(config?.[kind]) ? config[kind] : [])
+      if (item?.[field]) out.add(`${kind}:${item[field]}`);
+  for (const producer of config?.queues?.producers ?? [])
+    if (producer?.queue) out.add(`queues:${producer.queue}`);
+  for (const consumer of config?.queues?.consumers ?? [])
+    if (consumer?.queue) out.add(`queues:${consumer.queue}`);
+  return out;
+}
+
+/**
+ * Checks a resolved staging environment against the resolved production
+ * environment(s) of the same config. `warnings` are wrangler's own messages
+ * while resolving staging; any of them fails (inheritance is reported there),
+ * except the one reviewed notice below.
+ * @param {{ staging: any, production: any[], warnings?: string[] }} resolved
+ * @param {string} label
+ * @returns {string[]}
+ */
+export function checkResolvedStaging({ staging, production, warnings = [] }, label) {
+  const failures = [];
+  const flag = (condition, message) => condition && failures.push(`${label}: ${message}`);
+  for (const warning of warnings) {
+    const text = stripAnsi(warning).replace(/\s+/g, " ").trim();
+    // Each finding is one "- ..." item under an environment heading.
+    const items = text
+      .split(/ - /)
+      .slice(1)
+      .filter((item) => !/^"env\.[\w-]+" environment configuration$/.test(item));
+    const findings = (text.includes(" - ") ? items : [text]).filter(
+      // Reviewed: staging leaves out the Images binding on purpose (its free
+      // allowance is shared with production); wrangler notes the omission.
+      (item) => !/^"images" exists at the top level, but not on "env\.staging"/.test(item)
+    );
+    for (const item of findings) flag(true, `wrangler warns: ${item.slice(0, 300)}`);
+  }
+  const routes = [
+    ...(Array.isArray(staging.routes) ? staging.routes : []),
+    ...(staging.route ? [staging.route] : []),
+  ];
+  for (const route of routes)
+    flag(
+      true,
+      `resolves ${typeof route === "object" && route?.custom_domain ? "custom domain" : "route"} ${
+        typeof route === "string" ? route : route?.pattern
+      }; staging must have none`
+    );
+  const crons = staging.triggers?.crons ?? [];
+  flag(crons.length > 0, `resolves cron triggers ${crons.join(", ")}; staging must have none`);
+  const productionNames = new Set(production.map((config) => config.name).filter(Boolean));
+  flag(
+    !staging.name || productionNames.has(staging.name) || !staging.name.endsWith("-staging"),
+    `resolved Worker name "${staging.name}" is not staging-specific`
+  );
+  const productionResources = new Set(production.flatMap((config) => [...resourceIds(config)]));
+  for (const id of resourceIds(staging))
+    flag(productionResources.has(id), `binding ${id} is shared with production`);
+  for (const binding of staging.durable_objects?.bindings ?? [])
+    flag(
+      Boolean(binding?.script_name) &&
+        (productionNames.has(binding.script_name) || !binding.script_name.endsWith("-staging")),
+      `Durable Object ${binding?.name} lives in Worker "${binding?.script_name}"`
+    );
+  flag(Boolean(staging.images), "resolves the Images binding (production's allowance)");
+  return failures;
+}
+
+/** Reads one environment of a wrangler config the way wrangler does, collecting its warnings. */
+export async function resolveWranglerEnvironment(configPath, env) {
+  const { unstable_readConfig } = await import("wrangler");
+  const warnings = [];
+  const original = { warn: console.warn, log: console.log };
+  console.warn = (...parts) => warnings.push(parts.map(String).join(" "));
+  console.log = (...parts) => {
+    const text = parts.map(String).join(" ");
+    if (/WARNING/.test(stripAnsi(text))) warnings.push(text);
+  };
+  try {
+    const config = unstable_readConfig({ config: configPath, env }, { hideWarnings: false });
+    return { config, warnings };
+  } finally {
+    console.warn = original.warn;
+    console.log = original.log;
+  }
+}
+
+/** Resolves staging and production of one config file and checks them. */
+export async function checkResolvedConfigFile(configPath, label = configPath) {
+  const staging = await resolveWranglerEnvironment(configPath, "staging");
+  const raw = parse(readFileSync(configPath, "utf8"));
+  const production = [(await resolveWranglerEnvironment(configPath, undefined)).config];
+  if (raw.env?.production)
+    production.push((await resolveWranglerEnvironment(configPath, "production")).config);
+  return checkResolvedStaging(
+    { staging: staging.config, production, warnings: staging.warnings },
+    label
+  );
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const args = process.argv.slice(2).filter((arg) => arg !== "--");
   const requireStaging = args.includes("--require-staging");
   const file = args.find((arg) => !arg.startsWith("--")) ?? "wrangler.toml";
   const config = parse(readFileSync(file, "utf8"));
   const failures = checkStagingIsolation(config, { requireStaging });
+  if (config.env?.staging) failures.push(...(await checkResolvedConfigFile(file)));
   // Companions are checked with the default config only; a single named file
   // is checked alone.
   if (!args.some((arg) => !arg.startsWith("--")))
     for (const companion of COMPANION_CONFIGS)
-      if (existsSync(companion))
+      if (existsSync(companion)) {
+        const companionConfig = parse(readFileSync(companion, "utf8"));
         failures.push(
-          ...checkCompanionIsolation(parse(readFileSync(companion, "utf8")), companion, {
-            requireStaging,
-          })
+          ...checkCompanionIsolation(companionConfig, companion, { requireStaging }),
+          ...(companionConfig.env?.staging ? await checkResolvedConfigFile(companion) : [])
         );
+      }
   if (failures.length) {
     console.error(`Staging is NOT isolated from production (${file}):`);
     for (const failure of failures) console.error(`  - ${failure}`);
@@ -253,7 +375,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   }
   console.log(
     config.env?.staging
-      ? "Staging configuration uses no production resource identifiers."
+      ? "Staging configuration (raw and as wrangler resolves it) uses no production resource, route or domain."
       : "No staging environment is configured, so none can reach production."
   );
 }

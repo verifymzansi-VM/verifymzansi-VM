@@ -34,6 +34,9 @@ ENVIRONMENT = "production"
 # storage. Deploy with: pnpm exec wrangler deploy --config wrangler.offload.toml --env staging
 [env.staging]
 name = "verifymzansi-offload-staging"
+# Never inherit the top-level routes: they hold production custom domains,
+# and a deploy would move them to this Worker.
+routes = []
 workers_dev = false
 preview_urls = false
 

@@ -60,6 +60,15 @@ test.describe("foundation test copy", () => {
 
       const response = await page.goto("/");
       expect(response?.status()).toBeLessThan(400);
+      // Staging stays out of search results.
+      expect(response?.headers()["x-robots-tag"]).toContain("noindex");
+      const robots = await page.request.get("/robots.txt");
+      expect(await robots.text()).toMatch(/Disallow: \/\s*$/m);
+      // The browser bundle was built for the staging project.
+      await expect(page.locator("#vmz-public-config")).toHaveAttribute(
+        "data-supabase-url",
+        stagingTarget.apiUrl
+      );
       const html = await page.content();
       expect(html).not.toContain("gntzjtuncsyefujajmjy");
       expect(html).not.toContain("media.verifymzansi.com");

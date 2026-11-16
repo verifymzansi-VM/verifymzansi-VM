@@ -316,11 +316,16 @@ KYC_PROVIDER = "manual"
 # STRICT_ENV_STARTUP_BLOCK is "0" because the production launch checks require
 # live Ozow settings; staging logs those failures instead of refusing to start.
 #
-# Secrets are set on the staging Worker only (never copied from production);
-# the list is in docs/RUNBOOK.md, section "Staging copy".
+# Secrets come only from the GitHub environment "staging" (STAGING_* names,
+# never production values) and are deployed with the Worker
+# (scripts/prepare-staging-worker-secrets.mjs); the list is in docs/RUNBOOK.md,
+# section "Staging copy".
 # ────────────────────────────────────────────────────────────────────────────
 [env.staging]
 name = "verifymzansi-staging"
+# Never inherit the top-level routes: they hold production custom domains,
+# and a deploy would move them to this Worker.
+routes = []
 workers_dev = true
 preview_urls = false
 
@@ -366,6 +371,8 @@ FOUNDATION_REGISTRATION_INVITE_ONLY = "true"
 FOUNDATION_AUTH_CALLBACK_ENABLED = "true"
 FOUNDATION_RECOVERY_ENABLED = "true"
 FOUNDATION_PHONE_VERIFICATION_ENABLED = "false"
+# Africa's Talking sandbox (simulated SMS only); its sandbox API key is a staging secret.
+AFRICASTALKING_USERNAME = "sandbox"
 ADDON_SALES_ENABLED = "false"
 OZOW_API_REFUNDS_ENABLED = "false"
 # Cloudflare's published Turnstile test site key (always passes); the matching

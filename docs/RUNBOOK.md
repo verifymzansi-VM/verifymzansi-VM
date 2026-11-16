@@ -570,17 +570,55 @@ production:
 | Durable Objects     | Belong to the staging Worker names, so never production's                             |
 
 Left out on purpose: payments (no Ozow settings exist for staging, so checkout
-cannot start), phone codes (no SMS), and Cloudflare Images (its free monthly
-allowance is shared with production, so staging refuses photo uploads).
+cannot start), phone codes (no SMS; Africa's Talking sandbox only), and
+Cloudflare Images (its free monthly allowance is shared with production, so
+staging refuses photo uploads). Every staging response carries
+`X-Robots-Tag: noindex` and its `robots.txt` disallows everything; files served
+straight from the static assets (scripts, styles) do not pass through the
+Worker. To keep strangers out entirely, the owner can put the staging address
+behind Cloudflare Access (Zero Trust, free for up to 50 users); the smoke test
+would then need an Access service token.
 
 **Release order.** The Deploy workflow deploys every main commit to staging
-first (job `deploy-staging`), runs `e2e/foundation/fixture-smoke.spec.ts`
-against it (`playwright.staging.config.ts`), and only then deploys production. A
-failed staging deploy or smoke test stops the release. Until the staging secrets
-below exist, the job `staging-config` reports "Staging skipped" and production
-deploys as before. `pnpm cloudflare:staging:isolation -- --require-staging` runs
-in CI and before every staging deploy, and refuses any production identifier in
-the staging settings.
+first (job `deploy-staging`), confirms the staging Worker serves that commit,
+runs `e2e/foundation/fixture-smoke.spec.ts` against it
+(`playwright.staging.config.ts`), and only then deploys production. A failed
+staging deploy or smoke test stops the release. The job `staging-config` decides
+first:
+
+- No `STAGING_*` secret set, or no `STAGING_CLOUDFLARE_API_TOKEN`: "Staging
+  skipped", production deploys as before.
+- Some but not all staging secrets set: the release fails until they are
+  complete.
+- The staging project does not answer (paused or unreachable), or
+  `STAGING_FOUNDATION_SUPABASE_SECRET_KEY` is not a key of the staging project:
+  the release fails before anything deploys.
+
+`pnpm cloudflare:staging:isolation -- --require-staging` runs in CI and before
+every staging deploy. It reads the staging settings both as written and as
+wrangler resolves them, and refuses any production identifier, any route or
+custom domain (inherited ones included), inherited cron triggers or shared
+bindings, and any wrangler inheritance warning.
+
+**Rehearse once first.** Before staging gates production, run Actions → Deploy →
+Run workflow with target `staging`: it deploys and smoke-tests staging only and
+never touches production.
+
+**Releasing without staging (owner bypass).** Do not delete staging secrets. Set
+the repository Actions variable `STAGING_BYPASS_UNTIL` (Settings → Secrets and
+variables → Actions → Variables; only admins can change it) to an ISO time at
+most 72 hours ahead, for example `2026-11-20T18:00:00Z`. Until then every
+release skips staging with a loud warning in the run and its summary. Expired,
+invalid or more distant values are ignored. Remove the variable afterwards.
+
+**Do not add a protection rule** (required reviewers or a wait timer) to the
+GitHub environment `staging`: both staging jobs use it, so every release would
+wait for that approval. Limiting its deployment branches to `main` is fine.
+
+**Keeping the project awake.** Free projects pause after a week without use; a
+paused staging project stops the release. The workflow `Staging keep-alive`
+reads the staging project anonymously once a day. If it reports "paused",
+restore the project in the Supabase dashboard (or use the bypass above).
 
 **Database.** Staging was built from `database/foundation/` (`candidate.sql`,
 `replay/baseline-supplement.sql` before
@@ -590,48 +628,39 @@ except `schema_grants` (7 instead of 8 until the Auth "Before user created" hook
 is switched on in the staging dashboard). New updates reach staging before merge
 (see `database/foundation/updates/README.md`).
 
-**Secrets the owner sets.** Never copy a production value; every one is new.
+**Secrets the owner sets.** Every staging secret lives in one place, the GitHub
+environment `staging` (Settings → Environments → `staging`, deployment branches
+limited to `main`), and the deploy sends them to the staging Workers. Never copy
+a production value; every one is new.
 
-GitHub, Settings → Environments → `staging` (limit deployment branches to
-`main`), environment secrets:
-
-| Name                                     | Value                                                                                            |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `STAGING_FOUNDATION_SUPABASE_SECRET_KEY` | Staging Supabase project → Project Settings → API Keys → new secret key (`sb_secret_…`)          |
-| `STAGING_FOUNDATION_PHONE_OTP_KEY`       | New random 64 hex characters¹                                                                    |
-| `STAGING_INTERNAL_JOBS_SECRET`           | New random value, at least 32 characters¹                                                        |
-| `STAGING_OPS_JOBS_SECRET`                | New random value, at least 32 characters¹                                                        |
-| `STAGING_KYC_WEBHOOK_SECRET`             | New random value, at least 32 characters¹                                                        |
-| `STAGING_HEALTH_DIAGNOSTIC_TOKEN`        | New random value, at least 32 characters¹                                                        |
-| `STAGING_RATE_LIMITER_API_KEY`           | New random value, at least 32 characters¹ (the deploy also gives it to the staging rate limiter) |
-
-Optionally an environment secret `CLOUDFLARE_API_TOKEN` with a token limited to
-the staging Workers; without it the repository's deploy token is used.
-
-Cloudflare, Workers & Pages → `verifymzansi-staging` → Settings → Variables and
-Secrets (or `pnpm wrangler secret put NAME --env staging`):
-
-| Name                                                        | Value                                                                                      |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `KYC_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEY`, `HMAC_SECRET`    | New random 64 hex characters each¹                                                         |
-| `IP_HASH_SECRET`                                            | New random value, at least 32 characters¹                                                  |
-| `RESEND_API_KEY`                                            | A separate Resend API key named for staging (sending access only)                          |
-| `AFRICASTALKING_USERNAME`, `AFRICASTALKING_API_KEY`         | `sandbox` and the Africa's Talking sandbox API key (no real SMS)                           |
-| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | R2 → Manage API tokens → token with Object Read & Write on the two `-staging` buckets only |
+| Environment secret                                         | Value                                                                                                                                                                                           |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STAGING_CLOUDFLARE_API_TOKEN`                             | A new Cloudflare API token for this account with Workers Scripts Edit (plus the account's Workers KV and R2 read access it asks for); the staging deploy never uses the production deploy token |
+| `STAGING_FOUNDATION_SUPABASE_SECRET_KEY`                   | Staging Supabase project → Project Settings → API Keys → new secret key (`sb_secret_…`)                                                                                                         |
+| `STAGING_FOUNDATION_PHONE_OTP_KEY`                         | New random 64 hex characters¹                                                                                                                                                                   |
+| `STAGING_KYC_ENCRYPTION_KEY`                               | New random 64 hex characters¹                                                                                                                                                                   |
+| `STAGING_ID_ENCRYPTION_KEY`                                | New random 64 hex characters¹                                                                                                                                                                   |
+| `STAGING_HMAC_SECRET`                                      | New random 64 hex characters¹                                                                                                                                                                   |
+| `STAGING_IP_HASH_SECRET`                                   | New random 64 hex characters¹                                                                                                                                                                   |
+| `STAGING_INTERNAL_JOBS_SECRET`                             | New random 64 hex characters¹                                                                                                                                                                   |
+| `STAGING_OPS_JOBS_SECRET`                                  | New random 64 hex characters¹                                                                                                                                                                   |
+| `STAGING_HEALTH_DIAGNOSTIC_TOKEN`                          | New random 64 hex characters¹                                                                                                                                                                   |
+| `STAGING_RATE_LIMITER_API_KEY`                             | New random 64 hex characters¹ (also given to the staging rate limiter)                                                                                                                          |
+| `STAGING_RESEND_API_KEY`                                   | A separate Resend API key named for staging, sending access only (`re_…`)                                                                                                                       |
+| `STAGING_AFRICASTALKING_API_KEY`                           | The API key of the Africa's Talking sandbox app (username `sandbox` is set in `wrangler.toml`; no real SMS)                                                                                     |
+| `STAGING_R2_ACCESS_KEY_ID`, `STAGING_R2_SECRET_ACCESS_KEY` | R2 → Manage API tokens → token with Object Read & Write on the two `-staging` buckets only                                                                                                      |
 
 ¹ `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+
+Turnstile on staging uses Cloudflare's published always-pass test keys; nothing
+to set.
 
 **Staging dashboard settings.** In the staging Supabase project: Data API
 exposed schemas `api` only (the smoke test expects the `public` schema to be
 refused); Auth site URL and redirect URLs on the staging address; Auth bot
-protection with Turnstile and Cloudflare's published test secret (the staging
-site key is the matching test key); the "Before user created" hook on
-`internal.acceptance_signup_guard`. Optionally attach the custom domain
-`media-staging.verifymzansi.com` to `verifymzansi-public-staging`.
-
-**Pausing.** Free projects pause after a week without use; a paused staging
-project fails the staging smoke test and so holds back the release. Restore it
-from the Supabase dashboard, or remove the `STAGING_*` secrets to skip staging.
+protection with Turnstile and Cloudflare's published test secret; the "Before
+user created" hook on `internal.acceptance_signup_guard`. Optionally attach the
+custom domain `media-staging.verifymzansi.com` to `verifymzansi-public-staging`.
 
 ### Current Known-Good Runtime Baseline
 

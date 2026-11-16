@@ -1,11 +1,15 @@
 // @vitest-environment node
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { parse } from "smol-toml";
 import { describe, expect, it } from "vitest";
 
 import {
   COMPANION_CONFIGS,
   checkCompanionIsolation,
+  checkResolvedConfigFile,
+  checkResolvedStaging,
   checkStagingIsolation,
 } from "../../scripts/check-staging-isolation.mjs";
 
@@ -213,5 +217,87 @@ describe("staging isolation preflight", () => {
       })
     );
     expect(failures).toHaveLength(3);
+  });
+});
+
+// Wrangler inherits some top-level keys (routes among them) into an
+// environment; these checks read the configs the way wrangler deploys them.
+describe("staging as wrangler resolves it", () => {
+  it("resolves the real staging configs with no route, domain, cron or shared binding", async () => {
+    expect(await checkResolvedConfigFile("wrangler.toml")).toEqual([]);
+    for (const file of COMPANION_CONFIGS)
+      expect(await checkResolvedConfigFile(file), file).toEqual([]);
+  }, 60_000);
+
+  it("fails the real wrangler.toml when staging's `routes = []` is removed", async () => {
+    const real = readFileSync("wrangler.toml", "utf8");
+    const withoutRoutes = real.replace(/^routes = \[\]\r?\n/m, "");
+    // Exactly the one staging line is gone; production's routes stay.
+    expect(withoutRoutes).not.toBe(real);
+    expect(withoutRoutes).not.toMatch(/^routes = \[\]/m);
+    const dir = mkdtempSync(path.join(tmpdir(), "vm-staging-routes-"));
+    try {
+      const file = path.join(dir, "wrangler.toml");
+      writeFileSync(file, withoutRoutes);
+      // The raw TOML alone does not show the problem...
+      expect(
+        checkStagingIsolation(parse(withoutRoutes) as object, { requireStaging: true })
+      ).toEqual([]);
+      // ...the resolved config does: production's custom domains would move.
+      const failures = (await checkResolvedConfigFile(file, "copy")).join("\n");
+      expect(failures).toMatch(/resolves custom domain verifymzansi\.com/);
+      expect(failures).toMatch(/resolves custom domain www\.verifymzansi\.com/);
+      expect(failures).toMatch(/wrangler warns: .*inherits the top-level `routes`/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it("flags inherited triggers, shared bindings and production Durable Objects", () => {
+    const production = [
+      {
+        name: "verifymzansi",
+        kv_namespaces: [{ binding: "KV", id: "prod-kv" }],
+        r2_buckets: [{ binding: "B", bucket_name: "verifymzansi-public" }],
+        queues: { producers: [{ binding: "Q", queue: "prod-queue" }] },
+      },
+    ];
+    const staging = {
+      name: "verifymzansi-staging",
+      routes: [],
+      triggers: { crons: ["* * * * *"] },
+      kv_namespaces: [{ binding: "KV", id: "prod-kv" }],
+      r2_buckets: [{ binding: "B", bucket_name: "verifymzansi-public" }],
+      queues: { producers: [{ binding: "Q", queue: "prod-queue" }] },
+      durable_objects: { bindings: [{ name: "DO", class_name: "X", script_name: "verifymzansi" }] },
+      images: { binding: "IMAGES" },
+    };
+    const failures = checkResolvedStaging(
+      {
+        staging,
+        production,
+        warnings: [
+          '▲ [WARNING] Processing wrangler.toml configuration: - "env.staging" environment configuration - "images" exists at the top level, but not on "env.staging". This is not what you probably want.',
+          '▲ [WARNING] Processing wrangler.toml configuration: - "env.staging" environment configuration - The "env.staging" environment inherits the top-level `triggers` configuration.',
+        ],
+      },
+      "x"
+    ).join("\n");
+    expect(failures).toMatch(/cron triggers/);
+    expect(failures).toMatch(/kv_namespaces:prod-kv is shared/);
+    expect(failures).toMatch(/r2_buckets:verifymzansi-public is shared/);
+    expect(failures).toMatch(/queues:prod-queue is shared/);
+    expect(failures).toMatch(/Durable Object DO lives in Worker "verifymzansi"/);
+    expect(failures).toMatch(/Images binding/);
+    expect(failures).toMatch(/inherits the top-level `triggers`/);
+    // The reviewed Images notice alone is not a failure.
+    expect(failures).not.toMatch(/"images" exists at the top level/);
+  });
+
+  it("requires ENVIRONMENT = staging on the staging Worker", () => {
+    const { ENVIRONMENT: _omitted, ...vars } = isolatedStaging.vars;
+    expect(checkStagingIsolation(withStaging({ ...isolatedStaging, vars }))).toEqual([
+      'ENVIRONMENT must be "staging" in staging',
+    ]);
   });
 });

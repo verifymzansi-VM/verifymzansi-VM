@@ -45,6 +45,9 @@ new_classes = ["RateLimiterDO"]
 # ────────────────────────────────────────────────────────────────────────────
 [env.staging]
 name = "verifymzansi-rate-limiter-staging"
+# Never inherit the top-level routes: they hold production custom domains,
+# and a deploy would move them to this Worker.
+routes = []
 workers_dev = true
 preview_urls = false
 
