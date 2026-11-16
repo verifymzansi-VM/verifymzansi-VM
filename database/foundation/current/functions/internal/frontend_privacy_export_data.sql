@@ -28,7 +28,8 @@ begin
       p.provider,p.created_at,p.completed_at,coalesce((p.snapshot->>'renewal')::boolean,false) renewal,
       p.snapshot->'cooling_off_consent' cooling_off_consent,p.snapshot->'renewal_starts' renewal_starts,
       (select jsonb_agg(jsonb_build_object('line_number',l.line_number,'amount_cents',l.amount_cents,'status',l.status,
-          'renews_entitlement_id',l.renews_entitlement_id,'reversal_kind',l.reversal_kind,'reversed_at',l.reversed_at)
+          'renews_entitlement_id',l.renews_entitlement_id,'slot_count',l.slot_count,'reversal_kind',l.reversal_kind,
+          'reversed_at',l.reversed_at)
         order by l.line_number) from private.payment_lines l where l.payment_id=p.id) lines
       from private.payments p where p.owner_id=$1 order by p.created_at,p.id$q$),
     ('invoices',$q$select i.id,i.payment_id,i.invoice_number,i.amount_ex_vat_cents,i.vat_cents,i.total_cents,i.description,i.issued_at
@@ -42,8 +43,10 @@ begin
       t.cooling_off_waiver_confirmed,t.status,t.recorded_at,t.confirmed_at,t.declined_at
       from private.invoice_transfers t join private.plan_versions v on v.id=t.plan_version_id where t.account_id=$1 order by t.recorded_at,t.id$q$),
     ('entitlements',$q$select id,source,area,slot_capacity,activations_per_period,activation_period_days,max_photos,max_videos,starts_at,ends_at,status,revoked_reason,
-      renews_entitlement_id,slot_id
+      renews_entitlement_id,slot_id,package_id
       from private.entitlements where owner_id=$1 order by created_at,id$q$),
+    ('slot_packages',$q$select id,term_days,slot_count,created_at from private.slot_packages where owner_id=$1
+      order by created_at,id$q$),
     ('post_activations',$q$select post_id,entitlement_id,activated_at,released_at,release_reason,continued
       from private.post_activations where owner_id=$1 order by activated_at,id$q$),
     ('event_submissions',$q$select post_id,submitted_at,released_at,release_reason

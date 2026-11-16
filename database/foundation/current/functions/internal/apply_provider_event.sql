@@ -89,7 +89,16 @@ begin
       end if;
     else
       select count(*) into line_count from private.payment_lines l where l.payment_id = pay.id and l.status = 'open';
-      if line_count > 0 and fulfillable then
+      if line_count > 0 and fulfillable and exists(select 1 from private.plan_versions v
+          where v.id = pay.plan_version_id and internal.slot_package_plan(v.plan_code)) then
+        -- A Multi-listing package (20261114154823): one package per account at
+        -- a time, only while packages are on sale and the member's ID review
+        -- is still accepted. Otherwise the money goes to reconciliation:
+        -- staff refund it (or activate it once it can be delivered).
+        perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||pay.owner_id::text, 707));
+        fulfillable := not internal.slot_package_open(pay.owner_id) and internal.slot_packages_on_sale()
+          and internal.current_verified_identity(pay.owner_id) is not null;
+      elsif line_count > 0 and fulfillable then
         -- Slots are delivered only within the person's limit (every account
         -- of the identity, each slot once); otherwise the money goes to
         -- reconciliation. A renewal of a held slot adds no slot (so it is
@@ -104,7 +113,11 @@ begin
             or (internal.individual_slots_counted(fingerprint, pay.owner_id, pay.id)->>'held')::integer
               + internal.slot_lines_adding(pay.id) <= internal.individual_slot_limit(fingerprint))
           and (cardinality(renewing) = 0
-            or internal.individual_renewals_allowed(fingerprint, pay.owner_id, pay.id, renewing));
+            or internal.individual_renewals_allowed(fingerprint, pay.owner_id, pay.id, renewing))
+          -- E3 (20261114154823): no Individual slot or renewal is delivered
+          -- while the person's package runs (until its last 7 days), even
+          -- from a checkout opened before it: reconciliation, then a refund.
+          and not internal.slot_package_blocks_individual(fingerprint, pay.owner_id);
       end if;
     end if;
     fulfillable := coalesce(fulfillable,false);

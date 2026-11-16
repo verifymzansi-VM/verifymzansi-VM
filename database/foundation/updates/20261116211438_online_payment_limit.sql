@@ -5,7 +5,7 @@
 -- still ask for an invoice first at any amount, and pay it with "Pay now"
 -- (Ozow) or by bank transfer.
 --
--- Apply after 20261114093742_renew_slots_early.sql (it refuses with 55000
+-- Apply after 20261114154823_slot_packages.sql (it refuses with 55000
 -- unless the three functions it replaces have their reviewed bodies, or this
 -- update's). Only adds: no API command, argument or grant is removed or
 -- changed. In one transaction it:
@@ -64,12 +64,12 @@ begin
       ('internal.start_invoice_payment(text,bigint,boolean)')) v(sig)
   loop
     if shape not in (
-        'internal.start_slot_checkout(uuid,integer,bigint,boolean) 4ce514eae4c2fb3fd9b0a0ecc40ac498',
-        'internal.start_slot_checkout(uuid,integer,bigint,boolean) 0a6cde678881926d76b0f77128e19ffa',
-        'internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean) 94de32ca80099d59db23aed33c6e7ee2',
-        'internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean) c6a863a4a9d30de454890c11e7d7ca10',
-        'internal.start_invoice_payment(text,bigint,boolean) 1bc2224ded0d1a5ddd03382f1fc2a46f',
-        'internal.start_invoice_payment(text,bigint,boolean) 0768f484f693cabe73b4c959a593ba7e') then
+        'internal.start_slot_checkout(uuid,integer,bigint,boolean) cae84c17b05a49fc3937064eaaff38f2',
+        'internal.start_slot_checkout(uuid,integer,bigint,boolean) c8035d1400d4786ded224cbfda9b0864',
+        'internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean) e014633dd37ebb3fa212fc2944dd7ed6',
+        'internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean) 4c9ceef45be61e47ec685d82e8392c96',
+        'internal.start_invoice_payment(text,bigint,boolean) 157a3a3a51c3abfdef565e37a2af3785',
+        'internal.start_invoice_payment(text,bigint,boolean) 2269112508c2af33e80fccf331f7479c') then
       raise exception 'online payment limit precondition: % is not a reviewed body', shape using errcode='55000';
     end if;
   end loop;
@@ -154,6 +154,12 @@ begin
   fingerprint := internal.current_verified_identity(actor);
   if fingerprint is null then
     raise exception 'your ID review must be accepted before you buy a slot' using errcode='PT412';
+  end if;
+  -- E3 (20261114154823): while the person's Multi-listing package runs, posts
+  -- use its places; Individual slots can be bought again in its last 7 days.
+  if internal.slot_package_blocks_individual(fingerprint, actor) then
+    raise exception 'Individual slots cannot be bought while your Multi-listing package runs'
+      using errcode='PT409', detail='package_active';
   end if;
   total := plan.price_cents * p_slots;
   -- Above the most Ozow accepts in one payment (internal.online_payment_max_cents,
@@ -260,6 +266,14 @@ begin
   fingerprint := internal.current_verified_identity(actor);
   if fingerprint is null then
     raise exception 'your ID review must be accepted before you renew a slot' using errcode='PT412';
+  end if;
+  -- E3 (20261114154823): while the person's Multi-listing package runs, an
+  -- Individual slot runs to its own end (its post then moves into a free
+  -- place of the package); it can be renewed again in the package's last 7
+  -- days.
+  if internal.slot_package_blocks_individual(fingerprint, actor) then
+    raise exception 'Individual slots cannot be renewed while your Multi-listing package runs'
+      using errcode='PT409', detail='package_active';
   end if;
   -- Each id must be a period of one of this account's Individual slots that
   -- is still running; anything else (another account's slot included) reads
@@ -406,6 +420,12 @@ begin
   fingerprint := internal.current_verified_identity(actor);
   if fingerprint is null then
     raise exception 'your ID review must be accepted before you pay' using errcode='PT412', detail='invoice_buyer_unverified';
+  end if;
+  -- E3 (20261114154823): while the person's Multi-listing package runs (until
+  -- its last 7 days), no Individual slot is sold, whatever the way it is paid.
+  if internal.slot_package_blocks_individual(fingerprint, actor) then
+    raise exception 'Individual slots cannot be sold while the person''s Multi-listing package runs'
+      using errcode='PT409', detail='package_active';
   end if;
   -- One person at a time (every account of the identity), then this account,
   -- as the slot checkout does.

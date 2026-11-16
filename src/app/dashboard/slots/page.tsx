@@ -5,7 +5,12 @@ import {
   FoundationServerSessionError,
   readFoundationServerSession,
 } from "@/lib/foundation/server-session";
-import { FoundationBillingError, readFoundationMySlots } from "@/lib/foundation/billing-runtime";
+import {
+  FoundationBillingError,
+  readFoundationMySlotPackage,
+  readFoundationMySlots,
+  type FoundationMySlotPackage,
+} from "@/lib/foundation/billing-runtime";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import {
   individualSlotPlans,
@@ -49,8 +54,23 @@ async function mySlots() {
   }
 }
 
+/** The member's Multi-listing package (P4a); null when it cannot be read
+ * (the page then shows the slots without the package group). */
+async function mySlotPackage(): Promise<FoundationMySlotPackage | null> {
+  try {
+    return await readFoundationMySlotPackage((await readFoundationServerSession()).api);
+  } catch (error) {
+    logDegradedRead(log, "Slot package unavailable", error);
+    return null;
+  }
+}
+
 export default async function MySlotsPage() {
-  const [mine, buyHref] = await Promise.all([mySlots(), buySlotHref()]);
+  const [mine, buyHref, slotPackage] = await Promise.all([
+    mySlots(),
+    buySlotHref(),
+    mySlotPackage(),
+  ]);
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
@@ -58,7 +78,12 @@ export default async function MySlotsPage() {
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "My slots" }]}
       />
       {mine ? (
-        <MySlots slots={mine.slots} individual={mine.individual} buyHref={buyHref} />
+        <MySlots
+          slots={mine.slots}
+          individual={mine.individual}
+          buyHref={buyHref}
+          slotPackage={slotPackage}
+        />
       ) : (
         <p
           role="status"

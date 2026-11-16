@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION internal.retention_commerce(p_limit integer)
 AS $function$
 declare provider_events integer; invoices integer; addon_windows integer; partner_events integer;
   commissions integer; acquisitions integer; sponsorships integer; trial_claims integer; activations integer;
-  entitlements integer; payments integer; customer_invoices integer; bank_transfers integer;
+  entitlements integer; payments integer; customer_invoices integer; bank_transfers integer; slot_packages integer;
 begin
   delete from private.provider_events where id in(select e.id from private.provider_events e
     where internal.retention_tax_year_due(e.received_at) order by e.received_at limit p_limit);
@@ -75,6 +75,13 @@ begin
       and not exists(select 1 from private.payment_lines l where l.renews_entitlement_id=e.id)
     order by e.created_at limit p_limit for update skip locked);
   get diagnostics entitlements=row_count;
+  -- A Multi-listing package (20261114154823) goes with the last of its grants,
+  -- which follow their payments' five tax years.
+  delete from private.slot_packages where id in(select k.id from private.slot_packages k
+    where internal.retention_tax_year_due(k.created_at)
+      and not exists(select 1 from private.entitlements e where e.package_id=k.id)
+    order by k.created_at limit p_limit for update skip locked);
+  get diagnostics slot_packages=row_count;
   delete from private.payments where id in(select p.id from private.payments p
     where p.status<>'pending' and internal.retention_tax_year_due(coalesce(p.completed_at,p.status_changed_at,p.created_at))
       and not exists(select 1 from private.entitlements e where e.payment_id=p.id)
@@ -91,7 +98,7 @@ begin
     'partner_events',partner_events,'partner_commissions',commissions,'account_acquisitions',acquisitions,
     'sponsorships',sponsorships,'post_trial_claims',trial_claims,'post_activations',activations,
     'entitlements',entitlements,'payments',payments,'customer_invoices',customer_invoices,
-    'bank_transfers',bank_transfers);
+    'bank_transfers',bank_transfers,'slot_packages',slot_packages);
 end;
 $function$;
 alter function internal.retention_commerce(integer) owner to postgres;

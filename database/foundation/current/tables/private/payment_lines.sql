@@ -14,6 +14,7 @@ create table private.payment_lines (
   reversed_by uuid,
   created_at timestamp with time zone default statement_timestamp() not null,
   renews_entitlement_id uuid,
+  slot_count integer default 1 not null,
   constraint payment_lines_amount_cents_check CHECK (amount_cents >= 100 AND amount_cents <= 1000000),
   constraint payment_lines_id_payment_key UNIQUE (id, payment_id),
   constraint payment_lines_line_number_check CHECK (line_number >= 1 AND line_number <= 25),
@@ -27,6 +28,7 @@ create table private.payment_lines (
   constraint payment_lines_reversal_reason_check CHECK (length(btrim(reversal_reason)) >= 5 AND length(btrim(reversal_reason)) <= 500),
   constraint payment_lines_reversed_by CHECK (reversed_by IS NULL OR status = 'reversed'::text),
   constraint payment_lines_reversed_by_fkey FOREIGN KEY (reversed_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
+  constraint payment_lines_slot_count_check CHECK (slot_count >= 1 AND slot_count <= 250),
   constraint payment_lines_status_check CHECK (status = ANY (ARRAY['open'::text, 'reversed'::text]))
 );
 alter table private.payment_lines owner to postgres;

@@ -52,6 +52,16 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_my_slots_v2: { Args: Record<never, never>; Returns: Json };
+      start_package_checkout: {
+        Args: {
+          p_plan_id: string;
+          p_slots: number;
+          p_expected_total_cents: number;
+          p_cooling_off_consent: boolean;
+        };
+        Returns: Json;
+      };
+      get_my_slot_package: { Args: Record<never, never>; Returns: Json };
       get_payment_limits: { Args: Record<never, never>; Returns: Json };
       get_my_communication_choices: { Args: Record<never, never>; Returns: Json };
       save_my_communication_choices: {
@@ -648,6 +658,7 @@ export type FoundationRuntimeServiceDatabase = {
       get_payment_receipt: { Args: { p_payment_id: string }; Returns: Json };
       claim_ozow_refund_send: { Args: { p_request_id: string }; Returns: Json };
       run_slot_renewals: { Args: { p_limit: number }; Returns: Json };
+      get_slot_package_offer: { Args: Record<never, never>; Returns: Json };
       list_ozow_refund_sends_due: { Args: { p_limit: number }; Returns: Json };
       record_ozow_refund_send: { Args: { p_request_id: string; p_result: Json }; Returns: Json };
       apply_ozow_refund_status: { Args: { p_event: Json }; Returns: Json };

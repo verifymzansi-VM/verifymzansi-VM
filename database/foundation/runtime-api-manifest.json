@@ -4695,6 +4695,66 @@
       "authority": "Service-only housekeeping sweep (posts are funded through their slot at read time): moves each post that can move whose slot period ended into the slot's next period that follows on without a break (never a post going live; posts that cannot move are not picked), and queues one renewal reminder per ending grant (once per slot end, keyed by the grant) for Individual slots ending within 3 days with no renewal following, while the account can still buy. Never starts a payment."
     },
     {
+      "name": "start_package_checkout",
+      "updates": ["updates/20261114154823_slot_packages.sql"],
+      "arguments": [
+        {
+          "name": "p_plan_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_slots",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_expected_total_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_consent",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound Multi-listing package quote: only while the owner's sales switch is on; a package term on sale; a typed number of slots, 5 to 100 online (more by invoice, at most 250), R100 per slot per 30 days and at most R10,000; an accepted ID review; the server total equal to the total shown; the 'my slots start now' cooling-off consent recorded in the payment; no package of the account that has not ended. One payment with one line holding every slot; one package order open at a time (the same order continued, another cancelled when never sent to Ozow, otherwise returned)."
+    },
+    {
+      "name": "get_slot_package_offer",
+      "updates": ["updates/20261114154823_slot_packages.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only read (the website's server renders the pricing and checkout pages from it) of whether Multi-listing packages are on sale and their fixed rules (minimum and online maximum slots, online limit, posts per slot); the package terms and prices only while on sale. No account data."
+    },
+    {
+      "name": "get_my_slot_package",
+      "updates": ["updates/20261114154823_slot_packages.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound read of the account's own latest Multi-listing package that runs or ended in the last 3 days (term, slots bought, places, start and end, new posts allowed and started in the rolling 30 days, the posts in it and the posts of the account's ended Individual slots it takes), whether the account could buy one now, and until when its Individual slots cannot be bought or renewed; no other account's data."
+    },
+    {
       "name": "get_payment_limits",
       "updates": ["updates/20261116211438_online_payment_limit.sql"],
       "arguments": [],

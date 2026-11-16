@@ -1709,6 +1709,243 @@ renewals; a staff-raised limit never carries more than 4 renewals past its end;
 the privacy export holds renewal links and each payment's consent; the grants;
 and that the rollback refuses once a slot was renewed.
 
+## Multi-listing packages, part one (sales off), 14 November 2026
+
+`20261114154823_slot_packages.sql` was applied on 16 November 2026 at 21:43 UTC
+with the owner's approval (roadmap P4a; the owner's decisions of 14 November
+2026 on the multi-listing gap review). It needs
+`20261114093742_renew_slots_early.sql` and the bodies and post funding views it
+builds on with their reviewed bodies and definitions, and refuses (55000)
+otherwise. It only adds: no API command, argument or grant is removed or
+changed. **Nothing can be bought after it is applied**: the sales switch is off.
+
+- **The sales switch.** `private.slot_package_sales` holds one row, `on_sale`
+  false. No command changes it; the owner switches it on with a reviewed SQL
+  step when business tools P5-P7 pass (G1). The three package terms
+  (`slot_package_30d`, `_90d`, `_180d`: R100, R300 and R600 per slot, 4 posts
+  going live per slot per 30 days, the Individual slot's photo and video limits)
+  are in the catalogue but not public, so `api.billing_catalogue` and the
+  Individual checkout never offer them.
+- **The package record (decision 5).** `private.slot_packages`: one row per
+  package (owner, term, number of slots bought), which never changes (trigger
+  `slot_packages_immutable`). Its places, start and end are read from its grants
+  (`internal.slot_package_now`): `private.entitlements.package_id` links each
+  grant to its package, and one purchase line is one grant carrying every slot
+  it was sold with (`private.payment_lines.slot_count`; an Individual line keeps
+  1). Later parts add to this without changing it: slots added part-way (P4b)
+  are further grants of the package ending with it, renewals and a change of
+  count (P4d) are grants that start at its end, the team (P4c) is keyed by the
+  package, and package invoices (P4e) are payment lines like any other. At most
+  one package per account has not ended.
+- **Buying.** New member command
+  `api.start_package_checkout(p_plan_id, p_slots, p_expected_total_cents, p_cooling_off_consent)`:
+  a typed number of slots, 5 to 100 online (fewer, or more than 250: 22023
+  `package_slots_invalid`; 101 to 250, and any total above R10,000: PT413
+  `package_invoice_required`), R100 per slot per 30 days, so online means at
+  most 100 slots for 30 days, 33 for 90 days and 16 for 180 days. It needs the
+  switch on (PT403 `packages_not_on_sale`), an accepted ID review (PT412,
+  decision 12), the "my slots start now" consent (22023; kept in the payment's
+  snapshot as `package-starts-now-v1`), the total the member was shown (PT428)
+  and no package of the account that has not ended (PT409 `package_active`). One
+  payment with one line; one package order open at a time (the same order is
+  continued, another one cancelled when it was never sent to Ozow, and otherwise
+  returned to continue, check or cancel).
+- **Delivery.** `internal.apply_provider_event` and
+  `internal.activate_staff_paid_payment` (full bodies) deliver a package only
+  while the account has no other package that has not ended, packages are on
+  sale and the member's ID review is accepted (otherwise a payment goes to
+  reconciliation and staff activation is refused: PT409 `package_active`, PT403
+  `packages_not_on_sale`, PT412); the Individual slot limit does not apply to
+  it. `internal.claim_checkout_request` (full body) opens no Ozow page for a
+  package while sales are off (PT403) or the ID review is not accepted (PT412).
+  `internal.issue_slot_line_entitlements` (full body) opens the package and
+  issues its grant (all its slots, 4 posts going live per slot per 30 days, from
+  payment to exactly the term later). The partner commission follows the line as
+  before: 20% of the package, once. A refund or chargeback of the line (the
+  existing one-line and whole-payment reversals) revokes the grant, ends the
+  posts in it and reverses the commission.
+- **Posts in package places.** `internal.activate_post` (full body) tries the
+  package's places first (an Individual slot beside it is often about to end);
+  in the package's last 7 days Individual slots come first (decision 11). A
+  package's capacity is its places; the posts in it and the posts of the owner's
+  ended Individual slots it takes fill them; the 4 posts going live per place
+  per rolling 30 days count over every grant of the package (decision 10; a post
+  moved in does not count); one activation at a time per package (its grants and
+  its row are locked). `internal.slot_posts_held` and
+  `internal.slot_posts_started` (full bodies) count the same way, so the posting
+  capacity, allowance and post manager show it.
+- **E3: Individual slots beside a package.** While a package of the person (any
+  account of the same ID) runs and has more than 7 days left, no Individual slot
+  can be bought, renewed or delivered, whatever the way (PT409
+  `package_active`): the checkouts (`internal.start_slot_checkout`,
+  `internal.start_slot_renewal_checkout`), delivery (a slot or renewal paid
+  after a package started, for example from an Ozow page left open, goes to
+  reconciliation in `internal.apply_provider_event`; staff activation refuses
+  it) and the invoices (`internal.issue_staff_invoice`,
+  `internal.start_invoice_payment`, `internal.record_staff_invoice_payment`,
+  `internal.record_staff_invoice_transfer`,
+  `internal.confirm_staff_invoice_payment`), full bodies. In its last 7 days
+  they can be again (decision 11). An Individual slot runs to its own end. When
+  its paid run ends, the package takes its post if it has a free place, decided
+  at read time: `internal.slot_chain_end` (full body; its earlier body is now
+  `internal.slot_chain_paid_end`) returns the package's end for that slot
+  (`internal.slot_package_takeover_end`), so the public view, the restorable
+  view, post funding, the kept activation and the shown end date keep the post
+  at the boundary before any job runs. Posts waiting take free places in the
+  order their slots ended (`internal.slot_package_waiting`).
+- **Search documents only for posts the package takes.** The sweep moves the
+  search document of a post to the package's end only when the package takes it,
+  or will take it when its slot ends in the next 2 minutes (before the next
+  sweep), so it stays in search and on its page at the boundary
+  (`internal.refresh_package_documents`). The documents of posts no package
+  takes any more (it filled up, was refunded or charged back) go back to their
+  own end dates (`internal.slot_package_release_dates`, run by the sweep and,
+  inside a refund or chargeback, by the new trigger
+  `entitlements_package_revoked`), so the lifecycle job ends them on their real
+  date, never on a package's end.
+- **No post row is written for a package by a payment, a reversal or the
+  sweep**, so no post check (a post saved under rules that have since changed,
+  for example) can stop money being recorded or the sweep running. Delivery
+  touches no post at all; the revocation trigger writes search documents only,
+  skips a document another transaction holds and never stops the reversal; a
+  post's own end date is left to the lifecycle job, which brings it up to the
+  post's funding or expires the post.
+- **The sweep.** `api.run_slot_renewals` (full body, four new counts in its
+  reply) moves posts the package takes into it (the old activation released as
+  `entitlement_ended`, the new one `continued`, the search document moved to the
+  package's end). It reads from the packages that have not reached their end
+  (refunded ones too, `entitlements_package_ends_idx`) whose owner still holds a
+  post in a paid Individual slot that has ended, however long ago, or ends in
+  the next 2 minutes (`post_activations_owner_held_idx`); the most recent slot
+  end first, at most `p_limit` packages a run. Each post moves in its own
+  subtransaction: a post that cannot move is counted (`package_skipped`), keeps
+  its place in the order and is tried again on the next run, and the others go
+  on. A post the package cannot take follows the normal 3-day grace. The free
+  first post, staff grants and sponsored places are not moved.
+- **Locks.** The sweep never waits for a lock it takes: the owner's fence is
+  tried, posts are skipped when busy, and slots, a package's grants and row and
+  search documents are taken without waiting (the loop that moves posts into a
+  renewed period now also takes the period without waiting); whatever is busy is
+  left to the next run. The revocation trigger does not wait either. A
+  transaction that never waits cannot be part of a deadlock, so the sweep and a
+  reversal cannot deadlock with `api.activate_post` (post, then slots, then the
+  package) or the lifecycle job (post, then search document).
+- **Going below 5 (decision 11).** In a package's last 7 days the same sweep
+  moves its posts into free places of the same owner's Individual slots whose
+  run lasts beyond the package's end (`internal.individual_free_places`), the
+  most recently approved first (`internal.slot_package_leaving`), as continued
+  activations (not a post going live), so at the package's end they are in their
+  Individual slots, not the grace. A post one slot cannot carry (another area,
+  more photos) tries the owner's other slots, the longest-running first, at
+  most 20. An Individual slot bought in the package's very last minute may miss
+  the sweep; its posts then follow the grace.
+- **Team.** `internal.manage_plan_member` (full body) never adds a member to a
+  package's grant, and `internal.get_my_frontend_post_manager` (full body) does
+  not list a package grant among the plans with administrators: the team belongs
+  to the package (P4c).
+- **Reads.** `api.get_slot_package_offer()` (the website's server only): whether
+  packages are on sale and the fixed rules; the terms only while on sale.
+  `api.get_my_slot_package()` (member): the account's latest package that runs
+  or ended in the last 3 days, its places, end, posts (and the posts of ended
+  Individual slots it takes, `moving`), the new posts allowed and started in the
+  rolling 30 days, whether the account could buy one now, and until when its
+  Individual slots stay closed.
+- **Retention and privacy.** `internal.retention_commerce` (full body) removes a
+  package with the last of its grants (five tax years after its payments); the
+  privacy export (`internal.frontend_privacy_export_data`, full body) gives the
+  account's packages (new dataset `slot_packages`), each grant's package and
+  each payment line's number of slots.
+- **Not in this part.** Package reminders (G5), slots added part-way (P4b), the
+  team (P4c), renewals, changing the count and choosing the posts that stay
+  (P4d), package invoices and "Ask for an invoice" (P4e), and Terms v5 (needed
+  before the switch goes on).
+- **Cost.** The package reads go from the owner (the posts they hold, through
+  the new partial index `post_activations_owner_held_idx`) or the package
+  (`entitlements_package_idx`); the sweep reads the packages by end date
+  (`entitlements_package_ends_idx`) and their owners' posts
+  (`post_activations_owner_held_idx`). The public view and search do no package
+  work for a post whose own period still runs, so they cost what they did; a
+  post whose Individual slot has just ended costs about 1 ms more until the
+  sweep moves it in. The helpers read on every such post are PL/pgSQL
+  (`internal.slot_package_now`, `internal.slot_package_waiting`,
+  `internal.slot_package_takeover_end`), so their plans are kept between calls.
+  Measured on 20,000 live posts in the pull request.
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the new commands (behind the switch) and the deploy preflight
+probes every command in `../runtime-api-manifest.json`, so a deploy without the
+update stops there. Earlier releases do not call them and keep working with the
+update applied. It is recorded after `20261114093742_renew_slots_early.sql`.
+
+**Applying.**
+
+1. Run `../preflight/20261114154823_slot_packages.check.sql` unchanged in the
+   SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "slot packages: update not applied (apply before the
+   website release that uses it is deployed); on sale: no (switch absent);
+   packages: none (table absent); package payments: 0".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "slot packages: already applied; on sale: no; packages:
+   0; package payments: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261114154823_slot_packages.down.sql`
+(only with the owner's decision; prefer a forward fix). Revert and deploy the
+website release first: the rollback removes the commands that release calls. It
+refuses once a package exists, a package payment was started or the switch is
+on, or when a body is not the update's; otherwise it puts back the twenty
+earlier bodies and drops the update's functions, trigger, indexes, constraints,
+columns and tables (the package terms stay in the catalogue, not public).
+
+`node --import tsx scripts/test-foundation-slot-packages.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted body, a
+drifted funding view or a drifted column, changing nothing; apply, rollback and
+re-apply return the same fingerprints; the grants (members buy and read their
+own package, only the website's server reads the offer, no API role reads the
+new tables); with the switch off nothing can be bought, the offer lists no terms
+and the slot catalogue and the Individual checkout never sell a package term;
+the typed number (4 and 251 refused, 101 and the R10,000 limit by invoice, 5,
+100, 33 x 90 days and 16 x 180 days bought online), the shown total and the
+consent; an accepted ID review; a paid package is one payment with one line and
+one package whose grant carries every slot and ends exactly its term after the
+payment; an Ozow notice with another amount or replayed changes nothing; one
+package per account (checkout, a late second payment sent to reconciliation,
+staff activation refused); posts use the package's places, at most its number of
+slots, also when two activations race for the last place; the 4 posts going live
+per slot per 30 days count over the package; E3 (no Individual slot bought or
+renewed while a package runs, both open again in its last 7 days; when an
+Individual slot ends the package takes its post at once in the public view, the
+restorable view, search, the post page and funding, the sweep moves it in once
+without it counting as a new post, the lifecycle job keeps it live with the
+package's end; a full package leaves the post to the 3-day grace); another
+account cannot see or use the package and no team member joins its grant;
+partner commission is 20% of the package once and a refund reverses it and ends
+the package and its posts; a chargeback ends them too; Individual slots work as
+before without a package. Review fixes: a new slot and a renewal left open at
+Ozow and paid after a package started go to reconciliation and staff cannot
+activate them; no Individual invoice is issued, paid, recorded or confirmed
+while a package runs; a package reaches Ozow and is delivered only while on sale
+and with an accepted ID review; a full package leaves an Individual post's
+search document alone; a refunded package gives back the post it took, which
+expires on its real date; in a package's last 7 days a new post goes into an
+Individual slot and the sweep moves the most recently approved package post into
+the free place (continued), which stays live after the package ends while the
+others follow the grace; retention removes a package with its last grant and the
+privacy export lists packages; the post manager lists no package grant among
+plans with administrators. Second review: with a post saved under rules that
+have since changed, a package refund, an Ozow settle of a package and its
+chargeback all go through, writing no post row (the documents go back, the
+lifecycle job then expires the posts); the sweep moves such a post, goes on when
+another post's move fails (and moves it on the next run), finds a waiting post
+whose slot ended 8 days earlier, and tries the owner's next Individual slot when
+the first cannot carry the post; while another transaction holds a package's row
+the sweep does not wait and leaves it to the next run, and while another holds a
+post's search document a refund does not wait and the sweep corrects the
+document afterwards. And the rollback refuses once a package was bought.
+
 ## Customer invoices with an Ozow "Pay now" link, 14 November 2026
 
 `20261114041000_customer_invoice_pay_now.sql` was applied on 14 November 2026 at
@@ -1939,10 +2176,10 @@ in one setting; the Terms say so.
 
 ### 1. The limit and posting-v5 published: `20261116211438_online_payment_limit.sql`
 
-It needs `20261114093742_renew_slots_early.sql` (the three function bodies it
-replaces are checked by md5 and it refuses with 55000 otherwise) and
-`posting-v4` current. It only adds: no API command, argument or grant is removed
-or changed.
+It needs `20261114154823_slot_packages.sql` (the three function bodies it
+replaces, with that update's package check, are checked by md5 and it refuses
+with 55000 otherwise) and `posting-v4` current. It only adds: no API command,
+argument or grant is removed or changed.
 
 - **One setting.** `internal.online_payment_max_cents()` returns 130000 cents
   (R1,300). When Ozow changes our site's maximum, a new reviewed update replaces
@@ -1952,7 +2189,9 @@ or changed.
   `internal.start_slot_renewal_checkout` (full bodies) refuse a total above the
   setting with PT413, detail `online_payment_above_limit` (before: above
   1,000,000 cents, R10,000, without a detail). A total exactly at the setting is
-  accepted. Nothing else in them changes.
+  accepted. Nothing else in them changes. The Multi-listing package checkout
+  (`internal.start_package_checkout`) keeps its own rule for now (above 100
+  slots or R10,000 by invoice).
 - **Invoice "Pay now".** `internal.start_invoice_payment` (full body) refuses an
   invoice whose total is above the setting with the same PT413
   `online_payment_above_limit`, before writing anything, so it is paid by bank
@@ -3792,6 +4031,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   "update not applied", after "slot renewals: already applied; renewal payment
   lines: 0; renewals issued: 0; reminders queued: 0"; production fingerprint
   after it matched the full replay (except the known schema grant difference)
+- `20261114154823_slot_packages.sql`: applied 2026-11-16 21:43 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file (sha256 starting f4976af048638d5c, files from
+  raw GitHub at 6b072673) before the pull request was merged; preflight before
+  "update not applied", after "slot packages: already applied; on sale: no;
+  packages: 0; package payments: 0"; production fingerprint after it matched the
+  full replay (except the known schema grant difference); sales stay switched
+  off
 - `20261116211438_online_payment_limit.sql`: pending
 - `20261116211439_switch_posting_terms_v5.sql`: pending
 

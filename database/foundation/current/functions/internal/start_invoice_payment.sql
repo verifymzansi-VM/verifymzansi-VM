@@ -45,6 +45,12 @@ begin
   if fingerprint is null then
     raise exception 'your ID review must be accepted before you pay' using errcode='PT412', detail='invoice_buyer_unverified';
   end if;
+  -- E3 (20261114154823): while the person's Multi-listing package runs (until
+  -- its last 7 days), no Individual slot is sold, whatever the way it is paid.
+  if internal.slot_package_blocks_individual(fingerprint, actor) then
+    raise exception 'Individual slots cannot be sold while the person''s Multi-listing package runs'
+      using errcode='PT409', detail='package_active';
+  end if;
   -- One person at a time (every account of the identity), then this account,
   -- as the slot checkout does.
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
