@@ -88,6 +88,12 @@ begin
     raise exception 'the customer''s ID review must be accepted before slots are recorded'
       using errcode='PT412', detail='invoice_buyer_unverified';
   end if;
+  -- E3 (20261114154823): while the person's Multi-listing package runs (until
+  -- its last 7 days), no Individual slot is sold, whatever the way it is paid.
+  if internal.slot_package_blocks_individual(fingerprint, buyer) then
+    raise exception 'Individual slots cannot be sold while the person''s Multi-listing package runs'
+      using errcode='PT409', detail='package_active';
+  end if;
   if plan.price_cents * p_slots <> p_amount_cents then
     raise exception 'the amount received is not the order total of % cents', plan.price_cents * p_slots
       using errcode='PT428', detail='invoice_amount_mismatch';

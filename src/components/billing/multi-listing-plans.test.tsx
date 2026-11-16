@@ -1,34 +1,41 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { ENTERPRISE_PLANS } from "@/lib/constants/pricing";
-import { MultiListingPlans, perPostPer30DaysCents } from "./multi-listing-plans";
+import { MultiListingPlans, packageCheckoutHref } from "./multi-listing-plans";
 import { MultiListingNudge } from "./multi-listing-nudge";
 
-describe("MultiListingPlans", () => {
-  const plans = ENTERPRISE_PLANS.map((plan, index) => ({ ...plan, planId: `plan-${index}` }));
-
-  it("prices one live post per 30 days so plans compare with a single post", () => {
-    expect(perPostPer30DaysCents({ priceCents: 120000, slots: 10, durationDays: 90 })).toBe(4000);
-    expect(perPostPer30DaysCents({ priceCents: 215000, slots: 10, durationDays: 180 })).toBe(3583);
+describe("MultiListingPlans (P4a rules)", () => {
+  it("shows the common sizes at R100 per slot per 30 days, each term going to the package checkout", () => {
+    render(<MultiListingPlans />);
+    for (const slots of [5, 10, 25, 50, 100])
+      expect(screen.getByRole("heading", { name: `${slots} slots` })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Choose 5 slots for 30 days, R500/ })).toHaveAttribute(
+      "href",
+      "/billing/package?slots=5&days=30"
+    );
+    expect(
+      screen.getByRole("link", { name: /Choose 25 slots for 90 days, R7\s500/ })
+    ).toHaveAttribute("href", packageCheckoutHref(25, 90));
+    expect(
+      screen.getByRole("link", { name: /Choose 100 slots for 30 days, R10\s000/ })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/R100 per slot per 30 days, from 5 slots/)).toBeInTheDocument();
   });
 
-  it("shows every size with a Choose button per term and the quote route", () => {
-    render(<MultiListingPlans plans={plans} checkoutEnabled />);
-    for (const slots of [10, 25, 50, 100])
-      expect(screen.getByRole("heading", { name: `${slots} live posts` })).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /Choose 100 live posts for 180 days/ })
-    ).toHaveAttribute("href", `/billing/checkout?plan=${plans[plans.length - 1]!.planId}`);
-    expect(screen.getByText("R40 per post per 30 days")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Request a quote" })).toHaveAttribute(
+  it("offers totals above R10,000 by invoice, never online", () => {
+    render(<MultiListingPlans />);
+    expect(screen.queryByRole("link", { name: /Choose 50 slots for 90 days/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Choose 100 slots for 180 days/ })).toBeNull();
+    expect(screen.getAllByText("By invoice").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Ask for an invoice" })).toHaveAttribute(
       "href",
-      "/contact?topic=organisation_proposal"
+      expect.stringContaining("mailto:billing@verifymzansi.com")
     );
   });
 
-  it("falls back to a quote when no plans are loaded", () => {
-    render(<MultiListingPlans plans={[]} checkoutEnabled />);
-    expect(screen.getByRole("link", { name: "Ask us for a quote" })).toBeInTheDocument();
+  it("drops the old rules: no 'paid once, never renews', no named administrators", () => {
+    const { container } = render(<MultiListingPlans />);
+    expect(container.textContent).not.toMatch(/never renews|administrators|Request a quote/);
+    expect(container.textContent).toMatch(/does not renew automatically/);
   });
 });
 

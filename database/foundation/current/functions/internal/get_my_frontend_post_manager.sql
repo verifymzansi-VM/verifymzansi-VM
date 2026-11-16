@@ -29,7 +29,9 @@ begin
         'email',u.email) order by m.member_id) from private.entitlement_members m join auth.users u on u.id=m.member_id
         left join private.profiles pr on pr.account_id=m.member_id where m.entitlement_id=e.id),'[]'::jsonb)))
       from private.entitlements e join private.payments p on p.id=e.payment_id and p.status='complete'
-      where e.owner_id=actor and e.source='retail_paid' and e.slot_capacity>1 and internal.entitlement_usable(e.status,e.starts_at,e.ends_at)),'[]'::jsonb),
+      where e.owner_id=actor and e.source='retail_paid' and e.slot_capacity>1 and internal.entitlement_usable(e.status,e.starts_at,e.ends_at)
+        -- a Multi-listing package's team belongs to the package (P4c), never to a grant
+        and e.package_id is null),'[]'::jsonb),
     'sponsored_post_ids',coalesce((select jsonb_agg(a.post_id order by a.post_id) from private.post_activations a
       join private.entitlements e on e.id=a.entitlement_id and e.source='sponsorship'
       where a.owner_id=actor and a.released_at is null and internal.entitlement_usable(e.status,e.starts_at,e.ends_at)),'[]'::jsonb),

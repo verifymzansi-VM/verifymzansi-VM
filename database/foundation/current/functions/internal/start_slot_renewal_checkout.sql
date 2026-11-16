@@ -37,6 +37,14 @@ begin
   if fingerprint is null then
     raise exception 'your ID review must be accepted before you renew a slot' using errcode='PT412';
   end if;
+  -- E3 (20261114154823): while the person's Multi-listing package runs, an
+  -- Individual slot runs to its own end (its post then moves into a free
+  -- place of the package); it can be renewed again in the package's last 7
+  -- days.
+  if internal.slot_package_blocks_individual(fingerprint, actor) then
+    raise exception 'Individual slots cannot be renewed while your Multi-listing package runs'
+      using errcode='PT409', detail='package_active';
+  end if;
   -- Each id must be a period of one of this account's Individual slots that
   -- is still running; anything else (another account's slot included) reads
   -- as not found.

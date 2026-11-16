@@ -7,13 +7,9 @@ CREATE OR REPLACE FUNCTION internal.slot_chain_end(p_entitlement uuid)
  STABLE
  SET search_path TO 'pg_catalog'
 AS $function$
-  with recursive run(id, ends_at, chain) as (
-    select e.id, e.ends_at, coalesce(e.slot_id, e.id) from private.entitlements e where e.id=p_entitlement
-    union all
-    select n.id, n.ends_at, run.chain from run join private.entitlements n
-      on n.slot_id=run.chain and n.status='active' and n.starts_at<=run.ends_at and n.ends_at>run.ends_at
-  )
-  select max(run.ends_at) from run;
+  select case when r.paid_end > statement_timestamp() then r.paid_end
+    else coalesce(internal.slot_package_takeover_end(p_entitlement), r.paid_end) end
+  from (select internal.slot_chain_paid_end(p_entitlement) as paid_end) r;
 $function$;
 alter function internal.slot_chain_end(uuid) owner to postgres;
 revoke all on function internal.slot_chain_end(uuid) from public;

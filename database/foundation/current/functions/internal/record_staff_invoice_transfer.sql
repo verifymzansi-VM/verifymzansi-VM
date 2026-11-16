@@ -96,6 +96,12 @@ begin
     raise exception 'the customer''s ID review must be accepted before slots are recorded'
       using errcode='PT412', detail='invoice_buyer_unverified';
   end if;
+  -- E3 (20261114154823): while the person's Multi-listing package runs (until
+  -- its last 7 days), no Individual slot is sold, whatever the way it is paid.
+  if internal.slot_package_blocks_individual(fingerprint, inv.account_id) then
+    raise exception 'Individual slots cannot be sold while the person''s Multi-listing package runs'
+      using errcode='PT409', detail='package_active';
+  end if;
   -- An early check of the slot limit; confirmation checks it again.
   if (internal.individual_slots_counted(fingerprint, inv.account_id, null)->>'held')::integer + inv.slots
       > internal.individual_slot_limit(fingerprint) then
