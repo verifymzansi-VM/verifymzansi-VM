@@ -335,6 +335,7 @@ describe("staging decision (the staging-config bash block, run for real)", () =>
       writeFileSync(output, "");
       const result = spawnSync("bash", [script], {
         env: {
+          NODE_ENV: "test",
           PATH: process.env.PATH,
           GITHUB_OUTPUT: output,
           GITHUB_STEP_SUMMARY: path.join(dir, "summary"),
