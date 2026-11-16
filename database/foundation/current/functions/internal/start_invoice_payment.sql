@@ -29,6 +29,12 @@ begin
   if inv.total_cents <> p_expected_total_cents then
     raise exception 'the invoice total is % cents', inv.total_cents using errcode='PT428', detail='invoice_amount_mismatch';
   end if;
+  -- Above the most Ozow accepts in one payment: the invoice is paid by bank
+  -- transfer only (staff record it; a second staff member confirms it).
+  if inv.total_cents > internal.online_payment_max_cents() then
+    raise exception 'this invoice is above the online payment limit of % cents; pay it by bank transfer',
+      internal.online_payment_max_cents() using errcode='PT413', detail='online_payment_above_limit';
+  end if;
   select * into plan from private.plan_versions v where v.id = inv.plan_version_id and v.retired_at is null
     and v.is_public and internal.individual_slot_plan(v.plan_code) and v.price_cents = inv.unit_price_cents;
   if not found then

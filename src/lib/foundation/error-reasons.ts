@@ -85,6 +85,7 @@ export const FOUNDATION_ERROR_REASONS = {
   location_invalid: ["22023"],
   logo_unavailable: ["22023"],
   notification_ids_invalid: ["22023"],
+  online_payment_above_limit: ["PT413"],
   organisation_changed: ["PT409"],
   organisation_inactive: ["PT409"],
   organisation_invalid: ["22023"],

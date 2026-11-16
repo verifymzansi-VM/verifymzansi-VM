@@ -229,7 +229,10 @@
     },
     {
       "name": "start_slot_checkout",
-      "updates": ["updates/20261113002421_individual_slots_r69.sql"],
+      "updates": [
+        "updates/20261113002421_individual_slots_r69.sql",
+        "updates/20261116211438_online_payment_limit.sql"
+      ],
       "arguments": [
         {
           "name": "p_plan_id",
@@ -259,7 +262,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Caller-bound slot quote: only an Individual slot plan on sale, 1-25 slots, the cooling-off consent recorded in the payment, an accepted ID review, the server total equal to the total shown and at most R10,000, and the person's Individual slot limit (every account of the same identity, slots in open payments included); one payment with one line per slot."
+      "authority": "Caller-bound slot quote: only an Individual slot plan on sale, 1-25 slots, the cooling-off consent recorded in the payment, an accepted ID review, the server total equal to the total shown and at most internal.online_payment_max_cents() (the most Ozow accepts in one payment; above it PT413 online_payment_above_limit), and the person's Individual slot limit (every account of the same identity, slots in open payments included); one payment with one line per slot."
     },
     {
       "name": "get_my_slots",
@@ -4553,7 +4556,10 @@
     },
     {
       "name": "start_invoice_payment",
-      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "updates": [
+        "updates/20261114041000_customer_invoice_pay_now.sql",
+        "updates/20261116211438_online_payment_limit.sql"
+      ],
       "arguments": [
         {
           "name": "p_invoice_number",
@@ -4578,7 +4584,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "A signed-in account with current access and a live session, only for its own invoices (any other number, or a malformed one, reads as not found): an unpaid, not void invoice with billing details, the cooling-off box ticked (recorded once with time and wording version), the total shown equal to the invoice total, the plan still on sale at the invoice price, an accepted ID review and room within the Individual slot limit counting open checkouts: returns the attempt whose Ozow page is open or that was never sent to Ozow, refuses while an attempt is still being checked or a bank transfer to the invoice waits for confirmation or another payment for the same slot term is open at Ozow, and otherwise starts an ordinary pending Ozow payment of the invoice total with one line per slot and the invoice number as its reference (attempt n after the first: '<number>-n'; at most 20). Settled by the existing Ozow notice and status check; completion pays the invoice."
+      "authority": "A signed-in account with current access and a live session, only for its own invoices (any other number, or a malformed one, reads as not found): an unpaid, not void invoice with billing details, the cooling-off box ticked (recorded once with time and wording version), the total shown equal to the invoice total and at most internal.online_payment_max_cents() (above it the invoice is paid by bank transfer only: PT413 online_payment_above_limit), the plan still on sale at the invoice price, an accepted ID review and room within the Individual slot limit counting open checkouts: returns the attempt whose Ozow page is open or that was never sent to Ozow, refuses while an attempt is still being checked or a bank transfer to the invoice waits for confirmation or another payment for the same slot term is open at Ozow, and otherwise starts an ordinary pending Ozow payment of the invoice total with one line per slot and the invoice number as its reference (attempt n after the first: '<number>-n'; at most 20). Settled by the existing Ozow notice and status check; completion pays the invoice."
     },
     {
       "name": "record_staff_invoice_transfer",
@@ -4621,7 +4627,10 @@
     },
     {
       "name": "start_slot_renewal_checkout",
-      "updates": ["updates/20261114093742_renew_slots_early.sql"],
+      "updates": [
+        "updates/20261114093742_renew_slots_early.sql",
+        "updates/20261116211438_online_payment_limit.sql"
+      ],
       "arguments": [
         {
           "name": "p_entitlement_ids",
@@ -4651,7 +4660,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Caller-bound renewal quote: only the caller's own Individual slots that are still held (anything else reads as not found), each slot once, from 14 days before the slot ends, an Individual slot plan on sale, the renewal's cooling-off consent (with each slot's start date) recorded in the payment, an accepted ID review, the server total equal to the total shown and at most R10,000, and at most the person's limit of slots renewed ahead (every account of the same identity, renewals in open payments included; while a staff-raised limit runs, at most the standard limit of renewals that start at or after it ends); one payment with one line per slot, each naming the slot it renews. A renewal never adds a slot."
+      "authority": "Caller-bound renewal quote: only the caller's own Individual slots that are still held (anything else reads as not found), each slot once, from 14 days before the slot ends, an Individual slot plan on sale, the renewal's cooling-off consent (with each slot's start date) recorded in the payment, an accepted ID review, the server total equal to the total shown and at most internal.online_payment_max_cents() (the most Ozow accepts in one payment; above it PT413 online_payment_above_limit), and at most the person's limit of slots renewed ahead (every account of the same identity, renewals in open payments included; while a staff-raised limit runs, at most the standard limit of renewals that start at or after it ends); one payment with one line per slot, each naming the slot it renews. A renewal never adds a slot."
     },
     {
       "name": "get_my_slots_v2",
@@ -4684,6 +4693,19 @@
         "service_role": true
       },
       "authority": "Service-only housekeeping sweep (posts are funded through their slot at read time): moves each post that can move whose slot period ended into the slot's next period that follows on without a break (never a post going live; posts that cannot move are not picked), and queues one renewal reminder per ending grant (once per slot end, keyed by the grant) for Individual slots ending within 3 days with no renewal following, while the account can still buy. Never starts a payment."
+    },
+    {
+      "name": "get_payment_limits",
+      "updates": ["updates/20261116211438_online_payment_limit.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "A signed-in account with current access and a live session: the most one online (Ozow) payment may be, in cents (online_max_cents, internal.online_payment_max_cents()); no account data."
     }
   ]
 }

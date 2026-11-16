@@ -269,27 +269,74 @@ describe("CheckoutConfirm for Individual slots", () => {
     expect(payButton()).toBeDisabled();
   });
 
-  it("sends orders above R10,000 to an invoice, and R10,000 exactly stays online", () => {
+  it("offers an invoice first below the pay button, at any amount, with the order in the email", () => {
+    render(
+      <CheckoutConfirm
+        summary={slotSummary({ planId: terms[2].planId, onlineMaxCents: 130_000 })}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "One slot more" }));
+    // R828 is below Ozow's maximum: both ways to pay are offered.
+    expect(payButton()).toBeInTheDocument();
+    const option = screen.getByTestId("invoice-option");
+    expect(option).toHaveTextContent("Need an invoice before you pay?");
+    expect(screen.queryByRole("link", { name: /Email us for the invoice/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Get an invoice" }));
+    expect(option).toHaveTextContent("Pay it with Pay now (Ozow) or by bank transfer");
+    const href = screen
+      .getByRole("link", { name: /Email us for the invoice/ })
+      .getAttribute("href")!;
+    expect(
+      href.startsWith("mailto:billing@verifymzansi.com?subject=Invoice%20for%20slots&body=")
+    ).toBe(true);
+    const body = decodeURIComponent(href.slice(href.indexOf("&body=") + 6));
+    expect(body).toContain("2 Individual slots, 180 days each");
+    expect(body).toContain(`Total: ${formatPlanPrice(82_800)}`);
+    expect(body).toContain("from the email address of my VerifyMzansi account");
+  });
+
+  it("offers only the invoice above Ozow's maximum; the total at the maximum stays online", () => {
     const priced = (priceCents: number) =>
       slotSummary({
         slotTerms: [{ ...terms[0], priceCents }],
-        slotStatus: { verified: true, held: 0, pending: 0, limit: 25 },
+        onlineMaxCents: 130_000,
       });
-    const { unmount } = render(<CheckoutConfirm summary={priced(500_000)} />);
+    const { unmount } = render(<CheckoutConfirm summary={priced(65_000)} />);
     fireEvent.click(screen.getByRole("button", { name: "One slot more" }));
-    expect(total()).toBe(formatPlanPrice(1_000_000));
-    expect(screen.queryByTestId("slot-block-invoice")).toBeNull();
+    expect(total()).toBe(formatPlanPrice(130_000));
+    expect(screen.queryByTestId("slot-block-online_max")).toBeNull();
+    expect(payButton()).toBeInTheDocument();
     unmount();
-    render(<CheckoutConfirm summary={priced(500_100)} />);
+    render(<CheckoutConfirm summary={priced(65_100)} />);
     fireEvent.click(screen.getByRole("button", { name: "One slot more" }));
-    expect(screen.getByTestId("slot-block-invoice")).toHaveTextContent(
-      "Orders above R10,000 are paid by invoice."
+    expect(screen.getByTestId("slot-block-online_max").textContent).toContain(
+      `Ozow takes payments of up to ${formatPlanPrice(130_000)}. For this order, get an invoice and pay it by bank transfer.`
     );
-    expect(screen.getByRole("link", { name: "Ask for an invoice" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Email us for the invoice/ })).toHaveAttribute(
       "href",
-      "mailto:billing@verifymzansi.com?subject=Invoice%20for%20slots"
+      expect.stringContaining(encodeURIComponent(`Total: ${formatPlanPrice(130_200)}`))
     );
-    expect(payButton()).toBeDisabled();
+    // No Ozow button, no cooling-off box and no second invoice line.
+    expect(screen.queryByRole("button", { name: /Pay .* securely/ })).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByTestId("invoice-option")).toBeNull();
+  });
+
+  it("offers both ways to pay when the limit is unknown (the database still applies it)", () => {
+    render(<CheckoutConfirm summary={slotSummary({ onlineMaxCents: null })} />);
+    for (let i = 0; i < 3; i++)
+      fireEvent.click(screen.getByRole("button", { name: "One slot more" }));
+    expect(payButton()).toBeInTheDocument();
+    expect(screen.getByTestId("invoice-option")).toBeInTheDocument();
+  });
+
+  it("offers no invoice when the member cannot buy (ID review, slot limit)", () => {
+    render(
+      <CheckoutConfirm
+        summary={slotSummary({ slotStatus: { verified: false, held: 0, pending: 0, limit: 4 } })}
+      />
+    );
+    expect(screen.queryByTestId("invoice-option")).toBeNull();
   });
 });
 
@@ -406,6 +453,23 @@ describe("CheckoutConfirm renewing slots early (P3)", () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
     expect(sent(fetch).renewSlotIds).toEqual([slotB]);
     expect(sent(fetch).slots).toBe(1);
+  });
+
+  it("asks to renew fewer slots per payment above Ozow's maximum, with no invoice option", () => {
+    const slots = [slotA, slotB].map((id) => ({
+      id,
+      startsAt: "2026-12-01T00:00:00.000Z",
+      postTitle: null,
+    }));
+    render(<CheckoutConfirm summary={{ ...renewalSummary(slots), onlineMaxCents: 10_000 }} />);
+    expect(screen.getByTestId("slot-block-online_max")).toHaveTextContent(
+      "Untick some slots and renew them in a second payment."
+    );
+    expect(payButton()).toBeDisabled();
+    expect(screen.queryByTestId("invoice-option")).toBeNull();
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    expect(screen.queryByTestId("slot-block-online_max")).toBeNull();
+    expect(screen.queryByTestId("invoice-option")).toBeNull();
   });
 
   it("says when nothing can be renewed yet, or the slots cannot be read", () => {

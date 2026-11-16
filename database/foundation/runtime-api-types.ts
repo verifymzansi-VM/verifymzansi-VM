@@ -52,6 +52,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_my_slots_v2: { Args: Record<never, never>; Returns: Json };
+      get_payment_limits: { Args: Record<never, never>; Returns: Json };
       get_my_communication_choices: { Args: Record<never, never>; Returns: Json };
       save_my_communication_choices: {
         Args: {

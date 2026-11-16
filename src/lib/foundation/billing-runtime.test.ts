@@ -19,6 +19,7 @@ import {
   paymentCheckFailureReason,
   readFoundationBilling,
   readFoundationMySlots,
+  readFoundationPaymentLimits,
   reconcileFoundationPayment,
   runFoundationPaymentReconciliation,
   startFoundationCheckout,
@@ -1141,7 +1142,7 @@ describe("the Individual slot checkout", () => {
   });
   it.each([
     ["PT412", 403, "ID_REVIEW_REQUIRED", /ID review must be accepted/],
-    ["PT413", 400, "INVOICE_REQUIRED", /above R10,000 are paid by invoice/],
+    ["PT413", 400, "INVOICE_REQUIRED", /more than Ozow accepts in one payment. Get an invoice/],
     ["PT428", 409, "PRICE_CHANGED", /price changed/],
     ["PT429", 409, "SLOT_LIMIT_REACHED", /most Individual slots you can hold at once/],
   ])("tells the member why the database refused (%s)", async (sqlstate, status, code, message) => {
@@ -1230,7 +1231,7 @@ describe("renewing slots early (P3)", () => {
       /has ended or is not yours/,
     ],
     [{ code: "PT412" }, 403, "ID_REVIEW_REQUIRED", /before you renew a slot/],
-    [{ code: "PT413" }, 400, "INVOICE_REQUIRED", /paid by invoice/],
+    [{ code: "PT413" }, 400, "ONLINE_LIMIT_EXCEEDED", /Renew fewer slots now/],
     [{ code: "PT428" }, 409, "PRICE_CHANGED", /price changed/],
     [{ code: "PT429" }, 409, "RENEWAL_LIMIT_REACHED", /as many slots ahead/],
   ])("tells the member why the database refused (%o)", async (error, status, code, message) => {
@@ -1294,6 +1295,15 @@ describe("My slots", () => {
     limit: 4,
     limit_ends_at: null,
   };
+  it("reads the online payment limit, refusing an unexpected shape", async () => {
+    rpc.mockResolvedValueOnce({ data: { online_max_cents: 130000 }, error: null });
+    expect(await readFoundationPaymentLimits(api)).toEqual({ onlineMaxCents: 130000 });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("get_payment_limits", {});
+    rpc.mockResolvedValueOnce({ data: { online_max_cents: 0 }, error: null });
+    await expect(readFoundationPaymentLimits(api)).rejects.toThrow();
+    rpc.mockResolvedValueOnce({ data: { online_max_cents: 130000, extra: 1 }, error: null });
+    await expect(readFoundationPaymentLimits(api)).rejects.toThrow();
+  });
   it("reads the member's slots, their renewals and counts (v2)", async () => {
     rpc.mockResolvedValueOnce({ data: { slots: [slot], individual }, error: null });
     expect(await readFoundationMySlots(api)).toEqual({ slots: [slot], individual });

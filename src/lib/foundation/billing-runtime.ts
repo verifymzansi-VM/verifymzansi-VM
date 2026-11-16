@@ -45,7 +45,8 @@ type BillingRpcName =
   | "start_checkout"
   | "start_slot_checkout"
   | "start_slot_renewal_checkout"
-  | "get_my_slots_v2";
+  | "get_my_slots_v2"
+  | "get_payment_limits";
 type BillingRpc = {
   rpc: (
     name: BillingRpcName,
@@ -182,7 +183,7 @@ const SLOT_CHECKOUT_REFUSALS: Readonly<
   ],
   PT413: [
     400,
-    "Orders above R10,000 are paid by invoice. Email billing@verifymzansi.com to ask for one.",
+    "This total is more than Ozow accepts in one payment. Get an invoice instead and pay it by bank transfer.",
     "INVOICE_REQUIRED",
   ],
   PT428: [409, "The price changed. Check the total and try again.", "PRICE_CHANGED"],
@@ -202,6 +203,11 @@ const RENEWAL_CHECKOUT_REFUSALS: Readonly<
     404,
     "This slot cannot be renewed: it has ended or is not yours. Buy a new slot instead.",
     "SLOT_UNAVAILABLE",
+  ],
+  PT413: [
+    400,
+    "This total is more than Ozow accepts in one payment. Renew fewer slots now and the rest in a second payment.",
+    "ONLINE_LIMIT_EXCEEDED",
   ],
   PT429: [
     409,
@@ -323,6 +329,19 @@ export async function readFoundationMySlots(
 ): Promise<FoundationMySlots> {
   return mySlotsSchema.parse(await command(api, "get_my_slots_v2"));
 }
+const paymentLimitsSchema = z.strictObject({
+  online_max_cents: z.number().int().positive().max(100_000_000),
+});
+/** The most one online (Ozow) payment may be, in cents: the database's one
+ * setting (api.get_payment_limits, 20261116211438_online_payment_limit.sql).
+ * Above it, a new order is paid by invoice and bank transfer, a renewal is
+ * split, and an invoice is paid by bank transfer only. */
+export async function readFoundationPaymentLimits(
+  api: FoundationAuthenticatedApi
+): Promise<{ onlineMaxCents: number }> {
+  const limits = paymentLimitsSchema.parse(await command(api, "get_payment_limits"));
+  return { onlineMaxCents: limits.online_max_cents };
+}
 export async function readFoundationPayment(
   api: FoundationAuthenticatedApi,
   paymentId: string
@@ -427,7 +446,8 @@ const slotOrderSchema = z.strictObject({
 });
 
 /** SQL owns the price (slot price x slots), the consent record, the ID review,
- * the R10,000 online limit and the person's slot limit; a total other than the
+ * the online payment limit (the most Ozow accepts in one payment) and the
+ * person's slot limit; a total other than the
  * one shown is refused, so the price shown is the price charged. */
 export async function startFoundationSlotCheckout(
   api: FoundationAuthenticatedApi,
@@ -470,7 +490,7 @@ const slotRenewalSchema = z.strictObject({
 
 /** SQL owns which slots may be renewed (the member's own, still running, from
  * 14 days before they end), the price, the consent record, the ID review, the
- * R10,000 online limit and the person's limit; each renewal starts when its
+ * online payment limit and the person's limit; each renewal starts when its
  * slot's current days end. */
 export async function startFoundationSlotRenewalCheckout(
   api: FoundationAuthenticatedApi,

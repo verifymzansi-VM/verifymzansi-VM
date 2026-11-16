@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   AlertCircle,
   CalendarClock,
+  FileText,
   Loader2,
   LockKeyhole,
   Minus,
@@ -18,11 +19,11 @@ import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { getFriendlyCheckoutError } from "@/lib/billing/checkout-copy";
 import { formatDurationDays, formatPlanPrice } from "@/lib/constants/pricing";
 import {
-  BILLING_EMAIL,
   COOLING_OFF_CONSENT,
-  ONLINE_ORDER_LIMIT_CENTS,
   RENEWAL_CANCEL_HREF,
   RENEWAL_WINDOW_DAYS,
+  aboveOnlineLimit,
+  invoiceRequestHref,
   renewalConsent,
   slotOrderTotalCents,
   slotsAvailable,
@@ -51,6 +52,9 @@ export interface CheckoutSummary {
   /** Renewing early (P3): the slots to renew, each starting when its current
    * days end; null when the member's slots could not be read. */
   renewal?: RenewalSlot[] | null;
+  /** The most one online (Ozow) payment may be, in cents; null when unknown
+   * (signed out, or it could not be read): the database still applies it. */
+  onlineMaxCents?: number | null;
 }
 
 /** One slot on the renewal checkout: its new days start at `startsAt`. */
@@ -65,7 +69,7 @@ const MAX_SLOTS_PER_ORDER = 25;
 /** Without the member's count the page offers the standard limit. */
 const STANDARD_SLOT_LIMIT = 4;
 
-type SlotBlock = "id_review" | "limit" | "invoice";
+type SlotBlock = "id_review" | "limit" | "online_max";
 
 interface PendingPayment {
   id: string;
@@ -92,9 +96,15 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 function SlotBlockNotice({
   block,
   status,
+  onlineMaxCents,
+  renewing,
+  invoiceHref,
 }: {
   block: SlotBlock;
   status: SlotCheckoutStatus | null;
+  onlineMaxCents: number | null;
+  renewing: boolean;
+  invoiceHref: string;
 }) {
   return (
     <div
@@ -121,15 +131,68 @@ function SlotBlockNotice({
             <Link href="/dashboard/slots">My slots</Link>
           </Button>
         </>
+      ) : renewing ? (
+        <p>
+          {`Ozow takes payments of up to ${formatPlanPrice(onlineMaxCents ?? 0)}. Untick some slots and renew them in a second payment.`}
+        </p>
+      ) : (
+        <>
+          <p>
+            {`Ozow takes payments of up to ${formatPlanPrice(onlineMaxCents ?? 0)}. For this order, get an invoice and pay it by bank transfer.`}
+          </p>
+          <Button asChild variant="trust-verified" className="h-11 rounded-full">
+            <a href={invoiceHref}>
+              <FileText aria-hidden="true" className="h-4 w-4" />
+              Email us for the invoice
+            </a>
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Send it from your account&apos;s email address.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Below the pay button, for buyers who need an invoice first (owner's decision
+ * of 16 November 2026): closed, one small line; opened, how it works and the
+ * email that asks for it. The invoice is then paid with Pay now or by bank
+ * transfer. Wording awaiting the owner's approval.
+ */
+function InvoiceOption({ href }: { href: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div data-testid="invoice-option" className="text-center text-sm text-muted-foreground">
+      {open ? (
+        <div className="flex flex-col gap-2.5 rounded-xl border border-border/80 bg-muted/40 p-3.5 text-left leading-6 text-foreground/80">
+          <p>
+            We email you an invoice for this order. Pay it with Pay now (Ozow) or by bank transfer;
+            your slots start once it is paid.
+          </p>
+          <Button asChild variant="outline" className="h-11 rounded-full">
+            <a href={href}>
+              <FileText aria-hidden="true" className="h-4 w-4" />
+              Email us for the invoice
+            </a>
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Send it from your account&apos;s email address. You add your business details on the
+            invoice.
+          </p>
+        </div>
       ) : (
         <p>
-          Orders above R10,000 are paid by invoice.{" "}
-          <a
-            href={`mailto:${BILLING_EMAIL}?subject=Invoice%20for%20slots`}
-            className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
+          Need an invoice before you pay?{" "}
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen(true)}
+            className="inline-flex min-h-11 items-center font-medium text-brand-green-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-gold-300 sm:min-h-0"
           >
-            Ask for an invoice
-          </a>
+            Get an invoice
+          </button>
         </p>
       )}
     </div>
@@ -270,9 +333,19 @@ export function CheckoutConfirm({
       ? "id_review"
       : allHeld && !renewing
         ? "limit"
-        : totalCents > ONLINE_ORDER_LIMIT_CENTS
-          ? "invoice"
+        : aboveOnlineLimit(totalCents, summary?.onlineMaxCents)
+          ? "online_max"
           : null;
+  // Only an order of new slots can be invoiced first (staff issue invoices
+  // for new slots); renewals are paid online.
+  const invoiceHref =
+    term && !renewing
+      ? invoiceRequestHref({
+          slots,
+          durationLabel: formatDurationDays(term.durationDays),
+          totalLabel: formatPlanPrice(totalCents),
+        })
+      : null;
   const checkoutHref = renewing
     ? `/billing/checkout?plan=${term?.planId ?? ""}&renew=${renewing.map((slot) => slot.id).join(",") || "all"}`
     : `/billing/checkout?plan=${term?.planId ?? summary?.planId ?? ""}`;
@@ -609,7 +682,13 @@ export function CheckoutConfirm({
             <div className="sticky bottom-0 flex flex-col gap-3 rounded-b-3xl border-t border-border/60 bg-card/95 px-5 pb-4 pt-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:px-7 sm:pb-7 sm:pt-5 sm:backdrop-blur-none lg:col-start-1 lg:row-start-2 lg:pt-6">
               {errorBlock}
               {slotBlock ? (
-                <SlotBlockNotice block={slotBlock} status={summary.slotStatus ?? null} />
+                <SlotBlockNotice
+                  block={slotBlock}
+                  status={summary.slotStatus ?? null}
+                  onlineMaxCents={summary.onlineMaxCents ?? null}
+                  renewing={renewing !== null}
+                  invoiceHref={invoiceHref ?? ""}
+                />
               ) : term ? (
                 <div className="flex items-start gap-3 rounded-xl border border-border/80 bg-muted/40 p-3.5">
                   <input
@@ -678,41 +757,46 @@ export function CheckoutConfirm({
                 </div>
               ) : null}
               <div className="flex flex-col gap-1 sm:gap-2">
-                <Button
-                  variant="trust-verified"
-                  size="lg"
-                  className="h-12 rounded-full"
-                  disabled={
-                    state !== "idle" ||
-                    slotBlock !== null ||
-                    (term !== null && !consent) ||
-                    slots < 1
-                  }
-                  onClick={pay}
-                >
-                  {state === "idle" ? (
-                    <>
-                      <LockKeyhole aria-hidden="true" className="h-4 w-4" />
-                      {`Pay ${formatPlanPrice(totalCents)} securely`}
-                    </>
-                  ) : (
-                    <>
-                      <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
-                      {state === "redirecting"
-                        ? "Redirecting to Ozow…"
-                        : "Opening secure checkout…"}
-                    </>
-                  )}
-                </Button>
+                {slotBlock === "online_max" && !renewing ? null : (
+                  <Button
+                    variant="trust-verified"
+                    size="lg"
+                    className="h-12 rounded-full"
+                    disabled={
+                      state !== "idle" ||
+                      slotBlock !== null ||
+                      (term !== null && !consent) ||
+                      slots < 1
+                    }
+                    onClick={pay}
+                  >
+                    {state === "idle" ? (
+                      <>
+                        <LockKeyhole aria-hidden="true" className="h-4 w-4" />
+                        {`Pay ${formatPlanPrice(totalCents)} securely`}
+                      </>
+                    ) : (
+                      <>
+                        <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                        {state === "redirecting"
+                          ? "Redirecting to Ozow…"
+                          : "Opening secure checkout…"}
+                      </>
+                    )}
+                  </Button>
+                )}
+                {invoiceHref && slotBlock === null ? <InvoiceOption href={invoiceHref} /> : null}
                 <Button asChild variant="ghost" className="h-11 rounded-full">
                   <Link href={backHref}>{backLabel}</Link>
                 </Button>
               </div>
               <ul className="hidden space-y-2 text-xs leading-5 text-muted-foreground sm:block">
-                <li className="flex gap-2.5">
-                  <LockKeyhole aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                  You&apos;ll pay on Ozow&apos;s secure page.
-                </li>
+                {slotBlock === "online_max" && !renewing ? null : (
+                  <li className="flex gap-2.5">
+                    <LockKeyhole aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                    You&apos;ll pay on Ozow&apos;s secure page.
+                  </li>
+                )}
                 <li className="flex gap-2.5">
                   <CalendarClock aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
                   {renewing

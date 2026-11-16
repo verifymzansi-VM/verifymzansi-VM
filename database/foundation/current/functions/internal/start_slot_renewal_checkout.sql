@@ -62,8 +62,10 @@ begin
       using errcode='PT409', detail='renewal_not_open';
   end if;
   total := plan.price_cents * slots;
-  if total > 1000000 then
-    raise exception 'orders above R10,000 are paid by invoice' using errcode='PT413';
+  -- Above the most Ozow accepts in one payment: renew fewer slots at a time.
+  if total > internal.online_payment_max_cents() then
+    raise exception 'this renewal is above the online payment limit of % cents; renew fewer slots in one payment',
+      internal.online_payment_max_cents() using errcode='PT413', detail='online_payment_above_limit';
   end if;
   if total <> p_expected_total_cents then
     raise exception 'the price changed; check the total again' using errcode='PT428';

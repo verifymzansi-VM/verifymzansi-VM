@@ -90,6 +90,23 @@ describe("paying an invoice", () => {
     expect(screen.queryByRole("button", { name: /Pay now|Continue payment/ })).toBeNull();
   });
 
+  it("offers only a bank transfer above Ozow's maximum, and Pay now at it", () => {
+    const { unmount } = render(
+      <InvoicePayPanel {...props} totalCents={165600} onlineMaxCents={130000} />
+    );
+    expect(screen.getByTestId("invoice-bank-transfer-only").textContent).toMatch(
+      /^Ozow takes payments of up to R1.300, so pay this invoice by bank transfer\./
+    );
+    expect(screen.queryByRole("button", { name: "Pay now" })).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    // Billing details can still be changed for the invoice.
+    expect(screen.getByRole("button", { name: "Change billing details" })).toBeInTheDocument();
+    unmount();
+    render(<InvoicePayPanel {...props} totalCents={130000} onlineMaxCents={130000} />);
+    expect(screen.getByRole("button", { name: "Pay now" })).toBeInTheDocument();
+    expect(screen.queryByTestId("invoice-bank-transfer-only")).toBeNull();
+  });
+
   it("offers to continue an open payment, and only printing once paid or cancelled", () => {
     const { rerender } = render(<InvoicePayPanel {...props} checkoutOpen />);
     expect(screen.getByRole("button", { name: "Continue payment" })).toBeInTheDocument();

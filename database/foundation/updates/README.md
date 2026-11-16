@@ -1928,6 +1928,104 @@ tax years after confirmation, keeps a recent transfer, and no delete works
 outside the job; the audit trail; the grants; and that the rollback refuses once
 an invoice was issued.
 
+## Online payments up to Ozow's maximum, invoices at any amount, and posting-v5, 16 November 2026
+
+Two updates, applied in this order. Both are pending. Owner's decisions of 16
+November 2026: remove the R10,000 online limit; checkout offers Ozow and, below
+it, an invoice first at every amount; the only online limit left is the most
+Ozow accepts in one payment on our site (its "Maximum Transaction Amount",
+R1,300 for site VER-VER-020 today; the owner has asked Ozow to raise it), held
+in one setting; the Terms say so.
+
+### 1. The limit and posting-v5 published: `20261116211438_online_payment_limit.sql`
+
+It needs `20261114093742_renew_slots_early.sql` (the three function bodies it
+replaces are checked by md5 and it refuses with 55000 otherwise) and
+`posting-v4` current. It only adds: no API command, argument or grant is removed
+or changed.
+
+- **One setting.** `internal.online_payment_max_cents()` returns 130000 cents
+  (R1,300). When Ozow changes our site's maximum, a new reviewed update replaces
+  only this function; the checkout, the renewal checkout, invoice "Pay now" and
+  the website follow it.
+- **Checkout and renewal.** `internal.start_slot_checkout` and
+  `internal.start_slot_renewal_checkout` (full bodies) refuse a total above the
+  setting with PT413, detail `online_payment_above_limit` (before: above
+  1,000,000 cents, R10,000, without a detail). A total exactly at the setting is
+  accepted. Nothing else in them changes.
+- **Invoice "Pay now".** `internal.start_invoice_payment` (full body) refuses an
+  invoice whose total is above the setting with the same PT413
+  `online_payment_above_limit`, before writing anything, so it is paid by bank
+  transfer only (staff record it and a second staff member confirms it, as
+  before). Before, any invoice total was sent to Ozow, which refuses amounts
+  above its maximum. Staff can still issue invoices up to R50,000.
+- **New member read** `api.get_payment_limits()` (authenticated, a signed-in
+  account with current access and a live session): `{"online_max_cents"}`. The
+  checkout uses it to offer only the invoice above the limit (and, on a renewal,
+  to ask for fewer slots per payment); the invoice page offers only bank
+  transfer above it.
+- **posting-v5 published, not current.** It inserts the `posting-v5` row
+  (`src/lib/legal/terms-documents/posting-v5.json`, canonical hash
+  `xXIllN5MmRH6TZR8Cdh3DqqmZI9Nwomh04vExnO5K4Y`) and checks that the current
+  version did not change. posting-v5 is posting-v4 with "Paying, VAT & invoices"
+  rewritten (online payment at any amount up to the payment provider's maximum;
+  an invoice first on request at any amount, paid with Pay now or by EFT; above
+  the maximum an invoice paid by EFT; the cooling-off box before invoice Pay
+  now) and one refund sentence ("by EFT for a payment made by EFT").
+
+**Order.** Apply after the merge and **before** the website release is deployed.
+The website deployed before it shows the R10,000 rule; with the update applied,
+it refuses orders above R1,300 with its old "paid by invoice" message (Ozow
+refuses those amounts today anyway) and never calls the new read.
+
+**Applying.** Run `../preflight/20261116211438_online_payment_limit.check.sql`
+unchanged in the SQL editor (read only). Continue only if the result is the
+single summary row starting "online payment limit: update not applied"; it also
+counts payments pending at Ozow and unpaid invoices above R1,300. Run the update
+(it waits at most 5 seconds for locks and stops without changing anything if
+they are busy; run it again), then the preflight again: "already applied;
+current posting terms: posting-v4; posting-v5 published".
+
+**Rollback.** `../rollback/20261116211438_online_payment_limit.down.sql`
+restores the three earlier bodies and drops the three new functions; the
+posting-v5 row stays (published terms are immutable). It refuses while
+posting-v5 is current and when a replaced body is neither this update's nor the
+earlier one. Revert the website release first: it calls the new read.
+
+### 2. Make posting-v5 current: `20261116211439_switch_posting_terms_v5.sql`
+
+It changes only `private.posting_terms_current` (posting-v4 to posting-v5) and
+refuses (55000) unless posting-v5 is published with the hash above and
+posting-v4 or posting-v5 is current. Every member then accepts posting-v5 once
+before their next submission or edit, and new payments record posting-v5 with
+their cooling-off consent. Run again, it changes nothing.
+
+**Order.** Apply **after** the website release that contains `posting-v5.json`
+is deployed. That release serves posting-v4 or posting-v5, whichever is current;
+the earlier website knows no posting-v5 and would refuse the current terms (no
+post could be submitted or edited). So: merge; apply update 1; deploy; apply
+update 2. Preflight:
+`../preflight/20261116211439_switch_posting_terms_v5.check.sql`, expecting
+"current posting-v4 (update not applied); posting-v5 published" before and
+"current posting-v5 (update already applied)" after. Open `/terms`: "Paying, VAT
+& invoices" shows the new text.
+
+**Rollback.** `../rollback/20261116211439_switch_posting_terms_v5.down.sql`
+makes posting-v4 current again (acceptances of posting-v5 stay as history). The
+website release can stay deployed. Never roll back the website alone while
+posting-v5 is current.
+
+**Tests.** `scripts/test-foundation-online-payment-limit.mjs` (in
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflights are read only and report each state; the update refuses a changed
+body; after it an order of exactly R1,300 is accepted online and one above is
+refused (PT413 `online_payment_above_limit`), for new slots and renewals;
+invoice Pay now is refused above the limit without writing a payment, and
+allowed at or below it; `api.get_payment_limits` answers members and refuses
+`anon`; posting-v5 is published but not current; the switch makes it current and
+members accept it once; both rollbacks restore the earlier state and re-applying
+returns the same schema fingerprint.
+
 ## Individual slots at R69, 12 November 2026
 
 `20261113002421_individual_slots_r69.sql` is not applied yet. It was first
@@ -3694,5 +3792,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   "update not applied", after "slot renewals: already applied; renewal payment
   lines: 0; renewals issued: 0; reminders queued: 0"; production fingerprint
   after it matched the full replay (except the known schema grant difference)
+- `20261116211438_online_payment_limit.sql`: pending
+- `20261116211439_switch_posting_terms_v5.sql`: pending
 
 <!-- applied-register:end -->

@@ -155,6 +155,13 @@ const MEMBER_REFUSALS: ReadonlyMap<
   ],
   ["invoice_amount_mismatch", [409, "The invoice total changed. Reload the page."]],
   [
+    "online_payment_above_limit",
+    [
+      409,
+      "This invoice is more than Ozow accepts in one payment. Pay it by bank transfer, using the bank details and reference on the invoice.",
+    ],
+  ],
+  [
     "invoice_plan_unavailable",
     [409, `This invoice can no longer be paid online. Email ${BILLING_EMAIL} for a new one.`],
   ],

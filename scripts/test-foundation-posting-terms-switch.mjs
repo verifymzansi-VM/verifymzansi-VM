@@ -275,8 +275,12 @@ try {
   const later = steps.slice(index + 1);
   if (later.length) {
     applySteps(database, later);
-    await check("later updates keep posting-v4 current", () => {
-      assert.deepEqual(currentTerms(), V4);
+    await check("later updates keep posting-v4 current until a newer version's switch", () => {
+      // 20261116211439_switch_posting_terms_v5.sql makes posting-v5 current.
+      const terms = currentTerms();
+      if (terms.version === "posting-v5")
+        assert.equal(terms.document_hash, CATALOGUE.versions["posting-v5"]);
+      else assert.deepEqual(terms, V4);
     });
   }
 } catch (error) {
