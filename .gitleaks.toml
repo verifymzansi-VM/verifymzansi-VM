@@ -27,6 +27,13 @@ paths = ['''(^|/)wrangler\.toml$''']
 regexes = ['''^sb_publishable_0nTWArCyTVta1nDx_U3u1Q_YOdMfZpi$''']
 
 [[allowlists]]
+description = "Staging Supabase publishable key (project vgplszqfcmdskwseoyam, M0.15b): verified public browser/API key of the separate staging copy, never a server secret"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''(^|/)(wrangler\.toml|\.github/workflows/(deploy|staging-keepalive)\.yml)$''']
+regexes = ['''^sb_publishable_mKDEhmQ-Ik-DIxdKVxVang_IA5aVLD1$''']
+
+[[allowlists]]
 description = "Deterministic test fixtures: obviously fake keys (counting hex, *_test_*, placeholder JWT bodies) used to exercise validators and the repo's own secret scanner"
 condition = "AND"
 paths = [
