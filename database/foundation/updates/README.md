@@ -1711,8 +1711,9 @@ and that the rollback refuses once a slot was renewed.
 
 ## Multi-listing packages, part one (sales off), 14 November 2026
 
-`20261114154823_slot_packages.sql` (roadmap P4a; the owner's decisions of 14
-November 2026 on the multi-listing gap review) is **pending**. It needs
+`20261114154823_slot_packages.sql` was applied on 16 November 2026 at 21:43 UTC
+with the owner's approval (roadmap P4a; the owner's decisions of 14 November
+2026 on the multi-listing gap review). It needs
 `20261114093742_renew_slots_early.sql` and the bodies and post funding views it
 builds on with their reviewed bodies and definitions, and refuses (55000)
 otherwise. It only adds: no API command, argument or grant is removed or
@@ -3930,7 +3931,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   "update not applied", after "slot renewals: already applied; renewal payment
   lines: 0; renewals issued: 0; reminders queued: 0"; production fingerprint
   after it matched the full replay (except the known schema grant difference)
-- `20261114154823_slot_packages.sql`: pending; apply before the pull request
-  that uses it is merged (roadmap P4a); sales stay switched off
+- `20261114154823_slot_packages.sql`: applied 2026-11-16 21:43 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file (sha256 starting f4976af048638d5c, files from
+  raw GitHub at 6b072673) before the pull request was merged; preflight before
+  "update not applied", after "slot packages: already applied; on sale: no;
+  packages: 0; package payments: 0"; production fingerprint after it matched the
+  full replay (except the known schema grant difference); sales stay switched
+  off
 
 <!-- applied-register:end -->
