@@ -7,7 +7,11 @@ CREATE OR REPLACE FUNCTION internal.slot_package_grant_revoked()
  SET search_path TO 'pg_catalog'
 AS $function$
 begin
-  perform internal.slot_package_release_dates(new.owner_id);
+  begin
+    perform internal.slot_package_release_dates(new.owner_id);
+  exception when others then
+    raise warning 'slot package search documents left to the sweep (%)', sqlstate;
+  end;
   return null;
 end;
 $function$;

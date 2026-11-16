@@ -12,17 +12,16 @@ begin
     select a.post_id, internal.slot_chain_paid_end(x.id) as paid_end
     from private.post_activations a join private.entitlements x on x.id = a.entitlement_id
     where a.owner_id = p_owner and a.released_at is null and a.post_id is not null
-      and x.package_id is null and x.status = 'active' and x.ends_at <= statement_timestamp()
+      and x.package_id is null and x.source = 'retail_paid' and x.status = 'active'
+      and x.ends_at <= statement_timestamp()
       and coalesce(internal.slot_chain_end(x.id) <= statement_timestamp(), true)
-  ), docs as (
-    update private.post_search_documents s set visible_until = r.paid_end from r
-    where s.post_id = r.post_id and s.kind <> 'event' and r.paid_end is not null
-      and s.visible_until > statement_timestamp()
-    returning s.post_id
+  ), locked as (
+    select s.post_id, r.paid_end from private.post_search_documents s join r on r.post_id = s.post_id
+    where s.kind <> 'event' and r.paid_end is not null and s.visible_until > statement_timestamp()
+    for update of s skip locked
   )
-  update private.posts p set visible_until = r.paid_end from r
-  where p.id = r.post_id and p.kind <> 'event' and r.paid_end is not null
-    and p.visible_until > statement_timestamp();
+  update private.post_search_documents s set visible_until = l.paid_end from locked l
+  where s.post_id = l.post_id;
   get diagnostics changed = row_count;
   return changed;
 end;

@@ -53,11 +53,9 @@ begin
     if chain is not null then
       perform internal.refresh_slot_chain_documents(chain);
     end if;
-    if pkg is not null then
-      -- Posts in Individual slots that end before the package stay in search
-      -- when the package takes them (E3).
-      perform internal.refresh_package_documents(pkg);
-    end if;
+    -- A package touches no post here (no post check may stop a payment being
+    -- recorded): the minute sweep moves the search documents of the posts it
+    -- takes (internal.refresh_package_documents).
   end loop;
   return made;
 end;

@@ -1796,24 +1796,47 @@ changed. **Nothing can be bought after it is applied**: the sales switch is off.
   search document of a post to the package's end only when the package takes it,
   or will take it when its slot ends in the next 2 minutes (before the next
   sweep), so it stays in search and on its page at the boundary
-  (`internal.refresh_package_documents`). Posts the package no longer takes (it
-  filled up, was refunded or charged back) get their own end dates back at once
-  (`internal.slot_package_release_dates`, run by the sweep and by the new
-  trigger `entitlements_package_revoked`), so the lifecycle job ends them on
-  their real date, never on a package's end. The sweep `api.run_slot_renewals`
-  (full body, three new counts in its reply) then moves such posts into the
-  package (the old activation released as `entitlement_ended`, the new one
-  `continued`). It reads by date: the Individual slots that ended in the last 7
-  days or end in the next 2 minutes and still hold a post, and the packages in
-  their last 7 days; at most `p_limit` packages of each a run. A post the
-  package cannot take follows the normal 3-day grace. The free first post, staff
-  grants and sponsored places are not moved.
+  (`internal.refresh_package_documents`). The documents of posts no package
+  takes any more (it filled up, was refunded or charged back) go back to their
+  own end dates (`internal.slot_package_release_dates`, run by the sweep and,
+  inside a refund or chargeback, by the new trigger
+  `entitlements_package_revoked`), so the lifecycle job ends them on their real
+  date, never on a package's end.
+- **No post row is written for a package by a payment, a reversal or the
+  sweep**, so no post check (a post saved under rules that have since changed,
+  for example) can stop money being recorded or the sweep running. Delivery
+  touches no post at all; the revocation trigger writes search documents only,
+  skips a document another transaction holds and never stops the reversal; a
+  post's own end date is left to the lifecycle job, which brings it up to the
+  post's funding or expires the post.
+- **The sweep.** `api.run_slot_renewals` (full body, four new counts in its
+  reply) moves posts the package takes into it (the old activation released as
+  `entitlement_ended`, the new one `continued`, the search document moved to the
+  package's end). It reads from the packages that have not reached their end
+  (refunded ones too, `entitlements_package_ends_idx`) whose owner still holds a
+  post in a paid Individual slot that has ended, however long ago, or ends in
+  the next 2 minutes (`post_activations_owner_held_idx`); the most recent slot
+  end first, at most `p_limit` packages a run. Each post moves in its own
+  subtransaction: a post that cannot move is counted (`package_skipped`), keeps
+  its place in the order and is tried again on the next run, and the others go
+  on. A post the package cannot take follows the normal 3-day grace. The free
+  first post, staff grants and sponsored places are not moved.
+- **Locks.** The sweep never waits for a lock it takes: the owner's fence is
+  tried, posts are skipped when busy, and slots, a package's grants and row and
+  search documents are taken without waiting (the loop that moves posts into a
+  renewed period now also takes the period without waiting); whatever is busy is
+  left to the next run. The revocation trigger does not wait either. A
+  transaction that never waits cannot be part of a deadlock, so the sweep and a
+  reversal cannot deadlock with `api.activate_post` (post, then slots, then the
+  package) or the lifecycle job (post, then search document).
 - **Going below 5 (decision 11).** In a package's last 7 days the same sweep
-  moves its posts into free places of the same owner's Individual slots
-  (`internal.individual_free_places`), the most recently approved first
-  (`internal.slot_package_leaving`), as continued activations (not a post going
-  live), so at the package's end they are in their Individual slots, not the
-  grace. An Individual slot bought in the package's very last minute may miss
+  moves its posts into free places of the same owner's Individual slots whose
+  run lasts beyond the package's end (`internal.individual_free_places`), the
+  most recently approved first (`internal.slot_package_leaving`), as continued
+  activations (not a post going live), so at the package's end they are in their
+  Individual slots, not the grace. A post one slot cannot carry (another area,
+  more photos) tries the owner's other slots, the longest-running first, at
+  most 20. An Individual slot bought in the package's very last minute may miss
   the sweep; its posts then follow the grace.
 - **Team.** `internal.manage_plan_member` (full body) never adds a member to a
   package's grant, and `internal.get_my_frontend_post_manager` (full body) does
@@ -1837,15 +1860,15 @@ changed. **Nothing can be bought after it is applied**: the sales switch is off.
   before the switch goes on).
 - **Cost.** The package reads go from the owner (the posts they hold, through
   the new partial index `post_activations_owner_held_idx`) or the package
-  (`entitlements_package_idx`); the sweep reads by date
-  (`entitlements_active_ends_idx`, `entitlements_package_ends_idx`). The public
-  view and search do no package work for a post whose own period still runs, so
-  they cost what they did; a post whose Individual slot has just ended costs
-  about 1 ms more until the sweep moves it in. The helpers read on every such
-  post are PL/pgSQL (`internal.slot_package_now`,
-  `internal.slot_package_waiting`, `internal.slot_package_takeover_end`), so
-  their plans are kept between calls. Measured on 20,000 live posts in the pull
-  request.
+  (`entitlements_package_idx`); the sweep reads the packages by end date
+  (`entitlements_package_ends_idx`) and their owners' posts
+  (`post_activations_owner_held_idx`). The public view and search do no package
+  work for a post whose own period still runs, so they cost what they did; a
+  post whose Individual slot has just ended costs about 1 ms more until the
+  sweep moves it in. The helpers read on every such post are PL/pgSQL
+  (`internal.slot_package_now`, `internal.slot_package_waiting`,
+  `internal.slot_package_takeover_end`), so their plans are kept between calls.
+  Measured on 20,000 live posts in the pull request.
 
 **Order: apply first, then merge.** The website release from the same pull
 request calls the new commands (behind the switch) and the deploy preflight
@@ -1911,7 +1934,16 @@ Individual slot and the sweep moves the most recently approved package post into
 the free place (continued), which stays live after the package ends while the
 others follow the grace; retention removes a package with its last grant and the
 privacy export lists packages; the post manager lists no package grant among
-plans with administrators. And the rollback refuses once a package was bought.
+plans with administrators. Second review: with a post saved under rules that
+have since changed, a package refund, an Ozow settle of a package and its
+chargeback all go through, writing no post row (the documents go back, the
+lifecycle job then expires the posts); the sweep moves such a post, goes on when
+another post's move fails (and moves it on the next run), finds a waiting post
+whose slot ended 8 days earlier, and tries the owner's next Individual slot when
+the first cannot carry the post; while another transaction holds a package's row
+the sweep does not wait and leaves it to the next run, and while another holds a
+post's search document a refund does not wait and the sweep corrects the
+document afterwards. And the rollback refuses once a package was bought.
 
 ## Customer invoices with an Ozow "Pay now" link, 14 November 2026
 

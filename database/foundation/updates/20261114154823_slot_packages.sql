@@ -70,18 +70,25 @@
 --    runs, and the posts waiting take free places in the order their slots
 --    ended. Only the search documents of posts the package takes (or will
 --    take when their slot ends in the next 2 minutes) end with the package
---    (internal.refresh_package_documents); posts it no longer takes (it
---    filled up, was refunded or charged back) go back to their own dates
---    (internal.slot_package_release_dates, also run by the trigger
---    entitlements_package_revoked), so the lifecycle job ends them on their
---    real date. internal.run_slot_renewals (full body; read by date, at most
---    p_limit packages a run) then moves such posts into the package
+--    (internal.refresh_package_documents, run by the minute sweep); the
+--    documents of posts no package takes any more (it filled up, was refunded
+--    or charged back) go back to their own dates
+--    (internal.slot_package_release_dates, also run inside a refund or
+--    chargeback by the trigger entitlements_package_revoked), so the lifecycle
+--    job ends them on their real date. Both write search documents only and
+--    never wait for a lock: a payment, a reversal or the sweep writes no post
+--    row for a package, so no post check can stop money being recorded.
+--    internal.run_slot_renewals (full body: from the packages that have not
+--    reached their end whose owner still holds a post in an ended Individual
+--    slot, at most p_limit a run; it never waits for a lock, and each post
+--    moves in its own subtransaction) then moves such posts into the package
 --    (continued, so not a post going live). A post the package cannot take
 --    follows the normal 3-day grace.
 --    Decision 11 (going below 5): in a package's last 7 days the same sweep
---    moves its posts into free Individual places of the same owner (the most
---    recently approved first; continued), so at its end they are in their
---    Individual slots, not the grace.
+--    moves its posts into free places of the same owner's Individual slots
+--    that run beyond the package's end (the most recently approved first,
+--    trying up to 20 slots for each; continued), so at its end they are in
+--    their Individual slots, not the grace.
 -- 8. api.manage_plan_member (full body) never adds a member to a package's
 --    grant: the team belongs to the package (P4c).
 -- 9. New reads: api.get_slot_package_offer() (the website's server only:
@@ -138,7 +145,7 @@ begin
         'internal.activate_post(uuid) bc99d728b6a6e4465b87b0fd607aeb08',
         'internal.activate_post(uuid) 114605168a14a5cf9b7619f23d3d198e',
         'internal.issue_slot_line_entitlements(uuid) 85ae00308b9abb35c6c13bc67821d39d',
-        'internal.issue_slot_line_entitlements(uuid) e4041c30d7297bc4b4da74791701627d',
+        'internal.issue_slot_line_entitlements(uuid) 3d167ce1ce2bcc4a84480b8ed7888e0a',
         'internal.apply_provider_event(jsonb) 19d5c2eb7e1a75210bc2b77d2cbb961b',
         'internal.apply_provider_event(jsonb) 7f33edbb6bcafaecb519eef80c9b3633',
         'internal.activate_staff_paid_payment(uuid,text) 03c8a3314cd99f02fb465a391ca2942f',
@@ -148,7 +155,7 @@ begin
         'internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean) 94de32ca80099d59db23aed33c6e7ee2',
         'internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean) e014633dd37ebb3fa212fc2944dd7ed6',
         'internal.run_slot_renewals(integer) db9fd3d09dd015c5de40da964d6f8825',
-        'internal.run_slot_renewals(integer) 6883b7f62518b33caaf127d300ea0864',
+        'internal.run_slot_renewals(integer) 91941c5d801ac26cb0a8fc98051cd04b',
         'internal.manage_plan_member(uuid,text,text) 39d6eba6a1db025d4ae0655d34870f96',
         'internal.manage_plan_member(uuid,text,text) 285ce1cc4dc56a1e262811362a345da8',
         'internal.claim_checkout_request(uuid,uuid) d29afcd49f72e712602914d6ecb4d8f5',
@@ -353,9 +360,10 @@ do $$begin
   end if;
 end$$;
 create index if not exists entitlements_package_idx on private.entitlements (package_id) where package_id is not null;
--- The packages running now (the sweep), by end date.
+-- The packages that have not reached their end (the sweep), by end date,
+-- refunded ones included (their posts' search documents go back).
 create index if not exists entitlements_package_ends_idx on private.entitlements (ends_at)
-  where package_id is not null and status = 'active';
+  where package_id is not null;
 -- The posts a member holds now (a package counts the posts of its owner's
 -- ended Individual slots it takes).
 create index if not exists post_activations_owner_held_idx on private.post_activations (owner_id)
@@ -570,11 +578,18 @@ $$;
 alter function internal.slot_package_blocks_individual(text,uuid) owner to postgres;
 revoke all on function internal.slot_package_blocks_individual(text,uuid) from public, anon, authenticated, service_role;
 
--- Posts held in the owner's Individual slots whose paid run has ended and that
--- nothing funds any more (a package that is full, refunded or ended, or a
--- changed rank): their end dates go back to the slot's run, so the lifecycle
--- job ends them on their real date, not on a package's end. Returns the
--- number of posts corrected.
+-- The search documents of the posts held in the owner's paid Individual slots
+-- whose paid run has ended and that no package takes any more
+-- (internal.slot_chain_end gives no later end: the package filled up, was
+-- refunded or charged back, or ended, or the account lost access): their end
+-- goes back to the end of the slot's paid run, so search drops them at once and
+-- the lifecycle job, which also reads the documents' ends, expires a live one on
+-- its next run. Search documents only: no post row is written (this runs inside
+-- a refund or chargeback, and no post check may stop money being recorded); a
+-- post's own end date is left to the lifecycle job. A document another
+-- transaction holds is skipped, never waited for: the minute sweep runs this
+-- again for every owner whose package has not reached its end. Returns the
+-- number of documents moved back.
 create or replace function internal.slot_package_release_dates(p_owner uuid)
 returns integer
 language plpgsql
@@ -586,17 +601,16 @@ begin
     select a.post_id, internal.slot_chain_paid_end(x.id) as paid_end
     from private.post_activations a join private.entitlements x on x.id = a.entitlement_id
     where a.owner_id = p_owner and a.released_at is null and a.post_id is not null
-      and x.package_id is null and x.status = 'active' and x.ends_at <= statement_timestamp()
+      and x.package_id is null and x.source = 'retail_paid' and x.status = 'active'
+      and x.ends_at <= statement_timestamp()
       and coalesce(internal.slot_chain_end(x.id) <= statement_timestamp(), true)
-  ), docs as (
-    update private.post_search_documents s set visible_until = r.paid_end from r
-    where s.post_id = r.post_id and s.kind <> 'event' and r.paid_end is not null
-      and s.visible_until > statement_timestamp()
-    returning s.post_id
+  ), locked as (
+    select s.post_id, r.paid_end from private.post_search_documents s join r on r.post_id = s.post_id
+    where s.kind <> 'event' and r.paid_end is not null and s.visible_until > statement_timestamp()
+    for update of s skip locked
   )
-  update private.posts p set visible_until = r.paid_end from r
-  where p.id = r.post_id and p.kind <> 'event' and r.paid_end is not null
-    and p.visible_until > statement_timestamp();
+  update private.post_search_documents s set visible_until = l.paid_end from locked l
+  where s.post_id = l.post_id;
   get diagnostics changed = row_count;
   return changed;
 end;
@@ -604,15 +618,22 @@ $$;
 alter function internal.slot_package_release_dates(uuid) owner to postgres;
 revoke all on function internal.slot_package_release_dates(uuid) from public, anon, authenticated, service_role;
 
--- A package's grant revoked (refund or chargeback): the posts it was taking go
--- back to their own dates at once.
+-- A package's grant revoked (a refund or chargeback): the search documents of
+-- the posts it was taking go back to their own dates at once
+-- (internal.slot_package_release_dates: documents only, never waiting for a
+-- lock). It never stops the reversal: if anything goes wrong here the money is
+-- still recorded, and the minute sweep corrects the documents.
 create or replace function internal.slot_package_grant_revoked()
 returns trigger
 language plpgsql
 set search_path to 'pg_catalog'
 as $$
 begin
-  perform internal.slot_package_release_dates(new.owner_id);
+  begin
+    perform internal.slot_package_release_dates(new.owner_id);
+  exception when others then
+    raise warning 'slot package search documents left to the sweep (%)', sqlstate;
+  end;
   return null;
 end;
 $$;
@@ -623,31 +644,38 @@ create trigger entitlements_package_revoked after update of status on private.en
   for each row when (new.package_id is not null and new.status = 'revoked' and old.status is distinct from 'revoked')
   execute function internal.slot_package_grant_revoked();
 
--- E3: the search documents of the posts the package takes now, or will take
--- when their Individual slot ends in the next 2 minutes (before the next
--- sweep), end with the package, so they stay in search and on their page at
--- the boundary before any job runs. Only those: a post the package will not
--- take keeps its own dates, and posts it no longer takes go back to theirs
--- (internal.slot_package_release_dates). Search and the post page also need
--- the post to be funded at read time (private.public_eligible_posts).
+-- E3: while the package runs, the search documents of the posts it takes now,
+-- or will take when their Individual slot ends in the next 2 minutes (before
+-- the next sweep), end with the package, so they stay in search and on their
+-- page at the boundary before any job runs. Only those: a post the package
+-- will not take keeps its own dates. Then the documents of the owner's posts
+-- no package takes go back to their own dates
+-- (internal.slot_package_release_dates), also once the package was refunded.
+-- Search and the post page also need the post to be funded at read time
+-- (private.public_eligible_posts). Search documents only, and a document
+-- another transaction holds is skipped (the next sweep gets it): only the
+-- minute sweep runs this, never a payment.
 create or replace function internal.refresh_package_documents(p_package uuid)
 returns integer
 language plpgsql
 set search_path to 'pg_catalog'
 as $$
-declare v_owner uuid; v_ends timestamptz; v_free integer; changed integer;
+declare v_owner uuid; v_ends timestamptz; v_free integer; changed integer := 0;
 begin
   select p.owner_id into v_owner from private.slot_packages p where p.id = p_package;
   select k.ends_at, k.places - internal.slot_package_posts(p_package) into v_ends, v_free
     from internal.slot_package_now(v_owner) k where k.package_id = p_package;
-  if v_ends is null then
-    return 0;
+  if v_ends is not null then
+    with locked as (
+      select s.post_id from private.post_search_documents s
+        join internal.slot_package_waiting(p_package, interval '2 minutes') w on w.post_id = s.post_id
+      where w.place_rank <= v_free and s.is_visible and s.kind <> 'event' and s.visible_until < v_ends
+      for update of s skip locked
+    )
+    update private.post_search_documents s set visible_until = v_ends from locked l
+    where s.post_id = l.post_id;
+    get diagnostics changed = row_count;
   end if;
-  update private.post_search_documents s set visible_until = v_ends
-  from internal.slot_package_waiting(p_package, interval '2 minutes') w
-  where s.post_id = w.post_id and w.place_rank <= v_free
-    and s.is_visible and s.kind <> 'event' and s.visible_until < v_ends;
-  get diagnostics changed = row_count;
   return changed + internal.slot_package_release_dates(v_owner);
 end;
 $$;
@@ -673,17 +701,18 @@ $$;
 alter function internal.slot_package_leaving(uuid) owner to postgres;
 revoke all on function internal.slot_package_leaving(uuid) from public, anon, authenticated, service_role;
 
--- Decision 11: the owner's free places in Individual slots running now, one
--- row per place, the slot that runs longest first.
+-- Decision 11: the owner's paid Individual slots running now that have free
+-- places, with the end of each slot's run (internal.slot_chain_end, renewals
+-- that follow on included).
 create or replace function internal.individual_free_places(p_owner uuid)
-returns table(entitlement_id uuid, place_no bigint)
+returns table(entitlement_id uuid, free_places integer, runs_until timestamptz)
 language sql
 stable
 set search_path to 'pg_catalog'
 as $$
-  select f.id, row_number() over (order by f.ends_at desc, f.id, g.n)
+  select f.id, f.free, internal.slot_chain_end(f.id)
   from (
-    select e.id, e.ends_at, e.slot_capacity - internal.slot_posts_held(e.id) as free
+    select e.id, e.slot_capacity - internal.slot_posts_held(e.id) as free
     from private.entitlements e
       join private.payment_lines l on l.id = e.payment_line_id
       join private.plan_versions v on v.id = l.plan_version_id
@@ -692,7 +721,9 @@ as $$
       and e.starts_at <= statement_timestamp() and e.ends_at > statement_timestamp()
       and internal.individual_slot_plan(v.plan_code)
       and exists(select 1 from private.current_account_access u where u.id = p_owner)
-  ) f cross join lateral pg_catalog.generate_series(1, greatest(f.free, 0)) g(n);
+    offset 0
+  ) f
+  where f.free > 0;
 $$;
 alter function internal.individual_free_places(uuid) owner to postgres;
 revoke all on function internal.individual_free_places(uuid) from public, anon, authenticated, service_role;
@@ -1160,11 +1191,9 @@ begin
     if chain is not null then
       perform internal.refresh_slot_chain_documents(chain);
     end if;
-    if pkg is not null then
-      -- Posts in Individual slots that end before the package stay in search
-      -- when the package takes them (E3).
-      perform internal.refresh_package_documents(pkg);
-    end if;
+    -- A package touches no post here (no post check may stop a payment being
+    -- recorded): the minute sweep moves the search documents of the posts it
+    -- takes (internal.refresh_package_documents).
   end loop;
   return made;
 end;
@@ -1741,11 +1770,20 @@ CREATE OR REPLACE FUNCTION internal.run_slot_renewals(p_limit integer)
 AS $function$
 declare n_moved integer := 0; n_reminders integer := 0; r record; post private.posts; next_grant private.entitlements;
   activation private.post_activations; used integer; n_package_moved integer := 0; n_documents integer := 0;
-  waiting record; skipped integer; places integer; n_downsized integer := 0; target_grant uuid;
+  waiting record; held_back integer; places integer; n_downsized integer := 0; n_skipped integer := 0;
+  package_ends timestamptz; target record; moved boolean;
 begin
   if p_limit is null or p_limit not between 1 and 5000 then
     raise exception 'limit 1 to 5000' using errcode='22023';
   end if;
+  -- Locks: the sweep never waits for a lock it takes. The owner's fence is
+  -- tried, posts are skipped when another transaction holds them, and slots,
+  -- a package's grants and row and search documents are taken without
+  -- waiting; whatever is busy is left to the next run (every minute). So it
+  -- cannot take part in a deadlock with api.activate_post (post, then slots,
+  -- then the package), a payment or reversal, or the lifecycle job (post, then
+  -- search document). It writes no post row (the lifecycle job brings a post's
+  -- own end date up to its funding), so no post check can stop it.
   -- 1. Hand-over (housekeeping only: posts are funded through their slot at
   -- read time). A post whose period has ended moves to the slot's period that
   -- follows on from it without a break and covers now. Only posts that can
@@ -1781,10 +1819,10 @@ begin
     select * into activation from private.post_activations a where a.id=r.activation_id and a.released_at is null
       and a.post_id=post.id;
     if not found then continue; end if;
-    select * into next_grant from private.entitlements e where e.id=r.next_id for update;
+    select * into next_grant from private.entitlements e where e.id=r.next_id for update skip locked;
     -- Recheck under the locks: the next period still follows on, covers now,
     -- may carry this post and has room for it.
-    continue when next_grant.status<>'active' or next_grant.starts_at>clock_timestamp()
+    continue when not found or next_grant.status<>'active' or next_grant.starts_at>clock_timestamp()
       or next_grant.ends_at<=clock_timestamp()
       or next_grant.ends_at>internal.slot_chain_end(activation.entitlement_id)
       or not internal.entitlement_for_post_eligible(next_grant.id, post.id, post.owner_id);
@@ -1800,73 +1838,98 @@ begin
   end loop;
   -- 1b. Multi-listing packages (20261114154823, E3). Housekeeping only: a
   -- package takes the post of its owner's ended Individual slot at read time
-  -- (internal.slot_chain_end). Read by date: the Individual slots that ended
-  -- in the last 7 days or end in the next 2 minutes and still hold a post,
-  -- whose owner has a package running (entitlements_active_ends_idx), at most
-  -- p_limit packages a run. For each: the search documents of the posts it
-  -- takes (or will take in the next 2 minutes) end with it, posts it no longer
-  -- takes go back to their own dates (internal.refresh_package_documents), and
-  -- the posts it takes move in, in the order they take its free places: the
-  -- old activation released as entitlement_ended, the new one continued (not a
-  -- post going live), the post's end dates moved to the package's end. Locks
-  -- are taken as api.activate_post takes them (the post, then the package's
-  -- grants, then the package). A post that cannot be locked keeps its place in
-  -- the order (it stays funded at read time), so no post behind it moves into
-  -- a place it needs.
+  -- (internal.slot_chain_end). Read from the packages that have not reached
+  -- their end (entitlements_package_ends_idx; refunded ones too) whose owner
+  -- still holds a post in a paid Individual slot that has ended, however long
+  -- ago, or ends in the next 2 minutes (post_activations_owner_held_idx); the
+  -- most recent slot end first, at most p_limit packages a run. For each: the
+  -- search documents (internal.refresh_package_documents: those of the posts
+  -- it takes, or will take in the next 2 minutes, end with it; those of posts
+  -- no package takes go back to their own dates); then, while it runs, the
+  -- posts it takes move in, in the order they take its free places: the old
+  -- activation released as entitlement_ended, the new one continued (not a
+  -- post going live) and the search document moved to the package's end. A
+  -- post that cannot move now keeps its place in the order (it stays funded at
+  -- read time), so no post behind it moves into a place it needs. Each post
+  -- moves in its own subtransaction: one that fails is counted
+  -- (package_skipped) and left to the next run, and the others go on.
   for r in
-    select distinct k.package_id, x.owner_id
-    from private.entitlements x
-      cross join lateral internal.slot_package_now(x.owner_id) k
-    where x.status = 'active' and x.package_id is null and x.source = 'retail_paid'
-      and x.ends_at > statement_timestamp() - interval '7 days'
-      and x.ends_at <= statement_timestamp() + interval '2 minutes'
-      and exists(select 1 from private.post_activations a where a.entitlement_id = x.id and a.released_at is null)
+    select k.package_id, k.owner_id from (
+      select distinct e.package_id, e.owner_id from private.entitlements e
+      where e.package_id is not null and e.ends_at > statement_timestamp()
+    ) k
+      cross join lateral (
+        select max(x.ends_at) as last_end
+        from private.post_activations a join private.entitlements x on x.id = a.entitlement_id
+        where a.owner_id = k.owner_id and a.released_at is null and a.post_id is not null
+          and x.package_id is null and x.source = 'retail_paid' and x.status = 'active'
+          and x.ends_at <= statement_timestamp() + interval '2 minutes'
+      ) h
+    where h.last_end is not null
+    order by h.last_end desc, k.package_id
     limit p_limit
   loop
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
     n_documents := n_documents + internal.refresh_package_documents(r.package_id);
-    skipped := 0;
+    continue when n_package_moved >= p_limit
+      or not exists(select 1 from internal.slot_package_waiting(r.package_id));
+    -- The package's places are shared by its grants: its grants and its row,
+    -- as api.activate_post takes them, without waiting.
+    begin
+      perform 1 from private.entitlements e where e.package_id = r.package_id and e.status = 'active'
+        order by e.ends_at, e.id for update nowait;
+      perform 1 from private.slot_packages k where k.id = r.package_id for update nowait;
+    exception when lock_not_available then
+      n_skipped := n_skipped + 1;
+      continue;
+    end;
+    select n.places into places from internal.slot_package_now(r.owner_id) n where n.package_id = r.package_id;
+    continue when places is null;
+    select * into next_grant from private.entitlements e where e.package_id = r.package_id and e.status = 'active'
+      and e.starts_at <= clock_timestamp() and e.ends_at > clock_timestamp() order by e.ends_at desc, e.id limit 1;
+    continue when not found;
+    held_back := 0;
     for waiting in select x.activation_id, x.post_id from internal.slot_package_waiting(r.package_id) x
         order by x.place_rank loop
-      exit when n_package_moved >= p_limit;
-      select * into post from private.posts p where p.id = waiting.post_id for update skip locked;
-      if not found then
-        skipped := skipped + 1;
-        continue;
-      end if;
-      select * into activation from private.post_activations a where a.id = waiting.activation_id and a.released_at is null
-        and a.post_id = post.id;
-      continue when not found;
-      perform 1 from private.entitlements e where e.package_id = r.package_id and e.status = 'active'
-        order by e.ends_at, e.id for update;
-      perform 1 from private.slot_packages k where k.id = r.package_id for update;
-      select n.places into places from internal.slot_package_now(r.owner_id) n where n.package_id = r.package_id;
-      exit when places is null or internal.slot_package_posts(r.package_id) + skipped >= places;
-      select * into next_grant from private.entitlements e where e.package_id = r.package_id and e.status = 'active'
-        and e.starts_at <= clock_timestamp() and e.ends_at > clock_timestamp() order by e.ends_at desc, e.id limit 1;
-      -- Recheck under the locks: the slot's paid run has ended (no renewal
-      -- followed on) and the package may carry the post.
-      if not found or coalesce(internal.slot_chain_paid_end(activation.entitlement_id) > clock_timestamp(), false)
-          or not internal.entitlement_for_post_eligible(next_grant.id, post.id, post.owner_id) then
-        skipped := skipped + 1;
-        continue;
-      end if;
-      update private.post_activations set released_at=clock_timestamp(), release_reason='entitlement_ended'
-        where id=activation.id;
-      insert into private.post_activations (post_id, entitlement_id, owner_id, activated_at, continued)
-        values (post.id, next_grant.id, post.owner_id, clock_timestamp(), true);
-      update private.posts set visible_until = next_grant.ends_at where id = post.id and visible_until < next_grant.ends_at;
-      update private.post_search_documents set visible_until = next_grant.ends_at
-        where post_id = post.id and kind <> 'event' and visible_until < next_grant.ends_at;
-      n_package_moved := n_package_moved + 1;
+      exit when n_package_moved >= p_limit or internal.slot_package_posts(r.package_id) + held_back >= places;
+      begin
+        select * into post from private.posts p where p.id = waiting.post_id for update skip locked;
+        if found then
+          select * into activation from private.post_activations a where a.id = waiting.activation_id
+            and a.released_at is null and a.post_id = post.id;
+        end if;
+        -- Recheck under the locks: the slot's paid run has ended (no renewal
+        -- followed on) and the package may carry the post.
+        if not found or coalesce(internal.slot_chain_paid_end(activation.entitlement_id) > clock_timestamp(), false)
+            or not internal.entitlement_for_post_eligible(next_grant.id, post.id, post.owner_id) then
+          held_back := held_back + 1;
+          continue;
+        end if;
+        perform 1 from private.post_search_documents s where s.post_id = post.id for update nowait;
+        update private.post_activations set released_at=clock_timestamp(), release_reason='entitlement_ended'
+          where id=activation.id;
+        insert into private.post_activations (post_id, entitlement_id, owner_id, activated_at, continued)
+          values (post.id, next_grant.id, post.owner_id, clock_timestamp(), true);
+        update private.post_search_documents set visible_until = next_grant.ends_at
+          where post_id = post.id and kind <> 'event' and visible_until < next_grant.ends_at;
+        n_package_moved := n_package_moved + 1;
+      exception when others then
+        held_back := held_back + 1;
+        n_skipped := n_skipped + 1;
+      end;
     end loop;
   end loop;
   -- 1c. Going below 5 (decision 11): in a package's last 7 days its posts move
-  -- into free Individual places of the same owner (bought to go below 5), the
-  -- most recently approved first, so at the package's end they are already in
-  -- their Individual slots instead of the 3-day grace. Read by date: the
-  -- packages ending within 7 days (entitlements_package_ends_idx), at most
-  -- p_limit a run. A move is not a post going live (continued).
+  -- into free places of the same owner's paid Individual slots whose run lasts
+  -- beyond the package's end (internal.individual_free_places), the most
+  -- recently approved first (internal.slot_package_leaving), so at the
+  -- package's end they are already in their Individual slots instead of the
+  -- 3-day grace. A post a slot cannot carry (another area, more photos) tries
+  -- the owner's other slots, the longest-running first, at most 20. Read by
+  -- date: the packages ending within 7 days (entitlements_package_ends_idx), at
+  -- most p_limit a run. A move is not a post going live (continued); the post's
+  -- search document moves to the slot's end. Each post moves in its own
+  -- subtransaction, as in 1b.
   for r in
     select distinct e.package_id, e.owner_id from private.entitlements e
     where e.package_id is not null and e.status = 'active' and e.ends_at > statement_timestamp()
@@ -1874,33 +1937,44 @@ begin
     limit p_limit
   loop
     exit when n_package_moved >= p_limit;
-    continue when not exists(select 1 from internal.individual_free_places(r.owner_id));
+    select n.ends_at into package_ends from internal.slot_package_now(r.owner_id) n where n.package_id = r.package_id;
+    continue when package_ends is null
+      or not exists(select 1 from internal.individual_free_places(r.owner_id) f where f.runs_until > package_ends);
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
     for waiting in select x.activation_id, x.post_id from internal.slot_package_leaving(r.package_id) x
         order by x.place_rank loop
       exit when n_package_moved >= p_limit;
-      select f.entitlement_id into target_grant from internal.individual_free_places(r.owner_id) f
-        order by f.place_no limit 1;
-      exit when target_grant is null;
-      select * into post from private.posts p where p.id = waiting.post_id for update skip locked;
-      continue when not found;
-      select * into activation from private.post_activations a where a.id = waiting.activation_id and a.released_at is null
-        and a.post_id = post.id;
-      continue when not found;
-      select * into next_grant from private.entitlements e where e.id = target_grant for update;
-      -- Recheck under the locks: the place is still free and may carry the post.
-      continue when internal.slot_posts_held(next_grant.id) >= next_grant.slot_capacity
-        or not internal.entitlement_for_post_eligible(next_grant.id, post.id, post.owner_id);
-      update private.post_activations set released_at=clock_timestamp(), release_reason='entitlement_ended'
-        where id=activation.id;
-      insert into private.post_activations (post_id, entitlement_id, owner_id, activated_at, continued)
-        values (post.id, next_grant.id, post.owner_id, clock_timestamp(), true);
-      update private.posts set visible_until = internal.slot_chain_end(next_grant.id)
-        where id = post.id and visible_until < internal.slot_chain_end(next_grant.id);
-      update private.post_search_documents set visible_until = internal.slot_chain_end(next_grant.id)
-        where post_id = post.id and kind <> 'event' and visible_until < internal.slot_chain_end(next_grant.id);
-      n_downsized := n_downsized + 1;
-      n_package_moved := n_package_moved + 1;
+      moved := false;
+      for target in select f.entitlement_id, f.runs_until from internal.individual_free_places(r.owner_id) f
+          where f.runs_until > package_ends order by f.runs_until desc, f.entitlement_id limit 20 loop
+        begin
+          select * into post from private.posts p where p.id = waiting.post_id for update skip locked;
+          exit when not found;
+          select * into activation from private.post_activations a where a.id = waiting.activation_id
+            and a.released_at is null and a.post_id = post.id;
+          exit when not found;
+          select * into next_grant from private.entitlements e where e.id = target.entitlement_id for update skip locked;
+          -- Recheck under the locks: the place is still free and may carry the post.
+          continue when not found or internal.slot_posts_held(next_grant.id) >= next_grant.slot_capacity
+            or not internal.entitlement_for_post_eligible(next_grant.id, post.id, post.owner_id);
+          perform 1 from private.post_search_documents s where s.post_id = post.id for update nowait;
+          update private.post_activations set released_at=clock_timestamp(), release_reason='entitlement_ended'
+            where id=activation.id;
+          insert into private.post_activations (post_id, entitlement_id, owner_id, activated_at, continued)
+            values (post.id, next_grant.id, post.owner_id, clock_timestamp(), true);
+          update private.post_search_documents set visible_until = target.runs_until
+            where post_id = post.id and kind <> 'event' and visible_until < target.runs_until;
+          moved := true;
+        exception when others then
+          n_skipped := n_skipped + 1;
+          exit;
+        end;
+        exit when moved;
+      end loop;
+      if moved then
+        n_downsized := n_downsized + 1;
+        n_package_moved := n_package_moved + 1;
+      end if;
     end loop;
   end loop;
   -- 2. Reminders: one per grant (so one per slot end, whatever the retries),
@@ -1920,7 +1994,7 @@ begin
     on conflict (dedupe_key) do nothing;
   get diagnostics n_reminders = row_count;
   return jsonb_build_object('moved', n_moved, 'reminders', n_reminders, 'package_moved', n_package_moved,
-    'package_documents', n_documents, 'package_downsized', n_downsized);
+    'package_documents', n_documents, 'package_downsized', n_downsized, 'package_skipped', n_skipped);
 end;
 $function$;
 alter function internal.run_slot_renewals(integer) owner to postgres;

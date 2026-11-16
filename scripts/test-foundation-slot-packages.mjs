@@ -37,7 +37,12 @@
 // cannot see or use the package, and no team member is added to its grant;
 // partner commission is 20% of the package once and is reversed by a refund;
 // a refund or chargeback withdraws the package and its posts; the grants; and
-// the rollback refuses once a package was bought.
+// the rollback refuses once a package was bought. Then the review fixes: a
+// package payment, refund or chargeback writes no post row (a post saved under
+// rules that have since changed stops none of them), nor does the sweep, which
+// goes on when one post cannot move, finds a waiting post however long ago its
+// slot ended and tries the owner's next Individual slot; neither the sweep nor
+// a refund waits for a lock another transaction holds.
 //
 //   node --import tsx scripts/test-foundation-slot-packages.mjs
 //
@@ -1040,13 +1045,19 @@ try {
         grantOf(paymentId).ends
       )
     );
-    // Refunded before the sweep moved it in: its dates go back at once.
+    // Refunded before the sweep moved it in: its search document goes back at
+    // once; the refund writes no post row (the lifecycle job ends the post).
     q(
       `select internal.reverse_payment_line('${grantOf(paymentId).line}','refunded','Billing error on the package','${admin.id}');`
     );
     const own = scalar(`select ends_at from private.entitlements where id='${grantOf(slot).id}';`);
-    assert.ok(same(scalar(`select visible_until from private.posts where id='${listing}';`), own));
     assert.ok(same(docUntil(listing), own));
+    assert.ok(
+      same(
+        scalar(`select visible_until from private.posts where id='${listing}';`),
+        grantOf(paymentId).ends
+      )
+    );
     assert.equal(eligible(listing), false);
     lifecycle();
     assert.equal(scalar(`select status from private.posts where id='${listing}';`), "expired");
@@ -1103,6 +1114,211 @@ try {
       assert.ok([two, extraSlot].every((p) => grantOf(p).status === "active"));
     }
   );
+
+  // ------------------------------------------------------- second review
+  /** A post saved under rules that have since changed: any write of its row
+   * now fails when the transaction commits (the deferred attribute check). */
+  const breakRules = (id) => {
+    q(`set session_replication_role=replica;
+      update private.listing_details set attributes='{"retired_field":"x"}'::jsonb where post_id='${id}';`);
+    fails(
+      `update private.posts set visible_until=visible_until where id='${id}';`,
+      "22023",
+      /unknown attribute key/
+    );
+  };
+  const mendRules = (id) =>
+    q(`set session_replication_role=replica;
+      update private.listing_details set attributes='{}'::jsonb where post_id='${id}';`);
+  /** The grant the post is in now. */
+  const heldIn = (id) =>
+    scalar(
+      `select entitlement_id from private.post_activations where post_id='${id}' and released_at is null;`
+    );
+  const inPackage = (id) =>
+    truth(`exists(select 1 from private.post_activations a join private.entitlements e on e.id=a.entitlement_id
+      where a.post_id='${id}' and a.released_at is null and e.package_id is not null)`);
+  const postUntil = (id) => scalar(`select visible_until from private.posts where id='${id}';`);
+
+  await check(
+    "no post check can stop a package payment, refund or chargeback: they write no post row",
+    () => {
+      const ayo = verified("ayo");
+      const slots = [buySlot(ayo), buySlot(ayo)];
+      const listings = [post(ayo), post(ayo)];
+      for (const id of listings) live(ayo, id);
+      const first = buyPackage(ayo, K90, 5);
+      // Both slots end; the package takes both posts and the lifecycle job
+      // brings their own end dates up to the package's.
+      travel(ayo, "30 days 1 second");
+      lifecycle();
+      assert.ok(same(postUntil(listings[0]), grantOf(first).ends));
+      // One of them was saved under rules that have since changed.
+      breakRules(listings[0]);
+      try {
+        // A refund: its search documents go back; no post row is written.
+        q(
+          `select internal.reverse_payment_line('${grantOf(first).line}','refunded','Billing error on the package','${admin.id}');`
+        );
+        assert.equal(grantOf(first).status, "revoked");
+        for (const [i, id] of listings.entries()) {
+          assert.ok(same(docUntil(id), grantOf(slots[i]).ends));
+          assert.ok(same(postUntil(id), grantOf(first).ends), "left to the lifecycle job");
+        }
+        // An Ozow settle of a new package (fulfilled), then its chargeback.
+        const second = buyPackage(ayo, K30, 5);
+        assert.equal(grantOf(second).status, "active");
+        q(
+          `select internal.reverse_payment_line('${grantOf(second).line}','chargeback','Bank chargeback on the package','${admin.id}');`
+        );
+        assert.equal(
+          scalar(`select status from private.payments where id='${second}';`),
+          "chargeback"
+        );
+        assert.ok(same(postUntil(listings[0]), grantOf(first).ends));
+      } finally {
+        mendRules(listings[0]);
+      }
+      // The lifecycle job ends both on their real dates.
+      lifecycle();
+      for (const id of listings)
+        assert.equal(scalar(`select status from private.posts where id='${id}';`), "expired");
+    }
+  );
+
+  await check("the sweep writes no post row and goes on when one post cannot move", () => {
+    const lungile = verified("lungile");
+    for (let i = 0; i < 3; i += 1) buySlot(lungile);
+    const listings = [post(lungile), post(lungile), post(lungile)];
+    for (const id of listings) live(lungile, id);
+    buyPackage(lungile, K90, 5);
+    travel(lungile, "30 days 1 second");
+    breakRules(listings[0]);
+    // A fault on the second post's move (a stand-in for anything unexpected).
+    q(`create function vmtest.refuse_move() returns trigger language plpgsql as $f$ begin
+           if new.post_id='${listings[1]}' and new.continued then raise exception 'fixture: this move fails'; end if;
+           return new; end $f$;
+         create trigger vmtest_refuse_move before insert on private.post_activations
+           for each row execute function vmtest.refuse_move();`);
+    try {
+      const result = sweep();
+      assert.ok(result.package_skipped >= 1, JSON.stringify(result));
+      assert.ok(inPackage(listings[0]), "a post failing current rules still moves");
+      assert.equal(inPackage(listings[1]), false, "the failed move is undone");
+      assert.ok(eligible(listings[1]), "it stays funded at read time");
+      assert.ok(inPackage(listings[2]), "the post after it still moves");
+    } finally {
+      q(
+        "drop trigger vmtest_refuse_move on private.post_activations; drop function vmtest.refuse_move();"
+      );
+      mendRules(listings[0]);
+    }
+    assert.equal(sweep().package_skipped, 0);
+    assert.ok(inPackage(listings[1]), "the next run moves it");
+  });
+
+  await check("the sweep finds a waiting post whose slot ended more than 7 days ago", () => {
+    const siyanda = verified("siyanda");
+    buySlot(siyanda);
+    const listing = post(siyanda);
+    live(siyanda, listing);
+    const paymentId = buyPackage(siyanda, K90, 5);
+    // The slot ended 8 days ago and no sweep has run since.
+    travel(siyanda, "38 days");
+    assert.ok(eligible(listing), "the package takes it at read time");
+    sweep();
+    assert.equal(heldIn(listing), grantOf(paymentId).id);
+    assert.ok(same(docUntil(listing), grantOf(paymentId).ends));
+  });
+
+  await check("going below 5: a post one slot cannot carry tries the owner's next slot", () => {
+    const thuli = verified("thuli");
+    buyPackage(thuli, K30, 5);
+    const listing = post(thuli);
+    live(thuli, listing);
+    travel(thuli, "24 days");
+    const slots = [buySlot(thuli), buySlot(thuli)].map((p) => grantOf(p).id);
+    // The slot the sweep tries first is for another area: it cannot carry a
+    // Market post.
+    const first =
+      scalar(`select f.entitlement_id from internal.individual_free_places('${thuli.id}') f
+      order by f.runs_until desc, f.entitlement_id limit 1;`);
+    q(`set session_replication_role=replica;
+      update private.entitlements set area='business' where id='${first}';`);
+    assert.ok(sweep().package_downsized >= 1);
+    assert.notEqual(heldIn(listing), first);
+    assert.ok(slots.includes(heldIn(listing)));
+    assert.ok(eligible(listing));
+  });
+
+  await check("the sweep and a package refund never wait for a lock", async () => {
+    // An activation holds a package's row: the sweep leaves it to the next run.
+    const lindi = verified("lindi");
+    buySlot(lindi);
+    const waiting = post(lindi);
+    live(lindi, waiting);
+    const lindiPackage = buyPackage(lindi, K90, 5);
+    travel(lindi, "30 days 1 second");
+    const finished = {};
+    const timed = (label, promise) =>
+      promise.then((result) => {
+        finished[label] = Date.now();
+        return result;
+      });
+    const [holder, swept] = await Promise.all([
+      timed(
+        "holder",
+        session(
+          `begin; select 1 from private.slot_packages where id='${grantOf(lindiPackage).package}' for update; select pg_sleep(3); commit;`
+        )
+      ),
+      timed("sweep", later(500, service("select api.run_slot_renewals(100);"))),
+    ]);
+    assert.equal(holder.status, 0, holder.stderr);
+    assert.equal(swept.status, 0, swept.stderr);
+    assert.ok(finished.sweep < finished.holder, "the sweep did not wait");
+    assert.ok(JSON.parse(swept.stdout.trim()).package_skipped >= 1, swept.stdout);
+    assert.equal(inPackage(waiting), false);
+    sweep();
+    assert.ok(inPackage(waiting), "the next run moves it");
+
+    // A refund while another transaction holds the search document of a post
+    // the package takes: the refund does not wait; the sweep corrects it.
+    const mbali = verified("mbali");
+    const slot = buySlot(mbali);
+    const listing = post(mbali);
+    live(mbali, listing);
+    const paymentId = buyPackage(mbali, K90, 5);
+    travel(mbali, "29 days 23 hours 59 minutes");
+    sweep();
+    travel(mbali, "1 minute 1 second");
+    assert.ok(same(docUntil(listing), grantOf(paymentId).ends));
+    const [docHolder, refund] = await Promise.all([
+      timed(
+        "docHolder",
+        session(
+          `begin; select 1 from private.post_search_documents where post_id='${listing}' for update; select pg_sleep(3); commit;`
+        )
+      ),
+      timed(
+        "refund",
+        later(
+          500,
+          `select internal.reverse_payment_line('${grantOf(paymentId).line}','refunded','Billing error on the package','${admin.id}');`
+        )
+      ),
+    ]);
+    assert.equal(docHolder.status, 0, docHolder.stderr);
+    assert.equal(refund.status, 0, refund.stderr);
+    assert.ok(finished.refund < finished.docHolder, "the refund did not wait");
+    assert.equal(grantOf(paymentId).status, "revoked");
+    assert.ok(same(docUntil(listing), grantOf(paymentId).ends), "the busy document was skipped");
+    const result = sweep();
+    assert.ok(result.package_documents >= 1, JSON.stringify(result));
+    assert.ok(same(docUntil(listing), grantOf(slot).ends));
+    lifecycle();
+    assert.equal(scalar(`select status from private.posts where id='${listing}';`), "expired");
+  });
 
   await check(
     "retention removes a package with its last grant; the privacy export lists packages",

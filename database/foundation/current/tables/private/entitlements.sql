@@ -63,7 +63,7 @@ CREATE INDEX entitlements_active_ends_idx ON private.entitlements USING btree (e
 CREATE INDEX entitlements_granted_by_idx ON private.entitlements USING btree (granted_by) WHERE (granted_by IS NOT NULL);
 CREATE INDEX entitlements_owner_id_idx ON private.entitlements USING btree (owner_id);
 CREATE INDEX entitlements_owner_usable_idx ON private.entitlements USING btree (owner_id, ends_at) WHERE (status = 'active'::text);
-CREATE INDEX entitlements_package_ends_idx ON private.entitlements USING btree (ends_at) WHERE ((package_id IS NOT NULL) AND (status = 'active'::text));
+CREATE INDEX entitlements_package_ends_idx ON private.entitlements USING btree (ends_at) WHERE (package_id IS NOT NULL);
 CREATE INDEX entitlements_package_idx ON private.entitlements USING btree (package_id) WHERE (package_id IS NOT NULL);
 CREATE INDEX entitlements_payment_id_idx ON private.entitlements USING btree (payment_id) WHERE (payment_id IS NOT NULL);
 CREATE UNIQUE INDEX entitlements_payment_line_idx ON private.entitlements USING btree (payment_line_id) WHERE (payment_line_id IS NOT NULL);

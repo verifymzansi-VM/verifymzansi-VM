@@ -62,7 +62,7 @@
     },
     "function_bodies": {
       "items": 942,
-      "fingerprint": "eb71fe9c30e0be1a1b356715987e461a"
+      "fingerprint": "5b3e8506e36928b2eeded01d3ecf7260"
     },
     "function_grants": {
       "items": 705,
@@ -70,11 +70,11 @@
     },
     "function_metadata": {
       "items": 942,
-      "fingerprint": "ba9e0774e6ec9e4683ca4c8cab18fddd"
+      "fingerprint": "99fada3a5cb71c34f2c0351da9f2700f"
     },
     "indexes": {
       "items": 510,
-      "fingerprint": "a54365da293248fe7ecd70150dddb76a"
+      "fingerprint": "a44a9c160e3686ff10d9ac1f98c912a7"
     },
     "policies": {
       "items": 1,
