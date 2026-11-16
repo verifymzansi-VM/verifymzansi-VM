@@ -7,7 +7,13 @@ import path from "node:path";
 if (process.env.GITHUB_ACTIONS !== "true" || !process.env.RUNNER_TEMP)
   throw new Error("Candidate secret preparation requires an isolated Actions runner");
 const args = process.argv.slice(2);
-if (args.length > 1 || args.some((arg) => arg !== "--include-workers"))
+// --include-workers: production's companion Workers (cleanup, limiter, ops,
+// monitor). --include-limiter: only the rate limiter's key, for the staging
+// copy (M0.15b), which deploys no other companion Worker with secrets.
+if (
+  args.length > 1 ||
+  args.some((arg) => arg !== "--include-workers" && arg !== "--include-limiter")
+)
   throw new Error("Unsupported secret preparation argument");
 const names = [
   "SUPABASE_SERVICE_ROLE_KEY",
@@ -62,5 +68,16 @@ if (args.includes("--include-workers")) {
       mode: 0o600,
       flag: "wx",
     });
+}
+if (args.includes("--include-limiter")) {
+  if (values.RATE_LIMITER_API_KEY.length < 32)
+    throw new Error("Worker shared credential is too short");
+  await writeFile(
+    path.join(process.env.RUNNER_TEMP, "cloudflare-limiter-secrets.json"),
+    JSON.stringify({
+      WORKER_API_KEY: values.RATE_LIMITER_API_KEY, // secret-scan: allow runtime reference, no credential literal
+    }),
+    { mode: 0o600, flag: "wx" }
+  );
 }
 console.log("Scoped candidate bindings prepared outside the checkout. No master keys changed.");

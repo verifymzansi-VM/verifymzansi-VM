@@ -28,3 +28,14 @@ enabled = true
 
 [vars]
 ENVIRONMENT = "production"
+
+# Staging copy (M0.15b): the staging website's OFFLOAD service binding names
+# this Worker (wrangler.toml [env.staging]). Same code, no routes, secrets or
+# storage. Deploy with: pnpm exec wrangler deploy --config wrangler.offload.toml --env staging
+[env.staging]
+name = "verifymzansi-offload-staging"
+workers_dev = false
+preview_urls = false
+
+[env.staging.vars]
+ENVIRONMENT = "staging"

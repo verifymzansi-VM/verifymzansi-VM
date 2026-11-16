@@ -79,6 +79,8 @@ export const HOSTED_PROJECT_REFS = Object.freeze([
   "ubrtdtmumfhjpuegxnhj",
   "pfuurrahjdewiphmjyiq",
   "vlsynwsekujghfufvsxn",
+  // The staging copy (M0.15b): hosted too, so the local test copy never reaches it.
+  "vgplszqfcmdskwseoyam",
 ]);
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);

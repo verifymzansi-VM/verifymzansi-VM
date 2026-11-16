@@ -7,30 +7,73 @@ import {
   rpc,
   signIn,
 } from "./support/test-copy";
+import {
+  isStagingTarget,
+  readStagingTarget,
+  stagingRetiredTableRead,
+  stagingRpc,
+  type StagingTarget,
+} from "./support/staging-target";
 
 // Smoke test for the private test copy (M0.7): the restored website in
 // foundation mode, reading the local database that was built only from
 // database/foundation/, with the seeded test people and posts.
 // Read in beforeAll, never at import time: listing specs must not touch the copy.
+//
+// The release workflow also runs it against the hosted staging copy (M0.15b,
+// playwright.staging.config.ts) right after deploying it. Staging has no
+// trusted database access and no seeded test people or posts, so there it
+// checks only what any visitor can see: the gateway, the public catalogue and
+// the home page, served from staging and never from production.
+const staging = isStagingTarget();
 let state: ReturnType<typeof readTestCopy>;
+let stagingTarget: StagingTarget;
 
 test.describe("foundation test copy", () => {
   test.beforeAll(() => {
-    state = readTestCopy();
+    if (staging) stagingTarget = readStagingTarget();
+    else state = readTestCopy();
   });
 
   test("the database has no tables in public, so retired-backend reads fail as they do live", async () => {
-    expect(countPublicTables()).toBe(0);
+    if (!staging) expect(countPublicTables()).toBe(0);
     // supabase-js defaults to schema public; like production, the gateway
     // exposes only the api schema and refuses the request.
-    const retired = await retiredTableRead(state, "listings");
+    const retired = staging
+      ? await stagingRetiredTableRead(stagingTarget, "listings")
+      : await retiredTableRead(state, "listings");
     expect(retired.status).toBe(406);
     expect(retired.data.code).toBe("PGRST106");
   });
 
+  // Registered only against staging, so the local run has nothing to skip.
+  if (staging)
+    test("the staging home page is served from the staging copy, never production", async ({
+      page,
+    }) => {
+      // The public command the home showroom calls answers anonymously.
+      const cards = await stagingRpc(stagingTarget, "search_post_cards", {
+        p_request: { limit: 24 },
+      });
+      expect(cards.status).toBe(200);
+      expect(Array.isArray(cards.data.items)).toBe(true);
+
+      const response = await page.goto("/");
+      expect(response?.status()).toBeLessThan(400);
+      const html = await page.content();
+      expect(html).not.toContain("gntzjtuncsyefujajmjy");
+      expect(html).not.toContain("media.verifymzansi.com");
+      const items = cards.data.items as { title: string }[];
+      if (items.length > 0) {
+        const showroom = page.locator("section", { has: page.locator("#home-showroom-title") });
+        await expect(showroom.getByText(items[0].title).first()).toBeAttached();
+      }
+    });
+
   test("the home showroom shows the test posts read through the foundation adapters", async ({
     page,
   }) => {
+    test.skip(staging, "Needs the local test copy's seeded posts");
     const titles = state.posts.map((post) => post.title);
     expect(titles.length).toBeGreaterThan(0);
     // The same public command the home showroom calls (search_post_cards).
@@ -57,6 +100,7 @@ test.describe("foundation test copy", () => {
     // posts in the home showroom. The carousel has no dot controls and its
     // arrows show only on wide screens, so on a phone the front card is the
     // control.
+    test.skip(staging, "Needs the local test copy's seeded posts");
     await page.goto("/");
     const showroom = page.locator("section", {
       has: page.locator("#home-showroom-title"),
@@ -77,6 +121,8 @@ test.describe("foundation test copy", () => {
       testInfo.project.name !== "chromium",
       "API-level account checks run once per run, in the chromium project"
     );
+    // Staging has no test people: their passwords are in this public repository.
+    test.skip(staging, "Needs the local test copy's test people");
     // Visitor: no account; the public catalogue answers anonymously.
     const anonymous = await rpc(state, "get_current_posting_terms", {});
     expect(anonymous.status).toBe(200);

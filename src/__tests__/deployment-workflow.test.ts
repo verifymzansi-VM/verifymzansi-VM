@@ -79,7 +79,7 @@ describe("production deployment wiring", () => {
           expect(JSON.stringify(step.with ?? {}), where).not.toMatch(/rollback|versions\s+deploy/i);
         }
     }
-    expect(Object.keys(workflow.jobs)).toEqual(["deploy"]);
+    expect(Object.keys(workflow.jobs)).toEqual(["staging-config", "deploy-staging", "deploy"]);
     const steps = workflow.jobs.deploy.steps as Step[];
     const firstChange = steps.findIndex((step) => step.id === "deploy-monitor");
     const stop = steps.findIndex((step) => step.name === "Stop for manual rollback");
@@ -110,6 +110,81 @@ describe("production deployment wiring", () => {
     const runbook = readFileSync("docs/RUNBOOK.md", "utf8");
     expect(runbook).toContain("### Manual rollback (all Workers)");
     expect(runbook).toContain("gh workflow disable deploy.yml");
+  });
+});
+
+describe("staging before production (M0.15b)", () => {
+  const workflow = parse(readFileSync(".github/workflows/deploy.yml", "utf8"));
+  const jobs = workflow.jobs as Record<
+    string,
+    {
+      if?: string;
+      needs?: string[] | string;
+      env?: Record<string, string>;
+      environment?: string | { name: string };
+      steps?: { name?: string; run?: string; env?: Record<string, string> }[];
+    }
+  >;
+  const text = (value: unknown) => JSON.stringify(value);
+
+  it("makes production wait for staging, but never for a staging copy that is not configured", () => {
+    expect(jobs.deploy.needs).toEqual(["staging-config", "deploy-staging"]);
+    for (const condition of [
+      "!cancelled()",
+      "needs.staging-config.result == 'success'",
+      "needs.deploy-staging.result == 'success' || needs.deploy-staging.result == 'skipped'",
+    ])
+      expect(jobs.deploy.if).toContain(condition);
+    // The staging decision runs under the same main-only conditions as production.
+    for (const condition of [
+      "conclusion == 'success'",
+      "event == 'push'",
+      "head_branch == 'main'",
+      "head_repository.full_name == github.repository",
+      "head_sha == github.sha",
+    ])
+      expect(jobs["staging-config"].if).toContain(condition);
+    expect(jobs["deploy-staging"].needs).toBe("staging-config");
+    expect(jobs["deploy-staging"].if).toBe("needs.staging-config.outputs.configured == 'true'");
+    const check = jobs["staging-config"].steps!.find((step) =>
+      step.run?.includes("configured=false")
+    );
+    expect(check?.run).toContain("Staging skipped");
+  });
+
+  it("gives staging only STAGING_* secrets, so nothing falls back to production's", () => {
+    for (const name of ["staging-config", "deploy-staging"]) {
+      const secrets = [...text(jobs[name]).matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1]);
+      expect(secrets.length, name).toBeGreaterThan(0);
+      for (const secret of secrets)
+        expect(
+          secret.startsWith("STAGING_") ||
+            secret === "CLOUDFLARE_API_TOKEN" ||
+            secret === "CLOUDFLARE_ACCOUNT_ID",
+          `${name} uses ${secret}`
+        ).toBe(true);
+    }
+    expect(text(jobs["deploy-staging"].environment)).toContain("staging");
+    expect(jobs["deploy-staging"].env?.ENVIRONMENT).toBe("staging");
+  });
+
+  it("deploys only staging Workers, checks isolation first and smoke-tests the result", () => {
+    const steps = jobs["deploy-staging"].steps!;
+    const runs = steps.map((step) => step.run ?? "");
+    const deploys = runs.filter((run) => /wrangler deploy|opennextjs-cloudflare deploy/.test(run));
+    expect(deploys).toHaveLength(3);
+    for (const run of deploys) expect(run).toContain("--env staging");
+    expect(runs.join("\n")).not.toMatch(/--env production|--env=production/);
+    const isolation = runs.findIndex((run) => run.includes("cloudflare:staging:isolation"));
+    const firstDeploy = runs.findIndex((run) => deploys.includes(run));
+    expect(runs[isolation]).toContain("--require-staging");
+    expect(isolation).toBeGreaterThanOrEqual(0);
+    expect(isolation).toBeLessThan(firstDeploy);
+    expect(runs.some((run) => run.includes("export-cloudflare-public-env.mjs --env=staging"))).toBe(
+      true
+    );
+    const smoke = runs.findIndex((run) => run.includes("playwright.staging.config.ts"));
+    expect(smoke).toBeGreaterThan(firstDeploy);
   });
 });
 

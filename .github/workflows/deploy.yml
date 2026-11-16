@@ -26,13 +26,197 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Staging first (roadmap M0.15b): every release goes to the separate staging
+  # copy and is smoke-tested there before production. Until the owner has set
+  # the staging secrets (GitHub environment "staging", names in
+  # docs/RUNBOOK.md, "Staging copy"), this job reports "staging skipped" and
+  # production deploys as before; a missing secret never blocks production.
+  # Staging secrets are named STAGING_* so a missing one can never fall back to
+  # the production repository secret of the same name.
+  staging-config:
+    name: Staging configured
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions: {}
+    timeout-minutes: 2
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_sha == github.sha &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - name: Check the staging secrets (names only)
+        id: check
+        env:
+          STAGING_FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_FOUNDATION_SUPABASE_SECRET_KEY }}
+          STAGING_FOUNDATION_PHONE_OTP_KEY: ${{ secrets.STAGING_FOUNDATION_PHONE_OTP_KEY }}
+          STAGING_INTERNAL_JOBS_SECRET: ${{ secrets.STAGING_INTERNAL_JOBS_SECRET }}
+          STAGING_OPS_JOBS_SECRET: ${{ secrets.STAGING_OPS_JOBS_SECRET }}
+          STAGING_KYC_WEBHOOK_SECRET: ${{ secrets.STAGING_KYC_WEBHOOK_SECRET }}
+          STAGING_HEALTH_DIAGNOSTIC_TOKEN: ${{ secrets.STAGING_HEALTH_DIAGNOSTIC_TOKEN }}
+          STAGING_RATE_LIMITER_API_KEY: ${{ secrets.STAGING_RATE_LIMITER_API_KEY }}
+        run: |
+          missing=()
+          for name in STAGING_FOUNDATION_SUPABASE_SECRET_KEY STAGING_FOUNDATION_PHONE_OTP_KEY \
+            STAGING_INTERNAL_JOBS_SECRET STAGING_OPS_JOBS_SECRET STAGING_KYC_WEBHOOK_SECRET \
+            STAGING_HEALTH_DIAGNOSTIC_TOKEN STAGING_RATE_LIMITER_API_KEY; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ "${#missing[@]}" -eq 0 ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Staging secrets are set: this release deploys to staging first." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Staging skipped::Staging is not configured yet (missing: ${missing[*]}). Production deploys without a staging rehearsal; see docs/RUNBOOK.md, 'Staging copy'."
+            echo "**Staging skipped**: not configured yet (missing: ${missing[*]}). Production deploys without a staging rehearsal." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # Deploys this exact commit to the staging copy (its own Supabase project,
+  # buckets, KV, rate limiter and offload Worker; wrangler.toml [env.staging])
+  # and runs e2e/foundation/fixture-smoke.spec.ts against it. Production waits
+  # for this job; when it fails, production is not deployed.
+  deploy-staging:
+    name: Deploy staging and smoke-test it
+    needs: staging-config
+    if: needs.staging-config.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://verifymzansi-staging.verifymzansi.workers.dev
+    permissions:
+      contents: read
+      actions: read
+    timeout-minutes: 60
+    env:
+      NODE_ENV: production
+      # Lets the build guard (next.config.js) accept the staging project, and
+      # only it.
+      ENVIRONMENT: staging
+      DEPLOY_TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      WRANGLER_SEND_ERROR_REPORTS: "false"
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_FOUNDATION_SUPABASE_SECRET_KEY }}
+      FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_FOUNDATION_SUPABASE_SECRET_KEY }}
+      FOUNDATION_PHONE_OTP_KEY: ${{ secrets.STAGING_FOUNDATION_PHONE_OTP_KEY }}
+      INTERNAL_JOBS_SECRET: ${{ secrets.STAGING_INTERNAL_JOBS_SECRET }}
+      OPS_JOBS_SECRET: ${{ secrets.STAGING_OPS_JOBS_SECRET }}
+      KYC_WEBHOOK_SECRET: ${{ secrets.STAGING_KYC_WEBHOOK_SECRET }}
+      HEALTH_DIAGNOSTIC_TOKEN: ${{ secrets.STAGING_HEALTH_DIAGNOSTIC_TOKEN }}
+      RATE_LIMITER_API_KEY: ${{ secrets.STAGING_RATE_LIMITER_API_KEY }}
+      # Cloudflare's published always-pass Turnstile test secret, the pair of
+      # the test site key in wrangler.toml [env.staging]. Not a credential.
+      TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA # secret-scan: allow published test value
+      STAGING_URL: https://verifymzansi-staging.verifymzansi.workers.dev
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.DEPLOY_TARGET_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject stale deployment sources before using provider credentials
+        run: |
+          [[ "$DEPLOY_TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$DEPLOY_TARGET_SHA"
+          git fetch --no-tags origin main
+          if [ "$(git rev-parse origin/main)" != "$DEPLOY_TARGET_SHA" ]; then
+            echo "::error::Main has advanced; refusing to deploy an older queued commit."
+            exit 1
+          fi
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile --prod=false
+      - name: Require successful CI for the exact deployment commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm exec tsx scripts/check-deployment-ci.ts
+      - name: Refuse any staging setting that names production
+        run: pnpm cloudflare:staging:isolation -- --require-staging
+      - name: Use the staging copy's public build settings
+        run: node scripts/export-cloudflare-public-env.mjs --env=staging
+      - name: Build for Cloudflare (staging settings)
+        run: pnpm run build:cloudflare
+      - name: Prepare staging Worker secrets outside the checkout
+        run: node scripts/prepare-cloudflare-candidate-secrets.mjs --include-limiter
+      - name: Deploy staging Offload Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy --config wrangler.offload.toml --env staging --tag "$DEPLOY_TARGET_SHA"
+      - name: Deploy staging website
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >-
+          pnpm exec opennextjs-cloudflare deploy --env staging
+          --secrets-file "$RUNNER_TEMP/cloudflare-candidate-secrets.json"
+          --tag "$DEPLOY_TARGET_SHA" --message verified-main-staging
+      - name: Deploy staging Rate Limiter Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy --config wrangler.rate-limiter.toml --env staging --tag "$DEPLOY_TARGET_SHA" --secrets-file "$RUNNER_TEMP/cloudflare-limiter-secrets.json"
+      # The home page, not /api/health: health reports "degraded" (503) on
+      # staging by design, because the production launch checks expect live
+      # payment settings that staging deliberately does not have.
+      - name: Wait for the staging website to answer
+        timeout-minutes: 5
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$STAGING_URL/" || true)"
+            if [ "$status" = "200" ]; then
+              echo "Staging answers (attempt $attempt)."
+              health="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$STAGING_URL/api/health" || true)"
+              echo "Staging /api/health answered $health (503 'degraded' is expected without payments)."
+              exit 0
+            fi
+            echo "Staging answered $status (attempt $attempt); retrying."
+            sleep 10
+          done
+          echo "::error::The staging website did not answer its home page with 200."
+          exit 1
+      - name: Install Chromium for the staging smoke test
+        uses: ./.github/actions/install-browsers
+      - name: Smoke-test staging (e2e/foundation/fixture-smoke.spec.ts)
+        timeout-minutes: 15
+        env:
+          FOUNDATION_SMOKE_TARGET: staging
+        run: pnpm exec playwright test --config=playwright.staging.config.ts --project=chromium
+      - name: Keep the staging smoke report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staging-smoke-report-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: test-results/staging
+      - name: Remove temporary deployment credentials
+        if: always()
+        run: |
+          rm -f -- "$RUNNER_TEMP/cloudflare-candidate-secrets.json" \
+            "$RUNNER_TEMP/cloudflare-limiter-secrets.json"
+
   deploy:
     runs-on: ubuntu-latest
+    # Production waits for staging: it runs after a passing staging deploy and
+    # smoke test, or when staging is not configured yet (deploy-staging
+    # skipped). A failed or cancelled staging run stops the release.
+    needs: [staging-config, deploy-staging]
     permissions:
       contents: read
       actions: read
     # Never expose deployment credentials to PR/fork workflow_run events.
     if: >-
+      !cancelled() &&
+      needs.staging-config.result == 'success' &&
+      (needs.deploy-staging.result == 'success' || needs.deploy-staging.result == 'skipped') &&
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'workflow_run' &&

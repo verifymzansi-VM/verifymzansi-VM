@@ -555,6 +555,84 @@ pnpm exec wrangler deploy --config wrangler.rate-limiter.toml
 pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 ```
 
+### Staging copy
+
+A separate copy for rehearsals (roadmap M0.15b). Nothing in it is shared with
+production:
+
+| Part                | Staging                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| Website             | Worker `verifymzansi-staging`, https://verifymzansi-staging.verifymzansi.workers.dev  |
+| Database            | Supabase project `verifymzansi-staging` (`vgplszqfcmdskwseoyam`, London, Free)        |
+| Storage             | R2 `verifymzansi-public-staging`, `verifymzansi-private-staging`                      |
+| Rate-limit state    | KV `verifymzansi-otp-rate-limits-staging`; Worker `verifymzansi-rate-limiter-staging` |
+| PDF and share cards | Worker `verifymzansi-offload-staging`                                                 |
+| Durable Objects     | Belong to the staging Worker names, so never production's                             |
+
+Left out on purpose: payments (no Ozow settings exist for staging, so checkout
+cannot start), phone codes (no SMS), and Cloudflare Images (its free monthly
+allowance is shared with production, so staging refuses photo uploads).
+
+**Release order.** The Deploy workflow deploys every main commit to staging
+first (job `deploy-staging`), runs `e2e/foundation/fixture-smoke.spec.ts`
+against it (`playwright.staging.config.ts`), and only then deploys production. A
+failed staging deploy or smoke test stops the release. Until the staging secrets
+below exist, the job `staging-config` reports "Staging skipped" and production
+deploys as before. `pnpm cloudflare:staging:isolation -- --require-staging` runs
+in CI and before every staging deploy, and refuses any production identifier in
+the staging settings.
+
+**Database.** Staging was built from `database/foundation/` (`candidate.sql`,
+`replay/baseline-supplement.sql` before
+`20261103154538_owner_signup_access.sql`, then every applied update in filename
+order). `fingerprint.sql` on staging matches production's recorded fingerprint,
+except `schema_grants` (7 instead of 8 until the Auth "Before user created" hook
+is switched on in the staging dashboard). New updates reach staging before merge
+(see `database/foundation/updates/README.md`).
+
+**Secrets the owner sets.** Never copy a production value; every one is new.
+
+GitHub, Settings → Environments → `staging` (limit deployment branches to
+`main`), environment secrets:
+
+| Name                                     | Value                                                                                            |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `STAGING_FOUNDATION_SUPABASE_SECRET_KEY` | Staging Supabase project → Project Settings → API Keys → new secret key (`sb_secret_…`)          |
+| `STAGING_FOUNDATION_PHONE_OTP_KEY`       | New random 64 hex characters¹                                                                    |
+| `STAGING_INTERNAL_JOBS_SECRET`           | New random value, at least 32 characters¹                                                        |
+| `STAGING_OPS_JOBS_SECRET`                | New random value, at least 32 characters¹                                                        |
+| `STAGING_KYC_WEBHOOK_SECRET`             | New random value, at least 32 characters¹                                                        |
+| `STAGING_HEALTH_DIAGNOSTIC_TOKEN`        | New random value, at least 32 characters¹                                                        |
+| `STAGING_RATE_LIMITER_API_KEY`           | New random value, at least 32 characters¹ (the deploy also gives it to the staging rate limiter) |
+
+Optionally an environment secret `CLOUDFLARE_API_TOKEN` with a token limited to
+the staging Workers; without it the repository's deploy token is used.
+
+Cloudflare, Workers & Pages → `verifymzansi-staging` → Settings → Variables and
+Secrets (or `pnpm wrangler secret put NAME --env staging`):
+
+| Name                                                        | Value                                                                                      |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `KYC_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEY`, `HMAC_SECRET`    | New random 64 hex characters each¹                                                         |
+| `IP_HASH_SECRET`                                            | New random value, at least 32 characters¹                                                  |
+| `RESEND_API_KEY`                                            | A separate Resend API key named for staging (sending access only)                          |
+| `AFRICASTALKING_USERNAME`, `AFRICASTALKING_API_KEY`         | `sandbox` and the Africa's Talking sandbox API key (no real SMS)                           |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | R2 → Manage API tokens → token with Object Read & Write on the two `-staging` buckets only |
+
+¹ `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+
+**Staging dashboard settings.** In the staging Supabase project: Data API
+exposed schemas `api` only (the smoke test expects the `public` schema to be
+refused); Auth site URL and redirect URLs on the staging address; Auth bot
+protection with Turnstile and Cloudflare's published test secret (the staging
+site key is the matching test key); the "Before user created" hook on
+`internal.acceptance_signup_guard`. Optionally attach the custom domain
+`media-staging.verifymzansi.com` to `verifymzansi-public-staging`.
+
+**Pausing.** Free projects pause after a week without use; a paused staging
+project fails the staging smoke test and so holds back the release. Restore it
+from the Supabase dashboard, or remove the `STAGING_*` secrets to skip staging.
+
 ### Current Known-Good Runtime Baseline
 
 - Current validated rollback baseline: `next@16.1.5`, `@next/env@16.1.5`, and
