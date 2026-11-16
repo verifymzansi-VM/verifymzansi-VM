@@ -586,10 +586,10 @@ runs `e2e/foundation/fixture-smoke.spec.ts` against it
 staging deploy or smoke test stops the release. The job `staging-config` decides
 first:
 
-- No `STAGING_*` secret set, or no `STAGING_CLOUDFLARE_API_TOKEN`: "Staging
-  skipped", production deploys as before.
-- Some but not all staging secrets set: the release fails until they are
-  complete.
+- None of the 15 `STAGING_*` secrets set: "Staging skipped", production deploys
+  as before.
+- Some but not all set (`STAGING_CLOUDFLARE_API_TOKEN` included): the release
+  fails until they are complete.
 - The staging project does not answer (paused or unreachable), or
   `STAGING_FOUNDATION_SUPABASE_SECRET_KEY` is not a key of the staging project:
   the release fails before anything deploys.
@@ -598,7 +598,10 @@ first:
 every staging deploy. It reads the staging settings both as written and as
 wrangler resolves them, and refuses any production identifier, any route or
 custom domain (inherited ones included), inherited cron triggers or shared
-bindings, and any wrangler inheritance warning.
+bindings, and any wrangler warning about the staging environment. A wrangler
+upgrade that adds a new warning therefore fails this check on purpose: read the
+warning, fix the staging settings or, if it is harmless, allow that exact
+message in `scripts/check-staging-isolation.mjs` with a reason.
 
 **Rehearse once first.** Before staging gates production, run Actions → Deploy →
 Run workflow with target `staging`: it deploys and smoke-tests staging only and
@@ -606,10 +609,13 @@ never touches production.
 
 **Releasing without staging (owner bypass).** Do not delete staging secrets. Set
 the repository Actions variable `STAGING_BYPASS_UNTIL` (Settings → Secrets and
-variables → Actions → Variables; only admins can change it) to an ISO time at
-most 72 hours ahead, for example `2026-11-20T18:00:00Z`. Until then every
-release skips staging with a loud warning in the run and its summary. Expired,
-invalid or more distant values are ignored. Remove the variable afterwards.
+variables → Actions → Variables; only admins can change it) to a UTC time at
+most 72 hours ahead, written exactly as `YYYY-MM-DDTHH:MMZ` or
+`YYYY-MM-DDTHH:MM:SSZ`, for example `2026-11-20T18:00Z`. Until then every
+release skips staging with a loud warning in the run and its summary. Any other
+form ("tomorrow", "+48 hours", a time zone offset), an expired time or a time
+more than 72 hours ahead is ignored with a warning. Remove the variable
+afterwards.
 
 **Do not add a protection rule** (required reviewers or a wait timer) to the
 GitHub environment `staging`: both staging jobs use it, so every release would
@@ -617,8 +623,11 @@ wait for that approval. Limiting its deployment branches to `main` is fine.
 
 **Keeping the project awake.** Free projects pause after a week without use; a
 paused staging project stops the release. The workflow `Staging keep-alive`
-reads the staging project anonymously once a day. If it reports "paused",
-restore the project in the Supabase dashboard (or use the bypass above).
+reads the staging project anonymously once a day, but only after the owner sets
+the admin-only repository variable `STAGING_ENABLED` to `true` (do that once
+staging is configured, so an unfinished copy opens no daily failure issues). If
+it reports "paused", restore the project in the Supabase dashboard (or use the
+bypass above).
 
 **Database.** Staging was built from `database/foundation/` (`candidate.sql`,
 `replay/baseline-supplement.sql` before
@@ -633,22 +642,22 @@ environment `staging` (Settings → Environments → `staging`, deployment branc
 limited to `main`), and the deploy sends them to the staging Workers. Never copy
 a production value; every one is new.
 
-| Environment secret                                         | Value                                                                                                                                                                                           |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `STAGING_CLOUDFLARE_API_TOKEN`                             | A new Cloudflare API token for this account with Workers Scripts Edit (plus the account's Workers KV and R2 read access it asks for); the staging deploy never uses the production deploy token |
-| `STAGING_FOUNDATION_SUPABASE_SECRET_KEY`                   | Staging Supabase project → Project Settings → API Keys → new secret key (`sb_secret_…`)                                                                                                         |
-| `STAGING_FOUNDATION_PHONE_OTP_KEY`                         | New random 64 hex characters¹                                                                                                                                                                   |
-| `STAGING_KYC_ENCRYPTION_KEY`                               | New random 64 hex characters¹                                                                                                                                                                   |
-| `STAGING_ID_ENCRYPTION_KEY`                                | New random 64 hex characters¹                                                                                                                                                                   |
-| `STAGING_HMAC_SECRET`                                      | New random 64 hex characters¹                                                                                                                                                                   |
-| `STAGING_IP_HASH_SECRET`                                   | New random 64 hex characters¹                                                                                                                                                                   |
-| `STAGING_INTERNAL_JOBS_SECRET`                             | New random 64 hex characters¹                                                                                                                                                                   |
-| `STAGING_OPS_JOBS_SECRET`                                  | New random 64 hex characters¹                                                                                                                                                                   |
-| `STAGING_HEALTH_DIAGNOSTIC_TOKEN`                          | New random 64 hex characters¹                                                                                                                                                                   |
-| `STAGING_RATE_LIMITER_API_KEY`                             | New random 64 hex characters¹ (also given to the staging rate limiter)                                                                                                                          |
-| `STAGING_RESEND_API_KEY`                                   | A separate Resend API key named for staging, sending access only (`re_…`)                                                                                                                       |
-| `STAGING_AFRICASTALKING_API_KEY`                           | The API key of the Africa's Talking sandbox app (username `sandbox` is set in `wrangler.toml`; no real SMS)                                                                                     |
-| `STAGING_R2_ACCESS_KEY_ID`, `STAGING_R2_SECRET_ACCESS_KEY` | R2 → Manage API tokens → token with Object Read & Write on the two `-staging` buckets only                                                                                                      |
+| Environment secret                                         | Value                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STAGING_CLOUDFLARE_API_TOKEN`                             | A new Cloudflare API token for this account: Account → Workers Scripts Edit, plus only what the deploy needs (Account → Workers KV Storage Read, Account Settings Read). **No** Zone, Workers Routes or DNS permissions, so it can never move a domain. The staging deploy never uses the production deploy token |
+| `STAGING_FOUNDATION_SUPABASE_SECRET_KEY`                   | Staging Supabase project → Project Settings → API Keys → new secret key (`sb_secret_…`)                                                                                                                                                                                                                           |
+| `STAGING_FOUNDATION_PHONE_OTP_KEY`                         | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_KYC_ENCRYPTION_KEY`                               | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_ID_ENCRYPTION_KEY`                                | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_HMAC_SECRET`                                      | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_IP_HASH_SECRET`                                   | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_INTERNAL_JOBS_SECRET`                             | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_OPS_JOBS_SECRET`                                  | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_HEALTH_DIAGNOSTIC_TOKEN`                          | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_RATE_LIMITER_API_KEY`                             | New random 64 hex characters¹ (also given to the staging rate limiter)                                                                                                                                                                                                                                            |
+| `STAGING_RESEND_API_KEY`                                   | A separate Resend API key named for staging, sending access only (`re_…`)                                                                                                                                                                                                                                         |
+| `STAGING_AFRICASTALKING_API_KEY`                           | The API key of the Africa's Talking sandbox app (username `sandbox` is set in `wrangler.toml`; no real SMS)                                                                                                                                                                                                       |
+| `STAGING_R2_ACCESS_KEY_ID`, `STAGING_R2_SECRET_ACCESS_KEY` | R2 → Manage API tokens → token with Object Read & Write on the two `-staging` buckets only                                                                                                                                                                                                                        |
 
 ¹ `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 

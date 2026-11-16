@@ -271,6 +271,17 @@ const nextConfig = {
           },
         ],
       },
+      // Staging copy only (M0.15b; built with ENVIRONMENT=staging): keep every
+      // page and API answer out of search results. Production builds add
+      // nothing here.
+      ...(process.env.ENVIRONMENT === "staging"
+        ? [
+            {
+              source: "/:path*",
+              headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }],
+            },
+          ]
+        : []),
     ];
   },
 };

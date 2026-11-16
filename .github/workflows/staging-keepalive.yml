@@ -20,6 +20,10 @@ concurrency:
 jobs:
   keepalive:
     name: Read the staging project once
+    # Only once the owner switches staging on (admin-only repository variable
+    # STAGING_ENABLED = "true"), so an unfinished staging copy opens no daily
+    # failure issues.
+    if: vars.STAGING_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:

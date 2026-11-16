@@ -22,17 +22,21 @@ on:
 permissions:
   contents: read
 
+# One queue per target: production releases share "deploy-production" as
+# before; a manual staging-only rehearsal queues in "deploy-staging" and so can
+# never cancel or replace a queued production release.
 concurrency:
-  group: deploy-production
+  group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
   cancel-in-progress: false
 
 jobs:
   # Staging first (roadmap M0.15b): every release goes to the separate staging
   # copy and is smoke-tested there before production (docs/RUNBOOK.md,
   # "Staging copy"). This job decides whether staging runs:
-  # - no STAGING_* secret set, or no STAGING_CLOUDFLARE_API_TOKEN: skipped,
-  #   production deploys as before ("Staging skipped" warning);
-  # - some but not all STAGING_* secrets set: fails, so the release stops;
+  # - none of the 15 STAGING_* secrets set: skipped, production deploys as
+  #   before ("Staging skipped" warning);
+  # - some but not all set (the staging deploy token included): fails, so the
+  #   release stops;
   # - the admin-only Actions variable STAGING_BYPASS_UNTIL holds a valid time
   #   at most 72 hours ahead: skipped on purpose, with a loud warning;
   # - otherwise the staging project must answer, and its secret key must belong
@@ -93,37 +97,42 @@ jobs:
             echo "**Staging skipped**: $1 Production deploys without a staging rehearsal." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           }
-          # Owner bypass: a valid ISO time at most 72 hours ahead. Expired,
-          # invalid or too distant values are ignored (reported, not obeyed).
+          # Owner bypass: a UTC time written exactly as YYYY-MM-DDTHH:MM[:SS]Z,
+          # at most 72 hours ahead. Any other value ("tomorrow", "+48 hours",
+          # expired or too distant) is reported and ignored.
           if [ -n "$STAGING_BYPASS_UNTIL" ] && [ "$STAGING_ONLY" != "true" ]; then
-            until_s="$(date -u -d "$STAGING_BYPASS_UNTIL" +%s 2>/dev/null || echo invalid)"
-            now_s="$(date -u +%s)"
-            if [ "$until_s" = "invalid" ]; then
-              echo "::notice::STAGING_BYPASS_UNTIL is not a valid time; ignored."
-            elif [ "$until_s" -le "$now_s" ]; then
-              echo "::notice::STAGING_BYPASS_UNTIL has expired; ignored."
-            elif [ "$until_s" -gt $(( now_s + 72 * 3600 )) ]; then
-              echo "::notice::STAGING_BYPASS_UNTIL is more than 72 hours ahead; ignored."
+            bypass_format='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?Z$'
+            if ! [[ "$STAGING_BYPASS_UNTIL" =~ $bypass_format ]]; then
+              echo "::warning::STAGING_BYPASS_UNTIL is not written as YYYY-MM-DDTHH:MM[:SS]Z (UTC); ignored."
             else
-              skip "The owner bypass STAGING_BYPASS_UNTIL is active until $STAGING_BYPASS_UNTIL."
+              until_s="$(date -u -d "$STAGING_BYPASS_UNTIL" +%s 2>/dev/null || echo invalid)"
+              now_s="$(date -u +%s)"
+              if [ "$until_s" = "invalid" ]; then
+                echo "::warning::STAGING_BYPASS_UNTIL is not a real date and time; ignored."
+              elif [ "$until_s" -le "$now_s" ]; then
+                echo "::warning::STAGING_BYPASS_UNTIL has expired; ignored."
+              elif [ "$until_s" -gt $(( now_s + 72 * 3600 )) ]; then
+                echo "::warning::STAGING_BYPASS_UNTIL is more than 72 hours ahead; ignored."
+              else
+                skip "The owner bypass STAGING_BYPASS_UNTIL is active until $STAGING_BYPASS_UNTIL."
+              fi
             fi
           fi
-          names=(STAGING_FOUNDATION_SUPABASE_SECRET_KEY STAGING_FOUNDATION_PHONE_OTP_KEY
-            STAGING_INTERNAL_JOBS_SECRET STAGING_OPS_JOBS_SECRET STAGING_HEALTH_DIAGNOSTIC_TOKEN
-            STAGING_RATE_LIMITER_API_KEY STAGING_KYC_ENCRYPTION_KEY STAGING_ID_ENCRYPTION_KEY
-            STAGING_HMAC_SECRET STAGING_IP_HASH_SECRET STAGING_RESEND_API_KEY
-            STAGING_AFRICASTALKING_API_KEY STAGING_R2_ACCESS_KEY_ID STAGING_R2_SECRET_ACCESS_KEY)
+          # All 15 staging secrets, the staging deploy token included: none set
+          # means staging is not configured (skip); some but not all fails, so a
+          # half-configured staging never silently drops out of the release.
+          names=(STAGING_CLOUDFLARE_API_TOKEN STAGING_FOUNDATION_SUPABASE_SECRET_KEY
+            STAGING_FOUNDATION_PHONE_OTP_KEY STAGING_INTERNAL_JOBS_SECRET STAGING_OPS_JOBS_SECRET
+            STAGING_HEALTH_DIAGNOSTIC_TOKEN STAGING_RATE_LIMITER_API_KEY STAGING_KYC_ENCRYPTION_KEY
+            STAGING_ID_ENCRYPTION_KEY STAGING_HMAC_SECRET STAGING_IP_HASH_SECRET
+            STAGING_RESEND_API_KEY STAGING_AFRICASTALKING_API_KEY STAGING_R2_ACCESS_KEY_ID
+            STAGING_R2_SECRET_ACCESS_KEY)
           set_count=0; missing=()
           for name in "${names[@]}"; do
             if [ -n "${!name}" ]; then set_count=$((set_count + 1)); else missing+=("$name"); fi
           done
-          # The staging deploy token is mandatory; without it staging never
-          # falls back to the repository's production deploy token.
-          if [ -z "$STAGING_CLOUDFLARE_API_TOKEN" ]; then
-            skip "STAGING_CLOUDFLARE_API_TOKEN is not set, so staging is not configured."
-          fi
           if [ "$set_count" -eq 0 ]; then
-            skip "No STAGING_* secret is set, so staging is not configured."
+            skip "No staging secret is set, so staging is not configured."
           fi
           if [ "${#missing[@]}" -gt 0 ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -147,11 +156,11 @@ jobs:
         env:
           STAGING_FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_FOUNDATION_SUPABASE_SECRET_KEY }}
         run: |
-          # One read-only Auth admin request; only the status code is shown. A
-          # key from any other project (production included) is refused here.
+          # One read-only Auth admin request with the key in the apikey header
+          # only; just the status code is shown. A key from any other project
+          # (production included) is refused here.
           status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
             -H "apikey: $STAGING_FOUNDATION_SUPABASE_SECRET_KEY" \
-            -H "Authorization: Bearer $STAGING_FOUNDATION_SUPABASE_SECRET_KEY" \
             "$STAGING_SUPABASE_URL/auth/v1/admin/users?page=1&per_page=1" || true)"
           if [ "$status" != "200" ]; then
             echo "::error title=Wrong staging secret key::The staging project refused STAGING_FOUNDATION_SUPABASE_SECRET_KEY ($status). It must be a secret key of project vgplszqfcmdskwseoyam, never another project's."
