@@ -90,7 +90,8 @@ export const customerInvoiceSchema = z.strictObject({
 export type CustomerInvoice = z.infer<typeof customerInvoiceSchema>;
 
 export const staffInvoiceSchema = customerInvoiceSchema.extend({
-  account_id: z.uuid(),
+  // Null once the account was erased (the invoice is kept, unlinked).
+  account_id: z.uuid().nullable(),
   customer_email: z.string().max(254).nullable(),
   customer_name: z.string().max(120).nullable(),
   issued_by_me: z.boolean(),

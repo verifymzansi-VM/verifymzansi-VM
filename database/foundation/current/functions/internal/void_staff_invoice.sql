@@ -21,7 +21,7 @@ begin
     raise exception 'invoice not found' using errcode='PT404', detail='invoice_unavailable';
   end if;
   perform internal.assert_staff_payment_actor(actor, inv.account_id);
-  perform internal.lock_evidence_subject(inv.account_id);
+  perform internal.lock_kept_record_subject(inv.account_id, inv.id);
   select * into inv from private.customer_invoices i where i.id = p_invoice_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after the lock waits
   perform internal.assert_staff_payment_actor(actor, inv.account_id);

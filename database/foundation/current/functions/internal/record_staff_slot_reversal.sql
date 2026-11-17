@@ -16,9 +16,9 @@ begin
     raise exception 'valid slot reversal and reason required' using errcode='22023';
   end if;
   select p.owner_id into buyer from private.payment_lines l join private.payments p on p.id=l.payment_id where l.id=p_line_id;
-  if buyer is null then raise exception 'slot payment line not found' using errcode='22023'; end if;
+  if not found then raise exception 'slot payment line not found' using errcode='22023'; end if;
   perform internal.assert_staff_acts_for_other(actor, buyer, 'reversal');
-  perform internal.lock_evidence_subject(buyer);
+  perform internal.lock_kept_record_subject(buyer, (select l.payment_id from private.payment_lines l where l.id=p_line_id));
   select p.* into pay from private.payments p join private.payment_lines l on l.payment_id=p.id where l.id=p_line_id
     for update of p;
   select * into line from private.payment_lines l where l.id=p_line_id for update;

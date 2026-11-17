@@ -15,10 +15,10 @@ begin
   perform internal.assert_staff_refund_reason(p_kind, p_reason_code, p_reason);
   if p_payment_id is null then raise exception 'payment required' using errcode='22023'; end if;
   select p.owner_id into buyer from private.payments p where p.id = p_payment_id;
-  if buyer is null then raise exception 'payment not found' using errcode='22023'; end if;
+  if not found then raise exception 'payment not found' using errcode='22023'; end if;
   perform internal.assert_staff_payment_actor(actor, buyer);
   perform pg_advisory_xact_lock(hashtextextended('frontend-payment-reversal:'||p_payment_id::text, 0));
-  perform internal.lock_evidence_subject(buyer);
+  perform internal.lock_kept_record_subject(buyer, p_payment_id);
   select * into pay from private.payments p where p.id = p_payment_id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, buyer);
@@ -34,7 +34,8 @@ begin
     raise exception 'a slot of this payment was already reversed; refund its other slots one by one' using errcode='PT409', detail='payment_slot_reversed';
   end if;
   refunded_before := internal.payment_refunded_before_cents(pay.id);
-  approval := internal.refund_needs_approval(p_kind, refunded_before, pay.amount_cents);
+  -- A payment of an erased account: always a second staff member.
+  approval := internal.refund_needs_approval(p_kind, refunded_before, pay.amount_cents) or pay.owner_id is null;
   if not approval then
     result := internal.reverse_payment(pay.id, p_kind, btrim(p_reason));
     insert into private.frontend_payment_reversals(payment_id, actor_id, kind, reason, released_activations)

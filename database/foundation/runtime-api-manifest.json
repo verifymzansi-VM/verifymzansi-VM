@@ -4744,6 +4744,62 @@
         "service_role": false
       },
       "authority": "Caller-bound read of the account's own latest Multi-listing package that runs or ended in the last 3 days (term, slots bought, places, start and end, new posts allowed and started in the rolling 30 days, the posts in it and the posts of the account's ended Individual slots it takes), whether the account could buy one now, and until when its Individual slots cannot be bought or renewed; no other account's data."
+    },
+    {
+      "name": "close_my_account",
+      "updates": ["updates/20261116175757_close_and_erase_account.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound: closes the caller's own account at once, only from its own live confirmed session that signed in during the last 15 minutes, never a staff account: the closure record (posts leave every public read), sign-in blocked and every session ended, the erasure scheduled 30 days later and a deletion privacy request recorded for staff. Returns only the closure and erasure dates and the request id."
+    },
+    {
+      "name": "fulfil_account_deletion",
+      "updates": ["updates/20261116175757_close_and_erase_account.sql"],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_revision",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current privacy request capability and recent authenticator proof; a verified deletion request in progress at its current revision, whose identity another staff member verified, never the requester's own and never a staff account: closes the named account if still open, links the request, and erases the account once its 30 days have passed and no legal, fraud or content hold, staff role, pending payment, open refund or waiting bank transfer applies. Returns the erasure state (dates, status, counts), no personal data; a replay returns the recorded state."
+    },
+    {
+      "name": "get_account_erasure",
+      "updates": ["updates/20261116175757_close_and_erase_account.sql"],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current privacy request capability and recent authenticator proof: the erasure state of the account a deletion request names (closure, erasure and Auth removal dates, the reason it waits, counts of what was erased), no personal data."
     }
   ]
 }

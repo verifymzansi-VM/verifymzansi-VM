@@ -27,7 +27,8 @@ export type RefundTarget = {
   /** Money already returned on this payment (refunded or charged back slots). */
   priorCents: number;
   label: string;
-  accountId: string;
+  /** Null once the paying account was erased. */
+  accountId: string | null;
   /** How it was paid: an Ozow refund, or a bank transfer back for a bank transfer. */
   method?: "ozow" | "invoice";
 };

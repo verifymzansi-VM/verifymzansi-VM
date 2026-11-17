@@ -70,7 +70,7 @@ begin
     return jsonb_build_object('outcome', 'unmatched');
   end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('frontend-payment-reversal:'||payment::text, 0));
-  perform internal.lock_evidence_subject(p.owner_id) from private.payments p where p.id = payment;
+  perform internal.lock_kept_record_subject(p.owner_id, p.id) from private.payments p where p.id = payment;
   select * into request from private.payment_refund_requests r
     where r.ozow_refund_id = refund and r.status <> 'declined' for update;
   if not found then

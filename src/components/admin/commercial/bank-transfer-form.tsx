@@ -46,7 +46,8 @@ export type WaitingTransfer = {
   customer_name: string | null;
   customer_email: string | null;
   similar_records: number;
-  account_id: string;
+  /** Null once the account was erased (the record is kept, unlinked). */
+  account_id: string | null;
   term_days: number;
   slots: number;
   amount_received_cents: number;

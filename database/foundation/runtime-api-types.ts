@@ -52,6 +52,9 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_my_slots_v2: { Args: Record<never, never>; Returns: Json };
+      close_my_account: { Args: Record<never, never>; Returns: Json };
+      fulfil_account_deletion: { Args: { p_request: string; p_revision: number }; Returns: Json };
+      get_account_erasure: { Args: { p_request: string }; Returns: Json };
       start_package_checkout: {
         Args: {
           p_plan_id: string;

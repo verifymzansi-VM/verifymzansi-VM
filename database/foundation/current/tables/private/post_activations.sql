@@ -5,7 +5,7 @@ create table private.post_activations (
   id uuid default gen_random_uuid() not null,
   post_id uuid,
   entitlement_id uuid not null,
-  owner_id uuid not null,
+  owner_id uuid,
   activated_at timestamp with time zone default statement_timestamp() not null,
   released_at timestamp with time zone,
   release_reason text,
