@@ -2327,7 +2327,8 @@ an invoice was issued.
 
 ## A phone code is sent only when the number can be verified, 16 November 2026
 
-`20261116194000_phone_in_use_before_sms.sql` is pending.
+`20261116194000_phone_in_use_before_sms.sql` was applied on 17 November 2026 at
+05:36 UTC with the owner's approval.
 
 Until now the website paid for an SMS code that could never be used: a member
 who entered a number another account had already verified, or who changed their
@@ -4181,6 +4182,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   accounts closed: 0; erased: 0; waiting with a hold: 0"; production fingerprint
   after it matched the full replay (except the known schema grant difference)
   (roadmap M1.6b)
-- `20261116194000_phone_in_use_before_sms.sql`: pending
+- `20261116194000_phone_in_use_before_sms.sql`: applied 2026-11-17 05:36 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file (sha256 starting ce981e4b9ae4adb2, files from
+  raw GitHub at 5a36e5fb) before the pull request was merged; preflight before
+  "phone in use before sms: update not applied; active phone proofs: 1; open
+  codes for a number in use: 0" with no problem rows, after "already applied"
+  with the same counts; production fingerprint after it matched the full replay
+  (except the known schema grant difference)
 
 <!-- applied-register:end -->
