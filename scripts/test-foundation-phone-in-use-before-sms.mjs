@@ -94,7 +94,7 @@ try {
   /** Creating a code for `phone` fails with PT409 and this listed reason. */
   const refused = (owner, phone, reason) => {
     const stderr = fails(createSql(owner, phone), "PT409");
-    assert.match(stderr, new RegExp(`DETAIL:\\s+${reason}\\b`), stderr);
+    assert.equal(/^DETAIL:\s+(\S+)/m.exec(stderr)?.[1], reason, stderr);
     return stderr;
   };
   const activePhones = (owner) =>
@@ -189,7 +189,7 @@ try {
     );
     assert.match(allowedFrom, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
     const stderr = refused(holder, OTHER, "phone_change_cooldown");
-    assert.match(stderr, new RegExp(`HINT:\\s+${allowedFrom}`));
+    assert.equal(/^HINT:\s+(\S+)/m.exec(stderr)?.[1], allowedFrom, stderr);
     // Eligibility comes first: a member who may not change their number learns
     // nothing about who holds another one.
     prove(syntheticMember("phone-neighbour"), NEIGHBOUR);
