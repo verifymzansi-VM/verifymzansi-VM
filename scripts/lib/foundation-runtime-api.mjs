@@ -6,6 +6,20 @@ const publicBusinessProjections = new Set([
   "get_public_frontend_business_cipc",
   "get_public_frontend_business_affiliations",
 ]);
+// Reviewed public settings (20261116211438_online_payment_limit.sql): no
+// arguments, no account data, readable by visitors like the price catalogue.
+const publicSettingReads = new Map([
+  [
+    "get_payment_limits",
+    (data) =>
+      data !== null &&
+      typeof data === "object" &&
+      !Array.isArray(data) &&
+      Object.keys(data).join() === "online_max_cents" &&
+      Number.isSafeInteger(data.online_max_cents) &&
+      data.online_max_cents > 0,
+  ],
+]);
 function validateRuntimeAudience(fn) {
   assert.deepEqual(Object.keys(fn.execute).sort(), ["anon", "authenticated", "service_role"]);
   assert.equal(typeof fn.execute.authenticated, "boolean");
@@ -16,6 +30,11 @@ function validateRuntimeAudience(fn) {
     assert.equal(fn.volatility, "s");
     assert.equal(fn.returns, "jsonb");
     assert.deepEqual(fn.arguments, [{ name: "p_post_ids", sqlType: "uuid[]", optional: false }]);
+  } else if (publicSettingReads.has(fn.name)) {
+    assert.deepEqual(fn.execute, { anon: true, authenticated: true, service_role: false });
+    assert.equal(fn.volatility, "s");
+    assert.equal(fn.returns, "jsonb");
+    assert.deepEqual(fn.arguments, []);
   } else assert.equal(fn.execute.anon, false);
 }
 
@@ -92,9 +111,17 @@ export async function probeFoundationRuntimeApi(
       signal: AbortSignal.timeout(5000),
     });
     const data = await response.json().catch(() => null);
-    const publicProjection = publicBusinessProjections.has(fn.name);
+    const publicSetting = publicSettingReads.get(fn.name);
+    const publicProjection = publicBusinessProjections.has(fn.name) || publicSetting !== undefined;
     let state = "unexpected";
-    if (publicProjection && response.status === 200 && Array.isArray(data) && data.length === 0)
+    if (publicSetting) {
+      if (response.status === 200 && publicSetting(data)) state = "present";
+    } else if (
+      publicProjection &&
+      response.status === 200 &&
+      Array.isArray(data) &&
+      data.length === 0
+    )
       state = "present";
     else if (!publicProjection && [401, 403].includes(response.status) && data?.code === "42501")
       state = "present";
