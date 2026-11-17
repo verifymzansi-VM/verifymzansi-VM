@@ -29,7 +29,10 @@ describe("VerifyMzansi's sample contact numbers", () => {
 describe("wrangler.toml", () => {
   const toml = readFileSync(path.join(process.cwd(), "wrangler.toml"), "utf8");
   const values = (name: string) =>
-    [...toml.matchAll(new RegExp(`^${name} = "([^"]*)"\\r?$`, "gm"))].map((match) => match[1]);
+    toml
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith(`${name} = "`) && line.endsWith('"'))
+      .map((line) => line.slice(name.length + 4, -1));
 
   it("gives every environment the same valid VerifyMzansi number", () => {
     for (const name of ["SAMPLE_CONTACT_PHONE", "SAMPLE_CONTACT_WHATSAPP"]) {
