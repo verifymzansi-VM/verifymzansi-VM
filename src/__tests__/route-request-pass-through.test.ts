@@ -16,7 +16,8 @@ import { describe, expect, it } from "vitest";
  */
 
 const SRC_DIR = path.resolve(__dirname, "..");
-const TEST_FILE = /(^|[\\/])__tests__[\\/]|\.(test|spec|stories)\.[cm]?[jt]sx?$/;
+const SKIPPED_DIRS = new Set(["__tests__", "node_modules"]);
+const TEST_FILE = /\.(?:test|spec|stories)\.[cm]?[jt]sx?$/;
 const SOURCE_FILE = /\.[cm]?[jt]sx?$/;
 const REQUEST_CONSTRUCTORS = new Set(["NextRequest", "Request"]);
 /** A string-valued property: `new NextRequest(request.url, …)` builds from a URL. */
@@ -27,8 +28,10 @@ const URL_NAME = /(url|href)$/i;
 function sourceFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) return entry.name === "node_modules" ? [] : sourceFiles(full);
-    return SOURCE_FILE.test(entry.name) && !TEST_FILE.test(full) && !entry.name.endsWith(".d.ts")
+    if (entry.isDirectory()) return SKIPPED_DIRS.has(entry.name) ? [] : sourceFiles(full);
+    return SOURCE_FILE.test(entry.name) &&
+      !TEST_FILE.test(entry.name) &&
+      !entry.name.endsWith(".d.ts")
       ? [full]
       : [];
   });
