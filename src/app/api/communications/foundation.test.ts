@@ -7,6 +7,17 @@ import { createFoundationRouteContext } from "@/lib/foundation/request-route";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { COMMUNICATION_WORDING_VERSION } from "@/lib/foundation/communication-choices";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+
+// Analytics and third-party sharing are hidden until the site uses them
+// (src/lib/hidden-features.ts); some tests switch them on to keep that path checked.
+const hiddenFeature = vi.hoisted(() => ({ shown: false }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_DATA_USE_CHOICES() {
+    return hiddenFeature.shown;
+  },
+}));
 
 vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: vi.fn() }));
 vi.mock("@/lib/foundation/runtime-connection", () => ({
@@ -57,6 +68,7 @@ const activity = () => request("/api/communications/email-activity");
 
 beforeEach(() => {
   vi.clearAllMocks();
+  hiddenFeature.shown = false;
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
   authenticate.mockResolvedValue({ rpc });
@@ -83,7 +95,7 @@ beforeEach(() => {
             ],
           }
         : name === "save_my_communication_choices"
-          ? { ...ALL_OFF, analytics: true }
+          ? { ...ALL_OFF, marketing_email: true }
           : ALL_OFF,
   }));
 });
@@ -99,15 +111,51 @@ describe("communication choices", () => {
   });
 
   it("saves only the given choice, with the wording version, and returns all four", async () => {
-    const response = await savePreferences(preferences("PATCH", { analytics: true }));
+    const response = await savePreferences(preferences("PATCH", { marketing_email: true }));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       success: true,
-      preferences: { ...ALL_OFF, analytics: true },
+      preferences: { ...ALL_OFF, marketing_email: true },
     });
     expect(rpc).toHaveBeenCalledExactlyOnceWith("save_my_communication_choices", {
       p_wording: COMMUNICATION_WORDING_VERSION,
+      p_marketing_email: true,
+    });
+  });
+
+  it.each([
+    ["analytics", { analytics: true }],
+    ["third-party sharing", { third_party_sharing: true }],
+    ["a hidden choice beside a shown one", { marketing_email: true, analytics: true }],
+  ])("refuses to turn on %s while it is hidden", async (_label, body) => {
+    const response = await savePreferences(preferences("PATCH", body));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ reason: "invalid" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("still lets a member turn a hidden choice off", async () => {
+    const response = await savePreferences(
+      preferences("PATCH", { analytics: false, third_party_sharing: false })
+    );
+    expect(response.status).toBe(200);
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("save_my_communication_choices", {
+      p_wording: COMMUNICATION_WORDING_VERSION,
+      p_analytics: false,
+      p_third_party_sharing: false,
+    });
+  });
+
+  it("turns the hidden choices on again when they are shown", async () => {
+    hiddenFeature.shown = true;
+    const response = await savePreferences(
+      preferences("PATCH", { analytics: true, third_party_sharing: true })
+    );
+    expect(response.status).toBe(200);
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("save_my_communication_choices", {
+      p_wording: COMMUNICATION_WORDING_VERSION,
       p_analytics: true,
+      p_third_party_sharing: true,
     });
   });
 
@@ -122,10 +170,10 @@ describe("communication choices", () => {
 
   it.each([
     ["no choice", {}],
-    ["a non-boolean", { analytics: "true" }],
+    ["a non-boolean", { marketing_email: "true" }],
     ["an unknown purpose", { data_processing: true }],
-    ["a claimed account", { analytics: true, user_id: id }],
-    ["a caller-chosen wording", { analytics: true, wording: "communication-2030-01" }],
+    ["a claimed account", { marketing_email: true, user_id: id }],
+    ["a caller-chosen wording", { marketing_email: true, wording: "communication-2030-01" }],
   ])("refuses %s without calling the database", async (_label, body) => {
     const response = await savePreferences(preferences("PATCH", body));
     expect(response.status).toBe(400);
@@ -134,9 +182,9 @@ describe("communication choices", () => {
   });
 
   it("keeps CSRF and same-origin protection on saves", async () => {
-    expect((await savePreferences(preferences("PATCH", { analytics: true }, false))).status).toBe(
-      403
-    );
+    expect(
+      (await savePreferences(preferences("PATCH", { marketing_email: true }, false))).status
+    ).toBe(403);
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -152,7 +200,7 @@ describe("communication choices", () => {
       data: null,
       error: { code: "PT429", details: "choice_limit", message: "too many changes today" },
     });
-    let response = await savePreferences(preferences("PATCH", { analytics: true }));
+    let response = await savePreferences(preferences("PATCH", { marketing_email: true }));
     expect(response.status).toBe(429);
     expect(await response.json()).toMatchObject({ reason: "limited" });
 
@@ -161,7 +209,7 @@ describe("communication choices", () => {
       data: null,
       error: { code: "42501", details: null, message: "active authenticated member required" },
     });
-    response = await savePreferences(preferences("PATCH", { analytics: true }));
+    response = await savePreferences(preferences("PATCH", { marketing_email: true }));
     expect(response.status).toBe(403);
     let body = await response.json();
     expect(JSON.stringify(body)).not.toContain("active authenticated");
@@ -196,7 +244,7 @@ describe("communication choices", () => {
       data: null,
       error: { code: "XX000", details: null, message: "relation private.x does not exist" },
     });
-    response = await savePreferences(preferences("PATCH", { analytics: true }));
+    response = await savePreferences(preferences("PATCH", { marketing_email: true }));
     expect(response.status).toBe(503);
     body = await response.json();
     expect(JSON.stringify(body)).not.toContain("relation");

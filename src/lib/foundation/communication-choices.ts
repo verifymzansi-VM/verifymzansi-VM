@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { hasDatabaseMessage, hasDatabaseReason } from "./error-reasons";
+import { SHOW_DATA_USE_CHOICES } from "../hidden-features";
 
 /**
  * The version of the switch wording on the communication page. Every saved
@@ -105,6 +106,13 @@ export async function saveCommunicationChoices(
 ): Promise<CommunicationChoices> {
   const change = communicationChoiceUpdateSchema.safeParse(input);
   if (!change.success) throw new FoundationCommunicationError("invalid");
+  // Hidden choices stay at their safe default: a crafted request cannot turn
+  // one on, but can still turn it off.
+  if (
+    !SHOW_DATA_USE_CHOICES &&
+    (change.data.analytics === true || change.data.third_party_sharing === true)
+  )
+    throw new FoundationCommunicationError("invalid");
   const { data, error } = await api.rpc("save_my_communication_choices", {
     p_wording: COMMUNICATION_WORDING_VERSION,
     ...(change.data.marketing_email === undefined

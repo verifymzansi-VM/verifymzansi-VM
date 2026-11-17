@@ -108,3 +108,13 @@ export const SHOW_TRIAL_PLAN_CHANGES: boolean = false;
  * the route answers 404.
  */
 export const SHOW_TRIAL_EXTENSION_OFFERS: boolean = false;
+
+/**
+ * The "Analytics" and "Third-party sharing" switches on the Notifications
+ * page's Preferences tab (/dashboard/communication). The site does not use
+ * usage analytics or third-party processing yet, so the switches asked for a
+ * choice that changed nothing (owner decision 2026-11-16). While hidden, the
+ * preferences route refuses to turn either one on; turning one off (the safe
+ * default) still works, so a member who chose one earlier can withdraw it.
+ */
+export const SHOW_DATA_USE_CHOICES: boolean = false;
