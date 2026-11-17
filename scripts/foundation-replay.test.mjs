@@ -18,15 +18,15 @@ test("the recorded fingerprint keeps the production-matched values", () => {
   // below. Reviewed updates after it are listed as pending until the owner has
   // applied them and production is captured again.
   const check = recorded.productionCheck;
-  assert.equal(check.matchedThroughUpdate, "20261117064820_ban_blocks_phone_numbers.sql");
+  assert.equal(check.matchedThroughUpdate, "20261117082021_switch_posting_terms_v5.sql");
   assert.deepEqual(check.matchedFingerprints, {
     column_grants: "11724f805587a82326eae936e0200f0c",
     columns: "16fe50fae39acfb6af124fb5f6c16e98",
     constraints: "30c988b0b3187b7bb49ecda6bdf24b16",
     event_triggers: "821f7d069c595c075754fad9309136ac",
-    function_bodies: "4a3ce9df718e920ffdb45069248b930f",
-    function_grants: "1e092fbe936c3cc44cee88cc9d87e5ae",
-    function_metadata: "8e8f7de94bae02466704fd6733da0aeb",
+    function_bodies: "7e877fb3b9ba779832c6db1a030fc225",
+    function_grants: "877bdf0c312bc2d37a7c0d1711d5dcfb",
+    function_metadata: "84adb2de36e2117b6aa9e493b926024a",
     indexes: "5cb1194807ab467e4bf3be2b76b70f40",
     policies: "2c1b773d5ffe29f172271087b1f36e04",
     row_level_security: "64ad562a0bdcc3267c51bcc81bab0605",
