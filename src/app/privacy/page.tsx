@@ -7,6 +7,7 @@ import { getTrustPublicConfig } from "@/lib/trust-public-config";
 
 export const metadata = {
   title: "Privacy Policy",
+  alternates: { canonical: "/privacy" },
   description:
     "How VerifyMzansi collects, uses, and protects your personal information. POPIA-compliant data practices.",
 };

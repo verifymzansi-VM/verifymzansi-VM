@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { Phone, TriangleAlert } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
+import { EmergencyCallLinks } from "@/components/safety/emergency-call-links";
 import { InfoHero } from "@/components/safety/info-hero";
 import { MeetingChecklist } from "./meeting-checklist";
 
 export const metadata = {
   title: "Meeting safety checklist",
+  alternates: { canonical: "/safety/meeting-checklist" },
   description:
     "Your checklist for safe in-person meetups when buying or selling on VerifyMzansi. Stay safe in South Africa.",
 };
@@ -54,22 +56,7 @@ export default function MeetingChecklistPage() {
                   </p>
                 </div>
               </div>
-              <div className="flex flex-col gap-2.5 sm:flex-row">
-                <a
-                  href="tel:10111"
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand-red-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-brand-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <Phone className="h-4 w-4" aria-hidden="true" />
-                  Call SAPS 10111
-                </a>
-                <a
-                  href="tel:112"
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-brand-red/30 bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <Phone className="h-4 w-4" aria-hidden="true" />
-                  Call 112
-                </a>
-              </div>
+              <EmergencyCallLinks />
             </div>
           </section>
         </div>

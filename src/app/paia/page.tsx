@@ -7,6 +7,7 @@ import { getConfiguredLegalIdentityRows, getTrustPublicConfig } from "@/lib/trus
 
 export const metadata = {
   title: "PAIA Manual",
+  alternates: { canonical: "/paia" },
   description:
     "VerifyMzansi's PAIA manual (section 51): company details, records we hold, how we process personal information, and how to request access to records.",
 };

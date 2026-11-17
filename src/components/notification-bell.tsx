@@ -12,11 +12,17 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNotificationStore, type Notification } from "@/stores/notification-store";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import {
+  NOTIFICATION_FEED_URL,
+  sharedInboxRead,
+  subscribeSharedPoll,
+} from "@/lib/notifications/shared-inbox-reads";
 import { useRealtime } from "@/hooks/use-realtime";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime, formatSaLongDate } from "@/lib/utils/format";
 
-const NOTIFICATION_REFRESH_INTERVAL_MS = 10_000;
+// A fallback only: realtime signals refresh the bell as soon as something changes.
+const NOTIFICATION_REFRESH_INTERVAL_MS = 60_000;
 
 function mapNotificationRow(n: Record<string, unknown>): Notification | null {
   const dbId = n.id;
@@ -89,20 +95,24 @@ export function NotificationBell({ userId }: { userId?: string }) {
   }, []);
 
   const refreshNotifications = useCallback(
-    async (signal?: AbortSignal) => {
+    // `signal`: ignore this read's answer once the bell unmounts or the account
+    // changes (the shared request itself is not cancelled; other bells may use it).
+    // `fresh`: a change was signalled, so never accept a read that started earlier.
+    async ({ signal, fresh = false }: { signal?: AbortSignal; fresh?: boolean } = {}) => {
       const requestUserId = currentUserRef.current;
       const requestGeneration = accountGenerationRef.current;
       const version = ++refreshVersion.current;
       if (!requestUserId) return;
 
-      await fetch("/api/notifications?limit=25", {
-        signal,
-        cache: "no-store",
-        credentials: "same-origin",
-      })
-        .then((r) => {
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          return r.json();
+      // One request for every bell and listener on the page (shared-inbox-reads).
+      await sharedInboxRead(NOTIFICATION_FEED_URL, { fresh })
+        .then((result) => {
+          if (!result.ok) throw new Error(`HTTP ${result.status}`);
+          return result.data as {
+            accountId?: string;
+            notifications?: unknown;
+            unreadCount?: unknown;
+          };
         })
         .then((data) => {
           if (
@@ -147,7 +157,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
     clearAll();
 
     const controller = new AbortController();
-    void refreshNotifications(controller.signal);
+    void refreshNotifications({ signal: controller.signal });
 
     return () => controller.abort();
   }, [userId, refreshNotifications, clearAll]);
@@ -155,21 +165,10 @@ export function NotificationBell({ userId }: { userId?: string }) {
   useEffect(() => {
     if (!userId) return;
 
-    const refreshIfVisible = () => {
-      if (document.visibilityState === "visible") {
-        void refreshNotifications();
-      }
-    };
-
-    const intervalId = window.setInterval(refreshIfVisible, NOTIFICATION_REFRESH_INTERVAL_MS);
-    window.addEventListener("focus", refreshIfVisible);
-    document.addEventListener("visibilitychange", refreshIfVisible);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", refreshIfVisible);
-      document.removeEventListener("visibilitychange", refreshIfVisible);
-    };
+    // One timer for every bell on the page, paused while the tab is hidden.
+    return subscribeSharedPoll("notifications", NOTIFICATION_REFRESH_INTERVAL_MS, () => {
+      void refreshNotifications();
+    });
   }, [userId, refreshNotifications]);
 
   // Subscribe to real-time notifications for the authenticated user
@@ -180,7 +179,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
     filterValue: userId,
     enabled: !!userId,
     onEvent: (payload: Record<string, unknown>) => {
-      if (payload.eventType === "REVALIDATE") void refreshNotifications();
+      if (payload.eventType === "REVALIDATE") void refreshNotifications({ fresh: true });
     },
   });
 
@@ -191,7 +190,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
       const requestGeneration = accountGenerationRef.current;
       void syncNotificationMutation(body, method).catch(() => {
         if (!mountedRef.current || accountGenerationRef.current !== requestGeneration) return;
-        void refreshNotifications();
+        void refreshNotifications({ fresh: true });
       });
     },
     [refreshNotifications]

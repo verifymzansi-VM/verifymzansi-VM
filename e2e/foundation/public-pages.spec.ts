@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { readTestCopy } from "./support/test-copy";
 
 // Public pages of the restored website in foundation mode: the checks of the
 // stub suite's smoke.spec.ts and golden.spec.ts that need no account or data,
@@ -450,10 +451,45 @@ test.describe("pricing and organisations", () => {
     expect(overflow).toBeLessThanOrEqual(1);
   });
 
-  test("an unknown organisation shows the not-found page", async ({ page }) => {
-    // The root loading boundary streams pages, so notFound() renders with status 200.
-    await page.goto("/organisation/not-a-real-organisation");
+  test("an unknown organisation shows the not-found page with a real 404", async ({ page }) => {
+    // The root loading boundary streams pages, so the page's notFound() alone
+    // would answer 200; the proxy answers 404 before rendering (proxy-handler).
+    const response = await page.goto("/organisation/not-a-real-organisation");
+    expect(response?.status()).toBe(404);
     await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+  });
+
+  test("unknown and malformed post addresses answer 404 with their own design", async ({
+    page,
+  }) => {
+    const unknown = "0d3f6a52-8b1c-4e2f-9a7d-5c4b3e2f1a09";
+    for (const [path, heading] of [
+      ["/listing/not-a-uuid", "This listing isn't available"],
+      [`/listing/${unknown}`, "This listing isn't available"],
+      ["/mzansi-business/not-a-uuid", "This post isn't available"],
+      [`/mzansi-business/${unknown}`, "This post isn't available"],
+      [`/tourism-events/${unknown}`, "Page not found"],
+    ] as const) {
+      const response = await page.goto(path);
+      expect(response?.status(), path).toBe(404);
+      await expect(page.getByRole("heading", { name: heading }), path).toBeVisible();
+    }
+
+    // Live posts still answer 200, so the check cannot hide a real page. A
+    // business post opened as a listing is not a listing: 404.
+    const posts = readTestCopy().posts;
+    const idOf = (title: string) => posts.find((post) => post.title === title)?.id ?? "";
+    const business = idOf("Fixture Mzansi Motor Workshop");
+    const event = idOf("Fixture Soweto Craft Market");
+    expect(business && event).toBeTruthy();
+    for (const path of [`/mzansi-business/${business}`, `/tourism-events/${event}`]) {
+      const response = await page.goto(path);
+      expect(response?.status(), path).toBe(200);
+      await expect(page.getByRole("heading", { name: /isn't available|not found/i })).toHaveCount(
+        0
+      );
+    }
+    expect((await page.goto(`/listing/${business}`))?.status()).toBe(404);
   });
 });
 
