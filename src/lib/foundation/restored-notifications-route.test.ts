@@ -107,3 +107,162 @@ it("points a member whose ID was sent back to the verification page, without the
     },
   ]);
 });
+it("tells a member their ID check was accepted and links verification", async () => {
+  rpc.mockResolvedValueOnce({
+    data: {
+      items: [{ ...notice, kind: "identity_accepted", warning_reason: null }],
+      unread_count: 1,
+    },
+    error: null,
+  });
+  const response = await handleRestoredNotifications(
+    new NextRequest("https://verifymzansi.com/api/notifications"),
+    "GET"
+  );
+  expect(response.status).toBe(200);
+  expect((await response.json()).notifications).toEqual([
+    {
+      id,
+      title: "Your ID check was accepted",
+      message: "Your identity is verified. Open verification to see any steps that remain.",
+      href: "/verification",
+      type: "success",
+      read: false,
+      created_at: notice.created_at,
+    },
+  ]);
+});
+it("names the post in moderation notices, with a fallback when the title is gone", async () => {
+  const post = "33333333-3333-4333-8333-333333333333";
+  rpc.mockResolvedValueOnce({
+    data: {
+      items: [
+        {
+          ...notice,
+          kind: "post_approved",
+          warning_reason: null,
+          post_id: post,
+          post_title: "Red bicycle",
+        },
+        { ...notice, kind: "post_rejected", warning_reason: null, post_id: post, post_title: null },
+        {
+          ...notice,
+          kind: "post_changes_rejected",
+          warning_reason: null,
+          post_id: post,
+          post_title: " Sofa ",
+        },
+      ],
+      unread_count: 3,
+    },
+    error: null,
+  });
+  const response = await handleRestoredNotifications(
+    new NextRequest("https://verifymzansi.com/api/notifications"),
+    "GET"
+  );
+  const body = await response.json();
+  expect(
+    body.notifications.map((n: { title: string; message: string; href: string; type: string }) => [
+      n.title,
+      n.message,
+      n.href,
+      n.type,
+    ])
+  ).toEqual([
+    [
+      "Your post is live",
+      "“Red bicycle” was approved and is now live.",
+      "/dashboard/listings",
+      "success",
+    ],
+    [
+      "Post not approved",
+      "Your post was not approved. Open your posts to see why and what to change.",
+      "/dashboard/listings",
+      "warning",
+    ],
+    [
+      "Changes not approved",
+      "Your changes to “Sofa” were not approved. Open your posts to see why.",
+      "/dashboard/listings",
+      "warning",
+    ],
+  ]);
+});
+it("links payment notices to My slots and says what was emailed", async () => {
+  rpc.mockResolvedValueOnce({
+    data: {
+      items: [{ ...notice, kind: "payment_completed", warning_reason: null }],
+      unread_count: 1,
+    },
+    error: null,
+  });
+  const response = await handleRestoredNotifications(
+    new NextRequest("https://verifymzansi.com/api/notifications"),
+    "GET"
+  );
+  expect((await response.json()).notifications[0]).toMatchObject({
+    title: "Payment received",
+    message: "We received your payment. Your receipt and invoice were emailed to you.",
+    href: "/dashboard/slots",
+    type: "success",
+  });
+});
+it("presents every account event kind the database adds", async () => {
+  const kinds = [
+    "verification_phone_confirmed",
+    "payment_completed",
+    "payment_reversed",
+    "payment_reconciliation_required",
+    "trial_started",
+    "post_changes_approved",
+    "invoice_issued",
+    "content_restored",
+    "post_expired",
+    "post_sold",
+    "post_kept",
+    "draft_deletion_warning",
+    "post_deleted",
+    "slot_renewal_reminder",
+  ];
+  rpc.mockResolvedValueOnce({
+    data: {
+      items: kinds.map((kind) => ({ ...notice, kind, warning_reason: null })),
+      unread_count: kinds.length,
+    },
+    error: null,
+  });
+  const response = await handleRestoredNotifications(
+    new NextRequest("https://verifymzansi.com/api/notifications"),
+    "GET"
+  );
+  expect(response.status).toBe(200);
+  const presented = (await response.json()).notifications as { title: string; href: string }[];
+  expect(presented).toHaveLength(kinds.length);
+  for (const n of presented) {
+    expect(n.title.length).toBeGreaterThan(0);
+    expect(n.href).toMatch(/^\/[a-z]/);
+  }
+});
+it("leaves out a notice of a kind this release does not know instead of failing the bell", async () => {
+  rpc.mockResolvedValueOnce({
+    data: {
+      items: [
+        { ...notice, id: "44444444-4444-4444-8444-444444444444", kind: "some_future_kind" },
+        notice,
+      ],
+      unread_count: 2,
+    },
+    error: null,
+  });
+  const response = await handleRestoredNotifications(
+    new NextRequest("https://verifymzansi.com/api/notifications"),
+    "GET"
+  );
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.notifications.map((n: { id: string }) => n.id)).toEqual([id]);
+  // The badge counts only what the list shows.
+  expect(body.unreadCount).toBe(1);
+});

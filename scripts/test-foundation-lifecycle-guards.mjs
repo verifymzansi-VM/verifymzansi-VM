@@ -2073,8 +2073,18 @@ try {
       assert.equal(outbox(soldListing, "post_sold"), 1);
       assert.equal(fresh(cutExpiredEvent, "post_expired"), 0);
       assert.equal(outbox(cutArchived, "post_expired") + outbox(cutArchived, "post_sold"), 0);
+      // 20261117140533_member_notices_in_app.sql adds no notice for an email
+      // queued before it (these were, at an earlier stage), and the job does
+      // not add one afterwards.
+      const bellNotices = (id) =>
+        count(
+          `select 1 from private.notifications where subject_id='${id}' and kind='post_expired'`
+        );
       job();
       assert.equal(fresh(cutExpired, "post_expired"), 1, "not repeated");
+      for (const id of [cutExpired, cutExpiredRecent, expiredListing, oldExpired]) {
+        assert.equal(bellNotices(id), 0, id);
+      }
       assert.equal(outbox(cutSold, "post_sold"), 1, "not repeated");
       assert.equal(
         outbox(expiredListing, "post_expiry_reminder"),
@@ -3414,6 +3424,52 @@ try {
       assert.ok(openOn(ent) <= 1);
     }
   );
+
+  // ----------------------------------------- member notices in the bell
+  await check("bell: a real approval and rejection notify the owner (20261117140533)", () => {
+    const kinds = (owner) =>
+      json(
+        `select coalesce(jsonb_agg(kind order by created_at,id),'[]') from private.notifications where account_id='${owner.id}';`
+      );
+    const accept = (owner) =>
+      q(
+        `insert into private.posting_terms_acceptances(owner_id,version,document_hash) values('${owner.id}','${TERMS.version}','${TERMS.document_hash}') on conflict do nothing;`
+      );
+    const approved = verified("bell-approved");
+    accept(approved);
+    const good = post(approved, "listing", "draft");
+    q(submitPost(approved, good));
+    scalar(`select vmtest.slot('${approved.id}','${staff.id}',1,20);`);
+    assert.equal(json(decide(good, "approve")).status, "live");
+    assert.deepEqual(kinds(approved), ["post_approved"]);
+    assert.equal(
+      count(
+        `select 1 from private.notifications where account_id='${approved.id}' and kind='post_approved' and post_id='${good}' and subject_id='${good}'`
+      ),
+      1
+    );
+    const refused = verified("bell-refused");
+    accept(refused);
+    const bad = post(refused, "listing", "draft");
+    q(submitPost(refused, bad));
+    assert.equal(json(decide(bad, "reject", "Photos do not show the item.")).status, "rejected");
+    assert.deepEqual(kinds(refused), ["post_rejected"]);
+    // The lifecycle job's own expiry email, queued after the update, reaches
+    // the bell once, linked to the post; a second run adds nothing.
+    const ended = post(refused, "listing", "expired", 1);
+    job();
+    job();
+    assert.equal(
+      count(
+        `select 1 from private.notifications where account_id='${refused.id}' and kind='post_expired' and post_id='${ended}' and subject_id='${ended}'`
+      ),
+      1
+    );
+    assert.equal(
+      count(`select 1 from private.notifications where account_id='${moderator.id}'`),
+      0
+    );
+  });
 } catch (error) {
   console.error(`FAIL ${current}`);
   throw error;
