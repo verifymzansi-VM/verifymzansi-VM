@@ -2327,7 +2327,8 @@ an invoice was issued.
 
 ## A ban also blocks the person's phone numbers, 17 November 2026
 
-`20261117064820_ban_blocks_phone_numbers.sql` is pending.
+`20261117064820_ban_blocks_phone_numbers.sql` was applied on 17 November 2026 at
+07:24 UTC with the owner's approval.
 
 Owner decision of 17 November 2026: a banned person must not be able to make us
 send (and pay for) SMS codes by entering their number again on a new account.
@@ -4269,6 +4270,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   codes for a number in use: 0" with no problem rows, after "already applied"
   with the same counts; production fingerprint after it matched the full replay
   (except the known schema grant difference)
-- `20261117064820_ban_blocks_phone_numbers.sql`: pending
+- `20261117064820_ban_blocks_phone_numbers.sql`: applied 2026-11-17 07:24 UTC;
+  time approximate, owner-approved, Supabase SQL editor (browser), preflight +
+  fingerprint checked; from the reviewed file (sha256 starting 7b36540cb91f0766,
+  files from raw GitHub at bb84c2e0) before the pull request was merged;
+  preflight before "ban blocks phone numbers: update not applied; running bans:
+  0; numbers to block: 0" with no problem rows, after "already applied; running
+  bans: 0; numbers blocked: 0; numbers to block: 0"; production fingerprint
+  after it matched the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
