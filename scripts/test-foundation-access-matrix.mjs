@@ -41,18 +41,18 @@
 // do; everything else goes through the production API commands.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { buildFoundationEnquiry } from "../src/lib/foundation/owner-inbox.ts";
 import { replaySteps } from "./lib/foundation-replay.mjs";
 import { createChecks, sqlHelpers } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 import {
-  attachFixtureCover,
-  createTrustedPostingFixture,
-  publishFixturePost,
-} from "./lib/foundation-trusted-posting-fixture.mjs";
-import reference from "../src/lib/domains/taxonomy/reference.json" with { type: "json" };
+  buildAccessOwnerWorld,
+  sweepBodies,
+  sweepInteger,
+  syntheticLetters,
+} from "./lib/foundation-access-matrix-world.mjs";
+import { createTrustedPostingFixture } from "./lib/foundation-trusted-posting-fixture.mjs";
 
 const STAFF_ROLES = ["moderator", "governor", "admin"];
 
@@ -431,8 +431,7 @@ try {
   const unverified = person("access-unverified");
   const orgAdmin = person("access-org-admin");
   const fixture = createTrustedPostingFixture({ rpc, sql, reviewer });
-  const letters = () => [...randomBytes(8)].map((b) => String.fromCharCode(97 + (b % 26))).join("");
-  const surname = "Zq" + letters();
+  const surname = "Zq" + syntheticLetters();
   let world;
   const plans = (await call("billing_catalogue", {}, null)).plans;
 
@@ -449,110 +448,18 @@ try {
     // Staff act on payments only with a current accepted ID review of their own.
     for (const role of STAFF_ROLES) await fixture.ready(staff[role]);
     await acceptPostingTerms(owner);
-    const liveEvent = async () => {
-      let post = await call("create_core_draft", {
-        p_kind: "event",
-        p_area: "tourism_events",
-        p_category_key: "events",
-        p_activity_key: reference.activities.find((a) => a.category === "events").key,
-        p_detail: {
-          contact_channels: ["form", "call"],
-          starts_at: new Date(Date.now() + 86400000).toISOString(),
-          ends_at: new Date(Date.now() + 93600000).toISOString(),
-          timezone: "Africa/Johannesburg",
-        },
+    const { live, buyer, business, org, orgSlug, programme, tokenHash, application } =
+      await buildAccessOwnerWorld({
+        call,
+        sql,
+        owner,
+        reviewer,
+        admin: staff.admin,
+        orgAdmin,
+        orgAdminEmail: orgAdmin.email,
+        startsAt: new Date(Date.now() + 86400000),
+        endsAt: new Date(Date.now() + 93600000),
       });
-      post = await call("save_post_content", {
-        p_post_id: post.id,
-        p_expected_revision: post.revision,
-        p_content: {
-          title: "Synthetic access matrix event",
-          description: "Synthetic local access matrix verification event.",
-          province_id: "gp",
-          city_id: "gp_johannesburg",
-        },
-      });
-      post = await attachFixtureCover(call, post, owner);
-      return publishFixturePost({ call, sql, post, reviewer });
-    };
-    const live = await liveEvent();
-    const buyer = {
-      email: "buyer-" + letters() + "@example.invalid",
-      phone: "+2782" + String(randomBytes(4).readUInt32BE(0) % 10000000).padStart(7, "0"),
-      name: "Buyer " + letters(),
-      message: "Synthetic private question " + letters(),
-    };
-    await call(
-      "submit_enquiry",
-      buildFoundationEnquiry(
-        {
-          request_id: randomUUID(),
-          post_id: live.id,
-          buyer_name: buyer.name,
-          buyer_email: buyer.email,
-          buyer_phone: buyer.phone,
-          message: buyer.message,
-        },
-        null
-      ),
-      null,
-      true
-    );
-    let business = await call("create_core_draft", {
-      p_kind: "business",
-      p_area: "business",
-      p_category_key: "automotive_services",
-      p_detail: {},
-    });
-    business = await call("save_post_content", {
-      p_post_id: business.id,
-      p_expected_revision: business.revision,
-      p_content: {
-        title: "Synthetic access workshop",
-        description: "Synthetic local business for access matrix verification.",
-        province_id: "gp",
-        city_id: "gp_johannesburg",
-      },
-    });
-    business = await attachFixtureCover(call, business, owner);
-    const reason = "Synthetic access matrix organisation";
-    const orgSlug = "access-org-" + letters();
-    const org = await call(
-      "create_organisation",
-      { p_slug: orgSlug, p_name: "Synthetic Access Org", p_type: "other", p_reason: reason },
-      staff.admin
-    );
-    await call(
-      "update_organisation",
-      {
-        p_id: org.id,
-        p_expected_revision: org.revision,
-        p_patch: { is_public: true, programme_status: "founding_trial", admin_limit: 2 },
-        p_reason: reason,
-      },
-      staff.admin
-    );
-    const programme = await call(
-      "save_organisation_programme",
-      { p_org: org.id, p_slug: "access-pilot", p_name: "Access pilot", p_reason: reason },
-      staff.admin
-    );
-    const inviteToken = randomBytes(32).toString("base64url");
-    const tokenHash = createHash("sha256").update(inviteToken).digest("hex");
-    await call(
-      "invite_organisation_admin",
-      { p_org: org.id, p_email: orgAdmin.email, p_token_hash: tokenHash, p_reason: reason },
-      staff.admin
-    );
-    await call("accept_organisation_invite", { p_token_hash: tokenHash }, orgAdmin);
-    const application = await call("apply_to_organisation", {
-      p_org: org.id,
-      p_post_id: business.id,
-      p_programme: programme.id,
-      p_share_representative_name: false,
-      p_consent: true,
-      p_reason: "We are members of this synthetic organisation.",
-    });
     const payment = await startPayment(owner);
     const one = (statement) => sql(statement).split("\n").filter(Boolean);
     const ids = {
@@ -691,54 +598,30 @@ try {
       p_account_email: owner.email,
       p_phone: world.verified.phone,
     })[name] ?? "Synthetic access sweep value";
-  const intValue = (name, body) =>
-    name === "p_expected_version"
-      ? caseVersion()
-      : name === "p_expected_revision_a"
-        ? revisionOf(body.p_post_a)
-        : name === "p_expected_revision_b"
-          ? revisionOf(body.p_post_b)
-          : /revision/.test(name)
-            ? revisionOf(body.p_post_id ?? body.p_id ?? body.p_post ?? live.id)
-            : name === "p_limit"
-              ? 50
-              : name === "p_offset"
-                ? 0
-                : name === "p_bytes" || name === "p_size"
-                  ? 128
-                  : 1;
-  const bodies = (fn) => {
-    let combos = [{}];
-    for (const arg of fn.args) {
-      let values;
-      if (arg.type === "uuid") values = uuidCandidates(arg.name);
-      else if (arg.type === "uuid[]")
-        values = [
-          arg.name === "p_ids"
-            ? [ids.notificationId]
-            : arg.name === "p_payment_ids"
-              ? [ids.paymentId]
-              : arg.name === "p_entitlement_ids"
-                ? entitlementIds
-                : [live.id, business.id],
-        ];
-      else if (arg.type === "integer") values = [null];
-      else if (arg.type === "bigint") values = [100];
-      else if (arg.type === "numeric") values = [null];
-      else if (arg.type === "boolean") values = [true];
-      else if (arg.type === "jsonb") values = [{}];
-      else if (arg.type === "text[]") values = [["Synthetic access sweep value"]];
-      else if (arg.type.startsWith("timestamp")) values = [null];
-      else if (arg.name === "p_status" && fn.name.includes("list_")) values = [null];
-      else values = [textValue(arg.name)];
-      combos = combos.flatMap((body) => values.map((value) => ({ ...body, [arg.name]: value })));
-    }
-    return combos.slice(0, 8).map((body) => {
-      for (const arg of fn.args)
-        if (arg.type === "integer") body[arg.name] = intValue(arg.name, body);
-      return body;
+  const bodies = (fn) =>
+    sweepBodies(fn, {
+      uuids: uuidCandidates,
+      uuidArray: (name) =>
+        ({
+          p_ids: [ids.notificationId],
+          p_payment_ids: [ids.paymentId],
+          p_entitlement_ids: entitlementIds,
+        })[name] ?? [live.id, business.id],
+      text: textValue,
+      integer: (name, body) =>
+        sweepInteger(name, body, {
+          caseVersion,
+          revisionOf,
+          revisionTarget: (target) => target.p_post_id ?? target.p_id ?? target.p_post ?? live.id,
+          fixed: { p_offset: 0 },
+        }),
+      typed: (arg) =>
+        ({
+          bigint: [100],
+          numeric: [null],
+          "text[]": [["Synthetic access sweep value"]],
+        })[arg.type],
     });
-  };
 
   // ---------------------------------------------------------------- sweep
   const principals = {

@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { buildFoundationEnquiry } from "../../src/lib/foundation/owner-inbox.ts";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
-  attachFixtureCover,
   createPostingVerifier,
   createTrustedPostingFixture,
-  publishFixturePost,
 } from "./foundation-trusted-posting-fixture.mjs";
-import reference from "../../src/lib/domains/taxonomy/reference.json" with { type: "json" };
+import {
+  buildAccessOwnerWorld,
+  sweepBodies,
+  sweepInteger,
+  syntheticLetters,
+} from "./foundation-access-matrix-world.mjs";
 
 // Reviewed role surface of the production API; every other command is for
 // signed-in accounts only.
@@ -242,8 +244,7 @@ export async function testAccessMatrix({
     assert.equal(response.status, 200, "access fixture " + name);
     return response.data;
   };
-  const letters = () => [...randomBytes(8)].map((b) => String.fromCharCode(97 + (b % 26))).join("");
-  const surname = "Zq" + letters();
+  const surname = "Zq" + syntheticLetters();
   const profile = await call("get_my_profile", {});
   await call("save_my_legal_name", {
     p_expected_revision: profile.revision,
@@ -255,114 +256,20 @@ export async function testAccessMatrix({
   await fixture.ready(orgAdmin);
 
   stage("access matrix owner data");
-  const liveEvent = async () => {
-    let post = await call("create_core_draft", {
-      p_kind: "event",
-      p_area: "tourism_events",
-      p_category_key: "events",
-      p_activity_key: reference.activities.find((a) => a.category === "events").key,
-      p_detail: {
-        contact_channels: ["form", "call"],
-        starts_at: new Date(Date.now() - 60000).toISOString(),
-        ends_at: new Date(Date.now() + 7200000).toISOString(),
-        timezone: "Africa/Johannesburg",
-      },
-    });
-    post = await call("save_post_content", {
-      p_post_id: post.id,
-      p_expected_revision: post.revision,
-      p_content: {
-        title: "Synthetic access matrix event",
-        description: "Synthetic local access matrix verification event.",
-        province_id: "gp",
-        city_id: "gp_johannesburg",
-      },
-    });
-    post = await attachFixtureCover(call, post, owner);
-    return publishFixturePost({ call, sql, post, reviewer });
-  };
-  const live = await liveEvent();
-  const buyer = {
-    email: "buyer-" + letters() + "@example.invalid",
-    phone: "+2782" + String(randomBytes(4).readUInt32BE(0) % 10000000).padStart(7, "0"),
-    name: "Buyer " + letters(),
-    message: "Synthetic private question " + letters(),
-  };
-  const enquiry = await rpc(
-    "submit_enquiry",
-    buildFoundationEnquiry(
-      {
-        request_id: randomUUID(),
-        post_id: live.id,
-        buyer_name: buyer.name,
-        buyer_email: buyer.email,
-        buyer_phone: buyer.phone,
-        message: buyer.message,
-      },
-      null
-    ),
-    null,
-    true
-  );
-  assert.equal(enquiry.status, 200);
-  await call("grant_verified_intro_trial", { p_owner: owner.id, p_days: 7 }, null, true);
-  let business = await call("create_core_draft", {
-    p_kind: "business",
-    p_area: "business",
-    p_category_key: "automotive_services",
-    p_detail: {},
-  });
-  business = await call("save_post_content", {
-    p_post_id: business.id,
-    p_expected_revision: business.revision,
-    p_content: {
-      title: "Synthetic access workshop",
-      description: "Synthetic local business for access matrix verification.",
-      province_id: "gp",
-      city_id: "gp_johannesburg",
-    },
-  });
-  business = await attachFixtureCover(call, business, owner);
-  await staff.admin.refresh();
-  const reason = "Synthetic access matrix organisation";
-  const orgSlug = "access-org-" + letters();
-  const org = await call(
-    "create_organisation",
-    { p_slug: orgSlug, p_name: "Synthetic Access Org", p_type: "other", p_reason: reason },
-    staff.admin
-  );
-  await call(
-    "update_organisation",
-    {
-      p_id: org.id,
-      p_expected_revision: org.revision,
-      p_patch: { is_public: true, programme_status: "founding_trial", admin_limit: 2 },
-      p_reason: reason,
-    },
-    staff.admin
-  );
-  const programme = await call(
-    "save_organisation_programme",
-    { p_org: org.id, p_slug: "access-pilot", p_name: "Access pilot", p_reason: reason },
-    staff.admin
-  );
-  const inviteToken = randomBytes(32).toString("base64url");
-  const tokenHash = createHash("sha256").update(inviteToken).digest("hex");
   const emailOf = (user) => sql("select email from auth.users where id='" + user.id + "';");
-  await call(
-    "invite_organisation_admin",
-    { p_org: org.id, p_email: emailOf(orgAdmin), p_token_hash: tokenHash, p_reason: reason },
-    staff.admin
-  );
-  await call("accept_organisation_invite", { p_token_hash: tokenHash }, orgAdmin);
-  const application = await call("apply_to_organisation", {
-    p_org: org.id,
-    p_post_id: business.id,
-    p_programme: programme.id,
-    p_share_representative_name: false,
-    p_consent: true,
-    p_reason: "We are members of this synthetic organisation.",
-  });
+  const { live, buyer, business, org, orgSlug, programme, tokenHash, application } =
+    await buildAccessOwnerWorld({
+      call,
+      sql,
+      owner,
+      reviewer,
+      admin: staff.admin,
+      orgAdmin,
+      orgAdminEmail: emailOf(orgAdmin),
+      startsAt: new Date(Date.now() - 60000),
+      endsAt: new Date(Date.now() + 7200000),
+    });
+  await call("grant_verified_intro_trial", { p_owner: owner.id, p_days: 7 }, null, true);
   const plans = (await call("billing_catalogue", {}, null)).plans;
   const checkout = await call("start_checkout", {
     p_product_id: plans.find((plan) => plan.code === "market_30d").id,
@@ -549,41 +456,18 @@ export async function testAccessMatrix({
       p_category: "other",
       p_email: emailOf(other),
     })[name] ?? "Synthetic access sweep value";
-  const intValue = (name, body) =>
-    name === "p_expected_version"
-      ? caseVersion()
-      : name === "p_expected_revision_a"
-        ? revisionOf(body.p_post_a)
-        : name === "p_expected_revision_b"
-          ? revisionOf(body.p_post_b)
-          : /revision/.test(name)
-            ? revisionOf(body.p_post_id ?? body.p_id ?? live.id)
-            : name === "p_limit"
-              ? 50
-              : name === "p_bytes" || name === "p_size"
-                ? 128
-                : 1;
-  const bodies = (fn) => {
-    let combos = [{}];
-    for (const arg of fn.args) {
-      let values;
-      if (arg.type === "uuid") values = uuidCandidates(arg.name);
-      else if (arg.type === "uuid[]")
-        values = [arg.name === "p_ids" ? [ids.notificationId] : [live.id, business.id]];
-      else if (arg.type === "integer") values = [null];
-      else if (arg.type === "boolean") values = [true];
-      else if (arg.type === "jsonb") values = [{}];
-      else if (arg.type.startsWith("timestamp")) values = [null];
-      else if (arg.name === "p_status" && fn.name.includes("list_")) values = [null];
-      else values = [textValue(arg.name)];
-      combos = combos.flatMap((body) => values.map((value) => ({ ...body, [arg.name]: value })));
-    }
-    return combos.slice(0, 8).map((body) => {
-      for (const arg of fn.args)
-        if (arg.type === "integer") body[arg.name] = intValue(arg.name, body);
-      return body;
+  const bodies = (fn) =>
+    sweepBodies(fn, {
+      uuids: uuidCandidates,
+      uuidArray: (name) => (name === "p_ids" ? [ids.notificationId] : [live.id, business.id]),
+      text: textValue,
+      integer: (name, body) =>
+        sweepInteger(name, body, {
+          caseVersion,
+          revisionOf,
+          revisionTarget: (target) => target.p_post_id ?? target.p_id ?? live.id,
+        }),
     });
-  };
   const observed = [];
   const outcomes = new Map();
   const sweep = async (label, principal) => {
