@@ -119,17 +119,19 @@ it("does not retry failed delivery or expose a challenge as successfully deliver
   expect(deliver).toHaveBeenCalledTimes(1);
   expect(rpc).toHaveBeenCalledTimes(1);
 });
-it.each(["phone_in_use", "phone_already_verified", "phone_change_identity_required"] as const)(
-  "sends no SMS when the database refuses with %s",
-  async (reason) => {
-    rpc.mockResolvedValue({ data: null, error: { code: "PT409", details: reason } });
-    const refused = await issued().catch((error: unknown) => error);
-    expect(refused).toBeInstanceOf(FoundationPhoneError);
-    expect(refused).toMatchObject({ status: 409, refusal: reason, changeAllowedFrom: undefined });
-    expect(rpc).toHaveBeenCalledTimes(1);
-    expect(deliver).not.toHaveBeenCalled();
-  }
-);
+it.each([
+  ["phone_in_use", 409],
+  ["phone_already_verified", 409],
+  ["phone_change_identity_required", 409],
+  ["phone_banned", 403],
+] as const)("sends no SMS when the database refuses with %s (%s)", async (reason, status) => {
+  rpc.mockResolvedValue({ data: null, error: { code: "PT409", details: reason } });
+  const refused = await issued().catch((error: unknown) => error);
+  expect(refused).toBeInstanceOf(FoundationPhoneError);
+  expect(refused).toMatchObject({ status, refusal: reason, changeAllowedFrom: undefined });
+  expect(rpc).toHaveBeenCalledTimes(1);
+  expect(deliver).not.toHaveBeenCalled();
+});
 it("sends no SMS during the change cooldown and keeps the date the database gives", async () => {
   rpc.mockResolvedValue({
     data: null,
@@ -181,20 +183,29 @@ it("an expired, replaced or used-up code asks for a new code, not 'number in use
   expect(rpc).toHaveBeenCalledTimes(1);
 });
 it.each([
-  ["23505", 409, "phone_in_use"],
-  ["PT409", 400, undefined],
-  ["42501", 403, undefined],
-] as const)("a %s refusal at finalization becomes %s", async (code, status, refusal) => {
-  const { code: otp } = await issued();
-  rpc.mockImplementation(async (name: string) =>
-    name === "claim_verification_phone_attempt"
-      ? { data: { challenge_id: challenge, phone, otp_hash: storedHash }, error: null }
-      : { data: null, error: { code } }
-  );
-  await expect(
-    verifyFoundationPhoneChallenge(api, owner, { challenge_id: challenge, code: otp }, environment)
-  ).rejects.toMatchObject({ status, refusal });
-});
+  ["23505", null, 409, "phone_in_use"],
+  ["PT409", "phone_banned", 403, "phone_banned"],
+  ["PT409", null, 400, undefined],
+  ["42501", null, 403, undefined],
+] as const)(
+  "a %s (%s) refusal at finalization becomes %s",
+  async (code, details, status, refusal) => {
+    const { code: otp } = await issued();
+    rpc.mockImplementation(async (name: string) =>
+      name === "claim_verification_phone_attempt"
+        ? { data: { challenge_id: challenge, phone, otp_hash: storedHash }, error: null }
+        : { data: null, error: { code, details } }
+    );
+    await expect(
+      verifyFoundationPhoneChallenge(
+        api,
+        owner,
+        { challenge_id: challenge, code: otp },
+        environment
+      )
+    ).rejects.toMatchObject({ status, refusal });
+  }
+);
 it.each([
   ["42501", 403],
   ["unavailable", 503],
