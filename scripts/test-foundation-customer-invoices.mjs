@@ -1237,6 +1237,19 @@ try {
       for (const sig of API)
         assert.equal(q(`select has_function_privilege('authenticated','${sig}','execute');`), "t");
     });
+    if (later.some((step) => step.label === "20261117140533_member_notices_in_app.sql")) {
+      await check("later: an issued invoice puts one notice in its member's bell", () => {
+        const buyer = verified("inv-bell");
+        const invoice = issue(admin, { email: buyer.email });
+        assert.equal(
+          count(
+            `private.notifications where account_id='${buyer.id}' and kind='invoice_issued' and subject_id='${invoice.invoice_id}'`
+          ),
+          1
+        );
+        assert.equal(count(`private.notifications where account_id='${admin.id}'`), 0);
+      });
+    }
   }
 } catch (error) {
   console.error(`FAIL ${current()}`);

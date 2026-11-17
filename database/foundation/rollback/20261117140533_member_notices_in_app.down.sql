@@ -1,11 +1,11 @@
 -- Reviewed rollback for updates/20261117140533_member_notices_in_app.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
--- owner has decided so; prefer a forward fix. It drops the two new triggers and
+-- owner has decided so; prefer a forward fix. It drops the four new triggers and
 -- their functions, restores the previous bodies of internal.list_my_notifications,
 -- internal.list_my_frontend_notifications and
 -- internal.notify_frontend_business_check byte for byte, and the previous
 -- closed list of notification kinds. To restore that list it deletes every
--- notification of the 17 new kinds (and their dismissals): members lose those
+-- notification of the 18 new kinds (and their dismissals): members lose those
 -- notices. Queued emails are untouched. Events after the rollback reach the
 -- bell only as they did before the update.
 begin;
@@ -15,26 +15,33 @@ do $$begin
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.list_my_notifications(timestamp with time zone,uuid,integer)'::regprocedure) is distinct from '7ecfbc9b0bbb788b862f78f6cdfda399'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.list_my_frontend_notifications(integer,boolean,timestamp with time zone)'::regprocedure) is distinct from 'e397d8e39f9939146339f5b1b368a51c'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.notify_frontend_business_check()'::regprocedure) is distinct from '5efb7f8b5ac8b062492d64397a34b1a4'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.notify_member_of_outbox_event()')) is distinct from '5b7257d168070e6be5d8ba1a0893989a'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.notify_post_moderation()')) is distinct from '910884e45c0034cb341a553c92276833' then
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.notify_member_of_outbox_event()')) is distinct from 'd05128b61979c38b64b79f94f4d78fa1'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.notify_post_moderation()')) is distinct from '910884e45c0034cb341a553c92276833'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.notify_invoice_issued()')) is distinct from '5567380db94629f630d381178b8bc36c'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.notify_content_restored()')) is distinct from '16b6daeb3cb591198347f3ddef44bfda' then
     raise exception 'rollback precondition: the member notices in app update is not applied' using errcode='55000';
   end if;
   -- The kind list is this update's, so no later kind is dropped.
-  if (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.notifications'::regclass and c.conname='notifications_kind_check') is distinct from array['account_banned','account_suspended','account_warning','appeal_decided','business_check_update','content_hidden','draft_deletion_warning','enquiry_received','identity_accepted','organisation_affiliation_ended','organisation_application_decided','organisation_application_received','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','payment_completed','payment_reconciliation_required','payment_reversed','post_approved','post_changes_approved','post_changes_rejected','post_deleted','post_expired','post_expiry_reminder','post_kept','post_rejected','post_sold','slot_renewal_reminder','trial_started','verification_phone_confirmed','verification_returned']::text[] then
+  if (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.notifications'::regclass and c.conname='notifications_kind_check') is distinct from array['account_banned','account_suspended','account_warning','appeal_decided','business_check_update','content_hidden','content_restored','draft_deletion_warning','enquiry_received','identity_accepted','invoice_issued','organisation_affiliation_ended','organisation_application_decided','organisation_application_received','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','payment_completed','payment_reconciliation_required','payment_reversed','post_approved','post_changes_approved','post_changes_rejected','post_deleted','post_expired','post_kept','post_rejected','post_sold','slot_renewal_reminder','trial_started','verification_phone_confirmed','verification_returned']::text[] then
     raise exception 'rollback precondition: private.notifications kinds are not the reviewed list' using errcode='55000';
   end if;
 end$$;
 
-lock table private.notifications,private.outbox_events,private.moderation_log in access exclusive mode nowait;
+lock table private.notifications,private.outbox_events,private.moderation_log,private.customer_invoices,
+  private.frontend_content_holds in access exclusive mode nowait;
 
 drop trigger notify_member_of_outbox_event on private.outbox_events;
 drop trigger notify_post_moderation on private.moderation_log;
 drop function internal.notify_member_of_outbox_event();
 drop function internal.notify_post_moderation();
+drop trigger notify_invoice_issued on private.customer_invoices;
+drop trigger notify_content_restored on private.frontend_content_holds;
+drop function internal.notify_invoice_issued();
+drop function internal.notify_content_restored();
 delete from private.notifications where kind in('identity_accepted','verification_phone_confirmed','payment_completed',
-  'payment_reversed','payment_reconciliation_required','trial_started','post_expired','post_expiry_reminder',
+  'payment_reversed','payment_reconciliation_required','trial_started','post_expired',
   'draft_deletion_warning','post_deleted','post_sold','post_kept','slot_renewal_reminder','post_approved',
-  'post_rejected','post_changes_approved','post_changes_rejected');
+  'post_rejected','post_changes_approved','post_changes_rejected','invoice_issued','content_restored');
 alter table private.notifications drop constraint notifications_kind_check,
   add constraint notifications_kind_check check(kind=any(array['enquiry_received'::text,
     'organisation_application_received'::text,'organisation_application_decided'::text,
@@ -129,7 +136,9 @@ do $$begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.list_my_frontend_notifications(integer,boolean,timestamp with time zone)'::regprocedure)<>'c6961ccad51ed7b788a43a1c5a4fb505'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.notify_frontend_business_check()'::regprocedure)<>'b2b0c8f2ee524951767db095c96f383d'
     or to_regprocedure('internal.notify_member_of_outbox_event()') is not null
-    or to_regprocedure('internal.notify_post_moderation()') is not null then
+    or to_regprocedure('internal.notify_post_moderation()') is not null
+    or to_regprocedure('internal.notify_invoice_issued()') is not null
+    or to_regprocedure('internal.notify_content_restored()') is not null then
     raise exception 'member notices in app rollback was not applied';
   end if;
 end$$;

@@ -190,6 +190,25 @@ it("names the post in moderation notices, with a fallback when the title is gone
     ],
   ]);
 });
+it("links payment notices to My slots and says what was emailed", async () => {
+  rpc.mockResolvedValueOnce({
+    data: {
+      items: [{ ...notice, kind: "payment_completed", warning_reason: null }],
+      unread_count: 1,
+    },
+    error: null,
+  });
+  const response = await handleRestoredNotifications(
+    new NextRequest("https://verifymzansi.com/api/notifications"),
+    "GET"
+  );
+  expect((await response.json()).notifications[0]).toMatchObject({
+    title: "Payment received",
+    message: "We received your payment. Your receipt and invoice were emailed to you.",
+    href: "/dashboard/slots",
+    type: "success",
+  });
+});
 it("presents every account event kind the database adds", async () => {
   const kinds = [
     "verification_phone_confirmed",
@@ -198,7 +217,8 @@ it("presents every account event kind the database adds", async () => {
     "payment_reconciliation_required",
     "trial_started",
     "post_changes_approved",
-    "post_expiry_reminder",
+    "invoice_issued",
+    "content_restored",
     "post_expired",
     "post_sold",
     "post_kept",
@@ -241,5 +261,8 @@ it("leaves out a notice of a kind this release does not know instead of failing 
     "GET"
   );
   expect(response.status).toBe(200);
-  expect((await response.json()).notifications.map((n: { id: string }) => n.id)).toEqual([id]);
+  const body = await response.json();
+  expect(body.notifications.map((n: { id: string }) => n.id)).toEqual([id]);
+  // The badge counts only what the list shows.
+  expect(body.unreadCount).toBe(1);
 });

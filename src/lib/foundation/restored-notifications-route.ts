@@ -25,13 +25,14 @@ const MEMBER_EVENT_KINDS = [
   "post_rejected",
   "post_changes_approved",
   "post_changes_rejected",
-  "post_expiry_reminder",
   "post_expired",
   "post_sold",
   "post_kept",
   "draft_deletion_warning",
   "post_deleted",
   "slot_renewal_reminder",
+  "invoice_issued",
+  "content_restored",
 ] as const;
 const row = foundationNotificationPageSchema.shape.items.element
   .extend({
@@ -61,23 +62,27 @@ const knownKinds: ReadonlySet<unknown> = new Set(row.shape.kind.options);
 /** A notice of a kind this release cannot present yet (a database update
  * applied ahead of its website) is left out, so it cannot hide every other
  * notice behind an error. A known notice that is malformed is still refused. */
-function withoutUnknownKinds(data: unknown) {
+function withoutUnknownKinds(data: unknown): { data: unknown; unreadLeftOut: number } {
   if (
     typeof data !== "object" ||
     data === null ||
     !Array.isArray((data as { items?: unknown }).items)
   )
-    return data;
+    return { data, unreadLeftOut: 0 };
   const items = (data as { items: unknown[] }).items;
-  const known = items.filter(
-    (item) =>
-      typeof item !== "object" || item === null || knownKinds.has((item as { kind?: unknown }).kind)
-  );
-  if (known.length < items.length)
-    log.warn("Left out notifications of a kind this release does not know", {
-      count: items.length - known.length,
-    });
-  return { ...data, items: known };
+  const isKnown = (item: unknown) =>
+    typeof item !== "object" || item === null || knownKinds.has((item as { kind?: unknown }).kind);
+  const unknown = items.filter((item) => !isKnown(item));
+  if (unknown.length === 0) return { data, unreadLeftOut: 0 };
+  log.warn("Left out notifications of a kind this release does not know", {
+    count: unknown.length,
+  });
+  return {
+    data: { ...data, items: items.filter(isKnown) },
+    // The badge counts only what the list can show.
+    unreadLeftOut: unknown.filter((item) => (item as { read_at?: unknown }).read_at === null)
+      .length,
+  };
 }
 /** The post's title in quotes, or a plain fallback. */
 function postName(title: string | null, fallback: string) {
@@ -111,21 +116,33 @@ function presentedNotification(n: z.infer<typeof row>) {
     ],
     payment_completed: [
       "Payment received",
-      "We received your payment. Your invoice is in Billing.",
-      "/billing/invoices",
+      "We received your payment. Your receipt and invoice were emailed to you.",
+      "/dashboard/slots",
       "success",
     ],
     payment_reversed: [
-      "Payment reversed",
-      "A payment was refunded or reversed. Check the details in Billing.",
-      "/billing",
+      "Refund recorded",
+      "Part or all of a payment was refunded or reversed. The details were emailed to you.",
+      "/dashboard/slots",
       "warning",
     ],
     payment_reconciliation_required: [
       "Payment being checked",
-      "We received a payment that needs checking before it is applied. Its status is in Billing.",
-      "/billing",
+      "We received your payment but could not apply it automatically. We are checking it; there is no need to pay again.",
+      "/dashboard/slots",
       "info",
+    ],
+    invoice_issued: [
+      "New invoice to pay",
+      "An invoice was issued to your account. Open it to see the amount and how to pay.",
+      "/billing/invoices",
+      "info",
+    ],
+    content_restored: [
+      "Your post is visible again",
+      `${Post} was reviewed and is showing again.`,
+      "/dashboard/listings",
+      "success",
     ],
     trial_started: [
       "Your introductory posting allowance is ready",
@@ -157,12 +174,6 @@ function presentedNotification(n: z.infer<typeof row>) {
       "/dashboard/listings",
       "warning",
     ],
-    post_expiry_reminder: [
-      "Post ending soon",
-      `${Post} stops showing soon. Review it and your posting allowance.`,
-      "/dashboard/listings",
-      "warning",
-    ],
     post_expired: [
       "Post expired",
       `${Post} is no longer shown. Reactivate it from your posts to keep it, or it will be deleted with its photos and videos.`,
@@ -182,8 +193,8 @@ function presentedNotification(n: z.infer<typeof row>) {
       "success",
     ],
     draft_deletion_warning: [
-      "Draft will be deleted soon",
-      `${Post} is an old draft close to its retention limit. Finish or update it to keep it.`,
+      "Post will be deleted soon",
+      `${Post} is not showing and has not been changed for 45 days. Update it within about 15 days to keep it, or it will be deleted with its photos and videos.`,
       "/dashboard/listings",
       "warning",
     ],
@@ -315,11 +326,12 @@ export function handleRestoredNotifications(
           ...(parsed.data.before ? { p_before: parsed.data.before } : {}),
         });
         if (error) throw new FoundationInboxError("unavailable");
-        const result = page.parse(withoutUnknownKinds(data));
+        const known = withoutUnknownKinds(data);
+        const result = page.parse(known.data);
         return {
           accountId: account.account_id,
           notifications: result.items.map(presentedNotification),
-          unreadCount: result.unread_count,
+          unreadCount: Math.max(0, result.unread_count - known.unreadLeftOut),
         };
       }
       const parsed = mutation.safeParse(input);

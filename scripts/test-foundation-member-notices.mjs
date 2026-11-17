@@ -39,13 +39,7 @@ const [PREFLIGHT, ROLLBACK] = [
 const LIST = "internal.list_my_notifications(timestamp with time zone,uuid,integer)";
 const FRONTEND_LIST =
   "internal.list_my_frontend_notifications(integer,boolean,timestamp with time zone)";
-const POST_KINDS = [
-  "post_expired",
-  "post_expiry_reminder",
-  "draft_deletion_warning",
-  "post_sold",
-  "post_kept",
-];
+const POST_KINDS = ["post_expired", "draft_deletion_warning", "post_sold", "post_kept"];
 const OTHER_KINDS = [
   "identity_accepted",
   "verification_phone_confirmed",
@@ -224,6 +218,69 @@ try {
     assert.deepEqual(notices(author, "post_changes_approved"), [{ subject: edit, post: live }]);
     assert.deepEqual(notices(author, "post_changes_rejected"), [{ subject: badEdit, post: live }]);
     assert.equal(count(`private.notifications where account_id='${staffer.id}'`), 0);
+  });
+  await check("a rejected edit's copy adds no post notice; the live post's do", () => {
+    const editor = syntheticMember("notice-editor");
+    const live = post(editor);
+    const copy = post(editor);
+    q(`set session_replication_role=replica;
+      update private.posts set edit_of='${live}',status='rejected' where id='${copy}';`);
+    queue("draft_deletion_warning", editor.id, copy);
+    queue("post_deleted", editor.id, copy);
+    queue("draft_deletion_warning", editor.id, live);
+    assert.equal(
+      count(`private.notifications where account_id='${editor.id}' and subject_id='${copy}'`),
+      0
+    );
+    assert.deepEqual(notices(editor, "draft_deletion_warning"), [{ subject: live, post: live }]);
+  });
+  await check(
+    "one reversal of several payment lines adds one notice; a later one adds another",
+    () => {
+      const payer = syntheticMember("notice-refund");
+      const payment = crypto.randomUUID();
+      q(`begin;
+      insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key) values
+        ('payment_reversed','${payment}','${payer.id}','payment_line_reversed:${crypto.randomUUID()}'),
+        ('payment_reversed','${payment}','${payer.id}','payment_line_reversed:${crypto.randomUUID()}');
+      insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key) values
+        ('payment_reversed','${payment}','${payer.id}','payment_line_reversed:${crypto.randomUUID()}');
+      commit;`);
+      assert.equal(notices(payer, "payment_reversed").length, 1);
+      queue("payment_reversed", payer.id, payment, `payment_line_reversed:${crypto.randomUUID()}`);
+      assert.equal(notices(payer, "payment_reversed").length, 2);
+    }
+  );
+  await check("a payment that could not be applied says so, not 'payment received'", () => {
+    const payer = syntheticMember("notice-unapplied");
+    const payment = q(`set session_replication_role=replica;
+      insert into private.payments(owner_id,product_kind,plan_version_id,amount_cents,currency,snapshot,status,fulfillment_status,completed_at,provider_transaction_id)
+        select '${payer.id}','plan',v.id,6900,'ZAR','{}','complete','needs_reconciliation',now(),'tx-notice'
+        from private.plan_versions v limit 1 returning id;`);
+    queue("payment_reconciliation_required", payer.id, payment);
+    queue("payment_completed", payer.id, payment);
+    assert.equal(notices(payer, "payment_reconciliation_required").length, 1);
+    assert.equal(notices(payer, "payment_completed").length, 0);
+  });
+  await check("a held post shown again after review notifies its owner once", () => {
+    const held = syntheticMember("notice-held");
+    const pid = post(held);
+    const hold = crypto.randomUUID();
+    q(`set session_replication_role=replica;
+      insert into private.frontend_content_holds(id,post_id,account_id,reason,applied_at)
+        values('${hold}','${pid}','${held.id}','Reported content under review.',now());`);
+    q(
+      `update private.frontend_content_holds set released_at=now(),release_reason='Review cleared' where id='${hold}';`
+    );
+    assert.equal(notices(held, "content_restored").length, 0, "released, not yet restored");
+    q(`update private.frontend_content_holds set restored=true where id='${hold}';`);
+    q(`update private.frontend_content_holds set version=version+1 where id='${hold}';`);
+    assert.deepEqual(notices(held, "content_restored"), [{ subject: hold, post: pid }]);
+  });
+  await check("post_expiry_reminder, which nothing queues any more, is not mirrored", () => {
+    const pid = post(owner);
+    queue("post_expiry_reminder", owner.id, pid);
+    assert.equal(count(`private.notifications where subject_id='${pid}'`), 0);
   });
   await check("the bell lists the new notices; the enquiry inbox does not", () => {
     const page = bell(owner);

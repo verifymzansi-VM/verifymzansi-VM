@@ -88,30 +88,40 @@ Until now the bell listed only what was written to `private.notifications`. Many
 account events queued only an email: an accepted ID check (a member who was
 verified saw nothing on the website), a confirmed mobile number, payments
 received, reversed or under review, the introductory allowance, the post
-lifecycle notices and the slot renewal reminder. Post moderation told the owner
-nothing at all. From this update:
+lifecycle notices and the slot renewal reminder. Post moderation, a staff-issued
+invoice and a held post shown again after review told the member nothing at all.
+From this update:
 
 - **Email events reach the bell.** A trigger on `private.outbox_events`
   (`internal.notify_member_of_outbox_event`) adds a notice of the same kind for
-  the 13 email kinds that had none: `identity_accepted`,
+  the 12 email kinds that had none: `identity_accepted`,
   `verification_phone_confirmed`, `payment_completed`, `payment_reversed`,
   `payment_reconciliation_required`, `trial_started`, `post_expired`,
-  `post_expiry_reminder`, `draft_deletion_warning`, `post_deleted`, `post_sold`,
-  `post_kept` and `slot_renewal_reminder`. It fires only for a row actually
-  inserted, so the outbox's dedupe keys keep the bell free of repeats. A post
+  `draft_deletion_warning`, `post_deleted`, `post_sold`, `post_kept` and
+  `slot_renewal_reminder`. It fires only for a row actually inserted, so the
+  outbox's dedupe keys keep the bell free of repeats. It adds no notice about a
+  rejected edit's copy (the live post stays), only one for a reversal of several
+  lines of one payment, and no "payment received" for a payment that could not
+  be applied (its `payment_reconciliation_required` notice says so). A post
   notice links its post and goes with it, except `post_deleted`. An owner
   without an account gets no notice, and the event is never refused.
+  `post_expiry_reminder` is not mirrored: nothing queues it any more.
 - **Moderation decisions.** A trigger on `private.moderation_log`
   (`internal.notify_post_moderation`) tells the owner of each decision:
   `post_approved`, `post_rejected`, `post_changes_approved` and
   `post_changes_rejected`. No reason is stored in the notice; the owner's posts
   page shows it.
+- **Invoices and restored posts.** A trigger on `private.customer_invoices`
+  (`internal.notify_invoice_issued`) tells the member when staff issue an
+  invoice to their account (`invoice_issued`); one on
+  `private.frontend_content_holds` (`internal.notify_content_restored`) tells
+  the owner when a held post is shown again after review (`content_restored`).
 - **Live refresh.** `internal.notify_frontend_business_check` also signals the
   member's live inbox, like every other notice.
 - **Inbox reads.** The enquiry-inbox reads (`internal.list_my_notifications`,
   `internal.list_my_frontend_notifications`) list an allowed set of their eight
   kinds instead of leaving out account notices one by one.
-- **Kinds.** The closed notification kind list gains the 17 new kinds. The
+- **Kinds.** The closed notification kind list gains the 18 new kinds. The
   outbox kinds and the mail claim are unchanged.
 - Events before the update are not notified afterwards.
 
@@ -121,14 +131,17 @@ of a kind it does not know, but the website deployed before it cannot read the
 new notices: its notifications list would show its error state to a member who
 has one. If that release is ever reverted, run the rollback below first.
 
-**Applying.** The website release that knows these kinds must be live.
+**Applying.** The website release that knows these kinds must be live, and the
+owner must have approved the notices' wording (`FRONTEND-CHANGES.md`, owner
+question 30): the notices show only once this update is applied.
 
 1. Run `../preflight/20261117140533_member_notices_in_app.check.sql` unchanged
    in the SQL editor. It is read only. Continue only if its result is the single
    "summary" row reading "update not applied".
-2. Run the update. It locks the notification, outbox and moderation log tables
-   without waiting and stops without changing anything if any is busy; run it
-   again. Run the preflight again: it must now read "already applied".
+2. Run the update. It locks the notification, outbox, moderation log, customer
+   invoice and content hold tables without waiting and stops without changing
+   anything if any is busy; run it again. Run the preflight again: it must now
+   read "already applied".
 3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
    compare with `../fingerprint.json`, which lists this update under
    `productionCheck.pendingApplication`. Once production's fingerprint matches,
@@ -136,11 +149,13 @@ has one. If that release is ever reverted, run the rollback below first.
 
 The reviewed rollback is
 `../rollback/20261117140533_member_notices_in_app.down.sql` (only with the
-owner's decision; prefer a forward fix). It drops both triggers, restores the
-earlier bodies and kind list, and deletes every notice of the 17 new kinds to do
-so; queued emails are untouched. `scripts/test-foundation-member-notices.mjs`
-(part of `pnpm db:foundation:lifecycle-test`) proves apply, rollback and
-re-apply and the notices above.
+owner's decision; prefer a forward fix). It drops the four triggers, restores
+the earlier bodies and kind list, and deletes every notice of the 18 new kinds
+to do so; queued emails are untouched.
+`scripts/test-foundation-member-notices.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves apply, rollback and re-apply and the
+notices above; the post lifecycle and customer invoice tests check them through
+the real moderation, lifecycle job and invoice commands.
 
 ## Members are told when their ID is sent back, 10 November 2026
 
