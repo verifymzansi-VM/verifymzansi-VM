@@ -80,7 +80,7 @@ export function TrialPolicy({
         >
           Your first post is free
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">One per verified member.</p>
+        <p className="mt-1 text-sm text-muted-foreground">One per ID-reviewed person.</p>
         <ul className="mt-4 space-y-2.5">
           {points.map((point) => (
             <li key={point} className="flex items-start gap-2.5 text-sm text-foreground/90">

@@ -13,7 +13,11 @@ import {
   parsePerformanceReport,
 } from "@/components/organisations/performance-report";
 import { ExtensionOfferCard } from "@/components/trials/extension-offer-card";
-import { SHOW_ORGANISATION_REPORT, SHOW_TRIAL_EXTENSION_OFFERS } from "@/lib/hidden-features";
+import {
+  SHOW_ORGANISATION_REPORT,
+  SHOW_SPONSOR_OFFER,
+  SHOW_TRIAL_EXTENSION_OFFERS,
+} from "@/lib/hidden-features";
 
 import {
   FoundationServerSessionError,
@@ -175,12 +179,15 @@ export default async function OrganisationDashboardPage({
             180-day sponsor proposal.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link
-              className="inline-flex min-h-11 items-center rounded-md border px-3 font-medium"
-              href="/advertise#programmes"
-            >
-              See programme prices
-            </Link>
+            {/* The sponsor offer is on hold: its Advertise section is hidden. */}
+            {SHOW_SPONSOR_OFFER ? (
+              <Link
+                className="inline-flex min-h-11 items-center rounded-md border px-3 font-medium"
+                href="/advertise#programmes"
+              >
+                See programme prices
+              </Link>
+            ) : null}
             <Link
               className="inline-flex min-h-11 items-center rounded-md bg-brand-green px-3 font-medium text-white"
               href="/contact?topic=organisation_proposal"

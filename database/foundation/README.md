@@ -88,6 +88,19 @@ delivery; and the activation limit per period holds with free slots. These
 checks complement the ones in `scripts/test-restored-post-commands.mjs`, which
 still runs on the older prototype fixture with only some of the updates.
 
+The same command ends with `scripts/test-foundation-access-matrix.mjs`, the
+access matrix of the native suite run on the replayed schema instead of the
+prototype fixture, so it covers every API command an update adds. It checks that
+each command's execute grants equal the manifests and that browsers have no
+table access, builds one member's private data through the production commands
+(identity review, phone, an event with an enquiry, a business, an organisation
+application, a payment), then calls every `api` command as a signed-out visitor,
+a member with no rights, another member, an organisation administrator, each
+staff role, that member, and the service role, each call in a subtransaction
+that is rolled back. It fails when a grant or a staff capability is bypassed or
+wrongly refused, or when anyone else sees one of the member's private values or
+changes their rows outside the reviewed lists at the top of the script.
+
 An update that backfills existing rows or is hard to undo can come with two
 reviewed companions named after it, which the replay never applies:
 `preflight/<update>.check.sql`, a read-only check the owner runs in the SQL
@@ -216,7 +229,8 @@ What each part of `pnpm test:foundation:native` proves:
   `20261109104020_post_expiry_rules`, `20261109224337_fix_post_command_target`
   and `20261110045944_intro_trial_at_first_approval`. It tests the staff rules
   listed above with `scripts/test-foundation-staff-rules.mjs`. Other updates are
-  not behaviour-tested on the replayed schema by these two scripts.
+  not behaviour-tested on the replayed schema by these two scripts, but every
+  API command they add is swept by `scripts/test-foundation-access-matrix.mjs`.
 - `scripts/test-restored-post-commands.mjs` applies a fixed list of 44 of the
   update files on top of that prototype fixture inside one transaction, tests
   the restored-frontend commands (posting forms, staff moderation, identity

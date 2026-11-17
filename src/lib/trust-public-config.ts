@@ -107,7 +107,7 @@ export function getTrustPublicConfig(): TrustPublicConfig {
       optionalEnv("VERIFYMZANSI_INFORMATION_OFFICER_PHONE"),
     securityEmail: envOrDefault("VERIFYMZANSI_SECURITY_EMAIL", SECURITY_CONTACT_EMAIL),
     ozowMerchantName: envOrDefault("VERIFYMZANSI_OZOW_MERCHANT_NAME", "VerifyMzansi"),
-    vatStatus: optionalEnv("VERIFYMZANSI_VAT_STATUS") ?? "VAT number not currently published",
+    vatStatus: optionalEnv("VERIFYMZANSI_VAT_STATUS") ?? "not registered for VAT",
   };
 }
 

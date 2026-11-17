@@ -95,37 +95,31 @@ export function BillingFaq({
 
         <FaqItem id="billing-faq-trial" question="How does the free introductory post work?">
           <p>
-            Complete phone, ID, selfie and location verification, then post once for free for{" "}
-            {shortDays} days from approval, in Mzansi Market, Mzansi Business or Tourism. It is one
-            post across all sections.
+            Once your ID has been reviewed, your first post is free for {shortDays} days, in Mzansi
+            Market, Mzansi Business or Tourism. It is one post across all sections. The {shortDays}{" "}
+            days start when we approve the post, not when you submit it.
           </p>
           <p>
-            Trial posts have standard placement: no boosts, featured placement or urgent badge.
-            There is no automatic charge and no repeated free renewal. When the trial ends your post
-            is hidden; buy a slot within 3 days to reactivate it, or it is deleted.
+            Free posts have standard placement: no boosts, featured placement or urgent badge. There
+            is no automatic charge and no free renewal. When its {shortDays} days end your post is
+            hidden; buy a slot within 3 days to reactivate it, or it is deleted.
           </p>
           <p>
-            The offer is tied to your verified identity. Previous free-post usage counts; deleting a
-            post or an account does not restore an activated offer.
+            The free post is available once per ID-reviewed person. Once its {shortDays} days have
+            started it is used for good; deleting the post or your account does not reset it.
+            Previous free-post usage counts.
           </p>
           <p>
-            Starting a form does not reserve a slot. A submitted post waits for moderation without
-            using active capacity.
+            A rejected post does not use the free post; you may correct it and submit it again. Only
+            one post at a time can wait for the free post.
           </p>
           <p>
-            Rejected content that never went live does not use up your offer. Once a trial is live,
-            removal or expiry frees the space for another member without restoring your own offer.
-          </p>
-          <p>
-            Trial posts run for {shortDays} days from approval. Strategic, founding partner and
-            organisation-sponsored programmes are by invitation only, can&apos;t be claimed publicly
-            and don&apos;t stack with this trial: one verified identity receives one free programme.
+            If, when that post is approved, you already have an unused paid slot with at least 7
+            days left that allows its photos and video, the post uses that slot instead and your
+            free post stays unused. A sponsored place, or a free post we grant you, counts as your
+            free post.
           </p>
           {rules ? <p className="whitespace-pre-line">{rules}</p> : null}
-          <p>
-            Campaign availability can change. Pausing an offer affects future activations only;
-            active trials keep their expiry unless removed for a policy violation.
-          </p>
         </FaqItem>
 
         <FaqItem question="Are events really free?">
