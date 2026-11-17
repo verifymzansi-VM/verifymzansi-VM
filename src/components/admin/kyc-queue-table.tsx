@@ -283,54 +283,73 @@ export function KycQueueTable({
                           Latest submission {formatRelativeTime(group.latest_created_at)}
                         </p>
                       </div>
-                      {evidenceDeskEnabled && (
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            className="h-9"
-                            onClick={() =>
-                              handleComparisonClick(
-                                group.user_id,
-                                group.account_display_name || group.user_id
-                              )
-                            }
-                            title="Compare ID and selfie"
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            <span className="text-xs">View documents</span>
-                          </Button>
-                          <Button
-                            asChild
-                            size="sm"
-                            variant="ghost"
-                            className="h-9 text-primary hover:bg-primary/10 hover:text-primary"
-                            title="View evidence"
-                          >
-                            <Link href="/admin/verification/evidence">
-                              <Eye className="h-4 w-4 mr-1" />
-                              <span className="text-xs">Evidence</span>
-                            </Link>
-                          </Button>
-                        </div>
-                      )}
-                      {!evidenceDeskEnabled && (
-                        <Button
-                          size="sm"
-                          variant="default"
-                          className="h-9"
-                          onClick={() =>
-                            handleComparisonClick(
-                              group.user_id,
-                              group.account_display_name || group.user_id
-                            )
-                          }
-                          title="Compare ID and selfie"
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          <span className="text-xs">View documents</span>
-                        </Button>
-                      )}
+                      {/* The evidence routes serve documents only to the staff
+                          member holding the case's claim, so the button waits
+                          for one instead of failing with a refusal. */}
+                      <ClaimGate
+                        type="verification_step"
+                        id={group.steps[0].claim_case_id ?? group.steps[0].id}
+                      >
+                        {(claim) => (
+                          <div className="flex flex-col items-end gap-1">
+                            {evidenceDeskEnabled && (
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="h-9"
+                                  onClick={() =>
+                                    handleComparisonClick(
+                                      group.user_id,
+                                      group.account_display_name || group.user_id
+                                    )
+                                  }
+                                  disabled={claim.blocked}
+                                  title="Compare ID and selfie"
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  <span className="text-xs">View documents</span>
+                                </Button>
+                                <Button
+                                  asChild
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-9 text-primary hover:bg-primary/10 hover:text-primary"
+                                  title="View evidence"
+                                >
+                                  <Link href="/admin/verification/evidence">
+                                    <Eye className="h-4 w-4 mr-1" />
+                                    <span className="text-xs">Evidence</span>
+                                  </Link>
+                                </Button>
+                              </div>
+                            )}
+                            {!evidenceDeskEnabled && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-9"
+                                onClick={() =>
+                                  handleComparisonClick(
+                                    group.user_id,
+                                    group.account_display_name || group.user_id
+                                  )
+                                }
+                                disabled={claim.blocked}
+                                title="Compare ID and selfie"
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                <span className="text-xs">View documents</span>
+                              </Button>
+                            )}
+                            {claim.blocked && (
+                              <p className="text-[11px] text-muted-foreground">
+                                Claim this case first
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </ClaimGate>
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
@@ -416,7 +435,7 @@ export function KycQueueTable({
                                         onClick={() => void handleRowViewClick(step)}
                                         title="View"
                                         aria-label={`View ${stepLabel}`}
-                                        disabled={isViewingStep}
+                                        disabled={isViewingStep || claim.blocked}
                                       >
                                         {isViewingStep ? (
                                           <Loader2 className="h-4 w-4 mr-1 animate-spin" />
