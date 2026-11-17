@@ -1187,26 +1187,31 @@ test.describe("account recovery and self-service", () => {
     const openChoice = async () => {
       await page.goto("/dashboard/communication");
       await page.getByRole("tab", { name: "Preferences" }).click();
-      return page.getByRole("switch", { name: "Analytics" });
+      return page.getByRole("switch", { name: "Marketing SMS" });
     };
     const choice = await openChoice();
     await expect(choice).toHaveAttribute("aria-checked", "false");
-    // Optional choices start off (opt-in), marketing included.
-    for (const name of ["Marketing email", "Marketing SMS", "Third-party sharing"])
-      await expect(page.getByRole("switch", { name })).toHaveAttribute("aria-checked", "false");
+    // Optional choices start off (opt-in).
+    await expect(page.getByRole("switch", { name: "Marketing email" })).toHaveAttribute(
+      "aria-checked",
+      "false"
+    );
+    // Hidden until the site uses them (SHOW_DATA_USE_CHOICES).
+    for (const name of ["Analytics", "Third-party sharing"])
+      await expect(page.getByRole("switch", { name })).toHaveCount(0);
     await choice.click();
     await expect
       .poll(() => guarded.reply(PREFERENCES_PATH, "PATCH").length, { timeout: 20_000 })
       .toBe(1);
-    expect(guarded.sentTo(PREFERENCES_PATH, "PATCH")[0].fields.join()).toBe("analytics");
+    expect(guarded.sentTo(PREFERENCES_PATH, "PATCH")[0].fields.join()).toBe("marketing_sms");
     expect(guarded.reply(PREFERENCES_PATH, "PATCH")[0]).toMatchObject({
       status: 200,
       body: {
         success: true,
         preferences: {
           marketing_email: false,
-          marketing_sms: false,
-          analytics: true,
+          marketing_sms: true,
+          analytics: false,
           third_party_sharing: false,
         },
       },
@@ -1218,7 +1223,7 @@ test.describe("account recovery and self-service", () => {
         "select purpose || ' ' || granted || ' ' || wording_version from private.communication_choice_events " +
           `where account_id = '${chooser.id}';`
       )
-    ).toBe("analytics true communication-2026-11");
+    ).toBe("marketing_sms true communication-2026-11");
     const reloaded = await openChoice();
     await expect(reloaded).toHaveAttribute("aria-checked", "true");
     // No error on any visit: both reads answer, and the email history shows
