@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { applySecurityHeaders, withSecurityHeaders } from "@/lib/middleware/security-headers";
+import {
+  applySecurityHeaders,
+  REWRITTEN_REQUEST_HEADER,
+  withSecurityHeaders,
+} from "@/lib/middleware/security-headers";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 import { addReferenceTiming } from "@/lib/utils/request-reference";
@@ -55,9 +59,13 @@ const MARKETPLACE_BROWSE_PREFIXES = [
   "/mzansi-market",
   "/mzansi-business",
   "/tourism-events",
-  // Organisation pages: the missing-page check below reads the database there too.
-  "/organisation/",
 ];
+
+// Throttled only when a browser or crawler loads the address, because the
+// missing-page check below reads the database for it then. Not the app's own
+// prefetches: sponsor strips and affiliation badges link to many organisation
+// pages, and counting those would use up a visitor's browse allowance.
+const DOCUMENT_BROWSE_PREFIXES = ["/organisation/"];
 
 /**
  * Segment-boundary prefix match. A bare `startsWith` would let a route like
@@ -89,21 +97,33 @@ function redirectHostTarget(request: NextRequest): URL | null {
 }
 
 /** A browser or crawler loading the address, not the app's own in-page
- * navigation or prefetch (those read the page's data and handle "not found"
- * themselves). */
+ * navigation or prefetch. Next.js removes its RSC headers before the proxy
+ * runs, so a browser's own `Sec-Fetch-Dest` tells them apart: "document" for
+ * a page load, "empty" for the app's fetches. Crawlers and link checkers send
+ * none and count as page loads. */
 function isDocumentRequest(request: NextRequest): boolean {
+  const destination = request.headers.get("sec-fetch-dest");
   return (
     (request.method === "GET" || request.method === "HEAD") &&
-    !request.headers.has("rsc") &&
-    !request.headers.has("next-router-prefetch")
+    (destination === null || destination === "document")
   );
 }
 
 /** Render the page as usual but with HTTP 404, so it keeps its own "not
  * available" design while browsers, crawlers and link checkers see a real
- * 404 status (set before streaming starts). */
+ * 404 status (set before streaming starts).
+ *
+ * On Cloudflare (OpenNext) the status travels on a rewrite to the same
+ * address. `next start` (the local and CI server) treats a rewrite whose host
+ * differs from the one it listens on as an outside address and fetches it
+ * again, which looped; there the status travels on the pass-through instead,
+ * which `next start` keeps (OpenNext does not, hence the rewrite). A rewritten
+ * request is marked (REWRITTEN_REQUEST_HEADER) and never rewritten twice. */
 function notFoundPage(request: NextRequest): NextResponse {
-  return NextResponse.rewrite(request.nextUrl.clone(), { status: 404 });
+  if (request.headers.get("host") === request.nextUrl.host) {
+    return NextResponse.rewrite(request.nextUrl.clone(), { status: 404 });
+  }
+  return NextResponse.next({ status: 404 });
 }
 
 // -- Core routing logic (testable without security headers) ------------------
@@ -180,7 +200,11 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     AUTH_ROUTES.some((r) => matchesPrefix(pathname, r));
 
   // Rate-limit public marketplace pages to deter scraping.
-  if (!needsAuth && MARKETPLACE_BROWSE_PREFIXES.some((p) => pathname.startsWith(p))) {
+  if (
+    !needsAuth &&
+    (MARKETPLACE_BROWSE_PREFIXES.some((p) => pathname.startsWith(p)) ||
+      (isDocumentRequest(request) && DOCUMENT_BROWSE_PREFIXES.some((p) => pathname.startsWith(p))))
+  ) {
     const ip = getClientIp(request);
     const { limited, retryAfter } = checkLocalRateLimit(ip, "marketplace:browse", 60);
     if (limited) {
@@ -197,7 +221,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   // malformed address costs no read; a well-formed one costs one public read
   // (remembered for a minute when it exists), and a failed read lets the page
   // decide as before.
-  if (!needsAuth && isDocumentRequest(request)) {
+  if (!needsAuth && isDocumentRequest(request) && !request.headers.has(REWRITTEN_REQUEST_HEADER)) {
     const detailPage = matchDetailPage(pathname);
     if (detailPage) {
       if (detailPageKeyIsMalformed(detailPage)) return notFoundPage(request);

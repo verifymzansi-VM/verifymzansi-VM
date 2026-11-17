@@ -109,13 +109,55 @@ describe("proxy — real 404 for missing detail pages", () => {
     expect(response.headers.get("x-middleware-rewrite")).toBeNull();
   });
 
-  it.each([
-    ["in-app navigation", { rsc: "1" }],
-    ["prefetch", { rsc: "1", "next-router-prefetch": "1" }],
-  ])("leaves %s to the page", async (_label, headers) => {
-    const response = await routeRequest(request("/listing/not-a-uuid", { headers }));
+  it("leaves the app's own navigation and prefetch fetches to the page", async () => {
+    // Next.js strips its RSC headers before the proxy; the browser's
+    // Sec-Fetch-Dest is "empty" for those fetches.
+    const response = await routeRequest(
+      request("/listing/not-a-uuid", { headers: { "sec-fetch-dest": "empty" } })
+    );
+    expect(response.status).toBe(200);
     expect(response.headers.get("x-middleware-next")).toBe("1");
     expect(isMissingDetailPage).not.toHaveBeenCalled();
+  });
+
+  it("checks a browser page load", async () => {
+    const response = await routeRequest(
+      request("/listing/not-a-uuid", { headers: { "sec-fetch-dest": "document" } })
+    );
+    expect(response.status).toBe(404);
+  });
+
+  it("never rewrites a request it already rewrote (no loop)", async () => {
+    isMissingDetailPage.mockResolvedValue(true);
+    const response = await routeRequest(
+      request(`/listing/${POST}`, { headers: { "x-vm-rewritten": "1" } })
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(isMissingDetailPage).not.toHaveBeenCalled();
+  });
+
+  it("answers 404 on the pass-through when the server's own address differs from the Host", async () => {
+    // `next start -H 127.0.0.1` sees http://localhost:<port> while the browser
+    // sends Host 127.0.0.1:<port>; a rewrite would be fetched again as an
+    // outside address. The status rides on the pass-through instead.
+    const mismatched = new NextRequest("http://localhost:3110/listing/not-a-uuid", {
+      headers: { host: "127.0.0.1:3110" },
+    });
+    const response = await routeRequest(mismatched);
+    expect(response.status).toBe(404);
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+
+    const wrapped = await middleware(
+      new NextRequest("http://localhost:3110/listing/not-a-uuid", {
+        headers: { host: "127.0.0.1:3110", accept: "text/html" },
+      })
+    );
+    expect(wrapped.status).toBe(404);
+    expect(wrapped.headers.get("x-middleware-next")).toBe("1");
+    expect(wrapped.headers.get("Content-Security-Policy")).toContain("default-src 'self'");
+    expect(wrapped.headers.get("x-middleware-request-x-vm-rewritten")).toBeNull();
   });
 
   it.each(["/listing", "/mzansi-business", "/tourism-events", "/pricing", `/listing/${POST}/x`])(
@@ -151,6 +193,8 @@ describe("proxy — real 404 for missing detail pages", () => {
       `/listing/${POST}`
     );
     expect(response.headers.get("x-middleware-request-x-csrf-token")).toBeTruthy();
+    // Marked, so a server that fetches the rewrite again cannot loop.
+    expect(response.headers.get("x-middleware-request-x-vm-rewritten")).toBe("1");
     expect(response.headers.get("set-cookie")).toContain("vm_csrf=");
     // Not a visit: no anonymous viewer id is issued for a missing page.
     expect(response.headers.get("set-cookie")).not.toContain("vm_viewer");

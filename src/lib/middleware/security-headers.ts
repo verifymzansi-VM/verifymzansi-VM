@@ -204,6 +204,9 @@ function clearPlaywrightSessionCookie(response: NextResponse): void {
   });
 }
 
+/** Marks a request the proxy already rewrote (see notFoundPage in proxy-handler.ts). */
+export const REWRITTEN_REQUEST_HEADER = "x-vm-rewritten";
+
 /**
  * Wrap a proxy result with CSP nonce + security headers.
  * Redirects and error responses get basic security headers only.
@@ -214,11 +217,14 @@ export function withSecurityHeaders(
 ): NextResponse {
   const pathname = request.nextUrl.pathname;
   const shouldClearPlaywrightSession = !!request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value;
-  // A rewrite still renders a page (a missing post's "not available" page is
-  // rewritten with status 404), so it gets the page policy, nonce and CSRF token.
+  // A rewrite or pass-through still renders a page (a missing post's "not
+  // available" page carries status 404), so it gets the page policy, nonce and
+  // CSRF token.
   const rewriteTarget = proxyResponse.headers.get("x-middleware-rewrite");
+  const rendersPage =
+    Boolean(rewriteTarget) || proxyResponse.headers.get("x-middleware-next") === "1";
 
-  if (proxyResponse.headers.has("location") || (proxyResponse.status >= 400 && !rewriteTarget)) {
+  if (proxyResponse.headers.has("location") || (proxyResponse.status >= 400 && !rendersPage)) {
     if (shouldClearPlaywrightSession) {
       clearPlaywrightSessionCookie(proxyResponse);
     }
@@ -283,12 +289,17 @@ export function withSecurityHeaders(
   const csrfToken = ensureCsrfCookie(request, csrfResponse);
   requestHeaders.set(CSRF_HEADER_NAME, csrfToken);
 
+  // A rewritten request is marked so the proxy never rewrites it again (a
+  // server that fetches the rewrite as an outside address would loop).
+  if (rewriteTarget) requestHeaders.set(REWRITTEN_REQUEST_HEADER, "1");
+  else requestHeaders.delete(REWRITTEN_REQUEST_HEADER);
   const response = rewriteTarget
     ? NextResponse.rewrite(new URL(rewriteTarget, request.url), {
         status: proxyResponse.status,
         request: { headers: requestHeaders },
       })
     : NextResponse.next({
+        status: proxyResponse.status,
         request: { headers: requestHeaders },
       });
 
