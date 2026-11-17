@@ -1,7 +1,12 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { dependencyAuditVerdict } from "./dependency-audit-policy";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { parse as parseToml } from "smol-toml";
+import { dependencyAuditVerdict, readAuditExceptions } from "./dependency-audit-policy";
 import { execute, pnpmInvocation } from "./lib/audit-runtime";
-import { assessPatchedAudit, verifyBracesBackport } from "./lib/braces-backport";
+import {
+  assessPatchedAudit,
+  verifyBracesBackport,
+  type AuditException,
+} from "./lib/braces-backport";
 async function main() {
   await mkdir("tmp/dependency-audit", { recursive: true });
   const includeDev = process.argv.includes("--all");
@@ -30,9 +35,19 @@ async function main() {
       networkError || ["UNAVAILABLE", "TIMED_OUT"].includes(run.status)
         ? "INVALID"
         : dependencyAuditVerdict(status, parsed);
-    if (verdict !== "INVALID") {
+    // The reviewed exceptions of the OSV scan (osv-scanner.toml); unreadable
+    // or malformed exceptions make the audit unavailable (fail closed).
+    let exceptions: AuditException[] | null = null;
+    try {
+      exceptions = readAuditExceptions(await readFile("osv-scanner.toml", "utf8"), parseToml);
+    } catch (error) {
+      process.stderr.write(`Reviewed exceptions unreadable: ${(error as Error).message}\n`);
+    }
+    if (verdict !== "INVALID" && exceptions) {
       backport = await verifyBracesBackport();
-      mitigation = assessPatchedAudit(status, parsed, backport);
+      mitigation = assessPatchedAudit(status, parsed, backport, exceptions);
+    } else if (!exceptions) {
+      mitigation = { assessment: "INVALID", mitigated: [], excepted: [] };
     }
     assessment =
       mitigation?.assessment === "INVALID" || verdict === "INVALID"
@@ -67,6 +82,10 @@ async function main() {
   if (mitigation?.mitigated.length)
     process.stdout.write(
       "WARN: Registry still lists braces 3.0.3; reviewed upstream depth-guard backport is installed and verified. Raw advisory retained in evidence.\n"
+    );
+  if (mitigation?.excepted.length)
+    process.stdout.write(
+      `WARN: reviewed, dated exceptions in osv-scanner.toml cover: ${[...new Set(mitigation.excepted)].join(", ")}. Raw advisories retained in evidence.\n`
     );
   if (!["PASS", "WARN"].includes(assessment)) process.exitCode = assessment === "FAIL" ? 1 : 2;
 }
