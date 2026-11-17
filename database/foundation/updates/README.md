@@ -2624,6 +2624,73 @@ When another update merges first, regenerate this pull request's
 `fingerprint.json`, the applied register, the manifests, `error-reasons.ts` and
 `package.json`.
 
+## A skipped email is no longer listed as sent, 17 November 2026
+
+`20261117123240_skipped_email_status.sql` is pending.
+
+The email job finishes a queued message without sending it when there is nothing
+to send: the account has no confirmed address (or is anonymous, or is closed for
+a notice closed accounts do not get), or a payment was refunded or charged back
+before its "Payment received" email went out. It then called
+`api.complete_notification_outbox` with `p_ok=true`, which cleared
+`delivery_error`, and `internal.list_my_email_history` lists every finished
+message as "sent", so the member's communication page showed an email that was
+never sent.
+
+From this update (same signatures, grants and owners):
+
+- **The outbox keeps the reason.** `internal.complete_notification_outbox`
+  accepts, with `p_ok=true`, no reason (sent) or `'skipped'` (nothing sent), and
+  stores it in `delivery_error`. Any other reason with `p_ok=true`, and
+  `'skipped'` with `p_ok=false`, is refused with 22023 `invalid outcome`. A
+  failed attempt is recorded exactly as before.
+- **The history leaves it out.** `internal.list_my_email_history` skips a
+  message whose `delivery_error` is `'skipped'`, whatever its attempts. The
+  history keeps its two states, "sent" and "failed", so the restored
+  communication page needs no new label and shows no change apart from the
+  missing row.
+
+The website release from the same pull request passes `p_error: "skipped"` when
+it finishes a message without sending it. Safe in either order: a database
+before this update accepts that reason with `p_ok=true` and clears it (the email
+is still listed as sent, as today), and the earlier website passes no reason, so
+with the update applied its skipped emails are still listed as sent until the
+release is deployed. The history's JSON shape is unchanged. Emails skipped
+before both are in place carry no reason and stay listed as sent until retention
+removes them (30 days after they were finished).
+
+**Applying.**
+
+1. Run `../preflight/20261117123240_skipped_email_status.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "skipped email status: update not applied; finished
+   emails: N; marked skipped: 0".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "skipped email status: already applied; finished emails:
+   N; marked skipped: M" (M counts emails skipped since the update).
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261117123240_skipped_email_status.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless both functions have
+this update's bodies, and puts back the earlier bodies byte for byte. Emails
+already stored as skipped keep the reason (the earlier history lists them as
+sent again).
+
+`node --import tsx scripts/test-foundation-skipped-email-status.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: before
+the update a skipped email is listed as sent and the reason `'skipped'` is
+accepted and cleared; the preflight before and after, read only; the refusals
+with a drifted body of either function and a premature rollback, changing
+nothing; apply, rollback and re-apply return the same fingerprints; afterwards a
+skipped email keeps its reason and leaves the history (also under a limit of one
+and with eight attempts), a sent one is listed as sent, an email skipped before
+the update stays listed as sent, failed and outcome-unknown attempts are
+recorded and listed as before, mismatched reasons and a stale lease change
+nothing, and the grants, owners and settings are unchanged.
+
 ## Individual slots at R69, 12 November 2026
 
 `20261113002421_individual_slots_r69.sql` is not applied yet. It was first
@@ -4441,5 +4508,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   posting-v5: 0", after "current posting-v5 (update already applied)"; data
   only, the production fingerprint rechecked unchanged; the live /terms page
   shows the new "Paying, VAT & invoices" text
+- `20261117123240_skipped_email_status.sql`: pending
 
 <!-- applied-register:end -->
