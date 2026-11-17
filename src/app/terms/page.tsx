@@ -9,6 +9,7 @@ import { getConfiguredLegalIdentityRows, getTrustPublicConfig } from "@/lib/trus
 
 export const metadata = {
   title: "Terms of Service",
+  alternates: { canonical: "/terms" },
   description:
     "VerifyMzansi terms of service: our role, what our checks mean, payments, refunds and posting rules for marketplace listings, businesses, tourism and events in South Africa.",
 };
@@ -95,7 +96,7 @@ export default async function TermsPage() {
       <main id="main-content" className="flex-1">
         <LegalDocument
           title="Terms of Service"
-          meta={published ? `Posting terms · ${published.version}` : "Updated October 2026"}
+          meta="Updated November 2026"
           description="Governed by South African law."
           breadcrumbs={[{ label: "Terms of Service" }]}
           sections={sections}

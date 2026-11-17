@@ -2,6 +2,9 @@ import "server-only";
 
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { foundationArea, restoredAreaSchema } from "./areas";
+import { addonSalesPausedResponse, areAddonSalesOpen } from "../billing/addon-sales";
+import { PLAN_SALES_PAUSED_CODE, PLAN_SALES_PAUSED_MESSAGE } from "../billing/plan-sales";
 import { createFoundationRouteContext } from "./request-route";
 import { readFoundationRuntimeConnection } from "./runtime-connection";
 import { FoundationSessionError } from "./request-api";
@@ -14,18 +17,27 @@ import { readFoundationBillingCatalogue } from "./billing-catalogue";
 import { selectFoundationBillingPlan } from "./billing-plan-selection";
 import { toFoundationPaymentStatusView } from "../payments/status-view";
 import { readPostingAllowance } from "./posting-allowance";
+import { readFoundationSlotPackageOffer } from "./slot-package-offer";
+import { createFoundationServiceApi } from "./service-api";
+import { isPackageTerm, packageTotalCents } from "../billing/slot-packages";
 import {
   cancelFoundationPendingPayment,
   FoundationBillingError,
+  FoundationPendingPaymentError,
   manageFoundationPlanMember,
   readFoundationBilling,
+  paymentCheckFailureReason,
   readFoundationPayment,
   reconcileFoundationPayment,
   startFoundationCheckout,
+  startFoundationPackageCheckout,
+  startFoundationSlotCheckout,
+  startFoundationSlotRenewalCheckout,
 } from "./billing-runtime";
 
 type Operation =
   | "checkout"
+  | "package-checkout"
   | "payment-status"
   | "cancel-pending"
   | "overview"
@@ -34,11 +46,6 @@ type Operation =
   | "allowance";
 const noStore = { "Cache-Control": "private, no-store", "CDN-Cache-Control": "no-store" };
 const log = createLogger("FoundationBilling");
-const areaMap = {
-  MZANSI_MARKET: "market",
-  MZANSI_BUSINESS: "business",
-  PROMOTIONS_EVENTS: "tourism_events",
-} as const;
 
 /** This bridge preserves the current website URLs while selecting the new
  * session and SQL command model before any legacy table factory is created. */
@@ -47,6 +54,8 @@ export async function handleFoundationBillingRoute(
   operation: Operation,
   addon?: { postId: string; kind: "boost" | "featured" | "urgent"; days: number }
 ) {
+  // Second check behind the add-on routes' own (src/lib/billing/addon-sales.ts).
+  if (addon && !areAddonSalesOpen()) return addonSalesPausedResponse("foundation_billing");
   const mutate = !["payment-status", "overview", "allowance"].includes(operation);
   if (mutate) {
     const blocked = enforceMutationRequest(request, log);
@@ -91,9 +100,7 @@ export async function handleFoundationBillingRoute(
         })
       );
     if (operation === "allowance") {
-      const area = z
-        .enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"])
-        .parse(request.nextUrl.searchParams.get("area"));
+      const area = restoredAreaSchema.parse(request.nextUrl.searchParams.get("area"));
       const [billing, posting, publicCatalogue] = await Promise.all([
         readFoundationBilling(caller.api),
         readPostingAllowance(caller.api, area),
@@ -101,7 +108,7 @@ export async function handleFoundationBillingRoute(
       ]);
       if (posting.account_id !== caller.accountId) throw new FoundationBillingError(503);
       const entries = billing.entitlements.filter(
-        (entry) => entry.area === null || entry.area === areaMap[area]
+        (entry) => entry.area === null || entry.area === foundationArea(area)
       );
       const capacity = entries.reduce((sum, entry) => sum + entry.slot_capacity, 0);
       const used = entries.reduce((sum, entry) => sum + entry.used, 0);
@@ -141,8 +148,12 @@ export async function handleFoundationBillingRoute(
         try {
           await reconcileFoundationPayment(pay.id);
           pay = (await readFoundationPayment(caller.api, id)) ?? pay;
-        } catch {
-          /* Preserve the stored state during a provider outage. */
+        } catch (error) {
+          // Preserve the stored state during a provider outage.
+          log.warn("Payment status check failed", {
+            paymentId: pay.id,
+            reason: paymentCheckFailureReason(error),
+          });
         }
       }
       const status = toFoundationPaymentStatusView(pay);
@@ -161,34 +172,131 @@ export async function handleFoundationBillingRoute(
       return context.respond(
         NextResponse.json(await manageFoundationPlanMember(caller.api, input))
       );
+    if (operation === "package-checkout") {
+      // Multi-listing (P4a): only while the owner's sales switch is on; the
+      // database checks it again with everything else.
+      const offer = await readFoundationSlotPackageOffer(createFoundationServiceApi());
+      if (!offer.on_sale)
+        throw new FoundationBillingError(
+          403,
+          "Multi-listing packages are not on sale yet.",
+          "PACKAGES_NOT_ON_SALE"
+        );
+      const value = z
+        .strictObject({
+          planId: z.uuid(),
+          slots: z.number().int().min(5).max(100),
+          expectedTotalCents: z.number().int().positive().max(1_000_000),
+          coolingOffConsent: z.boolean().optional(),
+        })
+        .parse(input);
+      const plan = offer.plans.find((entry) => entry.id === value.planId);
+      if (!plan || !isPackageTerm(plan.term_days))
+        throw new FoundationBillingError(400, "This package term is not available");
+      if (packageTotalCents(value.slots, plan.term_days) !== value.expectedTotalCents)
+        throw new FoundationBillingError(
+          409,
+          "The price changed. Check the total and try again.",
+          "PRICE_CHANGED"
+        );
+      if (value.coolingOffConsent !== true)
+        throw new FoundationBillingError(
+          400,
+          "Tick the box to confirm that your slots start now.",
+          "CONSENT_REQUIRED"
+        );
+      const result = await startFoundationPackageCheckout(
+        caller.api,
+        caller.accountId,
+        {
+          planId: plan.id,
+          slots: value.slots,
+          expectedTotalCents: value.expectedTotalCents,
+          coolingOffConsent: true,
+        },
+        process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com"
+      );
+      return context.respond(NextResponse.json({ ...result, account_id: caller.accountId }));
+    }
     const catalogue = await readFoundationBillingCatalogue(createFoundationPublicApi(connection));
-    let productId: string;
-    let postId: string | null = null;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com";
     if (addon) {
-      postId = z.uuid().parse(addon.postId);
       const product = catalogue.addons.find(
         (entry) => entry.kind === addon.kind && entry.days === addon.days
       );
       if (!product) throw new FoundationBillingError(400, "This add-on is not available");
-      productId = product.id;
-    } else {
-      const value = z
-        .strictObject({
-          planId: z.uuid(),
-          area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]).optional(),
-        })
-        .parse(input);
-      const product = selectFoundationBillingPlan(catalogue, value.planId);
-      if (!product || (value.area && product.area !== null && product.area !== areaMap[value.area]))
-        throw new FoundationBillingError(400, "This plan is not available in the selected section");
-      productId = product.id;
+      const result = await startFoundationCheckout(
+        caller.api,
+        caller.accountId,
+        product.id,
+        z.uuid().parse(addon.postId),
+        appUrl
+      );
+      return context.respond(NextResponse.json({ ...result, account_id: caller.accountId }));
     }
-    const result = await startFoundationCheckout(
+    // Paid slots are paused while the catalogue lists none (posting-v4).
+    if (catalogue.plans.length === 0)
+      throw new FoundationBillingError(403, PLAN_SALES_PAUSED_MESSAGE, PLAN_SALES_PAUSED_CODE);
+    const value = z
+      .strictObject({
+        planId: z.uuid(),
+        area: restoredAreaSchema.optional(),
+        slots: z.number().int().min(1).max(25),
+        expectedTotalCents: z.number().int().positive().max(100_000_000),
+        coolingOffConsent: z.boolean().optional(),
+        // Renewing early (P3): the slots to renew, one line each.
+        renewSlotIds: z.array(z.uuid()).min(1).max(25).optional(),
+      })
+      .parse(input);
+    const product = selectFoundationBillingPlan(catalogue, value.planId);
+    if (
+      !product ||
+      (value.area && product.area !== null && product.area !== foundationArea(value.area))
+    )
+      throw new FoundationBillingError(400, "This plan is not available in the selected section");
+    if (value.renewSlotIds) {
+      if (
+        value.renewSlotIds.length !== value.slots ||
+        new Set(value.renewSlotIds).size !== value.slots
+      )
+        throw new FoundationBillingError(400, "Check the slots to renew");
+      // The renewal's own box: the new days start later; the database records it.
+      if (value.coolingOffConsent !== true)
+        throw new FoundationBillingError(
+          400,
+          "Tick the box to confirm when your new days start.",
+          "CONSENT_REQUIRED"
+        );
+      const renewed = await startFoundationSlotRenewalCheckout(
+        caller.api,
+        caller.accountId,
+        {
+          planId: product.id,
+          entitlementIds: value.renewSlotIds,
+          expectedTotalCents: value.expectedTotalCents,
+          coolingOffConsent: true,
+        },
+        appUrl
+      );
+      return context.respond(NextResponse.json({ ...renewed, account_id: caller.accountId }));
+    }
+    // posting-v4: no payment without the consent; the database records it.
+    if (value.coolingOffConsent !== true)
+      throw new FoundationBillingError(
+        400,
+        "Tick the box to confirm that your slot starts now.",
+        "CONSENT_REQUIRED"
+      );
+    const result = await startFoundationSlotCheckout(
       caller.api,
       caller.accountId,
-      productId,
-      postId,
-      process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com"
+      {
+        planId: product.id,
+        slots: value.slots,
+        expectedTotalCents: value.expectedTotalCents,
+        coolingOffConsent: true,
+      },
+      appUrl
     );
     return context.respond(NextResponse.json({ ...result, account_id: caller.accountId }));
   } catch (error) {
@@ -206,7 +314,28 @@ export async function handleFoundationBillingRoute(
           : status === 400
             ? "Check the billing details"
             : "Billing is temporarily unavailable";
-    const response = NextResponse.json({ error: message }, { status, headers: noStore });
+    const code = error instanceof FoundationBillingError ? error.code : undefined;
+    // Outages and conflicts are logged by operation and reason code only.
+    if (status >= 500)
+      log.error("Billing request failed", {
+        operation,
+        status,
+        reason: code ?? paymentCheckFailureReason(error),
+      });
+    else if (status === 409)
+      log.warn("Billing request refused", {
+        operation,
+        reason: code ?? paymentCheckFailureReason(error),
+      });
+    // The restored checkout page shows Continue, Check status and Cancel from this.
+    const pendingPayment =
+      error instanceof FoundationPendingPaymentError ? error.pendingPayment : undefined;
+    const response = NextResponse.json(
+      code
+        ? { error: message, code, ...(pendingPayment && { pendingPayment }) }
+        : { error: message },
+      { status, headers: noStore }
+    );
     return context ? context.respond(response) : response;
   }
 }

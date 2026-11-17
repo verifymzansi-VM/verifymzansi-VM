@@ -1,28 +1,33 @@
 "use client";
 
+import { FilterEdgeTab } from "./filter-edge-tab";
 import { useEffect, useRef, useState } from "react";
-import { SlidersHorizontal, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { useMarketplaceStore } from "@/stores";
-import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
+import {
+  ALL_BUSINESS_CATEGORIES,
+  BUSINESS_CATEGORIES,
+  BUSINESS_TYPE_OPTIONS,
+} from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useFilterOrganisations } from "@/hooks/use-filter-organisations";
 import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
+import { filterSelectClass } from "./filter-controls";
 
-const selectClassName =
-  "flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-colors hover:border-brand-blue/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+const selectClassName = filterSelectClass;
 
 export function BusinessFilterDrawer() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
@@ -45,7 +50,20 @@ export function BusinessFilterDrawer() {
     filters.businessType,
     filters.province,
     filters.city,
+    filters.organisation,
   ].filter(Boolean).length;
+  const organisations = useFilterOrganisations(open || Boolean(filters.organisation));
+
+  // The search box is uncontrolled so typing never remounts it (a query-based
+  // key dropped focus after every debounced commit). Mirror query changes made
+  // elsewhere (URL hydration, chips, clear all) without touching it mid-typing.
+  useEffect(() => {
+    const input = searchInputRef.current;
+    const query = filters.query ?? "";
+    if (input && document.activeElement !== input && input.value !== query) {
+      input.value = query;
+    }
+  }, [filters.query]);
 
   const clearAllFilters = () => {
     triggerHaptic("light");
@@ -67,8 +85,11 @@ export function BusinessFilterDrawer() {
   }
   if (filters.businessCategory) {
     const catLabel =
-      BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory)?.label ||
-      String(filters.businessCategory).replace(/_/g, " ");
+      (ALL_BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory)?.label ||
+        String(filters.businessCategory).replace(/_/g, " ")) +
+      (BUSINESS_CATEGORIES.some((c) => c.value === filters.businessCategory)
+        ? ""
+        : " (previous category)");
     activeChips.push({
       key: "category",
       label: catLabel,
@@ -76,7 +97,7 @@ export function BusinessFilterDrawer() {
     });
   }
   if (filters.businessSubcategory) {
-    const catDef = BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory);
+    const catDef = ALL_BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory);
     const subLabel =
       catDef?.subcategories.find((s) => s.value === filters.businessSubcategory)?.label ||
       String(filters.businessSubcategory).replace(/_/g, " ");
@@ -87,9 +108,10 @@ export function BusinessFilterDrawer() {
     });
   }
   if (filters.businessType) {
-    const typeLabel =
+    const typeLabel = `${
       BUSINESS_TYPE_OPTIONS.find((t) => t.value === filters.businessType)?.label ||
-      String(filters.businessType).replace(/_/g, " ");
+      String(filters.businessType).replace(/_/g, " ")
+    } (previous filter)`;
     activeChips.push({
       key: "type",
       label: typeLabel,
@@ -97,7 +119,7 @@ export function BusinessFilterDrawer() {
     });
   }
   if (filters.province) {
-    const locLabel = filters.city ? `${filters.province} › ${filters.city}` : filters.province;
+    const locLabel = filters.city ? `${filters.city}, ${filters.province}` : filters.province;
     activeChips.push({
       key: "location",
       label: locLabel,
@@ -105,6 +127,16 @@ export function BusinessFilterDrawer() {
         setFilter("province", undefined);
         setFilter("city", undefined);
       },
+    });
+  }
+
+  if (filters.organisation) {
+    activeChips.push({
+      key: "organisation",
+      label:
+        organisations.find((org) => org.slug === filters.organisation)?.name ??
+        filters.organisation.replace(/-/g, " "),
+      onRemove: () => setFilter("organisation", undefined),
     });
   }
 
@@ -121,22 +153,16 @@ export function BusinessFilterDrawer() {
         <ActiveFilterChips chips={activeChips} onClearAll={clearAllFilters} />
       </div>
 
-      {/* ── Sticky FAB filter button (mobile only) ── */}
-      <SheetTrigger asChild>
-        <button
-          type="button"
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 inline-flex h-12 w-12 -translate-x-1/2 items-center justify-center gap-1 rounded-full bg-brand-blue text-white shadow-lg shadow-brand-blue/30 ring-1 ring-white/20 transition-all hover:bg-brand-blue/90 active:scale-95 md:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
-          aria-label="Open business filters"
-          disabled={!isInteractive}
-        >
-          <SlidersHorizontal className="h-4 w-4 shrink-0" />
-          {activeFilterCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[10px] font-bold text-warm-950 ring-2 ring-background">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
-      </SheetTrigger>
+      {/* ── Filters on the right wall (phones and tablets) ── */}
+      <FilterEdgeTab
+        label="Open business filters"
+        count={activeFilterCount}
+        open={open}
+        onOpen={() => {
+          triggerHaptic("medium");
+          setOpen(true);
+        }}
+      />
 
       <SheetContent
         side="bottom"
@@ -145,10 +171,8 @@ export function BusinessFilterDrawer() {
       >
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-border" aria-hidden="true" />
         <SheetHeader className="mb-3">
-          <SheetTitle>Filter Businesses</SheetTitle>
-          <SheetDescription>
-            Search and narrow the business list without leaving the page.
-          </SheetDescription>
+          <SheetTitle>Filters</SheetTitle>
+          <SheetDescription className="sr-only">Narrow the business list.</SheetDescription>
         </SheetHeader>
 
         <div className="space-y-3">
@@ -158,13 +182,12 @@ export function BusinessFilterDrawer() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                key={filters.query || "__empty-query__"}
                 ref={searchInputRef}
                 id="drawer-business-search"
                 type="search"
-                placeholder="Search businesses, services, or brands"
+                placeholder="Name, service or brand"
                 aria-label="Search businesses"
-                className="rounded-xl pl-9"
+                className="h-11 rounded-xl pl-9"
                 defaultValue={filters.query || ""}
                 disabled={!isInteractive}
                 onChange={(event) => {
@@ -193,6 +216,14 @@ export function BusinessFilterDrawer() {
               }
             >
               <option value="">All categories</option>
+              {filters.businessCategory &&
+                !BUSINESS_CATEGORIES.some((c) => c.value === filters.businessCategory) && (
+                  <option value={filters.businessCategory}>
+                    {ALL_BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory)
+                      ?.label ?? filters.businessCategory}{" "}
+                    (previous category)
+                  </option>
+                )}
               {BUSINESS_CATEGORIES.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
@@ -204,15 +235,17 @@ export function BusinessFilterDrawer() {
           {/* Subcategory (cascading from category) */}
           {filters.businessCategory &&
             (() => {
-              const catDef = BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory);
+              const catDef = ALL_BUSINESS_CATEGORIES.find(
+                (c) => c.value === filters.businessCategory
+              );
               const subs = catDef?.subcategories ?? [];
               if (subs.length === 0) return null;
               return (
                 <div className="space-y-1.5">
-                  <Label htmlFor="drawer-business-subcategory">Subcategory</Label>
+                  <Label htmlFor="drawer-business-subcategory">Specific business activity</Label>
                   <select
                     id="drawer-business-subcategory"
-                    aria-label="Subcategory"
+                    aria-label="Specific business activity"
                     className={selectClassName}
                     value={filters.businessSubcategory || ""}
                     disabled={!isInteractive}
@@ -220,7 +253,7 @@ export function BusinessFilterDrawer() {
                       setFilter("businessSubcategory", event.target.value || undefined)
                     }
                   >
-                    <option value="">All subcategories</option>
+                    <option value="">All activities</option>
                     {subs.map((sub) => (
                       <option key={sub.value} value={sub.value}>
                         {sub.label}
@@ -230,33 +263,6 @@ export function BusinessFilterDrawer() {
                 </div>
               );
             })()}
-
-          {/* Business Type */}
-          <div className="space-y-1.5">
-            <Label htmlFor="drawer-business-type">Business Type</Label>
-            <select
-              id="drawer-business-type"
-              aria-label="Business type"
-              className={selectClassName}
-              value={filters.businessType || ""}
-              disabled={!isInteractive}
-              onChange={(event) =>
-                setFilter(
-                  "businessType",
-                  event.target.value
-                    ? (event.target.value as typeof filters.businessType)
-                    : undefined
-                )
-              }
-            >
-              <option value="">All types</option>
-              {BUSINESS_TYPE_OPTIONS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </div>
 
           {/* Province */}
           <div className="space-y-1.5">
@@ -283,7 +289,7 @@ export function BusinessFilterDrawer() {
 
           {/* City (cascading) */}
           <div className="space-y-1.5">
-            <Label htmlFor="drawer-business-city">City</Label>
+            <Label htmlFor="drawer-business-city">City or town</Label>
             <select
               id="drawer-business-city"
               aria-label="City"
@@ -301,6 +307,27 @@ export function BusinessFilterDrawer() {
                 ))}
             </select>
           </div>
+          {/* Organisation / programme (optional; never changes ranking) */}
+          {organisations.length > 0 ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="drawer-business-organisation">Business Sponsor</Label>
+              <select
+                id="drawer-business-organisation"
+                aria-label="Business Sponsor"
+                className={selectClassName}
+                value={filters.organisation || ""}
+                onChange={(event) => setFilter("organisation", event.target.value || undefined)}
+                disabled={!isInteractive}
+              >
+                <option value="">All businesses</option>
+                {organisations.map((org) => (
+                  <option key={org.slug} value={org.slug}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           {/* Actions */}
           <div className="sticky bottom-0 flex gap-3 border-t bg-background/95 px-0 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] pt-4 backdrop-blur">
             <Button
@@ -319,7 +346,7 @@ export function BusinessFilterDrawer() {
                 setOpen(false);
               }}
             >
-              View results
+              Show results
             </Button>
           </div>
         </div>

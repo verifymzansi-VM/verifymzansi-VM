@@ -148,6 +148,8 @@ export async function extractPdf(bytes: Uint8Array): Promise<ExtractedPdf | null
   } catch {
     return null;
   } finally {
-    await pdf?.cleanup().catch(() => undefined);
+    await pdf?.cleanup().catch(() => {
+      // Cleanup only frees parser memory; the result above is already decided.
+    });
   }
 }

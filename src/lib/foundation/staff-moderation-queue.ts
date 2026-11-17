@@ -6,6 +6,7 @@ import type { ClaimView } from "../services/queue-claims";
 import { claimTypeOf } from "../admin/moderation-items";
 import { getContentEditChanges } from "../content-edit-diff";
 import { FoundationStaffReadError } from "./staff-read";
+import { areaLabel, restoredArea, restoredContentType } from "./areas";
 const instant = z.iso.datetime({ offset: true });
 const generation = z
   .string()
@@ -48,11 +49,6 @@ const queue = z.strictObject({
     )
     .max(220),
 });
-const labels = {
-  market: ["MZANSI_MARKET", "Mzansi Market"],
-  business: ["MZANSI_BUSINESS", "Mzansi Business"],
-  tourism_events: ["PROMOTIONS_EVENTS", "Tourism & Events"],
-} as const;
 /** Unclaimed rows are queue summaries. Full review data and exact fences can
  * only come from the caller's currently held native claim. */
 export function parseStaffModerationQueue(input: unknown, accountId: string) {
@@ -91,8 +87,9 @@ export function parseStaffModerationQueue(input: unknown, accountId: string) {
     if (!post && (row.owner_id || live)) throw new FoundationStaffReadError(503);
     const values = post ? restoredOwnerPostRow(post, row.owner_id!) : {};
     const current = live ? restoredOwnerPostRow(live, row.owner_id!) : null;
-    const [area, areaLabel] = labels[row.area];
-    const contentType = row.kind === "event" ? "promotion" : row.kind;
+    const area = restoredArea(row.area);
+    const areaName = areaLabel(row.area);
+    const contentType = restoredContentType(row.kind);
     // The owner projection is runtime-validated above, including media keys,
     // canonical price and supplemental presentation. Whitelist rendering data
     // through the same established owner-to-selected-form adapter.
@@ -104,7 +101,7 @@ export function parseStaffModerationQueue(input: unknown, accountId: string) {
       updated_at: row.updated_at,
       status: "pending_moderation",
       area,
-      areaLabel,
+      areaLabel: areaName,
       contentType,
       category: row.category,
       itemType: `${row.kind === "listing" ? "Listing" : row.kind === "event" ? "Event" : row.area === "tourism_events" ? "Tourism business" : "Business"}${row.edit_of ? " edit" : ""}`,

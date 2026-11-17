@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FoundationRefusal } from "./owner-route";
 export class FoundationStaffCommandError extends Error {
+  override name = "FoundationStaffCommandError";
   constructor(
     readonly status: number,
     message: string,
@@ -9,6 +10,7 @@ export class FoundationStaffCommandError extends Error {
     super(message);
   }
 }
+import { isStaffSecondFactorRefusal } from "./error-reasons";
 export async function settleStaffCommand<T>(
   result: PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>,
   schema: z.ZodType<T>
@@ -16,7 +18,7 @@ export async function settleStaffCommand<T>(
   const { data, error } = await result;
   if (error) {
     if (error.code === "42501") {
-      const mfa = /second.factor|authenticator app/.test(error.message ?? "");
+      const mfa = isStaffSecondFactorRefusal(error);
       throw new FoundationStaffCommandError(
         403,
         mfa
@@ -25,6 +27,12 @@ export async function settleStaffCommand<T>(
         mfa
       );
     }
+    // Approving a post that no plan or free week can fund any more.
+    if (error.code === "PT402")
+      throw new FoundationStaffCommandError(
+        409,
+        "No plan or free week is left to fund this post. Reject it with a reason, or ask the member to choose a plan."
+      );
     throw new FoundationStaffCommandError(
       error.code === "PT409"
         ? 409

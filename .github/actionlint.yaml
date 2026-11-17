@@ -1,0 +1,13 @@
+# actionlint configuration (CI job "Workflow lint (actionlint)").
+# Each ignore names one reviewed shellcheck note in one file, with its reason.
+paths:
+  .github/workflows/deploy.yml:
+    ignore:
+      # Style only: several echo lines appended to $GITHUB_OUTPUT one by one.
+      # deploy.yml is rewritten by the open production-keys change; tidy it there.
+      - "SC2129"
+  .github/workflows/database-backup.yml:
+    ignore:
+      # Info only: `ls` lists the backup files this job itself just wrote,
+      # whose names it controls (no spaces or special characters).
+      - "SC2012"

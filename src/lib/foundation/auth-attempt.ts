@@ -16,22 +16,34 @@ export function foundationVerificationCookies(
   );
 }
 
+/** Every write to a sign-in verifier cookie (a flow's slot, the slot index,
+ * the fixed verifier and their chunks), deletions included, so slots the SDK
+ * evicts are removed in the browser too. Session cookie names never match. */
+export function foundationVerifierCookieWrites(
+  items: Parameters<FoundationAuthCookies["setAll"]>[0]
+) {
+  return items.filter((item) => /-code-verifier(?:\.\d+)?$/.test(item.name));
+}
+
 /** A fresh Auth operation. Existing sessions cannot start INITIAL_SESSION
  * refreshes here; their names remain available for stale cookie chunk cleanup.
  * This is distinct from the verified-session bridge used by protected commands.
  * Callers stage cookie writes and commit only the operation's accepted result.
+ * `apiKey` is the publishable key unless a trusted server step passes the
+ * project's secret key (password-recovery.ts, password setup only).
  */
 export function createFoundationAuthAttempt(
   input: unknown,
   cookies: FoundationAuthCookies,
-  fetcher: typeof fetch
+  fetcher: typeof fetch,
+  apiKey?: string
 ) {
   const config = parseFoundationConnection(input);
   if (typeof cookies?.getAll !== "function" || typeof cookies?.setAll !== "function")
     throw new Error("A complete request cookie adapter is required");
   let cookieAccessFailed = false;
   const cookieName = `sb-${new URL(config.url).hostname.split(".")[0]}-auth-token`;
-  const client = createServerClient(config.url, config.publishableKey, {
+  const client = createServerClient(config.url, apiKey ?? config.publishableKey, {
     cookieOptions: { name: cookieName, secure: config.url.startsWith("https://") },
     // The callback requires an explicit slot selector, so one confirmation
     // cannot borrow a different pending flow's verifier. Versions are pinned.

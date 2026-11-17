@@ -18,6 +18,7 @@ import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 
 export const metadata: Metadata = {
   title: "Verification help",
+  alternates: { canonical: "/help/verification" },
   description: "Common reasons for verification rejection and how to fix them on VerifyMzansi.",
 };
 

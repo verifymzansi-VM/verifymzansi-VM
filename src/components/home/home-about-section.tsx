@@ -34,7 +34,7 @@ export function HomeAboutSection() {
           className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"
         >
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-gold-300">
+            <p className="text-xs font-semibold text-brand-green-700 dark:text-brand-gold-300">
               Why VerifyMzansi
             </p>
             <h2

@@ -25,7 +25,7 @@ describe("HeroBannerWithData", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the home showroom in fair rotation order for the visitor's province", async () => {
+  it("renders the home showroom with the visitor's province", async () => {
     const visitor = { province: "Gauteng", source: "detected" as const };
     mockGetVisitorProvince.mockResolvedValue(visitor);
     mockLoadShowroomItems.mockResolvedValue([
@@ -35,7 +35,7 @@ describe("HeroBannerWithData", () => {
 
     render(await HeroBannerWithData());
 
-    expect(mockLoadShowroomItems).toHaveBeenCalledWith("home", { province: "Gauteng" });
+    expect(mockLoadShowroomItems).toHaveBeenCalledWith("home");
     expect(screen.getByTestId("hero-showroom")).toHaveAttribute("data-count", "2");
     expect(showroomCarouselMock).toHaveBeenCalledWith(
       expect.objectContaining({ surface: "showroom:home", visitorProvince: visitor }),

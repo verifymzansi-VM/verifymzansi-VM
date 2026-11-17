@@ -33,8 +33,8 @@ vi.mock("@/components/layout/page-header", () => ({
   ),
 }));
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({
     auth: { getUser: mockGetUser },
     from: mockFrom,
   }),
@@ -193,7 +193,7 @@ describe("CompleteProfilePage", () => {
     });
   });
 
-  it("shows error toast and stays on OTP step when verify returns 409", async () => {
+  it("shows the error under the code field and stays on the OTP step when verify returns 409", async () => {
     const user = userEvent.setup();
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) } as Response);
     mockFetch.mockResolvedValueOnce({
@@ -212,12 +212,75 @@ describe("CompleteProfilePage", () => {
     await user.type(screen.getByLabelText(/6-digit code/i), "123456");
     await user.click(screen.getByRole("button", { name: /^Verify$/i }));
 
-    await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Phone number already in use" })
-      );
-    });
-    expect(screen.getByLabelText(/6-digit code/i)).toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("This phone number is already linked to another account.");
+    const code = screen.getByLabelText(/6-digit code/i);
+    expect(code).toHaveAttribute("aria-invalid", "true");
+    expect(code).toHaveAttribute("aria-describedby", "otp-error");
+    expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" }));
+    // Typing a new code clears the message.
+    await user.type(code, "{backspace}");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows a refused send under the number, without a toast", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      headers: new Headers(),
+      json: async () => ({
+        error:
+          "This phone number can't be used on VerifyMzansi. Contact support if you think this is a mistake.",
+        code: "phone_banned",
+      }),
+    } as Response);
+
+    render(<CompleteProfilePage />);
+
+    await waitFor(() => screen.getByLabelText(/SA mobile number/i));
+    await user.type(screen.getByLabelText(/SA mobile number/i), "0711234567");
+    await user.click(screen.getByRole("button", { name: /Send code/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("This phone number can't be used on VerifyMzansi.");
+    const number = screen.getByLabelText(/SA mobile number/i);
+    expect(number).toHaveAttribute("aria-invalid", "true");
+    expect(number).toHaveAttribute("aria-describedby", "phone-error");
+    expect(screen.queryByText(/Format: 0XX XXX XXXX/)).not.toBeInTheDocument();
+    expect(mockToast).not.toHaveBeenCalled();
+    await user.type(number, "8");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText(/Format: 0XX XXX XXXX/)).toBeInTheDocument();
+  });
+
+  it("waits out a rate limit: the message stays and Send code is disabled", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      headers: new Headers({ "Retry-After": "840" }),
+      json: async () => ({
+        error: "Too many attempts. Try again in 14 minutes.",
+        code: "rate_limited",
+        retryAfter: 840,
+      }),
+    } as Response);
+
+    render(<CompleteProfilePage />);
+
+    await waitFor(() => screen.getByLabelText(/SA mobile number/i));
+    await user.type(screen.getByLabelText(/SA mobile number/i), "0711234567");
+    await user.click(screen.getByRole("button", { name: /Send code/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Too many attempts. Try again in 14 minutes."
+    );
+    expect(screen.getByRole("button", { name: /Send code/i })).toBeDisabled();
+    // Editing the number does not hide a wait that is still running.
+    await user.type(screen.getByLabelText(/SA mobile number/i), "{backspace}");
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(mockToast).not.toHaveBeenCalled();
   });
 
   it("returns to phone step when Change number is clicked", async () => {

@@ -57,9 +57,32 @@ export const CHECKS: Check[] = [
   ),
   check("openapi", ["quality:openapi-drift"], "docs/openapi.json versus generated declarations"),
   check("dead-code", ["knip"], "Next file conventions, workers, scripts, remotion and CI", local, {
-    exclusions: "knip.jsonc: generated declarations, output and reviewed ignoreIssues",
+    exclusions: "knip.jsonc: listed path-run scripts and reviewed ignoreIssues; stale config fails",
   }),
   check("imports", ["depcruise"], "src, scripts, workers import boundaries"),
+  check(
+    "legacy-surface",
+    ["check:legacy-surface"],
+    "src, workers: old-backend switches, retired client imports, command names and table reads; may only go down",
+    local,
+    {
+      tests: ["scripts/legacy-surface.test.mjs"],
+      evidence: ["scripts/legacy-surface-baseline.json", "per-run legacy-surface.log"],
+      timeoutMs: 120_000,
+    }
+  ),
+  check(
+    "frontend-freeze",
+    ["check:frontend-freeze"],
+    "restored frontend scope versus commit 0b562f42; every difference listed in FRONTEND-CHANGES.md",
+    local,
+    {
+      dependencies: ["pnpm frozen install", "git; fetches commit 0b562f42 when the clone lacks it"],
+      tests: ["scripts/frontend-freeze.test.mjs"],
+      evidence: ["FRONTEND-CHANGES.md", "per-run frontend-freeze.log"],
+      timeoutMs: 120_000,
+    }
+  ),
   check("duplication", ["jscpd:check"], "src, scripts, workers executable code", local, {
     exclusions: ".jscpd.json: tests, generated/vendor, reviewed aliases",
     evidence: ["tmp/jscpd/jscpd-report.json", "scripts/audit-baselines/duplication.json"],
@@ -93,16 +116,10 @@ export const CHECKS: Check[] = [
     { evidence: ["public/vendor/ffmpeg-core/NOTICE.txt", "per-run licenses.log"] }
   ),
   check(
-    "db-static",
-    ["db:check-invariants"],
-    "static migration corpus invariants; supplementary only"
-  ),
-  check(
     "contracts",
     ["test:contract"],
     "clean foundation API artifact drift; Ozow full/thin official event fixtures, shared KYC schema, SMS/email"
   ),
-  check("canaries", ["test:security-canaries"], "security assertions; no mutation score"),
   check(
     "unit",
     ["exec", "vitest", "run"],
@@ -124,42 +141,21 @@ export const CHECKS: Check[] = [
     ["kyc", "release"],
     { coveredBy: "unit" }
   ),
-  ...[
-    "trials",
-    "commercial:db",
-    "payments:db",
-    "media:db",
-    "visits:db",
-    "staff-roles:db",
-    "decisions:db",
-    "queue-claims:db",
-    "operation-jobs:db",
-    "dsar:db",
-    "dashboard:db",
-    "admin-lists:db",
-    "kyc:db",
-    "business-counts:db",
-    "business-evidence:db",
-  ].map((lane) =>
-    check(
-      `db-${lane.replace(/:db$/, "")}`,
-      [`test:${lane}`],
-      lane.startsWith("business-")
-        ? "supplementary isolated PGlite assertions; limited schema/role model; hosted PostgreSQL/PostgREST proof remains separate"
-        : "isolated PGlite assertions; limited migration/concurrency model",
-      lane === "payments:db"
-        ? [...full, "payments"]
-        : lane === "kyc:db" || lane === "business-evidence:db"
-          ? [...full, "kyc"]
-          : full
-    )
-  ),
   check(
     "coverage",
     ["test:coverage:core"],
-    "core thresholds unchanged; six DOM-heavy suites run in unit",
+    "core thresholds unchanged; DOM-heavy suites in src/test/coverage-excluded-suites.ts run in unit-coverage-excluded",
     full,
     { evidence: ["coverage/coverage-final.json"], timeoutMs: 1_800_000 }
+  ),
+  // CI runs coverage plus this lane instead of unit, so every unit test runs
+  // once. Where unit runs (review, release) it already includes these suites.
+  check(
+    "unit-coverage-excluded",
+    ["test:coverage:excluded"],
+    "the DOM-heavy suites the coverage lane leaves out (src/test/coverage-excluded-suites.ts), without coverage",
+    full,
+    { coveredBy: "unit", timeoutMs: 600_000 }
   ),
   check("preflight", ["preflight"], "local development environment", local, {
     category: "local_production_env",
@@ -173,22 +169,21 @@ export const CHECKS: Check[] = [
     { category: "local_production_env", external: true }
   ),
   check(
-    "isolated-db",
-    ["test:db:isolated"],
-    "full migrations, PostgreSQL/PostgREST RLS, independent-session races",
-    ["release", "payments", "kyc"],
-    { dependencies: ["Docker daemon", "Supabase CLI"], timeoutMs: 1_800_000 }
-  ),
-  check(
     "browser",
-    ["test:browser:isolated"],
-    "critical smoke, billing, KYC, DSAR flows; isolated build and bundle budget",
+    ["test:e2e:foundation"],
+    "restored website on the private local foundation test copy: public pages and forms, checkout and fulfilment, account recovery, identity review, showroom and video (e2e/foundation)",
     ["release", "payments", "kyc"],
     {
-      dependencies: ["Playwright Chromium"],
-      exclusions: "WebKit/mobile-safari quarantine; authenticated scenarios need test credentials",
-      evidence: ["tmp/isolated-browser/latest.json"],
-      timeoutMs: 1_800_000,
+      dependencies: [
+        "Docker",
+        "Supabase CLI",
+        "Playwright Chromium",
+        "free loopback ports 3110 and 55440-55460",
+      ],
+      exclusions:
+        "Local throwaway copy only (nothing hosted, no real provider); WebKit and Firefox are not run; delete the copy afterwards with pnpm foundation:e2e:down",
+      evidence: ["playwright-report/foundation", "test-results/foundation"],
+      timeoutMs: 2_700_000,
     }
   ),
   check(
@@ -207,27 +202,6 @@ export const CHECKS: Check[] = [
       tests: ["src/__tests__/cloudflare-preflight.test.ts"],
       exclusions:
         "No build, environment rewrite, deployment or remote mutation; final Worker build still required",
-    }
-  ),
-  check(
-    "kyc-auth-browser",
-    ["test:browser:isolated"],
-    "authenticated synthetic ID/selfie, evidence, final approval and independent high-risk governance UI",
-    ["release", "payments", "kyc"],
-    {
-      coveredBy: "browser",
-      dependencies: [
-        "isolated production Next build",
-        "Chromium",
-        "synthetic auth/database/storage fixtures",
-      ],
-      timeoutMs: 1_800_000,
-      exclusions: "Real PostgreSQL/RLS and genuine provider delivery are separate requirements",
-      tests: [
-        "e2e/kyc-authenticated.spec.ts",
-        "src/lib/supabase/playwright-governance.test.ts",
-        "scripts/lib/kyc-browser-evidence.ts",
-      ],
     }
   ),
   check(
@@ -264,16 +238,16 @@ export const CHECKS: Check[] = [
     ["release", "payments", "kyc"],
     { external: true, category: "live_deployment" }
   ),
-  check("schema", ["db:verify-schema"], "read-only deployed schema", ["release"], {
-    external: true,
-    category: "live_deployment",
-  }),
   check(
-    "security-advisor",
-    ["supabase:advisor:security:strict"],
-    "read-only security advisor",
+    "hosted-exposure",
+    ["exec", "node", "scripts/check-foundation-hosted-exposure.mjs", "--stage=cutover"],
+    "read-only hosted Data API exposure and Auth settings",
     ["release"],
-    { external: true, category: "live_deployment" }
+    {
+      external: true,
+      category: "live_deployment",
+      dependencies: ["FOUNDATION_SUPABASE_URL and FOUNDATION_SUPABASE_PUBLISHABLE_KEY"],
+    }
   ),
   check(
     "performance-advisor",
@@ -439,7 +413,6 @@ for (const item of CHECKS) {
       "scripts/audit-tooling.test.ts",
     ],
     contracts: ["scripts/test-contract.ts", "src/test/contracts", "src/test/fixtures/contracts"],
-    canaries: ["scripts/test-mutation.ts"],
     unit: ["vitest.config.ts", "src/**/*.test.{ts,tsx}"],
     "payment-unit": [
       "scripts/run-domain-tests.ts payments",
@@ -451,18 +424,20 @@ for (const item of CHECKS) {
       "src/lib/validations/kyc-webhook.test.ts",
       "src/app/api/webhooks/kyc/provider/route.test.ts",
     ],
-    "db-business-counts": ["scripts/test-business-category-counts.mjs"],
-    "db-business-evidence": ["scripts/test-business-verification-file-privacy.mjs"],
     coverage: ["vitest.config.ts", "scripts/run-vitest.ts coverage-core"],
+    "unit-coverage-excluded": [
+      "vitest.config.ts",
+      "src/test/coverage-excluded-suites.ts",
+      "scripts/run-vitest.ts coverage-excluded",
+    ],
     preflight: ["src/__tests__/preflight-check.test.ts"],
     "preflight-production": ["src/__tests__/preflight-check.test.ts"],
-    "isolated-db": ["scripts/test-isolated-db.ts", "scripts/test-db.ts", "supabase/migrations"],
     browser: [
-      "e2e/smoke.spec.ts",
-      "e2e/addon-checkout.spec.ts",
-      "e2e/billing-payment-roundtrip.spec.ts",
-      "e2e/kyc-verification.spec.ts",
-      "e2e/dsar.spec.ts",
+      "playwright.foundation.config.ts",
+      "e2e/foundation/checkout-fulfilment.spec.ts",
+      "e2e/foundation/account-recovery.spec.ts",
+      "e2e/foundation/staff-review.spec.ts",
+      "e2e/foundation/public-forms.spec.ts",
     ],
     lighthouse: ["scripts/run-lighthouse.test.mjs", "lighthouse.config.json"],
     "http-smoke": ["src/__tests__/test-smoke-script.test.ts"],

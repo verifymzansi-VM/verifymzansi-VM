@@ -1,3 +1,7 @@
+> Historical: describes the retired source backend. Its migration steps target
+> the retired schema; foundation payment changes follow
+> [AGENTS.md](../AGENTS.md#database-changes).
+
 # Ozow One API payment repairs
 
 Prepared on 3 October 2026. These changes are local; they have not been applied

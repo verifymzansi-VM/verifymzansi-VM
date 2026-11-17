@@ -1,69 +1,58 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ArrowRight, LockKeyhole, ReceiptText, Users } from "lucide-react";
 import { BrandSurface } from "@/components/brand";
-import { MultiListingPlans, perPostPer30DaysCents } from "@/components/billing/multi-listing-plans";
+import { MultiListingPlans } from "@/components/billing/multi-listing-plans";
+import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
-import { getCommercialCatalog } from "@/lib/commercial/plans";
-import { getCommercialSettings } from "@/lib/commercial/settings";
+import { formatPlanPrice, RETAIL_OFFERS } from "@/lib/constants/pricing";
 import {
-  ENTERPRISE_ADMINS_INCLUDED,
-  ENTERPRISE_QUOTE_ABOVE_SLOTS,
-  formatPlanPrice,
-} from "@/lib/constants/pricing";
-import { createAdminClient } from "@/lib/supabase/admin";
+  PACKAGE_MAX_ONLINE_SLOTS,
+  PACKAGE_MIN_SLOTS,
+  PACKAGE_POSTS_PER_SLOT_PER_30_DAYS,
+  PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS,
+} from "@/lib/billing/slot-packages";
+import { readPackagesOnSale } from "@/lib/foundation/slot-package-offer";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Multi-listing plans",
-  description: `Keep 10 to ${ENTERPRISE_QUOTE_ABOVE_SLOTS} posts live at once on VerifyMzansi for 90 or 180 days. For dealers, agencies, shops and landlords. Pay once online; nothing renews.`,
+  title: "Multi-listing packages",
+  description: `Keep your whole stock live on VerifyMzansi: from ${PACKAGE_MIN_SLOTS} slots at ${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days, for 30, 90 or 180 days. For dealers, agencies, shops and landlords. Prepaid; does not renew automatically.`,
 };
-
-export const revalidate = 300;
 
 const STEPS = [
   {
-    title: "Choose a size and a term",
-    text: "Pick how many posts you want live at once, for 90 or 180 days, and pay once with Ozow.",
+    title: "Choose your slots and a term",
+    text: `Type how many posts you want live at once (from ${PACKAGE_MIN_SLOTS}) and pick 30, 90 or 180 days. Pay securely with Ozow; above the most Ozow accepts in one payment, by invoice.`,
   },
   {
     title: "Post as usual",
-    text: "Create each post from Post. Every live post uses one place in your plan, in any section.",
+    text: "Create each post from Post. Every live post uses one slot of your package, in any section, and is reviewed before it goes live.",
   },
   {
     title: "Swap stock as it sells",
-    text: "Publish replacement stock within your plan's live-post and activation limits.",
+    text: `Publish replacement stock any time, up to ${PACKAGE_POSTS_PER_SLOT_PER_30_DAYS} posts going live per slot per 30 days. All your slots end together.`,
   },
 ] as const;
 
-async function loadCheckoutEnabled() {
-  try {
-    const settings = await getCommercialSettings(createAdminClient() as never);
-    return settings.features.enterpriseCheckout ?? true;
-  } catch {
-    return true;
-  }
-}
-
 /**
  * The page a dealer, agency or shop lands on from the posting flow, billing,
- * pricing and advertise pages: buy a multi-listing plan directly.
+ * pricing and advertise pages: buy a Multi-listing package (roadmap P4a, the
+ * owner's decisions of 14 November 2026). Hidden (not found) while packages
+ * are not on sale: the owner's switch in the database, off until business
+ * tools P5-P7 pass.
  */
 export default async function MultiListingPage() {
-  const [catalog, checkoutEnabled] = await Promise.all([
-    getCommercialCatalog(),
-    loadCheckoutEnabled(),
-  ]);
-  const cheapestPerPost = catalog.enterprise.length
-    ? Math.min(...catalog.enterprise.map(perPostPer30DaysCents))
-    : null;
-  const singleFrom = catalog.retail.length
-    ? catalog.retail.reduce((low, offer) => (offer.priceCents < low.priceCents ? offer : low))
-    : null;
+  const offer = await readPackagesOnSale();
+  if (!offer) notFound();
+  const onlineMaxCents = await readOnlinePaymentMaxCents();
   const heroPoints = [
-    { icon: ReceiptText, label: "Paid once, never renews" },
+    { icon: ReceiptText, label: "Does not renew automatically" },
     { icon: LockKeyhole, label: "Secure Ozow checkout" },
-    { icon: Users, label: `${ENTERPRISE_ADMINS_INCLUDED} administrators included` },
+    { icon: Users, label: "You + 1 person (you + 4 from 50 slots)" },
   ];
 
   return (
@@ -81,15 +70,10 @@ export default async function MultiListingPage() {
               className="mt-4 max-w-3xl font-display text-[2.2rem] font-extrabold leading-[1.05] tracking-[-0.03em] text-white sm:text-5xl"
             >
               Keep your whole stock live.{" "}
-              <span className="gold-shine text-brand-gold-300">One plan, many posts.</span>
+              <span className="gold-shine text-brand-gold-300">One package, many posts.</span>
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-white/75 sm:text-lg sm:leading-8">
-              10 to {ENTERPRISE_QUOTE_ABOVE_SLOTS} posts live at the same time in Mzansi Market,
-              Mzansi Business or Tourism &amp; Events, for 90 or 180 days
-              {cheapestPerPost !== null
-                ? `, from ${formatPlanPrice(cheapestPerPost)} per post per 30 days`
-                : ""}
-              .
+              {`From ${PACKAGE_MIN_SLOTS} slots at ${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days, for 30, 90 or 180 days, in Mzansi Market, Mzansi Business or Tourism & Events. Each slot keeps one post live at a time.`}
             </p>
             <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-white/90">
               {heroPoints.map(({ icon: Icon, label }) => (
@@ -109,15 +93,12 @@ export default async function MultiListingPage() {
           className="container-page py-10 sm:py-14"
         >
           <h2 id="multi-listing-plans-title" className="section-title">
-            Choose your plan
+            Choose your package
           </h2>
           <p className="section-lede mb-6">
-            Prices are the total for the term.
-            {singleFrom
-              ? ` A single post costs ${formatPlanPrice(singleFrom.priceCents)} for ${singleFrom.durationDays} days.`
-              : ""}
+            {`Prices are the total for the term. Up to ${PACKAGE_MAX_ONLINE_SLOTS} slots and ${onlineMaxCents === null ? "the most Ozow accepts in one payment" : formatPlanPrice(onlineMaxCents)} are paid online. For 1 to 4 posts, Individual slots cost ${formatPlanPrice(RETAIL_OFFERS[0].priceCents)} each per 30 days.`}
           </p>
-          <MultiListingPlans plans={catalog.enterprise} checkoutEnabled={checkoutEnabled} />
+          <MultiListingPlans onlineMaxCents={onlineMaxCents} />
         </section>
 
         <section

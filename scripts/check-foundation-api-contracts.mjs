@@ -11,7 +11,10 @@ import {
 } from "./lib/foundation-api-contracts.mjs";
 import { API_ROLES, verifyRoleOpenapi } from "./lib/foundation-api-openapi.mjs";
 import { assertUnreleasedBaselineGuard } from "./lib/foundation-baseline-guard.mjs";
-import { readPostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
+import {
+  assertPostingTermsCatalogueSinceBaseline,
+  readFoundationUpdatesSql,
+} from "./lib/foundation-posting-terms-catalogue.mjs";
 
 // Offline consistency gate. A fresh local replay separately proves actual SQL
 // grant/default parity; this gate catches candidate/source/type drift in builds.
@@ -27,10 +30,10 @@ assert.equal(assembly.releaseReady, false);
 assert.equal(manifest.releaseReady, false);
 assert.equal(manifest.schema, "api");
 assert.equal(manifest.candidateHash, assembly.candidateHash);
-assert.deepEqual(
+// Terms published after the baseline are seeded by reviewed database updates.
+assertPostingTermsCatalogueSinceBaseline(
   assembly.postingTermsCatalogue,
-  readPostingTermsCatalogue(),
-  "Posting terms reference drift"
+  readFoundationUpdatesSql()
 );
 assert.ok(
   read("database/foundation/candidate.sql")

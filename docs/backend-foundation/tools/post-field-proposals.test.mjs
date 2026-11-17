@@ -5,13 +5,12 @@ import { createHash } from "node:crypto";
 
 test("post-field proposals cover source columns without pretending to approve them", () => {
   const root = "docs/backend-foundation";
-  const map = JSON.parse(fs.readFileSync(`${root}/schema-map.json`, "utf8"));
+  const sourceMap = "database/source-inventory/schema-map.json";
+  const map = JSON.parse(fs.readFileSync(sourceMap, "utf8"));
   const proposal = JSON.parse(fs.readFileSync(`${root}/post-field-proposals.json`, "utf8"));
   assert.equal(
     proposal.sourceMapHash,
-    createHash("sha256")
-      .update(fs.readFileSync(`${root}/schema-map.json`))
-      .digest("base64url")
+    createHash("sha256").update(fs.readFileSync(sourceMap)).digest("base64url")
   );
   const sourceTypes = new Map(
     map.tables.flatMap((table) =>

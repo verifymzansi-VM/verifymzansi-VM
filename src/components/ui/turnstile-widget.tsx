@@ -39,8 +39,13 @@ interface TurnstileWidgetProps {
   /** Widget theme */
   theme?: "light" | "dark" | "auto";
   /** Widget size */
-  /** "flexible" fills the container width (min 300px) at the short 65px height. */
+  /**
+   * "flexible" fills the container width (min 300px) at the short 65px height;
+   * in a container narrower than 300px it renders "compact" (150px) instead.
+   */
   size?: "normal" | "compact" | "flexible";
+  /** "interaction-only" keeps the widget out of sight unless Cloudflare asks the visitor to click. */
+  appearance?: "always" | "interaction-only";
   /** Additional CSS class */
   className?: string;
   /** Changes when the caller wants to explicitly retry the widget */
@@ -141,6 +146,7 @@ export function TurnstileWidget({
   onUnavailable,
   theme = "auto",
   size = "normal",
+  appearance,
   className,
   retryToken,
 }: TurnstileWidgetProps) {
@@ -297,10 +303,16 @@ export function TurnstileWidget({
     // Signal that the widget has loaded
     onLoadRef.current?.();
 
+    // Cloudflare's flexible widget is never narrower than 300px; in a narrower
+    // box (a dialog on a 320px phone) it would stick out, so use compact there.
+    const width = containerRef.current.clientWidth;
+    const renderSize = size === "flexible" && width > 0 && width < 300 ? "compact" : size;
+
     widgetIdRef.current = turnstile.render(containerRef.current, {
       sitekey: siteKey,
       theme,
-      size,
+      size: renderSize,
+      ...(appearance ? { appearance } : {}),
       callback: (token: string) => {
         onSuccessRef.current(token);
       },
@@ -349,6 +361,7 @@ export function TurnstileWidget({
     siteKey,
     theme,
     size,
+    appearance,
     cleanupWidget,
     getCurrentHostname,
     markUnavailable,

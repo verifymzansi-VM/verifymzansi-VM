@@ -4,17 +4,21 @@ import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 const root = path.resolve("docs/backend-foundation");
+// Generated snapshot of the retired source backend, kept outside docs/. The
+// input names stay the ledger's stable keys.
+const snapshot = path.resolve("database/source-inventory");
 const inputs = [
   "schema-map.json",
   "evidence/page-inventory.json",
   "evidence/route-inventory.json",
   "evidence/source-inventory.json",
 ];
+const location = (file) => path.join(snapshot, path.basename(file));
 const hash = (file) =>
   createHash("sha256")
-    .update(fs.readFileSync(path.join(root, file)))
+    .update(fs.readFileSync(location(file)))
     .digest("base64url");
-const read = (file) => JSON.parse(fs.readFileSync(path.join(root, file), "utf8"));
+const read = (file) => JSON.parse(fs.readFileSync(location(file), "utf8"));
 
 export function createLedger() {
   const schema = read(inputs[0]);

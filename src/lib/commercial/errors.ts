@@ -7,18 +7,18 @@ const COMMERCIAL_ERRORS: ReadonlyArray<{ code: string; status: number; message: 
     code: "SLOT_FULL",
     status: 409,
     message:
-      "All your active posting slots or activations are in use. Mark a post as sold, deactivate one, or add a slot from R50 / 30 days.",
+      "All your active posting slots or activations are in use. Mark a post as sold or deactivate one. Paid slots open soon.",
   },
   {
     code: "TRIAL_REQUIRED",
     status: 402,
     message:
-      "Choose a plan to make this post visible: R50 / 30 days, R140 / 90 days or R250 / 180 days.",
+      "This post needs a paid slot. Paid slots open soon; your first post and events are free.",
   },
   {
     code: "TRIAL_EXPIRED",
     status: 402,
-    message: "Your free period has ended. Reactivate from R50 / 30 days — your post is saved.",
+    message: "Your free period has ended. Paid slots open soon.",
   },
   { code: "TRIAL_EVENT_ENDED", status: 409, message: "This event has already ended." },
   {

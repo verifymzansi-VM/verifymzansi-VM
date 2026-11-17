@@ -18,7 +18,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { PackageRulesNote } from "@/components/posting/package-rules-note";
 import { editLimitReachedMessage } from "@/lib/posting/package-rules";
 import { useToast } from "@/hooks/use-toast";
-import { createClient } from "@/lib/supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 import { loadOwnListing } from "./load-own-listing";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
@@ -55,6 +55,7 @@ import { ListingDetailContent } from "@/components/listings/listing-detail-conte
 import { createLogger } from "@/lib/utils/logger";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
+import { VIDEO_GUIDANCE } from "@/lib/media/video-length";
 
 const log = createLogger("EditListingPage");
 const TITLE_MAX = 100;
@@ -821,6 +822,7 @@ export default function EditListingPage() {
                   <MediaUpload
                     id="edit-listing-video-input"
                     label={`Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                    description={VIDEO_GUIDANCE}
                     maxFiles={Math.max(maxVideos, existingVideos.length)}
                     files={newVideoFile}
                     existing={existingVideos.map((url, i) => ({

@@ -33,3 +33,12 @@ it("rejects wrong-area, unknown and ambiguous stable selections", () => {
     )
   ).toBeUndefined();
 });
+it("selects the Individual slot, which works in every section, from any section's link", () => {
+  const individual = { ...plan, id: "00000000-0000-4000-8000-000000000003", area: null };
+  const slots = { plans: [individual], addons: [] } as unknown as FoundationBillingCatalogue;
+  for (const area of ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"] as const)
+    expect(selectFoundationBillingPlan(slots, getStablePlanId(area, "month"))).toBe(individual);
+  expect(selectFoundationBillingPlan(slots, getStablePlanId("MZANSI_MARKET", "quarter"))).toBe(
+    undefined
+  );
+});

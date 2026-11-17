@@ -2,6 +2,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import type { FoundationRuntimeAuthenticatedDatabase as FoundationAuthenticatedDatabase } from "../../../database/foundation/runtime-api-types";
 import { getPublicRuntimeConfig } from "../public-runtime-config";
 import { parseFoundationConnection } from "./connection";
+import { browserHostedProjectRef } from "./hosted-projects";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 
 function browserConnection() {
@@ -10,7 +11,7 @@ function browserConnection() {
   const local = url.hostname === "127.0.0.1";
   const connection = parseFoundationConnection({
     url: values.supabaseUrl,
-    expectedProjectRef: local ? "local-foundation" : "gntzjtuncsyefujajmjy",
+    expectedProjectRef: local ? "local-foundation" : browserHostedProjectRef(url.hostname),
     publishableKey: values.supabaseAnonKey,
   });
   if (local && process.env.NODE_ENV === "production") {
@@ -51,7 +52,10 @@ export function getFoundationBrowserClient() {
   if (typeof window === "undefined") return makeClient(connection);
   const key = connection.url + "|" + connection.publishableKey;
   if (cached?.key !== key) {
-    if (cached) void Promise.resolve(cached.client.auth.stopAutoRefresh()).catch(() => {});
+    if (cached)
+      void Promise.resolve(cached.client.auth.stopAutoRefresh()).catch(() => {
+        // The replaced client is discarded either way; its timer cannot act on the new one.
+      });
     cached = { key, client: makeClient(connection) };
   }
   return cached.client;

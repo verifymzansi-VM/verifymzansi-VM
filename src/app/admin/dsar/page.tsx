@@ -1,5 +1,4 @@
 import { requireStaff } from "@/lib/auth/require-staff";
-import { createAdminClient } from "@/lib/supabase/admin";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,10 +10,8 @@ import { FileText, Plus } from "lucide-react";
 import { DsarActionButtons } from "./dsar-action-buttons";
 import { DsarCaseControls } from "./dsar-case-controls";
 import { createLogger } from "@/lib/utils/logger";
-import type { DsarCase } from "@/types/database";
 import type { DsarStatus } from "@/types/enums";
 import { redirect } from "next/navigation";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFrontendPrivacyQueue } from "@/lib/foundation/privacy-requests";
 import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
@@ -26,7 +23,6 @@ export const metadata = {
 };
 
 const OPEN_STATUSES: DsarStatus[] = ["submitted", "identity_pending", "in_progress"];
-const CLOSED_STATUSES: DsarStatus[] = ["completed", "rejected"];
 const PAGE_SIZE = 25;
 const DUE_SOON_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -54,80 +50,6 @@ function requestTime(): number {
 
 function daysUntil(iso: string, now: number): number {
   return Math.ceil((new Date(iso).getTime() - now) / DAY_MS);
-}
-
-async function readSourcePrivacyQueue(userId: string, view: DsarView, page: number, now: number) {
-  const nowIso = new Date(now).toISOString();
-  const dueSoonIso = new Date(now + DUE_SOON_DAYS * DAY_MS).toISOString();
-  const admin = createAdminClient();
-
-  // Open views are ordered by the deadline that applies now (after any
-  // extension), most urgent first; closed cases newest first. Every case
-  // stays reachable through paging.
-  let query = admin
-    .from("dsar_cases")
-    .select("*", { count: "exact" })
-    .in("status", view === "closed" ? CLOSED_STATUSES : OPEN_STATUSES);
-  if (view === "overdue") query = query.lt("effective_due_at", nowIso);
-  if (view === "due_soon")
-    query = query.gte("effective_due_at", nowIso).lt("effective_due_at", dueSoonIso);
-  if (view === "mine") query = query.eq("assigned_to", userId);
-  query =
-    view === "closed"
-      ? query.order("created_at", { ascending: false })
-      : query.order("effective_due_at", { ascending: true });
-
-  const [casesResult, overdueResult, dueSoonResult, rulesResult] = await Promise.all([
-    query.order("id", { ascending: true }).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1),
-    admin
-      .from("dsar_cases")
-      .select("id", { count: "exact", head: true })
-      .in("status", OPEN_STATUSES)
-      .lt("effective_due_at", nowIso),
-    admin
-      .from("dsar_cases")
-      .select("id", { count: "exact", head: true })
-      .in("status", OPEN_STATUSES)
-      .gte("effective_due_at", nowIso)
-      .lt("effective_due_at", dueSoonIso),
-    admin.from("dsar_deadline_rules").select("request_type, extension_days, statutory"),
-  ]);
-
-  const failure =
-    casesResult.error ?? overdueResult.error ?? dueSoonResult.error ?? rulesResult.error;
-  if (failure) throw new Error("Privacy queue source read failed");
-
-  const requests = ((casesResult.data ?? []) as DsarCase[]).map((row) => ({
-    ...row,
-    revision: undefined,
-    may_process: true,
-  }));
-  const total = casesResult.count ?? requests.length;
-  const rules = new Map(
-    ((rulesResult.data ?? []) as DeadlineRule[]).map((r) => [r.request_type, r] as const)
-  );
-
-  const assigneeIds = [
-    ...new Set(requests.map((r) => r.assigned_to).filter((id): id is string => !!id)),
-  ];
-  const { data: assignees } = assigneeIds.length
-    ? await admin
-        .from("account_profiles")
-        .select("user_id, display_name")
-        .in("user_id", assigneeIds)
-    : { data: [] as Array<{ user_id: string; display_name: string | null }> };
-  const assigneeNames = new Map(
-    (assignees ?? []).map((a) => [a.user_id, a.display_name || "a staff member"] as const)
-  );
-
-  return {
-    requests,
-    total,
-    rules,
-    assigneeNames,
-    overdue: overdueResult.count,
-    dueSoon: dueSoonResult.count,
-  };
 }
 
 async function readNativePrivacyQueue(userId: string, view: DsarView, page: number) {
@@ -162,10 +84,7 @@ export default async function AdminDSARPage({
   const now = requestTime();
   let data;
   try {
-    data =
-      getDataBackend() === "foundation"
-        ? await readNativePrivacyQueue(user.id, view, page)
-        : await readSourcePrivacyQueue(user.id, view, page, now);
+    data = await readNativePrivacyQueue(user.id, view, page);
   } catch (error) {
     if (error instanceof FoundationStaffCommandError && error.mfaRequired)
       redirect(staffVerifyHref("/staff/two-step", `/admin/dsar?view=${view}&page=${page}`));

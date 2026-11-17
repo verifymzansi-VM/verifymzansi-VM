@@ -2,6 +2,11 @@
 
 > Operational procedures for maintaining and operating the VerifyMzansi
 > platform.
+>
+> Production runs the foundation backend (`database/foundation/`); browsers have
+> no table access and every read and write goes through `api.*` functions.
+> Sections marked "Historical" describe the retired source backend. Merging into
+> `main` is a production release. Read [AGENTS.md](../AGENTS.md) first.
 
 ---
 
@@ -17,6 +22,7 @@
 - [Audit Logs](#audit-logs)
 - [Deployment & Rollback](#deployment--rollback)
 - [Database Backups](#database-backups)
+- [Monitoring and Alerts](#monitoring-and-alerts)
 - [Sentry Bug Finding](#sentry-bug-finding)
 - [KYC Provider Management](#kyc-provider-management)
 - [Incident Response](#incident-response)
@@ -25,7 +31,7 @@
 
 ## Cloudflare MCP
 
-Use [docs/cloudflare-mcp.md](docs/cloudflare-mcp.md) as the operator guide for
+Use [docs/cloudflare-mcp.md](cloudflare-mcp.md) as the operator guide for
 Cloudflare MCP in this workspace.
 
 The intended setup is:
@@ -85,6 +91,12 @@ Use separate tokens by workflow instead of one catch-all token.
 ---
 
 ## Supabase Access Boundaries
+
+Historical: describes the retired source backend. On foundation, server code
+calls `api.*` functions through `src/lib/foundation/` (request-scoped for the
+signed-in caller, trusted service commands only where the function requires
+them). New code must not use the `@/lib/supabase/*` table clients described
+below.
 
 Use the narrowest Supabase client that matches the workflow.
 
@@ -262,15 +274,17 @@ To register or update the VerifyMzansi webhook endpoint with Ozow:
 
 ### KYC Provider Webhook Secret
 
-Before deploying the callback handler, apply
-`20260930170000_atomic_kyc_provider_webhook.sql` through the normal backed-up
-migration workflow (`pnpm supabase:db:push:safe`). Run `pnpm test:kyc:db`
-locally first. The service-only `apply_kyc_provider_webhook` RPC commits
-provider evidence, pending-step risk and audit in one transaction. Missing
-migrations or failed writes return HTTP 500 so the provider retries; duplicates
-return HTTP 200 without replaying risk changes. Staff-decided steps and uploads
-replaced in the verification session are preserved. Callback bodies are limited
-to 256 KiB and HMAC signatures must be exactly 64 hexadecimal characters.
+Historical: describes the retired source backend. Before deploying the callback
+handler, `20260930170000_atomic_kyc_provider_webhook.sql` was applied through
+the source backend's backed-up migration command (`supabase:db:push:safe`, since
+removed). Foundation database updates follow
+[AGENTS.md](../AGENTS.md#database-changes). The service-only
+`apply_kyc_provider_webhook` RPC commits provider evidence, pending-step risk
+and audit in one transaction. Missing migrations or failed writes return HTTP
+500 so the provider retries; duplicates return HTTP 200 without replaying risk
+changes. Staff-decided steps and uploads replaced in the verification session
+are preserved. Callback bodies are limited to 256 KiB and HMAC signatures must
+be exactly 64 hexadecimal characters.
 
 This migration does not replay callbacks previously acknowledged by the old
 handler. If a real asynchronous provider was used, reconcile its delivery
@@ -353,8 +367,11 @@ province and city and receive automatic location approval.
 
 ### Toggling a Flag (Legacy)
 
+Historical: describes the retired source backend (its `feature_flags` table and
+the old `pages.dev` address no longer exist).
+
 ```bash
-curl -X POST https://verifymzansi.pages.dev/api/admin/feature-flags/toggle \
+curl -X POST https://verifymzansi.com/api/admin/feature-flags/toggle \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{"key": "kyc_v2_flow", "enabled": true}'
@@ -383,54 +400,173 @@ curl -X POST https://verifymzansi.pages.dev/api/admin/feature-flags/toggle \
 3. Or via API: `{"key": "<flag>", "enabled": false}`
 4. All changes are audit-logged
 
-See also:
-[Feature Flag Rollback Playbook](docs/playbooks/feature-flag-rollback.md)
+The feature flag rollback playbook is kept outside the public repository.
 
 ---
 
 ## DSAR Processing (POPIA)
 
-> South African POPIA law requires responding to Data Subject Access Requests
-> within **30 days**.
+> Privacy requests (access, correction, deletion, objection) are answered within
+> **30 days**. An access request may be extended once, before its deadline, with
+> written notice; a deletion request cannot be extended.
+
+Everything below uses the live (foundation) backend. The old tables
+(`dsar_requests`, `seller_profiles`, `verification_sessions`, `listings`,
+`audit_events`) and "soft delete" no longer exist; never use them.
 
 ### Processing a Request
 
-1. Requests arrive via `/dsar` page or email
-2. Check the Admin Panel → DSAR queue (or `dsar_requests` table)
-3. Verify the requester's identity using their SA ID number (Luhn-validated)
-4. Gather all personal data:
+1. Requests arrive from the `/dsar` page (a signed-in member: the account is
+   checked by its session), by email (staff record it in **Admin → DSAR**, with
+   a manual identity check), or, once M1.6c ships, from **Delete account** (a
+   deletion request is recorded automatically when the member closes the
+   account).
+2. Work in **Admin → DSAR** (`/admin/dsar`). You need the admin or governor role
+   and an authenticator code from the last 15 minutes. You can never process
+   your own request, and the database refuses it.
+3. Verify the identity: a session request is already tied to its account; a
+   manual (email) request is matched to the one confirmed account with exactly
+   that email address. If there is no match or more than one, ask for more
+   information; never guess the account.
+4. Access: use **Export** (the database builds the member's own data), check it,
+   and send it to the address on the request.
+5. Correction or objection: make the change through the normal staff screens and
+   complete the request with a short note.
+6. Deletion: follow the two-person procedure below.
+7. Complete the request on the screen. The database sends the "completed" notice
+   to the address on the request; nothing else needs logging.
+
+### Deletion requests: two-person procedure
+
+What "delete my account" does (owner decision OD-10, database update
+`20261116175757_close_and_erase_account.sql`):
+
+- **At once:** the account is closed. Its posts leave the site, sign-in is
+  blocked and every session ends.
+- **After 30 days:** the retention job (every 5 minutes) erases the account:
+  posts, enquiries it received and sent, photos and videos (queued for deletion
+  from storage), profile, drafts, notifications, consent records, organisation
+  roles and the sign-in itself. Paid time ends.
+- **Kept:** payment records, invoices, Multi-listing packages and partner
+  commissions for 5 tax years, with no link to the person; the identity-ban
+  fingerprint and the trial fingerprint for their own periods; the verification
+  history for 5 years after closure; reports and released legal holds for their
+  own periods. The empty Auth row is deleted automatically once nothing kept
+  names it.
+- **Waits:** the erasure does not run while any of these applies: a legal hold,
+  an open fraud hold, a staff content hold, an open report about the person or
+  their posts, a staff role, a rejected deletion request, a pending payment, a
+  paid order still to be delivered, an open refund, a bank transfer waiting for
+  confirmation, an unpaid invoice, or an unpaid commission owed to the person as
+  a partner. The reason is recorded and the job tries again an hour later.
+- **Deadline:** a deletion request is due 7 days after the 30-day grace period
+  ends.
+- **Rejected requests:** rejecting a deletion request of a closed account places
+  a legal hold ("Deletion request rejected; review by <date>", 12 months on) and
+  records the rejection, so nothing erases the account on its own. At the review
+  date decide: keep the hold, or release it and handle a new request. Privacy
+  staff place this hold by rejecting the request; releasing it needs the
+  legal-hold role (`legal_hold:manage`).
+- **Closed requests:** once a completed or rejected request's last notice is
+  sent (or 30 days after it closed), its email is replaced by "removed" and its
+  phone and description are cleared; the record is deleted 5 years after it
+  closed (provisional periods; the lawyer confirms).
+- **Cannot be undone.** Take a fresh backup before the first real use in
+  production, and rehearse this procedure once on staging with a test account.
+
+Two staff members take part: **Person A** checks the identity, **Person B**
+orders the erasure. The database refuses Person B if Person B also verified the
+identity.
+
+1. **Person A: check the identity** (step 3 above) and press **Verify
+   identity**.
+2. **Person A: check what must be kept.** Look for open reports, fraud holds or
+   a legal reason to keep data (a dispute, a court order, a police request). If
+   there is one, place a legal hold with the reason and tell the person what is
+   kept and why. A hold makes the erasure wait; it does not stop the closure.
+3. **Person A: approve** the request (it moves to "in progress").
+4. **Person A: paid time.** If the account still has paid time and belongs to a
+   natural person, closing counts as a cancellation request (refund policy, rule
+   8): after 20 business days the unused whole days are credited at the plan's
+   daily rate, minus R50. Record the credit with the slot refund (reason
+   "s14_cancellation") before the erasure runs. Companies, close corporations
+   and trusts get no credit. An open refund makes the erasure wait.
+5. **Person B: order the erasure.** Once M1.6c ships this is the **Erase
+   account** button on the request. Until then Person B runs this reviewed
+   command in the owner's Supabase SQL editor, with Person A watching and
+   checking each value (replace the two placeholders):
 
    ```sql
-   -- User profile
-   SELECT * FROM auth.users WHERE id = '<user_id>';
-   -- Seller profile
-   SELECT * FROM seller_profiles WHERE user_id = '<user_id>';
-   -- Verification data
-   SELECT * FROM verification_sessions WHERE user_id = '<user_id>';
-   -- Listings
-   SELECT * FROM listings WHERE user_id = '<user_id>';
-   -- Audit trail
-   SELECT * FROM audit_events WHERE actor_id = '<user_id>';
+   select internal.order_account_erasure('<request id>', null, '<Person B staff account id>');
    ```
 
-5. Export data in a portable format (JSON or CSV)
-6. For deletion requests:
-   - Soft-delete user records (set `deleted_at` timestamp)
-   - Queue R2 file cleanup via the retention-cleanup worker
-   - Retain audit logs for compliance (anonymize the actor)
-7. Respond to the requester within 30 days
-8. Log the DSAR completion in `audit_events`
+   It does exactly what the button will do: it refuses unless the request is a
+   verified deletion request in progress, Person B holds the privacy role, is
+   not the requester and did not verify the identity, and the account is not a
+   staff account; then it closes the account, links the request, records the
+   order on the request and sets its deadline. It returns the erasure state.
+
+6. **Wait 30 days.** The retention job erases the account on its own. To see
+   where it stands, read the state (read only):
+
+   ```sql
+   select internal.account_erasure_state(user_id)
+   from private.account_erasure_requests where request_id = '<request id>';
+   ```
+
+   `scheduled` waits for the 30 days, `held` names what it waits for
+   (`held_by`), `erased` means the content and sign-in are gone, `removed` means
+   the Auth user is deleted too. If it stays `held` with `error` (the retention
+   job also logs the alert `account_erasure_errors`), report it as an incident.
+   What to do for the other reasons:
+
+   - `invoice_unpaid`: void the unpaid invoice (Admin → Payments → Invoices), or
+     record its payment if the money arrived.
+   - `commission_unpaid` (the person is a partner): pay out the commission and
+     record the payout, or forfeit it (reverse it with the reason), so nothing
+     is owed.
+   - `report_open`: decide the open reports about the person or their posts.
+     Open reports can delay the erasure past the request's deadline: decide them
+     before the deadline, and if one needs longer, tell the person in writing
+     that the erasure waits for the review and why.
+   - `payment_pending`, `payment_unresolved`, `refund_open`, `transfer_waiting`:
+     finish the payment step (wait for Ozow, deliver or refund, confirm or
+     decline the transfer).
+   - `legal_hold`, `fraud_hold`, `content_hold`: the erasure waits until staff
+     release the hold.
+
+   A refund or chargeback of a payment whose account was erased always needs a
+   second staff member's approval.
+
+   The Auth sign-in log is cleared in one bounded batch (entries since the
+   account was created, up to 10,000); older or further entries leave with the
+   normal Auth log retention.
+
+7. **Person A: complete the request** with the attestation ("Erased under the
+   deletion rules on <date>; payment records kept 5 years without the person").
+   The database refuses to complete a deletion request before the account is
+   erased, or one naming an account before the erasure was ordered. A request
+   that names no account (no match) is completed with the attestation only.
+
+A staff member's own account is never erased this way: end their roles first
+(staff governance), then process the request.
 
 ### Monitoring DSAR Deadlines
 
+**Admin → DSAR** lists open requests with their deadlines, earliest first. Read
+only, in the SQL editor:
+
 ```sql
-SELECT id, created_at, status,
-       created_at + INTERVAL '30 days' AS deadline,
-       CASE WHEN NOW() > created_at + INTERVAL '30 days' THEN 'OVERDUE' ELSE 'OK' END AS compliance
-FROM dsar_requests
-WHERE status != 'completed'
-ORDER BY created_at ASC;
+select id, type, status, received_at, effective_due_at,
+       case when now() > effective_due_at then 'OVERDUE' else 'OK' end as compliance
+from private.privacy_requests
+where status in ('submitted', 'identity_pending', 'in_progress')
+order by effective_due_at;
 ```
+
+A deletion request closed by the member is answered after the 30-day grace
+period, so it can show as overdue by a day or so; complete it as soon as the
+erasure has run.
 
 ---
 
@@ -492,15 +628,21 @@ limiter, cleanup and operations Workers receive their matching shared keys. The
 live deployment is tagged with the Git commit for traceability. Candidate
 uploads remain manual and inactive; their successful upload is not a release.
 
-For the 30 September 2026 audit changes, run `pnpm test:kyc:db`,
-`pnpm test:staff-roles:db` and `pnpm test:commercial:db`, then apply the pending
-migrations through `pnpm supabase:db:push:safe` before deploying the
-application. `20260930170000_atomic_kyc_provider_webhook.sql` supplies the
-callback RPC; `20260930180000_role_predicates_security_invoker.sql` removes
-unnecessary elevation from three caller-scoped predicates while preserving their
-grants. The latter requires the preceding staff MFA and organisation
-column-privacy migrations. After rollout, rerun both strict Supabase advisors
-and the production smoke checks; retained findings still require review.
+Database updates are not part of the deploy. A foundation update is a new file
+in `database/foundation/updates/` that travels in the same pull request as its
+code; the owner applies it after the merge and before that code is deployed
+([AGENTS.md](../AGENTS.md#database-changes)).
+
+Historical: describes the retired source backend. For the 30 September 2026
+audit changes, the pending migrations were applied through the source backend's
+`supabase:db:push:safe` command (since removed) before deploying the application
+(the database test lanes run then were removed on 11 November 2026).
+`20260930170000_atomic_kyc_provider_webhook.sql` supplies the callback RPC;
+`20260930180000_role_predicates_security_invoker.sql` removes unnecessary
+elevation from three caller-scoped predicates while preserving their grants. The
+latter requires the preceding staff MFA and organisation column-privacy
+migrations. After rollout, rerun both strict Supabase advisors and the
+production smoke checks; retained findings still require review.
 
 ```bash
 # 1. Run the blocking launch gate
@@ -512,7 +654,7 @@ pnpm secret-scan
 pnpm security:audit
 pnpm licenses:check
 pnpm build
-pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome
+pnpm test:e2e --project=chromium
 
 # 2. Run the deep lane when the change set warrants it
 pnpm test:coverage:core
@@ -530,9 +672,124 @@ pnpm run build:cloudflare
 # 5. Deploy the main OpenNext worker and auxiliary workers
 pnpm exec opennextjs-cloudflare deploy
 pnpm exec wrangler deploy --config wrangler.rate-limiter.toml
-pnpm exec wrangler deploy --config wrangler.kyc-encryptor.toml
 pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 ```
+
+### Staging copy
+
+A separate copy for rehearsals (roadmap M0.15b). Nothing in it is shared with
+production:
+
+| Part                | Staging                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| Website             | Worker `verifymzansi-staging`, https://verifymzansi-staging.verifymzansi.workers.dev  |
+| Database            | Supabase project `verifymzansi-staging` (`vgplszqfcmdskwseoyam`, London, Free)        |
+| Storage             | R2 `verifymzansi-public-staging`, `verifymzansi-private-staging`                      |
+| Rate-limit state    | KV `verifymzansi-otp-rate-limits-staging`; Worker `verifymzansi-rate-limiter-staging` |
+| PDF and share cards | Worker `verifymzansi-offload-staging`                                                 |
+| Durable Objects     | Belong to the staging Worker names, so never production's                             |
+
+Left out on purpose: payments (no Ozow settings exist for staging, so checkout
+cannot start), phone codes (no SMS; Africa's Talking sandbox only), and
+Cloudflare Images (its free monthly allowance is shared with production, so
+staging refuses photo uploads). Every staging response carries
+`X-Robots-Tag: noindex` and its `robots.txt` disallows everything; files served
+straight from the static assets (scripts, styles) do not pass through the
+Worker. To keep strangers out entirely, the owner can put the staging address
+behind Cloudflare Access (Zero Trust, free for up to 50 users); the smoke test
+would then need an Access service token.
+
+**Release order.** The Deploy workflow deploys every main commit to staging
+first (job `deploy-staging`), confirms the staging Worker serves that commit,
+runs `e2e/foundation/fixture-smoke.spec.ts` against it
+(`playwright.staging.config.ts`), and only then deploys production. A failed
+staging deploy or smoke test stops the release. The job `staging-config` decides
+first:
+
+- None of the 15 `STAGING_*` secrets set: "Staging skipped", production deploys
+  as before.
+- Some but not all set (`STAGING_CLOUDFLARE_API_TOKEN` included): the release
+  fails until they are complete.
+- The staging project does not answer (paused or unreachable), or
+  `STAGING_FOUNDATION_SUPABASE_SECRET_KEY` is not a key of the staging project:
+  the release fails before anything deploys.
+
+`pnpm cloudflare:staging:isolation -- --require-staging` runs in CI and before
+every staging deploy. It reads the staging settings both as written and as
+wrangler resolves them, and refuses any production identifier, any route or
+custom domain (inherited ones included), inherited cron triggers or shared
+bindings, and any wrangler warning about the staging environment. A wrangler
+upgrade that adds a new warning therefore fails this check on purpose: read the
+warning, fix the staging settings or, if it is harmless, allow that exact
+message in `scripts/check-staging-isolation.mjs` with a reason.
+
+**Rehearse once first.** Before staging gates production, run Actions → Deploy →
+Run workflow with target `staging`: it deploys and smoke-tests staging only and
+never touches production.
+
+**Releasing without staging (owner bypass).** Do not delete staging secrets. Set
+the repository Actions variable `STAGING_BYPASS_UNTIL` (Settings → Secrets and
+variables → Actions → Variables; only admins can change it) to a UTC time at
+most 72 hours ahead, written exactly as `YYYY-MM-DDTHH:MMZ` or
+`YYYY-MM-DDTHH:MM:SSZ`, for example `2026-11-20T18:00Z`. Until then every
+release skips staging with a loud warning in the run and its summary. Any other
+form ("tomorrow", "+48 hours", a time zone offset), an expired time or a time
+more than 72 hours ahead is ignored with a warning. Remove the variable
+afterwards.
+
+**Do not add a protection rule** (required reviewers or a wait timer) to the
+GitHub environment `staging`: both staging jobs use it, so every release would
+wait for that approval. Limiting its deployment branches to `main` is fine.
+
+**Keeping the project awake.** Free projects pause after a week without use; a
+paused staging project stops the release. The workflow `Staging keep-alive`
+reads the staging project anonymously once a day, but only after the owner sets
+the admin-only repository variable `STAGING_ENABLED` to `true` (do that once
+staging is configured, so an unfinished copy opens no daily failure issues). If
+it reports "paused", restore the project in the Supabase dashboard (or use the
+bypass above).
+
+**Database.** Staging was built from `database/foundation/` (`candidate.sql`,
+`replay/baseline-supplement.sql` before
+`20261103154538_owner_signup_access.sql`, then every applied update in filename
+order). `fingerprint.sql` on staging matches production's recorded fingerprint,
+except `schema_grants` (7 instead of 8 until the Auth "Before user created" hook
+is switched on in the staging dashboard). New updates reach staging before merge
+(see `database/foundation/updates/README.md`).
+
+**Secrets the owner sets.** Every staging secret lives in one place, the GitHub
+environment `staging` (Settings → Environments → `staging`, deployment branches
+limited to `main`), and the deploy sends them to the staging Workers. Never copy
+a production value; every one is new.
+
+| Environment secret                                         | Value                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STAGING_CLOUDFLARE_API_TOKEN`                             | A new Cloudflare API token for this account: Account → Workers Scripts Edit, plus only what the deploy needs (Account → Workers KV Storage Read, Account Settings Read). **No** Zone, Workers Routes or DNS permissions, so it can never move a domain. The staging deploy never uses the production deploy token |
+| `STAGING_FOUNDATION_SUPABASE_SECRET_KEY`                   | Staging Supabase project → Project Settings → API Keys → new secret key (`sb_secret_…`)                                                                                                                                                                                                                           |
+| `STAGING_FOUNDATION_PHONE_OTP_KEY`                         | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_KYC_ENCRYPTION_KEY`                               | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_ID_ENCRYPTION_KEY`                                | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_HMAC_SECRET`                                      | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_IP_HASH_SECRET`                                   | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_INTERNAL_JOBS_SECRET`                             | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_OPS_JOBS_SECRET`                                  | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_HEALTH_DIAGNOSTIC_TOKEN`                          | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_RATE_LIMITER_API_KEY`                             | New random 64 hex characters¹ (also given to the staging rate limiter)                                                                                                                                                                                                                                            |
+| `STAGING_RESEND_API_KEY`                                   | A separate Resend API key named for staging, sending access only (`re_…`)                                                                                                                                                                                                                                         |
+| `STAGING_AFRICASTALKING_API_KEY`                           | The API key of the Africa's Talking sandbox app (username `sandbox` is set in `wrangler.toml`; no real SMS)                                                                                                                                                                                                       |
+| `STAGING_R2_ACCESS_KEY_ID`, `STAGING_R2_SECRET_ACCESS_KEY` | R2 → Manage API tokens → token with Object Read & Write on the two `-staging` buckets only                                                                                                                                                                                                                        |
+
+¹ `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+
+Turnstile on staging uses Cloudflare's published always-pass test keys; nothing
+to set.
+
+**Staging dashboard settings.** In the staging Supabase project: Data API
+exposed schemas `api` only (the smoke test expects the `public` schema to be
+refused); Auth site URL and redirect URLs on the staging address; Auth bot
+protection with Turnstile and Cloudflare's published test secret; the "Before
+user created" hook on `internal.acceptance_signup_guard`. Optionally attach the
+custom domain `media-staging.verifymzansi.com` to `verifymzansi-public-staging`.
 
 ### Current Known-Good Runtime Baseline
 
@@ -547,23 +804,73 @@ pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 
 ### Rollback on Failure
 
-The GitHub Actions deploy workflow runs on `ubuntu-latest`, deploys the main
-OpenNext worker plus auxiliary workers, then checks `${APP_URL}/api/health` and
-public/auth pages. If production fails after deploy, use manual rollback from a
-Linux, macOS, or WSL environment:
+The Deploy workflow does **not** roll back automatically. Rolling back only the
+main Worker left production half old and half new twice in October 2026, once on
+a build made for the retired backend. When any production step fails or the run
+is cancelled after the deploy has started (helper Worker deploys, the health
+check), the step "Stop for manual rollback" fails the run with the error "Manual
+rollback needed". The site keeps whatever versions are live until a person acts.
+A run that timed out or lost its runner after "Deploy authenticated service
+monitor" started needs the same procedure, even without that message.
 
-```bash
-# Inspect recent worker versions
-pnpm exec wrangler versions list
+### Manual rollback (all Workers)
 
-# Roll back the main OpenNext worker to the previous stable version
-pnpm exec wrangler rollback
-```
+Roll every Worker back to the same last good release, never only the main one.
+`wrangler rollback` needs no build, so it also works from Windows (run the
+commands in Git Bash, or use the PowerShell equivalents noted).
 
-Select a rollback version whose compiled Supabase project and API contracts
-match the current database. A Worker rollback does not roll back database
-migrations. Versions compiled against the deleted Supabase project cannot serve
-as a working recovery target for the foundation release.
+0. **Stop new deploys first.** Actions → Deploy → "…" → Disable workflow (or
+   `gh workflow disable deploy.yml`). Otherwise the next green CI run on `main`,
+   or a queued run, deploys over a half-finished rollback. Check Actions for a
+   newer Deploy run: if one already fixed forward, do not roll back to an older
+   release. Re-enable the workflow only after step 6.
+1. **Pick the last good release and its version IDs.** Actions → Deploy: the
+   newest successful run before the failed one. A run whose only failed step is
+   "Recheck live project security settings" deployed its code completely: it
+   counts as good here (that step reports a dashboard setting to fix, not a bad
+   release). Its log prints one `Current Version ID:` line per Worker; those IDs
+   are the targets. For the main Worker, the target version's message is
+   `verified-main-deployment` (inactive `inactive-main-candidate` uploads carry
+   the same commit tag and are never a target). `wrangler versions list` shows
+   only the 10 newest versions; use the Cloudflare dashboard (Worker →
+   Deployments) for older ones.
+2. **Check it is a foundation build.**
+   `git show <sha>:wrangler.toml | grep NEXT_PUBLIC_DATA_BACKEND` (PowerShell:
+   `git show <sha>:wrangler.toml | Select-String NEXT_PUBLIC_DATA_BACKEND`) must
+   print `foundation` or nothing (builds after the retired backend was removed
+   no longer set it; they cannot run the retired backend at all);
+   `pnpm exec wrangler versions view <version-id> --env production` shows the
+   version's own variables. Never roll back to a build made for the retired
+   source backend.
+3. **Check the database.** A Worker rollback does not undo database updates.
+   `git diff <good-sha>..<bad-sha> -- database/` lists the updates in between.
+   Older code works with updates that only added pieces; never roll back past an
+   update that removed or renamed something the older code uses (see "Database
+   changes" in [AGENTS.md](../AGENTS.md)). If unsure, stop and ask.
+4. **Check secrets and schedules.** If `wrangler rollback` lists secrets that
+   changed since the target version, confirming restores their old values. Stop
+   unless those old values are still valid (a rotated and revoked key would
+   break the site), or put the current secrets back right after the rollback.
+   Cron schedules and routes are not part of a version:
+   `git diff <good-sha>..<bad-sha> -- 'wrangler*.toml'` shows whether they
+   changed. Durable Object and KV data is never rolled back.
+5. **Roll back each Worker.** First run `deployments list` for every Worker and
+   skip only a Worker that already shows its target version ID. For the rest:
+
+   | Worker                   | Current deployment                                                             | Roll back                                                                                                                |
+   | ------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+   | `verifymzansi` (website) | `pnpm exec wrangler deployments list --env production`                         | `pnpm exec wrangler rollback <version-id> --env production --message "Manual rollback to <sha>"`                         |
+   | site monitor             | `pnpm exec wrangler deployments list --config wrangler.site-monitor.toml`      | `pnpm exec wrangler rollback <version-id> --config wrangler.site-monitor.toml --message "Manual rollback to <sha>"`      |
+   | rate limiter             | `pnpm exec wrangler deployments list --config wrangler.rate-limiter.toml`      | `pnpm exec wrangler rollback <version-id> --config wrangler.rate-limiter.toml --message "Manual rollback to <sha>"`      |
+   | retention clean-up       | `pnpm exec wrangler deployments list --config wrangler.retention-cleanup.toml` | `pnpm exec wrangler rollback <version-id> --config wrangler.retention-cleanup.toml --message "Manual rollback to <sha>"` |
+   | payment clean-up         | `pnpm exec wrangler deployments list --config wrangler.payment-cleanup.toml`   | `pnpm exec wrangler rollback <version-id> --config wrangler.payment-cleanup.toml --message "Manual rollback to <sha>"`   |
+   | operations jobs          | `pnpm exec wrangler deployments list --config wrangler.ops-jobs.toml`          | `pnpm exec wrangler rollback <version-id> --config wrangler.ops-jobs.toml --message "Manual rollback to <sha>"`          |
+
+6. **Confirm and clean up.** `deployments list` shows every target version;
+   `/api/health` answers `ok`; the site monitor is green. Revert the bad pull
+   request on GitHub. When the revert's CI on `main` is green, re-enable the
+   Deploy workflow and run it by hand (Actions → Deploy → Run workflow) so
+   production matches `main` again.
 
 ### Worker Deployment
 
@@ -577,9 +884,9 @@ required.
 and runs the shared anonymous smoke scenarios plus deep readiness through an app
 service binding. It forwards no caller cookies or authentication to the app.
 Public-edge delivery is checked separately. A specifically identified Cloudflare
-automation challenge is reported as unverified edge delivery; it cannot make a
-failed service smoke or readiness check pass. A regular 403/503 remains a
-failure.
+automation challenge is reported as **inconclusive** (a warning and a line in
+the run summary), never as a pass, and it cannot make a failed service smoke or
+readiness check pass. A regular 403/503 remains a failure.
 
 The foundation payment, retention and operations workers call the main
 `verifymzansi` Worker through the `APP` service binding. The internal requests
@@ -591,19 +898,18 @@ After editing companion configuration, run `pnpm cloudflare:types:companions`,
 then `pnpm cloudflare:types:companions:check` and
 `pnpm test:cloudflare:companions`. The latter executes all three scheduled
 handlers in isolated workerd with a local app fixture and synthetic credentials.
-Worker health URLs prove process liveness; app deep readiness and recorded job
-outcomes establish integration health.
+Worker health URLs prove process liveness only; app deep readiness, failed-run
+records and heartbeats establish job health (see
+[Monitoring and Alerts](#monitoring-and-alerts)).
 
 ```bash
 # Deploy individual workers
-pnpm exec wrangler deploy --config wrangler.kyc-encryptor.toml
 pnpm exec wrangler deploy --config wrangler.rate-limiter.toml
 pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 pnpm exec wrangler deploy --config wrangler.payment-cleanup.toml
 pnpm exec wrangler deploy --config wrangler.ops-jobs.toml
 
 # Check worker health
-curl https://verifymzansi-kyc-encryptor.verifymzansi.workers.dev/
 curl https://verifymzansi-rate-limiter.verifymzansi.workers.dev/
 curl https://verifymzansi-retention-cleanup.verifymzansi.workers.dev/
 curl https://verifymzansi-payment-cleanup.verifymzansi.workers.dev/
@@ -646,7 +952,10 @@ after 35 days.
   Supabase.
 - **Failure alerts:** GitHub emails the owner when a scheduled run fails. GitHub
   pauses schedules in public repositories after 60 days without commits;
-  re-enable the workflow if that happens.
+  re-enable the workflow if that happens. A paused or missing run sends no
+  email, so the optional `HEARTBEAT_URL_DATABASE_BACKUP` heartbeat (see
+  [Monitoring and Alerts](#monitoring-and-alerts)) is what catches backups that
+  silently stop.
 
 ### Restoring
 
@@ -673,6 +982,238 @@ after 35 days.
 4. Point the app at the restored project only after checking accounts, posts and
    payments. Uploaded media and ID documents live in R2 and are not part of this
    backup.
+
+---
+
+## Monitoring and Alerts
+
+The goal is that a broken site or a stopped timed job reaches a person within
+minutes. The code side is in place; the accounts, phone numbers and URLs that
+turn it into alerts are owner steps, listed below. Nothing here is configured
+until the owner does those steps.
+
+### What the code does
+
+- **Synthetic Monitoring** (`.github/workflows/synthetic-monitoring.yml`, every
+  30 minutes) checks the public homepage and the authenticated site monitor. A
+  missing setting fails the run; there are no skip-and-pass steps. A Cloudflare
+  challenge on the public check is reported as inconclusive, not as a pass.
+  Cloudflare's error page on a 503 counts as a failure. Inconclusive runs send
+  no email, so if every run is inconclusive the public homepage goes unchecked
+  from GitHub; the external public homepage check (owner step 1) covers that.
+  GitHub emails one account when a scheduled run fails, and schedules can be
+  delayed or paused, so this is a backstop rather than the main alert.
+- **Timed Workers** (`verifymzansi-ops-jobs` every minute,
+  `verifymzansi-payment-cleanup` every 10 minutes,
+  `verifymzansi-retention-cleanup` every 5 minutes): when the app cannot finish
+  a run, the scheduled handler fails, so Cloudflare records the run as failed in
+  the Worker's logs instead of logging an error and reporting success. After a
+  successful scheduled run each Worker pings its own optional heartbeat URL.
+  Authenticated manual runs do not ping, so a heartbeat means the schedule
+  itself is firing.
+- **Database backup** pings its optional heartbeat URL only after the encrypted
+  backup is uploaded and its size checked.
+- A heartbeat is a plain HTTPS GET with no credentials and a short timeout. An
+  unset URL sends nothing; a failed ping logs only the job name and never fails
+  the job. The URL itself is treated as a secret and is never logged.
+- **Operations jobs run each step on its own.** The timed sweeps and the email
+  batch run side by side; a sweep that fails does not stop the other sweeps or
+  the emails. When any step failed, the run is reported as failed after every
+  other step has finished, and the app Worker log line
+  `Operation job run failed` names the failed steps (for example
+  `sweep:sweep_sponsorships`, `claim:payment`, `privacy_notice`, `staff_alert`).
+- **Queued emails** go out up to 25 a run: payment messages first, then
+  privacy-request notices (up to five), then every other kind. Every claim uses
+  up one of a message's eight attempts, so messages are claimed one at a time,
+  only while a worst-case send still fits, and each is sent straight away; the
+  next claim runs while the previous outcome is recorded, except near the end of
+  the send window, where a slow record could otherwise push it past the window.
+  Sends are paced to the email provider's rate. The worker gives the request 50
+  seconds from its own start (including dispatch and start-up), so the run aims
+  to end within 44 seconds: database calls are cut off then, and no claim or
+  send (including the staff alert) starts after 13 seconds. Even a send that
+  uses all its provider retries, and the record of its outcome, then end in
+  time.
+- **Unknown outcome.** When the provider refuses a repeat of an earlier request
+  with the same key (still in progress, or sent with different content), the
+  earlier request may have been delivered. The message is recorded with the
+  error `outcome_unknown` and retried later; on its last attempt it is logged
+  (`Queued email outcome unknown at its last attempt`) and listed in the staff
+  alert marked "may have been delivered".
+- **Last attempt.** A queued email is tried at most eight times. When one fails
+  on its eighth attempt, the run logs `Queued email reached its last attempt`
+  (kind and queue id only) straight away and, before any further send, emails
+  the support address. Later losses in the same run are collected into one more
+  alert at the end of the email batch (or when the send window is nearly over):
+  at most two alerts a run. A lost email that no alert covers, or an alert that
+  cannot be sent, fails the run (`staff_alert`). The alert is not retried, and
+  with a one-minute job and a five-minute heartbeat grace, one failed run does
+  not page anyone.
+- **Where lost emails stay.** The database never hands such an email out again
+  and never purges it (only delivered emails are deleted, 30 days after
+  delivery), so it stays in `private.outbox_events`. The owner can list them
+  read-only in the Supabase SQL editor for the London project:
+
+  ```sql
+  select id, kind, created_at, delivery_attempts, delivery_error
+  from private.outbox_events
+  where processed_at is null and delivery_attempts >= 8
+  order by created_at;
+  ```
+
+  `delivery_error` is `delivery_failed`, `deferred` or `outcome_unknown`. There
+  is no retry button yet; tell the account owner directly if the email mattered.
+  Run this query too whenever a run fails with a `claim:payment` or
+  `claim:other` step: a claim that was cut off or lost on the way back can use
+  up an email's last attempt without the app seeing the email, so no alert names
+  it.
+
+- Known gap: an email that fails an earlier attempt is retried later and does
+  not fail the run, and a storage object that could not be deleted yet does not
+  either, so a lasting email outage shows only through the last-attempt alert
+  (about two hours after the first failure), which itself goes through the same
+  email provider. Privacy-request notices that use up their attempts raise no
+  alert yet. Payment checks with failures do fail the run.
+
+### Payment alerts
+
+Payment problems are logged, kept in the database and emailed to staff (database
+update `20261112080000_payment_problem_alerts.sql`; see
+`database/foundation/updates/README.md`).
+
+- **What counts as a problem.** A correctly signed Ozow notice that can never be
+  applied (wrong amount, currency, site, test flag, payment request or
+  transaction; no payment for its reference; unreadable), a transaction the
+  10-minute status check refuses for the same reasons, two successful
+  transactions on one payment request, and settlement outcomes that need a
+  person (a second successful payment, one bank transaction used for two
+  payments, money received for a plan or add-on that could not be activated,
+  money returned at the bank after activation). Nothing about the payment
+  changes: no plan is removed, no refund is made.
+- **Log lines** (app Worker logs, no member details): every problem is logged as
+  `Payment problem` with `paymentId` (null when no payment matched), `reason` (a
+  code such as `amount_mismatch`, `multiple_settlements` or
+  `complete_unfulfillable_target`) and `source` (`notice` or `status_check`),
+  plus `anomaly` (`wrong_amount`, `paid_twice`, `not_activated` or `refunded`)
+  when staff are emailed at once. A wrong amount or a second transaction is
+  emailed only when the bank reports it successful (money moved); otherwise it
+  is in the daily summary only. Every failed status check is logged as
+  `Payment status check failed` with `paymentId` and `reason` (a problem code,
+  or `provider_unavailable`, `database_unavailable`, `network_error` and similar
+  for outages), and the status-check job's reply lists them in `errors`.
+  `Payment problem could not be recorded` means the database refused, was
+  unavailable or did not answer within three seconds; the log line is then the
+  only record.
+- **Email at once.** The email job (every minute), after the members' payment
+  messages, sends one email listing every problem with an `anomaly` not emailed
+  yet: payment number, Ozow reference, amount, payment state, how it was found
+  and when it was flagged. A failed send fails that run (`payment_alert`) and is
+  tried again, as the same email, five minutes later. A problem emailed before
+  is emailed again when another bank transaction shows it (for example a third
+  successful payment), at most five times. A flagged problem that could not be
+  emailed within 7 days (for example while `PAYMENT_ALERT_EMAILS` was unset) is
+  not emailed any more: find it with the query below. There is no
+  acknowledgement yet; that comes with the staff payment tools.
+- **Daily summary.** The first email job run after 07:00 South African time
+  sends a summary of the problems seen since the previous summary, the payments
+  still waiting for staff (paid but not activated; pending with an Ozow request
+  for over 2 hours), problems flagged in the last 7 days and not emailed yet,
+  and the count of each kind of payment notice and status check. It is sent
+  every day, also when there is nothing to report, which shows the alert path
+  still works. A retry after a failed send repeats the same summary.
+- **Recipients.** `PAYMENT_ALERT_EMAILS`, one to three addresses separated by
+  commas (the owner first; one or two trusted people later). Everyone listed
+  sees the other addresses. The setting is read only when there is something to
+  send. If it is not set, or not one to three valid addresses, nothing is
+  emailed: while an alert waits, every email job run logs
+  `Payment alert not emailed: no recipients configured` (with the payment
+  numbers and reasons) and fails with `payment_alert:recipients`, so the
+  operations heartbeat stops and its monitor alerts you; once a day the summary
+  is logged instead
+  (`Daily payment summary not emailed: no recipients configured`, with the day's
+  counts) and that run fails with `payment_summary:recipients`. Payments and
+  every other email keep working.
+- **Reading the record.** In the Supabase SQL editor for the London project
+  (read only):
+
+  ```sql
+  select payment_id, reason, source, needs_alert, alert_raised_at,
+    alerted_at is not null as emailed, occurrences, first_seen_at, last_seen_at
+  from private.payment_problems
+  order by last_seen_at desc
+  limit 50;
+  ```
+
+### Owner steps (not done in code)
+
+1. **External uptime monitor on the authenticated site monitor.** In a
+   monitoring service that can send a request header and keep it secret, add a
+   check of `GET https://verifymzansi-site-monitor.verifymzansi.workers.dev/`
+   with the header `Authorization: Bearer <SITE_MONITOR_API_KEY value>`. Alert
+   when the answer is not HTTP 200 or the JSON `status` is not `ok`, after two
+   failed checks in a row, checking every 1 to 5 minutes. The key only runs the
+   fixed anonymous smoke checks; if it is ever rotated, update the GitHub
+   secret, the Worker secret `MONITOR_API_KEY` and this monitor together. In the
+   same service add a plain check of `https://verifymzansi.com/` that alerts
+   when the page does not load, so the public edge is watched from outside
+   GitHub too.
+2. **One heartbeat check per timed job** in a heartbeat ("dead man's switch")
+   monitor that accepts an HTTPS GET. Store each URL only as a secret, never in
+   a `wrangler.*.toml` `[vars]` block or in the repository:
+
+   | Job               | Secret name                       | Where it is set                                           | Runs every | Suggested grace |
+   | ----------------- | --------------------------------- | --------------------------------------------------------- | ---------- | --------------- |
+   | Operations jobs   | `HEARTBEAT_URL_OPS_JOBS`          | Worker secret, `--config wrangler.ops-jobs.toml`          | 1 minute   | 5 minutes       |
+   | Payment check     | `HEARTBEAT_URL_PAYMENT_CLEANUP`   | Worker secret, `--config wrangler.payment-cleanup.toml`   | 10 minutes | 30 minutes      |
+   | Retention cleanup | `HEARTBEAT_URL_RETENTION_CLEANUP` | Worker secret, `--config wrangler.retention-cleanup.toml` | 5 minutes  | 20 minutes      |
+   | Database backup   | `HEARTBEAT_URL_DATABASE_BACKUP`   | GitHub repository secret                                  | daily      | 6 hours         |
+
+   Set a Worker secret with
+   `pnpm exec wrangler secret put HEARTBEAT_URL_OPS_JOBS --config wrangler.ops-jobs.toml`
+   (and likewise for the others). GitHub starts scheduled runs late, recently by
+   three to four hours, hence the long backup grace. Deploys keep Worker secrets
+   that are not in the deploy's secrets file. The Worker code that reads these
+   must already be deployed; until a URL is set no heartbeat is sent.
+
+3. **A second person.** Add a second person's phone (app push or SMS) to both
+   monitors' alert contacts, so one unavailable person does not mean no
+   response. GitHub's failed-run email reaches only one account.
+4. **Error reporting.** Sentry event delivery needs `NEXT_PUBLIC_SENTRY_DSN`
+   (see [Sentry Bug Finding](#sentry-bug-finding)); it is a separate owner step.
+5. **Payment alert addresses.** Set the app Worker secret `PAYMENT_ALERT_EMAILS`
+   to the addresses that should receive payment alerts and the daily payment
+   summary (one to three, separated by commas):
+   `pnpm exec wrangler secret put PAYMENT_ALERT_EMAILS --env production`.
+   Deploys keep it (it is not in the deploy's secrets file). Apply the database
+   update `20261112080000_payment_problem_alerts.sql` and set this secret before
+   the release that uses them is deployed. To check the address works, look for
+   the next morning's daily summary.
+
+### When an alert arrives
+
+- **Site monitor down:** follow [Service Down](#service-down). The JSON answer
+  lists which smoke check failed.
+- **Heartbeat missing:** open the Worker in the Cloudflare dashboard (Workers &
+  Pages, the Worker, Logs) and look for failed scheduled runs and their error
+  message (`App job returned HTTP <status>`, `App job request failed` or
+  `Invalid job configuration`). Then check the app Worker's logs for the
+  matching route. For the backup, open the failed Database Backup run in GitHub
+  Actions.
+- **Last-attempt email alert:** check the email provider's status page and
+  sending limits, then the app Worker logs for
+  `Queued email reached its last attempt`, and list every such email with the
+  read-only query under "Where lost emails stay". Those emails are not retried
+  automatically; tell the affected account owners if the message mattered
+  (payment messages first).
+- **Payment alert:** look the payment up in Ozow's merchant portal by the Ozow
+  reference in the email, and in the staff payments list by its payment number.
+  Wrong amount: the payment was not settled; confirm with Ozow what was paid.
+  Paid twice: one payment was settled (or, from the status check, none); return
+  the extra payment at Ozow and record the refund. Paid but not activated: the
+  money was received and the plan or add-on was not given; contact the member,
+  then activate it or refund. Money returned after activation: the plan is still
+  active; decide whether to end it. The app Worker logs hold the same payment
+  number under `Payment problem`.
 
 ---
 
@@ -813,6 +1354,6 @@ permission prompt appears, or the UI shows camera denied/blocked messages.
 Quick validation commands:
 
 ```bash
-pnpm test:e2e --project=chromium --project=mobile-chrome --grep "KYC Verification Flows"
-pnpm test:e2e --project=firefox --project=webkit --project=mobile-safari --grep "KYC Verification Flows"
+pnpm test:e2e --project=chromium --project=mobile-chrome e2e/foundation/staff-review.spec.ts
+pnpm foundation:e2e:down   # delete the local test copy afterwards
 ```

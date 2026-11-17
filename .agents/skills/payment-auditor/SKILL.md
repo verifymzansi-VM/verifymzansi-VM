@@ -6,6 +6,11 @@ description:
   gates.
 ---
 
+Production runs the foundation backend (`database/foundation/`,
+`src/lib/foundation/`); read [AGENTS.md](../../../AGENTS.md) first. Evidence
+from the retired source backend (`supabase/migrations/`, `public` tables, tests
+run with the `source` data backend) does not prove production behaviour.
+
 Run `pnpm payments:audit`. Read
 [Ozow integration](../../../docs/ozow-integration-guide.md) and
 [audit policy](../../../docs/audit-tools.md). Use the registry for scope;

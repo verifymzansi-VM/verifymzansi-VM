@@ -2,14 +2,15 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CheckCircle2, Loader2, Phone } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, Loader2, Phone } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/hooks/use-toast";
-import { createClient } from "@/lib/supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 import { saPhoneSchema } from "@/lib/validations/shared";
 import { ACCOUNT_PHONE_IN_USE_ERROR, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 import { formatPhone } from "@/lib/utils/format";
@@ -30,6 +31,11 @@ export default function CompleteProfilePage() {
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  // Shown under the field it is about (the number, or the code), never as a
+  // corner toast that is easy to miss. Cleared when that field is edited.
+  const [fieldError, setFieldError] = useState<{ message: string; rateLimited: boolean } | null>(
+    null
+  );
   const { toast } = useToast();
   const router = useRouter();
 
@@ -85,6 +91,18 @@ export default function CompleteProfilePage() {
     return () => window.clearInterval(timer);
   }, [resendCooldown]);
 
+  // A "too many attempts" message stops showing once its wait is over.
+  const shownError = fieldError?.rateLimited && resendCooldown === 0 ? null : fieldError;
+
+  const showFieldError = useCallback(
+    (message: string, rateLimited = false) => setFieldError({ message, rateLimited }),
+    []
+  );
+  // Editing the field clears its message, except a wait that is still running.
+  const clearFieldError = () => {
+    if (!shownError?.rateLimited) setFieldError(null);
+  };
+
   function getReturnUrl(): string {
     const returnUrl = new URLSearchParams(window.location.search).get("returnUrl");
     return returnUrl ? sanitizeReturnUrl(returnUrl) : "/dashboard";
@@ -101,15 +119,12 @@ export default function CompleteProfilePage() {
   const doSendOtp = useCallback(async () => {
     const phoneResult = saPhoneSchema.safeParse(phone);
     if (!phoneResult.success) {
-      toast({
-        title: "Invalid phone number",
-        description: phoneResult.error.issues[0]?.message || "Enter a valid SA mobile number",
-        variant: "destructive",
-      });
+      showFieldError(phoneResult.error.issues[0]?.message || "Enter a valid SA mobile number");
       return;
     }
 
     setIsSending(true);
+    setFieldError(null);
     try {
       const res = await fetch("/api/otp/send", {
         method: "POST",
@@ -122,12 +137,12 @@ export default function CompleteProfilePage() {
       };
 
       if (!res.ok) {
-        if (data.retryAfter) setResendCooldown(data.retryAfter);
-        toast({
-          title: "Could not send verification code",
-          description: data.error || "Please try again.",
-          variant: "destructive",
-        });
+        const retryAfter = Number(data.retryAfter ?? res.headers?.get("Retry-After") ?? 0);
+        if (retryAfter > 0) setResendCooldown(retryAfter);
+        showFieldError(
+          data.error || "Could not send the code. Please try again.",
+          res.status === 429 && retryAfter > 0
+        );
         return;
       }
 
@@ -140,15 +155,11 @@ export default function CompleteProfilePage() {
         variant: "success",
       });
     } catch {
-      toast({
-        title: "Could not send verification code",
-        description: "Please try again.",
-        variant: "destructive",
-      });
+      showFieldError("Could not send the code. Check your connection and try again.");
     } finally {
       setIsSending(false);
     }
-  }, [phone, toast]);
+  }, [phone, showFieldError, toast]);
 
   async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
@@ -159,15 +170,12 @@ export default function CompleteProfilePage() {
     e.preventDefault();
 
     if (!/^\d{6}$/.test(otpCode)) {
-      toast({
-        title: "Enter the 6-digit code",
-        description: "Use the code sent to your phone.",
-        variant: "destructive",
-      });
+      showFieldError("Enter the 6-digit code sent to your phone.");
       return;
     }
 
     setIsVerifying(true);
+    setFieldError(null);
     try {
       const res = await fetch("/api/otp/verify", {
         method: "POST",
@@ -177,19 +185,12 @@ export default function CompleteProfilePage() {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
 
       if (!res.ok) {
-        if (res.status === 409) {
-          toast({
-            title: "Phone number already in use",
-            description: ACCOUNT_PHONE_IN_USE_ERROR,
-            variant: "destructive",
-          });
-          return;
-        }
-        toast({
-          title: "Verification failed",
-          description: data.error || "Invalid or expired code. Please try again.",
-          variant: "destructive",
-        });
+        // 409 here means another account verified the number meanwhile.
+        showFieldError(
+          res.status === 409
+            ? ACCOUNT_PHONE_IN_USE_ERROR
+            : data.error || "Invalid or expired code. Please try again."
+        );
         return;
       }
 
@@ -197,11 +198,7 @@ export default function CompleteProfilePage() {
       setStep("verified");
       toast({ title: "Phone number verified!", variant: "success" });
     } catch {
-      toast({
-        title: "Verification failed",
-        description: "Please try again.",
-        variant: "destructive",
-      });
+      showFieldError("Could not check the code. Check your connection and try again.");
     } finally {
       setIsVerifying(false);
     }
@@ -246,19 +243,36 @@ export default function CompleteProfilePage() {
                     type="tel"
                     inputMode="tel"
                     value={phone}
-                    onChange={(e) => setPhone(sanitizeSaPhoneInput(e.target.value))}
+                    onChange={(e) => {
+                      setPhone(sanitizeSaPhoneInput(e.target.value));
+                      clearFieldError();
+                    }}
                     placeholder="071 234 5678"
                     autoComplete="tel"
                     pattern="^(\+27|0)[6-8][0-9]{8}$"
                     title="Enter a valid SA mobile number (e.g. 071 234 5678)"
                     required
+                    aria-invalid={shownError ? "true" : undefined}
+                    aria-describedby={shownError ? "phone-error" : "phone-hint"}
+                    className={cn(shownError && "border-destructive")}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Format: 0XX XXX XXXX. One number per account.
-                  </p>
+                  {shownError ? (
+                    <p id="phone-error" role="alert" className="inline-form-error flex gap-1.5">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span>{shownError.message}</span>
+                    </p>
+                  ) : (
+                    <p id="phone-hint" className="text-xs text-muted-foreground">
+                      Format: 0XX XXX XXXX. One number per account.
+                    </p>
+                  )}
                 </div>
 
-                <Button type="submit" className="gap-2" disabled={isSending}>
+                <Button
+                  type="submit"
+                  className="gap-2"
+                  disabled={isSending || Boolean(shownError?.rateLimited)}
+                >
                   {isSending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
@@ -283,12 +297,27 @@ export default function CompleteProfilePage() {
                     pattern="[0-9]{6}"
                     maxLength={6}
                     value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onChange={(e) => {
+                      setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                      clearFieldError();
+                    }}
                     placeholder="123456"
                     autoComplete="one-time-code"
                     required
+                    aria-invalid={shownError ? "true" : undefined}
+                    aria-describedby={shownError ? "otp-error" : "otp-hint"}
+                    className={cn(shownError && "border-destructive")}
                   />
-                  <p className="text-xs text-muted-foreground">Valid for 5 minutes.</p>
+                  {shownError ? (
+                    <p id="otp-error" role="alert" className="inline-form-error flex gap-1.5">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span>{shownError.message}</span>
+                    </p>
+                  ) : (
+                    <p id="otp-hint" className="text-xs text-muted-foreground">
+                      Valid for 5 minutes.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -304,7 +333,10 @@ export default function CompleteProfilePage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setStep("phone")}
+                    onClick={() => {
+                      setStep("phone");
+                      setFieldError(null);
+                    }}
                     disabled={isVerifying}
                   >
                     Change number

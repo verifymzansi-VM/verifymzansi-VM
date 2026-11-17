@@ -49,19 +49,6 @@ export const adminContentDecideSchema = z
     }
   );
 
-export const adminContentEditDecideSchema = z
-  .object({
-    requestId: uuidSchema,
-    decision: z.enum(["approve", "reject"], {
-      message: "decision must be approve or reject",
-    }),
-    reason: optionalTrimmedStringSchema.pipe(z.string().max(500).optional()),
-  })
-  .refine((data) => data.decision === "approve" || (data.reason && data.reason.trim().length > 0), {
-    message: "A reason is required when rejecting an edit",
-    path: ["reason"],
-  });
-
 export const adminVerificationDecideSchema = z
   .object({
     stepId: uuidSchema,

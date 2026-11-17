@@ -13,6 +13,8 @@ const {
   mockLoad,
   mockOn,
   mockFetchFile,
+  mockMount,
+  mockUnmount,
 } = vi.hoisted(() => ({
   mockExec: vi.fn().mockResolvedValue(0),
   mockWriteFile: vi.fn().mockResolvedValue(undefined),
@@ -22,10 +24,20 @@ const {
   mockLoad: vi.fn().mockResolvedValue(undefined),
   mockOn: vi.fn(),
   mockFetchFile: vi.fn().mockResolvedValue(new Uint8Array(10)),
+  // Undefined: the encoder has no mount support, so inputs are copied in.
+  mockMount: { current: undefined as ReturnType<typeof vi.fn> | undefined },
+  mockUnmount: vi.fn(async () => true),
 }));
 
 vi.mock("@ffmpeg/ffmpeg", () => ({
+  FFFSType: { WORKERFS: "WORKERFS" },
   FFmpeg: class MockFFmpeg {
+    createDir = vi.fn(async () => true);
+    deleteDir = vi.fn(async () => true);
+    unmount = mockUnmount;
+    get mount() {
+      return mockMount.current;
+    }
     load = mockLoad;
     exec = mockExec;
     writeFile = mockWriteFile;
@@ -75,6 +87,7 @@ beforeEach(() => {
   mockLoad.mockResolvedValue(undefined);
   mockExec.mockResolvedValue(0);
   mockWriteFile.mockResolvedValue(undefined);
+  mockMount.current = undefined;
 
   vi.stubGlobal(
     "fetch",
@@ -376,5 +389,40 @@ describe("compressVideo", () => {
     const args = mockExec.mock.calls[mockExec.mock.calls.length - 1][0] as string[];
     expect(args).toContain("libx264");
     expect(args).toContain("baseline");
+  });
+
+  it("mounts a large phone original for the encoder instead of copying it into memory", async () => {
+    mockMount.current = vi.fn(async () => true);
+    const file = fakeFile(10, "phone.mov", "video/quicktime");
+    Object.defineProperty(file, "size", { value: 250 * 1024 * 1024 });
+    const result = await compressVideo(file, { forceTranscode: true });
+    expect(result.skipped).toBe(false);
+    expect(mockMount.current).toHaveBeenCalledWith(
+      "WORKERFS",
+      { blobs: [{ name: "input.mov", data: file }] },
+      "/upload"
+    );
+    expect(mockWriteFile).not.toHaveBeenCalledWith("input.mov", expect.anything());
+    const args = mockExec.mock.calls[mockExec.mock.calls.length - 1][0] as string[];
+    expect(args[args.indexOf("-i") + 1]).toBe("/upload/input.mov");
+  });
+
+  it("does not copy an original over 50 MB into memory when mounting is unavailable", async () => {
+    const file = fakeFile(10, "phone.mov", "video/quicktime");
+    Object.defineProperty(file, "size", { value: 60 * 1024 * 1024 });
+    const result = await compressVideo(file, { forceTranscode: true });
+    expect(result.skipped).toBe(true);
+    expect(result.file).toBe(file);
+    expect(mockWriteFile).not.toHaveBeenCalled();
+    expect(mockExec).not.toHaveBeenCalled();
+  });
+
+  it("unmounts the picked file when the encoder fails", async () => {
+    mockMount.current = vi.fn(async () => true);
+    mockExec.mockResolvedValueOnce(1);
+    const file = fakeFile(10, "phone.mov", "video/quicktime");
+    const result = await compressVideo(file, { forceTranscode: true });
+    expect(result.skipped).toBe(true);
+    expect(mockUnmount).toHaveBeenCalledWith("/upload");
   });
 });

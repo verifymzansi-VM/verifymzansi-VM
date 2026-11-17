@@ -24,8 +24,6 @@ export const metadata: Metadata = {
   alternates: { canonical: "/sponsors" },
 };
 
-export const revalidate = 300;
-
 export default async function SponsorsPage() {
   const sponsors = await getPublicSponsors();
 

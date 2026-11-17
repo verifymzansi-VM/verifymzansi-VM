@@ -1,4 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+// The route is hidden until it works (src/lib/hidden-features.ts); these
+// tests switch it on to keep the code behind the switch checked.
+const hiddenFeature = vi.hoisted(() => ({ shown: true }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_TRIAL_EXTENSION_OFFERS() {
+    return hiddenFeature.shown;
+  },
+}));
 
 const OFFER_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "33333333-3333-4333-8333-333333333333";
@@ -30,6 +40,25 @@ const request = (body: unknown) =>
 function signedIn(user: { id: string } | null) {
   mockCreateClient.mockResolvedValue({ auth: { getUser: async () => ({ data: { user } }) } });
 }
+
+describe("POST /api/trial-extensions/:id while hidden", () => {
+  it("answers 404 before any other check", async () => {
+    hiddenFeature.shown = false;
+    try {
+      const res = await POST(
+        new Request("https://verifymzansi.com/api/trial-extensions/x", {
+          method: "POST",
+          body: "{}",
+        }),
+        { params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000001" }) }
+      );
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: "Not found" });
+    } finally {
+      hiddenFeature.shown = true;
+    }
+  });
+});
 
 describe("POST /api/trial-extensions/:id", () => {
   beforeEach(() => {

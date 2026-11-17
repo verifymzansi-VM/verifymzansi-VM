@@ -1,3 +1,7 @@
+> Historical: describes the retired source backend. Its product rules may still
+> apply; its table, migration and route sections describe the source backend.
+> Foundation business checks live in `database/foundation/`.
+
 # Business Verification spec — 3 stickers (approved 2026-10-06)
 
 ## Context

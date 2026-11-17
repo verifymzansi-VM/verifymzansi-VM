@@ -1,18 +1,17 @@
 import { parseFoundationConnection } from "./connection";
+import { approvedHostedProjectRef } from "./hosted-projects";
 
 /** Validate one approved browser/server connection without revealing credentials. */
 export function verifyFoundationDeploymentConnection(
   env: Readonly<Record<string, string | undefined>>
 ) {
-  if (env.NEXT_PUBLIC_DATA_BACKEND !== "foundation")
-    throw new Error("Foundation backend selection is required");
   const connection = parseFoundationConnection({
     url: env.FOUNDATION_SUPABASE_URL,
     expectedProjectRef: env.FOUNDATION_PROJECT_REF,
     publishableKey: env.FOUNDATION_SUPABASE_PUBLISHABLE_KEY,
   });
   if (
-    connection.expectedProjectRef !== "gntzjtuncsyefujajmjy" ||
+    connection.expectedProjectRef !== approvedHostedProjectRef(env.ENVIRONMENT) ||
     env.NEXT_PUBLIC_SUPABASE_URL !== connection.url ||
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== connection.publishableKey
   )

@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { searchFoundationPosts } from "../src/lib/foundation/post-search";
 import { createFoundationPublicApi } from "../src/lib/foundation/public-api";
 import { readFoundationPostingTerms } from "../src/lib/foundation/posting-terms";
-import { readPostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
+import { readBaselinePostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
 import {
   parseFoundationBillingCatalogue,
   readFoundationBillingCatalogue,
@@ -86,7 +86,7 @@ async function run() {
       { categories: 31, activities: 136, provinces: 9, cities: 90, fields: 113 }
     );
     assert.equal(await readFoundationPublicPost(api, { id: randomUUID() }), null);
-    const terms = readPostingTermsCatalogue();
+    const terms = readBaselinePostingTermsCatalogue();
     assert.deepEqual(await readFoundationPostingTerms(api), {
       ...terms.documents.find((document) => document.version === terms.activeVersion),
       document_path: `/terms/versions/${terms.activeVersion}`,

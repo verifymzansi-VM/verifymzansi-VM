@@ -405,6 +405,11 @@ export function KycPreviewLightbox({
       return;
     }
 
+    if (decision !== "approved" && !reasonNote.trim()) {
+      setDecisionError("Please write a note telling the member what to fix.");
+      return;
+    }
+
     if (decision === "approved" && isHighRisk && !overrideReasonCode) {
       setDecisionError("Override reason code is required when approving high-risk steps.");
       return;
@@ -730,13 +735,13 @@ export function KycPreviewLightbox({
                 </div>
                 <div>
                   <Label htmlFor="lb-reason-note" className="text-xs font-medium">
-                    Notes
+                    Note to the member <span className="text-destructive">*</span>
                   </Label>
                   <Textarea
                     id="lb-reason-note"
                     value={reasonNote}
                     onChange={(e) => setReasonNote(e.target.value)}
-                    placeholder="Optional context..."
+                    placeholder="Required: what the member needs to fix..."
                     rows={2}
                     className="mt-1"
                   />

@@ -2,41 +2,40 @@
  * Display-only sample posts.
  *
  * A short, static list of example posts shown in the showrooms so visitors can
- * see how the site will look. Each entry is a real local business's video,
- * added only after that business has given written permission. Nothing here
- * goes through the database: no SQL, no migration, no member account.
+ * see how the site looks. Each sample is presented as VerifyMzansi's own
+ * display example: it names no business (the business line reads
+ * "VerifyMzansi" with the site's shield), carries no trust badges, and its
+ * Call and WhatsApp buttons reach VerifyMzansi (src/lib/sample-posts/contact.ts).
  *
  * Rules for entries (checked by `validateSamplePost` and its tests):
- * - Commit an entry only after the business has approved it. The repository
- *   is public, so unapproved names and media never belong in this file. Use
- *   the git-ignored `catalogue.local.json` (development only) to preview them.
- * - `contact` is included only when the business agreed to show it, and then
- *   carries `approvedByBusiness: true`. Never invent numbers.
- * - Media live in the public bucket under `media/samples/<slug>.<ext>`.
+ * - No business names, people's names or contact details in any field.
+ * - Media live in the public bucket as `media/samples/<slug>.mp4` and
+ *   `media/samples/<slug>.webp`.
+ * - Use the git-ignored `catalogue.local.json` (development only) to preview
+ *   entries before they are committed.
  *
  * Everything is hidden until `SAMPLE_POSTS_ENABLED=true` is set on the
- * server. Unset it (or set anything else) to hide every sample at once.
+ * server. Staff can also remove one sample, and restore it, from the staff
+ * area (/admin/sample-posts); the database keeps only that hide-list.
  *
  * This file is imported by the request proxy, so it stays dependency-light.
  */
-import type { BusinessCategory, ListingCategory } from "@/types/enums";
-import { isValidSaPhone } from "@/lib/utils/phone";
 
-/** Where a sample appears: Mzansi Market, Mzansi Business, or Tourism & Events. */
-export type SamplePostArea = "market" | "business" | "event";
-
-export interface SamplePostContact {
-  /** Must be `true`: the business agreed to show this contact. */
-  approvedByBusiness: true;
-  phone?: string;
-  whatsapp?: string;
-}
+/**
+ * Where a sample appears. Market samples show in Mzansi Market, business
+ * samples in Mzansi Business, tourism (places to stay and experiences) and
+ * event samples in Tourism & Events. The home showroom shows them all.
+ */
+export type SamplePostArea = "market" | "business" | "tourism" | "event";
 
 export interface SamplePostEntry {
   /** URL slug: lowercase words joined by hyphens (`/sample/<slug>`). */
   slug: string;
   area: SamplePostArea;
-  /** Listing category (market), business category (business) or event type (event). */
+  /**
+   * Market: a listing category. Business: a business category. Tourism: a
+   * tourism activity (a place to stay or an experience). Event: an event type.
+   */
   category: string;
   /** 5 to 100 characters, as for real posts. */
   title: string;
@@ -48,25 +47,34 @@ export interface SamplePostEntry {
   videoKey: string;
   /** Committed: `media/samples/<slug>.webp`. Local preview: a file name in `public/sample-posts-local/`. */
   posterKey: string;
-  /** The business that gave permission. */
-  businessName: string;
-  contact?: SamplePostContact;
+  /**
+   * Events only, optional: the day it takes place (YYYY-MM-DD). Once that day
+   * has passed the date is no longer shown; the sample stays.
+   */
+  eventDate?: string;
+  /**
+   * Internal only, optional: whether the place was confirmed while preparing
+   * the entry. Never shown and dropped when the entry is loaded.
+   */
+  locationConfirmed?: boolean;
 }
 
-/**
- * Approved samples. Starts empty: entries are added one business at a time,
- * after that business says yes.
- */
+/** The committed samples. Empty until entries are added in a reviewed change. */
 export const APPROVED_SAMPLE_POSTS: readonly SamplePostEntry[] = [];
 
 export { SAMPLE_POST_LABEL } from "./label";
+
+/** The name every sample shows on its business line. */
+export const SAMPLE_POST_PRESENTER = "VerifyMzansi";
+/** The site's own shield, shown as every sample's logo. */
+export const SAMPLE_POST_LOGO = "/images/brand-shield-small.png";
 
 /** One switch for all samples; default off. Read at request time on the server. */
 export function samplePostsEnabled(env: Record<string, string | undefined> = process.env) {
   return env.SAMPLE_POSTS_ENABLED?.trim().toLowerCase() === "true";
 }
 
-/* ── Valid values (kept in step with src/types/enums.ts and categories.ts by tests) ── */
+/* ── Valid values (kept in step with src/lib/domains/taxonomy/reference.json by tests) ── */
 
 export const SAMPLE_LISTING_CATEGORIES = [
   "property",
@@ -80,30 +88,47 @@ export const SAMPLE_LISTING_CATEGORIES = [
   "clothing_accessories",
   "sports_hobbies",
   "other_items",
-] as const satisfies readonly ListingCategory[];
+] as const;
 
-/** Business categories offered to new posts (legacy ones excluded). */
+/** Mzansi Business categories (tourism businesses are their own area). */
 export const SAMPLE_BUSINESS_CATEGORIES = [
-  "fashion_accessories",
-  "electronics_tech",
-  "groceries_essentials",
-  "home_living",
-  "food_dining",
-  "trade_maintenance",
-  "professional_services",
-  "education_training",
-  "events_entertainment",
-  "tourism_hospitality",
-  "general_other",
-  "health_medical",
-  "beauty_personal",
-  "fitness_wellness",
-  "cleaning_garden",
   "automotive_services",
-  "transport_storage",
-  "pets_animals",
+  "beauty_personal",
+  "trade_maintenance",
+  "cleaning_garden",
+  "fashion_accessories",
   "community_personal",
-] as const satisfies readonly BusinessCategory[];
+  "education_training",
+  "electronics_tech",
+  "events_entertainment",
+  "fitness_wellness",
+  "home_living",
+  "groceries_essentials",
+  "health_medical",
+  "pets_animals",
+  "professional_services",
+  "food_dining",
+  "transport_storage",
+  "general_other",
+] as const;
+
+/** Tourism & Hospitality activities: places to stay and experiences. */
+export const SAMPLE_TOURISM_ACTIVITIES = [
+  "hotel_resort",
+  "guest_house_bnb",
+  "lodge_game_lodge",
+  "backpackers_hostel",
+  "self_catering",
+  "tour_operator",
+  "travel_agency",
+  "safari_wildlife",
+  "adventure_activities",
+  "cultural_heritage",
+  "car_rental_tourism",
+  "campground_caravan",
+  "spa_wellness_retreat",
+  "tourist_attraction",
+] as const;
 
 export const SAMPLE_EVENT_TYPES = [
   "festival_concert",
@@ -124,6 +149,7 @@ export const SAMPLE_EVENT_TYPES = [
 const CATEGORIES_BY_AREA: Record<SamplePostArea, readonly string[]> = {
   market: SAMPLE_LISTING_CATEGORIES,
   business: SAMPLE_BUSINESS_CATEGORIES,
+  tourism: SAMPLE_TOURISM_ACTIVITIES,
   event: SAMPLE_EVENT_TYPES,
 };
 
@@ -154,15 +180,15 @@ const ENTRY_KEYS = new Set([
   "city",
   "videoKey",
   "posterKey",
-  "businessName",
-  "contact",
+  "eventDate",
+  "locationConfirmed",
 ]);
-const CONTACT_KEYS = new Set(["approvedByBusiness", "phone", "whatsapp"]);
-const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const SAMPLE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MEDIA_PATTERNS: Record<SamplePostSource, { video: RegExp; poster: RegExp }> = {
   committed: {
-    video: /^media\/samples\/[a-z0-9]+(?:-[a-z0-9]+)*\.(?:mp4|webm)$/,
-    poster: /^media\/samples\/[a-z0-9]+(?:-[a-z0-9]+)*\.(?:webp|jpg|jpeg|png)$/,
+    video: /^media\/samples\/[a-z0-9]+(?:-[a-z0-9]+)*\.mp4$/,
+    poster: /^media\/samples\/[a-z0-9]+(?:-[a-z0-9]+)*\.webp$/,
   },
   // A bare file name inside public/sample-posts-local/ (no folders, no "..").
   local: {
@@ -170,6 +196,16 @@ const MEDIA_PATTERNS: Record<SamplePostSource, { video: RegExp; poster: RegExp }
     poster: /^[A-Za-z0-9_-][A-Za-z0-9 ._-]*\.(?:webp|jpg|jpeg|png)$/i,
   },
 };
+
+/** Whether `value` is a well-formed sample slug (3 to 80 characters). */
+export function isSampleSlug(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length >= 3 &&
+    value.length <= 80 &&
+    SAMPLE_SLUG_PATTERN.test(value)
+  );
+}
 
 export type SamplePostValidation =
   { ok: true; entry: SamplePostEntry } | { ok: false; errors: string[] };
@@ -190,6 +226,19 @@ function checkLength(
   }
 }
 
+function isCalendarDate(value: string): boolean {
+  const match = DATE_PATTERN.exec(value);
+  if (!match) return false;
+  const [year, month, day] = match.slice(1).map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    year >= 2020 &&
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
 /** Checks one entry. Invalid entries are never shown. */
 export function validateSamplePost(
   value: unknown,
@@ -206,7 +255,7 @@ export function validateSamplePost(
   }
 
   const slug = text(raw.slug);
-  if (!slug || slug.length < 3 || slug.length > 80 || !SLUG_PATTERN.test(slug)) {
+  if (!isSampleSlug(slug)) {
     errors.push("slug must be 3 to 80 lowercase letters, digits and single hyphens");
   }
 
@@ -214,7 +263,7 @@ export function validateSamplePost(
   const categories = Object.hasOwn(CATEGORIES_BY_AREA, String(area))
     ? CATEGORIES_BY_AREA[area]
     : null;
-  if (!categories) errors.push('area must be "market", "business" or "event"');
+  if (!categories) errors.push('area must be "market", "business", "tourism" or "event"');
   const category = text(raw.category);
   if (categories && (!category || !categories.includes(category))) {
     errors.push(`category "${String(raw.category)}" is not valid for area "${area}"`);
@@ -224,8 +273,6 @@ export function validateSamplePost(
   checkLength(errors, "title", title, 5, 100);
   const description = text(raw.description);
   checkLength(errors, "description", description, 20, 5000);
-  const businessName = text(raw.businessName);
-  checkLength(errors, "businessName", businessName, 2, 120);
   const city = text(raw.city);
   checkLength(errors, "city", city, 2, 80);
   const province = text(raw.province);
@@ -235,47 +282,34 @@ export function validateSamplePost(
 
   const media = MEDIA_PATTERNS[source];
   const videoKey = text(raw.videoKey);
-  if (!videoKey || !media.video.test(videoKey) || videoKey.includes("..")) {
-    errors.push(
-      source === "committed"
-        ? "videoKey must look like media/samples/<slug>.mp4"
-        : "videoKey must be a .mp4 or .webm file name in public/sample-posts-local/"
-    );
-  }
   const posterKey = text(raw.posterKey);
-  if (!posterKey || !media.poster.test(posterKey) || posterKey.includes("..")) {
-    errors.push(
-      source === "committed"
-        ? "posterKey must look like media/samples/<slug>.webp"
-        : "posterKey must be an image file name in public/sample-posts-local/"
-    );
+  if (source === "committed") {
+    // One media pair per slug: media/samples/<slug>.mp4 and .webp.
+    if (videoKey !== `media/samples/${slug}.mp4` || !media.video.test(videoKey ?? "")) {
+      errors.push("videoKey must be media/samples/<slug>.mp4");
+    }
+    if (posterKey !== `media/samples/${slug}.webp` || !media.poster.test(posterKey ?? "")) {
+      errors.push("posterKey must be media/samples/<slug>.webp");
+    }
+  } else {
+    if (!videoKey || !media.video.test(videoKey) || videoKey.includes("..")) {
+      errors.push("videoKey must be a .mp4 or .webm file name in public/sample-posts-local/");
+    }
+    if (!posterKey || !media.poster.test(posterKey) || posterKey.includes("..")) {
+      errors.push("posterKey must be an image file name in public/sample-posts-local/");
+    }
   }
 
-  let contact: SamplePostContact | undefined;
-  if (raw.contact !== undefined) {
-    const value = raw.contact as Record<string, unknown> | null;
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      errors.push("contact must be an object");
-    } else {
-      for (const key of Object.keys(value)) {
-        if (!CONTACT_KEYS.has(key)) errors.push(`unknown contact field "${key}"`);
-      }
-      if (value.approvedByBusiness !== true) {
-        errors.push("contact needs approvedByBusiness: true (the business agreed to show it)");
-      }
-      const phone = text(value.phone) || undefined;
-      const whatsapp = text(value.whatsapp) || undefined;
-      if (!phone && !whatsapp) errors.push("contact needs a phone or whatsapp number");
-      if (phone && !isValidSaPhone(phone)) errors.push("contact.phone is not a valid SA number");
-      if (whatsapp && !isValidSaPhone(whatsapp)) {
-        errors.push("contact.whatsapp is not a valid SA number");
-      }
-      contact = {
-        approvedByBusiness: true,
-        ...(phone ? { phone } : {}),
-        ...(whatsapp ? { whatsapp } : {}),
-      };
-    }
+  let eventDate: string | undefined;
+  if (raw.eventDate !== undefined) {
+    const value = text(raw.eventDate);
+    if (area !== "event") errors.push("eventDate is only for event samples");
+    else if (!value || !isCalendarDate(value)) errors.push("eventDate must be a date (YYYY-MM-DD)");
+    else eventDate = value;
+  }
+
+  if (raw.locationConfirmed !== undefined && typeof raw.locationConfirmed !== "boolean") {
+    errors.push("locationConfirmed must be true or false");
   }
 
   if (errors.length > 0) return { ok: false, errors };
@@ -291,23 +325,41 @@ export function validateSamplePost(
       city: city!,
       videoKey: videoKey!,
       posterKey: posterKey!,
-      businessName: businessName!,
-      ...(contact ? { contact } : {}),
+      ...(eventDate ? { eventDate } : {}),
     },
   };
 }
 
+/** Today's date in South Africa (YYYY-MM-DD). */
+export function southAfricanToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Johannesburg",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
+/** The event date to show: only while it is today or later in South Africa. */
+export function upcomingEventDate(
+  entry: Pick<SamplePostEntry, "eventDate">,
+  now: Date = new Date()
+): string | null {
+  return entry.eventDate && entry.eventDate >= southAfricanToday(now) ? entry.eventDate : null;
+}
+
 /**
- * True when `/sample/<slug>` may be served in production: the switch is on and
- * the slug belongs to a valid committed entry. The proxy answers everything
- * else with a real 404 before the page starts streaming.
+ * True when `/sample/<slug>` may be served in production as far as the code
+ * knows: the switch is on and the slug belongs to a valid committed entry.
+ * The proxy answers everything else with a real 404 before the page starts
+ * streaming, and then checks the staff hide-list.
  */
 export function isPublishedSampleSlug(
   slug: string,
   env: Record<string, string | undefined> = process.env,
   catalogue: readonly unknown[] = APPROVED_SAMPLE_POSTS
 ): boolean {
-  if (!samplePostsEnabled(env) || !SLUG_PATTERN.test(slug)) return false;
+  if (!samplePostsEnabled(env) || !isSampleSlug(slug)) return false;
   return catalogue.some((value) => {
     const result = validateSamplePost(value, "committed");
     return result.ok && result.entry.slug === slug;

@@ -2,7 +2,8 @@ import crypto from "crypto";
 
 import { parseRegisteredOffice, type RegisteredOffice } from "@/lib/cipc/address";
 import { parseCipcText, type ParsedCipcDocument } from "@/lib/cipc/parse";
-import { extractPdf, type PdfStructure } from "@/lib/cipc/pdf";
+import type { PdfStructure } from "@/lib/cipc/pdf";
+import { OffloadUnavailableError, readPdf } from "@/lib/offload/client";
 import { getIdNumberHmacSecret, hmacIdNumber } from "@/lib/services/id-number-hmac";
 import { validateBufferIntegrity } from "@/lib/utils/file-validation";
 import {
@@ -10,6 +11,7 @@ import {
   isReencodableImageType,
   reencodeImage,
 } from "@/lib/utils/image-reencode";
+import { recordImagesTransformations } from "@/lib/media/images-allowance";
 import { createLogger } from "@/lib/utils/logger";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 
@@ -64,7 +66,9 @@ async function reencodePhoto(bytes: Uint8Array, mime: string): Promise<Uint8Arra
     if (!isReencodableImageType(mime)) {
       throw new ImageReencodeError("undecodable", `Unsupported image type ${mime}`);
     }
-    return await reencodeImage(bytes, mime);
+    const reencoded = await reencodeImage(bytes, mime);
+    await recordImagesTransformations(1);
+    return reencoded;
   } catch (error) {
     log.warn("Photo re-encode refused upload", {
       error: error instanceof Error ? error.message : String(error),
@@ -133,7 +137,21 @@ export async function readCipcFile(
   const bytes = isPdf ? raw : await reencodePhoto(raw, mime);
   if (!(bytes instanceof Uint8Array)) return bytes;
 
-  const extracted = isPdf ? await extractPdf(raw) : null;
+  let extracted: Awaited<ReturnType<typeof readPdf>> = null;
+  if (isPdf) {
+    try {
+      extracted = await readPdf(raw);
+    } catch (error) {
+      if (!(error instanceof OffloadUnavailableError)) throw error;
+      // Never screen a PDF without its checks: ask for the upload again later.
+      log.warn("PDF reader unavailable", { error: error.message });
+      return {
+        error: "Document checking is busy. Please try again shortly.",
+        code: "document_processing_unavailable",
+        status: 503,
+      };
+    }
+  }
   const parsed = extracted?.structure.hasTextLayer ? parseCipcText(extracted.items) : null;
 
   const secret = getIdNumberHmacSecret();

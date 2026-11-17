@@ -220,7 +220,7 @@ try {
           connection,
           cookieJar({ ...reviewerSession, access_token: pieces.join(".") }).adapter
         ),
-      /^Error: A verified foundation account session is required$/
+      /^FoundationSessionError: A verified foundation account session is required$/
     );
     result.requestSessionBridge = {
       realGoTrueRefresh: "PASS",

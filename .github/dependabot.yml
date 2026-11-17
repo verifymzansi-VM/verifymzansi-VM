@@ -62,22 +62,23 @@ updates:
           - "minor"
           - "patch"
 
-  # GitHub Actions versions
+  # GitHub Actions versions: one grouped pull request a month at most, so
+  # pinned actions do not age silently (owner decision, 11 November 2026).
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 0
+      interval: "monthly"
+    open-pull-requests-limit: 1
     # Same supply-chain wait as npm: a compromised action release is usually
     # caught and pulled within days.
     cooldown:
       default-days: 8
-    # init, autobuild and analyze must share one version or CodeQL fails.
+    # One group for every action, so the limit of 1 covers them all (and
+    # CodeQL's init, autobuild and analyze always share one version).
     groups:
-      codeql-action:
+      github-actions:
         patterns:
-          - "github/codeql-action*"
+          - "*"
     labels:
       - "dependencies"
       - "ci"

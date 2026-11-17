@@ -5,6 +5,11 @@ description:
   examination and separate local/deployment/provider evidence.
 ---
 
+Production runs the foundation backend (`database/foundation/`,
+`src/lib/foundation/`); read [AGENTS.md](../../../AGENTS.md) first. Evidence
+from the retired source backend (`supabase/migrations/`, `public` tables, tests
+run with the `source` data backend) does not prove production behaviour.
+
 Run `pnpm safety:release`. Read [audit policy](../../../docs/audit-tools.md),
 [payment guide](../../../docs/ozow-integration-guide.md) and
 [KYC guide](../../../docs/kyc-audit-guide.md), and examine the release's code.

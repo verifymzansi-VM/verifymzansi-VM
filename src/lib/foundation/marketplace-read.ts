@@ -1,11 +1,16 @@
 import type { FoundationPublicApi } from "./public-api";
+import { declareNotAvailable, notAvailable } from "./not-available";
 import { readPublicBusinessStickers } from "./business-seen";
 import {
   searchFoundationPresentedCards,
   foundationMediaUrl,
   type FoundationCardPresentation,
 } from "./public-cards";
-import { type FoundationPublicPostDetail } from "./public-post";
+import {
+  readFoundationPublicContactChannels,
+  readFoundationPublicPost,
+  type FoundationPublicPostDetail,
+} from "./public-post";
 import type { FoundationPublicPostCore } from "./public-post-contract";
 import reference from "../domains/taxonomy/reference.json";
 import { buildFoundationPostSearch } from "./post-search";
@@ -18,7 +23,9 @@ import {
 } from "./post-presentation";
 
 export type PublicCollection = "listings" | "businesses" | "promotions";
-export class MarketplaceQueryError extends Error {}
+export class MarketplaceQueryError extends Error {
+  override name = "MarketplaceQueryError";
+}
 
 const normalized = (value: string) =>
   value
@@ -28,6 +35,24 @@ const normalized = (value: string) =>
 export function publicProvinceLabel(id: string) {
   return reference.provinces.find((row) => row.id === id)?.label ?? id;
 }
+
+/** Public post fields the live backend does not provide on any public read. */
+export const PUBLIC_POST_NOT_AVAILABLE = declareNotAvailable({
+  boost_until: notAvailable(null, "public reads carry no paid Boost placement"),
+  featured_until: notAvailable(null, "public reads carry no paid Featured placement"),
+  featured: notAvailable(false, "public reads carry no paid Featured placement"),
+  view_count: notAvailable(null, "views are not stored"),
+  like_count: notAvailable(null, "likes are not stored"),
+  viewer_has_liked: notAvailable(false, "likes are not stored"),
+  location_suburb: notAvailable(null, "posts keep a province and city only"),
+  account_profile: notAvailable(null, "public reads never carry the owner's profile"),
+});
+/** Public post fields only a detail read provides: cards from a collection
+ * read leave them at these placeholders. */
+export const PUBLIC_CARD_NOT_AVAILABLE = declareNotAvailable({
+  seller: notAvailable(null, "the card read carries no seller; the detail read does"),
+  contact_methods: notAvailable([], "the card read carries no contact channels"),
+});
 
 /** Only approved public DTOs enter the restored cards. Missing private/paid
  * facts stay absent; a card never acquires an owner id or a verification badge. */
@@ -71,6 +96,8 @@ export function restoredPublicRow(
     : photo
       ? [photo]
       : [];
+  const missing = PUBLIC_POST_NOT_AVAILABLE.values();
+  const cardOnly = PUBLIC_CARD_NOT_AVAILABLE.values();
   return {
     id: post.id,
     title: post.title,
@@ -95,7 +122,7 @@ export function restoredPublicRow(
     condition: post.condition,
     location_province: publicProvinceLabel(post.province),
     location_city: post.locality,
-    location_suburb: null,
+    location_suburb: missing.location_suburb,
     location_town: null,
     location_address: null,
     created_at: post.published_at,
@@ -111,25 +138,25 @@ export function restoredPublicRow(
     focal_y: firstVideo?.focal_y ?? cover?.focal_y ?? null,
     media_width: videoLayout?.width ?? cover?.width ?? null,
     media_height: videoLayout?.height ?? cover?.height ?? null,
-    boost_until: null,
-    featured_until: null,
-    featured: false,
-    view_count: null,
-    like_count: null,
-    viewer_has_liked: false,
+    boost_until: missing.boost_until,
+    featured_until: missing.featured_until,
+    featured: missing.featured,
+    view_count: missing.view_count,
+    like_count: missing.like_count,
+    viewer_has_liked: missing.viewer_has_liked,
     seller: detail
       ? {
           display_name: detail.seller.public_name,
           account_verification_status: detail.seller.identity_verified ? "verified" : null,
         }
-      : null,
-    account_profile: null,
+      : cardOnly.seller,
+    account_profile: missing.account_profile,
     business_id: null,
     start_date: eventWindow?.starts_at ?? null,
     end_date: eventWindow?.ends_at ?? null,
     status: "live",
     attributes: {},
-    contact_methods: detail?.contact_channels ?? [],
+    contact_methods: detail?.contact_channels ?? cardOnly.contact_methods,
     category_details: null,
     business_details: null,
     service_areas: null,
@@ -144,12 +171,105 @@ export function restoredPublicRow(
   };
 }
 
+/** The reads behind a public post page: the post, its contact channels and its
+ * card presentation (business type and form fields). Null when the post is not
+ * public. */
+/** A publicly live post with its presentation, as its detail page reads it.
+ * The link preview asks for one kind and skips the contact-channel read it
+ * does not show. */
+export async function readRestoredPublicDetail(
+  api: FoundationPublicApi,
+  id: string,
+  options: { kind?: FoundationPublicPostCore["kind"]; withContactChannels?: boolean } = {}
+) {
+  const post = await readFoundationPublicPost(api, { id });
+  if (!post || (options.kind && post.kind !== options.kind)) return null;
+  const contact_channels =
+    options.withContactChannels === false
+      ? []
+      : await readFoundationPublicContactChannels(api, { id });
+  const presentation = (
+    await searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 })
+  ).items[0]?.presentation;
+  if (!presentation) return null;
+  return {
+    ...post,
+    contact_channels,
+    business_type: presentation.business_type,
+    frontend: presentation.frontend,
+  };
+}
+
 function integer(params: URLSearchParams, key: string, fallback: number, max: number) {
   const raw = params.get(key);
   if (raw === null) return fallback;
   if (!/^\d+$/.test(raw) || Number(raw) < 1 || Number(raw) > max)
     throw new MarketplaceQueryError(`Invalid ${key}`);
   return Number(raw);
+}
+
+type PresentedCard = Awaited<ReturnType<typeof searchFoundationPresentedCards>>["items"][number];
+
+/** The tourism area's business category (stays, restaurants, tours). */
+const TOURISM_BUSINESS_CATEGORY = "tourism_hospitality";
+/** Deepest result a merged search reads from each scope (ten card reads). Its
+ * reported total is capped to the whole pages within this depth, so page links
+ * never point past what can be served. */
+const MERGED_SEARCH_DEPTH = 480;
+
+/** Cards of one search scope from `start`, at most `want` of them, in bounded
+ * reads of 48. Refuses a card of another kind. */
+async function readCards(
+  api: FoundationPublicApi,
+  input: Record<string, unknown>,
+  kind: PresentedCard["kind"],
+  { start, want }: { start: number; want: number }
+) {
+  const cards: PresentedCard[] = [];
+  let total = 0;
+  for (let count = 0; ; count++) {
+    if (count >= 200) throw new Error("Public collection is too large to paginate safely");
+    const requested = Math.min(48, want - cards.length);
+    const offset = start + cards.length;
+    const result = await searchFoundationPresentedCards(api, {
+      ...input,
+      offset,
+      limit: requested,
+    });
+    if (result.items.some((row) => row.kind !== kind))
+      throw new Error("Invalid public collection response");
+    total = result.total;
+    cards.push(...result.items);
+    if (
+      result.items.length < requested ||
+      offset + result.items.length >= total ||
+      cards.length >= want
+    )
+      break;
+  }
+  return { cards, total };
+}
+
+/** The database's result order (internal.search_posts), used to merge scopes:
+ * relevance score, then price (missing prices last), then newest, then id. */
+function databaseOrder(sort: unknown) {
+  return (a: PresentedCard, b: PresentedCard) => {
+    if (sort === "relevance") {
+      const score = Number(b.score ?? 0) - Number(a.score ?? 0);
+      if (score) return score;
+    }
+    if (sort === "price_asc" || sort === "price_desc") {
+      if (a.price_cents === null || b.price_cents === null) {
+        if (a.price_cents !== b.price_cents) return a.price_cents === null ? 1 : -1;
+      } else {
+        const price = Number(a.price_cents) - Number(b.price_cents);
+        if (price) return sort === "price_asc" ? price : -price;
+      }
+    }
+    const published = Date.parse(b.published_at) - Date.parse(a.published_at);
+    if (published) return published;
+    return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+  };
 }
 
 /** Translate the selected frontend's filters, never send legacy table names,
@@ -161,7 +281,8 @@ export async function readRestoredCollection(
 ) {
   const page = integer(params, "page", 1, 10000);
   const limit = integer(params, "limit", 24, 50);
-  const tourism = collection === "businesses" && params.get("category") === "tourism_hospitality";
+  const tourism =
+    collection === "businesses" && params.get("category") === TOURISM_BUSINESS_CATEGORY;
   const area =
     collection === "listings"
       ? "market"
@@ -236,55 +357,46 @@ export async function readRestoredCollection(
     if (params.get("event_order")) input.event_order = params.get("event_order");
   }
   input.offset = (page - 1) * limit;
-  let cards: Awaited<ReturnType<typeof searchFoundationPresentedCards>>["items"] = [];
-  try {
-    buildFoundationPostSearch(input);
-  } catch {
-    throw new MarketplaceQueryError("Invalid marketplace filters");
+  const kind =
+    collection === "listings" ? "listing" : collection === "businesses" ? "business" : "event";
+  // A text search under Businesses also finds tourism businesses (stays,
+  // restaurants, tours), as the chosen frontend's search did. The database
+  // keeps them in the tourism area, so both scopes are read and merged in the
+  // database's own order (map 03a C8).
+  const scopes: Array<Record<string, unknown>> =
+    collection === "businesses" && q && !category
+      ? [input, { ...input, area: "tourism_events", category: TOURISM_BUSINESS_CATEGORY }]
+      : [input];
+  const merged = scopes.length > 1;
+  const mergedDepth = merged && !organisation ? Math.floor(MERGED_SEARCH_DEPTH / limit) * limit : 0;
+  // A page past the served depth is empty, like any page past the end. Its
+  // total comes from one one-card read per scope.
+  const tooDeep = mergedDepth > 0 && page * limit > mergedDepth;
+  for (const scope of scopes) {
+    try {
+      buildFoundationPostSearch(scope);
+    } catch {
+      throw new MarketplaceQueryError("Invalid marketplace filters");
+    }
   }
+  let cards: PresentedCard[] = [];
   let total = 0;
   // Ordinary pages use SQL filtering, ordering, counts and offsets. At most two
   // bounded card reads serve the legacy 50-card viewer batch; no detail fan-out.
   // Organisation relationships remain public, bounded batches until their
-  // dedicated directory read gains the same filter contract.
-  for (let count = 0; ; count++) {
-    if (count >= 200) throw new Error("Public collection is too large to paginate safely");
-    const requested = organisation ? 48 : Math.min(48, limit - cards.length);
-    const offset = organisation ? count * 48 : (page - 1) * limit + cards.length;
-    const result = await searchFoundationPresentedCards(api, {
-      ...input,
-      offset,
-      limit: requested,
+  // dedicated directory read gains the same filter contract. A merged search
+  // reads each scope from its start up to the requested page.
+  for (const scope of scopes) {
+    const read = await readCards(api, scope, kind, {
+      start: organisation || merged ? 0 : (page - 1) * limit,
+      want: organisation ? Number.POSITIVE_INFINITY : tooDeep ? 1 : merged ? page * limit : limit,
     });
-    if (
-      result.items.some(
-        (row) =>
-          row.kind !==
-          (collection === "listings"
-            ? "listing"
-            : collection === "businesses"
-              ? "business"
-              : "event")
-      )
-    )
-      throw new Error("Invalid public collection response");
-    total = result.total;
-    cards.push(
-      ...result.items.filter((row) =>
-        collection === "listings"
-          ? row.kind === "listing"
-          : collection === "businesses"
-            ? row.kind === "business"
-            : row.kind === "event"
-      )
-    );
-    if (
-      result.items.length < requested ||
-      offset + result.items.length >= total ||
-      (!organisation && cards.length >= limit)
-    )
-      break;
+    cards.push(...read.cards);
+    total += read.total;
   }
+  if (mergedDepth) total = Math.min(total, mergedDepth);
+  if (tooDeep) return { rows: [], total, page, limit };
+  if (merged) cards.sort(databaseOrder(input.sort));
   if (organisation) {
     const affiliated = new Set<string>();
     for (let offset = 0; offset < cards.length; offset += 100) {
@@ -311,7 +423,7 @@ export async function readRestoredCollection(
     }
   }
   if (organisation) total = cards.length;
-  const selected = organisation ? cards.slice((page - 1) * limit, page * limit) : cards;
+  const selected = organisation || merged ? cards.slice((page - 1) * limit, page * limit) : cards;
   const stickers = await readPublicBusinessStickers(
     api,
     selected.filter((row) => row.kind === "business").map((row) => row.id)

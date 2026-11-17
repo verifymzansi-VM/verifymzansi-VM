@@ -72,9 +72,6 @@ const VALID_MARKET_SORTS = new Set([
   "popular",
 ] as const);
 export type MarketSort = "recommended" | "newest" | "price_asc" | "price_desc" | "popular";
-export function isMarketSort(value: string): value is MarketSort {
-  return VALID_MARKET_SORTS.has(value as MarketSort);
-}
 /** Fair rotation is the default list order (see fair_rotation_key in SQL). */
 export const DEFAULT_MARKET_SORT: MarketSort = "recommended";
 
@@ -117,7 +114,7 @@ export function normalizeMarketplaceCategoryParam(
     : undefined;
 }
 
-export function normalizeMarketplaceConditionParam(
+function normalizeMarketplaceConditionParam(
   condition: string | null | undefined
 ): ListingCondition | undefined {
   const normalized = normalizeParamValue(condition)?.toLowerCase();
@@ -134,7 +131,7 @@ export function normalizeMarketplaceQueryParam(
   return normalizeParamValue(query);
 }
 
-export function normalizeBusinessCategoryParam(
+function normalizeBusinessCategoryParam(
   category: string | null | undefined
 ): BusinessCategory | undefined {
   const normalized = normalizeParamValue(category)?.toLowerCase();
@@ -145,9 +142,7 @@ export function normalizeBusinessCategoryParam(
     : undefined;
 }
 
-export function normalizeBusinessTypeParam(
-  type: string | null | undefined
-): BusinessType | undefined {
+function normalizeBusinessTypeParam(type: string | null | undefined): BusinessType | undefined {
   const normalized = normalizeParamValue(type)?.toLowerCase();
   if (!normalized) return undefined;
 

@@ -1,5 +1,5 @@
 name: Install locked Playwright browsers
-description: Install browser dependencies through Ubuntu's standard HTTPS archive.
+description: Install browser dependencies through Ubuntu's HTTPS archive, with fallback mirrors.
 inputs:
   browsers:
     description: Browser binaries needed by this job
@@ -7,19 +7,39 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Use Ubuntu HTTPS package mirrors
+    - name: Use Ubuntu HTTPS package mirrors, keeping the runner's mirrors as fallbacks
       shell: bash
       run: |
         if [ "$RUNNER_OS" = "Linux" ]; then
+          # apt tries mirror-file entries by priority, lowest first: the HTTPS
+          # archive, then an HTTPS mirror outside ubuntu.com (runners have lost DNS
+          # for every ubuntu.com host at once), then the runner's original entries.
+          # Package indexes are signed, so a fallback cannot change what gets installed.
+          # Each failed lookup costs apt about 20 s per file, so when the archive
+          # does not resolve right now, try the outside mirror first.
+          archive_priority=1
+          fallback_priority=2
+          if ! timeout 5 getent hosts archive.ubuntu.com > /dev/null; then
+            echo "archive.ubuntu.com does not resolve; trying mirrors.edge.kernel.org first"
+            archive_priority=3
+            fallback_priority=1
+          fi
           for mirror_file in /etc/apt/apt-mirrors.txt /etc/apt/apt-mirrors-security.txt; do
             if [ -f "$mirror_file" ]; then
-              sudo sed -i \
+              sed \
                 -e 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
                 -e 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
                 -e 's|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' \
-                "$mirror_file"
+                "$mirror_file" > "$RUNNER_TEMP/apt-mirrors-https.txt"
+              {
+                awk -v p="$archive_priority" 'NF { print $1 "\tpriority:" p }' "$RUNNER_TEMP/apt-mirrors-https.txt"
+                printf 'https://mirrors.edge.kernel.org/ubuntu/\tpriority:%s\n' "$fallback_priority"
+                awk 'NF { print $1 "\tpriority:9" }' "$mirror_file"
+              } | awk '!seen[$1]++' > "$RUNNER_TEMP/apt-mirrors-merged.txt"
+              sudo cp "$RUNNER_TEMP/apt-mirrors-merged.txt" "$mirror_file"
             fi
           done
+          printf 'Acquire::Retries "2";\n' | sudo tee /etc/apt/apt.conf.d/80-ci-retries > /dev/null
         fi
     - name: Install browsers from the project lockfile
       shell: bash
@@ -31,4 +51,14 @@ runs:
           *) echo "Unsupported browser selection"; exit 1 ;;
         esac
         read -r -a selected_browsers <<< "$BROWSERS"
-        pnpm exec playwright install --with-deps "${selected_browsers[@]}"
+        for attempt in 1 2; do
+          if pnpm exec playwright install --with-deps "${selected_browsers[@]}"; then
+            exit 0
+          fi
+          if [ "$attempt" -lt 2 ]; then
+            echo "Browser install attempt $attempt failed; retrying in 30 s"
+            sleep 30
+          fi
+        done
+        echo "Browser install failed after 2 attempts"
+        exit 1

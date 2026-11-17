@@ -52,7 +52,6 @@ NEXT_PUBLIC_MEDIA_URL = "https://media.verifymzansi.com"
 R2_PUBLIC_URL = "https://media.verifymzansi.com"
 R2_PUBLIC_BUCKET = "verifymzansi-public"
 R2_PRIVATE_BUCKET = "verifymzansi-private"
-NEXT_PUBLIC_DATA_BACKEND = "foundation"
 NEXT_PUBLIC_SUPABASE_URL = "https://gntzjtuncsyefujajmjy.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_0nTWArCyTVta1nDx_U3u1Q_YOdMfZpi"
 FOUNDATION_SUPABASE_URL = "https://gntzjtuncsyefujajmjy.supabase.co"
@@ -60,11 +59,32 @@ FOUNDATION_PROJECT_REF = "gntzjtuncsyefujajmjy"
 FOUNDATION_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_0nTWArCyTVta1nDx_U3u1Q_YOdMfZpi"
 FOUNDATION_PASSWORD_AUTH_MODE = "native-captcha"
 FOUNDATION_REGISTRATION_ENABLED = "true"
+# Sign-up is by invitation only (database sign-up guard); the registration
+# reply says so. Set to "false" when public registration opens.
+FOUNDATION_REGISTRATION_INVITE_ONLY = "true"
 FOUNDATION_AUTH_CALLBACK_ENABLED = "true"
 FOUNDATION_RECOVERY_ENABLED = "true"
 FOUNDATION_PHONE_VERIFICATION_ENABLED = "true"
+# Paid add-on sales (Urgent, Boost, Featured) stay paused until visitors can
+# see what they deliver. Only "true" opens them (src/lib/billing/addon-sales.ts).
+ADDON_SALES_ENABLED = "false"
+# Staff refunds sent to Ozow through its API stay off until the owner has set
+# the Ozow refund key (OZOW_REFUND_CLIENT_ID/_SECRET, refunds scope) and the
+# refund webhook secret. Only "true" turns them on (src/lib/payments/ozow-refunds.ts).
+OZOW_API_REFUNDS_ENABLED = "false"
+# Display-only sample posts in the showrooms (src/lib/sample-posts/catalogue.ts).
+# Only "true" shows them; staff remove single samples at /admin/sample-posts.
+# Apply database/foundation/updates/20261117144001_sample_post_hide_list.sql first.
+SAMPLE_POSTS_ENABLED = "false"
+# VerifyMzansi's own Call and WhatsApp numbers on every sample page (not
+# secret, one place for all samples). Unset: no contact area. When the owner
+# gives them, add them here and under [env.production.vars], e.g.:
+# SAMPLE_CONTACT_PHONE = "0XXXXXXXXX"
+# SAMPLE_CONTACT_WHATSAPP = "0XXXXXXXXX"
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
-# Cloudflare Image Resizing toggle — enabled for CDN image optimization
+# Not image resizing: the zone has no Cloudflare Image Resizing and nothing
+# resizes images on the fly (src/lib/image-loader.ts). "true" only makes the
+# image loader leave same-origin paths without an image extension unchanged.
 NEXT_PUBLIC_CF_IMAGE_RESIZING = "true"
 # OTP Rate Limiter Worker URL
 OTP_RATE_LIMITER_URL = "https://verifymzansi-rate-limiter.verifymzansi.workers.dev"
@@ -81,11 +101,12 @@ KYC_PROVIDER = "manual"
 # local .env for development/testing.
 
 # ────────────────────────────────────────────────────────────────────────────
-# Durable Objects (required by @opennextjs/cloudflare for ISR/caching)
-# Wrangler/workerd may warn during local startup or deploy validation that
-# these classes are not exported yet. OpenNext documents this as expected for
-# cache setup; do not remove or rename these bindings unless the adapter docs
-# change.
+# Durable Objects for the @opennextjs/cloudflare caches (ISR, tags, queue)
+# Nothing uses the three NEXT_CACHE_* objects today: open-next.config.ts sets
+# no incremental cache, tag cache or queue, and every page renders per request.
+# They stay bound because removing a Durable Object class needs its own
+# reviewed migration (deleted_classes). Wrangler/workerd may warn during local
+# startup or deploy validation that these classes are not exported yet.
 #
 # NOTE: RATE_LIMITER_DO (and the OTP_RATE_LIMITS KV binding further below)
 # exist on the MAIN app worker only to satisfy the RateLimiterDO re-export
@@ -112,8 +133,11 @@ new_classes = ["RateLimiterDO"]
 
 # ────────────────────────────────────────────────────────────────────────────
 # KV Namespace for OTP Rate Limiting
-# Exists only to satisfy the RateLimiterDO re-export in
-# workers/open-next-entry.mjs — see the [durable_objects] note above.
+# Exists to satisfy the RateLimiterDO re-export in
+# workers/open-next-entry.mjs — see the [durable_objects] note above. The site
+# also keeps its rough monthly Cloudflare Images count here (one key per
+# month, `images-transformations:YYYY-MM`; src/lib/media/images-allowance.ts),
+# which stops photo copies before they use the allowance re-encodes need.
 # ────────────────────────────────────────────────────────────────────────────
 [[kv_namespaces]]
 binding = "OTP_RATE_LIMITS"
@@ -124,11 +148,24 @@ id = "247144b6d9b1406093351378a57c62fa"
 # sharp cannot load in Workers, so src/lib/utils/image-reencode.ts uses this
 # binding to re-save photos (dropping metadata and hidden content). Without it
 # photo uploads are refused. Images Free: 5,000 unique transformations a
-# month; over that, uploads fail until the next month (no charge).
+# month; over that, new ones fail (error 9422) until the next month (no
+# charge), so photo uploads are refused with a clear message. The 800 px
+# display copy stops at 60% of the month (src/lib/media/images-allowance.ts).
 # Bindings are not inherited: keep [env.*.images] below in step.
 # ────────────────────────────────────────────────────────────────────────────
 [images]
 binding = "IMAGES"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Offload Worker (M9.9): CIPC PDF reading and link-preview cards run in
+# verifymzansi-offload (wrangler.offload.toml) so pdf.js and @vercel/og stay
+# out of this Worker (src/lib/offload/client.ts). Without it, PDF uploads and
+# share previews answer "try again shortly" (503). Deploy it before this
+# Worker. Bindings are not inherited: keep [[env.*.services]] below in step.
+# ────────────────────────────────────────────────────────────────────────────
+[[services]]
+binding = "OFFLOAD"
+service = "verifymzansi-offload"
 
 # ────────────────────────────────────────────────────────────────────────────
 # R2 Access
@@ -163,6 +200,19 @@ binding = "IMAGES"
 #   pnpm wrangler secret put R2_SECRET_ACCESS_KEY
 #   pnpm wrangler secret put IP_HASH_SECRET
 #   pnpm wrangler secret put RATE_LIMITER_API_KEY
+# Optional (the app keeps working and logs instead when unset):
+#   pnpm wrangler secret put PAYMENT_ALERT_EMAILS   # staff payment alert addresses
+#   # Only when turning on API refunds (OZOW_API_REFUNDS_ENABLED); never in code:
+#   pnpm wrangler secret put OZOW_REFUND_CLIENT_ID      # Ozow API key with the refunds scope
+#   pnpm wrangler secret put OZOW_REFUND_CLIENT_SECRET
+#   pnpm wrangler secret put OZOW_REFUND_WEBHOOK_SECRET  # the refund.complete webhook's whsec_ secret
+#   # Customer invoices (src/lib/billing/invoice-settings.ts); never in code.
+#   # Unset, the invoice leaves the seller's address or the bank transfer out:
+#   pnpm wrangler secret put INVOICE_SELLER_ADDRESS        # one line, commas between parts
+#   pnpm wrangler secret put INVOICE_BANK_ACCOUNT_NAME     # all four bank settings, or none
+#   pnpm wrangler secret put INVOICE_BANK_NAME
+#   pnpm wrangler secret put INVOICE_BANK_ACCOUNT_NUMBER
+#   pnpm wrangler secret put INVOICE_BANK_BRANCH_CODE
 #   # NEVER set in production:
 #   # PLAYWRIGHT_E2E_AUTH, PLAYWRIGHT_TEST_MODE, PLAYWRIGHT_SUPABASE_MODE,
 #   # NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE,
@@ -222,6 +272,10 @@ id = "247144b6d9b1406093351378a57c62fa"
 [env.production.images]
 binding = "IMAGES"
 
+[[env.production.services]]
+binding = "OFFLOAD"
+service = "verifymzansi-offload"
+
 [env.production.vars]
 NODE_ENV = "production"
 ENVIRONMENT = "production"
@@ -230,7 +284,6 @@ NEXT_PUBLIC_MEDIA_URL = "https://media.verifymzansi.com"
 R2_PUBLIC_URL = "https://media.verifymzansi.com"
 R2_PUBLIC_BUCKET = "verifymzansi-public"
 R2_PRIVATE_BUCKET = "verifymzansi-private"
-NEXT_PUBLIC_DATA_BACKEND = "foundation"
 NEXT_PUBLIC_SUPABASE_URL = "https://gntzjtuncsyefujajmjy.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_0nTWArCyTVta1nDx_U3u1Q_YOdMfZpi"
 FOUNDATION_SUPABASE_URL = "https://gntzjtuncsyefujajmjy.supabase.co"
@@ -238,9 +291,15 @@ FOUNDATION_PROJECT_REF = "gntzjtuncsyefujajmjy"
 FOUNDATION_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_0nTWArCyTVta1nDx_U3u1Q_YOdMfZpi"
 FOUNDATION_PASSWORD_AUTH_MODE = "native-captcha"
 FOUNDATION_REGISTRATION_ENABLED = "true"
+# Sign-up is by invitation only (database sign-up guard); the registration
+# reply says so. Set to "false" when public registration opens.
+FOUNDATION_REGISTRATION_INVITE_ONLY = "true"
 FOUNDATION_AUTH_CALLBACK_ENABLED = "true"
 FOUNDATION_RECOVERY_ENABLED = "true"
 FOUNDATION_PHONE_VERIFICATION_ENABLED = "true"
+ADDON_SALES_ENABLED = "false"
+OZOW_API_REFUNDS_ENABLED = "false"
+SAMPLE_POSTS_ENABLED = "false"
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
 NEXT_PUBLIC_CF_IMAGE_RESIZING = "true"
 OTP_RATE_LIMITER_URL = "https://verifymzansi-rate-limiter.verifymzansi.workers.dev"
@@ -249,16 +308,40 @@ STRICT_ENV_STARTUP_BLOCK = "1"
 KYC_PROVIDER = "manual"
 
 # ────────────────────────────────────────────────────────────────────────────
-# Staging Environment   (deploy with: pnpm wrangler deploy --env staging)
-# Inherits all top-level bindings (DO, KV, R2, migrations).
-# Override only the vars that differ from production.
-# Secrets must also be set per-env:
-#   pnpm wrangler secret put SUPABASE_SERVICE_ROLE_KEY --env staging
+# Staging Environment (M0.15b): a separate copy for rehearsals.
+# Deployed by the release workflow before production (deploy.yml, job
+# deploy-staging) with `opennextjs-cloudflare deploy --env staging`.
+#
+# Nothing here is shared with production: its own Supabase project
+# (verifymzansi-staging, London), R2 buckets, KV namespace, Durable Objects
+# (they belong to this Worker name), rate-limiter and offload Workers and
+# workers.dev address. `pnpm cloudflare:staging:isolation -- --require-staging`
+# runs in CI and refuses any production identifier here.
+#
+# Deliberately left out:
+# - Cloudflare Images (IMAGES): the account's free monthly allowance is shared
+#   with production, so staging refuses photo uploads instead of using it up.
+# - Payments: no Ozow settings exist for staging, so checkout cannot start.
+# - Phone codes: FOUNDATION_PHONE_VERIFICATION_ENABLED is "false" (no SMS).
+# STRICT_ENV_STARTUP_BLOCK is "0" because the production launch checks require
+# live Ozow settings; staging logs those failures instead of refusing to start.
+#
+# Secrets come only from the GitHub environment "staging" (STAGING_* names,
+# never production values) and are deployed with the Worker
+# (scripts/prepare-staging-worker-secrets.mjs); the list is in docs/RUNBOOK.md,
+# section "Staging copy".
 # ────────────────────────────────────────────────────────────────────────────
 [env.staging]
 name = "verifymzansi-staging"
-workers_dev = true
+# Never inherit the top-level routes: they hold production custom domains,
+# and a deploy would move them to this Worker.
 routes = []
+workers_dev = true
+preview_urls = false
+
+[env.staging.observability]
+enabled = true
+redact_query_string = true
 
 [env.staging.limits]
 cpu_ms = 30000
@@ -271,40 +354,43 @@ bindings = [
   { name = "RATE_LIMITER_DO", class_name = "RateLimiterDO" },
 ]
 
-# ⚠️⚠️⚠️  WARNING — SHARED RATE-LIMIT STATE WITH PRODUCTION  ⚠️⚠️⚠️
-# Staging uses the SAME OTP_RATE_LIMITS KV namespace id as production and
-# points OTP_RATE_LIMITER_URL at the PRODUCTION rate-limiter worker (see
-# [env.staging.vars] below). Every staging OTP/auth request consumes REAL
-# production rate-limit quota. This is a deliberate operator decision —
-# do NOT change the values here without operator sign-off.
 [[env.staging.kv_namespaces]]
 binding = "OTP_RATE_LIMITS"
-id = "247144b6d9b1406093351378a57c62fa"
+id = "c185233891a8436fadaa4fea712785f3" # verifymzansi-otp-rate-limits-staging
 
-[env.staging.images]
-binding = "IMAGES"
+[[env.staging.services]]
+binding = "OFFLOAD"
+service = "verifymzansi-offload-staging"
 
 [env.staging.vars]
 NODE_ENV = "production"
 ENVIRONMENT = "staging"
-STRICT_ENV_STARTUP_BLOCK = "1"
-KYC_PROVIDER = "manual"
-VERIFYMZANSI_RUNTIME_MODE = "development"
-VERIFYMZANSI_VALIDATION_MODE = "development"
-NEXT_PUBLIC_APP_URL = "https://staging.verifymzansi.com"
+NEXT_PUBLIC_APP_URL = "https://verifymzansi-staging.verifymzansi.workers.dev"
 NEXT_PUBLIC_MEDIA_URL = "https://media-staging.verifymzansi.com"
 R2_PUBLIC_URL = "https://media-staging.verifymzansi.com"
-R2_PUBLIC_BUCKET = "verifymzansi-public"
-R2_PRIVATE_BUCKET = "verifymzansi-private"
-NEXT_PUBLIC_DATA_BACKEND = "foundation"
-NEXT_PUBLIC_SUPABASE_URL = "https://gntzjtuncsyefujajmjy.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_0nTWArCyTVta1nDx_U3u1Q_YOdMfZpi"
-FOUNDATION_SUPABASE_URL = "https://gntzjtuncsyefujajmjy.supabase.co"
-FOUNDATION_PROJECT_REF = "gntzjtuncsyefujajmjy"
-FOUNDATION_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_0nTWArCyTVta1nDx_U3u1Q_YOdMfZpi"
-NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
+R2_PUBLIC_BUCKET = "verifymzansi-public-staging"
+R2_PRIVATE_BUCKET = "verifymzansi-private-staging"
+NEXT_PUBLIC_SUPABASE_URL = "https://vgplszqfcmdskwseoyam.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_mKDEhmQ-Ik-DIxdKVxVang_IA5aVLD1"
+FOUNDATION_SUPABASE_URL = "https://vgplszqfcmdskwseoyam.supabase.co"
+FOUNDATION_PROJECT_REF = "vgplszqfcmdskwseoyam"
+FOUNDATION_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_mKDEhmQ-Ik-DIxdKVxVang_IA5aVLD1"
+FOUNDATION_PASSWORD_AUTH_MODE = "native-captcha"
+FOUNDATION_REGISTRATION_ENABLED = "true"
+FOUNDATION_REGISTRATION_INVITE_ONLY = "true"
+FOUNDATION_AUTH_CALLBACK_ENABLED = "true"
+FOUNDATION_RECOVERY_ENABLED = "true"
+FOUNDATION_PHONE_VERIFICATION_ENABLED = "false"
+# Africa's Talking sandbox (simulated SMS only); its sandbox API key is a staging secret.
+AFRICASTALKING_USERNAME = "sandbox"
+ADDON_SALES_ENABLED = "false"
+OZOW_API_REFUNDS_ENABLED = "false"
+SAMPLE_POSTS_ENABLED = "false"
+# Cloudflare's published Turnstile test site key (always passes); the matching
+# published test secret is set as the staging TURNSTILE_SECRET_KEY.
+NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
 NEXT_PUBLIC_CF_IMAGE_RESIZING = "true"
-# ⚠️  PRODUCTION rate-limiter URL — staging shares rate-limit state with
-# production. See the warning above [[env.staging.kv_namespaces]].
-OTP_RATE_LIMITER_URL = "https://verifymzansi-rate-limiter.verifymzansi.workers.dev"
+OTP_RATE_LIMITER_URL = "https://verifymzansi-rate-limiter-staging.verifymzansi.workers.dev"
 OTP_RATE_LIMITER_TIMEOUT_MS = "2500"
+STRICT_ENV_STARTUP_BLOCK = "0"
+KYC_PROVIDER = "manual"

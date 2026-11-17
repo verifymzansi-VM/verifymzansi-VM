@@ -1,8 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ensureCsrfCookie, CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import { env } from "@/lib/config/env";
-import { PLAYWRIGHT_SESSION_COOKIE } from "@/lib/supabase/playwright-session";
-import { shouldUsePlaywrightStubForRequest } from "@/lib/middleware/playwright-stub";
 
 // -- Nonce & CSP helpers -----------------------------------------------------
 
@@ -191,6 +189,9 @@ export function applySecurityHeaders(
 
 // -- Cookie helpers ----------------------------------------------------------
 
+/** The retired stub browser suite's session cookie; a stale one is cleared. */
+const PLAYWRIGHT_SESSION_COOKIE = "vmz_pw_session";
+
 function clearPlaywrightSessionCookie(response: NextResponse): void {
   response.cookies.set({
     name: PLAYWRIGHT_SESSION_COOKIE,
@@ -203,6 +204,9 @@ function clearPlaywrightSessionCookie(response: NextResponse): void {
   });
 }
 
+/** Marks a request the proxy already rewrote (see notFoundPage in proxy-handler.ts). */
+export const REWRITTEN_REQUEST_HEADER = "x-vm-rewritten";
+
 /**
  * Wrap a proxy result with CSP nonce + security headers.
  * Redirects and error responses get basic security headers only.
@@ -212,11 +216,15 @@ export function withSecurityHeaders(
   proxyResponse: NextResponse
 ): NextResponse {
   const pathname = request.nextUrl.pathname;
-  const shouldClearPlaywrightSession =
-    !shouldUsePlaywrightStubForRequest(request) &&
-    !!request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value;
+  const shouldClearPlaywrightSession = !!request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value;
+  // A rewrite or pass-through still renders a page (a missing post's "not
+  // available" page carries status 404), so it gets the page policy, nonce and
+  // CSRF token.
+  const rewriteTarget = proxyResponse.headers.get("x-middleware-rewrite");
+  const rendersPage =
+    Boolean(rewriteTarget) || proxyResponse.headers.get("x-middleware-next") === "1";
 
-  if (proxyResponse.headers.has("location") || proxyResponse.status >= 400) {
+  if (proxyResponse.headers.has("location") || (proxyResponse.status >= 400 && !rendersPage)) {
     if (shouldClearPlaywrightSession) {
       clearPlaywrightSessionCookie(proxyResponse);
     }
@@ -281,9 +289,19 @@ export function withSecurityHeaders(
   const csrfToken = ensureCsrfCookie(request, csrfResponse);
   requestHeaders.set(CSRF_HEADER_NAME, csrfToken);
 
-  const response = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
+  // A rewritten request is marked so the proxy never rewrites it again (a
+  // server that fetches the rewrite as an outside address would loop).
+  if (rewriteTarget) requestHeaders.set(REWRITTEN_REQUEST_HEADER, "1");
+  else requestHeaders.delete(REWRITTEN_REQUEST_HEADER);
+  const response = rewriteTarget
+    ? NextResponse.rewrite(new URL(rewriteTarget, request.url), {
+        status: proxyResponse.status,
+        request: { headers: requestHeaders },
+      })
+    : NextResponse.next({
+        status: proxyResponse.status,
+        request: { headers: requestHeaders },
+      });
 
   // Transfer the CSRF cookie from the temporary response.
   const csrfCookie = csrfResponse.cookies.get("vm_csrf");

@@ -140,6 +140,74 @@ test("the reviewed public Seen projection accepts only the empty anonymous probe
     /projection probe failed/
   );
 });
+test("the reviewed public payment limit accepts only its one-number answer", async () => {
+  const input = {
+    ...manifest,
+    functions: [
+      {
+        name: "get_payment_limits",
+        arguments: [],
+        returns: "jsonb",
+        volatility: "s",
+        execute: { anon: true, authenticated: true, service_role: false },
+      },
+    ],
+  };
+  assert.equal(
+    await verifyFoundationRuntimeApi(
+      connection,
+      async () => Response.json({ online_max_cents: 130000 }),
+      input
+    ),
+    1
+  );
+  for (const answer of [{ online_max_cents: 0 }, { online_max_cents: 1, extra: 1 }, []])
+    await assert.rejects(
+      verifyFoundationRuntimeApi(connection, async () => Response.json(answer), input),
+      /projection probe failed/
+    );
+  // It may never become callable by the service role or take arguments.
+  await assert.rejects(
+    verifyFoundationRuntimeApi(connection, async () => Response.json({}), {
+      ...input,
+      functions: [
+        {
+          ...input.functions[0],
+          execute: { anon: true, authenticated: false, service_role: true },
+        },
+      ],
+    })
+  );
+});
+test("the reviewed public sample hide-list accepts only a list of slugs", async () => {
+  const input = {
+    ...manifest,
+    functions: [
+      {
+        name: "get_hidden_sample_posts",
+        arguments: [],
+        returns: "jsonb",
+        volatility: "s",
+        execute: { anon: true, authenticated: true, service_role: false },
+      },
+    ],
+  };
+  for (const answer of [{ slugs: [] }, { slugs: ["fish-braai", "guest-house"] }])
+    assert.equal(
+      await verifyFoundationRuntimeApi(connection, async () => Response.json(answer), input),
+      1
+    );
+  for (const answer of [
+    [],
+    { slugs: ["Not A Slug"] },
+    { slugs: [], hidden_by: ["someone"] },
+    { slugs: [{ slug: "fish-braai" }] },
+  ])
+    await assert.rejects(
+      verifyFoundationRuntimeApi(connection, async () => Response.json(answer), input),
+      /projection probe failed/
+    );
+});
 test("service-only extensions are probed anonymously with synthetic arguments and never a service key", async () => {
   let calls = 0;
   const input = {

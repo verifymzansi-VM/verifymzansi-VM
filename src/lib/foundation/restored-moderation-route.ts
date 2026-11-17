@@ -9,6 +9,7 @@ import {
   settleStaffCommand,
   staffCommandRefusal,
 } from "./staff-command";
+import { foundationArea, foundationKind, restoredAreaSchema } from "./areas";
 const log = createLogger("NativeModeration");
 const shared = {
   ...nativeContentReviewSchema.shape,
@@ -18,16 +19,11 @@ const shared = {
 const original = z.strictObject({
   ...shared,
   itemId: z.uuid(),
-  area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]),
+  area: restoredAreaSchema,
   contentType: z.enum(["listing", "business", "promotion"]),
   expectedUpdatedAt: z.iso.datetime({ offset: true }).optional(),
 });
 const edit = z.strictObject({ ...shared, requestId: z.uuid() });
-const areas = {
-  MZANSI_MARKET: "market",
-  MZANSI_BUSINESS: "business",
-  PROMOTIONS_EVENTS: "tourism_events",
-} as const;
 export function handleRestoredModerationDecision(request: NextRequest, isEdit: boolean) {
   return handleFoundationOwnerRoute({
     request,
@@ -69,8 +65,8 @@ export function handleRestoredModerationDecision(request: NextRequest, isEdit: b
         context.revision !== value.expectedRevision ||
         Boolean(context.edit_of) !== isEdit ||
         ("area" in value &&
-          (context.area !== areas[value.area] ||
-            context.kind !== (value.contentType === "promotion" ? "event" : value.contentType)))
+          (context.area !== foundationArea(value.area) ||
+            context.kind !== foundationKind(value.contentType)))
       )
         throw new FoundationStaffCommandError(409, "The reviewed item changed. Reload the queue.");
       const result = await settleStaffCommand(

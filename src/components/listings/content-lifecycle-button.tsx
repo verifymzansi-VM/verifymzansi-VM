@@ -15,12 +15,13 @@ const ACTION_COPY: Record<LifecycleAction, { label: string; busy: string; confir
   mark_sold: {
     label: "Mark sold",
     busy: "Updating…",
-    confirm: "Mark this item as sold? It leaves public view and frees your posting slot.",
+    confirm:
+      "Mark this item as sold? It leaves public view and is deleted in 3 days. Its slot stays in use until then; delete the post to free it sooner. You can undo this within the 3 days.",
   },
   deactivate: {
     label: "Deactivate",
     busy: "Updating…",
-    confirm: "Take this post offline? It stays saved and frees your posting slot.",
+    confirm: "Take this post offline? It keeps its slot, and its end date does not change.",
   },
   reactivate: { label: "Reactivate", busy: "Reactivating…" },
 };

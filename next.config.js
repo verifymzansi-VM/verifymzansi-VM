@@ -1,32 +1,28 @@
 /** @type {import('next').NextConfig} */
 const { withSentryConfig } = require("@sentry/nextjs/config");
-const dataBackend = process.env.NEXT_PUBLIC_DATA_BACKEND || "foundation";
-if (!["source", "foundation"].includes(dataBackend))
-  throw new Error("Invalid NEXT_PUBLIC_DATA_BACKEND");
-if (dataBackend === "source") {
-  let isolatedApp = false;
-  try {
-    const app = new URL(process.env.NEXT_PUBLIC_APP_URL || "invalid");
-    isolatedApp = app.protocol === "http:" && ["127.0.0.1", "localhost"].includes(app.hostname);
-  } catch {}
-  if (
-    !isolatedApp ||
-    process.env.ENVIRONMENT !== "test" ||
-    process.env.VERIFYMZANSI_RUNTIME_MODE !== "e2e" ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://playwright.supabase.stub" ||
-    process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE !== "1" ||
-    process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE !== "stub"
-  )
-    throw new Error("The retired backend is restricted to isolated browser fixtures");
-}
-if (dataBackend === "foundation") {
+const { shouldSkipNextTypecheck } = require("./scripts/lib/next-typecheck-skip.cjs");
+// The retired ("source") backend has been removed. A leftover backend setting
+// fails the build instead of passing silently.
+if (
+  process.env.NEXT_PUBLIC_DATA_BACKEND !== undefined &&
+  process.env.NEXT_PUBLIC_DATA_BACKEND !== "foundation"
+)
+  throw new Error("The retired backend has been removed; unset NEXT_PUBLIC_DATA_BACKEND");
+// Builds use only the approved London project, the separate staging copy (only
+// when the build is for the staging Worker, ENVIRONMENT=staging), or the
+// isolated local test copy. Keep in step with src/lib/foundation/hosted-projects.ts.
+(function assertApprovedPublicConnection() {
   let targetUrl;
   try {
     targetUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "invalid");
   } catch {
     throw new Error("Foundation builds require the approved public connection");
   }
-  const hosted = targetUrl.origin === "https://gntzjtuncsyefujajmjy.supabase.co";
+  const hostedOrigin =
+    process.env.ENVIRONMENT === "staging"
+      ? "https://vgplszqfcmdskwseoyam.supabase.co"
+      : "https://gntzjtuncsyefujajmjy.supabase.co";
+  const hosted = targetUrl.origin === hostedOrigin;
   const local =
     process.env.ENVIRONMENT === "test" &&
     process.env.VERIFYMZANSI_RUNTIME_MODE === "e2e" &&
@@ -53,11 +49,10 @@ if (dataBackend === "foundation") {
     !/^sb_publishable_[A-Za-z0-9_-]+$/.test(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "")
   )
     throw new Error("Foundation builds require the approved public connection");
-}
+})();
 
 const clientEnv = Object.fromEntries(
   Object.entries({
-    NEXT_PUBLIC_DATA_BACKEND: dataBackend,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
@@ -80,7 +75,24 @@ const sharpServerExternalPackages = [
 
 const nextConfig = {
   reactStrictMode: true,
-  webpack(config) {
+  // Browser-test and bundle-measurement builds in CI may skip Next's own
+  // TypeScript pass (lint-type-security already runs tsc on the same commit).
+  // Never production builds: see scripts/lib/next-typecheck-skip.cjs.
+  typescript: { ignoreBuildErrors: shouldSkipNextTypecheck(process.env) },
+  webpack(config, { webpack, isServer }) {
+    // Cloudflare (OpenNext) builds leave PDF reading and link-preview drawing
+    // to the offload Worker (src/lib/offload/client.ts, M9.9), so pdf.js and
+    // @vercel/og stay out of the main Worker. OpenNext sets
+    // NEXT_PRIVATE_STANDALONE=true just before it runs `next build` (see
+    // scripts/lib/next-typecheck-skip.cjs); Node builds keep doing the work.
+    if (isServer && process.env.NEXT_PRIVATE_STANDALONE === "true") {
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(
+          /[\\/]src[\\/]lib[\\/]offload[\\/]local\.ts$/,
+          require.resolve("./src/lib/offload/local.worker.ts")
+        )
+      );
+    }
     // A patched dependency retains its npm version. Invalidate persistent
     // compiler output when this runtime compatibility patch changes.
     if (config.cache && config.cache.type === "filesystem") {
@@ -103,26 +115,22 @@ const nextConfig = {
   // at build time; the `env` field forces inlining without masking missing config.
   env: clientEnv,
   images: {
-    // Cloudflare Workers/Pages does not support the default Next.js image
-    // optimisation endpoint (/_next/image). Instead of disabling optimisation
-    // entirely, we use a custom loader that routes through Cloudflare Image
-    // Resizing (/cdn-cgi/image/) when available, producing responsive srcSets
-    // with proper width/quality/format negotiation on mobile.
+    // Cloudflare Workers does not support the default Next.js image
+    // optimisation endpoint (/_next/image), and the zone has no Cloudflare
+    // Image Resizing. The custom loader maps media to 400/800/1600px variant
+    // keys (made at upload by src/lib/media/photo-variants.ts; the media route
+    // serves the original when a variant is missing) and leaves other images
+    // at their own URL. Nothing is resized on the fly.
     loader: "custom",
     loaderFile: "./src/lib/image-loader.ts",
-    // Media is served as pre-generated 400/800/1600px variants and local
-    // assets are not resized, so extra widths only repeat the same file in
-    // every srcset. Keep candidates aligned with the variants that exist.
+    // Only the 400/800/1600px media variants can differ and local assets are
+    // not resized, so extra widths only repeat the same file in every srcset.
     deviceSizes: [400, 800, 1600],
     imageSizes: [128, 256],
     remotePatterns: [
       {
         protocol: "https",
         hostname: "media.verifymzansi.com",
-      },
-      {
-        protocol: "https",
-        hostname: "tnygdgormnofpgjknlhr.supabase.co",
       },
       {
         protocol: "https",
@@ -263,6 +271,17 @@ const nextConfig = {
           },
         ],
       },
+      // Staging copy only (M0.15b; built with ENVIRONMENT=staging): keep every
+      // page and API answer out of search results. Production builds add
+      // nothing here.
+      ...(process.env.ENVIRONMENT === "staging"
+        ? [
+            {
+              source: "/:path*",
+              headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }],
+            },
+          ]
+        : []),
     ];
   },
 };

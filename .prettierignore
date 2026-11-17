@@ -23,7 +23,11 @@ supabase/.temp/
 database/foundation/*.json
 !database/foundation/runtime-api-manifest.json
 database/foundation/openapi/
+database/foundation/current/
 docs/backend-foundation/evidence/
-docs/backend-foundation/schema-map.json
+database/source-inventory/
 docs/backend-foundation/post-field-proposals.json
 src/lib/domains/taxonomy/reference.json
+
+# Hand-written reviewed list of contract steps.
+!database/foundation/contract-steps.json

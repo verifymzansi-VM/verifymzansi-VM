@@ -2,21 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as Catalogue from "./catalogue";
 import type { SamplePostEntry } from "./catalogue";
 
-const { mockRpc, mockSearch, approved } = vi.hoisted(() => ({
-  mockRpc: vi.fn(),
+const { mockSearch, mockHidden, approved } = vi.hoisted(() => ({
   mockSearch: vi.fn(),
+  mockHidden: vi.fn(),
   approved: [] as SamplePostEntry[],
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/foundation/server-public", () => ({
-  foundationServerPublicApi: () => ({ rpc: mockRpc }),
-}));
+vi.mock("@/lib/foundation/server-public", () => ({ foundationServerPublicApi: () => ({}) }));
 vi.mock("@/lib/foundation/public-cards", () => ({
   searchFoundationCards: mockSearch,
   foundationMediaUrl: () => null,
 }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: mockRpc }) }));
+vi.mock("./hidden", () => ({ loadHiddenSampleSlugs: mockHidden }));
 vi.mock("@/lib/utils/logger", () => ({ createLogger: () => ({ warn: vi.fn(), error: vi.fn() }) }));
 vi.mock("./catalogue", async (importOriginal) => ({
   ...(await importOriginal<typeof Catalogue>()),
@@ -24,7 +22,7 @@ vi.mock("./catalogue", async (importOriginal) => ({
 }));
 
 import { loadShowroomItems } from "@/lib/showroom/feed";
-import { findSamplePost, listSamplePosts, resolveSamplePosts } from "./load";
+import { findSamplePost, listCatalogueSamples, listSamplePosts, resolveSamplePosts } from "./load";
 
 const entry = (slug: string, area: SamplePostEntry["area"], category: string): SamplePostEntry => ({
   slug,
@@ -36,7 +34,6 @@ const entry = (slug: string, area: SamplePostEntry["area"], category: string): S
   city: "Richards Bay",
   videoKey: `media/samples/${slug}.mp4`,
   posterKey: `media/samples/${slug}.webp`,
-  businessName: `Business ${slug}`,
 });
 
 function foundationCard(id: string) {
@@ -59,26 +56,27 @@ describe("sample posts in the showrooms", () => {
       0,
       approved.length,
       entry("cakes", "business", "food_dining"),
-      entry("lodge", "business", "tourism_hospitality"),
+      entry("lodge", "tourism", "lodge_game_lodge"),
       entry("bakkie", "market", "vehicles"),
       entry("expo", "event", "market_expo")
     );
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     mockSearch.mockResolvedValue({ items: [foundationCard("r1"), foundationCard("r2")] });
+    mockHidden.mockResolvedValue(new Set());
   });
 
   afterEach(() => vi.unstubAllEnvs());
 
-  it("shows nothing while the switch is off", async () => {
-    const items = await loadShowroomItems("home", { province: null });
+  it("shows nothing while the switch is off, without reading the hide-list", async () => {
+    const items = await loadShowroomItems("home");
     expect(items.map((item) => item.id)).toEqual(["r1", "r2"]);
     expect(await listSamplePosts()).toEqual([]);
     expect(await findSamplePost("cakes")).toBeNull();
+    expect(mockHidden).not.toHaveBeenCalled();
   });
 
-  it("puts samples after every real post, labelled as samples", async () => {
+  it("puts samples after every real post, presented by VerifyMzansi", async () => {
     vi.stubEnv("SAMPLE_POSTS_ENABLED", "true");
-    const items = await loadShowroomItems("home", { province: null });
+    const items = await loadShowroomItems("home");
     expect(items.map((item) => item.id)).toEqual([
       "r1",
       "r2",
@@ -92,31 +90,55 @@ describe("sample posts in the showrooms", () => {
     expect(items[2]).toMatchObject({
       href: "/sample/cakes",
       type: "business",
+      mediaKind: "video",
       mediaUrl: "https://media.verifymzansi.com/media/samples/cakes.mp4",
       posterUrl: "https://media.verifymzansi.com/media/samples/cakes.webp",
+      logoUrl: "/images/brand-shield-small.png",
     });
   });
 
   it.each([
-    ["business", ["sample-cakes", "sample-lodge"]],
+    ["business", ["sample-cakes"]],
     ["market", ["sample-bakkie"]],
     ["tourism", ["sample-lodge", "sample-expo"]],
   ] as const)("matches samples to the %s showroom", async (surface, expected) => {
     vi.stubEnv("SAMPLE_POSTS_ENABLED", "true");
-    const items = await loadShowroomItems(surface, { province: null });
+    const items = await loadShowroomItems(surface);
     expect(items.filter((item) => item.sample).map((item) => item.id)).toEqual(expected);
+  });
+
+  it("leaves out samples staff removed, everywhere", async () => {
+    vi.stubEnv("SAMPLE_POSTS_ENABLED", "true");
+    mockHidden.mockResolvedValue(new Set(["lodge", "bakkie"]));
+    expect((await loadShowroomItems("home")).map((item) => item.id)).toEqual([
+      "r1",
+      "r2",
+      "sample-cakes",
+      "sample-expo",
+    ]);
+    expect(await findSamplePost("lodge")).toBeNull();
+    expect((await findSamplePost("expo"))?.slug).toBe("expo");
+    // Staff still see every catalogue sample, to restore it.
+    expect((await listCatalogueSamples()).map((post) => post.slug)).toContain("lodge");
+  });
+
+  it("fails closed: no sample at all when the hide-list cannot be read", async () => {
+    vi.stubEnv("SAMPLE_POSTS_ENABLED", "true");
+    mockHidden.mockRejectedValue(new Error("unavailable"));
+    expect((await loadShowroomItems("home")).map((item) => item.id)).toEqual(["r1", "r2"]);
+    expect(await findSamplePost("cakes")).toBeNull();
   });
 
   it("still shows samples when the real feed fails", async () => {
     vi.stubEnv("SAMPLE_POSTS_ENABLED", "true");
     mockSearch.mockRejectedValue(new Error("Posts could not be loaded"));
-    const items = await loadShowroomItems("market", { province: null });
+    const items = await loadShowroomItems("market");
     expect(items.map((item) => item.id)).toEqual(["sample-bakkie"]);
   });
 
-  it("finds a published sample by slug", async () => {
+  it("finds a shown sample by slug", async () => {
     vi.stubEnv("SAMPLE_POSTS_ENABLED", "true");
-    expect((await findSamplePost("expo"))?.businessName).toBe("Business expo");
+    expect((await findSamplePost("expo"))?.title).toBe("Sample expo");
     expect(await findSamplePost("missing")).toBeNull();
   });
 });

@@ -106,9 +106,7 @@ function PaymentDeliveryInline({
     <div className="space-y-4">
       {hasPayment && (
         <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Payment methods
-          </p>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Payment methods</p>
           <div className="flex flex-wrap gap-2">
             {paymentMethods.map((method) => (
               <Badge key={method} variant="outline">
@@ -120,9 +118,7 @@ function PaymentDeliveryInline({
       )}
       {deliveryAvailable && (
         <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Delivery
-          </p>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Delivery</p>
           <Badge variant="outline">Available</Badge>
         </div>
       )}

@@ -3,14 +3,6 @@
    Thresholds, templates, and limits used across verification flows.
    ══════════════════════════════════════════════════════════════ */
 
-/* ── Manual Location Risk Scoring ─────────────────────────── */
-export const MANUAL_ONLY_BASELINE_RISK = 20;
-
-/* ── Image Quality Requirements ──────────────────────────── */
-export const MIN_IMAGE_DIMENSION = 320;
-export const MAX_IMAGE_DIMENSION = 8000;
-export const BLUR_VARIANCE_THRESHOLD = 100;
-
 /* ── Verification Steps ──────────────────────────────────── */
 export const REQUIRED_VERIFICATION_STEPS = ["phone", "id_doc", "selfie", "location"] as const;
 
@@ -51,7 +43,6 @@ export const DECISION_NOTE_TEMPLATES = [
 ] as const;
 
 /* ── Provider Score Thresholds ───────────────────────────── */
-export const FACE_MATCH_THRESHOLD = 70;
 export const LIVENESS_THRESHOLD = 60;
 
 /* ── SA ID Constants ─────────────────────────────────────── */

@@ -18,4 +18,11 @@ describe("ShowroomCardCarouselSkeleton", () => {
 
     expect(sizedCards.length).toBeGreaterThanOrEqual(3);
   });
+
+  // Roadmap M2.8: the province chip is hidden, so the skeleton keeps no room for it.
+  it("keeps no room for the hidden province chip", () => {
+    const { container } = render(<ShowroomCardCarouselSkeleton />);
+
+    expect(container.querySelector("section + .h-14")).toBeNull();
+  });
 });

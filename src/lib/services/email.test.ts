@@ -27,6 +27,8 @@ import {
   sendModerationNoticeEmail,
   sendDsarExtensionEmail,
   sendPlatformNotice,
+  sendOutboxFinalFailureAlert,
+  sendStaffOperationsEmail,
 } from "./email";
 
 describe("email service", () => {
@@ -49,6 +51,173 @@ describe("email service", () => {
       sendPlatformNotice("owner@example.invalid", "account_warning", "foundation-outbox/missing")
     ).rejects.toThrow("details unavailable");
     expect(mockSend).toHaveBeenCalledTimes(1);
+  });
+  it("tells owners of expired, sold and kept posts when they will be deleted", async () => {
+    const deletesAt = "2026-11-12T08:30:00Z"; // 10:30 in South Africa
+    await sendPlatformNotice("owner@example.invalid", "post_expired", "outbox/expired", undefined, {
+      deletesAt,
+      holdsSlot: false,
+    });
+    await sendPlatformNotice("owner@example.invalid", "post_sold", "outbox/sold", undefined, {
+      deletesAt,
+      holdsSlot: true,
+    });
+    await sendPlatformNotice("owner@example.invalid", "post_sold", "outbox/early", undefined, {
+      deletesAt,
+      holdsSlot: false,
+    });
+    await sendPlatformNotice("owner@example.invalid", "post_kept", "outbox/kept", undefined, {
+      deletesAt,
+    });
+    const [expired, sold, soldEarlier, kept] = mockSend.mock.calls.map(([message]) => message);
+    expect(expired.subject).toBe("Your post has expired");
+    expect(expired.text).toMatch(/deleted, with its photos and videos, on 12 November 2026.*10:30/);
+    expect(expired.text).toContain("ended or was cancelled");
+    expect(expired.text).toContain("buy a plan and reactivate it");
+    expect(sold.subject).toBe("Your post is marked as sold");
+    expect(sold.text).toMatch(/on 12 November 2026/);
+    expect(sold.text).toContain("delete the post yourself to free the slot sooner");
+    expect(soldEarlier.text).not.toContain("slot");
+    expect(kept.subject).toBe("Your post is kept after your payment");
+    expect(kept.text).toMatch(/kept until 12 November 2026/);
+    expect(sold.text).toContain("/dashboard");
+  });
+  it("tells the member when the free introductory post ends", async () => {
+    await sendPlatformNotice("owner@example.invalid", "trial_started", "outbox/trial", undefined, {
+      trialEndsAt: "2026-11-17T08:30:00Z", // 10:30 in South Africa
+      trialFundsPost: true,
+    });
+    await sendPlatformNotice("owner@example.invalid", "trial_started", "outbox/earlier");
+    const [dated, undated] = mockSend.mock.calls.map(([message]) => message);
+    expect(dated.subject).toBe("Your introductory posting allowance is ready");
+    expect(dated.text).toMatch(/live until 17 November 2026.*10:30 \(South African time\)/);
+    expect(dated.text).toContain("buy a plan within 3 days to reactivate it");
+    expect(dated.html).toContain("17 November 2026");
+    expect(undated.subject).toBe(dated.subject);
+    expect(undated.text).toContain("Your eligible introductory allowance is now recorded");
+    expect(undated.text).not.toMatch(/until [0-9]/);
+  });
+  it("words a staff or service grant that pays for no post without a post", async () => {
+    for (const trialFundsPost of [false, null, undefined])
+      await sendPlatformNotice(
+        "owner@example.invalid",
+        "trial_started",
+        "outbox/grant",
+        undefined,
+        {
+          trialEndsAt: "2026-11-17T08:30:00Z",
+          trialFundsPost,
+        }
+      );
+    for (const [message] of mockSend.mock.calls) {
+      expect(message.subject).toBe("Your introductory posting allowance is ready");
+      expect(message.text).toMatch(
+        /Your introductory posting allowance runs until 17 November 2026.*10:30 \(South African time\)\./
+      );
+      expect(message.text).not.toMatch(/post is live|reactivate|deleted/);
+    }
+  });
+  it("words lifecycle notices without a date when the job does not know it", async () => {
+    await sendPlatformNotice("owner@example.invalid", "post_expired", "outbox/expired");
+    await sendPlatformNotice("owner@example.invalid", "post_sold", "outbox/sold", undefined, {
+      deletesAt: "not a date",
+    });
+    const [expired, sold] = mockSend.mock.calls.map(([message]) => message);
+    expect(expired.text).not.toMatch(/ on [0-9]/);
+    expect(expired.text).toContain("otherwise it will be deleted");
+    expect(sold.text).toContain("deleted, with its photos and videos, shortly");
+    expect(`${expired.text}${sold.text}`).not.toMatch(/3 days|30 days/);
+  });
+  it("sends the payment receipt under the outbox key, or a plain notice without one", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "payment_completed",
+      "foundation-outbox/paid",
+      undefined,
+      {
+        receipt: {
+          kind: "plan",
+          invoiceNumber: "INV-20261113-ABCDEF1234",
+          paidAt: "2026-11-13T07:15:00+00:00",
+          item: "Individual slot — 30 days",
+          amountCents: 6900,
+          bankReference: "abcdef12345678",
+        },
+      }
+    );
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "payment_completed",
+      "foundation-outbox/plain"
+    );
+    const [[receipt, receiptOptions], [plain, plainOptions]] = mockSend.mock.calls.slice(-2);
+    expect(receipt.subject).toBe("Payment received");
+    expect(receipt.text).toContain("Invoice number: INV-20261113-ABCDEF1234");
+    expect(receipt.text).toContain("Amount paid: R 69.00");
+    expect(receiptOptions.idempotencyKey).toBe("foundation-outbox/paid");
+    expect(plain.subject).toBe("Payment received");
+    expect(plain.text).toContain(
+      "We received your payment. Need your invoice? Reply to this email."
+    );
+    expect(plain.text).toContain("https://verifymzansi.com/dashboard");
+    expect(`${receipt.text}${plain.text}`).not.toContain("/billing");
+    expect(plainOptions.idempotencyKey).toBe("foundation-outbox/plain");
+    vi.unstubAllEnvs();
+  });
+  it("tells a member their ID was sent back and links to verification, without the reason", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "verification_returned",
+      "foundation-outbox/returned"
+    );
+    const [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.subject).toBe("Your ID check needs another look");
+    expect(message.text).toContain("We could not complete your ID check");
+    expect(message.text).toContain("https://verifymzansi.com/verification");
+    expect(message.html).toContain("https://verifymzansi.com/verification");
+    expect(options.idempotencyKey).toBe("foundation-outbox/returned");
+    vi.unstubAllEnvs();
+  });
+  it("reminds a member that a slot ends, with its date and a renew link (P3)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+    const slot = "00000000-0000-4000-8000-0000000000a1";
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "slot_renewal_reminder",
+      "foundation-outbox/reminder",
+      undefined,
+      { slotEndsAt: "2026-11-17T12:00:00Z", slotRenewAll: false, renewSlotId: slot }
+    );
+    let [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.subject).toBe("Your slot ends soon");
+    expect(message.text).toContain("Your Individual slot ends on 17 November 2026");
+    expect(message.text).toContain("Nothing renews automatically.");
+    expect(message.text).toContain(
+      `Renew my slot: https://verifymzansi.com/billing/checkout?renew=${slot}`
+    );
+    expect(message.html).toContain(`https://verifymzansi.com/billing/checkout?renew=${slot}`);
+    expect(options.idempotencyKey).toBe("foundation-outbox/reminder");
+    // More than one slot ending within 7 days: "Renew all".
+    await sendPlatformNotice(
+      "member@example.invalid",
+      "slot_renewal_reminder",
+      "foundation-outbox/reminder-all",
+      undefined,
+      { slotEndsAt: "2026-11-17T12:00:00Z", slotRenewAll: true, renewSlotId: slot }
+    );
+    [message, options] = mockSend.mock.calls.at(-1)!;
+    expect(message.text).toContain("another of your slots ends within 7 days");
+    expect(message.text).toContain(
+      "Renew all: https://verifymzansi.com/billing/checkout?renew=soon"
+    );
+    // Without a date: the plain wording, and My slots without a slot id.
+    await sendPlatformNotice("member@example.invalid", "slot_renewal_reminder", "outbox/plain");
+    [message] = mockSend.mock.calls.at(-1)!;
+    expect(message.text).toContain("One of your Individual slots ends within 3 days.");
+    expect(message.text).toContain("https://verifymzansi.com/dashboard/slots");
+    vi.unstubAllEnvs();
   });
   it("passes durable job keys to Resend for repeatable notices", async () => {
     await sendModerationNoticeEmail({
@@ -193,6 +362,11 @@ describe("email service", () => {
       expect(call.html).toContain("24 May 2026");
       expect(call.html).toContain("do not auto-renew");
       expect(call.html).not.toContain("renew automatically");
+      // Post lifecycle rules (9 November 2026): ended posts are deleted after 3 days.
+      for (const body of [call.html, call.text])
+        expect(body).toContain(
+          "When your plan ends, its posts are hidden and deleted 3 days later unless you buy a new plan and reactivate them."
+        );
       expect(call.text).toContain("24 May 2026");
       expect(call.text).not.toContain("renew automatically");
     });
@@ -352,6 +526,87 @@ describe("email service", () => {
       expect(await pending).toMatchObject({ success: false, error: "Email send timed out" });
       expect(mockSend).toHaveBeenCalledTimes(3);
       expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it.each(["concurrent_idempotent_requests", "invalid_idempotent_request"])(
+      "reports a repeated-request refusal (%s) as an unknown outcome, not a failure",
+      async (name) => {
+        mockSend.mockResolvedValue({
+          data: null,
+          error: { name, message: "Same idempotency key", statusCode: 409 },
+        });
+        const result = await sendPlatformNotice(
+          "owner@example.invalid",
+          "post_expired",
+          "foundation-outbox/synthetic"
+        );
+        expect(result).toMatchObject({ success: false, outcomeUnknown: true });
+        expect(mockSend).toHaveBeenCalledOnce();
+      }
+    );
+
+    it("marks lost emails that may have been delivered in the alert", async () => {
+      await sendOutboxFinalFailureAlert([
+        { id: "00000000-0000-4000-8000-00000000000c", kind: "post_kept", maybeDelivered: true },
+      ]);
+      expect(mockSend.mock.calls[0][0].text).toContain(
+        "post kept (may have been delivered): 00000000-0000-4000-8000-00000000000c"
+      );
+      expect(mockSend.mock.calls[0][0].html).toContain("may have been delivered");
+    });
+
+    it("alerts the support address about lost queued emails without recipient details", async () => {
+      const a = "00000000-0000-4000-8000-00000000000a";
+      const b = "00000000-0000-4000-8000-00000000000b";
+      await sendOutboxFinalFailureAlert([
+        { id: b, kind: "payment_completed" },
+        { id: a, kind: "post_expired" },
+      ]);
+      await sendOutboxFinalFailureAlert([
+        { id: a, kind: "post_expired" },
+        { id: b, kind: "payment_completed" },
+      ]);
+      const [payload, options] = mockSend.mock.calls[0];
+      expect(payload).toMatchObject({
+        to: "support@verifymzansi.com",
+        subject: expect.stringContaining("2 queued emails"),
+        text: expect.stringContaining(`payment completed: ${b}`),
+      });
+      expect(payload.subject).toContain("(1 payment)");
+      expect(payload.html).toContain(a);
+      expect(options.idempotencyKey).toMatch(/^outbox-final-failure\/[0-9a-f]{64}$/);
+      expect(mockSend.mock.calls[1][1].idempotencyKey).toBe(options.idempotencyKey);
+      expect(mockSend.mock.calls[1][0].text).toBe(payload.text);
+    });
+
+    it("sends a staff operations email to every staff address with escaped content", async () => {
+      await sendStaffOperationsEmail({
+        to: ["owner@example.test", "deputy@example.test"],
+        idempotencyKey: "payment-alert/synthetic",
+        subject: "VerifyMzansi payment alert: 1 payment needs attention (wrong amount)",
+        title: "A payment needs attention",
+        intro: "The payment checks flagged the payment below.",
+        sections: [
+          { heading: "Wrong amount", rows: [["Payment number", "<b>id</b>"]] },
+          { rows: [["Amount", "R 50.00"]] },
+        ],
+        closing: "Look it up.",
+        reason: "Sent to the payment alert addresses.",
+        tone: "warning",
+      });
+      const [payload, options] = mockSend.mock.calls[0];
+      expect(payload.to).toEqual(["owner@example.test", "deputy@example.test"]);
+      expect(options).toEqual({ idempotencyKey: "payment-alert/synthetic" });
+      expect(payload.text).toBe(
+        [
+          "The payment checks flagged the payment below.",
+          "Wrong amount\nPayment number: <b>id</b>",
+          "Amount: R 50.00",
+          "Look it up.",
+        ].join("\n\n")
+      );
+      expect(payload.html).toContain("&lt;b&gt;id&lt;/b&gt;");
+      expect(payload.html).not.toContain("<b>id</b>");
     });
 
     it("routes payment support to billing with an authenticated queue link", async () => {

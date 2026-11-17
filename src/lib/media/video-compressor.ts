@@ -58,6 +58,10 @@ const DEFAULT_OPTIONS: Required<Omit<CompressionOptions, "onProgress" | "signal"
 
 const WEB_UPLOAD_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
 const FFMPEG_CORE_BASE_PATH = "/vendor/ffmpeg-core";
+/** Where the picked file is mounted (read in slices, never copied whole). */
+const INPUT_MOUNT = "/upload";
+/** Largest input copied into the WASM heap when mounting is unavailable. */
+const COPIED_INPUT_MAX_BYTES = 50 * 1024 * 1024;
 
 /**
  * Download the self-hosted core and hand it to the worker as a blob URL.
@@ -202,9 +206,10 @@ export async function compressVideo(
 
   let dispose: (() => void) | undefined;
   let wasmURL: string | undefined;
+  let mountedInput: (() => Promise<void>) | undefined;
   try {
     // ── Lazy-load FFmpeg WASM ─────────────────────────────
-    const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+    const { FFmpeg, FFFSType } = await import("@ffmpeg/ffmpeg");
     const { fetchFile } = await import("@ffmpeg/util");
 
     const ffmpeg = new FFmpeg();
@@ -250,11 +255,29 @@ export async function compressVideo(
       throw new DOMException("Compression aborted", "AbortError");
     }
 
-    // ── Write input file to virtual filesystem ───────────
+    // ── Give the encoder the input ───────────────────────
+    // Mounted read-only (WORKERFS): the encoder reads the file in slices, so a
+    // 300 MB phone original is never copied whole into the WASM heap. Only if
+    // mounting fails is a small file (up to 50 MB) copied in, as before.
     const inputName = "input" + getExtension(file.name);
     const outputName = "output.mp4";
-
-    await ffmpeg.writeFile(inputName, await fetchFile(file));
+    let inputPath = `${INPUT_MOUNT}/${inputName}`;
+    try {
+      await ffmpeg.createDir(INPUT_MOUNT);
+      await ffmpeg.mount(
+        FFFSType.WORKERFS,
+        { blobs: [{ name: inputName, data: file }] },
+        INPUT_MOUNT
+      );
+      mountedInput = async () => {
+        await ffmpeg.unmount(INPUT_MOUNT);
+        await ffmpeg.deleteDir(INPUT_MOUNT);
+      };
+    } catch (error) {
+      if (file.size > COPIED_INPUT_MAX_BYTES) throw error;
+      inputPath = inputName;
+      await ffmpeg.writeFile(inputName, await fetchFile(file));
+    }
 
     // ── Build FFmpeg command ─────────────────────────────
     // Cap both long and short edges, including portrait and square videos.
@@ -268,7 +291,7 @@ export async function compressVideo(
 
     const args = [
       "-i",
-      inputName,
+      inputPath,
       "-map",
       "0:v:0",
       "-map",
@@ -315,7 +338,7 @@ export async function compressVideo(
 
     // Clean up virtual filesystem
     try {
-      await ffmpeg.deleteFile(inputName);
+      if (!mountedInput) await ffmpeg.deleteFile(inputName);
       await ffmpeg.deleteFile(outputName);
     } catch {
       // Best-effort cleanup
@@ -373,6 +396,11 @@ export async function compressVideo(
       skipReason: `Compression failed: ${err instanceof Error ? err.message : "Unknown error"}`,
     };
   } finally {
+    // Unmount on every path, errors included, so an encoder is never left
+    // holding the picked file through a stale mount.
+    await mountedInput?.().catch(() => {
+      // Best-effort: the encoder is terminated next either way.
+    });
     dispose?.();
     if (wasmURL) URL.revokeObjectURL(wasmURL);
   }

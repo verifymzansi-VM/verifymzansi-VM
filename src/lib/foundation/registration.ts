@@ -12,6 +12,7 @@ import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 import { parseFoundationConnection } from "./connection";
 
 export class FoundationRegistrationError extends Error {
+  override name = "FoundationRegistrationError";
   constructor(
     readonly status: 400 | 429 | 503,
     breached = false
@@ -28,9 +29,10 @@ export class FoundationRegistrationError extends Error {
   }
 }
 
-/** The target's auth.users trigger creates its private profile. Display name
- * is an unverified claim, never authority. The authenticated posting-terms
- * command separately records acceptance of each posting-terms version.
+/** The target's auth.users triggers create its private profile and record the
+ * current Terms version as accepted at sign-up. Display name is an unverified
+ * claim, never authority. The authenticated posting-terms command separately
+ * records acceptance of each posting-terms version before a first post.
  */
 export async function registerFoundationAccount(
   connection: unknown,
@@ -68,14 +70,24 @@ export async function registerFoundationAccount(
       email,
       password,
       options: {
-        data: { ...registrationHints, display_name: displayName },
+        // terms_accepted: the form's Terms box was ticked (the schema requires
+        // it). The database records the current Terms version against the new
+        // account when Auth creates it; the detail can say nothing else.
+        data: { ...registrationHints, display_name: displayName, terms_accepted: true },
         emailRedirectTo: redirectTo,
         captchaToken: turnstileToken,
       },
     });
     if (attempt.cookieAccessFailed()) throw new FoundationRegistrationError(503);
     if (error) {
-      if (error.code === "user_already_exists" || error.code === "email_exists") {
+      // An existing address, or one the sign-up guard turns away while
+      // registration is by invitation only (403), gets the same reply as a
+      // new account, so the answer never reveals who is invited or registered.
+      if (
+        error.code === "user_already_exists" ||
+        error.code === "email_exists" ||
+        (error.status === 403 && error.code !== "signup_disabled")
+      ) {
         // The SDK removes this attempt's verifier on an explicit refusal.
         // Restore only its random PKCE state so cookie deletion cannot reveal
         // that the address exists while the response body promises anonymity.

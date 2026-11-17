@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { withCsrfHeaders } from "@/lib/utils/csrf-client";
 import {
   Dialog,
   DialogContent,

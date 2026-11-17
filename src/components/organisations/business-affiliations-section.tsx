@@ -1,25 +1,8 @@
 import Image from "next/image";
-import { organisationsPublicEnabled } from "@/lib/commercial/settings";
 import Link from "next/link";
 import { Landmark } from "lucide-react";
 import type { PublicAffiliation } from "@/lib/organisations/affiliations";
 import { formatSaLongDate } from "@/lib/utils/format";
-
-/** Load a business's public affiliations; failures render nothing. */
-export async function loadBusinessAffiliations(
-  client: { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown }> },
-  businessId: string
-): Promise<PublicAffiliation[]> {
-  try {
-    if (!(await organisationsPublicEnabled(client as never))) return [];
-    const { data } = await client.rpc("public_business_affiliations", {
-      p_business_ids: [businessId],
-    });
-    return Array.isArray(data) ? (data as PublicAffiliation[]) : [];
-  } catch {
-    return [];
-  }
-}
 
 /**
  * Profile section listing confirmed organisation relationships. Sponsorship

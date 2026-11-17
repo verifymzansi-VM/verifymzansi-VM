@@ -64,8 +64,9 @@ export async function testSponsorships({
     return rpc(name, body, commercial.token);
   };
   const refusedWith = (reason) => (error) =>
-    // Compared by name: tsx may load the shared module twice, defeating instanceof.
-    error?.name === "Error" &&
+    // Compared by the class's stable name: tsx may load the shared module twice,
+    // defeating instanceof.
+    error?.name === "FoundationOrganisationError" &&
     String(error.message).startsWith("Foundation organisation request failed") &&
     error.reason === reason;
   const one = (query) => sql(query);

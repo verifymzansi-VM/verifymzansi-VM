@@ -2,20 +2,18 @@
 
 import { useEffect, useCallback, useRef } from "react";
 import { useAuthStore } from "@/stores/auth-store";
-import { getDataBackend } from "@/lib/data-backend";
-import {
-  ACCOUNT_PROFILE_WRITE_TABLE,
-  normalizeUserRole,
-  readAccountVerificationStatus,
-} from "@/lib/account/compat";
+import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { hasAuthSessionCookie } from "@/lib/supabase/auth-session-cookie";
-import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
+import {
+  foundationSessionDisplayName,
+  foundationSessionRole,
+  isStaffRole,
+} from "@/lib/auth/session-display";
 import { toast } from "@/hooks/use-toast";
 import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
 
 const log = createLogger("useAuth");
-const PROFILE_FETCH_RETRY_DELAYS_MS = [150, 400] as const;
 
 /**
  * The Supabase browser client pulls in ~177 KB (uncompressed) of auth,
@@ -30,8 +28,8 @@ let authRequestVersion = 0;
 
 function getSupabaseClient(): Promise<SupabaseClient> {
   if (!supabaseClientPromise) {
-    supabaseClientPromise = import("@/lib/supabase/client")
-      .then((mod) => mod.createClient())
+    supabaseClientPromise = import("@/lib/foundation/restored-browser-client")
+      .then((mod) => mod.getRestoredFoundationBrowserClient())
       .catch((err) => {
         // Reset so the next attempt retries the download (transient network
         // failure or a chunk mismatch after a deploy) instead of latching
@@ -56,7 +54,7 @@ export function hasBrowserAuthSession(): boolean {
   }
 
   const cookieNames = document.cookie.split(";").map((entry) => entry.split("=", 1)[0].trim());
-  return hasAuthSessionCookie(cookieNames, isPlaywrightSupabaseStubMode());
+  return hasAuthSessionCookie(cookieNames);
 }
 
 /**
@@ -115,90 +113,6 @@ export function useAuth() {
 
   const fetchedRef = useRef(false);
 
-  function readSessionRole(role: unknown): string {
-    if (typeof role !== "string") {
-      return "user";
-    }
-
-    return normalizeUserRole(role) ?? role;
-  }
-
-  function readSessionDisplayName(userMetadata: unknown, email: string | undefined): string {
-    const metadata =
-      userMetadata && typeof userMetadata === "object"
-        ? (userMetadata as Record<string, unknown>)
-        : null;
-
-    const readName = (...keys: string[]) => {
-      for (const key of keys) {
-        const value = metadata?.[key];
-        if (typeof value === "string" && value.trim().length > 0) {
-          return value.trim();
-        }
-      }
-      return "";
-    };
-
-    const directName = readName("display_name", "full_name", "name");
-    if (directName) {
-      return directName;
-    }
-
-    const combinedName = [readName("given_name"), readName("family_name")]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-    if (combinedName) {
-      return combinedName;
-    }
-
-    return email?.split("@")[0] || "User";
-  }
-
-  const fetchAccountProfileWithRetry = useCallback(
-    async (supabase: SupabaseClient, userId: string) => {
-      let lastError: unknown = null;
-
-      for (let attempt = 0; attempt <= PROFILE_FETCH_RETRY_DELAYS_MS.length; attempt += 1) {
-        const { data, error } = await supabase
-          .from(ACCOUNT_PROFILE_WRITE_TABLE)
-          .select("*")
-          .eq("user_id", userId)
-          .maybeSingle();
-
-        if (!error && data) {
-          return data;
-        }
-
-        // No row yet — for OAuth signups the profile may be created
-        // asynchronously by a trigger, so retry before giving up.
-        if (!error && !data) {
-          const isLastAttempt = attempt === PROFILE_FETCH_RETRY_DELAYS_MS.length;
-          if (isLastAttempt) {
-            return null;
-          }
-          await new Promise((resolve) => {
-            setTimeout(resolve, PROFILE_FETCH_RETRY_DELAYS_MS[attempt]);
-          });
-          continue;
-        }
-
-        lastError = error;
-        const isLastAttempt = attempt === PROFILE_FETCH_RETRY_DELAYS_MS.length;
-        if (isLastAttempt) {
-          break;
-        }
-
-        await new Promise((resolve) => {
-          setTimeout(resolve, PROFILE_FETCH_RETRY_DELAYS_MS[attempt]);
-        });
-      }
-
-      throw lastError;
-    },
-    []
-  );
-
   const fetchUser = useCallback(
     async (options?: { force?: boolean }) => {
       // Guard: skip if we already fetched during this component lifecycle.
@@ -231,69 +145,37 @@ export function useAuth() {
           return;
         }
 
-        if (getDataBackend() === "foundation") {
-          const [
-            { fetchFoundationAccountSession },
-            { restoredAccountProfile },
-            { readFoundationVerificationStatus },
-          ] = await Promise.all([
-            import("@/lib/foundation/account-session-client"),
-            import("@/lib/foundation/restored-profile"),
-            import("@/lib/foundation/verification-runtime-client"),
-          ]);
-          const [account, verification] = await Promise.all([
-            fetchFoundationAccountSession(),
-            readFoundationVerificationStatus(supabase),
-          ]);
-          if (!isCurrentRequest()) return;
-          if (!account || account.account_id !== authUser.id) {
-            reset();
-            return;
-          }
-          const nextProfile = restoredAccountProfile(account, authUser, verification);
-          useAuthStore.getState().setTrustLevel(0);
-          setUser({
-            id: account.account_id,
-            email: account.email ?? "",
-            displayName: nextProfile.display_name,
-            role: account.staff?.can_access
-              ? account.staff.role === "governor"
-                ? "governance_controller"
-                : account.staff.role
-              : "user",
-          });
-          setProfile(nextProfile);
+        const [
+          { fetchFoundationAccountSession },
+          { restoredAccountProfile },
+          { readFoundationVerificationStatus },
+        ] = await Promise.all([
+          import("@/lib/foundation/account-session-client"),
+          import("@/lib/foundation/restored-profile"),
+          import("@/lib/foundation/verification-runtime-client"),
+        ]);
+        const [account, verification] = await Promise.all([
+          fetchFoundationAccountSession(),
+          readFoundationVerificationStatus(supabase),
+        ]);
+        if (!isCurrentRequest()) return;
+        if (!account || account.account_id !== authUser.id) {
+          reset();
           return;
         }
-
-        if (useAuthStore.getState().user?.id !== authUser.id) {
-          setProfile(null);
-          useAuthStore.getState().setTrustLevel(0);
-        }
+        const nextProfile = restoredAccountProfile(account, authUser, verification);
+        useAuthStore.getState().setTrustLevel(0);
         setUser({
-          id: authUser.id,
-          email: authUser.email || "",
-          displayName: readSessionDisplayName(authUser.user_metadata, authUser.email),
-          role: readSessionRole(authUser.app_metadata?.role),
+          id: account.account_id,
+          email: account.email ?? "",
+          displayName: foundationSessionDisplayName(
+            nextProfile.display_name,
+            authUser.user_metadata,
+            account.email ?? authUser.email
+          ),
+          role: foundationSessionRole(account.staff),
         });
-
-        try {
-          const accountProfile = await fetchAccountProfileWithRetry(supabase, authUser.id);
-          if (!isCurrentRequest()) return;
-
-          if (accountProfile) {
-            setProfile(accountProfile);
-          } else {
-            setProfile(null);
-          }
-        } catch (profileError) {
-          if (!isCurrentRequest()) return;
-          setProfile(null);
-          log.warn("Failed to fetch account profile after retries", {
-            userId: authUser.id,
-            error: profileError instanceof Error ? profileError.message : String(profileError),
-          });
-        }
+        setProfile(nextProfile);
       } catch (err) {
         if (!isCurrentRequest()) return;
         log.error("Failed to fetch user", {
@@ -304,7 +186,7 @@ export function useAuth() {
         if (isCurrentRequest()) setLoading(false);
       }
     },
-    [fetchAccountProfileWithRetry, reset, setLoading, setProfile, setUser]
+    [reset, setLoading, setProfile, setUser]
   );
 
   useEffect(() => {
@@ -358,6 +240,9 @@ export function useAuth() {
   const isAuthenticated = !!user;
   const isAdmin = user?.role === "admin";
   const isModerator = user?.role === "moderator" || isAdmin;
+  // Any staff role, including governors. A UI hint only: staff pages and
+  // commands check role and two-step on the server.
+  const isStaff = isStaffRole(user?.role);
   const isVerified = readAccountVerificationStatus(profile) === "verified";
 
   return {
@@ -368,6 +253,7 @@ export function useAuth() {
     isAuthenticated,
     isAdmin,
     isModerator,
+    isStaff,
     isVerified,
     signOut,
     refresh: () => fetchUser({ force: true }),

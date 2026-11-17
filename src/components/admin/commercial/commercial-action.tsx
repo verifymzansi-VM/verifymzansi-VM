@@ -14,7 +14,10 @@ export function useCommercialAction() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(null);
 
-  async function run(payload: CommercialPayload, successText = "Saved") {
+  async function run(
+    payload: CommercialPayload,
+    successText: string | ((data: unknown) => string) = "Saved"
+  ) {
     setBusy(true);
     setMessage(null);
     try {
@@ -34,7 +37,10 @@ export function useCommercialAction() {
         setMessage({ tone: "error", text: body.error ?? "The change could not be applied." });
         return null;
       }
-      setMessage({ tone: "success", text: successText });
+      setMessage({
+        tone: "success",
+        text: typeof successText === "function" ? successText(body.data) : successText,
+      });
       router.refresh();
       return body.data ?? true;
     } catch {

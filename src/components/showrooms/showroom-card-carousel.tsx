@@ -3,6 +3,7 @@
 import { feedSourceAttribute } from "@/lib/feed/session";
 import { trackCommercialEvents } from "@/lib/analytics/commercial-events";
 import { ShowroomProvinceChip } from "./showroom-province-chip";
+import { SHOW_SHOWROOM_PROVINCE_CHIP } from "@/lib/hidden-features";
 import {
   ShowroomSectionShell as SectionShell,
   getBackgroundOverlayClasses,
@@ -17,6 +18,7 @@ import {
   useCallback,
   useRef,
   type PointerEvent as ReactPointerEvent,
+  type FocusEvent as ReactFocusEvent,
   type KeyboardEvent,
   type CSSProperties,
 } from "react";
@@ -24,7 +26,7 @@ import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useAutoplayPolicy } from "@/contexts/autoplay-policy-context";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import { isVideoUrl } from "@/components/ui/video-card-player";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* ── Types ─────────────────────────────────────────────────── */
@@ -37,6 +39,8 @@ export interface CarouselItem {
   description?: string;
   location?: string;
   mediaUrl?: string;
+  /** Photo or video, from the stored media; without it the file name decides. */
+  mediaKind?: "image" | "video";
   posterUrl?: string;
   logoUrl?: string;
   price?: number | null;
@@ -110,6 +114,11 @@ function getFallbackMediaUrl(item: CarouselItem): string {
   return item.fallbackMediaUrl ?? TYPE_FALLBACK_MEDIA[item.type];
 }
 
+function isVideoItem(item: CarouselItem | undefined): boolean {
+  if (!item) return false;
+  return item.mediaKind ? item.mediaKind === "video" : isVideoUrl(item.mediaUrl);
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -165,12 +174,34 @@ function getInitialSlideStyle(index: number, count: number): CSSProperties {
 
 /* ── Arrow controls ───────────────────────────────────────── */
 
+/** The round glass button shared by the arrows and the pause control. */
+const CONTROL_BUTTON_CLASSES = cn(
+  "absolute z-30 h-11 w-11 items-center justify-center rounded-full",
+  "border border-slate-900/10 bg-white/75 text-slate-800 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] backdrop-blur-md",
+  "transition-all duration-200 hover:scale-105 hover:bg-white active:scale-95",
+  "dark:border-white/15 dark:bg-slate-950/60 dark:text-white dark:hover:bg-slate-950/80",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/40 dark:focus-visible:ring-white/40"
+);
+
+/** True when the element got focus from the keyboard rather than a mouse click. */
+function hasKeyboardFocus(element: Element): boolean {
+  try {
+    return element.matches(":focus-visible");
+  } catch {
+    return false;
+  }
+}
+
 function ShowroomArrowButton({
   direction,
   onClick,
+  onFocus,
+  onBlur,
 }: {
   direction: "prev" | "next";
   onClick: () => void;
+  onFocus?: (event: ReactFocusEvent<HTMLButtonElement>) => void;
+  onBlur?: (event: ReactFocusEvent<HTMLButtonElement>) => void;
 }) {
   const isPrev = direction === "prev";
   return (
@@ -178,18 +209,42 @@ function ShowroomArrowButton({
       type="button"
       data-carousel-control="true"
       onClick={onClick}
+      onFocus={onFocus}
+      onBlur={onBlur}
       aria-label={isPrev ? "Previous slide" : "Next slide"}
       className={cn(
-        "absolute top-1/2 z-30 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full",
-        "border border-slate-900/10 bg-white/75 text-slate-800 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.35)] backdrop-blur-md",
-        "transition-all duration-200 hover:scale-105 hover:bg-white active:scale-95",
-        "dark:border-white/15 dark:bg-slate-950/60 dark:text-white dark:hover:bg-slate-950/80",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/40 dark:focus-visible:ring-white/40",
-        "lg:flex",
+        CONTROL_BUTTON_CLASSES,
+        "top-1/2 hidden -translate-y-1/2 lg:flex",
         isPrev ? "left-4 xl:left-10" : "right-4 xl:right-10"
       )}
     >
       {isPrev ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+    </button>
+  );
+}
+
+/**
+ * Stops and restarts the automatic slide changes (WCAG 2.2.2). Shown only
+ * where the showroom moves by itself: not on touch screens or with reduced
+ * motion, where it never does.
+ */
+function ShowroomRotationButton({ paused, onClick }: { paused: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      data-carousel-control="true"
+      onClick={onClick}
+      aria-label={paused ? "Play slides" : "Pause slides"}
+      className={cn(
+        CONTROL_BUTTON_CLASSES,
+        "bottom-4 right-4 flex motion-reduce:hidden xl:right-10"
+      )}
+    >
+      {paused ? (
+        <Play className="h-4 w-4" aria-hidden="true" />
+      ) : (
+        <Pause className="h-4 w-4" aria-hidden="true" />
+      )}
     </button>
   );
 }
@@ -235,6 +290,13 @@ export function ShowroomCardCarousel({
   const pausedRef = useRef(false);
   // Hovering or focusing the showroom holds it still (WCAG 2.2.2 pause on hover/focus).
   const holdRef = useRef(false);
+  // Focus on the slides (or keyboard focus on the arrows) holds the showroom,
+  // so its moves are then the visitor's own and are announced.
+  const [focusHeld, setFocusHeld] = useState(false);
+  const focusHeldRef = useRef(false);
+  // The pause button: no automatic moves until the visitor presses play.
+  const [userPaused, setUserPaused] = useState(false);
+  const userPausedRef = useRef(false);
   const pauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isHalfVisible, setIsHalfVisible] = useState(false);
@@ -759,21 +821,63 @@ export function ShowroomCardCarousel({
   const videoEndedRef = useRef(false);
 
   const handleVideoEnded = useCallback(() => {
-    if (pausedRef.current || holdRef.current || activeInputModeRef.current || disableAutoplay)
+    if (
+      pausedRef.current ||
+      holdRef.current ||
+      userPausedRef.current ||
+      activeInputModeRef.current ||
+      disableAutoplay
+    )
       return;
     videoEndedRef.current = true;
     nextRef.current();
   }, [disableAutoplay]);
 
   const displayIndex = normalizedActiveIndex;
-  const activeIsVideo = isVideoUrl(carouselItems[displayIndex]?.mediaUrl);
+  const activeIsVideo = isVideoItem(carouselItems[displayIndex]);
 
   useEffect(() => {
     videoEndedRef.current = false;
   }, [displayIndex]);
 
+  // The showroom moves by itself only with a mouse-like pointer and motion allowed.
+  const autoplayAvailable = count > 1 && !reducedMotion && !disableAutoplay;
+  const rotating = autoplayAvailable && !userPaused && !focusHeld;
+
+  const toggleUserPaused = useCallback(() => {
+    userPausedRef.current = !userPausedRef.current;
+    setUserPaused(userPausedRef.current);
+  }, []);
+
+  const holdForFocus = useCallback(() => {
+    holdRef.current = true;
+    focusHeldRef.current = true;
+    setFocusHeld(true);
+  }, []);
+
+  const holdForArrowFocus = useCallback(
+    (event: ReactFocusEvent<HTMLButtonElement>) => {
+      if (hasKeyboardFocus(event.currentTarget)) holdForFocus();
+    },
+    [holdForFocus]
+  );
+
+  const releaseFocusHold = useCallback(
+    (event: ReactFocusEvent<HTMLElement>) => {
+      // Moving between slides keeps the hold; a keyboard move to an arrow
+      // takes it again in that arrow's focus handler.
+      if (!focusHeldRef.current) return;
+      if (coverflowRef.current?.contains(event.relatedTarget as Node | null)) return;
+      holdRef.current = false;
+      focusHeldRef.current = false;
+      setFocusHeld(false);
+      pauseAutoSwipe();
+    },
+    [pauseAutoSwipe]
+  );
+
   useEffect(() => {
-    if (count <= 1 || reducedMotion || disableAutoplay || !isVisible) return;
+    if (!autoplayAvailable || userPaused || focusHeld || !isVisible) return;
 
     // For video cards, set a safety fallback timeout only.
     // The primary advance is triggered by the video's onEnded callback.
@@ -794,10 +898,10 @@ export function ShowroomCardCarousel({
     activeIsVideo,
     imageDisplayMs,
     videoFallbackMs,
-    count,
     isVisible,
-    reducedMotion,
-    disableAutoplay,
+    autoplayAvailable,
+    userPaused,
+    focusHeld,
   ]);
 
   /* ── Cleanup ───────────────────────────────────────────── */
@@ -887,7 +991,9 @@ export function ShowroomCardCarousel({
         </SectionShell>
         {/* An empty feed has no province to change, but keep the chip's room so the
           page below stays where the loading skeleton put it. */}
-        {visitorProvince ? <div className="h-14" aria-hidden="true" /> : null}
+        {SHOW_SHOWROOM_PROVINCE_CHIP && visitorProvince ? (
+          <div className="h-14" aria-hidden="true" />
+        ) : null}
       </>
     );
   }
@@ -921,6 +1027,10 @@ export function ShowroomCardCarousel({
           )}
           aria-hidden="true"
         />
+        {/* First in the tab order, before the slides (ARIA carousel pattern). */}
+        {autoplayAvailable && (
+          <ShowroomRotationButton paused={userPaused} onClick={toggleUserPaused} />
+        )}
         {/* Card coverflow area */}
         <div
           ref={coverflowRef}
@@ -941,17 +1051,12 @@ export function ShowroomCardCarousel({
             holdRef.current = true;
           }}
           onMouseLeave={() => {
-            holdRef.current = false;
+            // Keyboard focus on the slides keeps holding them after the mouse leaves.
+            if (!focusHeldRef.current) holdRef.current = false;
             pauseAutoSwipe();
           }}
-          onFocus={() => {
-            holdRef.current = true;
-          }}
-          onBlur={(event) => {
-            if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-            holdRef.current = false;
-            pauseAutoSwipe();
-          }}
+          onFocus={holdForFocus}
+          onBlur={releaseFocusHold}
           tabIndex={0}
           aria-label="Carousel slides"
           data-feed-source={feedSourceAttribute({
@@ -977,11 +1082,10 @@ export function ShowroomCardCarousel({
           {/* Absolutely positioned coverflow cards */}
           {carouselItems.map((item, i) => {
             const offset = signedOffset(i);
+            const itemIsVideo = isVideoItem(item);
             const sideMediaFallback =
-              item.posterUrl ??
-              (isVideoUrl(item.mediaUrl) ? getFallbackMediaUrl(item) : item.mediaUrl);
-            const activeVideoNeedsArtwork =
-              offset === 0 && isVideoUrl(item.mediaUrl) && !item.posterUrl;
+              item.posterUrl ?? (itemIsVideo ? getFallbackMediaUrl(item) : item.mediaUrl);
+            const activeVideoNeedsArtwork = offset === 0 && itemIsVideo && !item.posterUrl;
             const cardMediaUrl =
               offset === 0 && !activeVideoNeedsArtwork ? item.mediaUrl : sideMediaFallback;
 
@@ -1024,6 +1128,7 @@ export function ShowroomCardCarousel({
                   title={item.title}
                   location={item.location}
                   mediaUrl={cardMediaUrl}
+                  isVideo={itemIsVideo && cardMediaUrl === item.mediaUrl}
                   posterUrl={item.posterUrl}
                   mediaFallbackUrl={getFallbackMediaUrl(item)}
                   logoUrl={item.logoUrl}
@@ -1053,9 +1158,10 @@ export function ShowroomCardCarousel({
           })}
         </div>
 
-        {/* Screen-reader live announcer */}
+        {/* Screen-reader live announcer: silent while the slides change by
+            themselves, polite when the visitor moves them or has paused. */}
         {count > 1 && (
-          <div className="sr-only" aria-live="polite" aria-atomic="true">
+          <div className="sr-only" aria-live={rotating ? "off" : "polite"} aria-atomic="true">
             {`Slide ${displayIndex + 1} of ${count}`}
           </div>
         )}
@@ -1069,6 +1175,8 @@ export function ShowroomCardCarousel({
                 pauseAutoSwipe();
                 prev();
               }}
+              onFocus={holdForArrowFocus}
+              onBlur={releaseFocusHold}
             />
             <ShowroomArrowButton
               direction="next"
@@ -1076,12 +1184,16 @@ export function ShowroomCardCarousel({
                 pauseAutoSwipe();
                 next();
               }}
+              onFocus={holdForArrowFocus}
+              onBlur={releaseFocusHold}
             />
           </>
         )}
       </SectionShell>
       {/* Below the showroom, so it never sits behind a card. */}
-      {visitorProvince ? <ShowroomProvinceChip {...visitorProvince} /> : null}
+      {SHOW_SHOWROOM_PROVINCE_CHIP && visitorProvince ? (
+        <ShowroomProvinceChip {...visitorProvince} />
+      ) : null}
     </>
   );
 }

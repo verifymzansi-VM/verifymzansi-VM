@@ -304,9 +304,7 @@ export function SearchBar({
 
       {showPopular ? (
         <div className="-mx-4 mt-2.5 flex items-center gap-2 overflow-x-auto px-4 scrollbar-hide sm:mx-0 sm:mt-3.5 sm:flex-wrap sm:px-0">
-          <h2 className="shrink-0 text-xs font-semibold uppercase tracking-wider text-white/60">
-            Popular
-          </h2>
+          <h2 className="shrink-0 text-xs font-semibold text-white/60">Popular</h2>
           <ul className="flex gap-2 sm:flex-wrap">
             {POPULAR_SEARCHES.map((term) => (
               <li key={term} className="shrink-0">

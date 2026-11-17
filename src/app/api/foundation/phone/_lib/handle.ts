@@ -9,9 +9,15 @@ import {
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import {
   FoundationPhoneError,
+  type FoundationPhoneRefusal,
   issueFoundationPhoneChallenge,
   verifyFoundationPhoneChallenge,
 } from "@/lib/foundation/phone-verification";
+import {
+  PHONE_CHANGE_COOLDOWN_DAYS,
+  phoneCooldown,
+  phoneReverificationRequired,
+} from "@/lib/account/identity-policy";
 import {
   foundationPhoneSendSchema,
   foundationPhoneVerifySchema,
@@ -20,7 +26,12 @@ import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { otpVerifySchema } from "@/lib/validations/auth";
 import { saPhoneSchema } from "@/lib/validations/shared";
-import { normalizeSaPhone } from "@/lib/utils/phone";
+import {
+  ACCOUNT_PHONE_ALREADY_VERIFIED,
+  ACCOUNT_PHONE_IN_USE_ERROR,
+  PHONE_NUMBER_UNAVAILABLE,
+  normalizeSaPhone,
+} from "@/lib/utils/phone";
 import { z } from "zod";
 import {
   FOUNDATION_PHONE_CHALLENGE_COOKIE,
@@ -30,10 +41,43 @@ import {
 } from "@/lib/foundation/phone-challenge-cookie";
 
 const log = createLogger("FoundationPhone");
+/** What the member is told for a refusal they can act on (the site's existing
+ * wording for each case). */
+function phoneRefusalMessage(refusal: FoundationPhoneRefusal, changeAllowedFrom?: Date) {
+  switch (refusal) {
+    case "phone_in_use":
+      return ACCOUNT_PHONE_IN_USE_ERROR;
+    case "phone_already_verified":
+      return ACCOUNT_PHONE_ALREADY_VERIFIED;
+    case "phone_change_cooldown":
+      return changeAllowedFrom
+        ? phoneCooldown(changeAllowedFrom).message
+        : `You can change your phone number once every ${PHONE_CHANGE_COOLDOWN_DAYS} days.`;
+    case "phone_change_identity_required":
+      return phoneReverificationRequired().message;
+    case "phone_banned":
+      // Owner decision 2026-11-17: neutral, never says that a ban exists.
+      return PHONE_NUMBER_UNAVAILABLE;
+  }
+}
+/** A phone limit was reached; `retryAfter` is the seconds until it resets. */
+class PhoneRateLimitError extends FoundationPhoneError {
+  override name = "PhoneRateLimitError";
+  constructor(readonly retryAfter: number) {
+    super(429);
+  }
+}
+/** "in about a minute", "in 14 minutes", "in 3 hours". */
+export function phoneRetryWait(seconds: number) {
+  if (seconds <= 60) return "in about a minute";
+  if (seconds < 3600) return `in ${Math.ceil(seconds / 60)} minutes`;
+  const hours = Math.ceil(seconds / 3600);
+  return hours === 1 ? "in an hour" : `in ${hours} hours`;
+}
 async function reserve(key: string, action: string) {
   const result = await checkRateLimit({ key, action, degradedMode: "block" });
-  if (result.degraded || result.limited)
-    throw new FoundationPhoneError(result.degraded ? 503 : 429);
+  if (result.degraded) throw new FoundationPhoneError(503);
+  if (result.limited) throw new PhoneRateLimitError(Math.max(1, result.retryAfter ?? 60));
 }
 export async function handleFoundationPhoneRoute(
   request: NextRequest,
@@ -113,6 +157,21 @@ export async function handleFoundationPhoneRoute(
       return restoredForm ? { success: true, ...verified } : verified;
     },
     refusal(error) {
+      if (error instanceof PhoneRateLimitError)
+        return {
+          status: 429,
+          reason: "phone_rate_limited",
+          code: "rate_limited",
+          retryAfter: error.retryAfter,
+          error: `Too many attempts. Try again ${phoneRetryWait(error.retryAfter)}.`,
+        };
+      if (error instanceof FoundationPhoneError && error.refusal)
+        return {
+          status: error.status,
+          reason: error.refusal,
+          code: error.refusal,
+          error: phoneRefusalMessage(error.refusal, error.changeAllowedFrom),
+        };
       const status =
         error instanceof FoundationPhoneError
           ? error.status

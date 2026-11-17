@@ -115,6 +115,12 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 5, ttl: 60 }, // 5 per minute
     { limit: 10, ttl: 3600 }, // 10 per hour
   ],
+  // Each server-side check of the current password when a signed-in member
+  // changes it (a sign-in without CAPTCHA), per account.
+  "auth:change-password:verify": [
+    { limit: 5, ttl: 3600 }, // 5 per hour per account
+    { limit: 10, ttl: 86400 }, // 10 per day per account
+  ],
   "auth:reset-password": [
     { limit: 5, ttl: 60 }, // 5 per minute
     { limit: 10, ttl: 3600 }, // 10 per hour
@@ -126,6 +132,16 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   "auth:forgot-password-email": [
     { limit: 3, ttl: 600 }, // 3 per 10 minutes per email
     { limit: 5, ttl: 3600 }, // 5 per hour per email
+  ],
+  // Password setup emails for signed-in members without a password (no
+  // CAPTCHA): per account, plus a platform-wide budget like the logins above.
+  "auth:password-setup": [
+    { limit: 3, ttl: 3600 }, // 3 per hour per account
+    { limit: 5, ttl: 86400 }, // 5 per day per account
+  ],
+  "auth:password-setup:global": [
+    { limit: 30, ttl: 60 },
+    { limit: 300, ttl: 3600 },
   ],
   "auth:resend-confirmation": [
     { limit: 5, ttl: 60 }, // 5 per minute per IP
@@ -236,6 +252,28 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 3, ttl: 60 }, // 3 per minute
     { limit: 5, ttl: 3600 }, // 5 per hour
   ],
+  // Foundation email changes (each sends two emails, no CAPTCHA): per
+  // account, per account and new address, per new address and platform-wide.
+  // Address keys are SHA-256 digests (src/lib/foundation/limiter-key.ts).
+  "account:email-change:account": [
+    // One request per 120 s: longer than Auth's own minimum interval between
+    // emails to one account (hosted default 60 s) plus the request's own
+    // duration, so Auth's interval never answers a request the website sends.
+    // Raise this with that Auth setting.
+    { limit: 1, ttl: 120 },
+    { limit: 3, ttl: 3600 }, // 3 per hour per account
+    { limit: 5, ttl: 86400 }, // 5 per day per account
+  ],
+  "account:email-change:recipient": [
+    { limit: 3, ttl: 3600 }, // 3 per hour per account and new address
+  ],
+  "account:email-change:address": [
+    { limit: 10, ttl: 86400 }, // 10 per day per new address, from all accounts
+  ],
+  "account:email-change:global": [
+    { limit: 30, ttl: 60 },
+    { limit: 300, ttl: 3600 },
+  ],
 
   // ── Billing / webhooks ───────────────────────────────
   "billing:checkout": [{ limit: 10, ttl: 60 }],
@@ -261,8 +299,6 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
 
   // ── Media ────────────────────────────────────────────
   "media:upload": [{ limit: 20, ttl: 60 }],
-  "media:upload-url": [{ limit: 20, ttl: 60 }],
-  "media:upload-complete": [{ limit: 20, ttl: 60 }],
 
   // ── Contact ──────────────────────────────────────────
   // Tap-to-reveal of a poster's number: enough for real buyers, too slow to harvest.

@@ -1,27 +1,19 @@
 "use client";
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
-import { hasCapability } from "@/lib/auth/roles";
 
 import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { MultiListingNudge } from "@/components/billing/multi-listing-nudge";
 import { usePathname } from "next/navigation";
-import { AlertTriangle, Loader2, Sparkles, Check, X, Crown, Camera, Video } from "lucide-react";
+import { AlertTriangle, Loader2, Sparkles, Check, X, Camera, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { createClient } from "@/lib/supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
-import { getDataBackend } from "@/lib/data-backend";
 import { fetchPostingAllowance } from "@/lib/foundation/posting-allowance-client";
 import { restoredPostingPlanInfo, restoredPostingPlans } from "@/lib/foundation/posting-allowance";
 import { createLogger } from "@/lib/utils/logger";
-import { isPostingLimitBypassEnabled } from "../../lib/utils/posting-limit-bypass";
-import {
-  getOwnerColumn,
-  OWNER_COMPAT_TABLES,
-  type OwnerCompatibleTable,
-} from "@/lib/account/compat";
 
 const logger = createLogger("PlanGate");
 import {
@@ -32,13 +24,9 @@ import {
   getPlanCheckoutHref,
   type PlanDefinition,
 } from "@/lib/constants/pricing";
-import { getEntitlements } from "@/lib/services/entitlements";
+import { PLAN_SALES_PAUSED_NOTE } from "@/lib/billing/plan-sales";
 import { PLAN_TIER_LABELS, type MarketplaceArea, type PlanTier } from "@/types/enums";
-import {
-  getActiveFreePostUsage,
-  trialAvailabilityMessage,
-  type IntroTrialOffer,
-} from "@/lib/billing/free-posts";
+import { trialAvailabilityMessage, type IntroTrialOffer } from "@/lib/billing/free-posts";
 
 const FREE_POST_COUNT = Number(FREE_POST_CONFIG.maxAllowed);
 
@@ -77,30 +65,9 @@ function FreeEventOption({ onChoose }: { onChoose: () => void }) {
   );
 }
 
-type AllowanceResponse = {
-  hasPaidPlan: boolean;
-  capacity: number;
-  used: number;
-  maxPhotos: number;
-  maxVideos: number;
-};
-
 /** Configured length for a trial choice (7 = short, 30 = launch). */
 function trialLength(offer: IntroTrialOffer | undefined, choice: 7 | 30): number {
   return choice === 7 ? (offer?.shortDays ?? 7) : (offer?.longDays ?? 30);
-}
-
-async function fetchAllowance(area: MarketplaceArea): Promise<AllowanceResponse | null> {
-  try {
-    const res = await fetch(`/api/billing/allowance?area=${area}`, { cache: "no-store" });
-    if (!res.ok) return null;
-    const data = (await res.json()) as Partial<AllowanceResponse>;
-    return typeof data.hasPaidPlan === "boolean" && typeof data.capacity === "number"
-      ? (data as AllowanceResponse)
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 interface PlanInfo {
@@ -139,51 +106,17 @@ const AREA_ITEM_LABELS: Record<MarketplaceArea, string> = {
   PROMOTIONS_EVENTS: "events",
 };
 
-const AREA_COUNT_TARGETS: Record<MarketplaceArea, { table: string; area?: MarketplaceArea }[]> = {
-  MZANSI_MARKET: [{ table: "listings", area: "MZANSI_MARKET" }],
-  MZANSI_BUSINESS: [{ table: "businesses", area: "MZANSI_BUSINESS" }],
-  PROMOTIONS_EVENTS: [{ table: "promotions" }, { table: "businesses", area: "PROMOTIONS_EVENTS" }],
-};
-
 /* ─────────────────────────────────────────────────────────────
    Inline Plan Grid — compact cards matching the pricing page
    ───────────────────────────────────────────────────────────── */
 function planFeatureList(plan: PlanDefinition): { text: string; enabled: boolean }[] {
   const f = plan.features;
   return [
-    { text: "1 active posting slot, reusable when an item sells", enabled: true },
+    { text: "1 active posting slot, reusable once its post is deleted", enabled: true },
     { text: `${f.maxPhotos} photos and ${f.maxVideos ?? 1} video per post`, enabled: true },
     { text: "Optional Urgent label add-on", enabled: f.urgentAllowed },
     { text: "No automatic renewal", enabled: true },
   ];
-}
-
-async function countCurrentAreaItems(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  area: MarketplaceArea
-): Promise<number> {
-  let total = 0;
-
-  for (const target of AREA_COUNT_TARGETS[area]) {
-    const ownerCol = (OWNER_COMPAT_TABLES as readonly string[]).includes(target.table)
-      ? await getOwnerColumn(supabase, target.table as OwnerCompatibleTable)
-      : "owner_id";
-
-    let query = supabase
-      .from(target.table)
-      .select("id", { count: "exact", head: true })
-      .eq(ownerCol, userId);
-
-    if (target.area) {
-      query = query.eq("area", target.area);
-    }
-
-    const { count } = await query.not("status", "in", "(rejected,expired)");
-    total += count ?? 0;
-  }
-
-  return total;
 }
 
 function InlinePlanGrid({
@@ -195,6 +128,13 @@ function InlinePlanGrid({
   onSubscribe: (plan: PlanDefinition) => void;
   subscribing: string | null;
 }) {
+  // No plan on sale (paid slots paused): say so instead of an empty grid.
+  if (plans.length === 0)
+    return (
+      <p className="mx-auto max-w-4xl rounded-2xl border border-border/70 bg-muted/40 p-4 text-center text-sm text-muted-foreground">
+        {PLAN_SALES_PAUSED_NOTE}
+      </p>
+    );
   return (
     <div
       className={`grid grid-cols-1 sm:grid-cols-2 ${
@@ -216,23 +156,7 @@ function InlinePlanGrid({
                   : "border-border/70"
             }`}
           >
-            {isPopular && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="gap-1 whitespace-nowrap border-0 bg-brand-green-600 px-2.5 py-0.5 text-xs font-bold text-white hover:bg-brand-green-600 dark:bg-brand-green-500 dark:text-brand-green-950">
-                  <Sparkles className="h-3 w-3" aria-hidden="true" />
-                  {plan.promoLabel ?? "Popular"}
-                </Badge>
-              </div>
-            )}
-            {isPremium && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="gap-1 whitespace-nowrap border-0 bg-brand-gold px-2.5 py-0.5 text-xs font-bold text-brand-gold-950 hover:bg-brand-gold">
-                  <Crown className="h-3 w-3" aria-hidden="true" />
-                  Best value
-                </Badge>
-              </div>
-            )}
-
+            {/* No "Popular" or "Best value" badge: slots have no discounts (posting-v4). */}
             <CardContent className="p-4 pt-5 space-y-3">
               {/* Plan name + price */}
               <div className="text-center">
@@ -341,125 +265,16 @@ export function PlanGate({
     async function checkEntitlements() {
       const generation = ++readGeneration;
       try {
-        if (getDataBackend() === "foundation") {
-          const facts = await fetchPostingAllowance(area);
-          if (cancelled || generation !== readGeneration) return;
-          if (!facts.profile_exists) {
-            setError("no_profile");
-            return;
-          }
-          setError(null);
-          setPlanInfo({
-            ...restoredPostingPlanInfo(facts),
-            plans: restoredPostingPlans(facts.catalogue, area),
-          });
-          return;
-        }
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (cancelled) return;
-
-        if (!user) {
-          setError("not_authenticated");
-          setLoading(false);
-          return;
-        }
-
-        // Get account profile — just check it exists.
-        const { data: profile } = await supabase
-          .from("account_profiles")
-          .select("id, created_at")
-          .eq("user_id", user.id)
-          .single();
-
-        if (!profile) {
+        const facts = await fetchPostingAllowance(area);
+        if (cancelled || generation !== readGeneration) return;
+        if (!facts.profile_exists) {
           setError("no_profile");
-          setLoading(false);
           return;
         }
-
-        // Get active entitlement for this area from the entitlements table
-        const { data: entitlement } = await supabase
-          .from("entitlements")
-          .select("tier, type, status, started_at, expires_at")
-          .eq("user_id", user.id)
-          .eq("area", area)
-          .eq("status", "active")
-          .gt("expires_at", new Date().toISOString())
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const tier = (entitlement?.tier as PlanTier) || null;
-        const postingLimitBypassEnabled =
-          isPostingLimitBypassEnabled() || hasCapability(user, "posting:bypass_limits");
-
-        const freePostUsage = postingLimitBypassEnabled
-          ? { used: 0, remaining: 1, available: true, offer: undefined }
-          : await getActiveFreePostUsage(supabase, user.id, area);
-        // In testing mode, keep the free-post flow open and remove the posting count cap.
-        const freePostAvailable =
-          !entitlement && (postingLimitBypassEnabled || freePostUsage.available);
-
-        // Legacy trial compat: treat free-post-available as "trial" for rendering
-        const isTrial = freePostAvailable;
-        const trialDaysLeft = freePostAvailable ? FREE_POST_CONFIG.durationDays : 0;
-
-        // Paid, programme and sponsored capacity come from active posting slots.
-        // If the allowance endpoint is unavailable, fall back to the plan
-        // summary; the server re-checks capacity either way.
-        const allowance = entitlement ? await fetchAllowance(area) : null;
-        const summary = entitlement && !allowance && tier ? getEntitlements(tier, area) : null;
-        const hasPaidPlan = Boolean(allowance?.hasPaidPlan || summary);
-
-        // Count existing items for this area. Businesses and tourism share the
-        // businesses table, so the area filter is what keeps their free posts separate.
-        const currentCount = allowance?.hasPaidPlan
-          ? allowance.used
-          : await countCurrentAreaItems(supabase, user.id, area);
-
-        // Testing mode keeps free-tier media limits but removes posting-count caps.
-        const maxAllowed = postingLimitBypassEnabled
-          ? -1
-          : freePostAvailable
-            ? FREE_POST_CONFIG.maxAllowed
-            : hasPaidPlan
-              ? (allowance?.capacity ?? summary?.maxAllowed ?? 0)
-              : 0;
-        const maxPhotos = hasPaidPlan
-          ? (allowance?.maxPhotos ?? summary?.maxPhotos ?? FREE_POST_CONFIG.maxPhotos)
-          : FREE_POST_CONFIG.maxPhotos;
-        const maxVideos = postingLimitBypassEnabled
-          ? FREE_POST_CONFIG.maxVideos
-          : freePostAvailable
-            ? FREE_POST_CONFIG.maxVideos
-            : hasPaidPlan
-              ? (allowance?.maxVideos ?? summary?.maxVideos ?? 0)
-              : 0;
-
-        if (cancelled) return;
-
+        setError(null);
         setPlanInfo({
-          tier: tier || "free",
-          isTrial,
-          trialDaysLeft,
-          freePostAvailable,
-          offer: freePostUsage.offer,
-          freePostsUsed: freePostUsage.used,
-          freePostsRemaining: freePostUsage.remaining,
-          postingLimitBypassEnabled,
-          currentCount,
-          maxAllowed,
-          maxPhotos,
-          maxVideos,
-          videoAllowed: postingLimitBypassEnabled
-            ? FREE_POST_CONFIG.videoAllowed
-            : freePostAvailable
-              ? FREE_POST_CONFIG.videoAllowed
-              : maxVideos > 0,
+          ...restoredPostingPlanInfo(facts),
+          plans: restoredPostingPlans(facts.catalogue, area),
         });
       } catch (error) {
         if (!cancelled && generation === readGeneration)
@@ -480,30 +295,26 @@ export function PlanGate({
     // Re-check when tab becomes visible (handles cross-tab free post consumption)
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
-        _entitlementCache.clear();
         void checkEntitlements();
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
     let authAccount: string | null | undefined;
-    const authChanges =
-      getDataBackend() === "foundation"
-        ? createClient().auth.onAuthStateChange((_event, session) => {
-            const next = session?.user.id ?? null;
-            if (authAccount === next) return;
-            authAccount = next;
-            ++readGeneration;
-            queueMicrotask(() => {
-              if (!cancelled) {
-                setLoading(true);
-                void checkEntitlements();
-              }
-            });
-          }).data.subscription
-        : null;
+    const authChanges = createClient().auth.onAuthStateChange((_event, session) => {
+      const next = session?.user.id ?? null;
+      if (authAccount === next) return;
+      authAccount = next;
+      ++readGeneration;
+      queueMicrotask(() => {
+        if (!cancelled) {
+          setLoading(true);
+          void checkEntitlements();
+        }
+      });
+    }).data.subscription;
     return () => {
       cancelled = true;
-      authChanges?.unsubscribe();
+      authChanges.unsubscribe();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [area]);
@@ -692,8 +503,10 @@ export function PlanGate({
                           ? "Free post"
                           : (PLAN_TIER_LABELS[planInfo.tier as PlanTier] ?? "current")}
                       </Badge>{" "}
-                      plan. Mark a sold item, deactivate a post from your dashboard, add another
-                      slot below, or move to multi-listing to keep more posts live at once.
+                      plan.{" "}
+                      {upgradePlans.length > 0
+                        ? "Mark a sold item, deactivate a post from your dashboard, or add another slot below."
+                        : "Mark a sold item or deactivate a post from your dashboard."}
                     </>
                   )}
                 </p>
@@ -706,13 +519,11 @@ export function PlanGate({
 
         <MultiListingNudge emphasis="strong" />
 
-        {upgradePlans.length > 0 && (
-          <InlinePlanGrid
-            plans={upgradePlans}
-            onSubscribe={handleSubscribe}
-            subscribing={subscribing}
-          />
-        )}
+        <InlinePlanGrid
+          plans={upgradePlans}
+          onSubscribe={handleSubscribe}
+          subscribing={subscribing}
+        />
       </div>
     );
   }
@@ -869,7 +680,9 @@ function PlanPickerWithTrial({
                   ? `Each post still uses free-tier media limits: ${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video.`
                   : (planInfo.offer?.adminFreePostsRemaining ?? 0) > 0
                     ? "Each lasts 30 days from approval."
-                    : `Choose ${trialLength(planInfo.offer, 7)} or ${trialLength(planInfo.offer, 30)} days, once. Starts on approval; standard placement.`}
+                    : planInfo.offer?.thirtyDayAvailable
+                      ? `Choose ${trialLength(planInfo.offer, 7)} or ${trialLength(planInfo.offer, 30)} days, once. Starts on approval; standard placement.`
+                      : `${trialLength(planInfo.offer, 7)} days, once. Starts on approval; standard placement.`}
               </p>
             </div>
             <Button
@@ -899,12 +712,17 @@ function PlanPickerWithTrial({
             Choose how you want to post
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            R50 / 30 days, R140 / 90 days or R250 / 180 days.
+            {areaPlans.length > 0
+              ? areaPlans
+                  .map((plan) => `${formatPlanPrice(plan.priceCents)} / ${plan.durationDays} days`)
+                  .join(", ")
+              : PLAN_SALES_PAUSED_NOTE}
           </p>
         </div>
       )}
 
       {planInfo.offer &&
+        planInfo.offer.thirtyDayAvailable &&
         planInfo.isTrial &&
         !planInfo.postingLimitBypassEnabled &&
         !(planInfo.offer.adminFreePostsRemaining ?? 0) && (
@@ -955,8 +773,7 @@ function PlanPickerWithTrial({
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Shared entitlement fetch — deduplicates getUser() + DB calls
-   when multiple hooks are used in the same component / page.
+   Shared entitlement fetch for the media-limit hooks.
    ───────────────────────────────────────────────────────────── */
 interface PlanEntitlementInfo {
   maxPhotos: number;
@@ -964,72 +781,12 @@ interface PlanEntitlementInfo {
   videoAllowed: boolean;
 }
 
-const ENTITLEMENT_CACHE_TTL = 30_000; // 30 s
-const _entitlementCache = new Map<string, { promise: Promise<PlanEntitlementInfo>; ts: number }>();
-
 function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlementInfo> {
-  if (getDataBackend() === "foundation")
-    return fetchPostingAllowance(area).then((facts) => ({
-      maxPhotos: facts.max_photos,
-      maxVideos: facts.max_videos,
-      videoAllowed: facts.max_videos > 0,
-    }));
-  const now = Date.now();
-  const cached = _entitlementCache.get(area);
-  if (cached && now - cached.ts < ENTITLEMENT_CACHE_TTL) return cached.promise;
-
-  const promise = (async (): Promise<PlanEntitlementInfo> => {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return {
-        maxPhotos: FREE_POST_CONFIG.maxPhotos,
-        maxVideos: FREE_POST_CONFIG.maxVideos,
-        videoAllowed: false,
-      };
-    }
-
-    const postingLimitBypassEnabled = isPostingLimitBypassEnabled();
-
-    const { data: entitlement } = await supabase
-      .from("entitlements")
-      .select("tier, expires_at")
-      .eq("user_id", user.id)
-      .eq("area", area)
-      .eq("status", "active")
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const allowance = entitlement ? await fetchAllowance(area) : null;
-    if (allowance?.hasPaidPlan) {
-      return {
-        maxPhotos: allowance.maxPhotos,
-        maxVideos: allowance.maxVideos,
-        videoAllowed: allowance.maxVideos > 0,
-      };
-    }
-
-    if (postingLimitBypassEnabled) {
-      return {
-        maxPhotos: FREE_POST_CONFIG.maxPhotos,
-        maxVideos: FREE_POST_CONFIG.maxVideos,
-        videoAllowed: FREE_POST_CONFIG.videoAllowed,
-      };
-    }
-
-    return {
-      maxPhotos: FREE_POST_CONFIG.maxPhotos,
-      maxVideos: FREE_POST_CONFIG.maxVideos,
-      videoAllowed: FREE_POST_CONFIG.videoAllowed,
-    };
-  })();
-
-  _entitlementCache.set(area, { promise, ts: now });
-  return promise;
+  return fetchPostingAllowance(area).then((facts) => ({
+    maxPhotos: facts.max_photos,
+    maxVideos: facts.max_videos,
+    videoAllowed: facts.max_videos > 0,
+  }));
 }
 
 function usePlanEntitlements(area: MarketplaceArea): PlanEntitlementInfo {
@@ -1052,11 +809,7 @@ function usePlanEntitlements(area: MarketplaceArea): PlanEntitlementInfo {
           error: error instanceof Error ? error.message : String(error),
         });
         if (!cancelled) {
-          setInfo({
-            maxPhotos: getDataBackend() === "foundation" ? 0 : FREE_POST_CONFIG.maxPhotos,
-            maxVideos: getDataBackend() === "foundation" ? 0 : FREE_POST_CONFIG.maxVideos,
-            videoAllowed: getDataBackend() === "foundation" ? false : FREE_POST_CONFIG.videoAllowed,
-          });
+          setInfo({ maxPhotos: 0, maxVideos: 0, videoAllowed: false });
         }
       });
     return () => {

@@ -11,7 +11,7 @@ import reference from "../../src/lib/domains/taxonomy/reference.json" with { typ
 
 // Reviewed role surface of the production API; every other command is for
 // signed-in accounts only.
-export const ANON_API = [
+const ANON_API = [
   "billing_catalogue",
   "get_current_posting_terms",
   "get_public_organisation",
@@ -26,7 +26,7 @@ export const ANON_API = [
   "search_post_cards",
   "get_public_contact_channels",
 ];
-export const SERVICE_API = [
+const SERVICE_API = [
   "advance_evidence_artifact",
   "apply_provider_event",
   "approve_due_commissions",

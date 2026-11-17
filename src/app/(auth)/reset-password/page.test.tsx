@@ -5,8 +5,8 @@ import ResetPasswordPage from "./page";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({
     auth: {
       mfa: {
         listFactors: async () => ({

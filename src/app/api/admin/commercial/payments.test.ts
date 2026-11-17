@@ -1,0 +1,424 @@
+/** @vitest-environment node */
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { NextRequest, type NextResponse } from "next/server";
+import { POST } from "./route";
+import { createFoundationRouteContext } from "@/lib/foundation/request-route";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
+vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: vi.fn() }));
+vi.mock("@/lib/foundation/runtime-connection", () => ({
+  readFoundationRuntimeConnection: () => ({}),
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: vi.fn(),
+  getClientRateLimitIdentity: () => ({ key: "fixture" }),
+}));
+vi.mock("@/lib/services/email", () => ({ sendOrganisationAdminInviteEmail: vi.fn() }));
+
+const payment = "11111111-1111-4111-8111-111111111111",
+  line = "22222222-2222-4222-8222-222222222222",
+  csrf = "c".repeat(64),
+  rpc = vi.fn();
+function request(body: unknown) {
+  return new NextRequest("https://verifymzansi.com/api/admin/commercial", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: {
+      origin: "https://verifymzansi.com",
+      "content-type": "application/json",
+      cookie: `vm_csrf=${csrf}`,
+      "x-csrf-token": csrf,
+    },
+  });
+}
+const refundReply = {
+  request_id: line,
+  status: "applied",
+  kind: "refunded",
+  released_activations: 1,
+  payment_status: "refunded",
+  repeated: false,
+};
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+  vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
+  vi.mocked(createFoundationRouteContext).mockReturnValue({
+    authenticate: async () => ({ rpc }),
+    respond: (response: NextResponse) => response,
+  } as unknown as ReturnType<typeof createFoundationRouteContext>);
+});
+afterEach(() => vi.unstubAllEnvs());
+
+it("refuses a refund without a reference before any database call", async () => {
+  const response = await POST(
+    request({
+      action: "payment.reverse",
+      paymentId: payment,
+      kind: "refunded",
+      reasonCode: "billing_error",
+      reason: "Charged twice by mistake",
+    })
+  );
+  expect(response.status).toBe(422);
+  expect(await response.json()).toMatchObject({ error: "Enter the refund reference." });
+  expect(rpc).not.toHaveBeenCalled();
+});
+
+it("refuses a refund without a reason code", async () => {
+  const response = await POST(
+    request({
+      action: "payment.reverse",
+      paymentId: payment,
+      kind: "refunded",
+      ozowReference: "OZ-REF-1",
+      reason: "Charged twice by mistake",
+    })
+  );
+  expect(response.status).toBe(422);
+  expect(rpc).not.toHaveBeenCalled();
+});
+
+it("records a whole-payment refund and a slot refund with the new commands", async () => {
+  rpc.mockResolvedValue({ data: refundReply, error: null });
+  const whole = await POST(
+    request({
+      action: "payment.reverse",
+      paymentId: payment.toUpperCase(),
+      kind: "refunded",
+      reasonCode: "duplicate",
+      ozowReference: "OZ-REF-1",
+      reason: "Charged twice by mistake",
+    })
+  );
+  expect(whole.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "record_staff_payment_refund",
+    {
+      p_payment_id: payment,
+      p_kind: "refunded",
+      p_reason_code: "duplicate",
+      p_reason: "Charged twice by mistake",
+      p_ozow_reference: "OZ-REF-1",
+    },
+    { get: false }
+  );
+  rpc.mockResolvedValue({ data: { ...refundReply, line_id: line }, error: null });
+  const slot = await POST(
+    request({
+      action: "payment.reverse_slot",
+      lineId: line,
+      kind: "chargeback",
+      reasonCode: "s14_cancellation",
+      ozowReference: "OZ-CB-1",
+      reason: "Bank chargeback on one slot",
+    })
+  );
+  expect(slot.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "record_staff_slot_refund",
+    expect.objectContaining({ p_line_id: line, p_kind: "chargeback", p_ozow_reference: "OZ-CB-1" }),
+    { get: false }
+  );
+});
+
+it("activates a paid but undelivered payment and approves a waiting refund", async () => {
+  rpc.mockResolvedValueOnce({
+    data: {
+      payment_id: payment,
+      fulfillment_status: "fulfilled",
+      entitlements: 1,
+      addon_window: false,
+      commissions: 0,
+      repeated: false,
+    },
+    error: null,
+  });
+  const activated = await POST(
+    request({ action: "payment.activate", paymentId: payment, reason: "Paid after cancel" })
+  );
+  expect(activated.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "activate_staff_paid_payment",
+    { p_payment_id: payment, p_reason: "Paid after cancel" },
+    { get: false }
+  );
+  rpc.mockResolvedValueOnce({ data: context("manual"), error: null });
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: { code: "42501", details: "refund_approver_same", message: "refused" },
+  });
+  const approved = await POST(request({ action: "payment.refund_approve", requestId: line }));
+  expect(approved.status).toBe(403);
+  expect(await approved.json()).toMatchObject({
+    error: "Another staff member must approve this refund: you recorded it.",
+  });
+  expect(rpc).toHaveBeenLastCalledWith(
+    "approve_staff_payment_refund",
+    { p_request_id: line },
+    { get: false }
+  );
+});
+
+const context = (channel: string) => ({
+  channel,
+  status: "awaiting_approval",
+  ozow_checked: false,
+  ozow_missing: false,
+});
+
+it("never approves a refund through Ozow here while refunds through Ozow are off", async () => {
+  vi.stubEnv("OZOW_API_REFUNDS_ENABLED", "false");
+  rpc.mockResolvedValueOnce({ data: context("api"), error: null });
+  const response = await POST(request({ action: "payment.refund_approve", requestId: line }));
+  expect(response.status).toBe(409);
+  expect(rpc).toHaveBeenCalledExactlyOnceWith(
+    "get_staff_refund_context",
+    { p_payment_id: null, p_line_id: null, p_request_id: line },
+    { get: false }
+  );
+});
+
+const transfer = {
+  action: "payment.record_transfer",
+  accountEmail: "thandi@example.test",
+  termDays: 30,
+  slots: 2,
+  amountCents: 13800,
+  bankReference: "FNB 2026-11 A1",
+  clearedOn: "2026-11-13",
+  coolingOffWaiver: true,
+  reason: "EFT cleared; written waiver on file",
+};
+
+const waitingRecord = {
+  transfer_id: line,
+  status: "awaiting_confirmation",
+  account_id: payment,
+  customer_email: "thandi@example.test",
+  similar_records: 0,
+  customer_name: "Thandi D.",
+  term_days: 30,
+  slots: 2,
+  amount_received_cents: 13800,
+  bank_reference: "FNB 2026-11 A1",
+  cleared_on: "2026-11-13",
+  reason: "EFT cleared; written waiver on file",
+  recorded_at: "2026-11-13T10:00:00.000+00:00",
+  recorded_by_me: true,
+  recorded_by_name: null,
+  payment_id: null,
+};
+
+it("confirms a waiting transfer, and refuses the recorder in plain words", async () => {
+  rpc.mockResolvedValueOnce({
+    data: {
+      ...waitingRecord,
+      status: "confirmed",
+      recorded_by_me: false,
+      payment_id: payment,
+      commissions: 0,
+      slots_started: 2,
+      ends_at: "2026-12-13T10:00:00.000+00:00",
+      repeated: false,
+    },
+    error: null,
+  });
+  const confirmed = await POST(request({ action: "payment.transfer_confirm", transferId: line }));
+  expect(confirmed.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "confirm_staff_invoice_payment",
+    { p_transfer_id: line },
+    { get: false }
+  );
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: { code: "42501", details: "transfer_confirmer_same", message: "refused" },
+  });
+  const own = await POST(request({ action: "payment.transfer_confirm", transferId: line }));
+  expect(own.status).toBe(403);
+  expect(await own.json()).toMatchObject({
+    error: "Another staff member must confirm this bank transfer: you recorded it.",
+  });
+  rpc.mockResolvedValueOnce({
+    data: { ...waitingRecord, status: "declined", repeated: false },
+    error: null,
+  });
+  const declined = await POST(
+    request({
+      action: "payment.transfer_decline",
+      transferId: line,
+      reason: "The bank shows no such transfer",
+    })
+  );
+  expect(declined.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "decline_staff_invoice_payment",
+    { p_transfer_id: line, p_reason: "The bank shows no such transfer" },
+    { get: false }
+  );
+});
+
+it("records a cleared bank transfer with the staff command", async () => {
+  rpc.mockResolvedValueOnce({ data: { ...waitingRecord, repeated: false }, error: null });
+  const response = await POST(request(transfer));
+  expect(response.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "record_staff_invoice_payment",
+    {
+      p_account_email: "thandi@example.test",
+      p_term_days: 30,
+      p_slots: 2,
+      p_amount_cents: 13800,
+      p_bank_reference: "FNB 2026-11 A1",
+      p_cleared_on: "2026-11-13",
+      p_cooling_off_waiver: true,
+      p_reason: "EFT cleared; written waiver on file",
+    },
+    { get: false }
+  );
+});
+
+it("refuses a bank transfer without the written waiver or with a bad term before any call", async () => {
+  const unticked = await POST(request({ ...transfer, coolingOffWaiver: false }));
+  expect(unticked.status).toBe(422);
+  expect(await unticked.json()).toMatchObject({
+    error: "Confirm the customer agreed in writing to the cooling-off waiver.",
+  });
+  const term = await POST(request({ ...transfer, termDays: 60 }));
+  expect(term.status).toBe(422);
+  const date = await POST(request({ ...transfer, clearedOn: "13/11/2026" }));
+  expect(date.status).toBe(422);
+  expect(rpc).not.toHaveBeenCalled();
+});
+
+// Customer invoices (P2b): the database numbers, prices and audits them.
+const invoiceRequest = {
+  action: "invoice.issue",
+  accountEmail: " thandi@example.test ",
+  termDays: 90,
+  slots: 3,
+  dueDays: 7,
+  requestId: payment,
+  reason: "Invoice requested by email",
+};
+it("issues and voids a customer invoice with the staff commands", async () => {
+  const view = {
+    invoice_id: line,
+    invoice_number: "VM-2026-000001",
+    status: "issued",
+    issued_at: "2026-11-14T08:00:00.000+00:00",
+    due_on: "2026-11-21",
+    seller: {
+      legal_name: "Verifymzansi (Pty) Ltd",
+      registration_number: "2026/155305/07",
+      vat_registered: false,
+    },
+    buyer: null,
+    revision: 1,
+    term_days: 90,
+    slots: 3,
+    unit_price_cents: 20700,
+    total_cents: 62100,
+    description: "3 × Individual slot — 90 days",
+    currency: "ZAR",
+    payment_reference: "VM-2026-000001",
+    cooling_off_consent_at: null,
+    cooling_off_consent_version: null,
+    consent: {
+      version: "invoice-cooling-off-v1",
+      wording: "My slots start as soon as this invoice is paid.",
+    },
+    paid_at: null,
+    payment_id: null,
+    payment_status: null,
+    voided_at: null,
+    transfer_waiting: false,
+    latest_attempt: null,
+    account_id: payment,
+    customer_email: "thandi@example.test",
+    customer_name: "Thandi D.",
+    issued_by_me: true,
+    issued_by_name: null,
+    issue_reason: "Invoice requested by email",
+    void_reason: null,
+    attempts: 0,
+    extra_payments: [],
+  };
+  rpc.mockResolvedValue({ data: { ...view, repeated: false }, error: null });
+  const issued = await POST(request(invoiceRequest));
+  expect(issued.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "issue_staff_invoice",
+    {
+      p_account_email: "thandi@example.test",
+      p_term_days: 90,
+      p_slots: 3,
+      p_due_days: 7,
+      p_reason: "Invoice requested by email",
+      p_request_id: payment,
+    },
+    { get: false }
+  );
+  rpc.mockResolvedValue({
+    data: {
+      ...view,
+      status: "void",
+      voided_at: view.issued_at,
+      void_reason: "Wrong term",
+      repeated: false,
+    },
+    error: null,
+  });
+  const voided = await POST(
+    request({ action: "invoice.void", invoiceId: line.toUpperCase(), reason: "Wrong term" })
+  );
+  expect(voided.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "void_staff_invoice",
+    { p_invoice_id: line, p_reason: "Wrong term" },
+    { get: false }
+  );
+});
+
+it("records a bank transfer to an invoice with the staff command", async () => {
+  rpc.mockResolvedValue({
+    data: {
+      transfer_id: line,
+      status: "awaiting_confirmation",
+      invoice_number: "VM-2026-000001",
+      repeated: false,
+    },
+    error: null,
+  });
+  const response = await POST(
+    request({
+      action: "invoice.record_transfer",
+      invoiceNumber: "VM-2026-000001",
+      bankReference: "FNB 2026-11",
+      clearedOn: "2026-11-14",
+      coolingOffWaiver: true,
+      reason: "EFT cleared on the statement",
+    })
+  );
+  expect(response.status).toBe(200);
+  expect(rpc).toHaveBeenLastCalledWith(
+    "record_staff_invoice_transfer",
+    expect.objectContaining({
+      p_invoice_number: "VM-2026-000001",
+      p_bank_reference: "FNB 2026-11",
+    }),
+    { get: false }
+  );
+});
+
+it("refuses an invoice with a bad term, slot count or days to pay before any call", async () => {
+  for (const change of [
+    { termDays: 60 },
+    { slots: 26 },
+    { dueDays: 0 },
+    { dueDays: 31 },
+    { requestId: "x" },
+  ])
+    expect((await POST(request({ ...invoiceRequest, ...change }))).status).toBe(422);
+  expect(rpc).not.toHaveBeenCalled();
+});

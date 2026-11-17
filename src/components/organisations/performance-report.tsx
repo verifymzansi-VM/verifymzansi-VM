@@ -68,7 +68,7 @@ export function PerformanceReport({
       aria-labelledby="report-title"
     >
       <header>
-        <p className="text-xs font-semibold uppercase tracking-wider text-brand-green">
+        <p className="text-xs font-semibold text-brand-green">
           VerifyMzansi Partnership Performance Report
         </p>
         <h2 id="report-title" className="font-display text-xl font-semibold">

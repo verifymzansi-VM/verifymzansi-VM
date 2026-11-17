@@ -4,12 +4,13 @@ import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { listRestoredOwnerPosts, restoredOwnerPostRow } from "./restored-owner-posts";
 import { readFoundationOwnerDashboard } from "./owner-dashboard";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import { restoredAreaSchema } from "./areas";
 const count = z.number().int().nonnegative(),
   instant = z.iso.datetime({ offset: true });
 const slot = z.strictObject({
   id: z.uuid(),
   source: z.string(),
-  area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]).nullable(),
+  area: restoredAreaSchema.nullable(),
   planName: z.string().nullable(),
   status: z.literal("active"),
   slotCapacity: count,
@@ -71,9 +72,12 @@ export async function readRestoredPostManager(api: FoundationAuthenticatedApi, a
     PROMOTIONS_EVENTS: "starter",
   };
   const priority = ["month", "quarter", "half_year", "year", "enterprise"];
-  for (const plan of dashboard.paid_plans)
-    if (plan.area && plan.tier && priority.indexOf(plan.tier) > priority.indexOf(tiers[plan.area]))
-      tiers[plan.area] = plan.tier;
+  for (const plan of dashboard.paid_plans) {
+    if (!plan.tier) continue;
+    // An Individual slot (no section) works in every section.
+    for (const area of plan.area ? [plan.area] : (Object.keys(tiers) as MarketplaceArea[]))
+      if (priority.indexOf(plan.tier) > priority.indexOf(tiers[area])) tiers[area] = plan.tier;
+  }
   return {
     responses: [
       { data: rows(listings), error: null },

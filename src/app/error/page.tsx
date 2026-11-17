@@ -1,9 +1,15 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import { CloudOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { StatePanel, StatePanelPage } from "@/components/shared/state-panel";
+import { ErrorPageActions } from "./error-page-actions";
+
+// Where staff and account checks send a refused or failed request
+// (/error?reason=forbidden|unavailable); never a page for search results.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 type ErrorPageSearchParams = {
   reason?: string;
@@ -41,16 +47,7 @@ export default async function ErrorPage({
           icon={<CloudOff />}
           title={message.title}
           description={message.description}
-          actions={
-            <>
-              <Button asChild variant="trust-verified">
-                <Link href="/dashboard">Go to dashboard</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/">Go to homepage</Link>
-              </Button>
-            </>
-          }
+          actions={<ErrorPageActions />}
           showNextSteps
         />
       </StatePanelPage>

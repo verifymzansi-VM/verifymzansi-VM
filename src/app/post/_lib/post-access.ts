@@ -1,7 +1,7 @@
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
-import { AREA_LABELS, type AccountVerificationStatus, type MarketplaceArea } from "@/types/enums";
+import type { AccountVerificationStatus } from "@/types/enums";
 
-export function isVerifiedMember(
+function isVerifiedMember(
   status: AccountVerificationStatus | null | undefined
 ): status is "verified" {
   return status === "verified";
@@ -18,12 +18,4 @@ export function buildPostCategoryHref(
 ): string {
   const safeTargetHref = sanitizeReturnUrl(targetHref);
   return isVerifiedMember(status) ? safeTargetHref : buildVerificationRedirectUrl(safeTargetHref);
-}
-
-export function createVerificationRequiredPayload(area: MarketplaceArea) {
-  return {
-    error: "Verification required",
-    code: "verification_required" as const,
-    reason: `Complete verification before you can start posting in ${AREA_LABELS[area]}.`,
-  };
 }

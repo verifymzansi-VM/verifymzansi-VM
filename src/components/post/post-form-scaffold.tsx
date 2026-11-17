@@ -543,7 +543,7 @@ export function PostEditActionBar({
   saveLabel = "Save changes",
 }: PostEditActionBarProps) {
   return (
-    <div className={ACTION_BAR_CLASS}>
+    <div className={ACTION_BAR_CLASS} data-post-action-bar>
       <Button type="button" variant="outline" onClick={onCancel} className="h-11 rounded-full px-5">
         Cancel
       </Button>
@@ -601,7 +601,7 @@ export function PostFormFooter({
   const isFirstStep = currentStep === 0;
 
   return (
-    <div className={ACTION_BAR_CLASS}>
+    <div className={ACTION_BAR_CLASS} data-post-action-bar>
       <Button
         type="button"
         variant="outline"

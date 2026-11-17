@@ -1,5 +1,5 @@
 import "server-only";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createFoundationServiceApi } from "./service-api";
 import {
@@ -22,7 +22,7 @@ import { isIntakeError, readCipcFile } from "../business-verification/intake";
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const imageMime = z.enum(["image/jpeg", "image/png", "image/webp"]);
 const evidenceMime = z.enum([...imageMime.options, "application/pdf"]);
-export function uploadSeenPhoto(incoming: Request, id: string) {
+export function uploadSeenPhoto(incoming: NextRequest, id: string) {
   return protectBusinessEvidenceRoute(
     incoming,
     "business-verification:visit-photo",
@@ -87,7 +87,7 @@ export function uploadSeenPhoto(incoming: Request, id: string) {
   );
 }
 
-export function readSeenEvidenceFile(incoming: Request, id: string) {
+export function readSeenEvidenceFile(incoming: NextRequest, id: string) {
   return protectBusinessEvidenceRoute(incoming, "admin:evidence:view", false, async ({ api }) => {
     const artifact = z.uuid().parse(id);
     const scope = z.strictObject({
@@ -141,7 +141,7 @@ export function readSeenEvidenceFile(incoming: Request, id: string) {
   });
 }
 
-export function sendSeenOwnerMessage(incoming: Request, id: string) {
+export function sendSeenOwnerMessage(incoming: NextRequest, id: string) {
   return protectBusinessEvidenceRoute(
     incoming,
     "business-verification:message",

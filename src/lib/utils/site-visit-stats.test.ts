@@ -1,7 +1,6 @@
 import { expect, it, vi } from "vitest";
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc }) }));
-vi.mock("@/lib/account/ensure-profile", () => ({ ensureAccountProfile: vi.fn() }));
 import { getSiteVisitStats, EMPTY_SITE_VISIT_STATS } from "./admin-queries";
 it("loads database aggregates without fetching individual visits", async () => {
   rpc.mockResolvedValue({

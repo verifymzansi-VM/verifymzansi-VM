@@ -64,6 +64,10 @@ git diff 0b562f42f96b5390c62244cb9e97b219da1471f4 -- ':(glob)src/app/**/*.tsx' '
 These comparisons should initially have no differences. Backend directories are
 deliberately outside this comparison.
 
+Differences exist today. Every one is listed in `FRONTEND-CHANGES.md` with its
+reason and the owner's decision, and `pnpm check:frontend-freeze` (run in CI)
+fails when a difference is not listed there.
+
 ## Validation
 
 - Frontend source comparison with the selected commit: no differences.

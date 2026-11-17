@@ -6,13 +6,25 @@ retained for integration work. Start with
 [FRONTEND-RESTORE.md](FRONTEND-RESTORE.md) before following the setup or
 deployment instructions below.
 
+**Current state, in short** (details in [AGENTS.md](AGENTS.md)):
+
+- Production runs the **foundation** backend: the London Supabase project, with
+  its SQL in `database/foundation/` (baseline `candidate.sql` plus `updates/`).
+  Browsers reach data only through `api.*` database functions.
+- The **source** backend (`supabase/migrations/`, tables in schema `public`) is
+  retired and empty in production. Sections below marked "Historical" describe
+  it.
+- **Merging into `main` releases to production.** Changes reach `main` only
+  through pull requests that the owner merges
+  ([docs/branch-protection.md](docs/branch-protection.md)).
+
 South African marketplace built on Next.js, Supabase, and Cloudflare. The
 platform has exactly three marketplace areas: `Mzansi Market`,
 `Mzansi Business`, and `Tourism & Events`. Legacy `business-ads`, `mall-shops`,
 and standalone `promotions` surfaces have been removed; their old URLs
 permanently redirect to the canonical area.
 
-[![CI](https://github.com/verifymzansi/verifymzansi/actions/workflows/ci.yml/badge.svg)](https://github.com/verifymzansi/verifymzansi/actions/workflows/ci.yml)
+[![CI](https://github.com/verifymzansi-VM/verifymzansi-VM/actions/workflows/ci.yml/badge.svg)](https://github.com/verifymzansi-VM/verifymzansi-VM/actions/workflows/ci.yml)
 
 ## Overview
 
@@ -76,7 +88,8 @@ pnpm dev
 Open `http://localhost:3000`.
 
 For Playwright, keep that local dev server separate. `pnpm test:e2e` starts its
-own deterministic app instance on a dedicated port.
+own app instance on a dedicated port, against a private local test copy of the
+database (needs Docker; see "Browser tests" below).
 
 ### Docker development
 
@@ -105,9 +118,9 @@ docker compose up -d --build --force-recreate --renew-anon-volumes --no-deps app
 Docker keeps `node_modules` and `.next` in separate container volumes so Linux
 dependencies and compiler caches are not mixed with native Windows builds.
 
-Production deployment is currently manual through the Deploy workflow. Pushing
-`main` runs CI only. Review the security assessment and apply the required
-database changes in isolated staging before approving a production rollout.
+Production deployment is automatic: when CI passes on `main`, the Deploy
+workflow releases that commit. Merging a pull request into `main` is therefore a
+release; see [Deployment](#deployment).
 
 ## Environment Modes
 
@@ -157,12 +170,17 @@ Some Supabase security controls are dashboard-only and are not represented in
   Supabase Management API field `password_hibp_enabled`. Supabase only allows
   that setting on Pro plans and above, so the related Security Advisor warning
   is expected while the project remains on the free plan.
-- The `avatars` storage bucket is intentionally public because the profile
-  avatar upload flow stores a persistent public URL in `avatar_url`. Keep the
-  bucket public for direct object delivery, but do not add a broad public
-  `SELECT` policy on `storage.objects`; that re-enables bucket listing.
+- Historical: describes the retired source backend. The `avatars` storage bucket
+  was intentionally public because the profile avatar upload flow stores a
+  persistent public URL in `avatar_url`. Keep the bucket public for direct
+  object delivery, but do not add a broad public `SELECT` policy on
+  `storage.objects`; that re-enables bucket listing.
 
 ### Supabase CLI From Workspace Env
+
+Historical: describes the retired source backend. These wrappers refuse
+foundation targets; foundation changes follow
+[AGENTS.md](AGENTS.md#database-changes).
 
 The repo includes an env-aware Supabase CLI wrapper so linked remote commands do
 not depend on manually exporting `SUPABASE_ACCESS_TOKEN` and
@@ -182,39 +200,18 @@ pnpm supabase:migration:list
 pnpm supabase:db:push
 ```
 
-### Free-plan backups
+### Backups
 
-Free Supabase projects do not include automated database backups. Before every
-remote migration, use the safe command below; it exports public-table data and
-copies the schema migrations to the ignored `tmp/supabase-backups/` directory.
+Production backups are made by `.github/workflows/database-backup.yml`
+([docs/RUNBOOK.md](docs/RUNBOOK.md#database-backups)). The former
+`supabase:db:backup` and `supabase:db:push:safe` commands exported the retired
+source schema and were removed.
 
-```bash
-pnpm supabase:db:push:safe
-```
-
-For a routine manual backup without applying a migration:
-
-```bash
-pnpm supabase:db:backup
-```
-
-The backup covers public-table data and the checked-in database migrations. It
-deliberately does not include Auth users, Supabase Storage objects, Cloudflare
-R2 files, or database roles; keep the private R2 KYC bucket private and use its
-own recovery process. Copy production backups to an access-controlled location
-outside the workspace.
-
-To check live Supabase Security Advisor findings from workspace env:
-
-```bash
-pnpm supabase:advisor:security
-pnpm supabase:advisor:security -- --json
-pnpm supabase:advisor:security:strict
-```
-
-The advisor script classifies plan-gated findings separately. On free Supabase
-plans, `auth_leaked_password_protection` is reported as plan-blocked instead of
-being treated as an unresolved repo-owned issue.
+The former `supabase:advisor:security` command checked the retired source schema
+and was removed. The live schema's structure, grants and row level security are
+checked in CI against a recorded fingerprint and access-policy invariants
+(`foundation-replay`), and its access rules by the native suite
+(`foundation-native`).
 
 To check live Supabase Performance Advisor findings from workspace env:
 
@@ -234,23 +231,21 @@ To use a different env file, pass it through the generic wrapper:
 pnpm supabase:cli -- --env-file=.env.local migration list
 ```
 
-### Playwright / CI smoke
+### Browser tests
 
-- Playwright does not depend on your local `.env.local`
-- `playwright.config.ts` starts the app through
-  `scripts/start-playwright-server.cjs`
-- That script injects deterministic e2e-safe env values and sets
-  `VERIFYMZANSI_RUNTIME_MODE=e2e`
-- By default, Playwright boots its own server on `http://127.0.0.1:3100` so an
-  unrelated local app on `3000` cannot contaminate browser results
-- Set `PLAYWRIGHT_REUSE_SERVER=1` only when you intentionally want Playwright to
-  attach to an already-running app on the configured Playwright port
-- `chromium`, `firefox`, and `mobile-chrome` run the full interaction suite;
-  `webkit` and `mobile-safari` are currently scoped to the stable page-load
-  accessibility coverage because broader Safari automation intermittently
-  renders blank public/auth pages in this app
-- The app still boots through `next start`, but production-only launch rules are
-  relaxed for that explicit e2e mode
+- `pnpm test:e2e` (`playwright.foundation.config.ts`, specs in
+  `e2e/foundation/`) runs the restored website in foundation mode against a
+  private, throwaway test copy: a local Supabase stack on your own Docker whose
+  database is built only from `database/foundation/`. It needs Docker and the
+  Supabase CLI, and refuses any hosted project
+- Playwright does not depend on your local `.env.local`: the copy's website gets
+  fixed test settings (`scripts/lib/foundation-e2e-website.mjs`) with
+  `VERIFYMZANSI_RUNTIME_MODE=e2e` and serves on `http://127.0.0.1:3110`
+- Projects: `chromium` and `mobile-chrome`. CI runs them as the required check
+  `e2e-foundation` (workflow "E2E foundation")
+- Delete the copy afterwards with `pnpm foundation:e2e:down`
+- The old stub browser suite (`playwright.config.ts`, `e2e/*.spec.ts`) was
+  retired on 2026-11-11 (`e2e/foundation/PORTING.md`)
 
 ### Production / Cloudflare
 
@@ -311,45 +306,42 @@ pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 
 ## Key Commands
 
-| Command                                                                                | Purpose                                              |
-| -------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `pnpm dev`                                                                             | Start the local Next.js dev server                   |
-| `pnpm build`                                                                           | Production Next.js build                             |
-| `pnpm brand:assets`                                                                    | Regenerate logo lockups, favicon, and app icons      |
-| `pnpm knip`                                                                            | Dead-code scan for unused files and exports          |
-| `pnpm jscpd`                                                                           | Advisory code-duplication scan with HTML/JSON report |
-| `pnpm jscpd:check`                                                                     | Regression-only duplication budget gate              |
-| `pnpm depcruise`                                                                       | Import-graph check for cycles and test-only leaks    |
-| `pnpm lint`                                                                            | ESLint                                               |
-| `pnpm typecheck`                                                                       | TypeScript typecheck                                 |
-| `pnpm test`                                                                            | Blocking Vitest lane used for launch gating          |
-| `pnpm test:blocking`                                                                   | Explicit blocking Vitest lane                        |
-| `pnpm run stability:check`                                                             | One-command full stabilization gate                  |
-| `pnpm test:coverage`                                                                   | Alias for the core coverage lane                     |
-| `pnpm test:coverage:core`                                                              | Coverage lane focused on core server and domain code |
-| `pnpm test:dev-startup`                                                                | Local dev startup smoke (boot + / + /api/health)     |
-| `pnpm test:launch:flows`                                                               | Billing + OTP + DSAR launch-confidence bundle        |
-| `pnpm test:deep`                                                                       | Core coverage plus Playwright                        |
-| `pnpm test:all`                                                                        | Full validation shortcut                             |
-| `pnpm payments:audit`                                                                  | Paid-flow security and live posture audit            |
-| `pnpm safety:review`                                                                   | One-command code review and security gate            |
-| `pnpm safety:ci-review`                                                                | CI-safe review gate (preflight is non-blocking)      |
-| `pnpm safety:release`                                                                  | One-command release-readiness gate                   |
-| `pnpm test:e2e`                                                                        | Full Playwright suite                                |
-| `pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome` | Launch-path smoke coverage                           |
-| `pnpm bootstrap:operator`                                                              | Create or update the first live staff account        |
-| `pnpm reset:launch-data`                                                               | Launch-reset inventory / wipe tool                   |
-| `pnpm supabase:migration:list`                                                         | List linked Supabase local vs remote migrations      |
-| `pnpm supabase:db:push`                                                                | Apply pending local migrations to linked Supabase    |
-| `pnpm preflight`                                                                       | Local launch checks with development-mode validation |
-| `pnpm preflight:prod`                                                                  | Production launch checks                             |
-| `pnpm validate:launch-env`                                                             | Fail-fast production env validation                  |
-| `pnpm ozow:webhook:secret`                                                             | Fetch Ozow webhook secret(s) via One API             |
-| `pnpm security:audit`                                                                  | Dependency vulnerability gate                        |
-| `pnpm secret-scan`                                                                     | Secret leak scan                                     |
-| `pnpm licenses:check`                                                                  | License policy gate                                  |
-| `pnpm build:cloudflare`                                                                | OpenNext Cloudflare build                            |
-| `pnpm email:domain:check`                                                              | Public DNS check for Gmail-backed domain email       |
+| Command                        | Purpose                                              |
+| ------------------------------ | ---------------------------------------------------- |
+| `pnpm dev`                     | Start the local Next.js dev server                   |
+| `pnpm build`                   | Production Next.js build                             |
+| `pnpm brand:assets`            | Regenerate logo lockups, favicon, and app icons      |
+| `pnpm knip`                    | Dead-code scan for unused files and exports          |
+| `pnpm jscpd`                   | Advisory code-duplication scan with HTML/JSON report |
+| `pnpm jscpd:check`             | Regression-only duplication budget gate              |
+| `pnpm depcruise`               | Import-graph check for cycles and test-only leaks    |
+| `pnpm lint`                    | ESLint                                               |
+| `pnpm typecheck`               | TypeScript typecheck                                 |
+| `pnpm test`                    | Blocking Vitest lane used for launch gating          |
+| `pnpm test:blocking`           | Explicit blocking Vitest lane                        |
+| `pnpm run stability:check`     | One-command full stabilization gate                  |
+| `pnpm test:coverage`           | Alias for the core coverage lane                     |
+| `pnpm test:coverage:core`      | Coverage lane focused on core server and domain code |
+| `pnpm test:dev-startup`        | Local dev startup smoke (boot + / + /api/health)     |
+| `pnpm test:launch:flows`       | Billing + OTP + DSAR launch-confidence bundle        |
+| `pnpm test:deep`               | Core coverage plus Playwright                        |
+| `pnpm test:all`                | Full validation shortcut                             |
+| `pnpm payments:audit`          | Paid-flow security and live posture audit            |
+| `pnpm safety:review`           | One-command code review and security gate            |
+| `pnpm safety:ci-review`        | CI-safe review gate (preflight is non-blocking)      |
+| `pnpm safety:release`          | One-command release-readiness gate                   |
+| `pnpm test:e2e`                | Full Playwright suite (foundation test copy)         |
+| `pnpm supabase:migration:list` | List linked Supabase local vs remote migrations      |
+| `pnpm supabase:db:push`        | Apply pending local migrations to linked Supabase    |
+| `pnpm preflight`               | Local launch checks with development-mode validation |
+| `pnpm preflight:prod`          | Production launch checks                             |
+| `pnpm validate:launch-env`     | Fail-fast production env validation                  |
+| `pnpm ozow:webhook:secret`     | Fetch Ozow webhook secret(s) via One API             |
+| `pnpm security:audit`          | Dependency vulnerability gate                        |
+| `pnpm secret-scan`             | Secret leak scan                                     |
+| `pnpm licenses:check`          | License policy gate                                  |
+| `pnpm build:cloudflare`        | OpenNext Cloudflare build                            |
+| `pnpm email:domain:check`      | Public DNS check for Gmail-backed domain email       |
 
 ## Domain Email Via Gmail
 
@@ -357,7 +349,7 @@ Keep the public addresses branded on `@verifymzansi.com` and use Gmail only as
 the mailbox behind them.
 
 - Inbound receive path: Cloudflare Email Routing catch-all or explicit aliases
-  forward to `verifymzansi2s@gmail.com`
+  forward to the private Gmail inbox named in `CF_EMAIL_ROUTING_DESTINATION`
 - Public aliases to keep in the app: `hello@verifymzansi.com`,
   `support@verifymzansi.com`, `privacy@verifymzansi.com`,
   `security@verifymzansi.com`
@@ -412,7 +404,7 @@ pnpm secret-scan
 pnpm security:audit
 pnpm licenses:check
 pnpm build
-pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome
+pnpm test:e2e
 ```
 
 To specifically validate local `pnpm dev` startup behavior in one command, run:
@@ -437,8 +429,9 @@ pnpm test:launch:flows
 ```
 
 That bundle runs the billing payment route/library/worker tests, OTP route and
-verification page tests, DSAR submit/admin/page tests, then finishes with
-Chromium Playwright smoke for the billing round-trip and DSAR browser flow.
+verification page tests, DSAR submit/admin/page tests, then finishes with the
+Chromium browser tests for checkout and fulfilment and for staff review
+(including privacy requests) on the foundation test copy.
 
 For automated safety gates, use:
 
@@ -524,9 +517,8 @@ deployed Cloudflare posture, and local production env readiness, run:
 pnpm payments:audit
 ```
 
-That command writes JSON and Markdown artifacts to `tmp/payment-security-audit`
-and is documented in
-[docs/playbooks/payment-security-audit.md](docs/playbooks/payment-security-audit.md).
+That command writes JSON and Markdown artifacts to `tmp/payment-security-audit`.
+Its operator playbook is kept outside the public repository.
 
 Before a production release, also run the production-only validation checks:
 
@@ -550,96 +542,37 @@ It also treats "Spotlight" as Sentry's current
 [Toolbar](https://docs.sentry.io/product/sentry-toolbar/) workflow for
 page-aware local debugging.
 
-## Live Operator Bootstrap
+## Live Operator Bootstrap and Launch Reset
 
-After a launch reset, the linked Supabase project can be left with zero auth
-users. Use the minimal operator bootstrap script to create the first admin or
-moderator without reintroducing any demo or seed data:
-
-```bash
-pnpm bootstrap:operator -- \
-  --email=admin@verifymzansi.com \
-  --password='replace-with-strong-password' \
-  --display-name='VerifyMzansi Admin' \
-  --role=admin \
-  --reason='First admin after launch reset' \
-  --confirm-project=your-project-ref
-```
-
-Notes:
-
-- Roles: `admin`, `governance_controller` or `moderator`. A written `--reason`
-  is required.
-- It creates or updates the auth user, upserts a minimal `account_profiles` row,
-  and grants the role in `staff_roles` (the only source of staff authority) with
-  a role-history row and a `role_provisioned_by_owner` audit entry.
-  `app_metadata.role` is set only as a display hint.
-- Everyday role changes go through Admin → Role Management, where an independent
-  person approves them. Use this script only for the first admins and for
-  recovery; see `docs/runbooks/admin-provisioning.md`.
-- It refuses to run unless `--confirm-project` matches the current
-  `NEXT_PUBLIC_SUPABASE_URL` project ref.
-
-## Launch Reset
-
-Use the launch reset tool in inventory mode first, then only run a destructive
-wipe after reviewing the generated snapshot:
-
-```bash
-pnpm reset:launch-data
-```
-
-For a destructive wipe that keeps exactly one admin account, pass the project
-confirmation flag and an explicit preserve target when needed:
-
-```bash
-pnpm reset:launch-data -- \
-  --execute \
-  --confirm-project=your-project-ref \
-  --preserve-admin-email=admin@verifymzansi.com
-```
-
-Or preserve by auth user id:
-
-```bash
-pnpm reset:launch-data -- \
-  --execute \
-  --confirm-project=your-project-ref \
-  --preserve-admin-user-id=00000000-0000-0000-0000-000000000000
-```
-
-Notes:
-
-- Inventory writes a JSON snapshot to `tmp/` showing auth users, admin users,
-  legal holds, and table counts.
-- Wipe mode now refuses to proceed when multiple admin users exist unless you
-  explicitly choose which admin to preserve.
-- When there is exactly one admin user, wipe mode preserves it automatically.
-- The wipe clears tracked application tables first, then deletes all auth users
-  except the preserved admin.
-- Media and KYC object deletion completes through `r2_cleanup_queue` and the
-  retention worker after the database wipe.
+The former `bootstrap:operator` and `reset:launch-data` scripts worked on the
+retired source schema and were removed. On the foundation backend, the first
+admin is set up with the owner bootstrap procedure in
+[database/foundation/README.md](database/foundation/README.md).
 
 ## Deployment
 
-Canonical release path: push to `master` and let GitHub Actions deploy from
-Ubuntu using Node `22.x`.
+Merging a pull request into `main` releases it. Nobody pushes to `main`
+directly; the owner merges reviewed pull requests whose required checks pass
+([docs/branch-protection.md](docs/branch-protection.md)).
 
-```bash
-git push origin master
-```
+What happens after a merge (`.github/workflows/deploy.yml`):
 
-The deploy workflow now:
+1. CI runs on the new `main` commit.
+2. When that CI run succeeds, the Deploy workflow starts for exactly that
+   commit. It refuses commits without a successful `main` CI run.
+3. It validates the production configuration and the foundation runtime
+   contracts, builds the OpenNext Cloudflare Worker on Ubuntu with Node 22, and
+   deploys the site monitor, the main `verifymzansi` Worker and the helper
+   Workers (rate limiter, retention clean-up, payment clean-up, operations
+   jobs).
+4. It checks production health and smoke pages after the deploy. Today a failed
+   health check rolls back only the main Worker; see
+   [docs/RUNBOOK.md](docs/RUNBOOK.md#rollback-on-failure).
 
-1. Validates the full production env contract with
-   `scripts/validate-launch-env.ts`
-2. Runs the blocking launch gate: `pnpm lint`, `pnpm typecheck`,
-   `pnpm test:blocking`, `pnpm preflight`, `pnpm secret-scan`,
-   `pnpm security:audit`, `pnpm licenses:check`, `pnpm build`, and Playwright
-   smoke
-3. Builds the Cloudflare bundle on Ubuntu
-4. Deploys the Pages app plus supporting Workers
-5. Fails if `/api/health` comes back degraded after deploy
+A manual run of the Deploy workflow (Actions → Deploy → Run workflow) releases
+the current `main` commit and also requires its successful CI run. Database
+updates are not part of the deploy: the owner applies them before the code that
+needs them is merged ([AGENTS.md](AGENTS.md#database-changes)).
 
 ## Startup Failures
 
@@ -661,7 +594,7 @@ Local `pnpm build:cloudflare`, `pnpm preview:cloudflare`, and `pnpm deploy` are
 not supported on native Windows because Wrangler/OpenNext emits filenames that
 Windows cannot materialize. Use one of:
 
-- GitHub Actions on `master`
+- GitHub Actions (CI on pull requests and `main`)
 - Ubuntu
 - WSL on an ext4-backed workspace such as `~/verifymzansi`
 
@@ -679,7 +612,7 @@ GitHub Copilot.
 Use the guide in [docs/cloudflare-mcp.md](docs/cloudflare-mcp.md) to validate
 Cloudflare MCP against this repo's R2, KV, Durable Object, and Workers/Pages
 resources. The workspace MCP command uses the validated local startup form
-`npx -y @cloudflare/mcp-server-cloudflare run`.
+`npx -y @cloudflare/mcp-server-cloudflare@0.2.0 run`.
 
 ## Project Structure
 
@@ -692,9 +625,10 @@ src/
   test/                shared test setup
 scripts/               preflight, validation, security, and release tooling
 docs/                  runbooks, playbooks, audits, and operator references
-supabase/              migrations and schema assets
+database/foundation/   live backend SQL: baseline, updates and generated API contracts
+supabase/              retired source-backend migrations (historical; never replay on foundation)
 workers/               Cloudflare Workers
-e2e/                   Playwright suites
+e2e/foundation/        Playwright suite (foundation test copy)
 ```
 
 ## Launch Notes

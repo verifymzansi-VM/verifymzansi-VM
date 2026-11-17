@@ -7,14 +7,18 @@ import { readFoundationAccountContext, FoundationAccountContextError } from "./a
 import { readFoundationRuntimeConnection } from "./runtime-connection";
 import { FOUNDATION_POST_SIGNUP_PATH } from "./auth-navigation";
 import { readMyRestrictionStatus } from "./enforcement";
+import { rememberFoundationPageSession } from "./page-session-handoff";
 
 function under(path: string, prefix: string) {
   return path === prefix || path.startsWith(prefix + "/");
 }
 
-/** Routing hints only; page layouts and every API command still authorize their
- * own operations. Uses the verified London caller and live canonical account,
- * never source tables, JWT role metadata or a phone-gate cookie. */
+/** Uses the verified London caller (GoTrue) and live canonical account, never
+ * source tables, JWT role metadata or a phone-gate cookie. Every API command
+ * still authorizes its own operation in SQL. A page request that passes hands
+ * this verified answer to its render (page-session-handoff.ts): page layouts
+ * then take the session, account and staff state from it instead of checking
+ * again, so only a full GoTrue + account-context check may hand one over. */
 export async function checkFoundationPageAccess(request: NextRequest, authPage: boolean) {
   const path = request.nextUrl.pathname;
   const apiRequest = path.startsWith("/api/");
@@ -91,6 +95,20 @@ export async function checkFoundationPageAccess(request: NextRequest, authPage: 
       const url = new URL(FOUNDATION_POST_SIGNUP_PATH, request.url);
       url.searchParams.set("returnUrl", path + request.nextUrl.search);
       return reply(NextResponse.redirect(url));
+    }
+    if (!apiRequest && (request.method === "GET" || request.method === "HEAD")) {
+      // The page render reuses this full check instead of repeating it.
+      // Optional: without it the page simply checks in full.
+      try {
+        await rememberFoundationPageSession(request, {
+          tokenDigest: await caller.tokenDigest(),
+          account,
+          user: caller.user,
+        });
+      } catch {
+        // Safe to ignore: without the remembered result the page runs the full
+        // sign-in check itself, so nothing is skipped or trusted.
+      }
     }
     return reply(next());
   } catch (error) {

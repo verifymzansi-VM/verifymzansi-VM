@@ -17,8 +17,9 @@ import {
 } from "@/components/ui/dialog";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { contactPhone } from "@/lib/utils/contact-links";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { withCsrfHeaders } from "@/lib/utils/csrf-client";
 import { cn } from "@/lib/utils";
+import { useDialogReturnFocus } from "@/hooks/use-dialog-return-focus";
 import type { ContactActionConfig } from "./contact-action-types";
 
 /** Private enquiries go to the existing recipient inbox; nothing is published on the post. */
@@ -46,7 +47,8 @@ export function ContentEnquiryAction({
     if (!messageOpen) return;
     let cancelled = false;
     void (async () => {
-      const { createClient } = await import("@/lib/supabase/client");
+      const { getRestoredFoundationBrowserClient: createClient } =
+        await import("@/lib/foundation/restored-browser-client");
       const client = createClient();
       const {
         data: { user },
@@ -127,7 +129,10 @@ export function ContentEnquiryAction({
     }
   }
 
-  function openEnquiry() {
+  const { rememberOpener, onCloseAutoFocus } = useDialogReturnFocus();
+
+  function openEnquiry(event?: { currentTarget: EventTarget | null }) {
+    rememberOpener(event?.currentTarget);
     setMessageSent(false);
     setMessageError("");
     setMessageOpen(true);
@@ -156,7 +161,10 @@ export function ContentEnquiryAction({
         </Button>
       )}
       <Dialog open={messageOpen} onOpenChange={setMessageOpen}>
-        <DialogContent className={cn("sm:max-w-md", contentClassName)}>
+        <DialogContent
+          className={cn("sm:max-w-md", contentClassName)}
+          onCloseAutoFocus={onCloseAutoFocus}
+        >
           <DialogHeader>
             <DialogTitle>{config.messageTitle}</DialogTitle>
             <DialogDescription>

@@ -12,7 +12,6 @@ import {
   setCachedKycArtifactBlob,
 } from "@/lib/utils/kyc-artifact-blob-cache";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { getDataBackend } from "@/lib/data-backend";
 import type { NativeIdentityScope } from "@/lib/admin/native-identity-review";
 import {
   nativeEvidenceBody,
@@ -62,7 +61,7 @@ export function KycInlinePreview({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const allowedToLoad = getDataBackend() !== "foundation" || Boolean(reviewScope);
+  const allowedToLoad = Boolean(reviewScope);
 
   // IntersectionObserver — trigger load when card scrolls into viewport
   useEffect(() => {

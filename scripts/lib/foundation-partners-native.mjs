@@ -47,8 +47,9 @@ export async function testPartners({
   };
   const asStaff = async () => typed(await commercial.refresh());
   const refusedWith = (reason) => (error) =>
-    // Compared by name: tsx may load the shared module twice, defeating instanceof.
-    error?.name === "Error" &&
+    // Compared by the class's stable name: tsx may load the shared module twice,
+    // defeating instanceof.
+    error?.name === "FoundationOrganisationError" &&
     String(error.message).startsWith("Foundation organisation request failed") &&
     error.reason === reason;
   const reason = "Synthetic partner programme setup";

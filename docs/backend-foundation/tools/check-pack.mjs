@@ -3,7 +3,9 @@ import path from "node:path";
 import assert from "node:assert/strict";
 const root = path.resolve("docs/backend-foundation");
 const read = (name) => JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
-const map = read("schema-map.json");
+const snapshot = (name) =>
+  JSON.parse(fs.readFileSync(path.resolve("database/source-inventory", name), "utf8"));
+const map = snapshot("schema-map.json");
 const tables = read("evidence/tables.json");
 assert.equal(map.tables.length, 88);
 assert.equal(new Set(map.tables.map((x) => x.source)).size, 88);
@@ -15,8 +17,8 @@ assert.equal(
   map.tables.reduce((n, x) => n + x.currentColumns.length, 0),
   1051
 );
-assert.equal(read("evidence/page-inventory.json").length, 109);
-assert.equal(read("evidence/route-inventory.json").length, 131);
+assert.equal(snapshot("page-inventory.json").length, 109);
+assert.equal(snapshot("route-inventory.json").length, 131);
 assert.equal(read("job-register.json").jobs.length, 24);
 const tasks = read("task-register.json").tasks;
 const ids = new Set(tasks.map((x) => x.id));

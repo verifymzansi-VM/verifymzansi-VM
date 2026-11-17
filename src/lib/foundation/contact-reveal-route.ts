@@ -9,6 +9,7 @@ import { parseJsonRequest } from "../utils/api";
 import { verifyPublicTurnstile } from "../utils/public-mutation-route";
 import { checkRateLimit, getClientRateLimitIdentity } from "../utils/rate-limit";
 import { createLogger } from "../utils/logger";
+import { foundationKind } from "./areas";
 
 const log = createLogger("PublicContactReveal");
 const headers = { "Cache-Control": "private, no-store", "CDN-Cache-Control": "no-store" };
@@ -45,7 +46,7 @@ export async function revealFoundationContact(request: NextRequest) {
       );
     const api = foundationServerPublicApi();
     const post = await readFoundationPublicPost(api, { id: parsed.data.targetId });
-    const expected = parsed.data.targetType === "promotion" ? "event" : parsed.data.targetType;
+    const expected = foundationKind(parsed.data.targetType);
     if (!post || post.kind !== expected)
       return NextResponse.json({ error: "Post not found" }, { status: 404, headers });
     const channels = await readFoundationPublicContactChannels(api, { id: post.id });

@@ -1,5 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  expectFoundationPostFields,
+  installFoundationPostFetch,
+} from "@/test/foundation-post-transport";
 import EditPromotionPage from "./page";
 import { useParams, useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -81,6 +85,9 @@ vi.mock("@/components/billing/plan-gate", () => ({
 describe("EditPromotionPage", () => {
   const mockPush = vi.fn();
   const mockToast = vi.fn();
+  let fetchMock: Mock;
+  let termsLoaded: () => Promise<void>;
+
   const createDefaultPromotion = (
     overrides: Partial<{
       photos: string[];
@@ -89,9 +96,11 @@ describe("EditPromotionPage", () => {
       business_id: string | null;
       event_details: Record<string, unknown>;
       price_cents: number | null;
+      revision: number | null;
     }> = {}
   ) => ({
     id: "promotion-1",
+    revision: 6,
     title: "Night Market",
     description: "Community event with food, music, and stalls.",
     promotion_type: "event",
@@ -120,26 +129,29 @@ describe("EditPromotionPage", () => {
       business_id: string | null;
       price_cents: number | null;
       event_details: Record<string, unknown>;
+      revision: number | null;
     }> = {}
   ) {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          promotion: createDefaultPromotion(promotionOverrides),
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          businesses: [{ id: "business-1", business_name: "Nomsa Kitchen" }],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true }),
-      }) as unknown as typeof fetch;
+    ({ api: fetchMock, termsLoaded } = installFoundationPostFetch(
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            promotion: createDefaultPromotion(promotionOverrides),
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            businesses: [{ id: "business-1", business_name: "Nomsa Kitchen" }],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true }),
+        })
+    ));
   }
 
   beforeEach(() => {
@@ -154,8 +166,9 @@ describe("EditPromotionPage", () => {
   });
 
   it("keeps a saved free event as free entry and lets it be saved", async () => {
-    mockEditPromotionFetch({ price_cents: 0 });
+    mockEditPromotionFetch({ price_cents: 0, revision: 11 });
     render(<EditPromotionPage />);
+    await termsLoaded();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Night Market")).toBeInTheDocument();
@@ -165,16 +178,16 @@ describe("EditPromotionPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
     });
-    const payload = JSON.parse(
-      (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2][1].body as string
-    );
+    const payload = JSON.parse(fetchMock.mock.calls[2][1].body as string);
     expect(payload.price_zar).toBe(0);
+    expectFoundationPostFields(payload, { expectedRevision: 11 });
   });
 
   it("hydrates saved promotion details and sends normalized payload on save", async () => {
     render(<EditPromotionPage />);
+    await termsLoaded();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Night Market")).toBeInTheDocument();
@@ -199,10 +212,10 @@ describe("EditPromotionPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
     });
 
-    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2];
+    const request = fetchMock.mock.calls[2];
     const payload = JSON.parse(request[1].body as string);
 
     expect(request[0]).toBe("/api/promotions/promotion-1");
@@ -213,6 +226,7 @@ describe("EditPromotionPage", () => {
     expect(payload.start_date).toBe("2099-03-10T00:00:00.000Z");
     expect(payload.end_date).toBe("2099-03-12T00:00:00.000Z");
     expect(payload.event_details.tickets_url).toBe("https://tickets.example.com/night-market");
+    expectFoundationPostFields(payload, { expectedRevision: 6 });
   });
 
   it("keeps event details the form does not edit and saves website, map pin and socials", async () => {
@@ -226,6 +240,7 @@ describe("EditPromotionPage", () => {
       },
     });
     render(<EditPromotionPage />);
+    await termsLoaded();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("https://nightmarket.example.com")).toBeInTheDocument();
@@ -243,9 +258,9 @@ describe("EditPromotionPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
     });
-    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2];
+    const request = fetchMock.mock.calls[2];
     const payload = JSON.parse(request[1].body as string);
 
     expect(payload.event_details).toMatchObject({
@@ -260,11 +275,24 @@ describe("EditPromotionPage", () => {
     });
   });
 
+  it("reports a post loaded without its revision as a failed load", async () => {
+    mockEditPromotionFetch({ revision: null });
+
+    render(<EditPromotionPage />);
+
+    expect(await screen.findByText("Failed to load Tourism & Events post")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Night Market")).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/promotions/promotion-1",
+      expect.objectContaining({ method: "PATCH" })
+    );
+  });
+
   it("does not render a promotion type selector (events only)", async () => {
     render(<EditPromotionPage />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalled();
     });
 
     expect(screen.queryByLabelText("Promotion Type")).not.toBeInTheDocument();
@@ -278,6 +306,7 @@ describe("EditPromotionPage", () => {
     });
 
     render(<EditPromotionPage />);
+    await termsLoaded();
 
     const saveButton = await screen.findByRole("button", { name: /Save Changes/i });
     expect(saveButton).toBeEnabled();
@@ -286,10 +315,10 @@ describe("EditPromotionPage", () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
     });
 
-    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2];
+    const request = fetchMock.mock.calls[2];
     const payload = JSON.parse(request[1].body as string);
 
     expect(payload.images).toEqual([]);
@@ -307,44 +336,48 @@ describe("EditPromotionPage", () => {
     });
 
     render(<EditPromotionPage />);
+    await termsLoaded();
 
     const saveButton = await screen.findByRole("button", { name: /Save Changes/i });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
     });
 
     expect(
       screen.queryByText("Video upload is not available on your current plan.")
     ).not.toBeInTheDocument();
-    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2];
+    const request = fetchMock.mock.calls[2];
     const payload = JSON.parse(request[1].body as string);
     expect(payload.videos).toEqual(["https://example.com/promo-video.mp4"]);
   });
 
   it("keeps unsaved changes on the form when an earlier promotion edit is pending", async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          promotion: createDefaultPromotion(),
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          businesses: [{ id: "business-1", business_name: "Nomsa Kitchen" }],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 409,
-        json: async () => ({ code: "pending_edit_exists" }),
-      }) as unknown as typeof fetch;
+    ({ api: fetchMock, termsLoaded } = installFoundationPostFetch(
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            promotion: createDefaultPromotion(),
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            businesses: [{ id: "business-1", business_name: "Nomsa Kitchen" }],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 409,
+          json: async () => ({ code: "pending_edit_exists" }),
+        })
+    ));
 
     render(<EditPromotionPage />);
+    await termsLoaded();
 
     const saveButton = await screen.findByRole("button", { name: /Save Changes/i });
     fireEvent.click(saveButton);

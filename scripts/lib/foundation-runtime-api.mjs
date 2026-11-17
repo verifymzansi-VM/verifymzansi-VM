@@ -6,6 +6,34 @@ const publicBusinessProjections = new Set([
   "get_public_frontend_business_cipc",
   "get_public_frontend_business_affiliations",
 ]);
+// Reviewed public settings (20261117082020_online_payment_limit.sql,
+// 20261117144001_sample_post_hide_list.sql): no arguments, no account data,
+// readable by visitors like the price catalogue.
+const publicSettingReads = new Map([
+  [
+    "get_payment_limits",
+    (data) =>
+      data !== null &&
+      typeof data === "object" &&
+      !Array.isArray(data) &&
+      Object.keys(data).join() === "online_max_cents" &&
+      Number.isSafeInteger(data.online_max_cents) &&
+      data.online_max_cents > 0,
+  ],
+  [
+    "get_hidden_sample_posts",
+    (data) =>
+      data !== null &&
+      typeof data === "object" &&
+      !Array.isArray(data) &&
+      Object.keys(data).join() === "slugs" &&
+      Array.isArray(data.slugs) &&
+      data.slugs.length <= 500 &&
+      data.slugs.every(
+        (slug) => typeof slug === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)
+      ),
+  ],
+]);
 function validateRuntimeAudience(fn) {
   assert.deepEqual(Object.keys(fn.execute).sort(), ["anon", "authenticated", "service_role"]);
   assert.equal(typeof fn.execute.authenticated, "boolean");
@@ -16,18 +44,23 @@ function validateRuntimeAudience(fn) {
     assert.equal(fn.volatility, "s");
     assert.equal(fn.returns, "jsonb");
     assert.deepEqual(fn.arguments, [{ name: "p_post_ids", sqlType: "uuid[]", optional: false }]);
+  } else if (publicSettingReads.has(fn.name)) {
+    assert.deepEqual(fn.execute, { anon: true, authenticated: true, service_role: false });
+    assert.equal(fn.volatility, "s");
+    assert.equal(fn.returns, "jsonb");
+    assert.deepEqual(fn.arguments, []);
   } else assert.equal(fn.execute.anon, false);
 }
 
-export function provisionedFoundationApiManifest(
-  baseline,
-  runtime = JSON.parse(
+const readRuntimeManifest = () =>
+  JSON.parse(
     readFileSync(
       new URL("../../database/foundation/runtime-api-manifest.json", import.meta.url),
       "utf8"
     )
-  )
-) {
+  );
+
+export function provisionedFoundationApiManifest(baseline, runtime = readRuntimeManifest()) {
   assert.equal(runtime.schemaVersion, 1);
   assert.equal(runtime.schema, "api");
   const names = new Set(baseline.functions.map((fn) => fn.name));
@@ -40,29 +73,27 @@ export function provisionedFoundationApiManifest(
   return { ...baseline, functions: [...baseline.functions, ...runtime.functions] };
 }
 
-/** Presence and audience probe for reviewed additive RPCs. This is
- * not proof of authenticated DTOs or exact EXECUTE grants; SQL tests and live
- * authenticated checks provide those separate pieces of evidence. No user
- * credentials, session tokens, messages or privileged writes are involved. */
-export async function verifyFoundationRuntimeApi(
+/** Anonymous, read-only probe of every reviewed runtime RPC. Each result is
+ * `present` (it answered as reviewed: an empty public projection or an
+ * anonymous refusal), `missing` (PostgREST has no such function with these
+ * arguments) or `unexpected`. No user credentials, session tokens, messages or
+ * privileged writes are involved; only the publishable key is sent. */
+export async function probeFoundationRuntimeApi(
   connection,
   fetcher = fetch,
-  manifest = JSON.parse(
-    readFileSync(
-      new URL("../../database/foundation/runtime-api-manifest.json", import.meta.url),
-      "utf8"
-    )
-  )
+  manifest = readRuntimeManifest()
 ) {
   assert.equal(manifest.schemaVersion, 1);
   assert.equal(manifest.schema, "api");
+  // A sanity bound on the probe (one anonymous request per command), raised
+  // from 160 when the customer invoice commands took the manifest to 163.
   assert.ok(
     Array.isArray(manifest.functions) &&
       manifest.functions.length > 0 &&
-      manifest.functions.length <= 160
+      manifest.functions.length <= 250
   );
   assert.equal(new Set(manifest.functions.map((fn) => fn.name)).size, manifest.functions.length);
-  let verified = 0;
+  const results = [];
   for (const fn of manifest.functions) {
     assert.match(fn.name, /^[a-z][a-z0-9_]{0,79}$/);
     validateRuntimeAudience(fn);
@@ -70,7 +101,7 @@ export async function verifyFoundationRuntimeApi(
     for (const arg of fn.arguments) {
       assert.match(arg.name, /^p_[a-z][a-z0-9_]{0,79}$/);
       if (arg.optional) continue;
-      if (arg.sqlType === "integer") args[arg.name] = 1;
+      if (arg.sqlType === "integer" || arg.sqlType === "bigint") args[arg.name] = 1;
       else if (arg.sqlType === "boolean") args[arg.name] = true;
       else if (["text[]", "uuid[]"].includes(arg.sqlType)) args[arg.name] = [];
       else if (arg.sqlType === "timestamp with time zone") args[arg.name] = "2000-01-01T00:00:00Z";
@@ -94,12 +125,37 @@ export async function verifyFoundationRuntimeApi(
       signal: AbortSignal.timeout(5000),
     });
     const data = await response.json().catch(() => null);
-    if (publicBusinessProjections.has(fn.name)) {
-      if (response.status !== 200 || !Array.isArray(data) || data.length !== 0)
-        throw new Error("Reviewed public business projection probe failed");
-    } else if (![401, 403].includes(response.status) || data?.code !== "42501")
-      throw new Error("Runtime API presence/authentication check failed");
-    verified++;
+    const publicSetting = publicSettingReads.get(fn.name);
+    const publicProjection = publicBusinessProjections.has(fn.name) || publicSetting !== undefined;
+    let state = "unexpected";
+    if (publicSetting) {
+      if (response.status === 200 && publicSetting(data)) state = "present";
+    } else if (
+      publicProjection &&
+      response.status === 200 &&
+      Array.isArray(data) &&
+      data.length === 0
+    )
+      state = "present";
+    else if (!publicProjection && [401, 403].includes(response.status) && data?.code === "42501")
+      state = "present";
+    else if (response.status === 404 && data?.code === "PGRST202") state = "missing";
+    results.push({ name: fn.name, publicProjection, state });
   }
-  return verified;
+  return results;
+}
+
+/** Presence and audience check for reviewed additive RPCs. This is
+ * not proof of authenticated DTOs or exact EXECUTE grants; SQL tests and live
+ * authenticated checks provide those separate pieces of evidence. */
+export async function verifyFoundationRuntimeApi(
+  connection,
+  fetcher = fetch,
+  manifest = readRuntimeManifest()
+) {
+  const results = await probeFoundationRuntimeApi(connection, fetcher, manifest);
+  const failed = results.find((result) => result.state !== "present");
+  if (failed?.publicProjection) throw new Error("Reviewed public business projection probe failed");
+  if (failed) throw new Error("Runtime API presence/authentication check failed");
+  return results.length;
 }

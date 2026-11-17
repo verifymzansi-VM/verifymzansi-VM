@@ -12,6 +12,8 @@ interface BusinessPreviewCardProps {
   businessId?: string;
   imageUrl?: string;
   posterUrl?: string;
+  /** Photo or video, from the post's own media; without it the file name decides. */
+  isVideo?: boolean;
   logoUrl?: string;
   title: string;
   businessType: BusinessType;
@@ -32,6 +34,7 @@ export function BusinessPreviewCard({
   businessId,
   imageUrl,
   posterUrl,
+  isVideo,
   logoUrl,
   title,
   businessType,
@@ -58,6 +61,7 @@ export function BusinessPreviewCard({
       title={title}
       mediaUrl={imageUrl}
       posterUrl={posterUrl}
+      isVideo={isVideo}
       mediaAlt={title}
       description={typeLabel || null}
       location={city || null}

@@ -2,6 +2,14 @@ import { type NextRequest, NextResponse } from "next/server";
 import { S3Client, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { isPlaywrightFoundationCopy } from "@/lib/supabase/playwright-mode";
+import {
+  isVideoContentType,
+  rangeStillValid,
+  resolveByteRange,
+  type ByteRangeAnswer,
+} from "@/lib/media/byte-range";
+import { detectMimeFromMagicBytes } from "@/lib/utils/file-validation";
 
 const logger = createLogger("MediaServe");
 
@@ -147,9 +155,79 @@ const MIME_MAP: Record<string, string> = {
   mov: "video/quicktime",
 };
 
-// Supported video extensions for streaming with Range request support.
-// MOV files added to support legacy uploads; new uploads restricted to mp4/webm.
-const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg", "mov"]);
+const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
+
+/** The type a key's file extension names, if it names one (own entries only). */
+function extensionContentType(ext: string): string | undefined {
+  return Object.hasOwn(MIME_MAP, ext) ? MIME_MAP[ext] : undefined;
+}
+
+/**
+ * The type to serve. A known extension wins over stored metadata: a direct
+ * upload could have stored a bogus contentType (e.g. text/html on a .jpg key),
+ * and serving it inline from the app origin would enable stored XSS. Keys made
+ * by the live backend (`media/<uuid>`) have no extension; their type is the one
+ * the upload recorded after checking the file's own bytes.
+ */
+function contentTypeFor(ext: string, storedType: string | undefined): string {
+  return extensionContentType(ext) ?? (storedType || "application/octet-stream");
+}
+
+/** Whether the object could be a video, before its stored type is read. */
+function mayBeVideo(ext: string): boolean {
+  const named = extensionContentType(ext);
+  return named === undefined || isVideoContentType(named);
+}
+
+function isSvgType(contentType: string): boolean {
+  return contentType.split(";")[0].trim().toLowerCase() === "image/svg+xml";
+}
+
+/**
+ * How to answer the request's Range header once the object's size, type and
+ * ETag are known. Only videos are served in parts; anything else is whole.
+ */
+function planRange(
+  request: NextRequest,
+  size: number,
+  contentType: string,
+  etag: string | undefined
+): ByteRangeAnswer {
+  if (!isVideoContentType(contentType)) return { type: "full" };
+  if (!rangeStillValid(request.headers.get("if-range"), etag)) return { type: "full" };
+  return resolveByteRange(request.headers.get("range"), size);
+}
+
+function partialContent(
+  body: ReadableStream | Uint8Array,
+  key: string,
+  contentType: string,
+  range: { start: number; end: number; length: number },
+  size: number,
+  etag: string | undefined
+): NextResponse {
+  return new NextResponse(body as BodyInit, {
+    status: 206,
+    headers: {
+      "Content-Type": contentType,
+      "Content-Length": String(range.length),
+      "Content-Range": `bytes ${range.start}-${range.end}/${size}`,
+      "Accept-Ranges": "bytes",
+      "Cache-Control": IMMUTABLE_CACHE,
+      "Content-Disposition": `inline; filename="${deriveFilename(key)}"`,
+      ...(etag ? { ETag: etag } : {}),
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
+/** 416 carries no Cache-Control here, so GET marks it `private, no-store`. */
+function rangeNotSatisfiable(size: number): NextResponse {
+  return new NextResponse(null, {
+    status: 416,
+    headers: { "Content-Range": `bytes */${size}`, "Accept-Ranges": "bytes" },
+  });
+}
 
 /**
  * If the requested key is a pre-generated responsive variant
@@ -169,6 +247,30 @@ function originalKeyForVariant(key: string): string | null {
 /** Candidate original extensions to probe when a variant key is missing. */
 const VARIANT_ORIGINAL_EXTS = ["jpg", "jpeg", "png", "webp", "avif", "gif"];
 
+/** Keys made by the live backend's upload (`media/<uuid>`) have no extension. */
+const LIVE_MEDIA_KEY = /^media\/[0-9a-f-]{36}$/;
+
+/**
+ * The keys that may hold the original of a missing variant. A live-backend
+ * key is its own original; older keys are probed with each raster extension.
+ */
+function originalCandidates(stem: string): string[] {
+  if (LIVE_MEDIA_KEY.test(stem)) return [stem];
+  return VARIANT_ORIGINAL_EXTS.map((originalExt) => `${stem}.${originalExt}`);
+}
+
+/**
+ * Live-backend copies are made only during the upload, before the photo can
+ * be shown, so a missing one stays missing (an old photo, a failed copy or a
+ * width not smaller than the original): cache that original for a day. Older
+ * keys could gain a variant at any time, so keep their five minutes.
+ */
+function fallbackCacheControl(stem: string): string {
+  return LIVE_MEDIA_KEY.test(stem)
+    ? "public, max-age=86400, s-maxage=86400"
+    : "public, max-age=300, s-maxage=300";
+}
+
 /**
  * Derive a filename for the Content-Disposition header from the storage key.
  * Generated keys never contain the original filename (e.g.
@@ -183,97 +285,34 @@ function deriveFilename(key: string): string {
   return name.replace(/["\r\n\x00-\x1f]/g, "_");
 }
 
-/**
- * Parse an HTTP Range header like "bytes=0-1023" into start/end numbers.
- * Returns null if the header is missing or malformed.
- */
-function parseRangeHeader(
-  rangeHeader: string | null,
-  totalSize: number
-): { start: number; end: number } | null {
-  if (!rangeHeader) return null;
-
-  const match = rangeHeader.match(/^bytes=(\d*)-(\d*)$/);
-  if (!match) return null;
-
-  const [, startStr, endStr] = match;
-
-  let start: number;
-  let end: number;
-
-  if (startStr === "" && endStr !== "") {
-    // Suffix range: "bytes=-500" → last 500 bytes
-    const suffix = parseInt(endStr, 10);
-    start = Math.max(0, totalSize - suffix);
-    end = totalSize - 1;
-  } else if (startStr !== "" && endStr === "") {
-    // Open-ended range: "bytes=500-" → from 500 to end
-    start = parseInt(startStr, 10);
-    end = totalSize - 1;
-  } else if (startStr !== "" && endStr !== "") {
-    // Explicit range: "bytes=500-1023"
-    start = parseInt(startStr, 10);
-    end = Math.min(parseInt(endStr, 10), totalSize - 1);
-  } else {
-    return null;
-  }
-
-  if (Number.isNaN(start) || Number.isNaN(end) || start > end || start < 0 || start >= totalSize)
-    return null;
-
-  return { start, end };
-}
-
 // ── R2 binding serve path (in-worker, zero network hop) ─────────────
 async function serveViaR2Binding(
   r2: R2BucketBinding,
+  request: NextRequest,
   key: string,
   ext: string,
-  isVideo: boolean,
   ifNoneMatch: string | null,
   rangeHeader: string | null
 ): Promise<NextResponse> {
   // ── Video with Range → 206 Partial Content ──────────────────────────
-  if (isVideo && rangeHeader) {
+  // The stored type decides whether this is a video, so read it first.
+  if (rangeHeader && mayBeVideo(ext)) {
     const head = await r2.head(key);
     if (!head || head.size === 0) {
       return new NextResponse(null, { status: 404 });
     }
 
-    const range = parseRangeHeader(rangeHeader, head.size);
-    if (!range) {
-      return new NextResponse(null, {
-        status: 416,
-        headers: { "Content-Range": `bytes */${head.size}` },
-      });
+    const contentType = contentTypeFor(ext, head.httpMetadata?.contentType);
+    const range = planRange(request, head.size, contentType, head.etag);
+    if (range.type === "unsatisfiable") return rangeNotSatisfiable(head.size);
+    if (range.type === "partial") {
+      // Read only the requested bytes from R2.
+      const obj = await r2.get(key, { range: { offset: range.start, length: range.length } });
+      if (!obj) {
+        return new NextResponse(null, { status: 404 });
+      }
+      return partialContent(obj.body, key, contentType, range, head.size, head.etag);
     }
-
-    const { start, end } = range;
-    const contentLength = end - start + 1;
-    // Prefer the extension-derived MIME over stored metadata: a direct upload
-    // could have stored a bogus contentType (e.g. text/html on a .jpg key),
-    // and serving it inline from the app origin would enable stored XSS.
-    const contentType =
-      MIME_MAP[ext] || head.httpMetadata?.contentType || "application/octet-stream";
-
-    const obj = await r2.get(key, { range: { offset: start, length: contentLength } });
-    if (!obj) {
-      return new NextResponse(null, { status: 404 });
-    }
-
-    return new NextResponse(obj.body, {
-      status: 206,
-      headers: {
-        "Content-Type": contentType,
-        "Content-Length": String(contentLength),
-        "Content-Range": `bytes ${start}-${end}/${head.size}`,
-        "Accept-Ranges": "bytes",
-        "Cache-Control": "public, max-age=31536000, immutable",
-        "Content-Disposition": `inline; filename="${deriveFilename(key)}"`,
-        ETag: head.etag,
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
   }
 
   // ── Full object fetch ───────────────────────────────────────────────
@@ -291,10 +330,10 @@ async function serveViaR2Binding(
     });
   }
 
-  const contentType = MIME_MAP[ext] || obj.httpMetadata?.contentType || "application/octet-stream";
+  const contentType = contentTypeFor(ext, obj.httpMetadata?.contentType);
 
   // Video without Range → stream with Accept-Ranges
-  if (isVideo) {
+  if (isVideoContentType(contentType)) {
     return new NextResponse(obj.body, {
       status: 200,
       headers: {
@@ -309,7 +348,7 @@ async function serveViaR2Binding(
     });
   }
 
-  const isSvg = ext === "svg";
+  const isSvg = isSvgType(contentType);
   const disposition = isSvg
     ? `attachment; filename="${deriveFilename(key)}"`
     : `inline; filename="${deriveFilename(key)}"`;
@@ -344,24 +383,36 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
   const rangeHeader = request.headers.get("range");
 
   const ext = key.split(".").pop()?.toLowerCase() ?? "";
-  const isVideo = VIDEO_EXTENSIONS.has(ext);
 
-  // ── Playwright e2e stub: serve uploads written to public/e2e-media ──
-  // uploadToR2 writes to the local filesystem in stub mode, but this route
-  // otherwise falls through to the S3 API with fake credentials — producing
-  // TLS handshake errors and test timeouts. Serve the local file directly.
-  if (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") {
+  // ── Local foundation test copy (M0.7): serve uploads written to
+  // public/e2e-media. uploadToR2 writes to the local filesystem there, but this
+  // route otherwise falls through to the S3 API with fake credentials. Serve
+  // the local file directly.
+  if (isPlaywrightFoundationCopy()) {
     try {
       const fs = await import("node:fs/promises");
       const path = await import("node:path");
       const filePath = path.join(process.cwd(), "public", "e2e-media", key);
       const buffer = await fs.readFile(filePath);
-      const contentType = MIME_MAP[ext] || "application/octet-stream";
+      // Local files carry no stored type. Use the type the upload would have
+      // recorded: the one the file's own first bytes show (photo or video only).
+      const sniffed = detectMimeFromMagicBytes(buffer);
+      const contentType = contentTypeFor(
+        ext,
+        sniffed && /^(image|video)\//.test(sniffed) ? sniffed : undefined
+      );
+      const range = planRange(request, buffer.length, contentType, undefined);
+      if (range.type === "unsatisfiable") return rangeNotSatisfiable(buffer.length);
+      if (range.type === "partial") {
+        const part = new Uint8Array(buffer.subarray(range.start, range.end + 1));
+        return partialContent(part, key, contentType, range, buffer.length, undefined);
+      }
       return new NextResponse(new Uint8Array(buffer), {
         status: 200,
         headers: {
           "Content-Type": contentType,
           "Content-Length": String(buffer.length),
+          ...(isVideoContentType(contentType) ? { "Accept-Ranges": "bytes" } : {}),
           "Cache-Control": "public, max-age=31536000, immutable",
           "Content-Disposition": `inline; filename="${deriveFilename(key)}"`,
           "X-Content-Type-Options": "nosniff",
@@ -378,9 +429,9 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
     if (r2) {
       const bindingResponse = await serveViaR2Binding(
         r2,
+        request,
         key,
         ext,
-        isVideo,
         ifNoneMatch,
         rangeHeader
       );
@@ -420,8 +471,9 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
     }
 
     // ── Video with Range header → 206 Partial Content ─────────────────
-    if (isVideo && rangeHeader) {
-      // HEAD request to get total size
+    // The stored type decides whether this is a video, so read it first.
+    if (rangeHeader && mayBeVideo(ext)) {
+      // HEAD request to get total size and stored type
       const headCommand = new HeadObjectCommand({ Bucket: bucket, Key: key });
       const headResponse = await client.send(headCommand);
       const totalSize = headResponse.ContentLength ?? 0;
@@ -430,46 +482,33 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
         return new NextResponse(null, { status: 404 });
       }
 
-      const range = parseRangeHeader(rangeHeader, totalSize);
-      if (!range) {
-        return new NextResponse(null, {
-          status: 416,
-          headers: { "Content-Range": `bytes */${totalSize}` },
+      const contentType = contentTypeFor(ext, headResponse.ContentType);
+      const range = planRange(request, totalSize, contentType, headResponse.ETag);
+      if (range.type === "unsatisfiable") return rangeNotSatisfiable(totalSize);
+      if (range.type === "partial") {
+        // Fetch only the requested range from R2. The bounds are this route's
+        // own numbers, never the client's header text.
+        const rangeCommand = new GetObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Range: `bytes=${range.start}-${range.end}`,
         });
+        const rangeResponse = await client.send(rangeCommand);
+
+        if (!rangeResponse.Body) {
+          return new NextResponse(null, { status: 404 });
+        }
+
+        // Stream the response body directly instead of buffering
+        return partialContent(
+          rangeResponse.Body.transformToWebStream(),
+          key,
+          contentType,
+          range,
+          totalSize,
+          headResponse.ETag
+        );
       }
-
-      const { start, end } = range;
-      const contentLength = end - start + 1;
-      const contentType = MIME_MAP[ext] || headResponse.ContentType || "application/octet-stream";
-
-      // Fetch only the requested range from R2
-      const rangeCommand = new GetObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Range: `bytes=${start}-${end}`,
-      });
-      const rangeResponse = await client.send(rangeCommand);
-
-      if (!rangeResponse.Body) {
-        return new NextResponse(null, { status: 404 });
-      }
-
-      // Stream the response body directly instead of buffering
-      const webStream = rangeResponse.Body.transformToWebStream();
-
-      return new NextResponse(webStream, {
-        status: 206,
-        headers: {
-          "Content-Type": contentType,
-          "Content-Length": String(contentLength),
-          "Content-Range": `bytes ${start}-${end}/${totalSize}`,
-          "Accept-Ranges": "bytes",
-          "Cache-Control": "public, max-age=31536000, immutable",
-          "Content-Disposition": `inline; filename="${deriveFilename(key)}"`,
-          ...(headResponse.ETag ? { ETag: headResponse.ETag } : {}),
-          "X-Content-Type-Options": "nosniff",
-        },
-      });
     }
 
     // ── Non-range request ─────────────────────────────────────────────
@@ -489,11 +528,11 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
       });
     }
 
-    // Prefer the extension-derived MIME over stored metadata (see note above).
-    const contentType = MIME_MAP[ext] || response.ContentType || "application/octet-stream";
+    // Prefer the extension-derived MIME over stored metadata (see contentTypeFor).
+    const contentType = contentTypeFor(ext, response.ContentType);
 
     // For video files, stream the response and include Accept-Ranges
-    if (isVideo) {
+    if (isVideoContentType(contentType)) {
       const webStream = response.Body.transformToWebStream();
 
       return new NextResponse(webStream, {
@@ -517,7 +556,7 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
     const body = response.Body.transformToWebStream();
 
     // SVG files can contain embedded scripts — force download instead of inline rendering
-    const isSvg = ext === "svg";
+    const isSvg = isSvgType(contentType);
     const disposition = isSvg
       ? `attachment; filename="${deriveFilename(key)}"`
       : `inline; filename="${deriveFilename(key)}"`;
@@ -543,8 +582,8 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
       },
     });
   } catch (err: unknown) {
-    // NoSuchKey → 404
-    if (err instanceof Error && err.name === "NoSuchKey") {
+    // NoSuchKey (GetObject) or NotFound (HeadObject) → 404
+    if (err instanceof Error && (err.name === "NoSuchKey" || err.name === "NotFound")) {
       return new NextResponse(null, { status: 404 });
     }
     logger.error("Media serve error", {
@@ -578,14 +617,9 @@ async function getMediaResponse(
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
-  // Rate-limit: generous threshold (public CDN-cached content). The Playwright
-  // e2e suite issues hundreds of media requests (image retries, video range
-  // probes, retries of failed tests) from a single IP, so skip the local
-  // in-memory limiter in stub mode to avoid starving the server.
-  const isE2eStub =
-    process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub";
+  // Rate-limit: generous threshold (public CDN-cached content).
   const ip = getClientIp(request);
-  const rl = isE2eStub ? { limited: false } : checkLocalRateLimit(ip, "media:serve", 300);
+  const rl = checkLocalRateLimit(ip, "media:serve", 300);
   if (rl.limited) {
     return NextResponse.json(
       { error: "Too many requests" },
@@ -609,9 +643,7 @@ async function getMediaResponse(
       // loop added up to 6 serial R2/S3 round-trips of latency per image for
       // legacy media without pre-generated variants.
       const probes = await Promise.all(
-        VARIANT_ORIGINAL_EXTS.map((originalExt) =>
-          serveMediaForKey(request, `${stem}.${originalExt}`)
-        )
+        originalCandidates(stem).map((candidate) => serveMediaForKey(request, candidate))
       );
       // A failure probing one extension must not hide an existing original.
       const hit =
@@ -624,7 +656,7 @@ async function getMediaResponse(
         // The original can be replaced by a generated variant at this URL.
         // Do not cache the temporary fallback as immutable for a year.
         if (hit.ok || hit.status === 304) {
-          hit.headers.set("Cache-Control", "public, max-age=300, s-maxage=300");
+          hit.headers.set("Cache-Control", fallbackCacheControl(stem));
         }
         return hit;
       }

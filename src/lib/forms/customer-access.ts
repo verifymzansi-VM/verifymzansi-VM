@@ -1,28 +1,9 @@
 import { z } from "zod";
 import type { BusinessType } from "@/types/enums";
+import { CUSTOMER_ACCESS_OPTIONS } from "./customer-access-read";
 
-export const CUSTOMER_ACCESS_OPTIONS = [
-  {
-    value: "visit",
-    label: "Customers visit me",
-    hint: "For example, a shop, salon, practice or market stall.",
-  },
-  {
-    value: "travel",
-    label: "I travel to customers",
-    hint: "For example, plumbing or hair appointments at a customer's home.",
-  },
-  {
-    value: "delivery",
-    label: "I deliver orders",
-    hint: "You or a courier take orders to your customers.",
-  },
-  {
-    value: "online",
-    label: "I sell or provide services online",
-    hint: "For example, online orders or video consultations.",
-  },
-] as const;
+// The options live in customer-access-read.ts, which public pages use without zod.
+export { CUSTOMER_ACCESS_OPTIONS } from "./customer-access-read";
 export const customerAccessSchema = z
   .object({
     version: z.literal(2),

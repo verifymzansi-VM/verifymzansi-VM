@@ -49,7 +49,7 @@ describe("listingToCarouselItem", () => {
     expect(item.mediaUrl).toContain("/video.mp4");
     expect(item.posterUrl).toContain("/thumb.jpg");
     expect(item.logoUrl).toContain("/logo.png");
-    expect(item.eyebrow).toMatch(/R\s*99/);
+    expect(item.eyebrow).toBe("R99");
   });
 
   it("uses hrefOverride when provided", () => {
@@ -189,7 +189,7 @@ describe("promotionToCarouselItem", () => {
     });
     expect(item.mediaUrl).toContain("/event.mp4");
     expect(item.posterUrl).toContain("/ethumb.jpg");
-    expect(item.eyebrow).toMatch(/R\s*150/);
+    expect(item.eyebrow).toBe("R150");
   });
 
   it("uses hrefOverride when provided", () => {
@@ -219,7 +219,7 @@ describe("promotionToCarouselItem", () => {
       logo_url: "https://media.verifymzansi.com/media/promotion/logo.jpg",
       event_details: { ticket_tiers: tiers },
     });
-    expect(item.eyebrow).toBe("From R 150");
+    expect(item.eyebrow).toBe("From R150");
     expect(item.price).toBe(150);
     expect(item.logoUrl).toContain("logo.jpg");
     expect(

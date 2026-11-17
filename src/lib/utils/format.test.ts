@@ -18,6 +18,16 @@ describe("formatZAR", () => {
     expect(formatZAR(0)).toMatch(/R\s?0[\.,]00/);
     expect(formatZAR(150)).toMatch(/R\s?1[\.,]50/);
   });
+
+  it("prints exactly R, a space, the rands and two decimals", () => {
+    // en-ZA may use a comma or a dot as the decimal separator.
+    expect(formatZAR(26000)).toMatch(/^R 260[.,]00$/);
+    expect(formatZAR(9999)).toMatch(/^R 99[.,]99$/);
+  });
+
+  it.each([NaN, Infinity, -Infinity])("shows R 0.00 for %s instead of a broken amount", (value) => {
+    expect(formatZAR(value)).toMatch(/^R 0[.,]00$/);
+  });
 });
 
 // ── formatZARShort ──────────────────────────────────────────────────────────

@@ -228,4 +228,59 @@ describe("ListingDetailClient", () => {
       "https://example.com/photo-1.jpg"
     );
   });
+
+  // Roadmap M10.6: the showroom card's caption on the main photo (phones only).
+  it("puts the card's caption on the photo, hidden from screen readers", () => {
+    const { container } = render(
+      <ListingDetailClient
+        photos={["https://example.com/photo-1.jpg"]}
+        videos={[]}
+        title="Leather couch"
+        listingId="listing-caption"
+        trackView={false}
+        caption={{ eyebrow: "R1 450", location: "Richards Bay" }}
+      />
+    );
+
+    const caption = container.querySelector("[data-post-caption]");
+    expect(caption).toHaveAttribute("aria-hidden", "true");
+    expect(caption).toHaveClass("md:hidden", "bottom-0", "pointer-events-none");
+    expect(caption).toHaveTextContent("R1 450Leather couchRichards Bay");
+    // The caption is not a heading: the page heading says the title once.
+    expect(screen.queryByRole("heading")).toBeNull();
+  });
+
+  it("moves the caption above the video controls and fades it while the video plays", () => {
+    const { container } = render(
+      <ListingDetailClient
+        photos={[]}
+        videos={["https://example.com/video-1.mp4"]}
+        title="Beaded necklaces"
+        listingId="listing-caption-video"
+        trackView={false}
+        caption={{ eyebrow: "Price on request", location: "Richards Bay" }}
+      />
+    );
+
+    const caption = () => container.querySelector("[data-post-caption]");
+    expect(caption()).toHaveClass("bottom-16", "opacity-100");
+    fireEvent.playing(screen.getByLabelText("Beaded necklaces video"));
+    expect(caption()).toHaveClass("opacity-0");
+    fireEvent.pause(screen.getByLabelText("Beaded necklaces video"));
+    expect(caption()).toHaveClass("opacity-100");
+  });
+
+  it("shows no caption when the post page passes none", () => {
+    const { container } = render(
+      <ListingDetailClient
+        photos={["https://example.com/photo-1.jpg"]}
+        videos={[]}
+        title="Preview"
+        listingId="listing-no-caption"
+        trackView={false}
+      />
+    );
+
+    expect(container.querySelector("[data-post-caption]")).toBeNull();
+  });
 });

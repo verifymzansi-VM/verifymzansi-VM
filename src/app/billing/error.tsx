@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useErrorReference } from "@/hooks/use-error-reference";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
@@ -12,6 +13,7 @@ export default function BillingError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
+  const reference = useErrorReference(error);
   useEffect(() => {
     console.error("[BillingError]", error.digest ?? error.message);
   }, [error]);
@@ -39,9 +41,9 @@ export default function BillingError({
           </a>{" "}
           and we&apos;ll sort it out.
         </p>
-        {error.digest ? (
+        {reference ? (
           <p className="mt-3 text-xs text-muted-foreground">
-            Error reference: <span className="font-mono">{error.digest}</span>
+            Error reference: <span className="font-mono">{reference}</span>
           </p>
         ) : null}
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">

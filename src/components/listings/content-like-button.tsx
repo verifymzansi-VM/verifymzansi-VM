@@ -7,6 +7,7 @@ import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCompactCount } from "@/lib/utils/format";
 import type { ContentTargetType } from "@/lib/engagement";
+import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 
 /** Likes double as "saves" in commercial reports. */
 const CONTENT_TABLES = {
@@ -58,6 +59,9 @@ export function ContentLikeButton({
   const ariaLabel = liked
     ? `Unlike this ${noun}. ${spokenCount} like${spokenCount === 1 ? "" : "s"}`
     : `Like this ${noun}. ${spokenCount} like${spokenCount === 1 ? "" : "s"}`;
+
+  // Hidden until likes are stored by the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_ENGAGEMENT_TOTALS) return null;
 
   return (
     <div className={cn("relative z-20", className)}>

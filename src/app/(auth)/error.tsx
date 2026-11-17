@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useErrorReference } from "@/hooks/use-error-reference";
 import Link from "next/link";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { AuthIconTile, AuthPageHeader } from "@/components/auth/auth-ui";
@@ -13,6 +14,7 @@ export default function AuthError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
+  const reference = useErrorReference(error);
   useEffect(() => {
     console.error("[AuthError]", error.digest ?? error.message);
   }, [error]);
@@ -29,9 +31,9 @@ export default function AuthError({
         description="Something went wrong on our side. Please try again."
       />
 
-      {error.digest && (
+      {reference && (
         <p className="rounded-xl bg-muted/60 px-3.5 py-2.5 text-xs text-muted-foreground">
-          Reference for support: <span className="font-mono text-foreground">{error.digest}</span>
+          Reference for support: <span className="font-mono text-foreground">{reference}</span>
         </p>
       )}
 

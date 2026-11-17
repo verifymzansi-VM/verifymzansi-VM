@@ -76,6 +76,29 @@ describe("LoginPage", () => {
     expect(screen.getByRole("button", { name: /^Resend confirmation$/i })).toBeInTheDocument();
   });
 
+  it("says registration is by invitation after an invite-only sign-up", async () => {
+    window.history.pushState({}, "", "/login?registered=invite");
+
+    render(<LoginPage />);
+
+    expect(await screen.findByText("Check your email")).toBeInTheDocument();
+    expect(screen.getByText(/Registration is by invitation only for now/i)).toBeInTheDocument();
+  });
+
+  it.each([
+    ["registration_closed", "Registration is not open yet"],
+    ["google_cancelled", "Google sign-in was not completed"],
+  ])("explains a Google sign-in that came back with %s", async (error, title) => {
+    window.history.pushState({}, "", `/login?error=${error}`);
+
+    render(<LoginPage />);
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title })));
+    expect(toastMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Authentication failed" })
+    );
+  });
+
   it("shows the email confirmed banner when redirected from confirmation", async () => {
     window.history.pushState({}, "", "/login?confirmed=true");
 

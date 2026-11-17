@@ -28,7 +28,7 @@ import type { TourismCategoryDetails } from "@/types/tourism-details";
 import type { BusinessDetails } from "@/types/business-details";
 import type { RegisteredOfficeView } from "@/lib/business-verification/public";
 
-import { formatRandAmount } from "@/lib/utils/format";
+import { formatZARShort } from "@/lib/utils/format";
 
 export interface BusinessDetailRecord {
   id: string;
@@ -289,7 +289,7 @@ export function BusinessDetailsCard({
               <div className="flex items-start justify-between gap-4">
                 <span className="text-muted-foreground">Callout fee from</span>
                 <span className="text-right font-medium">
-                  {`R ${formatRandAmount(businessDetails.callout_fee_from)}`}
+                  {formatZARShort(Math.round(businessDetails.callout_fee_from * 100))}
                 </span>
               </div>
             )}

@@ -2,12 +2,14 @@ import crypto from "crypto";
 import { Webhook } from "svix";
 import { env } from "@/lib/config/env";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { testCopyCheckout } from "./checkout-origins";
+import { toOzowReferenceField } from "./ozow-reference";
 import { createLogger } from "@/lib/utils/logger";
 import { fetchWithoutRedirects } from "@/lib/utils/fetch-without-redirects";
 
 const log = createLogger("Ozow");
 
-export class OzowConfigurationError extends Error {
+class OzowConfigurationError extends Error {
   readonly code = "ozow_configuration_error" as const;
 
   constructor(
@@ -20,7 +22,7 @@ export class OzowConfigurationError extends Error {
   }
 }
 
-export class OzowAuthenticationError extends Error {
+class OzowAuthenticationError extends Error {
   readonly code = "ozow_authentication_error" as const;
 
   constructor(
@@ -33,7 +35,7 @@ export class OzowAuthenticationError extends Error {
   }
 }
 
-export class OzowProviderError extends Error {
+class OzowProviderError extends Error {
   readonly code = "ozow_provider_error" as const;
 
   constructor(
@@ -55,7 +57,6 @@ type CachedToken = {
 const MAX_CACHED_TOKENS = 20;
 const cachedTokens = new Map<string, CachedToken>();
 const pendingTokenFetches = new Map<string, Promise<string>>();
-const OZOW_REFERENCE_FIELD_MAX_LENGTH = 14;
 const DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE = "payments";
 
 const OZOW_ALLOWED_HOSTS = {
@@ -100,7 +101,7 @@ function getOzowEnvironment(): "staging" | "production" {
   return env("OZOW_ENV") === "production" ? "production" : "staging";
 }
 
-function getOzowBaseUrlContext(): {
+export function getOzowBaseUrlContext(): {
   baseUrl: string;
   baseUrlHost: string;
   ozowEnv: "staging" | "production";
@@ -242,6 +243,9 @@ function throwOzowProviderFailure({
   });
 }
 
+/** Request ids of mock checkouts; they never exist at Ozow. */
+export const MOCK_OZOW_REQUEST_PREFIX = "mock-";
+
 function createMockHostedPaymentResponse(
   input: OzowHostedPaymentRequest
 ): OzowHostedPaymentResponse {
@@ -250,7 +254,12 @@ function createMockHostedPaymentResponse(
   const correlationId = crypto.randomUUID();
   const idempotencyKey = crypto.randomUUID();
   const appUrl = env("NEXT_PUBLIC_APP_URL") || "http://localhost:3000";
-  const redirectUrl = new URL("/api/mock-ozow", appUrl);
+  // The foundation test copy stores checkout URLs, which must be HTTPS; its
+  // mock payment page lives on a fixed loopback address the browser tests serve.
+  const testCopy = testCopyCheckout();
+  const redirectUrl = testCopy
+    ? new URL("/checkout", testCopy.mockPaymentOrigin)
+    : new URL("/api/mock-ozow", appUrl);
 
   redirectUrl.searchParams.set("paymentId", input.paymentId);
   redirectUrl.searchParams.set("amount", amount);
@@ -258,14 +267,14 @@ function createMockHostedPaymentResponse(
   redirectUrl.searchParams.set("cancelUrl", input.cancelUrl);
 
   return {
-    providerPaymentId: `mock-${input.paymentId}`,
+    providerPaymentId: `${MOCK_OZOW_REQUEST_PREFIX}${input.paymentId}`,
     providerReference: input.merchantReference,
     redirectUrl: redirectUrl.toString(),
     expireAt,
     correlationId,
     idempotencyKey,
     rawResponse: {
-      id: `mock-${input.paymentId}`,
+      id: `${MOCK_OZOW_REQUEST_PREFIX}${input.paymentId}`,
       redirectUrl: redirectUrl.toString(),
       expireAt,
       mockFlow: true,
@@ -281,21 +290,48 @@ function shouldFallbackToMockHostedPayment(error: unknown): boolean {
   );
 }
 
-async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<string> {
+/**
+ * The One API client credentials a token is requested with. Payments use the
+ * payment key (OZOW_CLIENT_ID/OZOW_CLIENT_SECRET); refunds use their own key
+ * (src/lib/payments/ozow-refunds.ts), so the payment key never carries the
+ * refunds scope. Tokens are cached per client and scope.
+ */
+export type OzowClientCredentials = {
+  clientId: string | undefined;
+  clientSecret: string | undefined;
+  /** Setting names, for the "missing" log line only (never the values). */
+  names: readonly [string, string];
+};
+
+function paymentCredentials(): OzowClientCredentials {
+  return {
+    clientId: env("OZOW_CLIENT_ID"),
+    clientSecret: env("OZOW_CLIENT_SECRET"),
+    names: ["OZOW_CLIENT_ID", "OZOW_CLIENT_SECRET"],
+  };
+}
+
+export async function getOzowAccessToken(
+  scope: string,
+  forceRefresh = false,
+  credentials: OzowClientCredentials = paymentCredentials()
+): Promise<string> {
   const normalizedScope = normalizeScope(scope);
-  const cachedToken = cachedTokens.get(normalizedScope);
+  // The cache key names the client (never its secret) and the scope.
+  const cacheKey = `${credentials.clientId ?? ""}\u0000${normalizedScope}`;
+  const cachedToken = cachedTokens.get(cacheKey);
   if (!forceRefresh && cachedToken && cachedToken.expiresAt > Date.now() + 5_000) {
     return cachedToken.accessToken;
   }
 
-  // Coalesce concurrent requests for the same scope into a single fetch
-  const pendingKey = forceRefresh ? `${normalizedScope}:force` : normalizedScope;
+  // Coalesce concurrent requests for the same client and scope into a single fetch
+  const pendingKey = forceRefresh ? `${cacheKey}:force` : cacheKey;
   const pending = pendingTokenFetches.get(pendingKey);
   if (pending) {
     return pending;
   }
 
-  const fetchPromise = fetchOzowAccessToken(normalizedScope);
+  const fetchPromise = fetchOzowAccessToken(normalizedScope, cacheKey, credentials);
   pendingTokenFetches.set(pendingKey, fetchPromise);
 
   try {
@@ -305,12 +341,15 @@ async function getOzowAccessToken(scope: string, forceRefresh = false): Promise<
   }
 }
 
-async function fetchOzowAccessToken(normalizedScope: string): Promise<string> {
+async function fetchOzowAccessToken(
+  normalizedScope: string,
+  cacheKey: string,
+  credentials: OzowClientCredentials
+): Promise<string> {
   const { baseUrl, baseUrlHost, ozowEnv } = getOzowBaseUrlContext();
-  const clientId = env("OZOW_CLIENT_ID");
-  const clientSecret = env("OZOW_CLIENT_SECRET");
+  const { clientId, clientSecret } = credentials;
   if (!clientId || !clientSecret) {
-    const missing = [!clientId && "OZOW_CLIENT_ID", !clientSecret && "OZOW_CLIENT_SECRET"]
+    const missing = [!clientId && credentials.names[0], !clientSecret && credentials.names[1]]
       .filter(Boolean)
       .join(", ");
     log.error("Ozow credentials missing", { missing, ozowEnv, baseUrlHost });
@@ -382,7 +421,7 @@ async function fetchOzowAccessToken(normalizedScope: string): Promise<string> {
       if (firstKey !== undefined) cachedTokens.delete(firstKey);
     }
   }
-  cachedTokens.set(normalizedScope, {
+  cachedTokens.set(cacheKey, {
     accessToken,
     // An invalid lifetime is usable for this request only; never guess an expiry.
     expiresAt: Date.now() + (Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn * 1000 : 0),
@@ -429,10 +468,6 @@ export function fromOzowMerchantReference(merchantReference: string): string | n
   }
   const m = merchantReference;
   return `${m.slice(0, 8)}-${m.slice(8, 12)}-${m.slice(12, 16)}-${m.slice(16, 20)}-${m.slice(20)}`;
-}
-
-export function toOzowReferenceField(value: string): string {
-  return value.replace(/[^A-Za-z0-9 -]/g, "").slice(0, OZOW_REFERENCE_FIELD_MAX_LENGTH);
 }
 
 export async function createOzowHostedPayment(
@@ -571,7 +606,41 @@ export async function createOzowHostedPayment(
   }
 }
 
+/**
+ * A lookup while mock Ozow is enabled. Ozow itself is never contacted. Only the
+ * private foundation test copy (testCopyCheckout) has a provider to ask: the
+ * stand-in its browser tests run at one fixed loopback address, sent no token
+ * and no credentials. Every other mock setting refuses before any request.
+ */
+async function testCopyProviderRequest(path: string, method: string): Promise<Response> {
+  const origin = testCopyCheckout()?.providerOrigin;
+  if (!origin)
+    throw new OzowConfigurationError("Ozow requests are disabled while mock Ozow is enabled");
+  const url = new URL(path, origin);
+  if (url.origin !== origin || !url.pathname.startsWith("/v1/")) {
+    throw new OzowProviderError("Invalid Ozow pagination link");
+  }
+  let response: Response;
+  try {
+    // A redirect is refused, never followed.
+    response = await fetchWithoutRedirects(url, {
+      method,
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    throw new OzowProviderError("Ozow payment lookup or cancellation failed");
+  }
+  if (!response.ok)
+    throw new OzowProviderError("Ozow payment lookup or cancellation failed", {
+      status: response.status,
+    });
+  return response;
+}
+
 async function ozowRequest(path: string, method = "GET"): Promise<Response> {
+  // Mock mode never contacts Ozow: lookups and cancellations fail closed
+  // instead, except in the test copy, which answers lookups locally.
+  if (isMockOzowEnabled()) return testCopyProviderRequest(path, method);
   const { baseUrl } = getOzowBaseUrlContext();
   const scope = env("OZOW_PAYMENT_OAUTH_SCOPE") || DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE;
   const url = new URL(path, baseUrl);
@@ -647,15 +716,45 @@ export async function getOzowPaymentRequestStatus(paymentRequestId: string): Pro
   const data = (await (
     await ozowRequest(`/v1/payments/${encodeURIComponent(paymentRequestId)}`)
   ).json()) as Record<string, unknown>;
-  if (data.id !== paymentRequestId || !["Created", "Expired"].includes(String(data.status))) {
+  // "Cancelled": a request closed by a cancellation (ours or the member's at
+  // Ozow). Any other status is refused, as before.
+  if (
+    data.id !== paymentRequestId ||
+    !["Created", "Expired", "Cancelled"].includes(String(data.status))
+  ) {
     throw new OzowProviderError("Invalid Ozow payment request status");
   }
   return String(data.status);
 }
 
 export async function cancelOzowPaymentRequest(paymentRequestId: string): Promise<void> {
-  if (isMockOzowEnabled()) return;
+  // Mock mode never contacts Ozow. Only the private test copy has a provider to
+  // tell: its loopback stand-in (testCopyProviderRequest, through ozowRequest).
+  if (isMockOzowEnabled() && !testCopyCheckout()) return;
   await ozowRequest(`/v1/payments/${encodeURIComponent(paymentRequestId)}/cancel`, "POST");
+}
+
+const SIGNATURE_HEADER_PARTS = ["id", "timestamp", "signature"] as const;
+type SignatureHeaders = Record<(typeof SIGNATURE_HEADER_PARTS)[number], string>;
+
+/**
+ * The signing headers of a notice. The Svix library behind Ozow's notices sends
+ * either `svix-*` or the Standard Webhooks `webhook-*` names. One complete set
+ * is required; a header sent under both names must carry the same value, or the
+ * notice is refused. The two styles are never mixed into one set.
+ */
+export function readOzowSignatureHeaders(headers: Pick<Headers, "get">): SignatureHeaders | null {
+  const styles = (["svix", "webhook"] as const).map((prefix) =>
+    SIGNATURE_HEADER_PARTS.map((part) => headers.get(`${prefix}-${part}`))
+  );
+  const [svix, standard] = styles;
+  if (SIGNATURE_HEADER_PARTS.some((_, i) => svix[i] && standard[i] && svix[i] !== standard[i])) {
+    return null;
+  }
+  const complete = styles.find((values) => values.every(Boolean));
+  if (!complete) return null;
+  const [id, timestamp, signature] = complete as string[];
+  return { id, timestamp, signature };
 }
 
 export function verifyOzowWebhookSignature(body: string, headers: Pick<Headers, "get">): boolean {
@@ -664,20 +763,32 @@ export function verifyOzowWebhookSignature(body: string, headers: Pick<Headers, 
     log.error("OZOW_WEBHOOK_SECRET is not configured — all webhooks will be rejected");
     return false;
   }
+  return verifyOzowSignature(body, headers, secret);
+}
 
-  const svixId = headers.get("svix-id");
-  const svixTimestamp = headers.get("svix-timestamp");
-  const svixSignature = headers.get("svix-signature");
-
-  if (!svixId || !svixTimestamp || !svixSignature) {
+/**
+ * Ozow's Svix signature over the raw body with one webhook's own secret (each
+ * Ozow webhook subscription has its own). False when anything is missing,
+ * stale (more than five minutes either way) or wrong.
+ */
+export function verifyOzowSignature(
+  body: string,
+  headers: Pick<Headers, "get">,
+  secret: string
+): boolean {
+  if (!secret) return false;
+  const signed = readOzowSignatureHeaders(headers);
+  if (!signed) {
     return false;
   }
 
   try {
+    // The library checks the timestamp tolerance (five minutes) and compares
+    // signatures in constant time, whichever header style was sent.
     new Webhook(secret).verify(body, {
-      "svix-id": svixId,
-      "svix-timestamp": svixTimestamp,
-      "svix-signature": svixSignature,
+      "svix-id": signed.id,
+      "svix-timestamp": signed.timestamp,
+      "svix-signature": signed.signature,
     });
     return true;
   } catch {
@@ -697,6 +808,30 @@ export interface NormalizedOzowWebhook {
   amount: string | null;
   currencyCode: string | null;
   rawPayload: Record<string, unknown>;
+}
+
+/**
+ * Ozow's test-mode flag: `IsTest` (full notices) or `isTest`, as a boolean or
+ * the text "true"/"false" in any case. Null when absent. A flag that is present
+ * but unreadable, or two that disagree, give `unreadable`: null for a full
+ * notice, which must carry a clear flag (validateOzowConfirmation refuses null
+ * there), and true elsewhere, so production refuses it as a test.
+ */
+function readOzowTestFlag(
+  transaction: Record<string, unknown>,
+  unreadable: boolean | null
+): boolean | null {
+  const values = [transaction.IsTest, transaction.isTest]
+    .filter((value) => value !== undefined)
+    .map((value) =>
+      typeof value === "boolean"
+        ? value
+        : typeof value === "string" && /^(true|false)$/i.test(value)
+          ? value.toLowerCase() === "true"
+          : null
+    );
+  if (values.length === 0) return null;
+  return values.every((value) => value !== null && value === values[0]) ? values[0] : unreadable;
 }
 
 export function normalizeOzowWebhook(body: unknown): NormalizedOzowWebhook | null {
@@ -740,19 +875,15 @@ export function normalizeOzowWebhook(body: unknown): NormalizedOzowWebhook | nul
     toSafeString(transaction.currency_code) ||
     toSafeString(transaction.currency);
 
+  const full = "TransactionId" in transaction || "TransactionReference" in transaction;
   return {
     eventType,
     merchantReference,
     providerPaymentId,
     transactionId,
     siteCode: toSafeString(transaction.SiteCode) || toSafeString(transaction.siteCode),
-    isTest: transaction.IsTest === "True" ? true : transaction.IsTest === "False" ? false : null,
-    format:
-      "TransactionId" in transaction || "TransactionReference" in transaction
-        ? "full"
-        : !merchantReference && transactionId
-          ? "thin"
-          : "api",
+    isTest: readOzowTestFlag(transaction, full ? null : true),
+    format: full ? "full" : !merchantReference && transactionId ? "thin" : "api",
     status,
     amount,
     currencyCode,

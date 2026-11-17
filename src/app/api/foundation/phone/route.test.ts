@@ -7,7 +7,14 @@ import { POST as restoredSend } from "@/app/api/otp/send/route";
 import { POST as restoredVerify } from "@/app/api/otp/verify/route";
 import { FOUNDATION_PHONE_CHALLENGE_COOKIE } from "@/lib/foundation/phone-challenge-cookie";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
+import { FoundationPhoneError } from "@/lib/foundation/phone-verification";
+import { phoneRetryWait } from "./_lib/handle";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
+import {
+  ACCOUNT_PHONE_ALREADY_VERIFIED,
+  ACCOUNT_PHONE_IN_USE_ERROR,
+  PHONE_NUMBER_UNAVAILABLE,
+} from "@/lib/utils/phone";
 const { authenticate, readAccount, service, issue, prove, limit, context } = vi.hoisted(() => ({
   authenticate: vi.fn(),
   readAccount: vi.fn(),
@@ -71,7 +78,6 @@ function request(body: unknown, origin = "https://verifymzansi.com", csrf = true
 }
 
 it("connects the preserved phone form to a signed, owner-bound native challenge", async () => {
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.stubEnv("FOUNDATION_PHONE_OTP_KEY", "0123456789abcdef".repeat(4));
   issue.mockResolvedValue({
     challenge_id: challenge,
@@ -97,7 +103,6 @@ it("connects the preserved phone form to a signed, owner-bound native challenge"
 });
 
 it("does not verify a restored OTP against a different number, owner or altered challenge", async () => {
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.stubEnv("FOUNDATION_PHONE_OTP_KEY", "0123456789abcdef".repeat(4));
   issue.mockResolvedValue({
     challenge_id: challenge,
@@ -152,10 +157,91 @@ it("binds delivery to the canonical account and reserves IP/account/phone limits
     { key: "+27820000000", action: "otp:send", degradedMode: "block" },
   ]);
 });
+it.each([
+  ["phone_in_use", undefined, ACCOUNT_PHONE_IN_USE_ERROR],
+  ["phone_already_verified", undefined, ACCOUNT_PHONE_ALREADY_VERIFIED],
+  [
+    "phone_change_cooldown",
+    new Date("2026-12-01T09:30:00Z"),
+    "You can change your phone number again after 1 December 2026.",
+  ],
+  ["phone_change_cooldown", undefined, "You can change your phone number once every 15 days."],
+  [
+    "phone_change_identity_required",
+    undefined,
+    "You must complete identity re-verification before changing your phone number.",
+  ],
+  ["phone_banned", undefined, PHONE_NUMBER_UNAVAILABLE],
+] as const)(
+  "tells the member at the send step why no code is sent (%s), without a challenge cookie",
+  async (refusal, changeAllowedFrom, message) => {
+    const status = refusal === "phone_banned" ? 403 : 409;
+    issue.mockRejectedValue(new FoundationPhoneError(status, refusal, changeAllowedFrom));
+    const sent = await restoredSend(request({ phone: "0820000000" }));
+    expect(sent.status).toBe(status);
+    expect(await sent.json()).toEqual({ error: message, reason: refusal, code: refusal });
+    expect(sent.cookies.get(FOUNDATION_PHONE_CHALLENGE_COOKIE)).toBeUndefined();
+  }
+);
+it("refuses a banned number at the code step with the same neutral message", async () => {
+  vi.stubEnv("FOUNDATION_PHONE_OTP_KEY", "0123456789abcdef".repeat(4));
+  issue.mockResolvedValue({
+    challenge_id: challenge,
+    expires_at: new Date(Date.now() + 300_000).toISOString(),
+  });
+  const sent = await restoredSend(request({ phone: "0820000000" }));
+  const cookie = sent.cookies.get(FOUNDATION_PHONE_CHALLENGE_COOKIE)!.value;
+  prove.mockRejectedValue(new FoundationPhoneError(403, "phone_banned"));
+  const incoming = request({ phone: "0820000000", otp: "123456" });
+  incoming.cookies.set(FOUNDATION_PHONE_CHALLENGE_COOKIE, cookie);
+  const verified = await restoredVerify(incoming);
+  expect(verified.status).toBe(403);
+  expect(await verified.json()).toEqual({
+    error: PHONE_NUMBER_UNAVAILABLE,
+    reason: "phone_banned",
+    code: "phone_banned",
+  });
+  expect(JSON.stringify(PHONE_NUMBER_UNAVAILABLE)).not.toMatch(/ban/i);
+});
+it("keeps other phone refusals generic", async () => {
+  issue.mockRejectedValue(new FoundationPhoneError(409));
+  const sent = await send(request({ phone: "+27820000000" }));
+  expect(sent.status).toBe(409);
+  expect(await sent.json()).toEqual({
+    error: "Check the number or code, or request a new code",
+    reason: "phone_verification_refused",
+  });
+});
 it("does not accept a browser-supplied account selector", async () => {
   expect((await send(request({ phone: "+27820000000", owner_id: challenge }))).status).toBe(400);
   expect(service).not.toHaveBeenCalled();
   expect(issue).not.toHaveBeenCalled();
+});
+it("says when a rate-limited member can try again, in the body and Retry-After", async () => {
+  limit
+    .mockResolvedValueOnce({ limited: false })
+    .mockResolvedValueOnce({ limited: true, retryAfter: 840 });
+  const sent = await restoredSend(request({ phone: "0820000000" }));
+  expect(sent.status).toBe(429);
+  expect(sent.headers.get("Retry-After")).toBe("840");
+  expect(await sent.json()).toEqual({
+    error: "Too many attempts. Try again in 14 minutes.",
+    reason: "phone_rate_limited",
+    code: "rate_limited",
+    retryAfter: 840,
+  });
+  expect(issue).not.toHaveBeenCalled();
+});
+it.each([
+  [30, "in about a minute"],
+  [60, "in about a minute"],
+  [61, "in 2 minutes"],
+  [3599, "in 60 minutes"],
+  [3600, "in an hour"],
+  [3601, "in 2 hours"],
+  [86400, "in 24 hours"],
+])("words a wait of %s seconds as %s", (seconds, words) => {
+  expect(phoneRetryWait(seconds)).toBe(words);
 });
 it("does not send SMS when the shared account protection is degraded", async () => {
   limit

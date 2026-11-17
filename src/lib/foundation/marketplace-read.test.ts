@@ -357,4 +357,142 @@ describe("restored marketplace reads", () => {
       clock.mockRestore();
     }
   });
+
+  describe("business search includes tourism businesses", () => {
+    const business = (n: number, score: string, extra = {}) =>
+      card(n, {
+        kind: "business",
+        area: "business",
+        category: "general_other",
+        price_mode: null,
+        price_cents: null,
+        condition: null,
+        score,
+        ...extra,
+      });
+    const tourism = (n: number, score: string, extra = {}) =>
+      business(n, score, { area: "tourism_events", category: "tourism_hospitality", ...extra });
+    const relevance = (items: Array<ReturnType<typeof card>>, total = items.length) => ({
+      ...page(items, total),
+      sort: "relevance",
+    });
+    function searchApi(own: Array<ReturnType<typeof card>>, stays: Array<ReturnType<typeof card>>) {
+      return vi.fn(async (name: string, args: { p_request: Record<string, unknown> }) => {
+        if (name !== "search_post_cards") return { data: [], error: null };
+        const {
+          area,
+          offset = 0,
+          limit = 24,
+        } = args.p_request as {
+          area: string;
+          offset?: number;
+          limit?: number;
+        };
+        const rows = area === "tourism_events" ? stays : own;
+        return { data: relevance(rows.slice(offset, offset + limit), rows.length), error: null };
+      });
+    }
+
+    it("reads the tourism business category with a text search and merges in the database's order", async () => {
+      const rpc = searchApi(
+        [business(1, "0.9"), business(2, "0.4")],
+        [tourism(3, "0.7"), tourism(4, "0.4", { published_at: "2026-10-17T10:00:00Z" })]
+      );
+      const result = await readRestoredCollection(
+        apiWith(rpc),
+        "businesses",
+        new URLSearchParams({ q: "lodge", province: "gp", limit: "3" })
+      );
+      const searches = rpc.mock.calls.filter(([name]) => name === "search_post_cards");
+      expect(searches.map(([, args]) => args.p_request)).toEqual([
+        expect.objectContaining({ area: "business", q: "lodge", province: "gp", offset: 0 }),
+        expect.objectContaining({
+          area: "tourism_events",
+          category: "tourism_hospitality",
+          q: "lodge",
+          province: "gp",
+          offset: 0,
+        }),
+      ]);
+      expect(result.total).toBe(4);
+      expect(result.rows.map((row) => row.id)).toEqual([id(1), id(3), id(4)]);
+      expect(result.rows[1]).toMatchObject({ category: "tourism_hospitality" });
+      const second = await readRestoredCollection(
+        apiWith(rpc),
+        "businesses",
+        new URLSearchParams({ q: "lodge", province: "gp", page: "2", limit: "3" })
+      );
+      expect(second.rows.map((row) => row.id)).toEqual([id(2)]);
+    });
+
+    it("keeps browsing and category filters to one scope", async () => {
+      const rpc = searchApi([business(1, "0.9")], [tourism(3, "0.7")]);
+      await readRestoredCollection(
+        apiWith(rpc),
+        "businesses",
+        new URLSearchParams({ q: "lodge", category: "general_other" })
+      );
+      await readRestoredCollection(
+        apiWith(rpc),
+        "businesses",
+        new URLSearchParams({ q: "lodge", category: "tourism_hospitality" })
+      );
+      const areas = rpc.mock.calls
+        .filter(([name]) => name === "search_post_cards")
+        .map(([, args]) => args.p_request.area);
+      expect(areas).toEqual(["business", "tourism_events"]);
+    });
+
+    describe("a merged search's total covers only the pages it can serve", () => {
+      const many = (from: number, count: number, make: typeof business) =>
+        Array.from({ length: count }, (_, index) =>
+          make(from + index, (0.999 - index / 1000).toFixed(3))
+        );
+      const searches = (rpc: ReturnType<typeof searchApi>) =>
+        rpc.mock.calls.filter(([name]) => name === "search_post_cards").map(([, args]) => args);
+
+      it.each([
+        [50, 450, 9],
+        [48, 480, 10],
+        [24, 480, 20],
+      ])("at %i cards a page: total %i, last page %i served", async (limit, capped, last) => {
+        const rpc = searchApi(many(1, 300, business), many(1001, 300, tourism));
+        const params = (page: number) =>
+          new URLSearchParams({ q: "lodge", page: String(page), limit: String(limit) });
+        const first = await readRestoredCollection(apiWith(rpc), "businesses", params(1));
+        expect(first.total).toBe(capped);
+        expect(Math.ceil(first.total / limit)).toBe(last);
+        const end = await readRestoredCollection(apiWith(rpc), "businesses", params(last));
+        expect(end.total).toBe(capped);
+        expect(end.rows).toHaveLength(limit);
+        // Never more than ten bounded reads per scope.
+        expect(searches(rpc).length).toBeLessThanOrEqual(2 + 20);
+      });
+
+      it("answers a page past the served depth with no cards and two one-card reads", async () => {
+        const rpc = searchApi(many(1, 300, business), many(1001, 300, tourism));
+        const result = await readRestoredCollection(
+          apiWith(rpc),
+          "businesses",
+          new URLSearchParams({ q: "lodge", page: "10", limit: "50" })
+        );
+        expect(result).toEqual({ rows: [], total: 450, page: 10, limit: 50 });
+        expect(searches(rpc).map((args) => args.p_request)).toEqual([
+          expect.objectContaining({ area: "business", offset: 0, limit: 1 }),
+          expect.objectContaining({ area: "tourism_events", offset: 0, limit: 1 }),
+        ]);
+      });
+
+      it("reports the real total when it is within the served depth", async () => {
+        const rpc = searchApi(many(1, 30, business), many(1001, 20, tourism));
+        const result = await readRestoredCollection(
+          apiWith(rpc),
+          "businesses",
+          new URLSearchParams({ q: "lodge", limit: "50" })
+        );
+        expect(result.total).toBe(50);
+        expect(result.rows).toHaveLength(50);
+      });
+    });
+  });
 });

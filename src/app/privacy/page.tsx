@@ -4,20 +4,18 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LegalBlocks, LegalDocument, type LegalSection } from "@/components/safety/legal-document";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
-import { getDataBackend } from "@/lib/data-backend";
 
 export const metadata = {
   title: "Privacy Policy",
+  alternates: { canonical: "/privacy" },
   description:
     "How VerifyMzansi collects, uses, and protects your personal information. POPIA-compliant data practices.",
 };
 
 export default function PrivacyPolicyPage() {
   const trustConfig = getTrustPublicConfig();
-  const foundation = getDataBackend() === "foundation";
-  const evidenceRetention = foundation
-    ? "ID images, selfies and the encrypted ID number are scheduled for deletion 30 days after the case decision. Unfinished evidence expires after 90 days. Open fraud or legal holds pause deletion. The decision and a keyed identity fingerprint are retained separately."
-    : "Approved: deleted 30 days after review. Rejected: deleted 30 days after upload. Unfinished uploads: deleted after 90 days. Longer only if a fraud, dispute or legal hold applies";
+  const evidenceRetention =
+    "ID images, selfies and the encrypted ID number are scheduled for deletion 30 days after the case decision. Unfinished evidence expires after 90 days. Open fraud or legal holds pause deletion. The decision and a keyed identity fingerprint are retained separately.";
   const dataHandlingRows = [
     {
       dataType: "Introductory-offer identity token",
@@ -31,12 +29,8 @@ export default function PrivacyPolicyPage() {
       dataType: "ID number",
       purpose: "Identity verification, duplicate-account checks, fraud prevention",
       recipients: "Internal reviewers and KYC/infrastructure providers where required",
-      retention: foundation
-        ? evidenceRetention
-        : "Kept encrypted while your account exists, to stop one ID being used for several accounts; deleted with the account (see the identity token above)",
-      deletion: foundation
-        ? "Deleted with the case evidence; open fraud or legal holds pause deletion"
-        : "Deleted when you delete your account, unless a fraud, dispute or legal hold applies",
+      retention: evidenceRetention,
+      deletion: "Deleted with the case evidence; open fraud or legal holds pause deletion",
     },
     {
       dataType: "ID document image",
@@ -57,7 +51,8 @@ export default function PrivacyPolicyPage() {
       dataType: "Phone number",
       purpose: "OTP checks, account recovery, safety contact, and posting accountability",
       recipients: "SMS provider, internal platform systems, and support reviewers",
-      retention: "Kept while account is active and as required for fraud or legal records",
+      retention:
+        "Kept while account is active and as required for fraud or legal records. If an account is banned, the numbers it verified are kept for 5 years (or until the ban is lifted) so they cannot be used to verify again",
       deletion: "Update or delete through account/data-rights workflow where legally allowed",
     },
     {
@@ -129,10 +124,9 @@ export default function PrivacyPolicyPage() {
       navLabel: "Retention & deletion",
       title: "Data retention and deletion",
       content: [
-        "We retain account and listing data while your account is active. After account deletion, some records may be retained for fraud prevention, accounting, dispute handling, legal obligations, or platform integrity before deletion or anonymisation.",
-        foundation
-          ? evidenceRetention
-          : "ID and selfie files are deleted 30 days after an approved review, and 30 days after upload if rejected; unfinished uploads are deleted after 90 days. A fraud, dispute, security or legal hold can pause deletion.",
+        "We retain account data while your account is active. After account deletion, some records may be retained for fraud prevention, accounting, dispute handling, legal obligations, or platform integrity before deletion or anonymisation.",
+        "Posts are deleted 3 days after their plan ends or after you mark them sold, and events when they end, together with their photos, videos and enquiries. A pending payment, an open report or a legal hold can delay deletion.",
+        evidenceRetention,
         "Security and moderation audit logs are kept for up to 24 months.",
         "When you delete your account, your posts, enquiries and media are deleted with it. Payments and invoices are kept for tax and accounting, no longer linked to you. Limited records may remain where the law, abuse prevention or an unresolved dispute requires it.",
       ],
@@ -251,7 +245,7 @@ export default function PrivacyPolicyPage() {
       <main id="main-content" className="flex-1">
         <LegalDocument
           title="Privacy Policy"
-          meta="Updated October 2026"
+          meta="Updated November 2026"
           description="How we collect, use and protect your personal information under POPIA."
           breadcrumbs={[{ label: "Privacy Policy" }]}
           sections={sections}

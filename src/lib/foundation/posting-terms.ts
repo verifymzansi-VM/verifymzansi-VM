@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FoundationPublicApi } from "./public-api";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
+import { hasDatabaseReason } from "./error-reasons";
 
 const version = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/);
 const hash = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
@@ -68,7 +69,7 @@ export async function acceptFoundationPostingTerms(
     }
   );
   if (error) {
-    if (error.code === "PT409" && error.details === "posting_terms_changed")
+    if (error.code === "PT409" && hasDatabaseReason(error, "posting_terms_changed"))
       throw new Error("Posting terms changed; review the current version");
     throw new Error("Posting terms acceptance could not be confirmed");
   }

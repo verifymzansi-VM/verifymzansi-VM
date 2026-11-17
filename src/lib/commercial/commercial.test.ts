@@ -6,7 +6,6 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 import { mapCommercialError } from "./errors";
 import { DEFAULT_COMMERCIAL_SETTINGS, resolveCommercialSettings } from "./settings";
 import { buildCommercialCatalog } from "./plans";
-import { parsePostingAllowance } from "./allowance";
 
 describe("commercial error mapping", () => {
   it("maps database guard codes to member-facing messages", () => {
@@ -83,7 +82,8 @@ describe("commercial catalogue", () => {
     expect(month?.planIds.MZANSI_MARKET).toBe("MZANSI_MARKET-month");
     // Area without a row keeps its stable checkout token.
     expect(month?.planIds.PROMOTIONS_EVENTS).toMatch(/^[0-9a-f-]{36}$/);
-    expect(catalog.retail.find((offer) => offer.tier === "quarter")?.priceCents).toBe(14000);
+    expect(catalog.retail.find((offer) => offer.tier === "quarter")?.priceCents).toBe(20700);
+    expect(catalog.onSale).toBe(true);
     expect(catalog.retail.find((offer) => offer.tier === "half_year")?.durationDays).toBe(180);
     expect(catalog.retail.map((offer) => offer.durationDays)).toEqual([30, 90, 180]);
     // Group 2: 10/25/50/100 slots for 90 and 180 days.
@@ -94,15 +94,8 @@ describe("commercial catalogue", () => {
   it("never lists private or inactive plans", () => {
     const hidden = { ...retailRow("MZANSI_MARKET", "month", 100), public: false };
     const catalog = buildCommercialCatalog([hidden] as never);
-    expect(catalog.retail.find((offer) => offer.tier === "month")?.priceCents).toBe(5000);
-  });
-});
-
-describe("posting allowance parsing", () => {
-  it("treats malformed RPC data as no paid plan", () => {
-    expect(parsePostingAllowance(null)).toMatchObject({ hasPaidPlan: false, capacity: 0 });
-    expect(
-      parsePostingAllowance({ hasPaidPlan: true, capacity: 25, maxPhotos: 10, maxVideos: 1 })
-    ).toMatchObject({ hasPaidPlan: true, capacity: 25 });
+    expect(catalog.retail.find((offer) => offer.tier === "month")?.priceCents).toBe(6900);
+    // Nothing on sale: the prices show, but nothing links to checkout.
+    expect(catalog.onSale).toBe(false);
   });
 });

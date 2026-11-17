@@ -13,6 +13,7 @@ import { foundationEvidenceMetadataSchema } from "./evidence-metadata";
 import { nativeIdentityScopeSchema } from "../admin/native-identity-review";
 import { createLogger } from "../utils/logger";
 import { frontendIdentityContextSchema } from "./identity-review-contract";
+import { foundationSelfieCaptureSchema, selfieCaptureSignals } from "./selfie-capture";
 const log = createLogger("NativeIdentityMetadata");
 const requestBody = z
   .strictObject({ stepId: z.uuid().optional(), userId: z.uuid().optional() })
@@ -77,6 +78,27 @@ export function handleRestoredIdentityMetadata(request: NextRequest) {
       );
       if (metadata.case_id !== resolved.case_id || metadata.version !== context.case_version)
         throw new FoundationStaffCommandError(409, "The evidence changed. Reload the queue.");
+      // How the member's browser says the selfie was taken (review context,
+      // not proof), for the viewer's existing liveness signals.
+      const capture = await settleStaffCommand(
+        api.rpc(
+          "get_frontend_staff_selfie_capture",
+          {
+            p_case_id: fence.case_id,
+            p_claim_generation: fence.claim_generation,
+            p_claim_nonce: fence.claim_nonce,
+          },
+          { get: false }
+        ),
+        foundationSelfieCaptureSchema
+      );
+      if (
+        capture.case_id !== context.case_id ||
+        capture.case_version !== context.case_version ||
+        capture.submission_id !== context.submission_id ||
+        capture.selfie_artifact_id !== context.selfie_artifact_id
+      )
+        throw new FoundationStaffCommandError(409, "The evidence changed. Reload the queue.");
       const foundation = nativeIdentityScopeSchema.parse({
         caseId: context.case_id,
         caseVersion: context.case_version,
@@ -125,6 +147,7 @@ export function handleRestoredIdentityMetadata(request: NextRequest) {
             value_json: { recipe: context.recipe, risk_score: context.risk_score },
             created_at: artifacts[0].created_at,
           },
+          ...selfieCaptureSignals(capture, resolved.owner_id, artifacts[1].created_at),
         ],
         accessLog: resolved.access_log,
         accountProfile: resolved.owner_profile

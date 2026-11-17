@@ -1,45 +1,78 @@
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ createClient: vi.fn(), createAdminClient: vi.fn() }));
-vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.createClient }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.createAdminClient }));
+const mocks = vi.hoisted(() => ({
+  readSession: vi.fn(),
+  readWorkspace: vi.fn(),
+  panel: vi.fn(),
+}));
+vi.mock("@/lib/foundation/server-session", () => ({
+  readFoundationServerSession: mocks.readSession,
+}));
+vi.mock("@/lib/foundation/affiliation-workspace", () => ({
+  readAffiliationWorkspace: mocks.readWorkspace,
+}));
 vi.mock("@/components/organisations/affiliation-request-panel", () => ({
-  AffiliationRequestPanel: () => null,
+  AffiliationRequestPanel: (props: unknown) => {
+    mocks.panel(props);
+    return null;
+  },
 }));
 
 import AffiliationsPage from "./page";
 
-describe("affiliation dashboard availability", () => {
+const api = { fixture: "api" };
+const workspace = {
+  account_id: "member-1",
+  businesses: [{ id: "business-1", name: "Nomsa Beauty Studio", status: "live" }],
+  applications: [],
+  affiliations: [],
+  administered: [{ name: "Ekurhuleni Chamber", slug: "ekurhuleni-chamber" }],
+  preselected: { name: "Ekurhuleni Chamber", slug: "ekurhuleni-chamber" },
+};
+
+describe("affiliation dashboard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.createClient.mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "member-1" } } }) },
-    });
+    mocks.readSession.mockResolvedValue({ api, user: { id: "member-1" } });
+    mocks.readWorkspace.mockResolvedValue(workspace);
   });
 
-  it.each([
-    "businesses",
-    "organisation_applications",
-    "organisation_admins",
-    "organisation_affiliations",
-  ])("uses the dashboard error boundary when %s is unavailable", async (failedTable) => {
-    mocks.createAdminClient.mockReturnValue({
-      from: (table: string) => {
-        const result = {
-          data: table === "businesses" ? [{ id: "business-1" }] : [],
-          error: table === failedTable ? { message: "internal database detail" } : null,
-        };
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          in: vi.fn().mockReturnThis(),
-          order: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-          then: (resolve: (value: typeof result) => unknown) =>
-            Promise.resolve(result).then(resolve),
-        };
-      },
-    });
+  it("shows the member's businesses and the organisations they administer", async () => {
+    render(
+      await AffiliationsPage({ searchParams: Promise.resolve({ org: "ekurhuleni-chamber" }) })
+    );
+
+    expect(mocks.readWorkspace).toHaveBeenCalledWith(api, "ekurhuleni-chamber");
+    expect(screen.getByRole("link", { name: "Ekurhuleni Chamber dashboard" })).toHaveAttribute(
+      "href",
+      "/dashboard/organisation/ekurhuleni-chamber"
+    );
+    expect(mocks.panel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businesses: workspace.businesses,
+        preselect: workspace.preselected,
+      })
+    );
+  });
+
+  it("ignores an organisation link that is not a valid slug", async () => {
+    render(await AffiliationsPage({ searchParams: Promise.resolve({ org: "../admin" }) }));
+
+    expect(mocks.readWorkspace).toHaveBeenCalledWith(api, undefined);
+  });
+
+  it("refuses a workspace that belongs to a different account", async () => {
+    mocks.readWorkspace.mockResolvedValue({ ...workspace, account_id: "member-2" });
+
+    await expect(AffiliationsPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      "Current account changed"
+    );
+  });
+
+  it("uses the dashboard error boundary when the workspace is unavailable", async () => {
+    mocks.readWorkspace.mockRejectedValue(new Error("Affiliations are temporarily unavailable"));
+
     await expect(AffiliationsPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
       "Affiliations are temporarily unavailable"
     );

@@ -9,6 +9,8 @@ import {
   getR2ObjectSize,
   getR2ObjectBytes,
   deleteFromR2,
+  deleteManyFromR2,
+  uploadToR2,
 } from "./storage";
 
 vi.mock("@/lib/config/env", () => ({
@@ -21,7 +23,9 @@ describe("isolated KYC encrypted storage lifecycle", () => {
     vi.stubEnv("ENVIRONMENT", "test");
     vi.stubEnv("VERIFYMZANSI_RUNTIME_MODE", "e2e");
     vi.stubEnv("PLAYWRIGHT_TEST_MODE", "1");
-    vi.stubEnv("PLAYWRIGHT_SUPABASE_MODE", "stub");
+    // The local foundation test copy.
+    vi.stubEnv("FOUNDATION_PROJECT_REF", "local-foundation");
+    vi.stubEnv("FOUNDATION_SUPABASE_URL", "http://127.0.0.1:55443");
     vi.stubEnv("R2_PRIVATE_BUCKET", "verifymzansi-private");
     vi.stubEnv("R2_PUBLIC_BUCKET", "verifymzansi-public");
   });
@@ -68,7 +72,25 @@ describe("isolated KYC encrypted storage lifecycle", () => {
     await deleteFromR2("verifymzansi-private", upload.key);
     expect(bucket.delete).toHaveBeenCalledWith(upload.key);
   });
+  it("batch-deletes local fixture media, counting missing keys as deleted", async () => {
+    const key = `media/${crypto.randomUUID()}`;
+    const variant = `${key}.w400.webp`;
+    for (const name of [key, variant])
+      await uploadToR2({
+        bucket: "verifymzansi-public",
+        key: name,
+        file: new Blob(["synthetic"]) as never,
+        contentType: "image/webp",
+      });
+    expect(await getR2ObjectSize("verifymzansi-public", variant)).toBe(9);
+    expect(
+      await deleteManyFromR2("verifymzansi-public", [key, variant, `${key}.w800.webp`])
+    ).toEqual([]);
+    expect(await getR2ObjectSize("verifymzansi-public", key)).toBeNull();
+    expect(await getR2ObjectSize("verifymzansi-public", variant)).toBeNull();
+  });
   it("rejects path traversal and unknown buckets before filesystem or network access", async () => {
+    await expect(deleteManyFromR2("verifymzansi-public", ["../../.env.local"])).rejects.toThrow();
     await expect(getR2ObjectBytes("verifymzansi-private", "../../.env.local")).rejects.toThrow();
     await expect(getR2ObjectBytes("unknown", "safe.bin")).rejects.toThrow(
       "Unknown isolated storage bucket"

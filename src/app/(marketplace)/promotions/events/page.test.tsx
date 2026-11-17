@@ -2,16 +2,15 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import EventsPage from "./page";
 
-const { mockCreateClient } = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
+const { readCollection } = vi.hoisted(() => ({
+  readCollection: vi.fn(),
 }));
 const { promotionCardSpy } = vi.hoisted(() => ({
   promotionCardSpy: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: mockCreateClient,
-}));
+vi.mock("@/lib/foundation/marketplace-read", () => ({ readRestoredCollection: readCollection }));
+vi.mock("@/lib/foundation/server-public", () => ({ foundationServerPublicApi: () => "api" }));
 
 vi.mock("@/components/layout", () => ({
   PageHeader: ({
@@ -42,101 +41,54 @@ vi.mock("./past-events-accordion", () => ({
   PastEventsAccordion: () => <div>Past Events</div>,
 }));
 
-vi.mock("@/lib/account/compat", () => ({
-  ACCOUNT_PROFILE_TABLE: "account_profiles",
-  getOwnerColumn: vi.fn().mockResolvedValue("owner_id"),
-  normalizeOwnerRecords: (rows: unknown[]) => rows,
-  readAccountVerificationStatus: () => "verified",
-  readOwnerId: (row: { owner_id?: string | null; seller_id?: string | null }) =>
-    row.owner_id ?? row.seller_id ?? null,
-  withOwnerColumn: (fields: string) => fields,
-}));
-
-function createQueryResult<T>(data: T) {
-  const builder = {
-    select: vi.fn(() => builder),
-    eq: vi.fn(() => builder),
-    or: vi.fn(() => builder),
-    lt: vi.fn(() => builder),
-    order: vi.fn(() => builder),
-    limit: vi.fn(() => builder),
-    in: vi.fn(() => builder),
-    then: (resolve: (value: { data: T }) => unknown) => Promise.resolve(resolve({ data })),
-  };
-
-  return builder;
+/** Upcoming events for the first read, ended events for the second. */
+function events(upcoming: unknown[], past: unknown[] = []) {
+  readCollection.mockImplementation(async (_api: unknown, _collection: string, params) =>
+    (params as URLSearchParams).get("event_state") === "ended"
+      ? { rows: past, total: past.length }
+      : { rows: upcoming, total: upcoming.length }
+  );
 }
 
 describe("EventsPage", () => {
-  it("passes linked business logos into upcoming event cards", async () => {
-    mockCreateClient.mockResolvedValue({
-      from: (table: string) => {
-        if (table === "promotions") {
-          return createQueryResult([
-            {
-              id: "event-1",
-              owner_id: "owner-1",
-              business_id: "biz-1",
-              title: "Night Market",
-              description: "Live music and food stalls.",
-              photos: ["https://example.com/photo.jpg"],
-              videos: [],
-              price_cents: null,
-              price_negotiable: false,
-              location_province: "Gauteng",
-              location_city: "Johannesburg",
-              start_date: "2099-01-10T00:00:00.000Z",
-              end_date: "2099-01-11T00:00:00.000Z",
-              boost_until: null,
-              featured_until: null,
-              view_count: 12,
-              created_at: "2026-03-01T00:00:00.000Z",
-            },
-          ]);
-        }
-
-        if (table === "account_profiles") {
-          return createQueryResult([]);
-        }
-
-        if (table === "businesses") {
-          return createQueryResult([
-            {
-              id: "biz-1",
-              business_name: "Nomsa Kitchen",
-              logo_url: "https://example.com/logo.jpg",
-            },
-          ]);
-        }
-
-        throw new Error(`Unexpected table ${table}`);
+  it("shows upcoming events with their own logo and no host-business lookup", async () => {
+    events([
+      {
+        id: "event-1",
+        business_id: "biz-1",
+        title: "Night Market",
+        description: "Live music and food stalls.",
+        photos: ["https://example.com/photo.jpg"],
+        videos: [],
+        logo_url: "https://example.com/event-logo.jpg",
+        price_cents: null,
+        price_negotiable: false,
+        location_province: "Gauteng",
+        location_city: "Johannesburg",
+        start_date: "2099-01-10T00:00:00.000Z",
+        end_date: "2099-01-11T00:00:00.000Z",
+        boost_until: null,
+        featured_until: null,
+        view_count: null,
+        created_at: "2026-03-01T00:00:00.000Z",
       },
-    } as never);
+    ]);
 
     render(await EventsPage());
 
     expect(screen.getByText("Night Market")).toBeInTheDocument();
-    expect(promotionCardSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        logoUrl: "https://example.com/logo.jpg",
-      })
+    const card = promotionCardSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(card.logoUrl).toBe("https://example.com/event-logo.jpg");
+    expect(card.businessName).toBeUndefined();
+    expect(card.viewCount).toBeUndefined();
+    expect(String(readCollection.mock.calls[0][2])).toBe("limit=48&event_order=start_asc");
+    expect(String(readCollection.mock.calls[1][2])).toBe(
+      "limit=24&event_state=ended&event_order=end_desc"
     );
   });
 
   it("sends users straight to event creation from the page header and empty state", async () => {
-    mockCreateClient.mockResolvedValue({
-      from: (table: string) => {
-        if (table === "promotions") {
-          return createQueryResult([]);
-        }
-
-        if (table === "account_profiles" || table === "businesses") {
-          return createQueryResult([]);
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      },
-    } as never);
+    events([]);
 
     render(await EventsPage());
 

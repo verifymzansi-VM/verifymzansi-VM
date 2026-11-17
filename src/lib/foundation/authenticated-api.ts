@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { FoundationRuntimeAuthenticatedDatabase as FoundationAuthenticatedDatabase } from "../../../database/foundation/runtime-api-types";
 import { parseFoundationConnection } from "./connection";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
+import { createFoundationCallRecorder } from "./call-failures";
 
 export type FoundationAuthenticatedApi = Pick<
   SupabaseClient<FoundationAuthenticatedDatabase, "api">,
@@ -38,6 +39,7 @@ export function createFoundationAuthenticatedApi(
   } catch {
     throw new Error("A current authenticated caller token is required");
   }
+  const recorder = createFoundationCallRecorder(fetcher);
   const client = createClient<FoundationAuthenticatedDatabase, "api">(
     config.url,
     config.publishableKey,
@@ -47,9 +49,14 @@ export function createFoundationAuthenticatedApi(
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       global: {
         fetch: (request, init) =>
-          fetcher(request, { ...init, credentials: "omit", cache: "no-store", redirect: "error" }),
+          recorder.fetch(request, {
+            ...init,
+            credentials: "omit",
+            cache: "no-store",
+            redirect: "error",
+          }),
       },
     }
   );
-  return Object.freeze({ rpc: client.rpc.bind(client) });
+  return recorder.attach(Object.freeze({ rpc: client.rpc.bind(client) }));
 }

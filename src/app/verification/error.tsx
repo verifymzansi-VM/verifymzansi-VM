@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useErrorReference } from "@/hooks/use-error-reference";
 import Link from "next/link";
 import { RefreshCw, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ export default function VerificationError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
+  const reference = useErrorReference(error);
   useEffect(() => {
     console.error("[VerificationError]", error.digest ?? error.message);
   }, [error]);
@@ -31,8 +33,8 @@ export default function VerificationError({
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           Something went wrong on our side. Anything you already submitted is saved.
         </p>
-        {error.digest && (
-          <p className="mt-3 text-xs text-muted-foreground">Error reference: {error.digest}</p>
+        {reference && (
+          <p className="mt-3 text-xs text-muted-foreground">Error reference: {reference}</p>
         )}
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
           <Button variant="trust-verified" size="lg" onClick={() => retry()}>

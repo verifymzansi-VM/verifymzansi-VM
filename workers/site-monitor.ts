@@ -69,7 +69,10 @@ async function probe(env: Env, check: SmokeCheck) {
             (!check.path.includes("deep=1") || ("readiness" in body && body.readiness === "ok"))
           );
       }
-    } else await response.body?.cancel().catch(() => {});
+    } else
+      await response.body?.cancel().catch(() => {
+        // Only drains the unread body; the status already decided the result.
+      });
     return {
       name: check.name,
       status: ok ? "PASS" : "FAIL",

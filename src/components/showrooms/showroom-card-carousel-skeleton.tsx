@@ -1,5 +1,6 @@
 import { ShowroomSectionShell, type ShowroomDecorativeBackground } from "./showroom-section-shell";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SHOW_SHOWROOM_PROVINCE_CHIP } from "@/lib/hidden-features";
 
 /**
  * Loading skeleton for ShowroomCardCarousel – rendered while hero data streams in via Suspense.
@@ -48,7 +49,7 @@ export function ShowroomCardCarouselSkeleton({
         </div>
       </ShowroomSectionShell>
       {/* Holds the place of the province chip shown under the populated showroom. */}
-      <div className="h-14" aria-hidden="true" />
+      {SHOW_SHOWROOM_PROVINCE_CHIP ? <div className="h-14" aria-hidden="true" /> : null}
     </>
   );
 }

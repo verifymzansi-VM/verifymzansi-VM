@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { hasRuntimeDiagnosticAccess, verifyRuntimeBindings } from "@/lib/health/runtime-bindings";
 import { parseJsonRequest } from "@/lib/utils/api";
+import { approvedHostedProjectRef } from "@/lib/foundation/hosted-projects";
 
 const headers = {
   "Cache-Control": "private, no-store",
@@ -36,8 +37,9 @@ export async function POST(request: Request) {
     // These direct references are inlined by Next.js. A matching runtime URL
     // alone cannot prove that the browser bundle was rebuilt for this project.
     const compiledPublic = {
-      backend: process.env.NEXT_PUBLIC_DATA_BACKEND === "foundation",
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL === "https://gntzjtuncsyefujajmjy.supabase.co",
+      url:
+        process.env.NEXT_PUBLIC_SUPABASE_URL ===
+        `https://${approvedHostedProjectRef(String(environment.ENVIRONMENT ?? ""))}.supabase.co`,
       publishable:
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ===
         environment.FOUNDATION_SUPABASE_PUBLISHABLE_KEY,

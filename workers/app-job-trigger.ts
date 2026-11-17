@@ -3,7 +3,10 @@ import type { AbortSignal as WorkerAbortSignal } from "@cloudflare/workers-types
 
 type AppBinding = Pick<FoundationCompanionBindings, "APP" | "APP_URL">;
 type JobPath =
-  "/api/internal/payments/reconcile" | "/api/internal/retention/run" | "/api/webhooks/ops-jobs";
+  | "/api/internal/payments/reconcile"
+  | "/api/internal/payments/refunds/reconcile"
+  | "/api/internal/retention/run"
+  | "/api/webhooks/ops-jobs";
 export type FoundationJobEnv = AppBinding & {
   DATA_BACKEND: "foundation";
   WORKER_API_KEY: string;
@@ -12,7 +15,10 @@ export type FoundationJobEnv = AppBinding & {
  * authority stay on the app's journal-backed commands. Never forward secrets. */
 export async function triggerFoundationJob(
   env: FoundationJobEnv,
-  path: "/api/internal/payments/reconcile" | "/api/internal/retention/run"
+  path:
+    | "/api/internal/payments/reconcile"
+    | "/api/internal/payments/refunds/reconcile"
+    | "/api/internal/retention/run"
 ) {
   await triggerBoundAppJob(env, path, env.WORKER_API_KEY);
 }
@@ -37,6 +43,7 @@ export async function triggerBoundAppJob(env: AppBinding, path: JobPath, credent
     typeof env.APP.fetch !== "function" ||
     ![
       "/api/internal/payments/reconcile",
+      "/api/internal/payments/refunds/reconcile",
       "/api/internal/retention/run",
       "/api/webhooks/ops-jobs",
     ].includes(path)
@@ -58,6 +65,8 @@ export async function triggerBoundAppJob(env: AppBinding, path: JobPath, credent
     throw new Error("App job request failed");
   }
   // Never read, forward or log private upstream response bodies.
-  await response.body?.cancel().catch(() => {});
+  await response.body?.cancel().catch(() => {
+    // Only drains the unread body; the status below decides the result.
+  });
   if (!response.ok) throw new Error(`App job returned HTTP ${response.status}`);
 }

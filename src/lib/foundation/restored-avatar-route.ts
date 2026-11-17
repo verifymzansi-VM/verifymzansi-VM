@@ -4,7 +4,11 @@ import { createFoundationRouteContext } from "./request-route";
 import { readFoundationRuntimeConnection } from "./runtime-connection";
 import { createFoundationServiceApi } from "./service-api";
 import { FoundationSessionError } from "./request-api";
-import { uploadFoundationMedia, FoundationMediaError } from "./media-upload";
+import {
+  uploadFoundationMedia,
+  FoundationMediaError,
+  IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE,
+} from "./media-upload";
 import { setFoundationAvatar, FoundationProfileError } from "./account-profile";
 import { enforceMutationRequest } from "../utils/mutation-guard";
 import { checkRateLimit, getClientRateLimitIdentity } from "../utils/rate-limit";
@@ -92,7 +96,9 @@ export async function handleRestoredAvatarUpload(request: NextRequest) {
     if (error instanceof FoundationMediaError)
       return reply(
         error.status,
-        "The image could not be uploaded. Check the format and storage allowance"
+        error.reason === "images_allowance_exhausted"
+          ? IMAGES_ALLOWANCE_EXHAUSTED_MESSAGE
+          : "The image could not be uploaded. Check the format and storage allowance"
       );
     if (error instanceof FoundationProfileError)
       return reply(

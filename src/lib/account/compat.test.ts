@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ACCOUNT_PROFILE_TABLE,
   ACCOUNT_PROFILE_WRITE_TABLE,
@@ -7,62 +7,18 @@ import {
   normalizeOwnerRecord,
   normalizeOwnerRecords,
   readOwnerId,
-  resetOwnerColumnCacheForTesting,
-  withOwnerColumn,
-  withOwnerField,
 } from "./compat";
 
-function createProbeClient(
-  results: Record<string, { error: { code?: string; message?: string } | null }>
-) {
-  const from = vi.fn(() => ({
-    select: vi.fn((fields: string) => ({
-      limit: vi.fn().mockResolvedValue(results[fields] ?? { error: null }),
-    })),
-  }));
-
-  return { from };
-}
-
 describe("account compat helpers", () => {
-  beforeEach(() => {
-    resetOwnerColumnCacheForTesting();
-  });
-
-  it("detects owner_id columns when available", async () => {
-    const client = createProbeClient({
-      "id, owner_id": { error: null },
-    });
-
+  it("uses owner_id without probing the database", async () => {
+    const client = { from: vi.fn() };
     await expect(getOwnerColumn(client as never, "listings")).resolves.toBe("owner_id");
-    expect(client.from).toHaveBeenCalledTimes(1);
+    expect(client.from).not.toHaveBeenCalled();
   });
 
   it("pins account profile table constants to account_profiles", () => {
     expect(ACCOUNT_PROFILE_TABLE).toBe("account_profiles");
     expect(ACCOUNT_PROFILE_WRITE_TABLE).toBe("account_profiles");
-  });
-
-  it("falls back to seller_id when owner_id is unavailable", async () => {
-    const client = createProbeClient({
-      "id, owner_id": {
-        error: { code: "42703", message: "column listings.owner_id does not exist" },
-      },
-      "id, seller_id": { error: null },
-    });
-
-    await expect(getOwnerColumn(client as never, "listings")).resolves.toBe("seller_id");
-    expect(client.from).toHaveBeenCalledTimes(2);
-  });
-
-  it("caches detected owner columns per table", async () => {
-    const client = createProbeClient({
-      "id, owner_id": { error: null },
-    });
-
-    await expect(getOwnerColumn(client as never, "promotions")).resolves.toBe("owner_id");
-    await expect(getOwnerColumn(client as never, "promotions")).resolves.toBe("owner_id");
-    expect(client.from).toHaveBeenCalledTimes(1);
   });
 
   it("normalizes seller_id records back to owner_id", () => {
@@ -83,15 +39,9 @@ describe("account compat helpers", () => {
     ]);
   });
 
-  it("rewrites owner-aware selects, filters, and payloads", () => {
+  it("applies owner filters", () => {
     const eq = vi.fn().mockReturnValue("filtered");
-
-    expect(withOwnerColumn("id, owner_id, title", "seller_id")).toBe("id, seller_id, title");
-    expect(applyOwnerFilter({ eq } as never, "seller_id", "user-1")).toBe("filtered");
-    expect(eq).toHaveBeenCalledWith("seller_id", "user-1");
-    expect(withOwnerField({ title: "Test" }, "seller_id", "user-1")).toEqual({
-      title: "Test",
-      seller_id: "user-1",
-    });
+    expect(applyOwnerFilter({ eq } as never, "owner_id", "user-1")).toBe("filtered");
+    expect(eq).toHaveBeenCalledWith("owner_id", "user-1");
   });
 });

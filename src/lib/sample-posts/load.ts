@@ -1,13 +1,15 @@
 import "server-only";
-import type { CarouselItem } from "@/components/showrooms/carousel-item-transforms";
+import type { CarouselItem } from "@/components/showrooms/showroom-card-carousel";
 import { createLogger } from "@/lib/utils/logger";
 import {
   APPROVED_SAMPLE_POSTS,
+  SAMPLE_POST_LOGO,
   samplePostsEnabled,
   validateSamplePost,
   type SamplePostEntry,
   type SamplePostSource,
 } from "./catalogue";
+import { loadHiddenSampleSlugs } from "./hidden";
 
 const log = createLogger("SamplePosts");
 
@@ -88,13 +90,35 @@ export function resolveSamplePosts(
   return resolved;
 }
 
-/** Every sample that may be shown now; empty while the switch is off. */
-export async function listSamplePosts(): Promise<ResolvedSamplePost[]> {
-  if (!samplePostsEnabled()) return [];
+/**
+ * Every valid catalogue sample, whether switched on or removed by staff: the
+ * staff page lists these. The development server adds local preview entries.
+ */
+export async function listCatalogueSamples(): Promise<ResolvedSamplePost[]> {
   return resolveSamplePosts([
     { source: "committed", entries: APPROVED_SAMPLE_POSTS },
     { source: "local", entries: await readLocalEntries() },
   ]);
+}
+
+/**
+ * Every sample that may be shown now: none while the switch is off, never one
+ * staff removed, and none at all when the hide-list cannot be read.
+ */
+export async function listSamplePosts(): Promise<ResolvedSamplePost[]> {
+  if (!samplePostsEnabled()) return [];
+  const catalogue = await listCatalogueSamples();
+  if (catalogue.length === 0) return [];
+  let hidden: ReadonlySet<string>;
+  try {
+    hidden = await loadHiddenSampleSlugs();
+  } catch (error) {
+    log.warn("Hidden sample list unavailable; showing no samples", {
+      error: error instanceof Error ? error.message : "unknown",
+    });
+    return [];
+  }
+  return catalogue.filter((post) => !hidden.has(post.slug));
 }
 
 export async function findSamplePost(slug: string): Promise<ResolvedSamplePost | null> {
@@ -102,7 +126,10 @@ export async function findSamplePost(slug: string): Promise<ResolvedSamplePost |
 }
 
 /** Which showrooms a sample belongs in, mirroring where real posts appear. */
-function sampleMatchesSurface(post: SamplePostEntry, surface: ShowroomSurface): boolean {
+function sampleMatchesSurface(
+  post: Pick<SamplePostEntry, "area">,
+  surface: ShowroomSurface
+): boolean {
   switch (surface) {
     case "home":
       return true;
@@ -111,10 +138,7 @@ function sampleMatchesSurface(post: SamplePostEntry, surface: ShowroomSurface): 
     case "business":
       return post.area === "business";
     case "tourism":
-      return (
-        post.area === "event" ||
-        (post.area === "business" && post.category === "tourism_hospitality")
-      );
+      return post.area === "tourism" || post.area === "event";
   }
 }
 
@@ -127,7 +151,9 @@ function sampleToCarouselItem(post: ResolvedSamplePost): CarouselItem {
     description: post.description,
     location: post.city,
     mediaUrl: post.videoUrl,
+    mediaKind: "video",
     posterUrl: post.posterUrl,
+    logoUrl: SAMPLE_POST_LOGO,
     price: null,
     sample: true,
   };

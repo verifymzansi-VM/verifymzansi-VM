@@ -20,9 +20,10 @@ export function TrialPolicy({
   variant?: "card" | "banner";
   className?: string;
 }) {
-  const { shortDays, longDays } = trials;
+  // One 7-day free post; the 30-day launch option has ended.
+  const { shortDays } = trials;
   const points = [
-    `${shortDays} days, or ${longDays} days while spaces last`,
+    `${shortDays} days from approval`,
     `${FREE_POST_CONFIG.maxPhotos} photos and ${FREE_POST_CONFIG.maxVideos} video`,
     "No payment needed",
   ];
@@ -44,7 +45,7 @@ export function TrialPolicy({
             Your first post is free
           </h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {shortDays} days, or {longDays} days while spaces last.{" "}
+            {shortDays} days from approval.{" "}
             <Link
               href="#billing-faq-trial"
               className="rounded-sm font-medium text-brand-green-700 underline underline-offset-2 hover:text-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-gold-300"

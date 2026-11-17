@@ -50,6 +50,7 @@ import {
   buildListingFacts,
   describeListingPrice,
   getListingCategoryLabel,
+  isListingPriceNegotiable,
   getListingDetailsHeading,
   humanizeKey,
 } from "@/lib/presentation/listing-facts";
@@ -58,7 +59,6 @@ import {
   formatRandAmount,
   formatSaLongDate,
   formatSaShortDate,
-  formatZAR,
   formatZARShort,
 } from "@/lib/utils/format";
 import { placeLine } from "@/lib/utils/place-line";
@@ -198,13 +198,10 @@ export function presentListingSlide(
         getListingCategoryLabel(listing.category),
         listing.condition ? getListingConditionLabel(listing.condition) : null,
       ].filter((chip): chip is string => Boolean(chip)),
-      figure:
-        price.kind === "amount"
-          ? {
-              value: formatZAR(price.cents),
-              note: listing.price_negotiable ? "Negotiable" : undefined,
-            }
-          : { value: price.label },
+      figure: {
+        value: price.label,
+        note: isListingPriceNegotiable(listing, price) ? "Negotiable" : undefined,
+      },
       meta: [
         place ? { icon: "location" as const, text: place } : null,
         listing.created_at && !Number.isNaN(new Date(listing.created_at).getTime())
@@ -705,7 +702,7 @@ function ticketFigure(promotion: PromotionDetailRecord, tiers: TicketTier[]) {
   if (tiers.length > 0) return { value: "Free entry" };
   if (promotion.price_cents != null && promotion.price_cents > 0) {
     return {
-      value: formatZAR(promotion.price_cents),
+      value: formatZARShort(promotion.price_cents),
       note: promotion.price_negotiable ? "Negotiable" : undefined,
     };
   }
@@ -863,7 +860,7 @@ export function presentEventSlide(
       initials: initialsOf(linkedBusiness?.business_name || advertiser?.display_name, "E"),
       trustLevel: trustOf(advertiser),
       // The position is the advertiser's only when they own the linked business.
-      ...(linkedBusiness && linkedBusiness.owner_id === promotion.owner_id
+      ...(linkedBusiness?.owner_id && linkedBusiness.owner_id === promotion.owner_id
         ? {
             position: linkedBusiness.owner_position_title ?? null,
             positionSource: linkedBusiness.owner_verified_role ?? null,

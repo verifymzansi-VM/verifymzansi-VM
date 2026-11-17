@@ -1,3 +1,5 @@
+> Historical: describes the retired source backend. Never run `supabase db push` or replay `supabase/migrations/` against the foundation project; follow [AGENTS.md](../AGENTS.md#database-changes).
+
 # Supabase Schema Sync Runbook
 
 This runbook prevents runtime schema drift in the linked Supabase project, including PGRST205 failures, missing policy columns on account_profiles, and enum mismatches such as a missing PROMOTIONS_EVENTS marketplace area.

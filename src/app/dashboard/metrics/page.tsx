@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
 import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 import { isVisibleByExpiry } from "@/lib/posting/visibility";
+import { SHOW_OWNER_METRICS } from "@/lib/hidden-features";
 
 export const metadata = {
   title: "Metrics",
@@ -238,6 +239,8 @@ async function loadShowroomFairShare(posts: OwnedPost[]): Promise<FairShareRow[]
 }
 
 export default async function MetricsPage() {
+  // Hidden until it works (src/lib/hidden-features.ts): old links lead to the dashboard.
+  if (!SHOW_OWNER_METRICS) redirect("/dashboard");
   const supabase = await createClient();
   const {
     data: { user },

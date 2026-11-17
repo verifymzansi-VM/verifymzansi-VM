@@ -8,7 +8,7 @@ import type { User } from "@supabase/supabase-js";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 
 vi.mock("server-only", () => ({}));
-vi.mock("next/headers", () => ({ cookies: vi.fn() }));
+vi.mock("next/headers", () => ({ cookies: vi.fn(), headers: vi.fn(async () => new Headers()) }));
 vi.mock("./runtime-connection", () => ({ readFoundationRuntimeConnection: () => ({}) }));
 vi.mock("./request-api", async (original) => ({
   ...(await original<Record<string, unknown>>()),
@@ -63,6 +63,11 @@ it("refuses inconsistent verified user and account identities", async () => {
     sessionId: id,
     api,
     recovery: null,
+    openedByRecovery: false,
+    signedInAt: null,
+    signedInWithPassword: false,
+    authenticatorAt: null,
+    authenticatorStepMissing: false,
     user: { ...user, id: "00000000-0000-4000-8000-000000000002" },
   });
   await expect(readFoundationServerSession()).rejects.toMatchObject({ status: 503 });

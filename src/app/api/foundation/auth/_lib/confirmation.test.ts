@@ -5,7 +5,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET } from "@/app/(auth)/auth/callback/route";
 import { POST as register } from "../register/route";
+import { POST as requestRecovery } from "../recovery/request/route";
+import { readRecoveryBinding } from "@/lib/foundation/recovery-binding";
 import { handleFoundationGoogleOAuth } from "./google-oauth";
+import { googleLandingPath, googleRefusalPath, handleFoundationConfirmation } from "./confirmation";
 import { createClient as legacyClient } from "@/lib/supabase/server";
 import { createAdminClient as legacyAdmin } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
@@ -26,16 +29,24 @@ const authUrl = `https://${target}.supabase.co/auth/v1`;
 const baseCookie = `sb-${target}-auth-token`;
 const csrf = "c".repeat(64);
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const flows: Array<{ id: string; code: string; challenge: string; user: number; used: boolean }> =
-  [];
+const flows: Array<{
+  id: string;
+  code: string;
+  challenge: string;
+  user: number;
+  used: boolean;
+  recovery?: boolean;
+}> = [];
 const issued = new Map<string, number>();
 const googleUsers = new Set<number>();
+const newUsers = new Set<number>();
 const fetcher = vi.fn<typeof fetch>();
 const user = (n: number) => ({
   id: uuid(n),
   email: `person${n}@example.invalid`,
   aud: "authenticated",
   email_confirmed_at: "2026-10-24T00:00:00Z",
+  ...(newUsers.has(n) ? { created_at: new Date().toISOString() } : {}),
   is_anonymous: false,
   identities: googleUsers.has(n)
     ? [
@@ -50,7 +61,7 @@ const user = (n: number) => ({
       ]
     : [],
 });
-function session(n: number) {
+function session(n: number, recovery = false) {
   const token = [
     Buffer.from('{"alg":"ES256"}').toString("base64url"),
     Buffer.from(
@@ -60,6 +71,9 @@ function session(n: number) {
         session_id: uuid(100 + n),
         role: "authenticated",
         exp: Math.floor(Date.now() / 1000) + 3600,
+        ...(recovery
+          ? { amr: [{ method: "recovery", timestamp: Math.floor(Date.now() / 1000) }] }
+          : {}),
       })
     ).toString("base64url"),
     "unsigned_synthetic_unit_only",
@@ -117,6 +131,7 @@ beforeEach(() => {
   flows.length = 0;
   issued.clear();
   googleUsers.clear();
+  newUsers.clear();
   for (const [key, value] of Object.entries({
     FOUNDATION_PASSWORD_AUTH_MODE: "native-captcha",
     FOUNDATION_AUTH_CALLBACK_ENABLED: "true",
@@ -154,8 +169,34 @@ beforeEach(() => {
       if (!flow || flow.used || flow.challenge !== challenge)
         return Response.json({ msg: "PRIVATE_CODE_REFUSAL" }, { status: 400 });
       flow.used = true;
-      return Response.json(session(flow.user));
+      return Response.json(session(flow.user, flow.recovery));
     }
+    if (request.pathname.endsWith("/recover")) {
+      const body = JSON.parse(String(init?.body));
+      const redirect = new URL(request.searchParams.get("redirect_to")!);
+      flows.push({
+        id: redirect.searchParams.get("sb_flow_id")!,
+        code: "synthetic_recovery_code_" + (flows.length + 1),
+        challenge: body.code_challenge,
+        user: Number(String(body.email).match(/^person([0-9]+)@/)![1]),
+        used: false,
+        recovery: true,
+      });
+      return Response.json({});
+    }
+    if (request.pathname === "/rest/v1/rpc/get_my_profile")
+      return Response.json({
+        display_name: "Thando M.",
+        public_name: "Thando M.",
+        bio: null,
+        avatar_object_id: null,
+        legal_first_name: null,
+        legal_last_name: null,
+        legal_name_locked: false,
+        identity_verified: false,
+        revision: 1,
+        updated_at: "2026-10-25T00:00:00Z",
+      });
     expect(request.pathname).toBe("/auth/v1/user");
     const n = issued.get(new Headers(init?.headers).get("authorization")!.slice(7));
     return n ? Response.json(user(n)) : Response.json({ msg: "refused" }, { status: 401 });
@@ -261,7 +302,7 @@ it("a client recovery selector cannot turn a signup code into password-recovery 
   );
   const response = await GET(new NextRequest(link(flow, "&recovery=1"), { headers: headers(jar) }));
   expect(response.headers.get("location")).toBe(
-    "https://verifymzansi.com/forgot-password?error=recovery_failed"
+    "https://verifymzansi.com/forgot-password?error=recovery_failed#"
   );
   expect(
     response.cookies
@@ -365,6 +406,27 @@ it.each(["missing-flow", "duplicate-code", "token-hash"])(
     expect(legacyClient).not.toHaveBeenCalled();
   }
 );
+it.each([
+  ["sign-up", "", "https://verifymzansi.com/login?error=auth_callback_failed#"],
+  ["recovery", "&recovery=1", "https://verifymzansi.com/forgot-password?error=recovery_failed#"],
+])(
+  "sends a refused %s link to its failure page with an empty fragment",
+  async (_label, selector, location) => {
+    vi.stubEnv("FOUNDATION_RECOVERY_ENABLED", "true");
+    // Auth's own refusal: error details in the query (and in a fragment the
+    // browser would otherwise keep).
+    const response = await GET(
+      new NextRequest(
+        `https://verifymzansi.com/auth/callback?backend=foundation${selector}&error=access_denied&error_code=otp_expired`
+      )
+    );
+    expect(response.headers.get("location")).toBe(location);
+    expect(new URL(response.headers.get("location")!).hash).toBe("");
+    expect(response.headers.get("location")!.endsWith("#")).toBe(true);
+    expect(fetcher).not.toHaveBeenCalled();
+  }
+);
+
 it("stays closed without the callback flag and blocks degraded shared protection", async () => {
   const jar = new Map([["vm_csrf", csrf]]);
   const flow = await begin(jar);
@@ -379,4 +441,227 @@ it("stays closed without the callback flag and blocks degraded shared protection
   const response = await GET(new NextRequest(link(flow), { headers: headers(jar) }));
   expect(response.headers.get("Retry-After")).toBe("90");
   expect(fetcher).not.toHaveBeenCalled();
+});
+
+async function beginRecovery(jar: Map<string, string>, n = 1) {
+  const response = await requestRecovery(
+    new NextRequest("https://verifymzansi.com/api/foundation/auth/recovery/request", {
+      method: "POST",
+      headers: {
+        ...headers(jar),
+        origin: "https://verifymzansi.com",
+        "x-csrf-token": csrf,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        email: `person${n}@example.invalid`,
+        turnstileToken: "synthetic-captcha",
+      }),
+    })
+  );
+  expect(response.status).toBe(200);
+  applyCookies(jar, response.cookies.getAll());
+  const flow = flows.at(-1)!;
+  expect(flow.recovery).toBe(true);
+  return flow;
+}
+const BINDING = "__Host-vm_recovery_binding";
+
+it("remembers which verified recovery session a reset link opened, in this browser only", async () => {
+  vi.stubEnv("FOUNDATION_RECOVERY_ENABLED", "true");
+  vi.stubEnv("HMAC_SECRET", "0123456789abcdef".repeat(4));
+  const jar = new Map([["vm_csrf", csrf]]);
+  const flow = await beginRecovery(jar);
+  const response = await GET(new NextRequest(link(flow, "&recovery=1"), { headers: headers(jar) }));
+  const location = new URL(response.headers.get("location")!);
+  expect(location.origin + location.pathname).toBe("https://verifymzansi.com/reset-password");
+  expect([...location.searchParams.keys()]).toEqual(["link"]);
+  const marker = location.searchParams.get("link")!;
+  expect(marker).toMatch(/^[A-Za-z0-9_-]{22}$/);
+  expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+  expect(response.cookies.get(baseCookie)?.secure).toBe(true);
+  const cookie = response.cookies.get(BINDING)!;
+  expect(cookie).toMatchObject({ httpOnly: true, secure: true, sameSite: "strict", path: "/" });
+  expect(cookie.domain).toBeUndefined();
+  expect(cookie.maxAge).toBeGreaterThan(1790);
+  expect(cookie.maxAge).toBeLessThanOrEqual(1800);
+  // Bound to the account and session GoTrue issued for this link.
+  expect(readRecoveryBinding(cookie.value)).toMatchObject({
+    account: uuid(1),
+    session: uuid(101),
+    marker,
+  });
+  expect(response.cookies.get("vm_password_recovery")).toBeUndefined();
+  expect(legacyClient).not.toHaveBeenCalled();
+});
+
+it("gives every opened link its own page address and binding", async () => {
+  vi.stubEnv("FOUNDATION_RECOVERY_ENABLED", "true");
+  vi.stubEnv("HMAC_SECRET", "0123456789abcdef".repeat(4));
+  const jar = new Map([["vm_csrf", csrf]]);
+  const first = await beginRecovery(jar);
+  const second = await beginRecovery(jar);
+  const a = await GET(new NextRequest(link(first, "&recovery=1"), { headers: headers(jar) }));
+  applyCookies(jar, a.cookies.getAll());
+  const b = await GET(new NextRequest(link(second, "&recovery=1"), { headers: headers(jar) }));
+  const markerA = new URL(a.headers.get("location")!).searchParams.get("link");
+  const markerB = new URL(b.headers.get("location")!).searchParams.get("link");
+  expect(markerA).not.toBe(markerB);
+  // The later link replaces the binding; the earlier page no longer matches it.
+  expect(readRecoveryBinding(b.cookies.get(BINDING)!.value)?.marker).toBe(markerB);
+});
+
+it("publishes no recovery session when the binding cannot be signed", async () => {
+  vi.stubEnv("FOUNDATION_RECOVERY_ENABLED", "true");
+  vi.stubEnv("HMAC_SECRET", "");
+  const jar = new Map([["vm_csrf", csrf]]);
+  const flow = await beginRecovery(jar);
+  const response = await GET(new NextRequest(link(flow, "&recovery=1"), { headers: headers(jar) }));
+  expect(response.headers.get("location")).toBe(
+    "https://verifymzansi.com/forgot-password?error=recovery_failed#"
+  );
+  expect(response.cookies.get(BINDING)).toBeUndefined();
+  expect(
+    response.cookies
+      .getAll()
+      .filter((item) => item.name === baseCookie || item.name.startsWith(baseCookie + "."))
+  ).toEqual([]);
+});
+
+it("never binds recovery for sign-up confirmations or refused recovery links", async () => {
+  vi.stubEnv("FOUNDATION_RECOVERY_ENABLED", "true");
+  vi.stubEnv("HMAC_SECRET", "0123456789abcdef".repeat(4));
+  const jar = new Map([["vm_csrf", csrf]]);
+  const signup = await begin(jar);
+  const confirmed = await GET(new NextRequest(link(signup), { headers: headers(jar) }));
+  expect(confirmed.headers.get("location")).toContain("/dashboard/complete-profile");
+  expect(confirmed.cookies.get(BINDING)).toBeUndefined();
+  // A sign-up code presented as recovery has no signed recovery method.
+  const other = await begin(jar, 2);
+  const refused = await GET(new NextRequest(link(other, "&recovery=1"), { headers: headers(jar) }));
+  expect(refused.headers.get("location")).toContain("recovery_failed");
+  expect(refused.cookies.get(BINDING)).toBeUndefined();
+  // A used recovery link opens nothing and binds nothing.
+  const flow = await beginRecovery(jar);
+  const opened = await GET(new NextRequest(link(flow, "&recovery=1"), { headers: headers(jar) }));
+  expect(opened.cookies.get(BINDING)).toBeDefined();
+  const replay = await GET(new NextRequest(link(flow, "&recovery=1"), { headers: headers(jar) }));
+  expect(replay.headers.get("location")).toContain("recovery_failed");
+  expect(replay.cookies.get(BINDING)).toBeUndefined();
+});
+
+it("an email change selector never turns a sign-up or recovery code into a session", async () => {
+  vi.stubEnv("FOUNDATION_RECOVERY_ENABLED", "true");
+  vi.stubEnv("HMAC_SECRET", "0123456789abcdef".repeat(4));
+  const jar = new Map([["vm_csrf", csrf]]);
+  const signup = await begin(jar);
+  const recovery = await beginRecovery(jar, 2);
+  fetcher.mockClear();
+  for (const url of [
+    link(signup, "&email_change=1"),
+    link(recovery, "&recovery=1&email_change=1"),
+    // The landing's own shape (no flow selector), with a real sign-up code.
+    `https://verifymzansi.com/auth/callback?backend=foundation&email_change=1&code=${signup.code}`,
+  ]) {
+    const response = await GET(new NextRequest(url, { headers: headers(jar) }));
+    expect(response.status).toBe(303);
+    // Only a page is chosen: no exchange, no session, no binding, no verifier change.
+    expect(response.cookies.getAll()).toEqual([]);
+    expect(fetcher).not.toHaveBeenCalled();
+  }
+  expect(signup.used).toBe(false);
+  expect(recovery.used).toBe(false);
+  // Even handed straight to the session handler, such a link opens nothing.
+  for (const [url, purpose] of [
+    [link(signup, "&email_change=1"), "signup"],
+    [link(recovery, "&recovery=1&email_change=1"), "recovery"],
+  ] as const) {
+    const direct = await handleFoundationConfirmation(
+      new NextRequest(url, { headers: headers(jar) }),
+      purpose
+    );
+    expect(direct.headers.get("location")).toMatch(/auth_callback_failed|recovery_failed/);
+    expect(direct.cookies.getAll().filter((item) => item.value)).toEqual([]);
+    expect(fetcher).not.toHaveBeenCalled();
+  }
+  // The same links without the selector still work as before.
+  const confirmed = await GET(new NextRequest(link(signup), { headers: headers(jar) }));
+  expect(confirmed.headers.get("location")).toContain("/dashboard/complete-profile");
+  const opened = await GET(
+    new NextRequest(link(recovery, "&recovery=1"), { headers: headers(jar) })
+  );
+  expect(opened.cookies.get(BINDING)).toBeDefined();
+  expect(legacyClient).not.toHaveBeenCalled();
+  expect(legacyAdmin).not.toHaveBeenCalled();
+});
+
+it("sends a brand-new Google account to the phone step, keeping where it was going", async () => {
+  const jar = new Map([["vm_csrf", csrf]]);
+  const callback = await beginGoogle(jar, "/post/create");
+  googleUsers.add(1);
+  newUsers.add(1);
+  const response = await GET(new NextRequest(callback, { headers: headers(jar) }));
+  expect(response.headers.get("location")).toBe(
+    "https://verifymzansi.com/dashboard/complete-profile?returnUrl=%2Fpost%2Fcreate"
+  );
+  expect(response.cookies.get(baseCookie)?.secure).toBe(true);
+});
+
+it("tells a Google visitor plainly when registration is not open", async () => {
+  const jar = new Map([["vm_csrf", csrf]]);
+  const callback = await beginGoogle(jar);
+  callback.searchParams.delete("code");
+  callback.searchParams.set("error", "server_error");
+  callback.searchParams.set("error_description", "Registration is not open yet");
+  const response = await GET(new NextRequest(callback, { headers: headers(jar) }));
+  expect(response.headers.get("location")).toBe(
+    "https://verifymzansi.com/login?error=registration_closed#"
+  );
+  expect(response.cookies.get(baseCookie)).toBeUndefined();
+});
+
+it("says a cancelled Google sign-in was not completed, not that a link expired", async () => {
+  const jar = new Map([["vm_csrf", csrf]]);
+  const callback = await beginGoogle(jar);
+  callback.searchParams.delete("code");
+  callback.searchParams.set("error", "access_denied");
+  callback.searchParams.set("error_description", "The user denied the request");
+  const response = await GET(new NextRequest(callback, { headers: headers(jar) }));
+  expect(response.headers.get("location")).toBe(
+    "https://verifymzansi.com/login?error=google_cancelled#"
+  );
+  expect(response.cookies.get(baseCookie)).toBeUndefined();
+});
+
+it("google landing and refusal reasons never come from untrusted text", () => {
+  const now = Date.parse("2026-11-12T12:00:00Z");
+  expect(googleLandingPath("/", "2026-11-12T11:59:00Z", now)).toBe("/dashboard/complete-profile");
+  expect(googleLandingPath("/dashboard", "2026-11-12T11:55:00Z", now)).toBe(
+    "/dashboard/complete-profile"
+  );
+  expect(googleLandingPath("/listing/1?x=1", "2026-11-12T11:59:00Z", now)).toBe(
+    "/dashboard/complete-profile?returnUrl=%2Flisting%2F1%3Fx%3D1"
+  );
+  // Older accounts (including email accounts adding Google), unknown or future times.
+  expect(googleLandingPath("/dashboard", "2026-11-12T11:40:00Z", now)).toBe("/dashboard");
+  expect(googleLandingPath("/dashboard", null, now)).toBe("/dashboard");
+  expect(googleLandingPath("/dashboard", "not a date", now)).toBe("/dashboard");
+  expect(googleLandingPath("/dashboard", "2026-11-12T12:30:00Z", now)).toBe("/dashboard");
+
+  const query = (entries: Record<string, string>) => new URLSearchParams(entries);
+  expect(googleRefusalPath(query({ oauth: "google", error: "access_denied" }))).toBe(
+    "/login?error=google_cancelled#"
+  );
+  expect(
+    googleRefusalPath(
+      query({
+        oauth: "google",
+        error: "access_denied",
+        error_description: "Registration is not open yet",
+      })
+    )
+  ).toBe("/login?error=registration_closed#");
+  expect(googleRefusalPath(query({ oauth: "google", error: "server_error" }))).toBeNull();
+  expect(googleRefusalPath(query({ error: "access_denied" }))).toBeNull();
+  expect(googleRefusalPath(query({ oauth: "google" }))).toBeNull();
 });

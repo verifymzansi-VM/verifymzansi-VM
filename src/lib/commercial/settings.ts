@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { safeErrorCode } from "@/lib/foundation/call-failures";
+import { recordDefaultFallback } from "@/lib/utils/fallback-events";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("CommercialSettings");
 
 /**
  * Admin-editable commercial numbers (table `commercial_settings`). Prices live
@@ -139,7 +144,7 @@ export const COMMERCIAL_SETTING_LABELS: Record<CommercialSettingKey, string> = {
   features: "Feature toggles",
 };
 
-export function isCommercialSettingKey(key: string): key is CommercialSettingKey {
+function isCommercialSettingKey(key: string): key is CommercialSettingKey {
   return Object.prototype.hasOwnProperty.call(COMMERCIAL_SETTING_SCHEMAS, key);
 }
 
@@ -165,7 +170,7 @@ type SettingsReader = {
   from: (table: "commercial_settings") => {
     select: (columns: string) => PromiseLike<{
       data: Array<{ key: string; value: unknown }> | null;
-      error: { message: string } | null;
+      error: { message: string; code?: string } | null;
     }>;
   };
 };
@@ -176,7 +181,15 @@ const CACHE_MS = 60_000;
 export async function getCommercialSettings(client: SettingsReader): Promise<CommercialSettings> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.value;
   const { data, error } = await client.from("commercial_settings").select("key, value");
-  if (error) return cache?.value ?? DEFAULT_COMMERCIAL_SETTINGS;
+  if (error) {
+    // Pages keep working on the last good or default values, but the failure is
+    // logged and counted so ignored staff settings do not go unnoticed.
+    recordDefaultFallback(log, "commercial_settings", {
+      errorCode: safeErrorCode(error.code),
+      usedCachedValue: Boolean(cache),
+    });
+    return cache?.value ?? DEFAULT_COMMERCIAL_SETTINGS;
+  }
   const value = resolveCommercialSettings(data);
   cache = { at: Date.now(), value };
   return value;
@@ -184,36 +197,6 @@ export async function getCommercialSettings(client: SettingsReader): Promise<Com
 
 export function clearCommercialSettingsCache(): void {
   cache = null;
-}
-
-const PLATFORM_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const PLATFORM_MAX_VIDEO_BYTES = 50 * 1024 * 1024;
-
-/** Upload ceilings: admin settings may lower, never raise, the platform limits. */
-export async function getMediaUploadLimits(client: SettingsReader): Promise<{
-  imageBytes: number;
-  videoBytes: number;
-  imageMb: number;
-  videoMb: number;
-  quotaBytes: number;
-  quotaMb: number;
-}> {
-  let media = DEFAULT_COMMERCIAL_SETTINGS.media;
-  try {
-    media = (await getCommercialSettings(client)).media;
-  } catch {
-    // Fall back to platform limits when settings are unavailable.
-  }
-  const imageBytes = Math.min(PLATFORM_MAX_IMAGE_BYTES, media.maxImageMb * 1024 * 1024);
-  const videoBytes = Math.min(PLATFORM_MAX_VIDEO_BYTES, media.maxVideoMb * 1024 * 1024);
-  return {
-    imageBytes,
-    videoBytes,
-    imageMb: Math.round(imageBytes / 1024 / 1024),
-    videoMb: Math.round(videoBytes / 1024 / 1024),
-    quotaBytes: media.storageQuotaMb * 1024 * 1024,
-    quotaMb: media.storageQuotaMb,
-  };
 }
 
 /**
@@ -247,13 +230,4 @@ export async function checkStorageQuota(
     return `Your media storage allowance (${quotaMb} MB) is full. Remove unused posts or contact VerifyMzansi.`;
   }
   return null;
-}
-
-/** Kill switch for every public organisation surface (pages, badges, filters, showrooms). */
-export async function organisationsPublicEnabled(client: SettingsReader): Promise<boolean> {
-  try {
-    return (await getCommercialSettings(client)).features.organisationsPublic;
-  } catch {
-    return true;
-  }
 }

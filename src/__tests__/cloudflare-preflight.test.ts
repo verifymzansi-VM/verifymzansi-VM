@@ -17,6 +17,12 @@ function fixture() {
     path.resolve("scripts/preflight-cloudflare.js"),
     path.join(root, "scripts/preflight-cloudflare.js")
   );
+  // The preflight refuses builds that would skip Next's TypeScript check.
+  fs.mkdirSync(path.join(root, "scripts/lib"));
+  fs.copyFileSync(
+    path.resolve("scripts/lib/next-typecheck-skip.cjs"),
+    path.join(root, "scripts/lib/next-typecheck-skip.cjs")
+  );
   const classes = ["DOQueueHandler", "DOShardedTagCache", "BucketCachePurge", "RateLimiterDO"];
   const bindings = [
     "NEXT_CACHE_DO_QUEUE",

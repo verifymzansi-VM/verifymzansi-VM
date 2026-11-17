@@ -75,9 +75,7 @@ export function ManagedByCard({
   return (
     <Card>
       <CardContent className="space-y-4 p-5">
-        <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Posted by
-        </h3>
+        <h3 className="font-display text-sm font-semibold text-muted-foreground">Posted by</h3>
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
             <UserRound className="h-5 w-5 text-muted-foreground" />

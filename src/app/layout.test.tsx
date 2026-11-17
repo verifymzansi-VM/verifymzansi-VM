@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { runInNewContext } from "node:vm";
-import type { ReactNode } from "react";
+import { isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/headers", () => ({
@@ -102,6 +102,25 @@ describe("RootLayout", () => {
     expect(scriptIndex).toBeGreaterThan(-1);
     expect(scriptIndex).toBeLessThan(skipLinkIndex);
     expect(markup).toContain("Marketplace");
+  });
+
+  it("opens straight on the page: no 'launching soon' pop-up in the app shell", async () => {
+    const tree = await RootLayout({ children: <div id="page-content">Marketplace</div> });
+    const names: string[] = [];
+    const visit = (node: ReactNode): void => {
+      if (Array.isArray(node)) return node.forEach(visit);
+      if (!isValidElement(node)) return;
+      const type = node.type as string | { name?: string; displayName?: string };
+      names.push(typeof type === "string" ? type : (type.displayName ?? type.name ?? ""));
+      visit((node.props as { children?: ReactNode }).children);
+    };
+    visit(tree);
+
+    expect(names).toContain("MobileNav");
+    expect(names.filter((name) => /prelaunch|launch|banner/i.test(name))).toEqual([]);
+    const markup = renderToStaticMarkup(tree);
+    expect(markup).not.toMatch(/launching soon|early preview/i);
+    expect(markup).not.toContain("data-full-screen-popup");
   });
 
   it("injects auth cache recovery before the app shell on auth pages", async () => {

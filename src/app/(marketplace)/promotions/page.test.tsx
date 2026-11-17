@@ -72,7 +72,6 @@ vi.mock("./client", () => ({
 
 vi.mock("@/lib/account/compat", () => ({
   getOwnerColumn: mockGetOwnerColumn,
-  withOwnerColumn: (fields: string) => fields,
 }));
 
 vi.mock("@/lib/utils/media-url", () => ({
@@ -84,15 +83,6 @@ vi.mock("@/lib/utils/placeholder-content", () => ({
     const content = `${title ?? ""} ${description ?? ""}`.toLowerCase();
     return content.includes("placeholder");
   },
-}));
-
-vi.mock("@/components/home/playwright-fixture-filter", () => ({
-  shouldHidePlaywrightFixtureRowWhenEnabled: () => false,
-}));
-
-vi.mock("@/lib/supabase/playwright-visual-fixtures", () => ({
-  PLAYWRIGHT_HIDE_FIXTURES_COOKIE: "playwright-hide-fixtures",
-  shouldHidePlaywrightFixtures: () => false,
 }));
 
 function createQueryResult<T>(data: T) {
@@ -156,7 +146,7 @@ describe("PromotionsPage", () => {
     mockGetVisitorProvince.mockResolvedValue({ province: null, source: null });
   });
 
-  it("shows tourism businesses and events in fair rotation order, local first", async () => {
+  it("shows tourism businesses and events from the showroom feed", async () => {
     const supabase = createSupabaseClient({ businesses: [], promotions: [] });
     mockCreateClient.mockResolvedValue(supabase);
     mockGetVisitorProvince.mockResolvedValue({ province: "Western Cape", source: "detected" });
@@ -168,11 +158,7 @@ describe("PromotionsPage", () => {
 
     await renderPage();
 
-    expect(mockLoadShowroomItems).toHaveBeenCalledWith("tourism", {
-      province: "Western Cape",
-      hideFixtures: false,
-      client: supabase,
-    });
+    expect(mockLoadShowroomItems).toHaveBeenCalledWith("tourism");
     expect(carouselSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         items,

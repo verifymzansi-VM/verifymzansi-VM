@@ -6,6 +6,11 @@ description:
   recovery.
 ---
 
+Production runs the foundation backend (`database/foundation/`,
+`src/lib/foundation/`); read [AGENTS.md](../../../AGENTS.md) first. Evidence
+from the retired source backend (`supabase/migrations/`, `public` tables, tests
+run with the `source` data backend) does not prove production behaviour.
+
 Run `pnpm kyc:audit`. Read [KYC workflow](../../../docs/kyc-audit-guide.md),
 [encryption recovery](../../../docs/encryption-recovery.md) and
 [audit policy](../../../docs/audit-tools.md). Examine the code and migrations

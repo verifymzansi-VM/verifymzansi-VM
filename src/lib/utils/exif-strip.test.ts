@@ -155,6 +155,53 @@ describe("exif-strip", () => {
 
       expect(stripMetadataFromPng(malformed)).toEqual(malformed.slice(0, 8));
     });
+
+    /** A PNG with the given chunks between IHDR and IEND (CRC not checked). */
+    function pngWith(chunks: Array<[string, number[]]>): Uint8Array {
+      const ascii = (text: string) => [...text].map((ch) => ch.charCodeAt(0));
+      const chunk = (type: string, data: number[]) => [
+        (data.length >>> 24) & 0xff,
+        (data.length >> 16) & 0xff,
+        (data.length >> 8) & 0xff,
+        data.length & 0xff,
+        ...ascii(type),
+        ...data,
+        0,
+        0,
+        0,
+        0,
+      ];
+      return new Uint8Array([
+        0x89,
+        0x50,
+        0x4e,
+        0x47,
+        0x0d,
+        0x0a,
+        0x1a,
+        0x0a,
+        ...chunk("IHDR", [0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0]),
+        ...chunks.flatMap(([type, data]) => chunk(type, data)),
+        ...chunk("IEND", []),
+      ]);
+    }
+    const text = (bytes: Uint8Array) => [...bytes].map((b) => String.fromCharCode(b)).join("");
+
+    it("removes tEXt chunks (author, comments, GPS notes) and keeps the image data", () => {
+      const input = pngWith([
+        ["IDAT", [0x78, 0x9c, 0x62, 0x00, 0x00]],
+        ["tEXt", [...new TextEncoder().encode("Comment\0GPS data")]],
+      ]);
+      const output = text(stripMetadataFromPng(input));
+      expect(output).not.toContain("tEXt");
+      expect(output).not.toContain("GPS data");
+      for (const kept of ["IHDR", "IDAT", "IEND"]) expect(output).toContain(kept);
+    });
+
+    it("returns a non-PNG buffer unchanged", () => {
+      const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+      expect(stripMetadataFromPng(jpeg)).toBe(jpeg);
+    });
   });
 
   describe("stripMetadataFromWebp", () => {

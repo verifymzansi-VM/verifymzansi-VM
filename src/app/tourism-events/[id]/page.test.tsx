@@ -1,30 +1,29 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import TourismEventDetailPage from "./page";
-import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 
-const { mockCreateClient, mockNotFound, mockTryCreateAdminClient, mockGetViewCounts } = vi.hoisted(
-  () => ({
-    mockCreateClient: vi.fn(),
-    mockNotFound: vi.fn(() => {
-      throw new Error("notFound");
-    }),
-    mockTryCreateAdminClient: vi.fn(),
-    mockGetViewCounts: vi.fn().mockResolvedValue({
-      ok: true,
-      data: new Map([["promotion-1", 42]]),
-    }),
-  })
-);
-
-vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
-vi.mock("@/lib/supabase/admin", () => ({ tryCreateAdminClient: mockTryCreateAdminClient }));
-vi.mock("next/navigation", () => ({ notFound: mockNotFound }));
-vi.mock("@/lib/engagement-server", () => ({
-  getOptionalContentViewCountMap: mockGetViewCounts,
-  getOptionalContentLikeSummaryMap: vi.fn().mockResolvedValue({ ok: true, data: new Map() }),
-  getOptionalContentShareCountMap: vi.fn().mockResolvedValue(new Map()),
+const { mockNotFound, readings } = vi.hoisted(() => ({
+  mockNotFound: vi.fn(() => {
+    throw new Error("notFound");
+  }),
+  readings: {
+    businessDetail: vi.fn(),
+    eventDetail: vi.fn(),
+    eventHostBusiness: vi.fn(),
+    publicDetail: vi.fn(),
+  },
 }));
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
+}));
+vi.mock("@/lib/foundation/marketplace-server", () => ({
+  restoredBusinessDetail: readings.businessDetail,
+  restoredEventDetail: readings.eventDetail,
+  restoredEventHostBusiness: readings.eventHostBusiness,
+  restoredPublicDetail: readings.publicDetail,
+}));
+vi.mock("next/navigation", () => ({ notFound: mockNotFound, redirect: vi.fn() }));
 vi.mock("@/components/layout/page-header", () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
 }));
@@ -41,95 +40,41 @@ vi.mock("@/components/listings/promotion-detail-content", () => ({
     <div>
       <div>Tourism Detail Mock</div>
       <div>{promotion.title}</div>
-      <div>{promotion.view_count ?? 0}</div>
       <div>{advertiserProfile?.display_name ?? "No advertiser"}</div>
       <div>{linkedBusiness?.business_name ?? "No linked business"}</div>
     </div>
   ),
 }));
 
-function buildClient(options?: {
-  promotion?: Record<string, unknown> | null;
-  advertiserProfile?: Record<string, unknown> | null;
-  linkedBusiness?: Record<string, unknown> | null;
-}) {
-  return {
-    auth: { getUser: async () => ({ data: { user: null } }) },
-    from: (table: string) => {
-      if (table === "promotions") {
-        return {
-          select: () => ({
-            eq: () => ({
-              eq: () => ({
-                single: async () => ({ data: options?.promotion ?? null }),
-              }),
-            }),
-          }),
-        };
-      }
-
-      if (table === ACCOUNT_PROFILE_TABLE) {
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({ data: options?.advertiserProfile ?? null }),
-            }),
-          }),
-        };
-      }
-
-      if (table === "businesses") {
-        // Supports both query shapes used on this table:
-        //   loadBusinessDetail:      select → eq → maybeSingle
-        //   linkedBusiness lookup:   select → eq → eq → maybeSingle (via applyVisibleExpiryFilter)
-        const result = { data: options?.linkedBusiness ?? null };
-        const chain: {
-          eq: () => typeof chain;
-          or: () => typeof chain;
-          maybeSingle: () => Promise<typeof result>;
-        } = {
-          eq: () => chain,
-          or: () => chain,
-          maybeSingle: async () => result,
-        };
-        return {
-          select: () => chain,
-        };
-      }
-
-      throw new Error(`Unexpected table ${table}`);
-    },
-  };
-}
-
 describe("TourismEventDetailPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Not a tourism business, so the page shows the event.
+    readings.businessDetail.mockResolvedValue(null);
+  });
+
   it("renders the canonical tourism detail content without its own header or footer shell", async () => {
-    mockCreateClient.mockResolvedValue(
-      buildClient({
-        promotion: {
-          id: "promotion-1",
-          owner_id: "owner-1",
-          business_id: "business-1",
-          title: "Night Market",
-          description: "Community event with food, music, and stalls.",
-          status: "live",
-          promotion_type: "event",
-          price_cents: 5000,
-          location_city: "Johannesburg",
-          location_province: "Gauteng",
-          photos: [],
-        },
-        advertiserProfile: {
-          display_name: "Nomsa Advertiser",
-          account_verification_status: "verified",
-        },
-        linkedBusiness: {
-          id: "business-1",
-          business_name: "Nomsa Kitchen",
-          logo_url: null,
-        },
-      })
-    );
+    readings.eventDetail.mockResolvedValue({
+      id: "promotion-1",
+      owner_id: "",
+      business_id: "business-1",
+      title: "Night Market",
+      description: "Community event with food, music, and stalls.",
+      status: "live",
+      promotion_type: "event",
+      price_cents: 5000,
+      location_city: "Johannesburg",
+      location_province: "Gauteng",
+      photos: [],
+    });
+    readings.publicDetail.mockResolvedValue({
+      seller: { public_name: "Nomsa Advertiser", identity_verified: true },
+    });
+    readings.eventHostBusiness.mockResolvedValue({
+      id: "business-1",
+      business_name: "Nomsa Kitchen",
+      logo_url: null,
+    });
 
     render(await TourismEventDetailPage({ params: Promise.resolve({ id: "promotion-1" }) }));
 
@@ -138,12 +83,13 @@ describe("TourismEventDetailPage", () => {
     // Public names show the first name and surname initial.
     expect(screen.getByText("Nomsa A.")).toBeInTheDocument();
     expect(screen.getByText("Nomsa Kitchen")).toBeInTheDocument();
+    expect(readings.eventHostBusiness).toHaveBeenCalledWith("business-1");
     expect(screen.queryByText("Header")).not.toBeInTheDocument();
     expect(screen.queryByText("Footer")).not.toBeInTheDocument();
   });
 
   it("calls notFound when the canonical tourism promotion is missing", async () => {
-    mockCreateClient.mockResolvedValue(buildClient({ promotion: null }));
+    readings.eventDetail.mockResolvedValue(null);
 
     await expect(
       TourismEventDetailPage({ params: Promise.resolve({ id: "missing-promotion" }) })

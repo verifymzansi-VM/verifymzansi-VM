@@ -1,11 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { addonSalesPausedResponse, areAddonSalesOpen } from "@/lib/billing/addon-sales";
 import { handleFoundationBillingRoute } from "@/lib/foundation/billing-route";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { createLogger } from "@/lib/utils/logger";
 const log = createLogger("FoundationAddonCheckout");
 export async function POST(request: NextRequest) {
+  // Paused add-on sales stop here, before the body is read.
+  if (!areAddonSalesOpen()) return addonSalesPausedResponse("foundation_addon");
   const blocked = enforceMutationRequest(request, log);
   if (blocked) return blocked;
   const input = z

@@ -1,12 +1,10 @@
 import { publicPersonName } from "@/lib/account/public-name";
-import { getDataBackend } from "@/lib/data-backend";
 import { restoredListingDetail, restoredPublicDetail } from "@/lib/foundation/marketplace-server";
 import { readRestoredCollection } from "@/lib/foundation/marketplace-read";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import { notFound } from "next/navigation";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
 import { createClient } from "@/lib/supabase/server";
-import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
@@ -16,29 +14,10 @@ import {
   type SimilarSellerRow,
 } from "@/components/listings/listing-detail-content";
 import type { Metadata } from "next";
-import {
-  ACCOUNT_PROFILE_TABLE,
-  getOwnerColumn,
-  normalizeOwnerRecord,
-  normalizeOwnerRecords,
-  readOwnerId,
-  withOwnerColumn,
-} from "@/lib/account/compat";
-import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
-import {
-  getOptionalContentShareCountMap,
-  getOptionalContentLikeSummaryMap,
-  getOptionalContentViewCountMap,
-} from "@/lib/engagement-server";
-import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
-import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
+import { normalizeOwnerRecord, normalizeOwnerRecords, readOwnerId } from "@/lib/account/compat";
 import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
 import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import { presentListingSlide } from "@/lib/feed/presenters";
-
-/** Public listing columns (no street address, which stays private). */
-const LISTING_DETAIL_SELECT =
-  "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, location_suburb, contact_methods, status, area, view_count, boost_until, featured_until, urgent_until, expires_at, created_at, updated_at, media_width, media_height, focal_x, focal_y, blurhash";
 
 interface ListingDetailPageProps {
   params: Promise<{ id: string }>;
@@ -46,19 +25,7 @@ interface ListingDetailPageProps {
 
 export async function generateMetadata({ params }: ListingDetailPageProps): Promise<Metadata> {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: listing } =
-    getDataBackend() === "foundation"
-      ? { data: await restoredListingDetail(id) }
-      : await applyVisibleExpiryFilter(
-          supabase
-            .from("listings")
-            .select(
-              "title, description, photos, videos, video_thumbnail, media_width, media_height, location_city, location_province"
-            )
-            .eq("id", id)
-            .eq("status", "live")
-        ).single();
+  const listing = await restoredListingDetail(id);
 
   if (!listing) {
     return { title: "Listing Not Found" };
@@ -77,11 +44,7 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
 
 export default async function ListingDetailPage({ params }: ListingDetailPageProps) {
   const { id } = await params;
-  const cookieStore = await getOptionalCookieStore();
   const supabase = await createClient();
-  const foundation = getDataBackend() === "foundation";
-  const engagementAdmin = foundation ? null : tryCreateAdminClient();
-  const listingOwnerColumn = foundation ? "owner_id" : await getOwnerColumn(supabase, "listings");
 
   // Check if visitor is authenticated
   const {
@@ -89,35 +52,24 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   } = await supabase.auth.getUser();
 
   // Fetch listing
-  const { data: rawListing } = foundation
-    ? { data: await restoredListingDetail(id) }
-    : await applyVisibleExpiryFilter(
-        supabase.from("listings").select(LISTING_DETAIL_SELECT).eq("id", id).eq("status", "live")
-      ).single();
+  const rawListing = await restoredListingDetail(id);
 
   const listing = rawListing ? normalizeOwnerRecord(rawListing) : null;
 
   if (!listing) notFound();
 
-  // Fetch listing owner profile (maybeSingle — the account may have been deleted)
   const listingOwnerId = readOwnerId(listing);
-  const publicPost = foundation ? await restoredPublicDetail(id) : null;
-  const { data: seller } = publicPost
+  const publicPost = await restoredPublicDetail(id);
+  const seller = publicPost
     ? {
-        data: {
-          id: null,
-          display_name: publicPost.seller.public_name,
-          account_verification_status: publicPost.seller.identity_verified ? "verified" : null,
-          phone: null,
-        },
+        id: null,
+        display_name: publicPost.seller.public_name,
+        account_verification_status: publicPost.seller.identity_verified
+          ? ("verified" as const)
+          : null,
+        phone: null,
       }
-    : listingOwnerId
-      ? await (engagementAdmin ?? supabase)
-          .from(ACCOUNT_PROFILE_TABLE)
-          .select("id, display_name, account_verification_status, phone")
-          .eq("user_id", listingOwnerId)
-          .maybeSingle()
-      : { data: null };
+    : null;
 
   // Publish phone only when the poster explicitly selected a phone contact method.
   const publishesPhone = listing.contact_methods?.some((method: string) =>
@@ -131,7 +83,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
         ...seller,
         display_name: publicPersonName(seller.display_name),
         phone: publishesPhone && viewerIsSeller ? seller.phone : null,
-        has_phone: foundation ? Boolean(publishesPhone) : Boolean(publishesPhone && seller.phone),
+        has_phone: Boolean(publishesPhone),
         masked_phone_public: null,
         // Use the location selected for this post, never a private account location.
         location_city: listing.location_city,
@@ -140,39 +92,20 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     : null;
 
   // Fetch similar listings (same category, excluding current)
-  const { data: similarListings } = foundation
-    ? {
-        data: (
-          await readRestoredCollection(
-            foundationServerPublicApi(),
-            "listings",
-            new URLSearchParams({ category: listing.category ?? "", limit: "5" })
-          )
-        ).rows
-          .filter((row) => row.id !== id)
-          .slice(0, 4),
-      }
-    : await applyVisibleExpiryFilter(
-        supabase
-          .from("listings")
-          .select(
-            withOwnerColumn(
-              "id, title, price_cents, price_negotiable, condition, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, logo_url, location_province, location_city, category, attributes, created_at, boost_until, featured, featured_until, owner_id",
-              listingOwnerColumn
-            )
-          )
-          .eq("status", "live")
-          .eq("area", "MZANSI_MARKET")
-          .eq("category", listing.category)
-          .neq("id", listing.id)
-      )
-        .order("created_at", { ascending: false })
-        .limit(4);
+  const similarListings = (
+    await readRestoredCollection(
+      foundationServerPublicApi(),
+      "listings",
+      new URLSearchParams({ category: listing.category ?? "", limit: "5" })
+    )
+  ).rows
+    .filter((row) => row.id !== id)
+    .slice(0, 4);
 
-  // Fetch owner profiles for similar listings
+  // Similar listings for the cards below the post
   const similarItems = (
     normalizeOwnerRecords(
-      (similarListings ?? []) as unknown as Array<
+      similarListings as unknown as Array<
         SimilarListingRow & {
           owner_id?: string | null;
           seller_id?: string | null;
@@ -185,45 +118,9 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     // The stored flag stays true after the paid window ends; trust the date.
     featured: Boolean(featured_until && new Date(featured_until) > new Date()),
   })) as SimilarListingRow[];
-  let similarSellers = new Map<string, SimilarSellerRow>();
-  if (similarItems.length > 0 && !foundation) {
-    const ownerIds = Array.from(
-      new Set(
-        similarItems.map((item) => readOwnerId(item)).filter((id): id is string => Boolean(id))
-      )
-    );
-    // Other sellers' profiles are owner-only to the visitor's session.
-    const { data: ownerData } = await (engagementAdmin ?? supabase)
-      .from(ACCOUNT_PROFILE_TABLE)
-      .select("user_id, display_name, account_verification_status")
-      .in("user_id", ownerIds);
-    similarSellers = new Map(
-      (ownerData ?? []).map((s) => [
-        s.user_id,
-        { ...s, display_name: publicPersonName(s.display_name) ?? "" },
-      ])
-    );
-  }
-  const viewerId = readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null;
-  const viewerKey = buildViewerKey(viewerId, user?.id);
-  const similarListingIds = similarItems.map((item) => item.id);
-  const [listingViewCounts, similarLikeSummary] = await Promise.all([
-    getOptionalContentViewCountMap(engagementAdmin, "listing", [listing.id, ...similarListingIds]),
-    getOptionalContentLikeSummaryMap(
-      engagementAdmin,
-      "listing",
-      [listing.id, ...similarListingIds],
-      viewerKey
-    ),
-  ]);
-  const listingViewCount = listingViewCounts.ok
-    ? (listingViewCounts.data.get(listing.id) ?? 0)
-    : (listing.view_count ?? 0);
+  const similarSellers = new Map<string, SimilarSellerRow>();
+  const listingViewCount = listing.view_count ?? 0;
 
-  const ownLikes = similarLikeSummary.ok ? similarLikeSummary.data.get(listing.id) : undefined;
-  const shareCounts = await getOptionalContentShareCountMap(engagementAdmin, "listing", [
-    listing.id,
-  ]);
   const immersiveSlide = presentListingSlide(
     listing,
     seller
@@ -235,9 +132,9 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       : null,
     {
       views: listingViewCount,
-      likes: ownLikes?.likeCount ?? 0,
-      viewerHasLiked: ownLikes?.viewerHasLiked ?? false,
-      shares: shareCounts.get(listing.id) ?? null,
+      likes: 0,
+      viewerHasLiked: false,
+      shares: null,
     }
   );
 
@@ -282,15 +179,9 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
             seller={safeSeller}
             similarItems={similarItems.map((item) => ({
               ...item,
-              view_count: listingViewCounts.ok
-                ? (listingViewCounts.data.get(item.id) ?? null)
-                : null,
-              like_count: similarLikeSummary.ok
-                ? (similarLikeSummary.data.get(item.id)?.likeCount ?? null)
-                : null,
-              viewer_has_liked: similarLikeSummary.ok
-                ? (similarLikeSummary.data.get(item.id)?.viewerHasLiked ?? false)
-                : false,
+              view_count: null,
+              like_count: null,
+              viewer_has_liked: false,
             }))}
             similarSellers={similarSellers}
             showContactActions={true}

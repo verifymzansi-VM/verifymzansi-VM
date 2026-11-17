@@ -1,12 +1,10 @@
 import { requireStaff } from "@/lib/auth/require-staff";
-import { getPendingAppeals } from "@/lib/services/decision-ledger";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Scale } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFrontendAppeals } from "@/lib/foundation/member-appeals";
 import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
@@ -17,14 +15,16 @@ export const metadata = {
   description: "Review and decide on submitted appeals.",
 };
 
+type AppealRow = Awaited<ReturnType<typeof readFrontendAppeals>>["items"][number];
+
 export default async function GovernanceAppealsPage() {
   const { user } = await requireStaff("appeal:decide");
 
-  const { items: appeals, total } = await (async () => {
-    if (getDataBackend() !== "foundation") {
-      const items = await getPendingAppeals(50);
-      return { items, total: items.length };
-    }
+  // Status as text: the list also handles the older "under_review" status.
+  const { items: appeals, total } = await (async (): Promise<{
+    items: Array<Omit<AppealRow, "status"> & { status: string }>;
+    total: number;
+  }> => {
     const { api } = await readFoundationServerSession();
     try {
       return await readFrontendAppeals(api, user.id);

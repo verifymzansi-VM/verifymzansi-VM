@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import VerificationPage from "./page";
 import { useSearchParams } from "next/navigation";
 import type { VerificationStatus } from "@/types/enums";
+import type * as HiddenFeatures from "@/lib/hidden-features";
 import {
   VERIFICATION_EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
   VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE,
@@ -39,6 +40,15 @@ vi.mock("next/link", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: mockToast }),
+}));
+
+// "Detect province and city" is hidden until it works; its tests switch it on.
+const hidden = vi.hoisted(() => ({ detect: false }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_LOCATION_DETECTION() {
+    return hidden.detect;
+  },
 }));
 
 vi.mock("@/components/layout/header", () => ({
@@ -128,6 +138,7 @@ describe("VerificationPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
+    hidden.detect = false;
     vi.stubGlobal(
       "URL",
       class MockURL extends OriginalURL {
@@ -807,12 +818,88 @@ describe("VerificationPage", () => {
     await waitFor(() => {
       expect(fetchCalls().some(([input]) => String(input).includes("/api/otp/send"))).toBe(true);
       expect(screen.getByText(/You can resend a new code in 45s/i)).toBeInTheDocument();
-      expect(
-        screen.getByText(/Too many code requests were made for this number/i)
-      ).toBeInTheDocument();
     });
+    // The reason sits under the number, not in a toast.
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Too many OTP requests. Please wait before trying again."
+    );
+    expect(screen.getByLabelText(/SA mobile number/i)).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByRole("button", { name: /Send code/i })).toBeDisabled();
     expect(screen.queryByLabelText(/6-digit code/i)).not.toBeInTheDocument();
+    expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" }));
+    // Editing the number keeps a wait that is still running.
+    fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
+      target: { value: "0712345679" },
+    });
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Send code/i })).toBeDisabled();
+  });
+
+  it.each([
+    ["phone_in_use", "This phone number is already linked to another account.", 409],
+    ["phone_already_verified", "This phone number is already verified on your account.", 409],
+    [
+      "phone_banned",
+      "This phone number can't be used on VerifyMzansi. Contact support if you think this is a mistake.",
+      403,
+    ],
+  ])(
+    "says why no code was sent (%s) without the SMS delivery hint",
+    async (code, error, status) => {
+      otpSendResponse = jsonResponse({ error, reason: code, code }, status);
+
+      render(<VerificationPage />);
+
+      fireEvent.change(await screen.findByLabelText(/SA mobile number/i), {
+        target: { value: "0712345678" },
+      });
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /Send code/i })).toBeEnabled();
+      });
+      fireEvent.click(screen.getByRole("button", { name: /Send code/i }));
+
+      // The reason sits under the number field, not in a toast.
+      expect(await screen.findByRole("alert")).toHaveTextContent(error);
+      const number = screen.getByLabelText(/SA mobile number/i);
+      expect(number).toHaveAttribute("aria-invalid", "true");
+      expect(number).toHaveAttribute("aria-describedby", "phone-error");
+      expect(mockToast).not.toHaveBeenCalledWith(
+        expect.objectContaining({ variant: "destructive" })
+      );
+      expect(screen.queryByText(/SMS delivery can take up to 60 seconds/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/6-digit code/i)).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Send code/i })).toBeEnabled();
+      // Editing the number clears it.
+      fireEvent.change(number, { target: { value: "0712345679" } });
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    }
+  );
+
+  it("shows a wrong code under the code field, not in a toast", async () => {
+    otpVerifyResponse = jsonResponse(
+      { error: "Check the number or code, or request a new code" },
+      400
+    );
+    render(<VerificationPage />);
+    fireEvent.change(await screen.findByLabelText(/SA mobile number/i), {
+      target: { value: "0712345678" },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Send code/i })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Send code/i }));
+    const code = await screen.findByLabelText(/6-digit code/i);
+    fireEvent.change(code, { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: /Verify code/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Check the number or code, or request a new code"
+    );
+    expect(code).toHaveAttribute("aria-invalid", "true");
+    expect(code).toHaveAttribute("aria-describedby", "otp-error");
+    expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" }));
+    fireEvent.change(code, { target: { value: "12345" } });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("falls back to /dashboard when no returnUrl is provided", async () => {
@@ -1255,7 +1342,25 @@ describe("VerificationPage", () => {
     await screen.findByRole("button", { name: /Save location/i });
   }
 
+  it("hides location detection until it works; the list still saves", async () => {
+    await openLocationStep();
+    expect(
+      screen.queryByRole("button", { name: /Detect province and city/i })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Detection is approximate/i)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^Province$/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City$/i), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save location/i }));
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Location approved" })
+      )
+    );
+    expect(fetchCalls().some(([url]) => String(url).includes("location/detect"))).toBe(false);
+  });
+
   it("suggests province and city without submitting or requesting GPS", async () => {
+    hidden.detect = true;
     gpsResponse = jsonResponse({ detected: true, province: "Gauteng", city: "Johannesburg" });
     await openLocationStep();
     expect(screen.queryByLabelText(/Town \/ Suburb/i)).not.toBeInTheDocument();
@@ -1275,6 +1380,7 @@ describe("VerificationPage", () => {
   });
 
   it.each([200, 503])("allows manual selection when detection fails (%s)", async (status) => {
+    hidden.detect = true;
     gpsResponse = jsonResponse({ detected: false, province: null, city: null }, status);
     await openLocationStep();
     fireEvent.click(screen.getByRole("button", { name: /Detect province and city/i }));

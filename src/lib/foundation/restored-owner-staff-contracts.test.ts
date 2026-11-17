@@ -2,6 +2,7 @@ import { expect, it, vi } from "vitest";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import {
   listRestoredOwnerPosts,
+  parseRestoredOwnerPost,
   readRestoredOwnerPost,
   restoredOwnerPostRow,
 } from "./restored-owner-posts";
@@ -71,13 +72,15 @@ const listing = {
   frontend: { data: { location_address: "Owner address" }, media: [] },
   contacts: { phone: "+27821112222" },
   pending_edit: null,
+  deletes_at: "2026-11-08T01:00:00Z",
 };
 
 it("loads and projects an owner draft without losing its moderation state, location or contact choices", async () => {
   const { api, rpc } = fixture(listing);
   const post = await readRestoredOwnerPost(api, id);
-  expect(rpc).toHaveBeenCalledWith("get_my_frontend_post", { p_id: id }, { get: false });
+  expect(rpc).toHaveBeenCalledWith("get_my_frontend_post_v2", { p_id: id }, { get: false });
   expect(restoredOwnerPostRow(post!, caller)).toMatchObject({
+    deletes_at: listing.deletes_at,
     owner_id: caller,
     status: "hidden",
     status_reason: "Hidden for staff review",
@@ -92,11 +95,51 @@ it("loads and projects an owner draft without losing its moderation state, locat
   await expect(readRestoredOwnerPost(api, subject)).rejects.toThrow("Post changed");
 });
 
+it("requires the deletion date on the owner's reads and keeps the staff form without it", async () => {
+  const { deletes_at: _, ...staffForm } = listing;
+  const { api } = fixture(staffForm);
+  await expect(readRestoredOwnerPost(api, id)).rejects.toThrow();
+  const pending = { ...listing, deletes_at: null };
+  const { api: open } = fixture(pending);
+  expect(
+    restoredOwnerPostRow((await readRestoredOwnerPost(open, id))!, caller).deletes_at
+  ).toBeNull();
+  expect(parseRestoredOwnerPost(staffForm)?.id).toBe(id);
+  expect(() => parseRestoredOwnerPost(listing)).toThrow();
+  expect(restoredOwnerPostRow(parseRestoredOwnerPost(staffForm)!, caller).deletes_at).toBeNull();
+});
+
+it("falls back to the original owner reads on a database without the deletion date", async () => {
+  const { deletes_at: _, ...earlier } = listing;
+  const missing = { data: null, error: { code: "PGRST202", message: "not found" } };
+  const { api, rpc } = fixture(earlier);
+  rpc.mockResolvedValueOnce(missing);
+  const post = await readRestoredOwnerPost(api, id);
+  expect(rpc.mock.calls.map(([name]) => name)).toEqual([
+    "get_my_frontend_post_v2",
+    "get_my_frontend_post",
+  ]);
+  expect(restoredOwnerPostRow(post!, caller).deletes_at).toBeNull();
+  rpc.mockClear();
+  rpc.mockResolvedValueOnce(missing);
+  rpc.mockResolvedValueOnce(ok({ items: [earlier], total: 1, limit: 100, offset: 0 }));
+  await expect(listRestoredOwnerPosts(api, "listing")).resolves.toHaveLength(1);
+  expect(rpc.mock.calls.map(([name]) => name)).toEqual([
+    "list_my_frontend_posts_v2",
+    "list_my_frontend_posts",
+  ]);
+  // Any other failure is not a reason to read the original form.
+  rpc.mockClear();
+  rpc.mockResolvedValueOnce({ data: null, error: { code: "42501", message: "denied" } });
+  await expect(readRestoredOwnerPost(api, id)).rejects.toThrow("could not be loaded");
+  expect(rpc).toHaveBeenCalledTimes(1);
+});
+
 it("rejects duplicate posts and pending edits from the top-level owner collection", async () => {
   const { api, rpc } = fixture({ items: [listing], total: 1, limit: 100, offset: 0 });
   await expect(listRestoredOwnerPosts(api, "listing", "market")).resolves.toHaveLength(1);
   expect(rpc).toHaveBeenCalledWith(
-    "list_my_frontend_posts",
+    "list_my_frontend_posts_v2",
     { p_kind: "listing", p_area: "market", p_limit: 100, p_offset: 0 },
     { get: false }
   );

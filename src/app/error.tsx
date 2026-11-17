@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useErrorReference } from "@/hooks/use-error-reference";
 import Link from "next/link";
 import { CloudOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,7 @@ export default function GlobalError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
+  const reference = useErrorReference(error);
   const [debugVisible] = useState(() => {
     try {
       return (
@@ -140,7 +142,7 @@ export default function GlobalError({
                 Technical details
               </summary>
               <div className="space-y-1 pb-1">
-                {error.digest ? <p>Error reference: {error.digest}</p> : null}
+                {reference ? <p>Error reference: {reference}</p> : null}
                 <p className="break-all">{error.message || "(no message)"}</p>
                 {debugVisible ? (
                   <pre

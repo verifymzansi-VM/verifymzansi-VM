@@ -1,32 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type * as AdminAccess from "@/lib/auth/admin-access";
 import { staffGuard } from "@/test/staff-guard";
 import { render, screen } from "@testing-library/react";
 
-const { getUser, verifyStaff, createAdmin, range, auditLimit, query } = vi.hoisted(() => {
-  const range = vi.fn();
-  const auditLimit = vi.fn();
-  const query = {
-    select: vi.fn(),
-    order: vi.fn(),
-    eq: vi.fn(),
-    in: vi.fn(),
-    range,
-    limit: auditLimit,
-  };
-  return { getUser: vi.fn(), verifyStaff: vi.fn(), createAdmin: vi.fn(), range, auditLimit, query };
-});
+const { readInbox, readSession } = vi.hoisted(() => ({
+  readInbox: vi.fn(),
+  readSession: vi.fn(),
+}));
 vi.mock(
   "@/lib/auth/require-staff",
   async () => (await import("@/test/staff-guard")).staffGuardModule
 );
-
-vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser } }) }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: createAdmin }));
-vi.mock("@/lib/auth/admin-access", async (importOriginal) => ({
-  ...(await importOriginal<typeof AdminAccess>()),
-  verifyStaffActorRoleFromDb: verifyStaff,
-}));
+vi.mock("@/lib/foundation/server-session", () => ({ readFoundationServerSession: readSession }));
+vi.mock("@/lib/foundation/support-inbox", () => ({ readFrontendSupportInbox: readInbox }));
 vi.mock("next/navigation", () => ({
   redirect: () => {
     throw new Error("redirect");
@@ -40,36 +25,43 @@ vi.mock("./support-inbox-client", () => ({
 
 import Page from "./page";
 
+const api = { fixture: "api" };
+const submission = {
+  id: "s1",
+  name: "A",
+  email: "a@example.com",
+  message: "Help",
+  status: "new",
+  created_at: "2026-11-01T10:00:00Z",
+  revision: 1,
+  emailActivity: [],
+};
+
 describe("Support inbox", () => {
   beforeEach(() => {
     staffGuard.reset();
     vi.clearAllMocks();
-    getUser.mockResolvedValue({ data: { user: { id: "staff" } } });
-    verifyStaff.mockResolvedValue("admin");
-    createAdmin.mockReturnValue({ from: vi.fn().mockReturnValue(query) });
-    for (const method of [query.select, query.order, query.eq, query.in])
-      method.mockReturnValue(query);
-    range.mockResolvedValue({ data: [], count: 0, error: null });
-    auditLimit.mockResolvedValue({ data: [], error: null });
+    readSession.mockResolvedValue({ api });
+    readInbox.mockResolvedValue({ items: [], total: 0, can_update: true });
   });
 
   it("does not expose submissions when a staff role was revoked", async () => {
     staffGuard.deny("staff");
     await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow("redirect");
-    expect(createAdmin).not.toHaveBeenCalled();
+    expect(readInbox).not.toHaveBeenCalled();
   });
 
   it("shows a read error instead of falsely reporting an empty inbox", async () => {
-    range.mockResolvedValue({ data: null, error: { message: "Unavailable" } });
+    readInbox.mockRejectedValue(new Error("Unavailable"));
     render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("alert")).toHaveTextContent("could not be loaded");
     expect(screen.queryByText("No support submissions yet.")).toBeNull();
   });
 
-  it("allows staff to reach records beyond the former 200-row limit", async () => {
-    range.mockResolvedValue({ data: [], count: 260, error: null });
+  it("allows staff to page through every request", async () => {
+    readInbox.mockResolvedValue({ items: [], total: 260, can_update: true });
     render(await Page({ searchParams: Promise.resolve({ page: "5" }) }));
-    expect(range).toHaveBeenCalledWith(200, 249);
+    expect(readInbox).toHaveBeenCalledWith(api, "staff-1", 5, undefined);
     expect(screen.getByRole("link", { name: "Older requests" })).toHaveAttribute(
       "href",
       "/admin/support?page=6"
@@ -79,32 +71,17 @@ describe("Support inbox", () => {
   it("opens an exact request from a staff email without pagination hiding it", async () => {
     const id = "12bb6c4e-66e9-45e5-a479-fd6b2c0b0c27";
     render(await Page({ searchParams: Promise.resolve({ page: "9", submission: id }) }));
-    expect(query.eq).toHaveBeenCalledWith("id", id);
-    expect(range).toHaveBeenCalledWith(0, 0);
+    expect(readInbox).toHaveBeenCalledWith(api, "staff-1", 9, id);
     expect(screen.getByRole("link", { name: "View all support requests" })).toBeInTheDocument();
   });
 
-  it("lets governors read the inbox without update controls", async () => {
-    range.mockResolvedValue({
-      data: [
-        {
-          id: "s1",
-          name: "A",
-          email: "a@example.com",
-          message: "Help",
-          status: "new",
-          created_at: "x",
-        },
-      ],
-      count: 1,
-      error: null,
-    });
-    staffGuard.as("governance_controller");
+  it("shows update controls only when the database allows them", async () => {
+    readInbox.mockResolvedValue({ items: [submission], total: 1, can_update: false });
     render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Saved requests")).toHaveAttribute("data-can-respond", "false");
     expect(screen.getByText(/Moderators and admins update their status/)).toBeInTheDocument();
 
-    staffGuard.as("moderator");
+    readInbox.mockResolvedValue({ items: [submission], total: 1, can_update: true });
     render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getAllByText("Saved requests")[1]).toHaveAttribute("data-can-respond", "true");
   });

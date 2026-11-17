@@ -114,6 +114,7 @@ export function BusinessCard({
       badges={stickers ? <BusinessStickers state={stickers} /> : null}
       affiliation={<AffiliationBadge businessId={id} />}
       mediaUrl={displayCover}
+      isVideo={Boolean(coverVideo)}
       posterUrl={posterUrl}
       mediaAlt={businessName}
       logoUrl={logoUrl}

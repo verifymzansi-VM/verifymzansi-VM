@@ -34,7 +34,7 @@ vi.mock("@/components/brand", async (importOriginal) => ({
 
 const catalog = vi.hoisted(() => ({ retail: [] as unknown[], enterprise: [] as unknown[] }));
 vi.mock("@/lib/commercial/plans", () => ({
-  getCommercialCatalog: async () => ({ ...catalog, source: "database" }),
+  getCommercialCatalog: async () => ({ ...catalog, source: "database", onSale: false }),
 }));
 
 describe("AdvertisePage", () => {
@@ -60,7 +60,6 @@ describe("AdvertisePage", () => {
 
     for (const [name, id] of [
       ["Individual", "individual"],
-      ["Multi-listing", "multi-listing"],
       ["Business Sponsor", "programmes"],
     ] as const) {
       expect(screen.getByRole("link", { name: `Full details of ${name}` })).toHaveAttribute(
@@ -69,7 +68,10 @@ describe("AdvertisePage", () => {
       );
       expect(container.querySelector(`#${id}`)).not.toBeNull();
     }
-    expect(screen.getAllByText("Who can use it")).toHaveLength(3);
+    // Multi-listing is hidden while it is not on sale.
+    expect(screen.queryByRole("link", { name: "Full details of Multi-listing" })).toBeNull();
+    expect(container.querySelector("#multi-listing")).toBeNull();
+    expect(screen.getAllByText("Who can use it")).toHaveLength(2);
   });
 
   it("shows a price sheet for each package and links to the full pricing page", async () => {
@@ -79,33 +81,24 @@ describe("AdvertisePage", () => {
       "href",
       "/pricing#plans"
     );
-    expect(screen.getByRole("link", { name: "See multi-listing prices" })).toHaveAttribute(
-      "href",
-      "/pricing#multi-listing-prices"
-    );
-    expect(screen.getByRole("link", { name: "See sponsor fees" })).toHaveAttribute(
-      "href",
-      "/pricing#programme-prices"
-    );
+    expect(screen.queryByRole("link", { name: "See multi-listing prices" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "See sponsor fees" })).toBeNull();
     expect(screen.getByText("Individual plans (one live slot)")).toBeInTheDocument();
-    expect(screen.getByText("Multi-listing price (total for the term)")).toBeInTheDocument();
-    expect(screen.getByText("Sponsor fee (total for the term)")).toBeInTheDocument();
-    expect(container.textContent).toMatch(/R50/);
-    expect(container.textContent).toMatch(/R1\s200/);
-    expect(container.textContent).toMatch(/R15\s000/);
+    expect(screen.queryByText("Multi-listing price (total for the term)")).toBeNull();
+    expect(screen.getByText("By written proposal")).toBeInTheDocument();
+    expect(container.textContent).toMatch(/R69/);
+    expect(container.textContent).toMatch(/Paid slots open soon/);
+    expect(container.textContent).not.toMatch(/R1\s200|R15\s000|R50\b|R140|R250|while launch/);
   });
 
-  it("sells multi-listing online, keeps the sponsor proposal and makes no 12-month claims", async () => {
+  it("keeps the sponsor proposal, sells no multi-listing and makes no 12-month claims", async () => {
     const { container } = render(await AdvertisePage());
 
     expect(screen.getByRole("link", { name: "Request a sponsor proposal" })).toHaveAttribute(
       "href",
       "/contact?topic=organisation_proposal"
     );
-    expect(screen.getByRole("link", { name: "Choose a multi-listing plan" })).toHaveAttribute(
-      "href",
-      "/pricing/multi-listing"
-    );
+    expect(screen.queryByRole("link", { name: "Choose a multi-listing plan" })).toBeNull();
     expect(screen.getByText("Example — not real results")).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/12 months|12-month|6 months|annual/i);
   });

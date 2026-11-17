@@ -1,7 +1,7 @@
 import "server-only";
-import { getDataBackend } from "@/lib/data-backend";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import {
+  isIndividualSlotPlan,
   readFoundationBillingCatalogue,
   type FoundationBillingCatalogue,
 } from "@/lib/foundation/billing-catalogue";
@@ -14,7 +14,6 @@ import {
   type EnterprisePlanDefinition,
   type RetailOffer,
 } from "@/lib/constants/pricing";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import type { MarketplaceArea } from "@/types/enums";
 
@@ -33,6 +32,10 @@ export interface CommercialCatalog {
   retail: RetailCatalogOffer[];
   enterprise: EnterpriseCatalogPlan[];
   source: "database" | "defaults";
+  /** Whether a retail plan can be bought: only plans the database lists as on
+   * sale. Without one (paid slots paused, or the catalogue unreadable) the
+   * prices are shown but nothing links to checkout. */
+  onSale: boolean;
 }
 
 type PlanRow = {
@@ -61,13 +64,17 @@ function defaultCatalog(): CommercialCatalog {
       ) as Record<MarketplaceArea, string>,
     })),
     enterprise: ENTERPRISE_PLANS.map((plan) => ({ ...plan, planId: null })),
+    onSale: false,
   };
 }
 
-/** Build the public catalogue from `plans` rows (authoritative prices). */
+/** Build the public catalogue from plan rows (authoritative prices). */
 export function buildCommercialCatalog(rows: readonly PlanRow[]): CommercialCatalog {
   const fallback = defaultCatalog();
   const sellable = rows.filter((row) => row.active && row.public);
+  const retailOnSale = fallback.retail.some((offer) =>
+    sellable.some((row) => row.tier === offer.tier && row.area)
+  );
 
   const retail = fallback.retail.map((offer) => {
     const matches = sellable.filter((row) => row.tier === offer.tier && row.area);
@@ -105,6 +112,7 @@ export function buildCommercialCatalog(rows: readonly PlanRow[]): CommercialCata
     source: "database",
     retail,
     enterprise: enterprise.length > 0 ? enterprise : fallback.enterprise,
+    onSale: retailOnSale,
   };
 }
 
@@ -118,6 +126,27 @@ export function buildFoundationCommercialCatalog(
   } as const;
   return buildCommercialCatalog(
     catalogue.plans.flatMap((plan): PlanRow[] => {
+      // An Individual slot (posting-v4) works in any section: the same plan
+      // serves the offer in each of them.
+      if (isIndividualSlotPlan(plan)) {
+        const offer = RETAIL_OFFERS.find((entry) => entry.durationDays === plan.duration_days);
+        if (!offer) return [];
+        return Object.values(areas).map((area) => ({
+          id: plan.id,
+          area,
+          tier: offer.tier,
+          name: plan.label,
+          price_cents: Number(plan.price_cents),
+          plan_code: offer.planCode,
+          duration_days: plan.duration_days,
+          slot_capacity: plan.slot_capacity,
+          monthly_activation_limit: plan.activations_per_period ?? null,
+          promo_label: offer.promoLabel,
+          compare_at_cents: null,
+          public: true,
+          active: true,
+        }));
+      }
       const retail =
         plan.slot_capacity === 1 &&
         plan.area &&
@@ -151,21 +180,9 @@ export function buildFoundationCommercialCatalog(
 
 export async function getCommercialCatalog(): Promise<CommercialCatalog> {
   try {
-    if (getDataBackend() === "foundation")
-      return buildFoundationCommercialCatalog(
-        await readFoundationBillingCatalogue(foundationServerPublicApi())
-      );
-    const { data, error } = await createAdminClient()
-      .from("plans")
-      .select(
-        "id, area, tier, name, price_cents, plan_code, duration_days, slot_capacity, monthly_activation_limit, promo_label, compare_at_cents, public, active"
-      )
-      .eq("active", true);
-    if (error || !data) {
-      if (error) log.warn("Falling back to default plan catalogue", { error: error.message });
-      return defaultCatalog();
-    }
-    return buildCommercialCatalog(data as PlanRow[]);
+    return buildFoundationCommercialCatalog(
+      await readFoundationBillingCatalogue(foundationServerPublicApi())
+    );
   } catch (error) {
     log.warn("Falling back to default plan catalogue", {
       error: error instanceof Error ? error.message : "Unknown error",

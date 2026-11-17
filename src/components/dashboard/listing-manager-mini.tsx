@@ -9,7 +9,8 @@ import { ExpiryCountdownBadge } from "@/components/dashboard/expiry-countdown-ba
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
-import { formatSaShortDate } from "@/lib/utils/format";
+import { formatSaLongDate, formatSaShortDate } from "@/lib/utils/format";
+import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -23,6 +24,8 @@ export interface MiniListingPost {
   photos?: string[] | null;
   view_count?: number | null;
   expires_at?: string | null;
+  /** When the post is deleted (new backend only). */
+  deletes_at?: string | null;
   created_at: string;
   updated_at?: string | null;
 }
@@ -293,12 +296,17 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
                       >
                         {status.label}
                       </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Eye aria-hidden="true" className="h-3.5 w-3.5" />
-                        <span>{post.view_count ?? 0}</span>
-                        <span className="sr-only">views</span>
-                      </span>
+                      {SHOW_ENGAGEMENT_TOTALS ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Eye aria-hidden="true" className="h-3.5 w-3.5" />
+                          <span>{post.view_count ?? 0}</span>
+                          <span className="sr-only">views</span>
+                        </span>
+                      ) : null}
                       <span suppressHydrationWarning>{dateStr}</span>
+                      {post.deletes_at ? (
+                        <span>Will be deleted on {formatSaLongDate(post.deletes_at)}</span>
+                      ) : null}
                     </div>
                     {showExpiry ? (
                       <ExpiryCountdownBadge

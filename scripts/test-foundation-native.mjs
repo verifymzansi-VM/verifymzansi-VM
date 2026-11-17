@@ -1632,6 +1632,11 @@ commit;`);
     const releasedSnapshot = sql(
       `select jsonb_agg(to_jsonb(a) order by a.id)::text from private.post_activations a where post_id='${activated[0]}';`
     );
+    // This suite builds the prototype schema, where a paused post's slot was
+    // already released. Update 20261109104020_post_expiry_rules.sql keeps the
+    // slot of a paused post and refuses release_post for it (22023); its
+    // behaviour is checked by scripts/test-foundation-lifecycle-guards.mjs.
+    // Change this expectation if this suite moves to the replayed updates.
     for (let retry = 0; retry < 2; retry++) {
       const released = await rpc("release_post", { p_post_id: activated[0] }, other.token);
       assert.equal(released.status, 200);
@@ -6319,6 +6324,7 @@ commit;`);
           await Promise.all([first, second]);
         }
       }
+      nativeStage = "live edit column classification";
       // Every posts column is classified for create_post_edit/apply_post_edit:
       // identity and content are copied, lifecycle starts fresh. A new column
       // must be classified there before this list changes.
@@ -6332,6 +6338,7 @@ commit;`);
       record("native-live-post-edit-keeps-approved-version-public-and-merges-atomically");
 
       // Generic queue claims: the evidence-case fence applied to posts and reports.
+      nativeStage = "queue claims fence, lease, release and reassignment";
       const pendingFixture = (count, ownerId = publicationOwner.id) => {
         const ids = Array.from({ length: count }, () => randomUUID());
         sql(
@@ -6599,6 +6606,7 @@ commit;`);
       );
       assert.equal((await claimOne("post", spare, staff.governorC.token)).status, 429);
       // CR-03: two reassignments to a holder with 19 claims allocate one 20th claim.
+      nativeStage = "queue reassignment holder cap race";
       pendingFixture(20);
       const liveOf = (member) =>
         Number(
@@ -6614,6 +6622,17 @@ commit;`);
       assert.equal(topUp.status, 200);
       assert.equal(liveOf(staff.governorB), 19);
       const [handA, handB] = capBatch.data;
+      // capBatch takes the oldest unclaimed items. Which of the two concurrent
+      // batches above won the oldest six items is not fixed, so handA or handB
+      // can be itemC2, which already has its reassignment and release events.
+      // Count only the events this race adds.
+      const handEvents = () =>
+        Number(
+          sql(
+            `select count(*) from private.queue_claim_events where post_id in ('${handA.id}','${handB.id}');`
+          )
+        );
+      const handEventsBefore = handEvents();
       const capBarrier = controlledSql(
         `begin; select pg_advisory_xact_lock(hashtextextended('${staff.governorB.id}',1201)); select 'EVIDENCE_LOCK_HELD'; select pg_sleep(2); commit;`
       );
@@ -6629,12 +6648,8 @@ commit;`);
         capBarrier.close();
       }
       assert.equal(liveOf(staff.governorB), 20);
-      assert.equal(
-        sql(
-          `select count(*) from private.queue_claim_events where post_id in ('${handA.id}','${handB.id}');`
-        ),
-        "1"
-      );
+      assert.equal(handEvents() - handEventsBefore, 1);
+      nativeStage = "queue renewal versus acquisition";
       // A renewal held uncommitted must reserve its holder's capacity even
       // after the old committed expiry passes. Without renewal's holder guard
       // acquisition sees19 and creates a twenty-first live claim after commit.
@@ -6675,6 +6690,7 @@ commit;`);
       sql(
         `update private.queue_claims set claimed_by=null,claim_nonce=null,claimed_at=null,claim_expires_at=null,renewals=0 where claimed_by in ('${staff.governorC.id}','${staff.governorB.id}');`
       );
+      nativeStage = "queue authority after lock waits";
       // CR-02: authority is re-derived after the holder-guard wait (role revoked
       // while waiting) and after claim-row waits (session expired while waiting).
       const guardBarrier = controlledSql(
@@ -6748,6 +6764,7 @@ commit;`);
       record("native-queue-claims-disjoint-fenced-leased-capped-and-audited");
 
       // Reports: server-only intake about a public post, claimed review, resolution.
+      nativeStage = "reports intake, claimed review and resolution";
       const ipHmac = (label) => createHash("sha256").update(label).digest("base64url");
       const reportBody = (overrides = {}) => ({
         p_post_id: videoEvent,

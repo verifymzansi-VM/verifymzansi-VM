@@ -1,4 +1,3 @@
-import { getDataBackend } from "../data-backend";
 import { nativeIdentityScopeSchema, type NativeIdentityScope } from "./native-identity-review";
 export type NativeEvidenceFields = {
   foundation?: NativeIdentityScope;
@@ -13,7 +12,6 @@ export function formatEvidenceBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 export function nativeEvidenceBody(artifact: { id: string } & NativeEvidenceFields) {
-  if (getDataBackend() !== "foundation") return { artifactId: artifact.id };
   return {
     artifactId: artifact.id,
     foundation: nativeIdentityScopeSchema.parse(artifact.foundation),
@@ -23,7 +21,6 @@ export function nativeEvidenceBody(artifact: { id: string } & NativeEvidenceFiel
  * ID attests its submitted number/details; approval of a selfie attests the
  * portrait match. SQL combines both current, same-reviewer step receipts. */
 export function confirmedIdentityDecisionFields(step: NativeEvidenceFields, decision: string) {
-  if (getDataBackend() !== "foundation") return {};
   return {
     foundation: nativeIdentityScopeSchema.parse(step.foundation),
     ...(decision === "approved" ? { stepMatches: true } : {}),
@@ -41,7 +38,5 @@ export function inspectedEvidenceArtifact<
 >(artifact: T, blob: Blob): T {
   if (["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(blob.type))
     return { ...artifact, content_type: blob.type, file_size_bytes: blob.size };
-  if (getDataBackend() === "foundation")
-    throw new Error("The evidence format could not be confirmed.");
-  return artifact;
+  throw new Error("The evidence format could not be confirmed.");
 }

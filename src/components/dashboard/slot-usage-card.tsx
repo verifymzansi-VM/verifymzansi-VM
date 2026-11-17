@@ -48,10 +48,6 @@ const date = new Intl.DateTimeFormat("en-ZA", {
   timeZone: "Africa/Johannesburg",
 });
 
-export function parseSlotUsage(raw: unknown): SlotUsageEntry[] {
-  return Array.isArray(raw) ? (raw as SlotUsageEntry[]) : [];
-}
-
 /** Active posting slots: capacity, usage, activations and expiry per plan. */
 export function SlotUsageCard({ entries }: { entries: SlotUsageEntry[] }) {
   const current = entries.filter((entry) => entry.status === "active");
@@ -74,7 +70,7 @@ export function SlotUsageCard({ entries }: { entries: SlotUsageEntry[] }) {
 
         {current.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No active plan. Your posts are saved — reactivate them from R50 / 30 days.
+            No active plan. Ended posts are deleted after 3 days. Paid slots open soon.
           </p>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2">

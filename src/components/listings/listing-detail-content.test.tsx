@@ -139,7 +139,8 @@ describe("ListingDetailContent", () => {
     expect(screen.getByText("Image failed to load")).toBeTruthy();
   });
 
-  it("updates the visible view count after a recorded detail-page view", async () => {
+  // Roadmap M2.8: views are not stored by the live backend, so no count is shown.
+  it("shows no view count, even after a recorded detail-page view", async () => {
     listingDetailClientState.shouldThrow = false;
 
     render(
@@ -172,14 +173,15 @@ describe("ListingDetailContent", () => {
       />
     );
 
-    expect(screen.getByText("7 views")).toBeTruthy();
+    expect(screen.getAllByText("Viewed listing").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/views?$/)).toBeNull();
     expect(listingDetailClientState.lastProps?.onViewRecorded).toBeTypeOf("function");
 
     await act(async () => {
       (listingDetailClientState.lastProps?.onViewRecorded as (() => void) | undefined)?.();
     });
 
-    expect(screen.getByText("8 views")).toBeTruthy();
+    expect(screen.queryByText(/views?$/)).toBeNull();
   });
 
   it("renders review mode without public contact actions", () => {
@@ -262,5 +264,67 @@ describe("ListingDetailContent", () => {
       container.querySelector('img[src="/api/media/serve/media/listing/logo.jpg"]')
     ).toHaveAttribute("alt", "");
     expect(screen.queryByText("Shown on the marketplace card and detail page")).toBeNull();
+  });
+
+  // Roadmap M10.6: the showroom card's caption on the main photo (phones).
+  it.each([
+    {
+      name: "an amount, negotiable",
+      listing: { price_cents: 145_000, price_negotiable: true, category: "home_lifestyle" },
+      eyebrow: "R1 450 · Negotiable",
+    },
+    {
+      name: "a free item, never negotiable",
+      listing: { price_cents: null, price_mode: "free", price_negotiable: true, category: null },
+      eyebrow: "Free",
+    },
+    {
+      name: "on request",
+      listing: {
+        price_cents: null,
+        price_mode: "on_request",
+        price_negotiable: false,
+        category: null,
+      },
+      eyebrow: "Price on request",
+    },
+    {
+      name: "a job without a salary, never negotiable",
+      listing: { price_cents: null, price_negotiable: true, category: "jobs_services" },
+      eyebrow: "Salary not provided",
+    },
+  ])("gives the main photo the card's caption: $name", ({ listing, eyebrow }) => {
+    listingDetailClientState.shouldThrow = false;
+    render(
+      <ListingDetailContent
+        listing={{
+          id: "listing-caption",
+          owner_id: "owner-1",
+          title: "Caption listing",
+          description: null,
+          condition: null,
+          attributes: null,
+          photos: ["https://media.verifymzansi.com/media/listing/photo.jpg"],
+          videos: [],
+          video_thumbnail: null,
+          logo_url: null,
+          location_province: "KwaZulu-Natal",
+          location_city: "Richards Bay",
+          location_suburb: "Meerensee",
+          contact_methods: ["call"],
+          created_at: new Date().toISOString(),
+          ...listing,
+        }}
+        seller={null}
+        showContactActions={false}
+        showSimilarListings={false}
+      />
+    );
+
+    expect(listingDetailClientState.lastProps?.caption).toEqual({
+      eyebrow,
+      location: "Richards Bay",
+      logoUrl: null,
+    });
   });
 });

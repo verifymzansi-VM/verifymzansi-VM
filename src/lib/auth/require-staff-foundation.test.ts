@@ -15,7 +15,6 @@ const { redirect } = vi.hoisted(() => ({
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ redirect }));
-vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => "foundation" }));
 vi.mock("@/lib/foundation/server-session", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   readFoundationServerSession: vi.fn(),

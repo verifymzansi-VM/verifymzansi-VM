@@ -90,7 +90,8 @@ vi.mock("@/hooks/use-track-content-view", () => ({
 const { PromotionDetailContent } = await import("@/components/listings/promotion-detail-content");
 
 describe("PromotionDetailContent", () => {
-  it("increments the visible detail-page view count after a recorded view", async () => {
+  // Roadmap M2.8: views are not stored by the live backend, so no count is shown.
+  it("shows no view count in the details, even after a recorded view", async () => {
     render(
       <PromotionDetailContent
         promotion={{
@@ -125,13 +126,15 @@ describe("PromotionDetailContent", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /details/i }));
-    expect(screen.getByText("4")).toBeTruthy();
+    expect(screen.getByText("Type")).toBeTruthy();
+    expect(screen.queryByText("Views")).toBeNull();
+    expect(screen.queryByText("4")).toBeNull();
 
     await act(async () => {
       trackViewState.lastArgs?.onRecorded?.();
     });
 
-    expect(screen.getByText("5")).toBeTruthy();
+    expect(screen.queryByText("5")).toBeNull();
   });
 
   it("renders event state and readable contact method labels", () => {

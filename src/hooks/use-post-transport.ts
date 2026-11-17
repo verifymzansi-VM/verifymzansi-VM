@@ -1,6 +1,5 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getDataBackend } from "@/lib/data-backend";
 import {
   parseFoundationOwnerPostingTerms,
   type FoundationOwnerPostingTerms,
@@ -18,7 +17,6 @@ export function usePostTransport() {
   const revision = useRef<number | null>(null);
   const [terms, setTerms] = useState<FoundationOwnerPostingTerms | null>(null);
   useEffect(() => {
-    if (getDataBackend() !== "foundation") return;
     receipt.current = crypto.randomUUID();
     const controller = new AbortController();
     void fetch("/api/foundation/posting-terms", {
@@ -38,7 +36,6 @@ export function usePostTransport() {
     return () => controller.abort();
   }, []);
   const captureRevision = useCallback((row: unknown) => {
-    if (getDataBackend() !== "foundation") return;
     const value = row && typeof row === "object" ? (row as Record<string, unknown>).revision : null;
     if (typeof value !== "number" || !Number.isInteger(value) || value < 1)
       throw new Error("The post revision could not be loaded. Reopen it from your dashboard.");
@@ -46,7 +43,6 @@ export function usePostTransport() {
   }, []);
   const fields = useCallback(
     (editing = false): PostTransportFields => {
-      if (getDataBackend() !== "foundation") return {};
       if (!terms || !receipt.current)
         throw new Error("Posting terms are still loading. Refresh this form before submitting.");
       if (editing && revision.current === null)

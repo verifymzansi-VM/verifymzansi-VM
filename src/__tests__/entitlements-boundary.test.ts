@@ -84,7 +84,7 @@ describe("Plan-tier entitlement boundaries", () => {
         expect(result.allowed).toBe(expectedFlags.boost);
         if (!expectedFlags.boost) {
           expect(result.reason).toBeDefined();
-          expect(result.reason).toContain("R50");
+          expect(result.reason).toContain("paid plans");
         }
       });
 
@@ -93,7 +93,7 @@ describe("Plan-tier entitlement boundaries", () => {
         expect(result.allowed).toBe(expectedFlags.featured);
         if (!expectedFlags.featured) {
           expect(result.reason).toBeDefined();
-          expect(result.reason).toContain("R50");
+          expect(result.reason).toContain("paid plans");
         }
       });
 
@@ -102,7 +102,7 @@ describe("Plan-tier entitlement boundaries", () => {
         expect(result.allowed).toBe(expectedFlags.urgent);
         if (!expectedFlags.urgent) {
           expect(result.reason).toBeDefined();
-          expect(result.reason).toContain("R50");
+          expect(result.reason).toContain("paid plans");
         }
       });
 

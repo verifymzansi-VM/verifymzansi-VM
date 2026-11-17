@@ -1,22 +1,21 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { applySecurityHeaders, withSecurityHeaders } from "@/lib/middleware/security-headers";
-import { handlePlaywrightStubRouting } from "@/lib/middleware/playwright-stub";
-import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import {
-  checkPhoneGate,
-  checkAdminGate,
-  checkBanEnforcement,
-  checkPostingGate,
-  type CachedProfile,
-} from "@/lib/middleware/auth-gates";
+  applySecurityHeaders,
+  REWRITTEN_REQUEST_HEADER,
+  withSecurityHeaders,
+} from "@/lib/middleware/security-headers";
+import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
-import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
+import { addReferenceTiming } from "@/lib/utils/request-reference";
+import { logRequestFailure } from "@/lib/utils/request-failure";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isAutomatedUserAgent } from "@/lib/analytics/automated-agent";
-import postingTermsCatalogue from "@/lib/legal/terms-documents/catalogue.json";
-import { getDataBackend } from "@/lib/data-backend";
+import { detailPageKeyIsMalformed, matchDetailPage } from "@/lib/routing/detail-pages";
 import { isPublishedSampleSlug } from "@/lib/sample-posts/catalogue";
+import {
+  dropIncomingFoundationPageSession,
+  forwardFoundationPageSession,
+} from "@/lib/foundation/page-session-handoff";
 import {
   createAnonymousViewerId,
   ENGAGEMENT_VIEWER_COOKIE,
@@ -51,8 +50,6 @@ const PROTECTED_PREFIXES = [
   "/api/otp",
   "/api/leads",
   "/api/media/upload",
-  "/api/media/upload-complete",
-  "/api/media/upload-url",
   "/api/notifications",
   "/api/profile",
 ];
@@ -65,6 +62,12 @@ const MARKETPLACE_BROWSE_PREFIXES = [
   "/tourism-events",
 ];
 
+// Throttled only when a browser or crawler loads the address, because the
+// missing-page check below reads the database for it then. Not the app's own
+// prefetches: sponsor strips and affiliation badges link to many organisation
+// pages, and counting those would use up a visitor's browse allowance.
+const DOCUMENT_BROWSE_PREFIXES = ["/organisation/"];
+
 /**
  * Segment-boundary prefix match. A bare `startsWith` would let a route like
  * `/api/profileevil` match the protected prefix `/api/profile`. Matching on an
@@ -73,6 +76,57 @@ const MARKETPLACE_BROWSE_PREFIXES = [
  */
 function matchesPrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(prefix + "/");
+}
+
+/** Hosts that only redirect, permanently, to the site's one address. */
+const REDIRECT_HOSTS: Readonly<Record<string, string>> = {
+  "www.verifymzansi.com": "verifymzansi.com",
+};
+
+function redirectHostTarget(request: NextRequest): URL | null {
+  for (const host of [request.headers.get("host"), request.nextUrl.host]) {
+    const name = host?.trim().toLowerCase().replace(/:\d+$/, "");
+    const apex = name ? REDIRECT_HOSTS[name] : undefined;
+    if (apex) {
+      const target = new URL(`https://${apex}`);
+      target.pathname = request.nextUrl.pathname;
+      target.search = request.nextUrl.search;
+      return target;
+    }
+  }
+  return null;
+}
+
+/** A browser or crawler loading the address, not the app's own in-page
+ * navigation or prefetch. Next.js removes its RSC headers before the proxy
+ * runs, so the browser's own fetch metadata tells them apart: a page load is
+ * `Sec-Fetch-Mode: navigate`, also when the site's service worker passes it on
+ * (it then arrives with `Sec-Fetch-Dest: empty`); the app's own fetches are
+ * "cors" or "same-origin". Crawlers and link checkers send no fetch metadata
+ * and count as page loads. */
+function isDocumentRequest(request: NextRequest): boolean {
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  const mode = request.headers.get("sec-fetch-mode");
+  const destination = request.headers.get("sec-fetch-dest");
+  if (mode === null && destination === null) return true;
+  return mode === "navigate" || destination === "document";
+}
+
+/** Render the page as usual but with HTTP 404, so it keeps its own "not
+ * available" design while browsers, crawlers and link checkers see a real
+ * 404 status (set before streaming starts).
+ *
+ * On Cloudflare (OpenNext) the status travels on a rewrite to the same
+ * address. `next start` (the local and CI server) treats a rewrite whose host
+ * differs from the one it listens on as an outside address and fetches it
+ * again, which looped; there the status travels on the pass-through instead,
+ * which `next start` keeps (OpenNext does not, hence the rewrite). A rewritten
+ * request is marked (REWRITTEN_REQUEST_HEADER) and never rewritten twice. */
+function notFoundPage(request: NextRequest): NextResponse {
+  if (request.headers.get("host") === request.nextUrl.host) {
+    return NextResponse.rewrite(request.nextUrl.clone(), { status: 404 });
+  }
+  return NextResponse.next({ status: 404 });
 }
 
 // -- Core routing logic (testable without security headers) ------------------
@@ -84,7 +138,13 @@ function matchesPrefix(pathname: string, prefix: string): boolean {
 export async function routeRequest(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
-  const foundationMode = getDataBackend() === "foundation";
+
+  // One address for the whole site: www.verifymzansi.com moves for good to
+  // verifymzansi.com, keeping the path and query (308 keeps the method too).
+  const hostTarget = redirectHostTarget(request);
+  if (hostTarget) {
+    return NextResponse.redirect(hostTarget, 308);
+  }
 
   // Recover legacy signup links that land on "/?code=..." instead of the
   // dedicated auth callback route. Keep this scoped to the root path so
@@ -102,23 +162,27 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.redirect(callbackUrl);
   }
 
-  // Reject unknown immutable document paths before the request-dependent root
-  // layout begins streaming, when notFound() can no longer set a 404 status.
-  const termsPrefix = "/terms/versions";
-  if (matchesPrefix(pathname, termsPrefix)) {
-    const version = pathname.slice(termsPrefix.length + 1).replace(/\/$/, "");
-    if (!Object.hasOwn(postingTermsCatalogue.versions, version))
-      return new NextResponse("Not found", { status: 404 });
+  // The site has one set of Terms (/terms). Former per-version addresses,
+  // including the links earlier posting forms showed, lead there for good.
+  if (matchesPrefix(pathname, "/terms/versions")) {
+    return NextResponse.redirect(new URL("/terms", request.url), 308);
   }
 
-  // Display-only sample posts: only published slugs (switch on, committed
-  // entry) are served; everything else is a real 404 before streaming starts.
-  // The development server also serves git-ignored local preview entries, so
-  // its page decides with notFound() instead.
-  const samplePrefix = "/sample";
-  if (matchesPrefix(pathname, samplePrefix) && process.env.NODE_ENV !== "development") {
-    const slug = pathname.slice(samplePrefix.length + 1).replace(/\/$/, "");
-    if (!isPublishedSampleSlug(slug)) return new NextResponse("Not found", { status: 404 });
+  // Display-only sample posts: only a committed entry, with the switch on and
+  // not removed by staff, is served; everything else gets a real 404 before
+  // streaming starts. When the hide-list cannot be read, every sample is a
+  // 404 (fail closed). The development server also serves git-ignored local
+  // preview entries, so there the page decides with notFound() instead.
+  if (
+    matchesPrefix(pathname, "/sample") &&
+    process.env.NODE_ENV !== "development" &&
+    !request.headers.has(REWRITTEN_REQUEST_HEADER)
+  ) {
+    const slug = pathname.slice("/sample/".length).replace(/\/$/, "");
+    if (!isPublishedSampleSlug(slug)) return notFoundPage(request);
+    const { loadHiddenSampleSlugs } = await import("@/lib/sample-posts/hidden");
+    const hidden = await loadHiddenSampleSlugs().catch(() => null);
+    if (!hidden || hidden.has(slug)) return notFoundPage(request);
   }
 
   // Local design previews. The pages call notFound() themselves, but streaming
@@ -129,14 +193,6 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     !isPlaywrightTestMode()
   ) {
     return new NextResponse("Not found", { status: 404 });
-  }
-
-  // -- Playwright stub mode --------------------------------------------------
-  const playwrightResult = foundationMode
-    ? null
-    : handlePlaywrightStubRouting(request, PROTECTED_PREFIXES, AUTH_ROUTES);
-  if (playwrightResult) {
-    return playwrightResult;
   }
 
   // -- Guard: Supabase not configured ---------------------------------------
@@ -159,12 +215,16 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   // -- Early exit for public routes ------------------------------------------
 
   const needsAuth =
-    (foundationMode && pathname === "/banned") ||
+    pathname === "/banned" ||
     PROTECTED_PREFIXES.some((p) => matchesPrefix(pathname, p)) ||
     AUTH_ROUTES.some((r) => matchesPrefix(pathname, r));
 
   // Rate-limit public marketplace pages to deter scraping.
-  if (!needsAuth && MARKETPLACE_BROWSE_PREFIXES.some((p) => pathname.startsWith(p))) {
+  if (
+    !needsAuth &&
+    (MARKETPLACE_BROWSE_PREFIXES.some((p) => pathname.startsWith(p)) ||
+      (isDocumentRequest(request) && DOCUMENT_BROWSE_PREFIXES.some((p) => pathname.startsWith(p))))
+  ) {
     const ip = getClientIp(request);
     const { limited, retryAfter } = checkLocalRateLimit(ip, "marketplace:browse", 60);
     if (limited) {
@@ -175,224 +235,30 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     }
   }
 
+  // Unknown posts and organisations, and the multi-listing page while packages
+  // are not on sale. Their pages call notFound(), but streaming has already
+  // sent 200 by then, so answer the 404 status here, before rendering. A
+  // malformed address costs no read; a well-formed one costs one public read
+  // (remembered for a minute when it exists), and a failed read lets the page
+  // decide as before.
+  if (!needsAuth && isDocumentRequest(request) && !request.headers.has(REWRITTEN_REQUEST_HEADER)) {
+    const detailPage = matchDetailPage(pathname);
+    if (detailPage) {
+      if (detailPageKeyIsMalformed(detailPage)) return notFoundPage(request);
+      const { isMissingDetailPage } = await import("@/lib/foundation/missing-detail-page");
+      if (await isMissingDetailPage(detailPage)) return notFoundPage(request);
+    }
+  }
+
   if (!needsAuth) {
     return NextResponse.next();
   }
 
-  if (foundationMode) {
-    const { checkFoundationPageAccess } = await import("@/lib/foundation/page-access");
-    return checkFoundationPageAccess(
-      request,
-      AUTH_ROUTES.some((route) => matchesPrefix(pathname, route))
-    );
-  }
-
-  // -- Supabase client -------------------------------------------------------
-
-  let response = NextResponse.next({
-    request: { headers: request.headers },
-  });
-
-  // Track cookies set by the Supabase client (token refresh, etc.) so they
-  // can be forwarded onto redirect responses that would otherwise drop them.
-  const pendingCookies: Array<{ name: string; value: string; options: CookieOptions }> = [];
-
-  function updateSessionCookie(name: string, value: string, options: CookieOptions): void {
-    request.cookies.set({ name, value, ...options });
-    pendingCookies.push({ name, value, options });
-    response = NextResponse.next({ request: { headers: request.headers } });
-    // A session can span multiple cookies. Rebuilding the downstream request
-    // headers must not discard earlier chunks or obsolete-cookie deletions.
-    for (const cookie of pendingCookies) {
-      response.cookies.set({ name: cookie.name, value: cookie.value, ...cookie.options });
-    }
-  }
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      global: { fetch: createTimeoutFetch() },
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          updateSessionCookie(name, value, options);
-        },
-        remove(name: string, options: CookieOptions) {
-          updateSessionCookie(name, "", options);
-        },
-      },
-    }
+  const { checkFoundationPageAccess } = await import("@/lib/foundation/page-access");
+  return checkFoundationPageAccess(
+    request,
+    AUTH_ROUTES.some((route) => matchesPrefix(pathname, route))
   );
-
-  /** Create a redirect that preserves any cookies set during this request. */
-  function redirectWithCookies(url: URL | string): NextResponse {
-    const target = typeof url === "string" ? new URL(url, request.url) : url;
-    const redir = NextResponse.redirect(target);
-    for (const { name, value, options } of pendingCookies) {
-      redir.cookies.set({ name, value, ...options });
-    }
-    return redir;
-  }
-
-  function clearStaleSupabaseAuthCookies(target: NextResponse): void {
-    for (const cookie of request.cookies.getAll()) {
-      const name = cookie.name;
-      if (!name.startsWith("sb-") || !name.includes("auth-token")) {
-        continue;
-      }
-
-      target.cookies.set({
-        name,
-        value: "",
-        path: "/",
-        maxAge: 0,
-      });
-      pendingCookies.push({ name, value: "", options: { path: "/", maxAge: 0 } });
-    }
-  }
-
-  function isInvalidRefreshTokenError(error: unknown): boolean {
-    const message =
-      error instanceof Error
-        ? error.message
-        : typeof error === "object" && error && "message" in error
-          ? String((error as { message?: unknown }).message)
-          : String(error ?? "");
-
-    const normalized = message.toLowerCase();
-    return (
-      normalized.includes("refresh token") ||
-      normalized.includes("authsessionmissing") ||
-      normalized.includes("auth session missing")
-    );
-  }
-
-  let user = null;
-  try {
-    const { data, error } = await supabase.auth.getUser();
-    if (error) {
-      if (isInvalidRefreshTokenError(error)) {
-        clearStaleSupabaseAuthCookies(response);
-        user = null;
-      } else {
-        throw error;
-      }
-    } else {
-      user = data.user;
-    }
-  } catch (error) {
-    const isProtected = PROTECTED_PREFIXES.some((p) => matchesPrefix(pathname, p));
-    if (isProtected) {
-      if (isApiRoute) {
-        const unavailable = NextResponse.json(
-          { error: "Authentication service unavailable" },
-          { status: 503 }
-        );
-        if (isInvalidRefreshTokenError(error)) {
-          clearStaleSupabaseAuthCookies(unavailable);
-        }
-        return unavailable;
-      }
-      const redirect = redirectWithCookies(new URL("/login?error=auth_unavailable", request.url));
-      if (isInvalidRefreshTokenError(error)) {
-        clearStaleSupabaseAuthCookies(redirect);
-      }
-      return redirect;
-    }
-    return response;
-  }
-
-  // -- Auth routes: redirect logged-in (real) users away --------------------
-  const isRealUser = user && user.is_anonymous !== true;
-  if (isRealUser && AUTH_ROUTES.some((r) => matchesPrefix(pathname, r))) {
-    return redirectWithCookies(new URL("/", request.url));
-  }
-
-  // -- Consolidated profile cache -------------------------------------------
-  let cachedProfile: CachedProfile = null;
-
-  // -- Phone-missing gate ---------------------------------------------------
-  if (isRealUser && user) {
-    const phoneResult = await checkPhoneGate(
-      request,
-      response,
-      supabase,
-      user.id,
-      cachedProfile,
-      redirectWithCookies
-    );
-    cachedProfile = phoneResult.profile;
-    if (phoneResult.response) {
-      return phoneResult.response;
-    }
-  }
-
-  // -- Protected routes: require authentication -----------------------------
-  const isProtectedRoute = PROTECTED_PREFIXES.filter(
-    (prefix) => prefix !== "/admin" && prefix !== "/api/admin"
-  ).some((p) => matchesPrefix(pathname, p));
-  const protectedReturnUrl = `${pathname}${request.nextUrl.search}`;
-
-  if (!user && isProtectedRoute) {
-    if (isApiRoute) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("returnUrl", protectedReturnUrl);
-    return redirectWithCookies(loginUrl);
-  }
-
-  // Block anonymous Supabase sessions from accessing protected routes
-  if (user?.is_anonymous && isProtectedRoute) {
-    if (isApiRoute) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("returnUrl", protectedReturnUrl);
-    return redirectWithCookies(loginUrl);
-  }
-
-  // -- Admin gate -----------------------------------------------------------
-  const adminResult = checkAdminGate(request, user, redirectWithCookies);
-  if (adminResult) {
-    return adminResult;
-  }
-
-  // -- Ban/suspension enforcement -------------------------------------------
-  if (user) {
-    const banResult = await checkBanEnforcement(
-      request,
-      supabase,
-      user.id,
-      isProtectedRoute,
-      cachedProfile,
-      redirectWithCookies
-    );
-    cachedProfile = banResult.profile;
-    if (banResult.response) {
-      return banResult.response;
-    }
-  }
-
-  // -- Posting gate ---------------------------------------------------------
-  if (user) {
-    const postingResult = await checkPostingGate(
-      request,
-      supabase,
-      user.id,
-      cachedProfile,
-      redirectWithCookies
-    );
-    cachedProfile = postingResult.profile;
-    if (postingResult.response) {
-      return postingResult.response;
-    }
-  }
-
-  return response;
 }
 
 // -- Shared request handler -------------------------------------------------
@@ -425,20 +291,23 @@ function ensureViewerCookie(request: NextRequest, response: NextResponse): void 
 }
 
 export async function handleMiddlewareRequest(request: NextRequest): Promise<NextResponse> {
+  // Only the page gate may hand a verified account to the page render.
+  dropIncomingFoundationPageSession(request);
   try {
     const routeResponse = await routeRequest(request);
     ensureViewerCookie(request, routeResponse);
-    return withSecurityHeaders(request, routeResponse);
+    addReferenceTiming(request, routeResponse);
+    return forwardFoundationPageSession(request, withSecurityHeaders(request, routeResponse));
   } catch (error) {
-    logger.error("Middleware request handler failed", {
-      path: request.nextUrl.pathname,
-      error: error instanceof Error ? error.message : String(error),
+    const reference = logRequestFailure(logger, "Middleware request handler failed", {
+      request,
+      error,
     });
 
     const pathname = request.nextUrl.pathname;
     const protectedPage = PROTECTED_PREFIXES.some((prefix) => matchesPrefix(pathname, prefix));
     const fallback = pathname.startsWith("/api/")
-      ? NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 })
+      ? NextResponse.json({ error: "Service temporarily unavailable", reference }, { status: 503 })
       : protectedPage
         ? new NextResponse("Service temporarily unavailable. Please try again shortly.", {
             status: 503,
@@ -456,7 +325,7 @@ export async function handleMiddlewareRequest(request: NextRequest): Promise<Nex
       // A public pass-through still needs the normal forwarded nonce policy.
       // If header construction is what failed, degrade to the basic headers.
       try {
-        return withSecurityHeaders(request, fallback);
+        return forwardFoundationPageSession(request, withSecurityHeaders(request, fallback));
       } catch {
         fallback.headers.set("X-Content-Type-Options", "nosniff");
         fallback.headers.set("X-Frame-Options", "DENY");
@@ -464,6 +333,6 @@ export async function handleMiddlewareRequest(request: NextRequest): Promise<Nex
       }
     }
 
-    return fallback;
+    return forwardFoundationPageSession(request, fallback);
   }
 }

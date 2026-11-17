@@ -51,9 +51,7 @@ export function BusinessContactSection({
               <Phone className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Call
-              </p>
+              <p className="text-xs font-medium text-muted-foreground">Call</p>
               <p className="font-medium">{business.phone}</p>
             </div>
           </a>
@@ -70,7 +68,7 @@ export function BusinessContactSection({
               <MessageCircle className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-green-700 dark:text-brand-gold-300">
+              <p className="text-xs font-medium text-green-700 dark:text-brand-gold-300">
                 WhatsApp
               </p>
               <p className="font-medium text-green-900 dark:text-brand-gold-100">
@@ -89,9 +87,7 @@ export function BusinessContactSection({
               <Mail className="h-5 w-5" />
             </div>
             <div className="overflow-hidden">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Email
-              </p>
+              <p className="text-xs font-medium text-muted-foreground">Email</p>
               <p className="truncate font-medium">{business.email}</p>
             </div>
           </a>

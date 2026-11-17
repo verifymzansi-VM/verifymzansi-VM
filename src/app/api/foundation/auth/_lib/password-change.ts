@@ -16,9 +16,16 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { sendPasswordChangeNotification } from "@/lib/services/email";
 import { createLogger } from "@/lib/utils/logger";
+import { logRequestFailure } from "@/lib/utils/request-failure";
 import { foundationNoStore } from "@/lib/foundation/owner-route";
+import { openedByResetLink, RECOVERY_SESSION_REFUSAL } from "./recovery-session";
 
 const log = createLogger("FoundationPasswordChange");
+/** The codes the restored profile page acts on (src/app/dashboard/profile/page.tsx). */
+const PAGE_CODES: Partial<Record<FoundationPasswordUpdateError["reason"], string>> = {
+  reauthentication: "reauthentication_required",
+  mfa_required: "mfa_required",
+};
 export async function handleFoundationPasswordChange(request: NextRequest) {
   const reply = (status: number, error: string) =>
     NextResponse.json({ error }, { status, headers: foundationNoStore });
@@ -36,17 +43,20 @@ export async function handleFoundationPasswordChange(request: NextRequest) {
     return reply(503, "Password changes are unavailable");
   }
   try {
-    const limit = async (key: string) => {
-      const result = await checkRateLimit({
-        key,
-        action: "auth:change-password",
-        degradedMode: "block",
-      });
+    const limit = async (key: string, action = "auth:change-password") => {
+      const result = await checkRateLimit({ key, action, degradedMode: "block" });
       if (result.limited)
         throw new FoundationPasswordUpdateError(result.degraded ? 503 : 429, "unavailable");
     };
     await limit(getClientRateLimitIdentity(request).key);
     const caller = await context.authenticateCaller();
+    // A session opened by a reset link sets a password only on the reset page,
+    // where that link's binding is checked; here it could skip that check
+    // (whether a wrong current password is refused depends on Auth settings).
+    if (openedByResetLink(caller))
+      return context.respond(
+        NextResponse.json(RECOVERY_SESSION_REFUSAL, { status: 403, headers: foundationNoStore })
+      );
     const account = await readFoundationAccountContext(caller.api);
     if (account.account_id !== caller.accountId)
       throw new FoundationPasswordUpdateError(503, "unavailable");
@@ -67,7 +77,12 @@ export async function handleFoundationPasswordChange(request: NextRequest) {
       return context.respond(reply(503, "Password protection is temporarily unavailable"));
     }
     if (breached) return context.respond(reply(400, PWNED_PASSWORD_ERROR));
-    await caller.updatePassword(parsed.data.currentPassword, parsed.data.newPassword);
+    // The server checks the current password itself with a sign-in that has
+    // no CAPTCHA (password-update.ts), so each check spends the account's own
+    // budget for them; reachable only with this account's verified session.
+    await caller.updatePassword(parsed.data.currentPassword, parsed.data.newPassword, () =>
+      limit("account:" + caller.accountId, "auth:change-password:verify")
+    );
     if (caller.user.email) {
       try {
         const notice = await sendPasswordChangeNotification(caller.user.email);
@@ -102,14 +117,26 @@ export async function handleFoundationPasswordChange(request: NextRequest) {
                 : error.status === 429
                   ? "Too many attempts; try again later"
                   : "Password change could not be confirmed";
+      // The restored profile page reads `code` (as the older route sends it)
+      // to show its "Sign in again" link or its authenticator step.
+      const code = PAGE_CODES[error.reason];
       return context.respond(
         NextResponse.json(
-          { error: message, reason: error.reason },
+          { error: message, reason: error.reason, ...(code ? { code } : {}) },
           { status: error.status, headers: foundationNoStore }
         )
       );
     }
-    log.error("Foundation password change unavailable");
-    return context.respond(reply(503, "Password change could not be confirmed"));
+    const reference = logRequestFailure(log, "Foundation password change unavailable", {
+      request,
+      error,
+      action: "account:password-change",
+    });
+    return context.respond(
+      NextResponse.json(
+        { error: "Password change could not be confirmed", reference },
+        { status: 503, headers: foundationNoStore }
+      )
+    );
   }
 }

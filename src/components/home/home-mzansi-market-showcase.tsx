@@ -1,6 +1,4 @@
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
-import { createClient } from "@/lib/supabase/server";
-import { getDataBackend } from "@/lib/data-backend";
 import { restoredHomeCollection } from "@/lib/foundation/marketplace-server";
 import { MarketPreviewCard } from "./market-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
@@ -9,14 +7,6 @@ import { HomeShowcaseEmptyState } from "./home-showcase-empty-state";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 import { createLogger } from "@/lib/utils/logger";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
-import { PackageOpen } from "lucide-react";
-import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
-import {
-  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
-  shouldHidePlaywrightFixtures,
-} from "@/lib/supabase/playwright-visual-fixtures";
-import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
-import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 const log = createLogger("HomeMzansiMarketShowcase");
 
@@ -25,28 +15,7 @@ function provinceCode(name: string): string {
 }
 
 export async function HomeMzansiMarketShowcase() {
-  const cookieStore = await getOptionalCookieStore();
-  const hideFixtures = shouldHidePlaywrightFixtures(
-    readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
-  );
-  const supabase = await createClient();
-  const { data: listings, error } =
-    getDataBackend() === "foundation"
-      ? await restoredHomeCollection("listings")
-      : await applyVisibleExpiryFilter(
-          supabase
-            .from("listings")
-            // Card fields only; the street address isn't publicly readable.
-            .select(
-              "id, owner_id, title, description, price_cents, photos, videos, video_thumbnail, logo_url, location_city, location_province, boost_until, focal_x, focal_y, media_width, media_height"
-            )
-            .eq("status", "live")
-            .eq("area", "MZANSI_MARKET")
-        )
-          // Fair rotation: new posts first for 72 hours, then everyone takes turns.
-          .order("fair_rotation_key", { ascending: true })
-          .order("id", { ascending: true })
-          .limit(16);
+  const { data: listings, error } = await restoredHomeCollection("listings");
 
   if (error) {
     log.warn("Failed to load home Mzansi Market showcase", { error: error.message });
@@ -54,21 +23,15 @@ export async function HomeMzansiMarketShowcase() {
   }
 
   const items = (listings ?? [])
-    .filter((listing) => !shouldHidePlaywrightFixtureRowWhenEnabled(listing, hideFixtures))
     .filter((listing) => !isPlaceholderMarketplaceContent(listing.title, listing.description))
     .slice(0, 8);
   if (items.length === 0) {
     return (
-      <HomeShowcaseShell title="Mzansi Market" href="/mzansi-market" tone="green">
-        <HomeShowcaseEmptyState
-          title="No listings yet"
-          description="Post something to sell or rent out and it will show here. Your first post is free once your ID is reviewed."
-          ctaHref="/post/create-listing"
-          ctaLabel="Post a listing"
-          tone="green"
-          icon={<PackageOpen className="h-7 w-7" />}
-        />
-      </HomeShowcaseShell>
+      <HomeShowcaseEmptyState
+        title="Be the first to sell on Mzansi Market"
+        href="/post/create-listing"
+        tone="green"
+      />
     );
   }
 
@@ -95,8 +58,10 @@ export async function HomeMzansiMarketShowcase() {
                 href={`/listing/${l.id}`}
                 imageUrl={displayUrl}
                 posterUrl={poster}
+                isVideo={Boolean(l.videos?.[0])}
                 title={l.title}
                 price={l.price_cents ? l.price_cents / 100 : null}
+                priceMode={"price_mode" in l ? (l.price_mode as string | null) : null}
                 city={l.location_city ?? "South Africa"}
                 provinceCode={provinceCode(l.location_province ?? "ZA")}
                 boosted={isBoosted}

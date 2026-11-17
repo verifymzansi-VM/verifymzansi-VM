@@ -1,4 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { redirect } from "next/navigation";
+import { SHOW_STAFF_INTELLIGENCE } from "@/lib/hidden-features";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +15,8 @@ export const metadata = {
 
 export default async function IntelligenceMarketplacePage() {
   await requireStaff("bi:view");
+  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  if (!SHOW_STAFF_INTELLIGENCE) redirect("/admin");
 
   const admin = createAdminClient();
 

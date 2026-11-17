@@ -195,7 +195,9 @@ export async function cacheable<T>(
  */
 export function invalidateCache(key: string): void {
   cache.delete(key);
-  edgeCacheDelete(key).catch(() => {});
+  edgeCacheDelete(key).catch(() => {
+    // A stale edge entry still expires at its own time limit.
+  });
 }
 
 /**
@@ -207,7 +209,9 @@ export function invalidateCacheByPrefix(prefix: string): void {
   for (const key of cache.keys()) {
     if (key.startsWith(prefix)) {
       cache.delete(key);
-      edgeCacheDelete(key).catch(() => {});
+      edgeCacheDelete(key).catch(() => {
+        // A stale edge entry still expires at its own time limit.
+      });
     }
   }
 }

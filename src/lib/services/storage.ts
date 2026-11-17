@@ -2,6 +2,7 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
@@ -9,12 +10,14 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { R2Bucket } from "@cloudflare/workers-types";
 import { encryptFile, decryptFile } from "@/lib/utils/encryption";
 import { createLogger } from "@/lib/utils/logger";
-import { isPlaywrightSupabaseStubMode, isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { isPlaywrightFoundationCopy } from "@/lib/supabase/playwright-mode";
 
 const log = createLogger("Storage");
 
+/** Local files instead of R2: the local foundation test copy only. It requires
+ * test mode, which production can never enable. */
 function shouldUsePlaywrightStorage(): boolean {
-  return isPlaywrightTestMode() && isPlaywrightSupabaseStubMode();
+  return isPlaywrightFoundationCopy();
 }
 
 async function playwrightStoragePath(bucket: string, key: string): Promise<string | null> {
@@ -275,11 +278,15 @@ function assertSafeStorageKey(key: string): void {
  * Initialize R2 client using S3-compatible API.
  * Cached as a module-level singleton to avoid recreating TLS connections
  * and credential parsing on every upload/download call.
+ *
+ * "single-attempt" turns off the SDK's own retries (3 attempts by default).
+ * Scheduled cleanup uses it so that one call is exactly one Worker
+ * subrequest; it retries through its claim/lease cycle instead.
  */
-let _r2Client: S3Client | null = null;
-let _r2ConfigKey: string | null = null;
+type R2ClientAttempts = "default" | "single-attempt";
+const _r2Clients: Partial<Record<R2ClientAttempts, { configKey: string; client: S3Client }>> = {};
 
-function getR2Client(): S3Client {
+function getR2Client(attempts: R2ClientAttempts = "default"): S3Client {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
@@ -290,11 +297,12 @@ function getR2Client(): S3Client {
 
   // Invalidate singleton if credentials change (e.g. key rotation).
   const configKey = `${accountId}:${accessKeyId}`;
-  if (_r2Client && _r2ConfigKey === configKey) {
-    return _r2Client;
+  const cached = _r2Clients[attempts];
+  if (cached && cached.configKey === configKey) {
+    return cached.client;
   }
 
-  _r2Client = new S3Client({
+  const client = new S3Client({
     region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: {
@@ -305,9 +313,10 @@ function getR2Client(): S3Client {
     // a hoisted empty-body CRC32 that breaks PUTs of non-empty files.
     requestChecksumCalculation: "WHEN_REQUIRED",
     responseChecksumValidation: "WHEN_REQUIRED",
+    ...(attempts === "single-attempt" ? { maxAttempts: 1 } : {}),
   });
-  _r2ConfigKey = configKey;
-  return _r2Client;
+  _r2Clients[attempts] = { configKey, client };
+  return client;
 }
 
 /**
@@ -319,8 +328,41 @@ function getR2Client(): S3Client {
 const R2_TRANSFER_TIMEOUT_MS = 120_000;
 const R2_METADATA_TIMEOUT_MS = 15_000;
 
-function r2SendOptions(timeoutMs: number): { abortSignal: AbortSignal } {
-  return { abortSignal: AbortSignal.timeout(timeoutMs) };
+/** A caller's signal (for example a whole job's deadline) still gets the per-call timeout. */
+function r2SendOptions(timeoutMs: number, signal?: AbortSignal): { abortSignal: AbortSignal } {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return { abortSignal: signal ? AbortSignal.any([signal, timeout]) : timeout };
+}
+
+/**
+ * Thrown by cleanup deletes when storage is overloaded, failing (5xx,
+ * SlowDown) or did not answer in time. Callers should send nothing more now
+ * and retry on a later run.
+ */
+class StorageRetryLaterError extends Error {
+  readonly retryLater = true;
+  constructor(cause: unknown) {
+    super("Storage is busy; retry later", { cause });
+    this.name = "StorageRetryLaterError";
+  }
+}
+
+const RETRY_LATER_NAMES = new Set([
+  "SlowDown",
+  "ServiceUnavailable",
+  "InternalError",
+  "RequestTimeout",
+  "TimeoutError",
+  "AbortError",
+]);
+
+function asRetryLater(error: unknown): unknown {
+  const failure = error as { name?: unknown; $metadata?: { httpStatusCode?: unknown } } | null;
+  const status = failure?.$metadata?.httpStatusCode;
+  return (typeof status === "number" && status >= 500) ||
+    (typeof failure?.name === "string" && RETRY_LATER_NAMES.has(failure.name))
+    ? new StorageRetryLaterError(error)
+    : error;
 }
 
 /**
@@ -335,6 +377,16 @@ export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
     const path = await import("node:path");
     const arrayBuffer = await params.file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    // Private objects (identity evidence) go to the ignored private fixture
+    // folder that evidence review reads, never under public/.
+    const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+    if (params.bucket === privateBucket) {
+      const target = await playwrightStoragePath(params.bucket, params.key);
+      if (!target) throw new Error("Isolated private storage unavailable");
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      await fs.writeFile(target, buffer);
+      return { url: "", key: params.key.replace(/\\/g, "/") };
+    }
     const publicRoot = path.join(process.cwd(), "public", "e2e-media");
     const destination = path.join(publicRoot, params.key);
 
@@ -494,8 +546,16 @@ export function generateStorageKey(
 
 /**
  * Delete a file from R2.
+ * "single-attempt" is for scheduled cleanup that counts its Worker
+ * subrequests: exactly one storage request (no SDK retries), the caller's
+ * signal applies, and a busy or unanswered request throws
+ * StorageRetryLaterError.
  */
-export async function deleteFromR2(bucket: string, key: string): Promise<void> {
+export async function deleteFromR2(
+  bucket: string,
+  key: string,
+  options: { attempts?: R2ClientAttempts; signal?: AbortSignal } = {}
+): Promise<void> {
   assertSafeStorageKey(key);
   const localPath = await playwrightStoragePath(bucket, key);
   if (localPath) {
@@ -511,13 +571,88 @@ export async function deleteFromR2(bucket: string, key: string): Promise<void> {
     return;
   }
 
-  const client = getR2Client();
+  const attempts = options.attempts ?? "default";
+  const client = getR2Client(attempts);
   const command = new DeleteObjectCommand({
     Bucket: bucket,
     Key: key,
   });
 
-  await client.send(command, r2SendOptions(R2_METADATA_TIMEOUT_MS));
+  try {
+    await client.send(command, r2SendOptions(R2_METADATA_TIMEOUT_MS, options.signal));
+  } catch (error) {
+    throw attempts === "single-attempt" ? asRetryLater(error) : error;
+  }
+}
+
+/** S3 DeleteObjects and the Workers R2 binding both take at most 1,000 keys. */
+export const R2_DELETE_BATCH_LIMIT = 1000;
+
+/**
+ * Delete up to 1,000 keys with one storage request and no SDK retries (one
+ * Worker subrequest). Returns the keys storage did not confirm as deleted.
+ *
+ * A key counts as deleted only when the reply lists it under Deleted, or
+ * under Errors as NoSuchKey (already gone). Any other requested key is
+ * unconfirmed. The reply must account for the request: one that names no
+ * requested key at all (an empty or non-S3 200), or an error naming a key
+ * that was not requested, throws so the caller can fall back to single
+ * deletes. Busy or unanswered requests throw StorageRetryLaterError.
+ */
+export async function deleteManyFromR2(
+  bucket: string,
+  keys: readonly string[],
+  options: { signal?: AbortSignal } = {}
+): Promise<string[]> {
+  if (keys.length === 0) return [];
+  if (keys.length > R2_DELETE_BATCH_LIMIT || new Set(keys).size !== keys.length) {
+    throw new Error("Invalid storage batch");
+  }
+  keys.forEach(assertSafeStorageKey);
+  if (shouldUsePlaywrightStorage()) {
+    const fs = await import("node:fs/promises");
+    for (const key of keys) {
+      const localPath = await playwrightStoragePath(bucket, key);
+      if (localPath) await fs.rm(localPath, { force: true });
+    }
+    return [];
+  }
+
+  const r2Binding = await getR2BucketBinding(bucket);
+  if (r2Binding) {
+    await r2Binding.delete([...keys]);
+    return [];
+  }
+
+  let response;
+  try {
+    response = await getR2Client("single-attempt").send(
+      new DeleteObjectsCommand({
+        Bucket: bucket,
+        // Not quiet: a reply must name every key it deleted.
+        Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: false },
+      }),
+      r2SendOptions(R2_METADATA_TIMEOUT_MS, options.signal)
+    );
+  } catch (error) {
+    throw asRetryLater(error);
+  }
+  const requested = new Set(keys);
+  const confirmed = new Set<string>();
+  const refused = new Set<string>();
+  for (const item of response.Deleted ?? []) {
+    if (item.Key && requested.has(item.Key)) confirmed.add(item.Key);
+  }
+  for (const error of response.Errors ?? []) {
+    if (!error.Key || !requested.has(error.Key))
+      throw new Error("Storage batch reply names a key that was not requested");
+    if (error.Code === "NoSuchKey") confirmed.add(error.Key);
+    else refused.add(error.Key);
+  }
+  if (confirmed.size === 0 && refused.size === 0)
+    throw new Error("Storage batch reply names none of the requested keys");
+  // A key reported both deleted and refused is not confirmed.
+  return keys.filter((key) => !confirmed.has(key) || refused.has(key));
 }
 
 /**
@@ -607,46 +742,14 @@ export async function getR2ObjectBytes(
 }
 
 /**
- * Generate a presigned URL for direct client-side upload to R2.
- * This allows users to upload files directly without proxying through the server.
- */
-export async function generatePresignedUploadUrl(
-  bucket: string,
-  key: string,
-  contentType: string,
-  expiresIn: number = 3600,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  maxContentLength?: number
-): Promise<string> {
-  // Clamp expiresIn to safe range: 60s–86400s (1 min–24 hours)
-  const safeExpiry = Math.max(60, Math.min(86400, expiresIn));
-  const client = getR2Client();
-
-  // NOTE: Do NOT set ContentLength on the command. Browsers forbid setting the
-  // Content-Length header manually in fetch/XHR, so a presigned URL that pins
-  // content-length cannot be satisfied by a browser PUT and fails with
-  // 403 SignatureDoesNotMatch. Size is validated server-side at upload-complete.
-  const command = new PutObjectCommand({
-    Bucket: bucket,
-    Key: key,
-    ContentType: contentType,
-  });
-
-  return await getSignedUrl(client, command, {
-    expiresIn: safeExpiry,
-    // Cryptographically pin the declared Content-Type so clients cannot PUT a
-    // different type (e.g. text/html) than the one the server authorised.
-    signableHeaders: new Set(["content-type"]),
-  });
-}
-
-/**
  * Generate a presigned URL for secure download from private R2 bucket.
  */
 export async function generatePresignedDownloadUrl(
   bucket: string,
   key: string,
-  expiresIn: number = 3600
+  expiresIn: number = 3600,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  maxContentLength?: number
 ): Promise<string> {
   // Clamp expiresIn to safe range: 60s–86400s (1 min–24 hours)
   const safeExpiry = Math.max(60, Math.min(86400, expiresIn));
@@ -756,7 +859,7 @@ export async function downloadKycDocument(key: string): Promise<Buffer> {
   return result.buffer;
 }
 
-export async function downloadKycDocumentWithMetrics(
+async function downloadKycDocumentWithMetrics(
   key: string
 ): Promise<{ buffer: Buffer; downloadMs: number; decryptMs: number }> {
   assertSafeStorageKey(key);

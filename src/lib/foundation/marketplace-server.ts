@@ -4,14 +4,17 @@ import { z } from "zod";
 import { foundationServerPublicApi } from "./server-public";
 import {
   readRestoredCollection,
+  readRestoredPublicDetail,
   restoredPublicRow,
   type PublicCollection,
 } from "./marketplace-read";
-import { readFoundationPublicPost, readFoundationPublicContactChannels } from "./public-post";
+import type { FoundationPublicPostCore } from "./public-post-contract";
 import { readPublicBusinessStickers } from "./business-seen";
-import { searchFoundationPresentedCards } from "./public-cards";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
-import type { PromotionDetailRecord } from "@/components/listings/promotion-detail-content";
+import type {
+  LinkedBusinessRecord,
+  PromotionDetailRecord,
+} from "@/components/listings/promotion-detail-content";
 import { createLogger } from "../utils/logger";
 import { readFoundationProgrammeShowcases } from "./organisation-sponsorships";
 import {
@@ -67,21 +70,33 @@ export async function restoredHomeCollection(collection: PublicCollection, touri
 
 export const restoredPublicDetail = cache(async (id: string) => {
   if (!z.uuid().safeParse(id).success) return null;
-  const api = foundationServerPublicApi();
-  const post = await readFoundationPublicPost(api, { id });
-  if (!post) return null;
-  const contact_channels = await readFoundationPublicContactChannels(api, { id });
-  const presentation = (
-    await searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 })
-  ).items[0]?.presentation;
-  if (!presentation) return null;
-  return {
-    ...post,
-    contact_channels,
-    business_type: presentation.business_type,
-    frontend: presentation.frontend,
-  };
+  return readRestoredPublicDetail(foundationServerPublicApi(), id);
 });
+
+/**
+ * The link-preview card (`/api/share-preview`): title, place, price and cover
+ * of a publicly live post of the requested kind, null otherwise (unknown,
+ * unpublished, expired or another kind). No seller, contact, description or
+ * evidence field leaves here.
+ */
+export async function restoredSharePreview(kind: FoundationPublicPostCore["kind"], id: string) {
+  if (!z.uuid().safeParse(id).success) return null;
+  const post = await readRestoredPublicDetail(foundationServerPublicApi(), id, {
+    kind,
+    withContactChannels: false,
+  });
+  if (!post) return null;
+  const row = restoredPublicRow(post, post);
+  return {
+    title: row.title,
+    tourism: post.area === "tourism_events",
+    location_city: row.location_city,
+    location_province: row.location_province,
+    price_cents: row.price_cents,
+    video_thumbnail: row.video_thumbnail,
+    has_video: row.videos.length > 0,
+  };
+}
 
 export const restoredListingDetail = cache(async (id: string) => {
   const post = await restoredPublicDetail(id);
@@ -118,3 +133,49 @@ export const restoredEventDetail = cache(async (id: string) => {
   };
   return promotion;
 });
+
+const stickerText = (value: unknown) => (typeof value === "string" ? value : null);
+
+/**
+ * The business an event names as its host (saved with the event; the database
+ * accepted only the poster's own business post), for the event page's host
+ * card. Public reads only: null unless that business is publicly live, and null
+ * when a read fails, so the event page still renders without the card. Only the
+ * card's fields leave here; the owner id stays hidden (null), so the card never
+ * claims the advertiser's verified position. The expiry dates let the page's
+ * toPublicVerification recheck the CIPC and Seen stickers.
+ */
+export async function restoredEventHostBusiness(
+  id: unknown
+): Promise<
+  (LinkedBusinessRecord & { cipc_expires_at: string | null; seen_expires_at: string | null }) | null
+> {
+  if (typeof id !== "string" || !z.uuid().safeParse(id).success) return null;
+  try {
+    const post = await restoredPublicDetail(id);
+    if (post?.kind !== "business") return null;
+    const row = restoredPublicRow(post, post);
+    const sticker = ((
+      await readPublicBusinessStickers(foundationServerPublicApi(), [post.id], {
+        withExpiry: true,
+      })
+    ).get(post.id) ?? {}) as Record<string, unknown>;
+    return {
+      id: post.id,
+      owner_id: null,
+      business_name: row.business_name,
+      logo_url: row.logo_url ?? null,
+      cipc_verified_at: stickerText(sticker.cipc_verified_at),
+      cipc_expires_at: stickerText(sticker.cipc_expires_at),
+      seen_verified_at: stickerText(sticker.seen_verified_at),
+      seen_expires_at: stickerText(sticker.seen_expires_at),
+      seen_method: stickerText(sticker.seen_method),
+      seen_city: stickerText(sticker.seen_city),
+      owner_verified_role: stickerText(sticker.owner_verified_role),
+      owner_position_title: stickerText(sticker.owner_position_title),
+    };
+  } catch {
+    log.warn("Event host business unavailable");
+    return null;
+  }
+}

@@ -42,7 +42,6 @@ import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { getKycZoomWidthClass } from "./kyc-review-constants";
 import { LIVENESS_THRESHOLD } from "@/lib/constants/verification";
 import { formatDateTime } from "@/lib/utils/format";
-import { getDataBackend } from "@/lib/data-backend";
 import {
   nativeEvidenceBody,
   inspectedEvidenceArtifact,
@@ -412,27 +411,23 @@ export function KycComparisonViewer({
     nextDecision: "approved" | "rejected" | "needs_resubmission"
   ) {
     if (artifact.step_type !== "id_doc" && artifact.step_type !== "selfie") return;
-    if (getDataBackend() === "foundation") {
-      if (!artifact.foundation) {
-        setArtifactErrors((previous) => ({
-          ...previous,
-          [artifact.id]: "Reload the claimed evidence before deciding it.",
-        }));
-        return;
-      }
-      onReviewStep?.(artifact.step_type, nextDecision, {
-        artifactId: artifact.id,
-        foundation: artifact.foundation,
-        review_subject_label: artifact.review_subject_label,
-        review_risk_score: artifact.review_risk_score,
-        review_risk_level: artifact.review_risk_level,
-      });
-    } else onReviewStep?.(artifact.step_type, nextDecision);
+    if (!artifact.foundation) {
+      setArtifactErrors((previous) => ({
+        ...previous,
+        [artifact.id]: "Reload the claimed evidence before deciding it.",
+      }));
+      return;
+    }
+    onReviewStep?.(artifact.step_type, nextDecision, {
+      artifactId: artifact.id,
+      foundation: artifact.foundation,
+      review_subject_label: artifact.review_subject_label,
+      review_risk_score: artifact.review_risk_score,
+      review_risk_level: artifact.review_risk_level,
+    });
   }
   const reviewCheckLabels = [
-    getDataBackend() === "foundation"
-      ? "The ID number and legal name match the submitted details shown above, and the South African document is clear."
-      : "ID photo and personal details are clear and the document is South African.",
+    "The ID number and legal name match the submitted details shown above, and the South African document is clear.",
     "The selfie and ID portrait appear to show the same person.",
     "I reviewed the liveness status and risk signals; the evidence is sufficient.",
   ];

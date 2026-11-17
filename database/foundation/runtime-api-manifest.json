@@ -81,18 +81,178 @@
       "authority": "Service-only scheduled purge; bounded deletion of expired autosaves."
     },
     {
-      "name": "get_frontend_staff_payments",
-      "updates": ["updates/20261105201822_restored_staff_payments.sql"],
+      "name": "expire_stale_checkouts",
+      "updates": ["updates/20261111212320_payment_start_retry.sql"],
       "arguments": [
         {
-          "name": "p_page",
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "integer",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only scheduled sweep run by the payment status job; bounded, repeatable expiry of pending payments with no Ozow request, created over an hour ago and not leased."
+    },
+    {
+      "name": "record_payment_problem",
+      "updates": [
+        "updates/20261112080000_payment_problem_alerts.sql",
+        "updates/20261113172356_ozow_api_refunds.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_source",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_alert",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_transaction",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only record by the website's server of a refused payment notice or status-check transaction or a settlement outcome or refund through Ozow that needs staff; closed reason and source lists, an existing payment or none, one row per payment and reason, repeats only counted; an alert mark only rises, and after it was emailed another Ozow transaction raises it again at most 5 times; holds no personal data."
+    },
+    {
+      "name": "claim_payment_alerts",
+      "updates": ["updates/20261112080000_payment_problem_alerts.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only five-minute lease, for the email job, on marked payment problems not yet emailed and raised in the last 7 days; a batch whose send failed is offered again unchanged first; bounded (1-50), returns payment numbers, reason codes and the payment amounts and states stored when the batch was prepared, never account or contact details."
+    },
+    {
+      "name": "complete_payment_alerts",
+      "updates": ["updates/20261112080000_payment_problem_alerts.sql"],
+      "arguments": [
+        {
+          "name": "p_claim",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_sent",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "integer",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only record that the staff email for one lease was sent, or its return for the next run; only rows of that lease not yet recorded."
+    },
+    {
+      "name": "claim_payment_digest",
+      "updates": ["updates/20261112080000_payment_problem_alerts.sql"],
+      "arguments": [
+        {
+          "name": "p_from_hour",
           "sqlType": "integer",
           "optional": false
         },
         {
-          "name": "p_status",
-          "sqlType": "text",
-          "optional": true
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only five-minute lease, for the email job, on the day's staff payment summary once per South African calendar day from the given hour; the content is fixed at the first lease and stored, so a retry gets the same summary; returns counts, payment numbers and reason codes, never account or contact details."
+    },
+    {
+      "name": "complete_payment_digest",
+      "updates": ["updates/20261112080000_payment_problem_alerts.sql"],
+      "arguments": [
+        {
+          "name": "p_claim",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "boolean",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only record that the day's staff payment summary was sent (or logged); only the summary of that lease, once."
+    },
+    {
+      "name": "start_slot_checkout",
+      "updates": [
+        "updates/20261113002421_individual_slots_r69.sql",
+        "updates/20261117082020_online_payment_limit.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_plan_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_slots",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_expected_total_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_consent",
+          "sqlType": "boolean",
+          "optional": false
         }
       ],
       "returns": "jsonb",
@@ -102,20 +262,38 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment viewing capability and live authenticator session; minimal paged payment fields without provider identifiers or metadata."
+      "authority": "Caller-bound slot quote: only an Individual slot plan on sale, 1-25 slots, the cooling-off consent recorded in the payment, an accepted ID review, the server total equal to the total shown and at most internal.online_payment_max_cents() (the most Ozow accepts in one payment; above it PT413 online_payment_above_limit), and the person's Individual slot limit (every account of the same identity, slots in open payments included); one payment with one line per slot."
     },
     {
-      "name": "record_frontend_staff_payment_reversal",
-      "updates": ["updates/20261105201822_restored_staff_payments.sql"],
+      "name": "get_my_slots",
+      "updates": ["updates/20261113002421_individual_slots_r69.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound read of the member's own slots (active, or ended in the last 3 days) with the posts in them and the sponsor's name for a sponsored place, and the person's Individual slot count, open-payment slots and limit; no other account's data."
+    },
+    {
+      "name": "staff_set_individual_slot_limit",
+      "updates": ["updates/20261113002421_individual_slots_r69.sql"],
       "arguments": [
         {
-          "name": "p_id",
+          "name": "p_account_id",
           "sqlType": "uuid",
           "optional": false
         },
         {
-          "name": "p_kind",
-          "sqlType": "text",
+          "name": "p_slot_limit",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_ends_at",
+          "sqlType": "timestamp with time zone",
           "optional": false
         },
         {
@@ -131,7 +309,423 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment refund capability and recent authenticator proof; only another account's settled payment, local effects and exact audit receipt in one transaction."
+      "authority": "Current slot limit capability (administrators) and recent authenticator proof; only another account with an accepted ID review; more than 4 (at most 25, until an end date within 366 days) only with a checked business; every raise and end kept with the staff member and reason."
+    },
+    {
+      "name": "get_staff_payment_list",
+      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "arguments": [
+        {
+          "name": "p_page",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_filter",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability; the staff payments list (50 a page) with each payment's delivery status, slot lines, the refund waiting for approval (whether the caller's identity requested it) and the staff activation time; filters by status, 'needs_attention' (complete and needs_reconciliation) or 'awaiting_approval', with both counts. No contact or identity details."
+    },
+    {
+      "name": "activate_staff_paid_payment",
+      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; only a complete, needs_reconciliation payment of an account with current access and no refund waiting: delivers one slot per open line within the person's Individual slot limit (one entitlement for a plan payment without lines) or the add-on window while the post can carry it, marks it fulfilled, creates the partner commission it earns and records the audit row."
+    },
+    {
+      "name": "record_staff_payment_refund",
+      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_kind",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason_code",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_ozow_reference",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; only with Ozow's reference (used once, any letter case) and a reason code from the closed list; the payment's own amount for the account that paid; when the money returned on the payment would exceed R1,000 the record waits for a second, different staff member (chargebacks too while internal.chargebacks_need_approval is true), otherwise it takes effect at once as a whole-payment reversal."
+    },
+    {
+      "name": "record_staff_slot_refund",
+      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "arguments": [
+        {
+          "name": "p_line_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_kind",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason_code",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_ozow_reference",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; one open slot line of a completed payment, only with Ozow's reference (used once, any letter case) and a reason code from the closed list; the slot's own amount for the account that paid; when the money returned on the payment would exceed R1,000 it waits for a second staff member, otherwise it revokes that slot as the single-slot reversal does."
+    },
+    {
+      "name": "approve_staff_payment_refund",
+      "updates": [
+        "updates/20261113021223_staff_payment_fixes.sql",
+        "updates/20261113172356_ozow_api_refunds.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never the requester's identity (checked again after the lock waits) and never a payment of their own identity; applies a refund waiting for approval (whole payment or one slot), the only reversal allowed while it waits, and records the approver; refuses when the payment changed since it was recorded. A refund through Ozow is approved (not reversed): the server sends it, and it takes effect only when Ozow reports it complete."
+    },
+    {
+      "name": "decline_staff_payment_refund",
+      "updates": ["updates/20261113021223_staff_payment_fixes.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; declines (or, for the requester, withdraws) a refund waiting for approval, with a reason; nothing else changes."
+    },
+    {
+      "name": "get_payment_receipt",
+      "updates": [
+        "updates/20261113021223_staff_payment_fixes.sql",
+        "updates/20261113162457_staff_invoice_payments.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only read for the receipt email: one payment's amount, currency, completion time, product kind, label, slot count, status, delivery status, merchant reference, Ozow transaction id, payment method (ozow or invoice), the bank reference of a recorded bank transfer and invoice (number, description, issue time), with its owner id; null for an unknown payment. No contact or identity details."
+    },
+    {
+      "name": "record_staff_invoice_payment",
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
+      "arguments": [
+        {
+          "name": "p_account_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_term_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_slots",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_amount_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_bank_reference",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_cleared_on",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_waiver",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; a confirmed account with current access and an accepted ID review, an Individual slot on sale for 30, 90 or 180 days, 1 to 25 slots within the person's Individual slot limit, the amount received equal to the order total and at most R50,000, money cleared today or in the last 90 days, the customer's written cooling-off waiver confirmed and a bank reference never recorded before (waiting, confirmed or declined): stores the audited record as waiting for a second staff member; no payment, slot, receipt or commission is made. The same request again by the same staff member returns the first record."
+    },
+    {
+      "name": "confirm_staff_invoice_payment",
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
+      "arguments": [
+        {
+          "name": "p_transfer_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current transfer confirmation capability (admin) and recent authenticator proof; the staff member's own current accepted ID review; never the recorder or another account of the recorder's identity, the customer or a partner who referred the customer, checked again after the lock waits; only a waiting record whose recorder still holds the payment refund capability and has not come to refer the customer, with the customer's current access, accepted ID review and Individual slot limit (open checkouts included) checked again: records a complete, fulfilled invoice payment with its lines, slots starting now, invoice, receipt event and partner commission, and marks the record confirmed. The same confirmer again returns the result; a declined record is refused."
+    },
+    {
+      "name": "decline_staff_invoice_payment",
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
+      "arguments": [
+        {
+          "name": "p_transfer_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current transfer confirmation capability (admin) and recent authenticator proof; the staff member's own current accepted ID review, never the customer or a partner who referred the customer; only a waiting record, with an audit reason: marks it declined (its recorder may withdraw it). Nothing is paid or started and the bank reference stays used. The same decline again returns the result; a confirmed record is refused."
+    },
+    {
+      "name": "get_staff_invoice_transfers",
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability and recent authenticator proof: the recorded bank transfers waiting for confirmation (up to 50, oldest first, with their count): customer account id, account email (to match the bank statement) and public name, term, slots, amount, bank reference, date cleared, reason, recorded time, the recorder's public name, whether the caller's identity recorded it and how many other waiting or confirmed records name the same customer, amount and date. No phone, legal name or identity details."
+    },
+    {
+      "name": "get_staff_invoice_customer",
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
+      "arguments": [
+        {
+          "name": "p_account_email",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred: for the one confirmed account with that email, its public name, whether its ID review is accepted and it can use slots, the Individual slots held and the person's slot limit. No email, legal name or contact details."
+    },
+    {
+      "name": "get_staff_invoice_payments",
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability and recent authenticator proof: the bank transfer details (reference, date cleared, amount, reason, recorded time and whether the caller's identity recorded or confirmed it) of up to 50 listed payments confirmed from a recorded bank transfer."
+    },
+    {
+      "name": "get_my_communication_choices",
+      "updates": ["updates/20261113134500_communication_choices_and_signup_terms.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Signed-in, confirmed, not deleted self-only account and live session (restrictions do not hide the caller's own choices); the caller's four optional communication choices (marketing_email, marketing_sms, analytics, third_party_sharing), each off until the caller turns it on. No caller-selected account."
+    },
+    {
+      "name": "save_my_communication_choices",
+      "updates": ["updates/20261113134500_communication_choices_and_signup_terms.sql"],
+      "arguments": [
+        {
+          "name": "p_wording",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_marketing_email",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_marketing_sms",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_analytics",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_third_party_sharing",
+          "sqlType": "boolean",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Signed-in, confirmed, not deleted self-only account and live session, rechecked after a per-account lock; turning a choice on also needs an active account and at most 20 in 24 hours, turning one off never is limited; each real change is an append-only row with the wording version and time. No caller-selected account."
+    },
+    {
+      "name": "list_my_email_history",
+      "updates": [
+        "updates/20261113134500_communication_choices_and_signup_terms.sql",
+        "updates/20261117123240_skipped_email_status.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current active self-only account (confirmed email) and live session; the caller's own finished account emails (kind, sent or failed, time), at most 50; an email finished without sending (skipped) is not listed. No address, subject record, provider error or other account."
     },
     {
       "name": "get_frontend_staff_organisation_detail",
@@ -2694,6 +3288,35 @@
       "authority": "Current independently claimed evidence reviewer; native case/version/lease checks and audited metadata/context reads. Private identity reference stays within the authorized review response."
     },
     {
+      "name": "get_frontend_staff_selfie_capture",
+      "updates": ["updates/20261111184619_selfie_capture_method.sql"],
+      "arguments": [
+        {
+          "name": "p_case_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_claim_generation",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_claim_nonce",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current live evidence claim holder with evidence:view on an open identity case that is not their own; returns only the current submission ids and the browser-reported selfie capture method and liveness answer (review context, not proof)"
+    },
+    {
       "name": "get_frontend_staff_claims",
       "updates": ["updates/20261104155022_restored_staff_claim_controls.sql"],
       "arguments": [
@@ -3052,6 +3675,72 @@
       "authority": "Live confirmed active member; bounded self-only original-post collection and exact count"
     },
     {
+      "name": "get_my_frontend_post_v2",
+      "updates": ["updates/20261109104020_post_expiry_rules.sql"],
+      "arguments": [
+        {
+          "name": "p_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Live confirmed active member; self-only owner form of get_my_frontend_post plus the post's deletion date"
+    },
+    {
+      "name": "list_my_frontend_posts_v2",
+      "updates": ["updates/20261109104020_post_expiry_rules.sql"],
+      "arguments": [
+        {
+          "name": "p_kind",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_area",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_offset",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Live confirmed active member; bounded self-only original-post collection and exact count, each post with its deletion date"
+    },
+    {
+      "name": "get_my_intro_trial",
+      "updates": ["updates/20261110045944_intro_trial_at_first_approval.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Live confirmed active member; self-only status of the member's free week (available, awaiting approval, running with its start and end, used or unavailable)"
+    },
+    {
       "name": "consume_frontend_post_command",
       "updates": [
         "updates/20261104002445_restored_post_commands.sql",
@@ -3150,6 +3839,35 @@
         "service_role": false
       },
       "authority": "Current confirmed active member and live matching session; owner derives from auth.uid(), request digest binds immutable native evidence reservation"
+    },
+    {
+      "name": "record_my_selfie_capture",
+      "updates": ["updates/20261111184619_selfie_capture_method.sql"],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_capture_method",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_browser_liveness_passed",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Active member with a live session, own uncompleted selfie upload receipt only; stores the browser-reported capture method and liveness answer from a closed set as staff review context, never authority"
     },
     {
       "name": "get_my_frontend_verification_uploads",
@@ -3379,6 +4097,774 @@
         "service_role": false
       },
       "authority": "Current active member and live matching session; notification ownership derived from auth.uid(), no direct table grants"
+    },
+    {
+      "name": "request_staff_ozow_refund",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_line_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason_code",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability (admins) and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity (checked again after the lock waits); a refund through Ozow of a completed Ozow payment (its Ozow transaction id) or one open slot of it, with a reason code from the closed list and no reference; the payment's or slot's own amount for the account that paid; one refund of a payment in flight at a time; above R1,000 returned on the payment it waits for a second, different staff member, otherwise it is approved for the server to send. Nothing is reversed until Ozow reports the refund complete."
+    },
+    {
+      "name": "record_staff_dashboard_refund",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_line_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason_code",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_ozow_refund_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_ozow_fact",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability (admins) and recent authenticator proof; the staff member's own current accepted ID review and never a payment of their own identity; records a refund an admin made by hand in the Ozow dashboard for a completed Ozow payment or one open slot, with Ozow's refund id (used once) and a reason code, and with the refund as the website read it from Ozow when it could (that id, this payment's Ozow transaction and amount, and not failed, cancelled, returned, invalid or in error; it only refuses, Ozow's status is stored only by the server's read-back); the same approval rule as every refund (above R1,000 a second, different staff member), otherwise it takes effect at once as today's refunds do."
+    },
+    {
+      "name": "get_staff_ozow_refunds",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability; for up to 50 listed payments, whether each can be refunded through Ozow and their API and dashboard refund records (state, amount, reason code, times, Ozow's refund id and status, whether the caller's identity requested it), plus up to 20 API refunds that need staff (failed or returned in 30 days without a later refund, or approved or sent for more than a day). No contact or identity details."
+    },
+    {
+      "name": "claim_ozow_refund_send",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only; hands an approved API refund to the server's sender once (status sent) with its Idempotency-Key, Ozow transaction, amount and reason code; an unknown send may be handed over again with the same key at most twice more, 30 minutes apart and within six hours; a payment that changed before the first send fails the record without contacting Ozow and alerts staff."
+    },
+    {
+      "name": "list_ozow_refund_sends_due",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only; up to 20 ids of approved API refunds not sent for two minutes and unknown sends due a retry, oldest first."
+    },
+    {
+      "name": "record_ozow_refund_send",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_result",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only; stores Ozow's answer to a send of an API refund: accepted (Ozow's refund id for this record's transaction and amount, used once, then its status), refused (only a first send fails the record; a refused retry stops retries) or unknown; alerts staff on failure, mismatch or the last unknown attempt."
+    },
+    {
+      "name": "apply_ozow_refund_status",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_event",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only; applies a refund status the server read back from Ozow after a signed refund notice: the record with that Ozow refund id, or the one sent API refund of the same transaction and amount; only Complete reverses the payment or slot, Failed, Error, Invalid or Cancelled fail it and Returned returns it with a staff alert; the same status twice changes nothing; a refund with no record or a different transaction or amount alerts staff."
+    },
+    {
+      "name": "reconcile_ozow_refunds",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_refunds",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only daily check against Ozow's refund list (up to 2,000 refunds); changes no refund and alerts staff for each Ozow refund with no record, each record whose transaction or amount differs, and each API refund approved or sent more than a day ago that has not settled."
+    },
+    {
+      "name": "claim_ozow_refund_checks",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only; hands the 10-minute job up to 20 refunds through Ozow without a final answer ten minutes after they were sent (no send retry still due) and each dashboard refund once, at most every 30 minutes each, to read back from Ozow; never waits for a record another transaction holds; returns record ids, Ozow refund ids, transactions, amounts and send times only."
+    },
+    {
+      "name": "report_ozow_refund_missing",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only; records on an API (still sent) or dashboard refund record that Ozow has no such refund (or none of its transaction fits a lost send) and alerts staff; nothing else changes."
+    },
+    {
+      "name": "close_staff_ozow_refund",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability (admins) and recent authenticator proof; the staff member's own current accepted ID review, never the requester's identity (checked again after the lock waits) and never a payment of their own identity; closes, with a reason, a refund through Ozow that never reached Ozow: approved and never sent, or a send whose answer was lost when the server found no such refund at Ozow more than a day after it was sent. The record fails; nothing else changes."
+    },
+    {
+      "name": "get_staff_refund_context",
+      "updates": ["updates/20261113172356_ozow_api_refunds.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_line_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability (admins) and recent authenticator proof, checked before the website asks Ozow anything for staff; for a payment (or one of its slots), its Ozow transaction id and the amount a refund of it is; for a refund record, its channel, status and whether Ozow's status of it was read or it was seen missing. No account, contact or audit details."
+    },
+    {
+      "name": "issue_staff_invoice",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_account_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_term_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_slots",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_due_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; a confirmed account with current access and an accepted ID review, the Individual slot on sale for 30, 90 or 180 days, 1 to 25 slots within the person's Individual slot limit (at most R50,000), 1 to 30 days to pay, an audit reason and the merchant VAT setting 'not registered': issues an audited invoice numbered VM-YYYY-NNNNNN, the next number of the South African year taken under the counter's lock in the same transaction (a refusal takes no number), priced by the database. The same request id again by the same staff member returns the first invoice."
+    },
+    {
+      "name": "void_staff_invoice",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never for an account of their own identity; an audit reason: voids an unpaid invoice that no payment attempt can still pay and no bank transfer waits for (an attempt never sent to Ozow is cancelled with it). A paid invoice is refunded instead. The invoice keeps its number. The same request again returns the result."
+    },
+    {
+      "name": "get_staff_invoices",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability and recent authenticator proof: the latest 50 invoices (customer email and name, who issued them and why, status, latest payment attempt) and the number unpaid."
+    },
+    {
+      "name": "get_staff_invoice",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_number",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability and recent authenticator proof: one invoice by number, as staff see it."
+    },
+    {
+      "name": "get_my_invoices",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "A signed-in account with current access and a live session, only for its own invoices (any other number, or a malformed one, reads as not found): the caller's latest 100 invoices (number, status, dates, description, total, payment status)."
+    },
+    {
+      "name": "get_my_invoice",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_number",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "A signed-in account with current access and a live session, only for its own invoices (any other number, or a malformed one, reads as not found): the invoice document (seller, billing details, slots, price, total, due date, payment reference, cooling-off consent and its wording, status and latest payment attempt); never staff details."
+    },
+    {
+      "name": "save_my_invoice_billing",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_number",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_buyer_name",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_buyer_address",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_buyer_registration_number",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "A signed-in account with current access and a live session, only for its own invoices (any other number, or a malformed one, reads as not found): saves the business or buyer name, address and optional registration number of an unpaid, not void invoice at the current revision (the same details again change nothing)."
+    },
+    {
+      "name": "start_invoice_payment",
+      "updates": [
+        "updates/20261114041000_customer_invoice_pay_now.sql",
+        "updates/20261117082020_online_payment_limit.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_invoice_number",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_expected_total_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_consent",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "A signed-in account with current access and a live session, only for its own invoices (any other number, or a malformed one, reads as not found): an unpaid, not void invoice with billing details, the cooling-off box ticked (recorded once with time and wording version), the total shown equal to the invoice total and at most internal.online_payment_max_cents() (above it the invoice is paid by bank transfer only: PT413 online_payment_above_limit), the plan still on sale at the invoice price, an accepted ID review and room within the Individual slot limit counting open checkouts: returns the attempt whose Ozow page is open or that was never sent to Ozow, refuses while an attempt is still being checked or a bank transfer to the invoice waits for confirmation or another payment for the same slot term is open at Ozow, and otherwise starts an ordinary pending Ozow payment of the invoice total with one line per slot and the invoice number as its reference (attempt n after the first: '<number>-n'; at most 20). Settled by the existing Ozow notice and status check; completion pays the invoice."
+    },
+    {
+      "name": "record_staff_invoice_transfer",
+      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_number",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_bank_reference",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_cleared_on",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_waiver",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; the bank transfer rules (a bank reference of 4 to 60 letters, digits, spaces or . _ : / -, money cleared today or in the last 90 days, the customer's written cooling-off waiver confirmed, an audit reason): records a bank transfer of exactly the invoice's account, slot term, slots and total against an issued invoice with no payment attempt that could still be paid and no other transfer waiting, as waiting for a second staff member, whose confirmation pays the invoice. The same request again by the same staff member returns the first record."
+    },
+    {
+      "name": "start_slot_renewal_checkout",
+      "updates": [
+        "updates/20261114093742_renew_slots_early.sql",
+        "updates/20261117082020_online_payment_limit.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_entitlement_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        },
+        {
+          "name": "p_plan_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_total_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_consent",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound renewal quote: only the caller's own Individual slots that are still held (anything else reads as not found), each slot once, from 14 days before the slot ends, an Individual slot plan on sale, the renewal's cooling-off consent (with each slot's start date) recorded in the payment, an accepted ID review, the server total equal to the total shown and at most internal.online_payment_max_cents() (the most Ozow accepts in one payment; above it PT413 online_payment_above_limit), and at most the person's limit of slots renewed ahead (every account of the same identity, renewals in open payments included; while a staff-raised limit runs, at most the standard limit of renewals that start at or after it ends); one payment with one line per slot, each naming the slot it renews. A renewal never adds a slot."
+    },
+    {
+      "name": "get_my_slots_v2",
+      "updates": ["updates/20261114093742_renew_slots_early.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound read of the member's own slots (the current period of each slot, ended in the last 3 days unless the next period followed on, or a renewal waiting to start when the slot has no current period) with the posts in them, whether each can be renewed and from when, its renewed end and queued renewals, the sponsor's name for a sponsored place, and the person's Individual slot count, open-payment slots, slots renewed ahead and limit; no other account's data."
+    },
+    {
+      "name": "run_slot_renewals",
+      "updates": ["updates/20261114093742_renew_slots_early.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only housekeeping sweep (posts are funded through their slot at read time): moves each post that can move whose slot period ended into the slot's next period that follows on without a break (never a post going live; posts that cannot move are not picked), and queues one renewal reminder per ending grant (once per slot end, keyed by the grant) for Individual slots ending within 3 days with no renewal following, while the account can still buy. Never starts a payment."
+    },
+    {
+      "name": "start_package_checkout",
+      "updates": [
+        "updates/20261114154823_slot_packages.sql",
+        "updates/20261117082020_online_payment_limit.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_plan_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_slots",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_expected_total_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_consent",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound Multi-listing package quote: only while the owner's sales switch is on; a package term on sale; a typed number of slots, 5 to 100 online (more by invoice, at most 250), R100 per slot per 30 days and at most internal.online_payment_max_cents() (the most Ozow accepts in one payment); an accepted ID review; the server total equal to the total shown; the 'my slots start now' cooling-off consent recorded in the payment; no package of the account that has not ended. One payment with one line holding every slot; one package order open at a time (the same order continued, another cancelled when never sent to Ozow, otherwise returned)."
+    },
+    {
+      "name": "get_slot_package_offer",
+      "updates": ["updates/20261114154823_slot_packages.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only read (the website's server renders the pricing and checkout pages from it) of whether Multi-listing packages are on sale and their fixed rules (minimum and online maximum slots, online limit, posts per slot); the package terms and prices only while on sale. No account data."
+    },
+    {
+      "name": "get_my_slot_package",
+      "updates": ["updates/20261114154823_slot_packages.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound read of the account's own latest Multi-listing package that runs or ended in the last 3 days (term, slots bought, places, start and end, new posts allowed and started in the rolling 30 days, the posts in it and the posts of the account's ended Individual slots it takes), whether the account could buy one now, and until when its Individual slots cannot be bought or renewed; no other account's data."
+    },
+    {
+      "name": "close_my_account",
+      "updates": ["updates/20261116175757_close_and_erase_account.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound: closes the caller's own account at once, only from its own live confirmed session that signed in during the last 15 minutes, never a staff account: the closure record (posts leave every public read), sign-in blocked and every session ended, the erasure scheduled 30 days later and a deletion privacy request recorded for staff. Returns only the closure and erasure dates and the request id."
+    },
+    {
+      "name": "fulfil_account_deletion",
+      "updates": ["updates/20261116175757_close_and_erase_account.sql"],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_revision",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current privacy request capability and recent authenticator proof; a verified deletion request in progress at its current revision, whose identity another staff member verified, never the requester's own and never a staff account: closes the named account if still open, links the request, and erases the account once its 30 days have passed and no legal, fraud or content hold, staff role, pending payment, open refund or waiting bank transfer applies. Returns the erasure state (dates, status, counts), no personal data; a replay returns the recorded state."
+    },
+    {
+      "name": "get_account_erasure",
+      "updates": ["updates/20261116175757_close_and_erase_account.sql"],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current privacy request capability and recent authenticator proof: the erasure state of the account a deletion request names (closure, erasure and Auth removal dates, the reason it waits, counts of what was erased), no personal data."
+    },
+    {
+      "name": "get_payment_limits",
+      "updates": ["updates/20261117082020_online_payment_limit.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public, like the price catalogue (anon and authenticated): the most one online (Ozow) payment may be, in cents (online_max_cents, internal.online_payment_max_cents()); no account data."
+    },
+    {
+      "name": "set_sample_post_hidden",
+      "updates": ["updates/20261117144001_sample_post_hide_list.sql"],
+      "arguments": [
+        {
+          "name": "p_slug",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_hidden",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Staff with post:moderate and a recent authenticator code (internal.staff_actor): removes (p_hidden true) or restores (false) one display-only sample post by its catalogue slug in the private hide-list, recording who removed it and when; idempotent; at most 500 hidden slugs. The sample's text and media stay in the website's catalogue."
+    },
+    {
+      "name": "get_hidden_sample_posts",
+      "updates": ["updates/20261117144001_sample_post_hide_list.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public, like the price catalogue (anon and authenticated): the slugs of the display-only sample posts staff removed, sorted; never who removed them or when; no account data."
     }
   ]
 }

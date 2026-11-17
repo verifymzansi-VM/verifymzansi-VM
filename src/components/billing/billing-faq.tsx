@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { getDataBackend } from "@/lib/data-backend";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { DEFAULT_COMMERCIAL_SETTINGS, type CommercialSettings } from "@/lib/commercial/settings";
@@ -43,7 +42,7 @@ export function BillingFaq({
   merchantName?: string;
   vatStatus?: string;
 }) {
-  const { shortDays, longDays, rules } = trials;
+  const { shortDays, rules } = trials;
 
   return (
     <section
@@ -78,30 +77,32 @@ export function BillingFaq({
 
         <FaqItem question="What happens when my plan ends?">
           <p>
-            {getDataBackend() === "foundation"
-              ? "Your posts are hidden from the public. Expired, sold and archived posts are kept for 30 days before deletion, with their media removed through scheduled cleanup. Renew before that deadline if you want to keep a post."
-              : "Your posts are hidden from the public but stay saved in your dashboard. Choose a plan again at any time to reactivate them. You won't need to start from scratch."}
+            Your posts are hidden from the public and we email you. You then have 3 days to buy a
+            plan and reactivate a post; after that it is deleted with its photos and videos. If your
+            payment is still being confirmed, we wait up to 24 hours more, and once it is confirmed
+            we keep the post for 3 days from your payment.
           </p>
         </FaqItem>
 
         <FaqItem question="Can I have more than one post live?">
           <p>
-            Each plan gives you one active posting slot. Buy another plan to keep more posts live at
-            the same time. When an item sells or you deactivate a post, the slot frees up for
-            something new.
+            Each slot holds one live post, and you can hold up to 4 Individual slots at a time. A
+            sold post keeps its slot until it is deleted 3 days later; delete it yourself to free
+            the slot sooner. A deactivated post keeps its slot, and the plan&apos;s time keeps
+            running. A new post in a freed slot runs for the plan&apos;s remaining days.
           </p>
         </FaqItem>
 
         <FaqItem id="billing-faq-trial" question="How does the free introductory post work?">
           <p>
-            Complete phone, ID, selfie and location verification, then choose one post for{" "}
-            {shortDays} days, or a {longDays}-day launch trial while spaces are available in Mzansi
-            Market, Mzansi Business and Tourism. You choose once across all sections.
+            Complete phone, ID, selfie and location verification, then post once for free for{" "}
+            {shortDays} days from approval, in Mzansi Market, Mzansi Business or Tourism. It is one
+            post across all sections.
           </p>
           <p>
             Trial posts have standard placement: no boosts, featured placement or urgent badge.
             There is no automatic charge and no repeated free renewal. When the trial ends your post
-            stays saved, ready to reactivate for R50 / 30 days, R140 / 90 days or R250 / 180 days.
+            is hidden; buy a slot within 3 days to reactivate it, or it is deleted.
           </p>
           <p>
             The offer is tied to your verified identity. Previous free-post usage counts; deleting a
@@ -109,15 +110,14 @@ export function BillingFaq({
           </p>
           <p>
             Starting a form does not reserve a slot. A submitted post waits for moderation without
-            using active capacity. If the {longDays}-day pool fills before approval, it stays
-            pending and you can choose {shortDays} days in your dashboard if that offer is enabled.
+            using active capacity.
           </p>
           <p>
             Rejected content that never went live does not use up your offer. Once a trial is live,
             removal or expiry frees the space for another member without restoring your own offer.
           </p>
           <p>
-            Trial posts run from approval for the chosen duration. Strategic, founding partner and
+            Trial posts run for {shortDays} days from approval. Strategic, founding partner and
             organisation-sponsored programmes are by invitation only, can&apos;t be claimed publicly
             and don&apos;t stack with this trial: one verified identity receives one free programme.
           </p>
@@ -130,8 +130,9 @@ export function BillingFaq({
 
         <FaqItem question="Are events really free?">
           <p>
-            Yes. Events don&apos;t need a trial or a plan and stay live until the event is over.
-            They&apos;re still moderated, with fair-use limits on how many you can run at once.
+            Yes. Events don&apos;t need a trial or a plan and stay live until the event is over;
+            then they are deleted. They&apos;re still moderated, with fair-use limits on how many
+            you can run at once.
           </p>
         </FaqItem>
 
@@ -158,7 +159,8 @@ export function BillingFaq({
             >
               terms
             </Link>
-            . If paid content is rejected, you can correct and resubmit it, or ask us for a refund.
+            . If a post is rejected, the slot stays yours: correct the post and submit it again, or
+            use the slot for another post.
           </p>
         </FaqItem>
       </div>

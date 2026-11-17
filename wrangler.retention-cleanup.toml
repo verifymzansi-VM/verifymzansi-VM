@@ -17,7 +17,10 @@ binding = "APP"
 service = "verifymzansi"
 
 [triggers]
-crons = ["0 * * * *"]
+# Every 5 minutes, matching the 5-minute cleanup lease: a run the app cannot
+# finish is picked up by the next one. Each run makes at most 40 subrequests
+# (src/lib/foundation/retention-jobs.ts); 288 runs a day.
+crons = ["*/5 * * * *"]
 
 # WORKER_API_KEY matches the app's scoped INTERNAL_JOBS_SECRET.
 # Database credentials and R2 bindings are intentionally absent here.

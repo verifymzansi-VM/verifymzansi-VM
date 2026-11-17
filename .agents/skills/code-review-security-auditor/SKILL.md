@@ -5,6 +5,11 @@ description:
   registry and examined implementation evidence.
 ---
 
+Production runs the foundation backend (`database/foundation/`,
+`src/lib/foundation/`); read [AGENTS.md](../../../AGENTS.md) first. Evidence
+from the retired source backend (`supabase/migrations/`, `public` tables, tests
+run with the `source` data backend) does not prove production behaviour.
+
 Run `pnpm safety:review`; CI uses `pnpm safety:ci-review`. Registry partitions
 may use `--checks=id,id`; they attest only the selected scope. Read
 [the audit guide](../../../docs/audit-tools.md) and

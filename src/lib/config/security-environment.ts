@@ -1,7 +1,10 @@
-// Hosted foundation data must never receive local development bypasses. Keep
-// the retired source hostname guarded too if stale local settings reference it.
+import { HOSTED_SUPABASE_HOSTS } from "@/lib/foundation/hosted-projects";
+
+// Hosted foundation data (production and the staging copy) must never receive
+// local development bypasses. Keep the retired source hostname guarded too if
+// stale local settings reference it.
 const PRODUCTION_SUPABASE_HOSTS = new Set([
-  "gntzjtuncsyefujajmjy.supabase.co",
+  ...HOSTED_SUPABASE_HOSTS,
   "tnygdgormnofpgjknlhr.supabase.co",
 ]);
 

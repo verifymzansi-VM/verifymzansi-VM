@@ -5,10 +5,14 @@
  * app at /api/webhooks/ops-jobs, which claims due jobs from operation_jobs
  * and reports each outcome back to the database. This worker only triggers
  * the run on a schedule.
+ *
+ * A failed run rejects the scheduled handler so Cloudflare records the
+ * invocation as failed. Only a successful run sends the optional heartbeat.
  */
 
 import { triggerBoundAppJob } from "./app-job-trigger";
 import type { FoundationCompanionBindings } from "./companion-bindings";
+import { sendHeartbeat } from "./heartbeat";
 
 interface ScheduledEvent {
   cron: string;
@@ -22,25 +26,18 @@ interface ExecutionContext {
 
 type Env = Pick<FoundationCompanionBindings, "APP" | "APP_URL"> & {
   OPS_JOBS_SECRET: string;
+  HEARTBEAT_URL_OPS_JOBS?: string;
 };
-
-async function trigger(env: Env): Promise<void> {
-  try {
-    await triggerBoundAppJob(env, "/api/webhooks/ops-jobs", env.OPS_JOBS_SECRET);
-  } catch (error) {
-    console.error(
-      `ops-jobs run failed: ${error instanceof Error ? error.message : "unknown error"}`
-    );
-  }
-}
 
 const worker = {
   // Scheduled-only worker; answer HTTP probes instead of throwing (error 1101).
   async fetch(): Promise<Response> {
     return Response.json({ worker: "verifymzansi-ops-jobs", status: "healthy" });
   },
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(trigger(env));
+  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
+    // Throws on any failure; awaited (not waitUntil) so the run is marked failed.
+    await triggerBoundAppJob(env, "/api/webhooks/ops-jobs", env.OPS_JOBS_SECRET);
+    await sendHeartbeat("ops-jobs", env.HEARTBEAT_URL_OPS_JOBS);
   },
 };
 

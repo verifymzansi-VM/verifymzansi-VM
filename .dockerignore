@@ -20,7 +20,6 @@
 !tsconfig.json
 !tsconfig.typecheck.json
 !vitest.config.ts
-!playwright.config.ts
 !patches/
 !patches/**
 !src/

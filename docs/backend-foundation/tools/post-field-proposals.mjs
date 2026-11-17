@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 
 // Explicit proposals, never automatic carry-forward or approval of legacy columns.
 const root = "docs/backend-foundation";
-const map = JSON.parse(fs.readFileSync(`${root}/schema-map.json`, "utf8"));
+const sourceMap = "database/source-inventory/schema-map.json";
+const map = JSON.parse(fs.readFileSync(sourceMap, "utf8"));
 const common = {
   id: "private.posts.id",
   owner_id: "private.posts.owner_id",
@@ -229,9 +230,7 @@ const result = {
   schemaVersion: 1,
   scope:
     "All source post-table columns grouped into explicit target proposals; not reviewed dispositions",
-  sourceMapHash: createHash("sha256")
-    .update(fs.readFileSync(`${root}/schema-map.json`))
-    .digest("base64url"),
+  sourceMapHash: createHash("sha256").update(fs.readFileSync(sourceMap)).digest("base64url"),
   total: records.length,
   unclassified: records
     .filter((record) => record.group === "unclassified")

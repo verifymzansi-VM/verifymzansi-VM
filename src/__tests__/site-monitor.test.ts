@@ -1,7 +1,11 @@
 /** @vitest-environment node */
 import { beforeEach, expect, it, vi } from "vitest";
 import worker from "../../workers/site-monitor";
-import { isCloudflareChallenge } from "../../scripts/lib/public-edge";
+import {
+  classifyPublicEdge,
+  isCloudflareChallenge,
+  publicEdgeReport,
+} from "../../scripts/lib/public-edge";
 import { checkSiteMonitorHomepage, siteMonitorTransport } from "../../scripts/lib/site-monitor";
 
 const key = "synthetic-site-monitor-credential-only-".repeat(2);
@@ -183,4 +187,87 @@ it("distinguishes a real edge challenge from ordinary app errors and injected JS
   expect(
     isCloudflareChallenge(403, new Headers(), '<div id="cf-error-details">Blocked</div>')
   ).toBe(false);
+});
+
+it("treats a Cloudflare challenge as inconclusive, never as a pass", () => {
+  const ray = { "cf-ray": "synthetic-ray" };
+  const page = '<script src="https://gntzjtuncsyefujajmjy.supabase.co"></script>';
+  expect(classifyPublicEdge(200, new Headers(ray), page)).toBe("pass");
+  for (const [status, headers, body] of [
+    [403, { ...ray, "cf-mitigated": "challenge" }, ""],
+    [503, { ...ray, "cf-mitigated": "challenge" }, page],
+    [403, ray, "<title>Just a moment...</title><script>window._cf_chl_opt={}</script>"],
+    [403, ray, '<div id="cf-error-details">Blocked</div>'],
+  ] as const) {
+    expect(classifyPublicEdge(status, new Headers(headers), body)).toBe("inconclusive");
+    const report = publicEdgeReport("inconclusive", status);
+    expect(report.line).toMatch(/^::warning .*INCONCLUSIVE.*not a pass/);
+    expect(report.summary).toMatch(/INCONCLUSIVE.*not a pass/);
+    expect(report.line).not.toMatch(/PASS:/);
+  }
+  // Ordinary errors, a missing challenge marker or the retired backend fail.
+  for (const [status, headers, body] of [
+    [403, ray, '{"error":"Forbidden"}'],
+    [503, {}, '<div id="cf-error-details">Blocked</div>'],
+    // Cloudflare's error page on a 503 is a real outage (e.g. the Worker failed).
+    [503, ray, '<div id="cf-error-details">Worker exceeded resource limits</div>'],
+    [500, ray, page],
+    [200, ray, "<html>no backend marker</html>"],
+    [200, ray, page + "tnygdgormnofpgjknlhr"],
+  ] as const)
+    expect(classifyPublicEdge(status, new Headers(headers), body)).toBe("fail");
+  expect(publicEdgeReport("fail", 500)).toMatchObject({ exitCode: 1 });
+  expect(publicEdgeReport("pass", 200)).toMatchObject({
+    exitCode: 0,
+    summary: "Public edge: PASS",
+  });
+});
+
+it("fails the live check when the homepage lacks a required security header", async () => {
+  const { securityHeaderProblems } = await import("../../scripts/lib/security-header-policy.mjs");
+  const production = {
+    "content-security-policy":
+      "default-src 'self'; script-src 'self' 'nonce-x'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+  };
+  expect(securityHeaderProblems(new Headers(production))).toEqual([]);
+  const without = (name: string, value?: string) => {
+    const headers = new Headers(production);
+    if (value === undefined) headers.delete(name);
+    else headers.set(name, value);
+    return securityHeaderProblems(headers);
+  };
+  expect(without("content-security-policy")).toEqual(["Content-Security-Policy missing"]);
+  expect(
+    without("content-security-policy", "default-src 'self'; object-src 'none'; frame-ancestors *")
+  ).toEqual(["CSP does not set frame-ancestors 'none'"]);
+  expect(without("content-security-policy", "default-src 'self'; frame-ancestors 'none'")).toEqual([
+    "CSP does not set object-src 'none'",
+  ]);
+  expect(without("x-content-type-options")).toEqual(["X-Content-Type-Options is not nosniff"]);
+  expect(without("x-frame-options", "SAMEORIGIN")).toEqual(["X-Frame-Options is not DENY"]);
+  expect(without("strict-transport-security", "max-age=300")).toEqual([
+    "Strict-Transport-Security max-age under one year",
+  ]);
+  const report = publicEdgeReport("fail", 200, ["X-Frame-Options is not DENY"]);
+  expect(report).toMatchObject({ exitCode: 1 });
+  expect(report.line).toMatch(/^::error::FAIL: .*security headers: X-Frame-Options is not DENY\./);
+  expect(report.summary).toBe("Public edge: FAIL (security headers: X-Frame-Options is not DENY)");
+});
+
+it("builds the production CSP the live check expects", async () => {
+  const { securityHeaderProblems } = await import("../../scripts/lib/security-header-policy.mjs");
+  const { buildCsp } = await import("@/lib/middleware/security-headers");
+  const csp = buildCsp("nonce-for-test");
+  const problems = securityHeaderProblems(
+    new Headers({
+      "content-security-policy": csp,
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    })
+  );
+  expect(problems).toEqual([]);
 });

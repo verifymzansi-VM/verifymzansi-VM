@@ -16,6 +16,15 @@ describe("DashboardSidebar", () => {
     expect(link).toHaveAttribute("aria-current", "page");
   });
 
+  it("hides the Performance page until it works, on the sidebar and the phone strip", () => {
+    const { unmount } = render(<DashboardSidebar onSignOut={vi.fn()} />);
+    expect(screen.queryByRole("link", { name: /Performance/i })).not.toBeInTheDocument();
+    unmount();
+    render(<DashboardMobileNav />);
+    expect(screen.getByRole("link", { name: /Leads/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Performance/i })).not.toBeInTheDocument();
+  });
+
   it("hides the verification progress card once the account is verified", () => {
     render(
       <DashboardSidebar

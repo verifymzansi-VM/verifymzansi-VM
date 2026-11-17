@@ -11,6 +11,7 @@ const rows = z
   )
   .max(80);
 export class OwnedMediaError extends Error {
+  override name = "OwnedMediaError";
   constructor(
     readonly status: 403 | 422 | 503,
     message: string

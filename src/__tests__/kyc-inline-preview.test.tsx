@@ -27,6 +27,10 @@ vi.mock("@/components/ui/button", () => ({
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
+// The staff-account check on evidence responses has its own tests.
+vi.mock("@/lib/auth/staff-evidence-fetch", () => ({
+  fetchStaffEvidence: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+}));
 
 const mockCreateObjectURL = vi.fn(() => "blob:mock-thumb-url");
 const mockRevokeObjectURL = vi.fn();
@@ -80,6 +84,15 @@ const { KycInlinePreview } = await import("@/components/admin/kyc-inline-preview
 
 // ── Test data ────────────────────────────────────────────────
 
+// Previews load only for a claimed identity submission.
+const SCOPE = {
+  caseId: "11111111-1111-4111-8111-000000000001",
+  caseVersion: 7,
+  submissionId: "11111111-1111-4111-8111-000000000002",
+  claimGeneration: "4",
+  claimNonce: "11111111-1111-4111-8111-000000000003",
+};
+
 const MOCK_METADATA_RESPONSE = {
   steps: [{ id: "step-1", step_type: "id_doc", status: "pending" }],
   artifacts: [
@@ -94,6 +107,7 @@ const MOCK_METADATA_RESPONSE = {
       created_at: "2025-01-01T00:00:00Z",
       purge_after: null,
       sha256: "abc123",
+      foundation: SCOPE,
     },
   ],
   providerResults: [],
@@ -122,7 +136,14 @@ describe("KycInlinePreview", () => {
       ok: false,
       json: async () => ({ error: "Temporary failure" }),
     });
-    render(<KycInlinePreview stepId="selfie-step" userId="user-1" stepType="selfie" />);
+    render(
+      <KycInlinePreview
+        reviewScope={SCOPE}
+        stepId="selfie-step"
+        userId="user-1"
+        stepType="selfie"
+      />
+    );
     await triggerIntersection();
     await screen.findByText("Temporary failure");
     mockFetch
@@ -149,6 +170,7 @@ describe("KycInlinePreview", () => {
     const onClickPreview = vi.fn();
     const { rerender } = render(
       <KycInlinePreview
+        reviewScope={SCOPE}
         stepId="step-1"
         userId="user-1"
         stepType="selfie"
@@ -165,6 +187,7 @@ describe("KycInlinePreview", () => {
       });
     rerender(
       <KycInlinePreview
+        reviewScope={SCOPE}
         stepId="step-2"
         userId="user-2"
         stepType="selfie"
@@ -190,10 +213,14 @@ describe("KycInlinePreview", () => {
         ok: true,
         blob: async () => new Blob(["selfie"], { type: "image/jpeg" }),
       });
-    render(<KycInlinePreview stepId="step-1" userId="user-1" stepType="selfie" />);
+    render(
+      <KycInlinePreview reviewScope={SCOPE} stepId="step-1" userId="user-1" stepType="selfie" />
+    );
     await triggerIntersection();
     await screen.findByRole("img");
-    expect(mockFetch.mock.calls[1][1].body).toBe(JSON.stringify({ artifactId: "newest" }));
+    expect(mockFetch.mock.calls[1][1].body).toBe(
+      JSON.stringify({ artifactId: "newest", foundation: SCOPE })
+    );
   });
 
   it("renders loading state then fetches metadata and blob", async () => {
@@ -209,6 +236,7 @@ describe("KycInlinePreview", () => {
 
     render(
       <KycInlinePreview
+        reviewScope={SCOPE}
         stepId="step-1"
         userId="user-1"
         stepType="id_doc"
@@ -237,7 +265,7 @@ describe("KycInlinePreview", () => {
     expect(String(mockFetch.mock.calls[1][0])).toContain("/api/admin/verification/evidence");
     expect(mockFetch.mock.calls[1][1]).toMatchObject({
       method: "POST",
-      body: JSON.stringify({ artifactId: "art-1" }),
+      body: JSON.stringify({ artifactId: "art-1", foundation: SCOPE }),
     });
 
     // Should create a blob URL for the thumbnail
@@ -258,6 +286,7 @@ describe("KycInlinePreview", () => {
 
     render(
       <KycInlinePreview
+        reviewScope={SCOPE}
         stepId="step-1"
         userId="user-1"
         stepType="id_doc"
@@ -290,6 +319,7 @@ describe("KycInlinePreview", () => {
 
     render(
       <KycInlinePreview
+        reviewScope={SCOPE}
         stepId="step-1"
         userId="user-1"
         stepType="id_doc"
@@ -314,6 +344,7 @@ describe("KycInlinePreview", () => {
 
     render(
       <KycInlinePreview
+        reviewScope={SCOPE}
         stepId="step-1"
         userId="user-1"
         stepType="id_doc"
@@ -342,6 +373,7 @@ describe("KycInlinePreview", () => {
 
     render(
       <KycInlinePreview
+        reviewScope={SCOPE}
         stepId="step-1"
         userId="user-1"
         stepType="id_doc"
@@ -370,6 +402,7 @@ describe("KycInlinePreview", () => {
 
     render(
       <KycInlinePreview
+        reviewScope={SCOPE}
         stepId="step-1"
         userId="user-1"
         stepType="id_doc"
@@ -408,6 +441,7 @@ describe("KycInlinePreview", () => {
 
     render(
       <KycInlinePreview
+        reviewScope={SCOPE}
         stepId="step-1"
         userId="user-1"
         stepType="id_doc"
@@ -450,6 +484,7 @@ describe("KycInlinePreview", () => {
 
     render(
       <KycInlinePreview
+        reviewScope={SCOPE}
         stepId="step-1"
         userId="user-1"
         stepType="id_doc"

@@ -204,12 +204,18 @@ export default function RegisterPage() {
         return;
       }
 
+      // The server gives every address the same answer (it never says whether
+      // one is invited or already registered), so show its words.
+      const inviteOnly = result.inviteOnly === true;
       toast({
-        title: "Account created!",
-        description: "Check your email to confirm, then complete your account verification.",
+        title: inviteOnly ? "Check your email" : "Account created!",
+        description:
+          inviteOnly && typeof result.message === "string"
+            ? result.message
+            : "Check your email to confirm, then complete your account verification.",
         variant: "success",
       });
-      router.push("/login?registered=true");
+      router.push(inviteOnly ? "/login?registered=invite" : "/login?registered=true");
     } catch {
       // The request may have consumed the single-use CAPTCHA token before
       // the connection failed; get a fresh one for the retry.

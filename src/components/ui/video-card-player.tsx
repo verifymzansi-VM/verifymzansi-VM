@@ -15,6 +15,7 @@ import { useVideoHover } from "@/hooks/use-video-hover";
 import { useVideoFeed } from "@/hooks/use-video-feed";
 import { useGlobalMute } from "@/hooks/use-global-mute";
 import { useVideoAutoplayStore } from "@/stores/video-autoplay-store";
+import { prefersNoVideoAutoplay } from "@/hooks/use-data-saver";
 
 const DEFAULT_MEDIA_FIT = "object-cover";
 const DEFAULT_CONTAINER_ASPECT_RATIO = 9 / 16;
@@ -296,7 +297,7 @@ export interface VideoCardPlayerProps {
   focalX?: number | null;
   /** Vertical focal point (0–1, top to bottom). */
   focalY?: number | null;
-  /** Gates touch-feed autoplay to cards that are currently in focus within a rail. */
+  /** False once a touch-feed card is no longer in focus within its rail; a running preview stops. */
   feedPlaybackActive?: boolean;
   /** Prevent native browser dragging on image/video surfaces so parent carousels can own the gesture. */
   disableNativeDrag?: boolean;
@@ -424,8 +425,8 @@ export function VideoCardPlayer({
     );
   }
 
-  // Touch-device feed mode: tap-to-toggle with auto-play on scroll visibility.
-  // Applies when a hover card falls back to ambient on touch devices, or when
+  // Touch-device feed mode: a tap opens the post; a labelled Preview button
+  // plays the video inline. Feed cards never play by themselves. Applies when a hover card falls back to ambient on touch devices, or when
   // ambient mode is used directly on a touch device with a video.
   // Excludes showroom/carousel players that have explicit playback controls.
   const isTouchFeed =
@@ -602,15 +603,9 @@ function getInitialAmbientPlaybackPaused(
     return false;
   }
 
-  if (typeof window.matchMedia === "function") {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return true;
-    }
-  }
-
-  // Save-Data preference: start paused so playback is always user-initiated.
-  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-  return Boolean(connection?.saveData);
+  // Reduced motion, Save-Data or reduced data: start paused so playback is
+  // always user-initiated.
+  return prefersNoVideoAutoplay();
 }
 
 interface VideoCardPlayerInnerProps {
@@ -707,8 +702,14 @@ function VideoCardPlayerInner({
     // (desktop and mobile) until the user presses pause. The inner player
     // remounts whenever a card becomes the focused showroom card, so applying
     // the persisted preference once on mount covers every focus change.
+    // Data saver, reduced data and reduced motion always win: nothing starts
+    // by itself then, even after an earlier press on Play.
     const inputs = mountPlaybackInputsRef.current;
-    if (inputs.linkStickyAutoplay && useVideoAutoplayStore.getState().autoplayEnabled) {
+    if (
+      inputs.linkStickyAutoplay &&
+      useVideoAutoplayStore.getState().autoplayEnabled &&
+      !prefersNoVideoAutoplay()
+    ) {
       setIsPlaybackPaused(false);
       setHasActivatedPlayback(true);
       return;
@@ -742,6 +743,7 @@ function VideoCardPlayerInner({
     return useVideoAutoplayStore.subscribe((state, previous) => {
       if (state.autoplayEnabled === previous.autoplayEnabled) return;
       if (state.autoplayEnabled) {
+        if (prefersNoVideoAutoplay()) return;
         setIsPlaybackPaused(false);
         setHasActivatedPlayback(true);
       } else {
@@ -1584,7 +1586,7 @@ function FeedTapIndicator({ action }: { action: "play" | "pause" }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Mobile feed video player (tap-to-toggle, scroll auto-play)         */
+/*  Mobile feed video player (tap opens the post, Preview plays inline) */
 /* ------------------------------------------------------------------ */
 
 interface FeedVideoPlayerProps {
@@ -1844,33 +1846,22 @@ function FeedVideoPlayer({
         onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
       />
 
-      {/* Only intercept taps to start playback. Playing cards expose their profile link. */}
+      {/* A tap anywhere else on the card opens the post (the card's link sits
+          under these controls); this small labelled button previews inline. */}
       {!hasError && !isPlaying ? (
-        <div
-          role="button"
-          tabIndex={0}
-          className="absolute inset-0 z-[10] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
-          onClick={handleTap}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              handleTap(e as unknown as React.MouseEvent);
-            }
-          }}
-          aria-label={isPlaying ? "Pause video preview" : "Play video"}
-          data-carousel-control="true"
-        />
-      ) : null}
-
-      {/* Centered play button overlay — shown when video is paused/not playing (YouTube mobile style) */}
-      {!hasError && !isPlaying ? (
-        <div
-          className="pointer-events-none absolute inset-0 z-[11] flex items-center justify-center"
-          aria-hidden="true"
-        >
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 text-white shadow-lg">
-            <Play className="h-6 w-6 fill-white pl-0.5" />
-          </div>
+        <div className="pointer-events-none absolute inset-0 z-[11] flex items-center justify-center">
+          <button
+            type="button"
+            data-carousel-control="true"
+            data-video-preview="true"
+            className="pointer-events-auto inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border border-white/20 bg-black/60 px-3.5 text-xs font-semibold text-white shadow-lg transition-colors select-none touch-manipulation hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={handleTap}
+            aria-label={alt ? `Preview video: ${alt}` : "Preview video"}
+          >
+            <Play className="h-3.5 w-3.5 fill-white" aria-hidden="true" />
+            <span>Preview</span>
+          </button>
         </div>
       ) : null}
 

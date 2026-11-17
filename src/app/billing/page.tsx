@@ -49,7 +49,7 @@ export default async function BillingPage() {
         <div className="container-page space-y-10 py-8 sm:py-10">
           <TrialPolicy trials={trials} variant="banner" />
 
-          <RetailPricing offers={catalog.retail} trialDays={trials} />
+          <RetailPricing offers={catalog.retail} onSale={catalog.onSale} trialDays={trials} />
           <MultiListingNudge className="mt-6" />
 
           <BillingFaq

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useErrorReference } from "@/hooks/use-error-reference";
 import Link from "next/link";
 import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ export default function AdminError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
+  const reference = useErrorReference(error);
   useEffect(() => {
     console.error("[AdminError]", error.digest ?? error.message);
   }, [error]);
@@ -34,7 +36,7 @@ export default function AdminError({
           Nothing was changed. Try again, or open another page from the menu. If it keeps happening,
           send the reference below to the platform team.
         </p>
-        {error.digest && <p className="text-xs text-muted-foreground">Reference: {error.digest}</p>}
+        {reference && <p className="text-xs text-muted-foreground">Reference: {reference}</p>}
       </div>
       <div className="flex flex-wrap justify-center gap-3">
         <Button onClick={() => retry()} className="h-11">

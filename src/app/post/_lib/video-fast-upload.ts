@@ -1,31 +1,17 @@
 import { compressVideoForUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
-import { MAX_VIDEO_UPLOAD_BYTES, mediaUploadTimeoutMs } from "@/lib/media/upload-policy";
+import { MAX_VIDEO_ORIGINAL_BYTES, MAX_VIDEO_UPLOAD_BYTES } from "@/lib/media/upload-policy";
+import { MAX_VIDEO_SECONDS, videoLengthProblem } from "@/lib/media/video-length";
+import { readVideoLengthSeconds } from "@/lib/media/video-length-client";
 import { normalizeSelectedFile } from "@/lib/utils/media-upload";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { createLogger } from "@/lib/utils/logger";
 import type { UploadArea } from "@/types/enums";
 
 const log = createLogger("VideoFastUpload");
 
-type DirectUploadUrlResponse = {
-  uploadUrl?: string;
-  publicUrl?: string;
-  key?: string;
-};
-
-type DirectUploadDescriptor = {
-  key: string;
-  publicUrl: string;
-  contentType: string;
-  size: number;
-  area: UploadArea;
-};
-
 const preparedVideoUploads = new WeakMap<File, Promise<File>>();
 const uploadedVideos = new WeakMap<
   File,
-  Map<UploadArea, { promise: Promise<string>; expires: number }>
+  Map<string, { promise: Promise<string>; expires: number }>
 >();
 let activeUploads = 0;
 const waitingUploads: Array<() => void> = [];
@@ -41,34 +27,36 @@ async function withUploadSlot<T>(upload: () => Promise<T>): Promise<T> {
     else activeUploads--;
   }
 }
-function createTimeoutSignal(ms: number): { signal: AbortSignal; cancel: () => void } {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort(new DOMException("Direct video upload timed out", "AbortError"));
-  }, ms);
 
-  return {
-    signal: controller.signal,
-    cancel: () => clearTimeout(timeoutId),
-  };
+/** The form's length rule, checked again at submit: a post's kind can change after the pick. */
+function assertVideoLength(seconds: number | null, maxSeconds: number): void {
+  const problem = videoLengthProblem(seconds, maxSeconds);
+  if (problem) throw new VideoTranscodeError(`${problem}.`);
 }
 
 async function prepareVideoForUpload(file: File): Promise<File> {
-  if (!file.size || file.size > MAX_VIDEO_UPLOAD_BYTES) {
-    throw new VideoTranscodeError("Select a non-empty video up to 50 MB.");
+  // A larger original is accepted only to be converted; 50 MB caps the stored file.
+  if (!file.size || file.size > MAX_VIDEO_ORIGINAL_BYTES) {
+    throw new VideoTranscodeError("Select a non-empty video up to 300 MB.");
   }
   const existing = preparedVideoUploads.get(file);
   if (existing) {
     return existing;
   }
 
-  const prepared = compressVideoForUpload(file, {
-    requireCompatibleOutput: true,
-  })
+  // A video whose length cannot be read is always converted, so that what is
+  // uploaded can be measured (an empty track or a trailer can hide it).
+  const prepared = readVideoLengthSeconds(file)
+    .then((seconds) =>
+      compressVideoForUpload(file, {
+        requireCompatibleOutput: true,
+        ...(seconds === null ? { forceConversion: true } : {}),
+      })
+    )
     .then((preparedFile) => {
       if (!preparedFile.size || preparedFile.size > MAX_VIDEO_UPLOAD_BYTES) {
         throw new VideoTranscodeError(
-          "The converted video exceeds the 50 MB upload limit. Try a shorter clip."
+          "The converted video is larger than 50 MB. Film it in 720p or export it as MP4, then try again."
         );
       }
       return normalizeSelectedFile(preparedFile);
@@ -96,127 +84,31 @@ export function prewarmVideosForFastUpload(files: File[]): void {
   }
 }
 
-async function verifyDirectUpload(upload: DirectUploadDescriptor): Promise<boolean> {
-  const completeResponse = await fetchWithRetry("/api/media/upload-complete", {
-    method: "POST",
-    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(upload),
-  });
-
-  return completeResponse.ok;
-}
-
-async function uploadVideoDirectToR2(file: File, area: UploadArea): Promise<string | null> {
-  try {
-    const signedUrlResponse = await fetchWithRetry("/api/media/upload-url", {
-      method: "POST",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({
-        filename: file.name,
-        contentType: file.type,
-        size: file.size,
-        area,
-      }),
-    });
-
-    if (!signedUrlResponse.ok) {
-      log.warn("Direct video upload URL unavailable; falling back to validated upload endpoint", {
-        status: signedUrlResponse.status,
-      });
-      return null;
-    }
-
-    const signedUrlPayload = (await signedUrlResponse
-      .json()
-      .catch(() => null)) as DirectUploadUrlResponse | null;
-    const uploadUrl = signedUrlPayload?.uploadUrl;
-    const publicUrl = signedUrlPayload?.publicUrl;
-
-    if (!uploadUrl || !publicUrl || !signedUrlPayload?.key) {
-      log.warn("Direct video upload URL response was incomplete; falling back");
-      return null;
-    }
-
-    const uploadDescriptor: DirectUploadDescriptor = {
-      key: signedUrlPayload.key,
-      publicUrl,
-      contentType: file.type,
-      size: file.size,
-      area,
-    };
-
-    const timeout = createTimeoutSignal(mediaUploadTimeoutMs(file.size));
-    let uploadResponse: Response;
-    try {
-      uploadResponse = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": file.type,
-        },
-        body: file,
-        signal: timeout.signal,
-      });
-    } catch (error) {
-      const verified = await verifyDirectUpload(uploadDescriptor).catch((cleanupError) => {
-        log.warn("Direct video upload cleanup failed after PUT error", {
-          uploadError: error instanceof Error ? error.message : String(error),
-          cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-        });
-        return false;
-      });
-      if (verified) return publicUrl;
-      throw error;
-    } finally {
-      timeout.cancel();
-    }
-
-    if (!uploadResponse.ok) {
-      log.warn("Direct video upload failed; falling back to validated upload endpoint", {
-        status: uploadResponse.status,
-      });
-      const verified = await verifyDirectUpload(uploadDescriptor).catch((error) => {
-        log.warn("Direct video upload cleanup failed before fallback", {
-          status: uploadResponse.status,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return false;
-      });
-      if (verified) return publicUrl;
-      return null;
-    }
-
-    if (!(await verifyDirectUpload(uploadDescriptor))) {
-      log.warn(
-        "Direct video upload verification failed; falling back to validated upload endpoint",
-        { reason: "upload_complete_rejected" }
-      );
-      return null;
-    }
-
-    return publicUrl;
-  } catch (error) {
-    log.warn("Direct video upload threw; falling back to validated upload endpoint", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-}
-
 export async function uploadVideoWithFastPath({
   file,
   area,
   uploadViaServer,
+  maxSeconds = MAX_VIDEO_SECONDS,
 }: {
   file: File;
   area: UploadArea;
   uploadViaServer: (file: File) => Promise<string>;
+  /** The post kind's limit: events 60 s, every other video 120 s. */
+  maxSeconds?: number;
 }): Promise<string> {
+  // A readable original over the limit is refused before any conversion work.
+  // An unreadable one (MediaRecorder WebM, some MOV) is measured once converted.
+  const original = await readVideoLengthSeconds(file);
+  if (original !== null) assertVideoLength(original, maxSeconds);
   let uploads = uploadedVideos.get(file);
   if (!uploads) {
     uploads = new Map();
     uploadedVideos.set(file, uploads);
   }
-  const existing = uploads.get(area);
+  // The limit is part of the key: an upload checked against 2 minutes is not
+  // reused for an event (1 minute).
+  const slot = `${area}:${maxSeconds}`;
+  const existing = uploads.get(slot);
   if (existing && existing.expires > Date.now()) return existing.promise;
 
   // Retain successful work during a form retry; failed attempts remain retryable.
@@ -224,17 +116,18 @@ export async function uploadVideoWithFastPath({
   const entry = { promise: Promise.resolve(""), expires: Infinity };
   entry.promise = (async () => {
     const uploadFile = await prepareVideoForUpload(file);
-    const url = await withUploadSlot(async () => {
-      const directUrl = await uploadVideoDirectToR2(uploadFile, area);
-      return directUrl || (await uploadViaServer(uploadFile));
-    });
+    // What is uploaded must itself have a readable length within the limit.
+    assertVideoLength(await readVideoLengthSeconds(uploadFile), maxSeconds);
+    // Every video goes through the server-validated /api/media/upload route;
+    // the direct-to-storage routes it once tried first are retired.
+    const url = await withUploadSlot(() => uploadViaServer(uploadFile));
     if (!url) throw new Error("Video upload returned no URL. Please retry.");
     entry.expires = Date.now() + 30 * 60_000;
     return url;
   })().catch((error) => {
-    if (uploads.get(area) === entry) uploads.delete(area);
+    if (uploads.get(slot) === entry) uploads.delete(slot);
     throw error;
   });
-  uploads.set(area, entry);
+  uploads.set(slot, entry);
   return entry.promise;
 }

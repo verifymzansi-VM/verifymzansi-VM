@@ -3,7 +3,7 @@ import path from "node:path";
 
 const foundationProject = "gntzjtuncsyefujajmjy";
 
-/** Root migrations and the legacy operator/export tools belong to the source schema. */
+/** The root supabase/migrations tree belongs to the retired source schema. */
 export function assertSourceDatabaseTool(tool, env = process.env, targets = []) {
   const references = [
     env.NEXT_PUBLIC_SUPABASE_URL,
@@ -13,10 +13,7 @@ export function assertSourceDatabaseTool(tool, env = process.env, targets = []) 
     env.FOUNDATION_SUPABASE_URL,
     ...targets,
   ];
-  if (
-    env.NEXT_PUBLIC_DATA_BACKEND === "foundation" ||
-    references.some((value) => typeof value === "string" && value.includes(foundationProject))
-  ) {
+  if (references.some((value) => typeof value === "string" && value.includes(foundationProject))) {
     throw new Error(
       `${tool} uses the retired source schema and cannot run against the foundation project. Use the reviewed foundation migrations and owner bootstrap procedure in database/foundation/README.md. For backups, use the Database Backup workflow.`
     );
@@ -33,7 +30,8 @@ export async function readLinkedProject(root = process.cwd()) {
 }
 
 /** Help and inspection do not replay the root schema. All other db/migration
- * operations are refused in foundation mode, including unknown future commands. */
+ * operations are refused against the foundation project, including unknown
+ * future commands. */
 export function isSourceSchemaOperation(args) {
   if (args.includes("--help") || args.includes("-h") || args.includes("--version")) return false;
   const db = args.indexOf("db");

@@ -53,8 +53,8 @@ function createBaseProductionEnv(): EnvSource {
     ID_ENCRYPTION_KEY: hex64,
     HMAC_SECRET: hex64,
     IP_HASH_SECRET: "a".repeat(32),
-    NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAACmVXwJ4jmJSu6fX",
-    TURNSTILE_SECRET_KEY: "0x4AAAAAACmVXwJ4jmJSu6fY", // secret-scan: allow
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAAA_test_site_key",
+    TURNSTILE_SECRET_KEY: "0x4AAAAAAA_test_secret_key", // secret-scan: allow
     OZOW_ENV: "production",
     OZOW_CLIENT_ID: "ozow-client-id",
     OZOW_CLIENT_SECRET: "ozow-client-secret",
