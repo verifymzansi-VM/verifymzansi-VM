@@ -6,6 +6,7 @@ import { addReferenceTiming } from "@/lib/utils/request-reference";
 import { logRequestFailure } from "@/lib/utils/request-failure";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isAutomatedUserAgent } from "@/lib/analytics/automated-agent";
+import { detailPageKeyIsMalformed, matchDetailPage } from "@/lib/routing/detail-pages";
 import {
   dropIncomingFoundationPageSession,
   forwardFoundationPageSession,
@@ -66,6 +67,43 @@ function matchesPrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(prefix + "/");
 }
 
+/** Hosts that only redirect, permanently, to the site's one address. */
+const REDIRECT_HOSTS: Readonly<Record<string, string>> = {
+  "www.verifymzansi.com": "verifymzansi.com",
+};
+
+function redirectHostTarget(request: NextRequest): URL | null {
+  for (const host of [request.headers.get("host"), request.nextUrl.host]) {
+    const name = host?.trim().toLowerCase().replace(/:\d+$/, "");
+    const apex = name ? REDIRECT_HOSTS[name] : undefined;
+    if (apex) {
+      const target = new URL(`https://${apex}`);
+      target.pathname = request.nextUrl.pathname;
+      target.search = request.nextUrl.search;
+      return target;
+    }
+  }
+  return null;
+}
+
+/** A browser or crawler loading the address, not the app's own in-page
+ * navigation or prefetch (those read the page's data and handle "not found"
+ * themselves). */
+function isDocumentRequest(request: NextRequest): boolean {
+  return (
+    (request.method === "GET" || request.method === "HEAD") &&
+    !request.headers.has("rsc") &&
+    !request.headers.has("next-router-prefetch")
+  );
+}
+
+/** Render the page as usual but with HTTP 404, so it keeps its own "not
+ * available" design while browsers, crawlers and link checkers see a real
+ * 404 status (set before streaming starts). */
+function notFoundPage(request: NextRequest): NextResponse {
+  return NextResponse.rewrite(request.nextUrl.clone(), { status: 404 });
+}
+
 // -- Core routing logic (testable without security headers) ------------------
 
 /**
@@ -75,6 +113,13 @@ function matchesPrefix(pathname: string, prefix: string): boolean {
 export async function routeRequest(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
+
+  // One address for the whole site: www.verifymzansi.com moves for good to
+  // verifymzansi.com, keeping the path and query (308 keeps the method too).
+  const hostTarget = redirectHostTarget(request);
+  if (hostTarget) {
+    return NextResponse.redirect(hostTarget, 308);
+  }
 
   // Recover legacy signup links that land on "/?code=..." instead of the
   // dedicated auth callback route. Keep this scoped to the root path so
@@ -141,6 +186,21 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
         status: 429,
         headers: { "Retry-After": String(retryAfter ?? 60) },
       });
+    }
+  }
+
+  // Unknown posts and organisations, and the multi-listing page while packages
+  // are not on sale. Their pages call notFound(), but streaming has already
+  // sent 200 by then, so answer the 404 status here, before rendering. A
+  // malformed address costs no read; a well-formed one costs one public read
+  // (remembered for a minute when it exists), and a failed read lets the page
+  // decide as before.
+  if (!needsAuth && isDocumentRequest(request)) {
+    const detailPage = matchDetailPage(pathname);
+    if (detailPage) {
+      if (detailPageKeyIsMalformed(detailPage)) return notFoundPage(request);
+      const { isMissingDetailPage } = await import("@/lib/foundation/missing-detail-page");
+      if (await isMissingDetailPage(detailPage)) return notFoundPage(request);
     }
   }
 

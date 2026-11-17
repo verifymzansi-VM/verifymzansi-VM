@@ -214,8 +214,11 @@ export function withSecurityHeaders(
 ): NextResponse {
   const pathname = request.nextUrl.pathname;
   const shouldClearPlaywrightSession = !!request.cookies.get(PLAYWRIGHT_SESSION_COOKIE)?.value;
+  // A rewrite still renders a page (a missing post's "not available" page is
+  // rewritten with status 404), so it gets the page policy, nonce and CSRF token.
+  const rewriteTarget = proxyResponse.headers.get("x-middleware-rewrite");
 
-  if (proxyResponse.headers.has("location") || proxyResponse.status >= 400) {
+  if (proxyResponse.headers.has("location") || (proxyResponse.status >= 400 && !rewriteTarget)) {
     if (shouldClearPlaywrightSession) {
       clearPlaywrightSessionCookie(proxyResponse);
     }
@@ -280,9 +283,14 @@ export function withSecurityHeaders(
   const csrfToken = ensureCsrfCookie(request, csrfResponse);
   requestHeaders.set(CSRF_HEADER_NAME, csrfToken);
 
-  const response = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
+  const response = rewriteTarget
+    ? NextResponse.rewrite(new URL(rewriteTarget, request.url), {
+        status: proxyResponse.status,
+        request: { headers: requestHeaders },
+      })
+    : NextResponse.next({
+        request: { headers: requestHeaders },
+      });
 
   // Transfer the CSRF cookie from the temporary response.
   const csrfCookie = csrfResponse.cookies.get("vm_csrf");

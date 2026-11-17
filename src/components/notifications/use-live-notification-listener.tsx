@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { ToastAction, type ToastProps } from "@/components/ui/toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { toast } from "@/hooks/use-toast";
+import { NOTIFICATION_FEED_URL, sharedInboxRead } from "@/lib/notifications/shared-inbox-reads";
 
 export type NotificationInsertRow = {
   id?: string;
@@ -75,10 +76,11 @@ export function useLiveNotificationListener({
     if (payload.eventType === "REVALIDATE") {
       const version = generation.current;
       const readVersion = ++nativeReadVersion.current;
-      void fetch("/api/notifications?limit=25", { cache: "no-store", credentials: "same-origin" })
-        .then(async (response) => {
-          if (!response.ok) return;
-          const data = await response.json();
+      // Shares the bell's request when both react to the same signal.
+      void sharedInboxRead(NOTIFICATION_FEED_URL)
+        .then((result) => {
+          if (!result.ok) return;
+          const data = result.data as { accountId?: string; notifications?: unknown };
           if (
             version !== generation.current ||
             readVersion !== nativeReadVersion.current ||

@@ -32,6 +32,7 @@ import type { TrustLevel } from "@/types/enums";
 
 export const metadata = {
   title: "Trust & Safety",
+  alternates: { canonical: "/trust-safety" },
   description:
     "How VerifyMzansi protects identity data, explains verification, handles payments, and helps South Africans trade more safely.",
 };

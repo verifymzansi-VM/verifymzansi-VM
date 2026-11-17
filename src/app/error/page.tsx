@@ -1,8 +1,15 @@
+import type { Metadata } from "next";
 import { CloudOff } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { StatePanel, StatePanelPage } from "@/components/shared/state-panel";
 import { ErrorPageActions } from "./error-page-actions";
+
+// Where staff and account checks send a refused or failed request
+// (/error?reason=forbidden|unavailable); never a page for search results.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 type ErrorPageSearchParams = {
   reason?: string;

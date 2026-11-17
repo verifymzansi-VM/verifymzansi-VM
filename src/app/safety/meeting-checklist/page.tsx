@@ -7,6 +7,7 @@ import { MeetingChecklist } from "./meeting-checklist";
 
 export const metadata = {
   title: "Meeting safety checklist",
+  alternates: { canonical: "/safety/meeting-checklist" },
   description:
     "Your checklist for safe in-person meetups when buying or selling on VerifyMzansi. Stay safe in South Africa.",
 };
