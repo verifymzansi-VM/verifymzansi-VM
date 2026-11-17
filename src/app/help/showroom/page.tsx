@@ -5,7 +5,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
 import { Button } from "@/components/ui/button";
-import { SHOW_OWNER_METRICS } from "@/lib/hidden-features";
+import { SHOW_OWNER_METRICS, SHOW_PAID_ADDONS } from "@/lib/hidden-features";
 
 export const metadata: Metadata = {
   title: "How the showroom works",
@@ -17,8 +17,10 @@ const ORDER_RULES = [
   {
     icon: Shuffle,
     name: "Everyone takes turns",
-    description:
-      "Free or paid, every live post gets an equal turn at the front of the showroom; Boost and Featured don't buy a better place here. The posts that have been seen least this week go next.",
+    // Boost and Featured are paid add-ons, hidden until they deliver (src/lib/hidden-features.ts).
+    description: SHOW_PAID_ADDONS
+      ? "Free or paid, every live post gets an equal turn at the front of the showroom; Boost and Featured don't buy a better place here. The posts that have been seen least this week go next."
+      : "Free or paid, every live post gets an equal turn at the front of the showroom. The posts that have been seen least this week go next.",
   },
   {
     icon: Sparkles,

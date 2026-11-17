@@ -110,6 +110,34 @@ export const SHOW_TRIAL_PLAN_CHANGES: boolean = false;
 export const SHOW_TRIAL_EXTENSION_OFFERS: boolean = false;
 
 /**
+ * Paid add-ons (Urgent, Boost, Featured) where they are offered or listed as
+ * included: the "Get more eyes on a post" section on Advertise and the
+ * "Urgent label add-on" line on the plan cards, and "Boost and Featured" on the
+ * showroom help page. Add-on sales are paused
+ * (ADDON_SALES_ENABLED) and paid add-ons do not deliver yet (roadmap M1.10),
+ * so the pages promised something nobody could buy.
+ */
+export const SHOW_PAID_ADDONS: boolean = false;
+
+/**
+ * The Business Sponsor offer: the sponsor package, founding pilots, sample
+ * partner report and sponsor questions on Advertise, and the "Become a
+ * Business Sponsor" buttons and call to action on the home page and
+ * Business Sponsors page, the sponsor card and fees on the (hidden) pricing
+ * package section, and "See programme prices" on an organisation dashboard.
+ * The sponsor programme is on hold by the owner's
+ * decision, and the Terms (posting-v5) sell no sponsor package. Existing
+ * sponsors and the businesses they support are still listed.
+ */
+export const SHOW_SPONSOR_OFFER: boolean = false;
+
+/**
+ * "You + 1 person (you + 4 from 50 slots)" on the (hidden) Multi-listing page.
+ * Package teams are not built yet (roadmap P4c), so a package has one person.
+ */
+export const SHOW_PACKAGE_TEAMS: boolean = false;
+
+/**
  * The "Analytics" and "Third-party sharing" switches on the Notifications
  * page's Preferences tab (/dashboard/communication). The site does not use
  * usage analytics or third-party processing yet, so the switches asked for a
