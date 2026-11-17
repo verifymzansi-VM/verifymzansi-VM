@@ -3,7 +3,7 @@
 
 create table private.entitlements (
   id uuid default gen_random_uuid() not null,
-  owner_id uuid not null,
+  owner_id uuid,
   source text not null,
   area text,
   payment_id uuid,

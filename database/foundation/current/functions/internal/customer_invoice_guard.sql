@@ -8,6 +8,13 @@ CREATE OR REPLACE FUNCTION internal.customer_invoice_guard()
 AS $function$
 declare pay private.payments; counter integer; issued_on date;
 begin
+  -- An erasure unlinks the erased account from this kept record (20261116175757_close_and_erase_account.sql);
+  -- nothing else may change with it.
+  if tg_op = 'UPDATE' and coalesce(pg_catalog.current_setting('vm.erasure', true), '') <> '' then
+    if internal.erasure_unlinks(to_jsonb(old), to_jsonb(new), array['account_id']) then
+      return new;
+    end if;
+  end if;
   if tg_op = 'DELETE' then
     if pg_catalog.current_setting('vm.retention', true) = 'on' then return old; end if;
     raise exception 'invoices are never removed; void it instead' using errcode='23514';

@@ -260,7 +260,8 @@ export function PartnersPanel({
 
 export interface AdminPaymentRow {
   id: string;
-  user_id: string;
+  /** Null once the paying account was erased (the payment is kept, unlinked). */
+  user_id: string | null;
   area: string;
   amount_cents: number;
   status: string;

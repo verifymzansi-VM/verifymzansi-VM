@@ -13,6 +13,8 @@ begin
     raise exception 'limit 1 to 5000' using errcode='22023'; end if;
   perform pg_catalog.set_config('vm.retention','on',true);
   perform internal.purge_frontend_post_commands(p_limit);perform internal.purge_frontend_post_actions(p_limit); result:=jsonb_build_object(
+    'accounts',internal.run_account_erasures(least(p_limit,20)),
+    'privacy_requests',internal.retention_privacy_requests(p_limit),
     'inbox',internal.purge_expired_inbox(p_limit),
     'identity_bans',internal.purge_expired_identity_bans(p_limit),
     'trial_identities',internal.purge_expired_trial_identities(p_limit),

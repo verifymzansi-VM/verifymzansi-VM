@@ -13,7 +13,10 @@ begin
     select j.id from private.privacy_notice_jobs j join private.privacy_requests r on r.id=j.request_id
     where j.delivered_at is null and j.attempts<8 and j.next_attempt_at<=now_at
       and (j.locked_until is null or j.locked_until<now_at)
-      and (r.identity_check='manual' or exists(select 1 from auth.users u where u.id=r.subject_user_id and u.email_confirmed_at is not null
+      and r.minimised_at is null -- a minimised request has no address left
+      -- An erased account's request goes to the address stored with it.
+      and (r.identity_check='manual' or exists(select 1 from private.account_erasure_requests l where l.request_id=r.id)
+        or exists(select 1 from auth.users u where u.id=r.subject_user_id and u.email_confirmed_at is not null
         and not u.is_anonymous and u.deleted_at is null and lower(u.email)=lower(r.requester_email)))
     order by j.next_attempt_at,j.id limit 1 for update of j skip locked
   ), claimed as (

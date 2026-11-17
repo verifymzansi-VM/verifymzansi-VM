@@ -3,7 +3,7 @@
 
 create table private.slot_packages (
   id uuid default gen_random_uuid() not null,
-  owner_id uuid not null,
+  owner_id uuid,
   term_days integer not null,
   slot_count integer not null,
   created_at timestamp with time zone default statement_timestamp() not null,
