@@ -34,6 +34,7 @@ const SWEEPS = [
   "purge_expired_inbox",
   "reconcile_intro_trials",
   "approve_due_commissions",
+  "expire_waiting_bank_transfers",
 ];
 const PAYMENT = ["payment_completed", "payment_reversed", "payment_reconciliation_required"];
 const job = (extra: Record<string, unknown> = {}) => ({
@@ -113,6 +114,41 @@ describe("independent steps", () => {
     for (const name of SWEEPS) expect(calls(name)).toHaveLength(1);
     expect(deliver).toHaveBeenCalledOnce();
     expect(privacy).toHaveBeenCalled();
+  });
+
+  it("expires waiting bank transfers on every run (the 14 days are decided in the database)", async () => {
+    await run();
+    expect(calls("expire_waiting_bank_transfers")).toEqual([
+      ["expire_waiting_bank_transfers", { p_limit: 100 }],
+    ]);
+  });
+
+  it("skips the bank transfer expiry against a database without it, and fails on other errors", async () => {
+    for (const code of ["PGRST202", "42883"]) {
+      queue(job());
+      const queued = rpc.getMockImplementation()!;
+      rpc.mockImplementation(async (name, args) =>
+        name === "expire_waiting_bank_transfers"
+          ? { data: null, error: { code, message: "not found" } }
+          : queued(name, args)
+      );
+      await expect(run()).resolves.toMatchObject({ failed: [] });
+    }
+    queue(job());
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "expire_waiting_bank_transfers"
+        ? { data: null, error: { code: "XX000" } }
+        : base(name, args)
+    );
+    const error = await run().catch((e) => e);
+    expect(error).toBeInstanceOf(OperationJobsIncompleteError);
+    expect(error.failed).toEqual(["sweep:expire_waiting_bank_transfers"]);
+    // Only the newest sweep may be missing: an older one missing still fails.
+    rpc.mockImplementation(async (name, args) =>
+      name === "run_slot_renewals" ? { data: null, error: { code: "PGRST202" } } : base(name, args)
+    );
+    expect((await run().catch((e) => e)).failed).toEqual(["sweep:run_slot_renewals"]);
   });
 
   it("does not wait for a slow sweep before sending emails", async () => {

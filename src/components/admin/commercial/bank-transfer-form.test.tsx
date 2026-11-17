@@ -264,4 +264,28 @@ describe("bank transfers waiting for a second staff member", () => {
     expect(screen.queryByRole("button", { name: "Confirm transfer" })).toBeNull();
     expect(screen.getByText(/R138 from Thandi D. for 2 × 30-day slots/)).toBeInTheDocument();
   });
+
+  it("lists expired transfers with an Expired badge and no actions", () => {
+    const { similar_records: _ignored, ...rest } = waiting;
+    const expired = {
+      ...rest,
+      expired_at: "2026-11-27T08:01:00Z",
+      invoice_number: "VM-2026-000012",
+    };
+    render(<BankTransferPanel canRecord={false} canConfirm waiting={[]} expired={[expired]} />);
+    const list = screen.getByRole("list", { name: "Expired bank transfers" });
+    expect(within(list).getByText("Expired")).toBeInTheDocument();
+    expect(within(list).getByText(/R138 from Thandi D. for 2 × 30-day slots/)).toBeInTheDocument();
+    expect(within(list).getByText(/Invoice VM-2026-000012/)).toBeInTheDocument();
+    expect(within(list).getByText(/record it again/)).toBeInTheDocument();
+    expect(within(list).queryByRole("button")).toBeNull();
+    expect(
+      screen.queryByRole("list", { name: "Bank transfers waiting for confirmation" })
+    ).toBeNull();
+  });
+
+  it("shows no expired list when there are none", () => {
+    render(<BankTransferPanel canRecord canConfirm waiting={[waiting]} expired={[]} />);
+    expect(screen.queryByRole("list", { name: "Expired bank transfers" })).toBeNull();
+  });
 });

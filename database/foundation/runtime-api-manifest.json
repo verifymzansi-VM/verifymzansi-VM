@@ -507,7 +507,10 @@
     },
     {
       "name": "record_staff_invoice_payment",
-      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
+      "updates": [
+        "updates/20261113162457_staff_invoice_payments.sql",
+        "updates/20261117141803_bank_transfer_expiry.sql"
+      ],
       "arguments": [
         {
           "name": "p_account_email",
@@ -557,11 +560,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; a confirmed account with current access and an accepted ID review, an Individual slot on sale for 30, 90 or 180 days, 1 to 25 slots within the person's Individual slot limit, the amount received equal to the order total and at most R50,000, money cleared today or in the last 90 days, the customer's written cooling-off waiver confirmed and a bank reference never recorded before (waiting, confirmed or declined): stores the audited record as waiting for a second staff member; no payment, slot, receipt or commission is made. The same request again by the same staff member returns the first record."
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; a confirmed account with current access and an accepted ID review, an Individual slot on sale for 30, 90 or 180 days, 1 to 25 slots within the person's Individual slot limit, the amount received equal to the order total and at most R50,000, money cleared today or in the last 90 days, the customer's written cooling-off waiver confirmed and a bank credit (reference, amount, date cleared) not already waiting or confirmed (a declined or expired record does not count): stores the audited record as waiting for a second staff member; no payment, slot, receipt or commission is made. The same request again by the same staff member returns the first record."
     },
     {
       "name": "confirm_staff_invoice_payment",
-      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
+      "updates": [
+        "updates/20261113162457_staff_invoice_payments.sql",
+        "updates/20261117141803_bank_transfer_expiry.sql"
+      ],
       "arguments": [
         {
           "name": "p_transfer_id",
@@ -576,11 +582,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current transfer confirmation capability (admin) and recent authenticator proof; the staff member's own current accepted ID review; never the recorder or another account of the recorder's identity, the customer or a partner who referred the customer, checked again after the lock waits; only a waiting record whose recorder still holds the payment refund capability and has not come to refer the customer, with the customer's current access, accepted ID review and Individual slot limit (open checkouts included) checked again: records a complete, fulfilled invoice payment with its lines, slots starting now, invoice, receipt event and partner commission, and marks the record confirmed. The same confirmer again returns the result; a declined record is refused."
+      "authority": "Current transfer confirmation capability (admin) and recent authenticator proof; the staff member's own current accepted ID review; never the recorder or another account of the recorder's identity, the customer or a partner who referred the customer, checked again after the lock waits; only a waiting record recorded less than 14 days ago (internal.invoice_transfer_expires_after(); an expired record, or one the sweep has not marked yet, is refused) whose recorder still holds the payment refund capability and has not come to refer the customer, with the customer's current access, accepted ID review and Individual slot limit (open checkouts included) checked again: records a complete, fulfilled invoice payment with its lines, slots starting now, invoice, receipt event and partner commission, and marks the record confirmed. The same confirmer again returns the result; a declined record is refused."
     },
     {
       "name": "decline_staff_invoice_payment",
-      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
+      "updates": [
+        "updates/20261113162457_staff_invoice_payments.sql",
+        "updates/20261117141803_bank_transfer_expiry.sql"
+      ],
       "arguments": [
         {
           "name": "p_transfer_id",
@@ -600,11 +609,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current transfer confirmation capability (admin) and recent authenticator proof; the staff member's own current accepted ID review, never the customer or a partner who referred the customer; only a waiting record, with an audit reason: marks it declined (its recorder may withdraw it). Nothing is paid or started and the bank reference stays used. The same decline again returns the result; a confirmed record is refused."
+      "authority": "Current transfer confirmation capability (admin) and recent authenticator proof; the staff member's own current accepted ID review, never the customer or a partner who referred the customer; only a waiting record, with an audit reason: marks it declined (its recorder may withdraw it). Nothing is paid or started and the bank reference stays used. The same decline again returns the result; a confirmed or expired record is refused."
     },
     {
       "name": "get_staff_invoice_transfers",
-      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
+      "updates": [
+        "updates/20261113162457_staff_invoice_payments.sql",
+        "updates/20261117141803_bank_transfer_expiry.sql"
+      ],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
@@ -613,7 +625,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment view capability and recent authenticator proof: the recorded bank transfers waiting for confirmation (up to 50, oldest first, with their count): customer account id, account email (to match the bank statement) and public name, term, slots, amount, bank reference, date cleared, reason, recorded time, the recorder's public name, whether the caller's identity recorded it and how many other waiting or confirmed records name the same customer, amount and date. No phone, legal name or identity details."
+      "authority": "Current payment view capability and recent authenticator proof: the recorded bank transfers waiting for confirmation (up to 50, oldest first, with their count): customer account id, account email (to match the bank statement) and public name, term, slots, amount, bank reference, date cleared, reason, recorded time, the recorder's public name, whether the caller's identity recorded it and how many other waiting or confirmed records (not declined or expired) name the same customer, amount and date. No phone, legal name or identity details."
     },
     {
       "name": "get_staff_invoice_customer",
@@ -4591,7 +4603,10 @@
     },
     {
       "name": "record_staff_invoice_transfer",
-      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "updates": [
+        "updates/20261114041000_customer_invoice_pay_now.sql",
+        "updates/20261117141803_bank_transfer_expiry.sql"
+      ],
       "arguments": [
         {
           "name": "p_invoice_number",
@@ -4626,7 +4641,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; the bank transfer rules (a bank reference of 4 to 60 letters, digits, spaces or . _ : / -, money cleared today or in the last 90 days, the customer's written cooling-off waiver confirmed, an audit reason): records a bank transfer of exactly the invoice's account, slot term, slots and total against an issued invoice with no payment attempt that could still be paid and no other transfer waiting, as waiting for a second staff member, whose confirmation pays the invoice. The same request again by the same staff member returns the first record."
+      "authority": "Current payment refund capability and recent authenticator proof; the staff member's own current accepted ID review, never a customer of their own identity or one a partner account of their identity referred; the bank transfer rules (a bank reference of 4 to 60 letters, digits, spaces or . _ : / -, money cleared today or in the last 90 days, the customer's written cooling-off waiver confirmed, an audit reason): records a bank transfer of exactly the invoice's account, slot term, slots and total against an issued invoice with no payment attempt that could still be paid and no other transfer waiting (a declined or expired one does not count), as waiting for a second staff member, whose confirmation pays the invoice. The same request again by the same staff member returns the first record."
     },
     {
       "name": "start_slot_renewal_checkout",
@@ -4828,6 +4843,57 @@
         "service_role": false
       },
       "authority": "Public, like the price catalogue (anon and authenticated): the most one online (Ozow) payment may be, in cents (online_max_cents, internal.online_payment_max_cents()); no account data."
+    },
+    {
+      "name": "expire_waiting_bank_transfers",
+      "updates": ["updates/20261117141803_bank_transfer_expiry.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only housekeeping sweep (the operation job, every minute): marks each recorded bank transfer still waiting for confirmation 14 days (internal.invoice_transfer_expires_after()) after it was recorded as expired, with the time, oldest first, at most p_limit (1 to 1000), skipping records a staff member is confirming or declining at that moment. Nothing is deleted, paid or started; an invoice the transfer named stays unpaid and can be paid again, as after a decline. Returns how many expired and how many named an invoice; a rerun finds nothing more."
+    },
+    {
+      "name": "get_staff_expired_invoice_transfers",
+      "updates": ["updates/20261117141803_bank_transfer_expiry.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment view capability and recent authenticator proof: the recorded bank transfers that expired in the last 30 days (up to 20, newest first), each with the same fields as the waiting list plus when it expired and the number of the invoice it named. No phone, legal name or identity details."
+    },
+    {
+      "name": "get_my_invoice_transfer_expiry",
+      "updates": ["updates/20261117141803_bank_transfer_expiry.sql"],
+      "arguments": [
+        {
+          "name": "p_invoice_number",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "A signed-in account with current access and a live session, only for its own invoices (any other number, or a malformed one, reads as not found): the invoice number and, while the invoice is unpaid, when the latest bank transfer recorded to it expired (null when there is none or it did not expire). Nothing else about the transfer."
     }
   ]
 }

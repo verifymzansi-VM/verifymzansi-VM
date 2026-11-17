@@ -60,10 +60,11 @@ begin
   perform internal.assert_staff_not_referrer(actor, buyer);
   -- The same bank credit (reference, amount, date cleared) waiting or
   -- confirmed: the same request again by the same staff member returns it;
-  -- anything else is refused. A declined record does not count.
+  -- anything else is refused. A declined or expired record does not count.
   select * into prior from private.invoice_transfers t
     where upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key
-      and t.amount_received_cents = p_amount_cents and t.cleared_on = cleared and t.status <> 'declined';
+      and t.amount_received_cents = p_amount_cents and t.cleared_on = cleared
+      and t.status not in ('declined', 'expired');
   if found then
     if prior.recorded_by = actor and prior.account_id = buyer and prior.reason = btrim(p_reason)
         and prior.slots = p_slots

@@ -56,10 +56,12 @@ begin
   perform internal.assert_staff_payment_actor(actor, inv.account_id);
   perform internal.assert_staff_not_referrer(actor, inv.account_id);
   -- The same bank credit waiting or confirmed: the same request again by the
-  -- same staff member returns it; anything else is refused.
+  -- same staff member returns it; anything else is refused. A declined or
+  -- expired record does not count.
   select * into prior from private.invoice_transfers t
     where upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key
-      and t.amount_received_cents = inv.total_cents and t.cleared_on = cleared and t.status <> 'declined';
+      and t.amount_received_cents = inv.total_cents and t.cleared_on = cleared
+      and t.status not in ('declined', 'expired');
   if found then
     if prior.recorded_by = actor and prior.customer_invoice_id = inv.id and prior.reason = audit_reason then
       return internal.invoice_transfer_dto(prior, actor)

@@ -97,6 +97,16 @@ UNION ALL
    FROM private.invoice_transfers t
   WHERE t.declined_by IS NOT NULL
 UNION ALL
+ SELECT 'payment_invoice_expired:'::text || t.id::text AS id,
+    t.expired_at AS occurred_at,
+    NULL::uuid AS actor_id,
+    t.id AS target_id,
+    'payment'::text AS target_type,
+    'payment:invoice_expired'::text AS action,
+    ('Bank transfer '::text || t.bank_reference) || ' expired: not confirmed within 14 days of being recorded'::text AS reason
+   FROM private.invoice_transfers t
+  WHERE t.expired_at IS NOT NULL
+UNION ALL
  SELECT 'customer_invoice_issued:'::text || i.id::text AS id,
     i.issued_at AS occurred_at,
     i.issued_by AS actor_id,

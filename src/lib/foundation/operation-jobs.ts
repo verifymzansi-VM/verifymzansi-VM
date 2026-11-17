@@ -115,7 +115,16 @@ const SWEEPS = [
   ["purge_expired_inbox", { p_limit: 100 }],
   ["reconcile_intro_trials", { p_limit: 20 }],
   ["approve_due_commissions", { p_limit: 20 }],
+  // Bank transfers still waiting for a second staff member 14 days after they
+  // were recorded expire; their invoices can be paid again
+  // (20261117141803_bank_transfer_expiry.sql).
+  ["expire_waiting_bank_transfers", { p_limit: 100 }],
 ] as const;
+// Sweeps an earlier database does not have yet: until their update is
+// applied, the missing command is skipped, not reported as a failure.
+const LATER_SWEEPS: ReadonlySet<string> = new Set(["expire_waiting_bank_transfers"]);
+const missingCommand = (error: { code?: string } | null) =>
+  error?.code === "PGRST202" || error?.code === "42883";
 
 const jobSchema = z
   .object({
@@ -243,7 +252,8 @@ export async function runFoundationOperationJobs(
   const sweeps = (async () => {
     for (const [name, args] of SWEEPS) {
       const result = await call(name, args);
-      if (result.error) fail(`sweep:${name}`);
+      if (result.error && !(LATER_SWEEPS.has(name) && missingCommand(result.error)))
+        fail(`sweep:${name}`);
     }
   })();
 

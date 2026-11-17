@@ -17,7 +17,9 @@ begin
   end if;
   -- A recorded bank transfer is an audit record: never removed; recorded as
   -- waiting; changed only once, from waiting to confirmed (naming its invoice
-  -- payment: that account, amount and plan) or to declined.
+  -- payment: that account, amount and plan), to declined, or (from
+  -- 20261117141803_bank_transfer_expiry.sql) to expired once it has waited 14
+  -- days, with nothing else changed.
   if tg_op = 'DELETE' then
     -- Only the retention job removes a record, five tax years on.
     if pg_catalog.current_setting('vm.retention', true) = 'on' then return old; end if;
@@ -26,15 +28,28 @@ begin
   if tg_op = 'INSERT' then
     if new.status <> 'awaiting_confirmation' or new.confirmed_by is not null or new.confirmed_at is not null
         or new.payment_id is not null or new.declined_by is not null or new.declined_at is not null
-        or new.decline_reason is not null then
+        or new.decline_reason is not null or new.expired_at is not null then
       raise exception 'a bank transfer is recorded as waiting for confirmation' using errcode='23514';
     end if;
     return new;
   end if;
-  if old.status <> 'awaiting_confirmation' or new.status not in ('confirmed', 'declined')
-      or (to_jsonb(new) - array['status','confirmed_by','confirmed_at','payment_id','declined_by','declined_at','decline_reason'])
-        is distinct from (to_jsonb(old) - array['status','confirmed_by','confirmed_at','payment_id','declined_by','declined_at','decline_reason']) then
+  if old.status <> 'awaiting_confirmation' or new.status not in ('confirmed', 'declined', 'expired')
+      or (to_jsonb(new) - array['status','confirmed_by','confirmed_at','payment_id','declined_by','declined_at','decline_reason','expired_at'])
+        is distinct from (to_jsonb(old) - array['status','confirmed_by','confirmed_at','payment_id','declined_by','declined_at','decline_reason','expired_at']) then
     raise exception 'a recorded bank transfer is confirmed or declined once and never changed' using errcode='23514';
+  end if;
+  if new.status = 'expired' then
+    if new.expired_at is null or new.expired_at > statement_timestamp()
+        or new.expired_at < old.recorded_at + internal.invoice_transfer_expires_after()
+        or new.confirmed_by is not null or new.confirmed_at is not null or new.payment_id is not null
+        or new.declined_by is not null or new.declined_at is not null or new.decline_reason is not null then
+      raise exception 'a waiting bank transfer expires only 14 days after it was recorded, with nothing else changed'
+        using errcode='23514';
+    end if;
+    return new;
+  end if;
+  if new.expired_at is not null then
+    raise exception 'only an expired bank transfer has an expiry time' using errcode='23514';
   end if;
   if new.status = 'confirmed' then
     select * into pay from private.payments p where p.id = new.payment_id;

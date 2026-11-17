@@ -227,7 +227,10 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   [
     "transfer_not_waiting",
-    [409, "This bank transfer is no longer waiting for confirmation. Reload the page."],
+    [
+      409,
+      "This bank transfer is no longer waiting for confirmation: it was confirmed or declined, or nobody confirmed it within 14 days and it expired. Reload the page.",
+    ],
   ],
   [
     "invoice_amount_mismatch",
@@ -560,6 +563,33 @@ export function readStaffBankTransfersWaiting(api: FoundationAuthenticatedApi) {
         .max(50),
     })
   );
+}
+
+const staffExpiredTransfer = staffTransferRecord.extend({
+  status: z.literal("expired"),
+  expired_at: z.iso.datetime({ offset: true }),
+  /** The invoice the transfer was recorded to, if any. */
+  invoice_number: z
+    .string()
+    .regex(/^VM-\d{4}-\d{6}$/)
+    .nullable(),
+});
+export type StaffExpiredTransfer = z.infer<typeof staffExpiredTransfer>;
+
+/** The recorded bank transfers that expired in the last 30 days (newest
+ * first): nobody confirmed them within 14 days of being recorded, so the
+ * database marked them expired (20261117141803_bank_transfer_expiry.sql).
+ * Against a database without that update there are none. */
+export async function readStaffBankTransfersExpired(
+  api: FoundationAuthenticatedApi
+): Promise<StaffExpiredTransfer[]> {
+  const result = await api.rpc("get_staff_expired_invoice_transfers", {}, { get: false });
+  if (result.error?.code === "PGRST202" || result.error?.code === "42883") return [];
+  const read = await settleStaffCommand(
+    Promise.resolve(result),
+    z.strictObject({ items: z.array(staffExpiredTransfer).max(20) })
+  );
+  return read.items;
 }
 
 /** Whose account an email names, before staff record a bank transfer for it. */

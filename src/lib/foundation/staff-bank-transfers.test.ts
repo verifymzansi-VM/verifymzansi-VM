@@ -4,6 +4,7 @@ import {
   confirmStaffBankTransfer,
   declineStaffBankTransfer,
   normaliseBankReference,
+  readStaffBankTransfersExpired,
   readStaffBankTransfersWaiting,
   readStaffBankTransferCustomer,
   readStaffBankTransfers,
@@ -244,5 +245,29 @@ describe("bank transfer adapters", () => {
       { p_payment_ids: [id] },
       { get: false }
     );
+  });
+
+  it("reads the transfers that expired, and none from a database without the expiry", async () => {
+    const expired = {
+      ...record,
+      status: "expired",
+      expired_at: "2026-11-27T10:01:00.000+00:00",
+      invoice_number: "VM-2026-000012",
+    };
+    const { rpc, api } = fixture({ items: [expired, { ...expired, invoice_number: null }] });
+    await expect(readStaffBankTransfersExpired(api)).resolves.toEqual([
+      expired,
+      { ...expired, invoice_number: null },
+    ]);
+    expect(rpc).toHaveBeenCalledWith("get_staff_expired_invoice_transfers", {}, { get: false });
+    for (const code of ["PGRST202", "42883"]) {
+      rpc.mockResolvedValueOnce(refused(code));
+      await expect(readStaffBankTransfersExpired(api)).resolves.toEqual([]);
+    }
+    // A waiting record is not an expired one; other refusals are reported.
+    rpc.mockResolvedValueOnce(ok({ items: [record] }));
+    await expect(readStaffBankTransfersExpired(api)).rejects.toMatchObject({ status: 503 });
+    rpc.mockResolvedValueOnce(refused("42501"));
+    await expect(readStaffBankTransfersExpired(api)).rejects.toMatchObject({ status: 403 });
   });
 });

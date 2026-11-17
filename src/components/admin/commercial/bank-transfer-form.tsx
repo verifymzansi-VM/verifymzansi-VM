@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPlanPrice } from "@/lib/constants/pricing";
 import {
@@ -57,6 +58,14 @@ export type WaitingTransfer = {
   recorded_at: string;
   recorded_by_me: boolean;
   recorded_by_name: string | null;
+};
+
+/** A recorded bank transfer nobody confirmed within 14 days: the database
+ * marked it expired; nothing was paid or started and an invoice it named can
+ * be paid again. */
+export type ExpiredTransfer = Omit<WaitingTransfer, "similar_records"> & {
+  expired_at: string;
+  invoice_number: string | null;
 };
 
 const recordedDate = new Intl.DateTimeFormat("en-ZA", {
@@ -167,14 +176,55 @@ function WaitingTransfers({
   );
 }
 
+/** Recorded bank transfers that expired in the last 30 days (newest first). */
+function ExpiredTransfers({ expired }: { expired: ExpiredTransfer[] }) {
+  if (expired.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold">Not confirmed within 14 days</h3>
+      <ul className="space-y-2" aria-label="Expired bank transfers">
+        {expired.map((t) => (
+          <li
+            key={t.transfer_id}
+            className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm"
+          >
+            <span className="font-semibold">
+              {`${formatPlanPrice(t.amount_received_cents)} from ${t.customer_name ?? "the customer"} for ${t.slots} × ${t.term_days}-day ${t.slots === 1 ? "slot" : "slots"}`}
+            </span>
+            <Badge variant="secondary">Expired</Badge>
+            <span className="w-full text-xs text-muted-foreground">
+              Bank transfer {t.bank_reference}, cleared {t.cleared_on}
+              {t.invoice_number ? ` · Invoice ${t.invoice_number}` : ""} ·{" "}
+              {t.customer_email ?? t.account_id} · Recorded{" "}
+              {recordedDate.format(new Date(t.recorded_at))}
+              {t.recorded_by_me
+                ? " by you"
+                : t.recorded_by_name
+                  ? ` by ${t.recorded_by_name}`
+                  : ""}{" "}
+              · Expired {recordedDate.format(new Date(t.expired_at))}
+            </span>
+            <span className="w-full text-xs text-muted-foreground">
+              Nothing was paid or started. If the money is in the bank account, record it again.
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function BankTransferPanel({
   canRecord,
   canConfirm,
   waiting,
+  expired = [],
 }: {
   canRecord: boolean;
   canConfirm: boolean;
   waiting: WaitingTransfer[];
+  /** Transfers nobody confirmed within 14 days (expired in the last 30). */
+  expired?: ExpiredTransfer[];
 }) {
   const { run, busy, message } = useCommercialAction();
   const { checking, check, checkCustomer } = useCustomerCheck("Nothing was recorded.");
@@ -196,6 +246,7 @@ export function BankTransferPanel({
         invoice.
       </p>
       <WaitingTransfers waiting={waiting} canConfirm={canConfirm} />
+      <ExpiredTransfers expired={expired} />
       <ActionMessage message={check ? { tone: "error", text: check } : message} />
       {!canRecord ? null : !open ? (
         <Button type="button" variant="outline" className="h-11" onClick={() => setOpen(true)}>

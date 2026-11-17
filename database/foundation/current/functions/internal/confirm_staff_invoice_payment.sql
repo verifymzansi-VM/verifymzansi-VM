@@ -20,6 +20,13 @@ begin
     raise exception 'this bank transfer was already %; it cannot be confirmed', t.status
       using errcode='PT409', detail='transfer_not_waiting';
   end if;
+  -- A transfer that has waited 14 days has expired
+  -- (20261117141803_bank_transfer_expiry.sql): never confirmed, also before
+  -- the sweep (api.expire_waiting_bank_transfers) has marked it.
+  if t.recorded_at <= statement_timestamp() - internal.invoice_transfer_expires_after() then
+    raise exception 'this bank transfer waited 14 days without confirmation and expired; it cannot be confirmed'
+      using errcode='PT409', detail='transfer_not_waiting';
+  end if;
   if internal.same_identity(actor, t.recorded_by) then
     raise exception 'a different staff member must confirm this bank transfer' using errcode='42501', detail='transfer_confirmer_same';
   end if;
