@@ -237,6 +237,10 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   ["transfer_resolved", [409, "This expired bank transfer was already resolved. Reload the page."]],
   [
+    "transfer_resolver_same",
+    [403, "Another staff member must resolve this bank transfer: you recorded it."],
+  ],
+  [
     "transfer_not_expired",
     [409, "Only an expired bank transfer is resolved here. Confirm or decline a waiting one."],
   ],

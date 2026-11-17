@@ -182,6 +182,7 @@ export const FOUNDATION_ERROR_REASONS = {
   transfer_not_waiting: ["PT409"],
   transfer_recorder_inactive: ["PT409"],
   transfer_resolved: ["PT409"],
+  transfer_resolver_same: ["42501"],
   verification_required: ["42501", "PT409"],
 } as const satisfies Record<string, readonly string[]>;
 // </database-reasons>

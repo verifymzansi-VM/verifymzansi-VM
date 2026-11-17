@@ -33,8 +33,10 @@ AS $function$
     when exists (select 1 from private.payment_refund_requests r where r.account_id = p_user
         and r.status in ('awaiting_approval', 'approved', 'sent'))
       then 'refund_open'
+    -- 20261117141803: also an expired transfer not yet followed up, so the
+    -- erasure never leaves an expiry without its follow-up.
     when exists (select 1 from private.invoice_transfers t where t.account_id = p_user
-        and internal.invoice_transfer_waiting(t))
+        and (internal.invoice_transfer_waiting(t) or internal.invoice_transfer_follow_up_open(t)))
       then 'transfer_waiting'
     when exists (select 1 from private.customer_invoices i where i.account_id = p_user and i.status = 'issued')
       then 'invoice_unpaid'

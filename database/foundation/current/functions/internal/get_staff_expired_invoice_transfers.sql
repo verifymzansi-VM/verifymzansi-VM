@@ -13,11 +13,7 @@ begin
   with open as (
     select t as transfer, t.id, coalesce(t.expired_at, t.recorded_at + internal.invoice_transfer_expires_after()) as expired_on
     from private.invoice_transfers t
-    where internal.invoice_transfer_expired(t) and t.resolved_at is null
-      and not exists(select 1 from private.invoice_transfers x where x.id <> t.id and x.status = 'confirmed'
-        and x.amount_received_cents = t.amount_received_cents and x.cleared_on = t.cleared_on
-        and upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
-          = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')))
+    where internal.invoice_transfer_follow_up_open(t)
   )
   select jsonb_build_object('unresolved', (select count(*) from open),
       'items', coalesce((select jsonb_agg(internal.invoice_transfer_dto(o.transfer, actor)

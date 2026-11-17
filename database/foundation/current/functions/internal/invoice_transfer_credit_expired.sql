@@ -12,6 +12,7 @@ AS $function$
       and t.amount_received_cents = p_amount_cents and t.cleared_on = p_cleared_on
       and t.account_id = p_account_id
       and (t.customer_invoice_id is null or t.customer_invoice_id = p_invoice_id)
+      and t.resolved_at is null
       and internal.invoice_transfer_expired(t));
 $function$;
 alter function internal.invoice_transfer_credit_expired(text,bigint,date,uuid,uuid) owner to postgres;

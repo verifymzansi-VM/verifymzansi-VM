@@ -246,7 +246,8 @@ try {
       "23514",
       /has expired and is never confirmed or declined/
     );
-    assert.notEqual(
+    // Not followed up yet, so the account's erasure waits for it.
+    assert.equal(
       q(`select coalesce(internal.account_erasure_hold('${early.id}'),'none');`),
       "transfer_waiting"
     );
@@ -517,7 +518,8 @@ try {
     assert.equal(read.transfer_waiting, false);
     const before = json(expirySql(buyer, number)).transfer_expired_at;
     assert.match(before ?? "", /^\d{4}-\d{2}-\d{2}T/);
-    assert.notEqual(
+    // Expired, not followed up: the account's erasure still waits for it.
+    assert.equal(
       q(`select coalesce(internal.account_erasure_hold('${buyer.id}'),'none');`),
       "transfer_waiting"
     );
@@ -619,6 +621,20 @@ try {
     fails(resolveSql(admin2, voidTransfer.transfer_id, "returned", "No"), "22023");
     const waitingNow = recordDirect(verified("expiry-not-expired"), "FNB NOTEXP 0001");
     fails(resolveSql(admin2, waitingNow.transfer_id), "PT409", /transfer_not_expired/);
+    // Two people: the staff member who recorded it never resolves it, for
+    // either reason.
+    for (const resolution of ["returned", "never_arrived"])
+      fails(
+        resolveSql(admin, voidTransfer.transfer_id, resolution, "Resolved by the recorder"),
+        "42501",
+        /transfer_resolver_same/
+      );
+    // Expired and not followed up: the account's erasure waits for it.
+    assert.equal(
+      q(`select internal.account_erasure_hold(account_id) from private.invoice_transfers
+          where id='${voidTransfer.transfer_id}';`),
+      "transfer_waiting"
+    );
     // Waiting 15 days, not marked yet: resolving marks it expired first.
     assert.equal(status(voidTransfer.transfer_id).status, "awaiting_confirmation");
     const resolved = json(
@@ -638,10 +654,11 @@ try {
       "PT409",
       /transfer_resolved/
     );
-    fails(
-      resolveSql(admin, voidTransfer.transfer_id, "returned", "Refunded by EFT"),
-      "PT409",
-      /transfer_resolved/
+    // The account's erasure no longer waits for it once it is resolved.
+    assert.notEqual(
+      q(`select coalesce(internal.account_erasure_hold(account_id),'none')
+          from private.invoice_transfers where id='${voidTransfer.transfer_id}';`),
+      "transfer_waiting"
     );
     // The record keeps it: nothing else may change, and it cannot be undone.
     fails(
@@ -661,6 +678,32 @@ try {
       ]
     );
   });
+  await check(
+    "money resolved as returned or never arrived is not recorded again as old money",
+    () => {
+      const thembi = verified("expiry-thembi");
+      const first = recordDirect(thembi, "FNB GONE 0001", daysAgo(80));
+      q(`set session_replication_role=replica;
+      update private.invoice_transfers set cleared_on=current_date-100,recorded_at=now()-interval '20 days'
+        where id='${first.transfer_id}';
+      set session_replication_role=origin;`);
+      const cleared = q(
+        `select to_char(cleared_on,'YYYY-MM-DD') from private.invoice_transfers where id='${first.transfer_id}';`
+      );
+      assert.equal(json(resolveSql(admin2, first.transfer_id)).resolution, "never_arrived");
+      fails(
+        transfers.recordSql(admin, {
+          email: thembi.email,
+          term: 30,
+          slots: 1,
+          reference: "FNB GONE 0001",
+          cleared,
+        }),
+        "22023",
+        /cleared_date_invalid/
+      );
+    }
+  );
   await check("a paid invoice shows no expiry", () => {
     const paid = issue(stranger);
     save(stranger, paid.invoice_number);

@@ -17,6 +17,11 @@ begin
     raise exception 'resolution reason required' using errcode='22023';
   end if;
   t := internal.lock_invoice_transfer_for_review(p_transfer_id, actor);
+  -- Two people, as for confirming: never the staff member who recorded it.
+  if internal.same_identity(actor, t.recorded_by) then
+    raise exception 'a different staff member must resolve this bank transfer' using errcode='42501',
+      detail='transfer_resolver_same';
+  end if;
   if t.resolved_at is not null then
     if t.resolved_by = actor and t.resolution = p_resolution and t.resolution_reason = btrim(p_reason) then
       return internal.invoice_transfer_dto(t, actor) || jsonb_build_object('status', 'expired',

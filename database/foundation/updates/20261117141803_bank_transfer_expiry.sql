@@ -66,7 +66,10 @@
 --    records once, with an audited reason, that the money of an expired
 --    transfer was returned outside VerifyMzansi ('returned') or never arrived
 --    ('never_arrived'): columns resolution, resolution_reason, resolved_by,
---    resolved_at, set only on an expired transfer.
+--    resolved_at, set only on an expired transfer, never by the staff member
+--    who recorded it. Money so resolved cannot be recorded again as old
+--    money, and the account erasure hold waits for an expired transfer not
+--    yet followed up (internal.invoice_transfer_follow_up_open).
 --    api.get_staff_expired_invoice_transfers() (payments:view) lists every
 --    expired transfer not yet followed up, that is, neither resolved nor with
 --    the same money recorded again and confirmed; oldest first, at most 200,
@@ -131,7 +134,7 @@ begin
         'internal.void_staff_invoice(uuid,text) 21763bcb62e398b6d1b8e8d64ef38ea5',
         'internal.void_staff_invoice(uuid,text) 6c997c846aa9d114150e11d2591d5ad7',
         'internal.account_erasure_hold(uuid) 5bd01c33cf23f3e6516ceb96c3dc3236',
-        'internal.account_erasure_hold(uuid) f450a4cad9855826d8dc6212d1a614cb',
+        'internal.account_erasure_hold(uuid) 42edfda741d3096f7ea7a7b0cb897d49',
         'internal.retention_commerce(integer) 422a63c6d6fd2be5a1556893a8975d3f',
         'internal.retention_commerce(integer) 55051470a07c224838cb58dc45d66406',
         'internal.frontend_privacy_export_data(uuid) 1a16274c11f77a9a6d72482ca43d6753',
@@ -228,9 +231,27 @@ $function$;
 alter function internal.invoice_transfer_waiting(private.invoice_transfers) owner to postgres;
 revoke all on function internal.invoice_transfer_waiting(private.invoice_transfers) from public, anon, authenticated, service_role;
 
--- A bank credit (reference, amount, date cleared) that an expired transfer of
--- the same account named (and of the same invoice, when that transfer named
--- one): it may be recorded again for them whatever its age.
+-- An expired transfer not yet followed up: not resolved by staff, and its
+-- money (reference, amount, date cleared) not recorded again and confirmed.
+CREATE OR REPLACE FUNCTION internal.invoice_transfer_follow_up_open(t private.invoice_transfers)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select internal.invoice_transfer_expired(t) and t.resolved_at is null
+    and not exists(select 1 from private.invoice_transfers x where x.id <> t.id and x.status = 'confirmed'
+      and x.amount_received_cents = t.amount_received_cents and x.cleared_on = t.cleared_on
+      and upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
+        = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')));
+$function$;
+alter function internal.invoice_transfer_follow_up_open(private.invoice_transfers) owner to postgres;
+revoke all on function internal.invoice_transfer_follow_up_open(private.invoice_transfers) from public, anon, authenticated, service_role;
+
+-- A bank credit (reference, amount, date cleared) that an expired, unresolved
+-- transfer of the same account named (and of the same invoice, when that
+-- transfer named one): it may be recorded again for them whatever its age.
+-- Money staff marked returned or never arrived may not.
 CREATE OR REPLACE FUNCTION internal.invoice_transfer_credit_expired(p_reference_key text, p_amount_cents bigint, p_cleared_on date, p_account_id uuid, p_invoice_id uuid)
  RETURNS boolean
  LANGUAGE sql
@@ -242,6 +263,7 @@ AS $function$
       and t.amount_received_cents = p_amount_cents and t.cleared_on = p_cleared_on
       and t.account_id = p_account_id
       and (t.customer_invoice_id is null or t.customer_invoice_id = p_invoice_id)
+      and t.resolved_at is null
       and internal.invoice_transfer_expired(t));
 $function$;
 alter function internal.invoice_transfer_credit_expired(text,bigint,date,uuid,uuid) owner to postgres;
@@ -1148,8 +1170,10 @@ AS $function$
     when exists (select 1 from private.payment_refund_requests r where r.account_id = p_user
         and r.status in ('awaiting_approval', 'approved', 'sent'))
       then 'refund_open'
+    -- 20261117141803: also an expired transfer not yet followed up, so the
+    -- erasure never leaves an expiry without its follow-up.
     when exists (select 1 from private.invoice_transfers t where t.account_id = p_user
-        and internal.invoice_transfer_waiting(t))
+        and (internal.invoice_transfer_waiting(t) or internal.invoice_transfer_follow_up_open(t)))
       then 'transfer_waiting'
     when exists (select 1 from private.customer_invoices i where i.account_id = p_user and i.status = 'issued')
       then 'invoice_unpaid'
@@ -1440,11 +1464,7 @@ begin
   with open as (
     select t as transfer, t.id, coalesce(t.expired_at, t.recorded_at + internal.invoice_transfer_expires_after()) as expired_on
     from private.invoice_transfers t
-    where internal.invoice_transfer_expired(t) and t.resolved_at is null
-      and not exists(select 1 from private.invoice_transfers x where x.id <> t.id and x.status = 'confirmed'
-        and x.amount_received_cents = t.amount_received_cents and x.cleared_on = t.cleared_on
-        and upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
-          = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')))
+    where internal.invoice_transfer_follow_up_open(t)
   )
   select jsonb_build_object('unresolved', (select count(*) from open),
       'items', coalesce((select jsonb_agg(internal.invoice_transfer_dto(o.transfer, actor)
@@ -1536,6 +1556,11 @@ begin
     raise exception 'resolution reason required' using errcode='22023';
   end if;
   t := internal.lock_invoice_transfer_for_review(p_transfer_id, actor);
+  -- Two people, as for confirming: never the staff member who recorded it.
+  if internal.same_identity(actor, t.recorded_by) then
+    raise exception 'a different staff member must resolve this bank transfer' using errcode='42501',
+      detail='transfer_resolver_same';
+  end if;
   if t.resolved_at is not null then
     if t.resolved_by = actor and t.resolution = p_resolution and t.resolution_reason = btrim(p_reason) then
       return internal.invoice_transfer_dto(t, actor) || jsonb_build_object('status', 'expired',

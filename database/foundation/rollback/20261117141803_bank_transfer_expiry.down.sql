@@ -45,7 +45,7 @@ begin
         'internal.customer_invoice_dto(private.customer_invoices,uuid) 27604995d3de7e7a5794c1bf220b3213',
         'internal.start_invoice_payment(text,bigint,boolean) ea362defef15f7d6116a0f96cc53fef5',
         'internal.void_staff_invoice(uuid,text) 6c997c846aa9d114150e11d2591d5ad7',
-        'internal.account_erasure_hold(uuid) f450a4cad9855826d8dc6212d1a614cb',
+        'internal.account_erasure_hold(uuid) 42edfda741d3096f7ea7a7b0cb897d49',
         'internal.retention_commerce(integer) 55051470a07c224838cb58dc45d66406',
         'internal.frontend_privacy_export_data(uuid) 86a879279ebd9dcadf6f3f4fa11e7f44') then
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
@@ -1197,6 +1197,7 @@ revoke all on function internal.frontend_privacy_export_data(uuid) from public;
 
 drop function if exists internal.expire_invoice_transfer(uuid);
 drop function if exists internal.invoice_transfer_credit_expired(text,bigint,date,uuid,uuid);
+drop function if exists internal.invoice_transfer_follow_up_open(private.invoice_transfers);
 drop function if exists internal.invoice_transfer_waiting(private.invoice_transfers);
 drop function if exists internal.invoice_transfer_expired(private.invoice_transfers);
 drop function if exists internal.invoice_transfer_expires_after();

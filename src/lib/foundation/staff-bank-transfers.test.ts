@@ -295,6 +295,10 @@ describe("bank transfer adapters", () => {
     await expect(
       resolveStaffExpiredTransfer(api, other, "returned", "Refunded by EFT")
     ).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/already resolved/) });
+    rpc.mockResolvedValueOnce(refused("42501", "transfer_resolver_same"));
+    await expect(
+      resolveStaffExpiredTransfer(api, other, "returned", "Refunded by EFT")
+    ).rejects.toMatchObject({ status: 403, message: expect.stringMatching(/you recorded it/) });
     rpc.mockResolvedValueOnce(refused("PT409", "transfer_not_expired"));
     await expect(
       resolveStaffExpiredTransfer(api, other, "returned", "Refunded by EFT")

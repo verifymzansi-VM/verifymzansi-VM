@@ -285,6 +285,23 @@ describe("bank transfers waiting for a second staff member", () => {
     });
   });
 
+  it("never lets the recorder resolve an expired transfer", () => {
+    const { similar_records: _ignored, ...rest } = waiting;
+    const expired = {
+      ...rest,
+      recorded_by_me: true,
+      expired_at: "2026-11-27T08:01:00Z",
+      invoice_number: null,
+    };
+    render(<BankTransferPanel canRecord canConfirm waiting={[]} expired={[expired]} />);
+    const list = screen.getByRole("list", { name: "Expired bank transfers" });
+    expect(within(list).getByRole("button", { name: "Money returned" })).toBeDisabled();
+    expect(within(list).getByRole("button", { name: "Never arrived" })).toBeDisabled();
+    expect(
+      within(list).getByText("You recorded it: another staff member must resolve it.")
+    ).toBeInTheDocument();
+  });
+
   it("lists expired transfers with an Expired badge and no actions without the right", () => {
     const { similar_records: _ignored, ...rest } = waiting;
     const expired = {

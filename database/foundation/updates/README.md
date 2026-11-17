@@ -2762,7 +2762,11 @@ written):
   reason, that the money of an expired transfer was returned outside
   VerifyMzansi (`returned`) or never arrived (`never_arrived`): new columns
   `resolution`, `resolution_reason`, `resolved_by`, `resolved_at`, set only on
-  an expired transfer and never changed after.
+  an expired transfer and never changed after; never by the staff member who
+  recorded it (42501 `transfer_resolver_same`, as for confirming). Money so
+  resolved cannot use the old-money exception, and the account erasure hold
+  (`transfer_waiting`) also waits for an expired transfer not yet followed up
+  (`internal.invoice_transfer_follow_up_open`).
 - **Two reads.** `api.get_staff_expired_invoice_transfers()` (payments:view:
   every expired transfer still to be followed up, that is neither resolved nor
   with the same money recorded again and confirmed; a paid or voided invoice or

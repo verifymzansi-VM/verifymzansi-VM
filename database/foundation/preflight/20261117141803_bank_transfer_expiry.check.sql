@@ -47,7 +47,7 @@ with bodies as (
     ('internal.void_staff_invoice(uuid,text)',
       '21763bcb62e398b6d1b8e8d64ef38ea5', '6c997c846aa9d114150e11d2591d5ad7'),
     ('internal.account_erasure_hold(uuid)',
-      '5bd01c33cf23f3e6516ceb96c3dc3236', 'f450a4cad9855826d8dc6212d1a614cb'),
+      '5bd01c33cf23f3e6516ceb96c3dc3236', '42edfda741d3096f7ea7a7b0cb897d49'),
     ('internal.retention_commerce(integer)',
       '422a63c6d6fd2be5a1556893a8975d3f', '55051470a07c224838cb58dc45d66406'),
     ('internal.frontend_privacy_export_data(uuid)',

@@ -240,7 +240,7 @@ function ExpiredTransfers({
                   size="sm"
                   variant="outline"
                   className="h-10"
-                  disabled={busy}
+                  disabled={busy || t.recorded_by_me}
                   onClick={() => resolve(t, "returned")}
                 >
                   Money returned
@@ -249,11 +249,16 @@ function ExpiredTransfers({
                   size="sm"
                   variant="outline"
                   className="h-10"
-                  disabled={busy}
+                  disabled={busy || t.recorded_by_me}
                   onClick={() => resolve(t, "never_arrived")}
                 >
                   Never arrived
                 </Button>
+                {t.recorded_by_me ? (
+                  <span className="text-xs text-muted-foreground">
+                    You recorded it: another staff member must resolve it.
+                  </span>
+                ) : null}
               </span>
             ) : null}
           </li>
