@@ -122,6 +122,32 @@ describe("the sponsor offer, on hold", () => {
     const { default: SponsorsPage } = await import("@/app/sponsors/page");
     const { container } = render(await SponsorsPage());
     expect(container.textContent).not.toMatch(/are joining|Founding programmes open/);
+    expect(screen.getByText("No sponsors yet")).toBeInTheDocument();
+  });
+});
+
+describe("links to hidden sections and the hidden pricing package block", () => {
+  it("drops the sponsor card and fees, and states the package rules on the multi-listing card", async () => {
+    const { EnterprisePricing } = await import("@/components/billing/enterprise-pricing");
+    const { container } = render(
+      <EnterprisePricing plans={[]} checkoutEnabled retailFromCents={6900} />
+    );
+    const text = container.textContent ?? "";
+    expect(screen.queryByRole("link", { name: /Full details of Business Sponsor/ })).toBeNull();
+    expect(container.querySelector("#programme-prices")).toBeNull();
+    expect(text).toMatch(/Two ways to advertise/);
+    expect(text).toMatch(/From R500\s*for 30 days/);
+    expect(text).toMatch(/From 5 slots at R100 per slot per 30 days, for 30, 90 or 180 days\./);
+    expect(text).not.toMatch(/administrators|10 to 100|sponsor/i);
+  });
+
+  it("says nothing about Boost or Featured on the showroom help page", async () => {
+    const { default: ShowroomHelpPage } = await import("@/app/help/showroom/page");
+    const { container } = render(<ShowroomHelpPage />);
+    expect(container.textContent).toMatch(
+      /every live post gets an equal turn at the front of the showroom\./
+    );
+    expect(container.textContent).not.toMatch(/Boost and Featured/);
   });
 });
 

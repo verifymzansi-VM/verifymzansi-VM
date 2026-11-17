@@ -69,17 +69,21 @@ export default async function SponsorsPage() {
           </p>
 
           {sponsors.length === 0 ? (
-            SHOW_SPONSOR_OFFER ? (
-              <div className="mt-8 rounded-2xl border border-dashed p-8 text-center">
-                <p className="font-display text-lg font-semibold">
-                  Our first Business Sponsors are joining
-                </p>
-                <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                  Founding programmes open in the City of uMhlathuze. Their businesses appear here
-                  as they go live.
-                </p>
-              </div>
-            ) : null
+            <div className="mt-8 rounded-2xl border border-dashed p-8 text-center">
+              {SHOW_SPONSOR_OFFER ? (
+                <>
+                  <p className="font-display text-lg font-semibold">
+                    Our first Business Sponsors are joining
+                  </p>
+                  <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                    Founding programmes open in the City of uMhlathuze. Their businesses appear here
+                    as they go live.
+                  </p>
+                </>
+              ) : (
+                <p className="font-display text-lg font-semibold">No sponsors yet</p>
+              )}
+            </div>
           ) : (
             <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {sponsors.map((sponsor) => {

@@ -4,7 +4,6 @@ import { CURRENT_MAX_APPROVED_CONTENT_EDITS } from "./current-edit-policy";
  * the current backend's shared edit limit until their adapters are migrated.
  */
 export type PackageRulePolicy = "source" | "foundation";
-export const CURRENT_EDIT_RULE = `Each live post can have up to ${CURRENT_MAX_APPROVED_CONTENT_EDITS} approved edits. It stays visible while we review an edit.`;
 
 /** Approved edits per started 30 days of a package; price-only changes are free. */
 const EDITS_PER_30_DAYS = 2;
@@ -12,17 +11,24 @@ const EDITS_PER_30_DAYS = 2;
 /** Days an expired, sold or archived post is kept before it and its media are deleted. */
 const EXPIRED_POST_KEEP_DAYS = 30;
 
-/** Edits a post gets for a package of `packageDays` (30 → 2, 90 → 6, 180 → 12). */
+/**
+ * Approved edits a post gets over its whole life for a slot of `packageDays`
+ * (30 → 2, 90 → 6, 180 → 12; at least 2), as internal.edit_allowance counts
+ * them. Free posts and events get 2 (CURRENT_MAX_APPROVED_CONTENT_EDITS).
+ */
 export function editAllowanceForDays(packageDays: number): number {
   if (!Number.isFinite(packageDays) || packageDays <= 0) return EDITS_PER_30_DAYS;
   return Math.max(EDITS_PER_30_DAYS, EDITS_PER_30_DAYS * Math.ceil(packageDays / 30));
 }
 
+/** "up to 2, 6 or 12 approved edits for a 30-, 90- or 180-day slot" */
+export const SLOT_EDIT_ALLOWANCE = `up to ${editAllowanceForDays(30)}, ${editAllowanceForDays(90)} or ${editAllowanceForDays(180)} approved edits for a 30-, 90- or 180-day slot`;
+
+export const CURRENT_EDIT_RULE = `Each live post can have ${SLOT_EDIT_ALLOWANCE} (a free post or an event: ${CURRENT_MAX_APPROVED_CONTENT_EDITS}). It stays visible while we review an edit.`;
+
 export type PostKind = "listing" | "business" | "event";
 
-/** The live backend's rule (internal.edit_allowance): 2 approved edits per started 30 days. */
-export const EDIT_RULE =
-  "Each live post gets 2 edits for every 30 days of its package (30 days: 2, 90 days: 6, 180 days: 12). One price change a day doesn't count. Your post stays visible while we check an edit.";
+const EDIT_RULE = `Each live post can have ${SLOT_EDIT_ALLOWANCE}. One price change a day doesn't count. Your post stays visible while we check an edit.`;
 
 export const EVENT_EDIT_RULE =
   "Each live event can be edited twice. It stays visible while we check an edit.";
@@ -45,7 +51,9 @@ export function editLimitReachedMessage(
 ): string {
   const label = KIND_LABEL[kind];
   if (policy === "source")
-    return `This ${label} has used its ${CURRENT_MAX_APPROVED_CONTENT_EDITS} approved edits.`;
+    return kind === "event"
+      ? `This ${label} has used its ${CURRENT_MAX_APPROVED_CONTENT_EDITS} approved edits.`
+      : `This ${label} has used all its approved edits: ${SLOT_EDIT_ALLOWANCE} (a free post: ${CURRENT_MAX_APPROVED_CONTENT_EDITS}).`;
   return kind === "listing"
     ? `This ${label} has used all its edits for its package. You can still change the price once a day. For other changes, delete it and post it again in the same slot.`
     : `This ${label} has used all its edits. For other changes, delete it and post it again in the same slot.`;

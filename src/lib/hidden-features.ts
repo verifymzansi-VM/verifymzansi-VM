@@ -112,7 +112,8 @@ export const SHOW_TRIAL_EXTENSION_OFFERS: boolean = false;
 /**
  * Paid add-ons (Urgent, Boost, Featured) where they are offered or listed as
  * included: the "Get more eyes on a post" section on Advertise and the
- * "Urgent label add-on" line on the plan cards. Add-on sales are paused
+ * "Urgent label add-on" line on the plan cards, and "Boost and Featured" on the
+ * showroom help page. Add-on sales are paused
  * (ADDON_SALES_ENABLED) and paid add-ons do not deliver yet (roadmap M1.10),
  * so the pages promised something nobody could buy.
  */
@@ -122,7 +123,9 @@ export const SHOW_PAID_ADDONS: boolean = false;
  * The Business Sponsor offer: the sponsor package, founding pilots, sample
  * partner report and sponsor questions on Advertise, and the "Become a
  * Business Sponsor" buttons and call to action on the home page and
- * Business Sponsors page. The sponsor programme is on hold by the owner's
+ * Business Sponsors page, the sponsor card and fees on the (hidden) pricing
+ * package section, and "See programme prices" on an organisation dashboard.
+ * The sponsor programme is on hold by the owner's
  * decision, and the Terms (posting-v5) sell no sponsor package. Existing
  * sponsors and the businesses they support are still listed.
  */

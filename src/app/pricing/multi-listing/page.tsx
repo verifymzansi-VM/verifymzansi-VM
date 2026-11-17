@@ -7,7 +7,7 @@ import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
-import { formatPlanPrice, RETAIL_OFFERS } from "@/lib/constants/pricing";
+import { formatPlanPrice, PACKAGES_ON_SALE, RETAIL_OFFERS } from "@/lib/constants/pricing";
 import {
   PACKAGE_MAX_ONLINE_SLOTS,
   PACKAGE_MIN_SLOTS,
@@ -126,13 +126,16 @@ export default async function MultiListingPage() {
                 </li>
               ))}
             </ol>
-            <Link
-              href="/advertise#multi-listing"
-              className="mt-6 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-green-300"
-            >
-              Who multi-listing is for, and everything it includes
-              <ArrowRight aria-hidden="true" className="h-4 w-4" />
-            </Link>
+            {/* Advertise shows its Multi-listing section only while packages are on sale there. */}
+            {PACKAGES_ON_SALE ? (
+              <Link
+                href="/advertise#multi-listing"
+                className="mt-6 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-green-300"
+              >
+                Who multi-listing is for, and everything it includes
+                <ArrowRight aria-hidden="true" className="h-4 w-4" />
+              </Link>
+            ) : null}
           </div>
         </section>
       </main>

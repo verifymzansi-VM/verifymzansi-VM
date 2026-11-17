@@ -68,32 +68,51 @@ describe("AdvertisePage", () => {
     expect(screen.getAllByText("Who can use it")).toHaveLength(1);
   });
 
-  it("states the live edit allowance, not 2 edits in total", async () => {
+  it("states the live edit allowance (over the post's life, by slot length)", async () => {
     const { container } = render(await AdvertisePage());
 
     expect(
       screen.getByText(
-        "2 approved edits per live post for every 30 days of its slot (30 days: 2, 90 days: 6, 180 days: 12)"
+        "Each live post: up to 2, 6 or 12 approved edits for a 30-, 90- or 180-day slot"
       )
     ).toBeInTheDocument();
-    expect(container.textContent).not.toMatch(/Up to 2 approved edits/);
+    expect(container.textContent).not.toMatch(/Up to 2 approved edits|for every 30 days/);
   });
 
-  it("answers 'Can I cancel?' as the Terms' Refunds & cancelling section does", async () => {
+  it("offers 1 to 4 Individual slots and makes no 'people can trust' claim", async () => {
+    const { container } = render(await AdvertisePage());
+    const text = container.textContent ?? "";
+
+    expect(text).toMatch(/you can hold 1 to 4 slots at a time/);
+    expect(text).toMatch(/1 to 4 live slots at a time/);
+    expect(screen.getByText("Individual slots (price per slot)")).toBeInTheDocument();
+    expect(text).not.toMatch(/people can trust|One live slot|1 live slot in/);
+  });
+
+  it("answers 'Can I cancel?' as the Terms' Paying and Refunds & cancelling sections do", async () => {
     const { container } = render(await AdvertisePage());
     const text = container.textContent ?? "";
 
     expect(screen.getByText("Can I cancel?")).toBeInTheDocument();
-    expect(text).toMatch(/A change of mind is not a reason for a refund/);
-    expect(text).toMatch(/so the 7-day cooling-off does not apply/);
-    expect(text).toMatch(/A rejected post is not refunded either; the slot stays yours/);
-    expect(text).toMatch(
-      /If you are an individual, you can cancel a slot by writing to billing@verifymzansi\.com: it runs for 20 business days more, then we credit its unused whole days, less a R50 fee/
+    for (const rule of [
+      "so the 7-day cooling-off does not apply and a change of mind is not a reason for a refund",
+      "A rejected post keeps its slot: correct it and submit it again.",
+      "If we wrongly reject a post, a paid slot does not work, or the site is down for more than 24 hours in a row, we first add the days you lost; if you still ask, we refund a reasonable part of the price for those days.",
+      "If you are an individual (sole traders included), you can cancel a slot by emailing billing@verifymzansi.com from your account's email address.",
+      "The slot runs for 20 more business days, then we credit its unused whole days, less a R50 fee; if that is R0 or less, nothing is paid, so cancelling a 30-day slot usually returns nothing.",
+      "Closing your account cancels all your slots.",
+      "Companies and other organisations are not refunded for unused days.",
+      "Billing errors and duplicate payments are refunded in full once we have checked them.",
+      "Refunds go to the account that paid, within 30 days after we approve them.",
+      "Your rights under the Consumer Protection Act are not affected.",
+    ])
+      expect(text).toContain(rule);
+    expect(screen.getByRole("link", { name: "Refunds & cancelling in the Terms" })).toHaveAttribute(
+      "href",
+      "/terms#refunds"
     );
-    expect(text).toMatch(/Companies and other organisations are not refunded for unused days/);
-    expect(text).toMatch(/Billing errors and duplicate payments are refunded in full/);
     expect(text).not.toMatch(/Unused days are not refunded|We refund rejected posts/);
-    expect(text).not.toMatch(/statutory cooling-off rights apply/);
+    expect(text).not.toMatch(/statutory cooling-off rights apply|is not refunded either/);
   });
 
   it("offers no paid add-ons while they do not deliver", async () => {
@@ -112,7 +131,7 @@ describe("AdvertisePage", () => {
     );
     expect(screen.queryByRole("link", { name: "See multi-listing prices" })).toBeNull();
     expect(screen.queryByRole("link", { name: "See sponsor fees" })).toBeNull();
-    expect(screen.getByText("Individual plans (one live slot)")).toBeInTheDocument();
+    expect(screen.getByText("Individual slots (price per slot)")).toBeInTheDocument();
     expect(screen.queryByText("Multi-listing price (total for the term)")).toBeNull();
     expect(screen.queryByText("By written proposal")).toBeNull();
     expect(container.textContent).toMatch(/R69/);

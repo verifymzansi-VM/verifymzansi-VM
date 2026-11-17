@@ -44,6 +44,8 @@ describe("the hidden Multi-listing page (P4a)", () => {
     expect(screen.getByText("Does not renew automatically")).toBeInTheDocument();
     // Package teams are not built yet: hidden until they work.
     expect(text).not.toMatch(/You \+ 1 person|you \+ 4/);
+    // Advertise hides its Multi-listing section while packages are off sale there.
+    expect(screen.queryByRole("link", { name: /Who multi-listing is for/ })).toBeNull();
     expect(text).toMatch(/up to 4 posts going live per slot per 30 days/);
     expect(text).not.toMatch(/Paid once|never renews|administrators|10 to 100|for 90 or 180 days/);
     // Ozow's maximum (the database setting), never the old R10,000.

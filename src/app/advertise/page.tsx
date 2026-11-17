@@ -57,6 +57,7 @@ import {
 import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { SHOW_PAID_ADDONS, SHOW_SPONSOR_OFFER } from "@/lib/hidden-features";
+import { SLOT_EDIT_ALLOWANCE } from "@/lib/posting/package-rules";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -67,9 +68,8 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://verifymzansi.com/advertise" },
 };
 
-/** Approved edits follow the slot's days (2 per 30 days); a price change once a day is free. */
-const EDITS_LINE =
-  "2 approved edits per live post for every 30 days of its slot (30 days: 2, 90 days: 6, 180 days: 12)";
+/** A post's approved edits over its whole life, set by its slot (internal.edit_allowance). */
+const EDITS_LINE = `Each live post: ${SLOT_EDIT_ALLOWANCE}`;
 
 const PROPOSAL_HREF = "/contact?topic=organisation_proposal";
 
@@ -203,7 +203,7 @@ const PACKAGES: readonly PackageDetail[] = [
     name: "Individual",
     eyebrow: "For one post or one business",
     title: "Sell something, or put your business on the map",
-    lede: "One live slot, in any section. The simplest way to reach local buyers with a post people can trust.",
+    lede: "Each slot keeps one post live, in any section, and you can hold 1 to 4 slots at a time. The simplest way to reach local buyers, with your ID reviewed before you post.",
     who: "Anyone selling one thing or running one business profile.",
     audience: [
       "Private sellers: a car, phone, furniture or equipment",
@@ -212,7 +212,7 @@ const PACKAGES: readonly PackageDetail[] = [
       "Community groups sharing an event (events are always free)",
     ],
     includes: [
-      "1 live slot in Mzansi Market, Mzansi Business or Tourism & Events",
+      "1 to 4 live slots at a time in Mzansi Market, Mzansi Business or Tourism & Events, one post each",
       "An ID reviewed sticker, plus optional CIPC registered and Seen stickers for businesses",
       "Photos and a short video on your post",
       "Calls and WhatsApp straight to you, with no commission",
@@ -424,7 +424,18 @@ const FAQ = [
   },
   {
     q: "Can I cancel?",
-    a: `You can take your post down at any time. A change of mind is not a reason for a refund: before you pay, you agree that your slot starts as soon as your payment is confirmed, so the 7-day cooling-off does not apply. A rejected post is not refunded either; the slot stays yours to correct the post or use for another. If you are an individual, you can cancel a slot by writing to ${BILLING_EMAIL}: it runs for 20 business days more, then we credit its unused whole days, less a R50 fee. Companies and other organisations are not refunded for unused days. Billing errors and duplicate payments are refunded in full.`,
+    a: (
+      <>
+        {`You can take your post down at any time. Before you pay, you agree that your slot starts as soon as your payment is confirmed, so the 7-day cooling-off does not apply and a change of mind is not a reason for a refund. A rejected post keeps its slot: correct it and submit it again. If we wrongly reject a post, a paid slot does not work, or the site is down for more than 24 hours in a row, we first add the days you lost; if you still ask, we refund a reasonable part of the price for those days. If you are an individual (sole traders included), you can cancel a slot by emailing ${BILLING_EMAIL} from your account's email address. The slot runs for 20 more business days, then we credit its unused whole days, less a R50 fee; if that is R0 or less, nothing is paid, so cancelling a 30-day slot usually returns nothing. Closing your account cancels all your slots. Companies and other organisations are not refunded for unused days. Billing errors and duplicate payments are refunded in full once we have checked them. Refunds go to the account that paid, within 30 days after we approve them. Your rights under the Consumer Protection Act are not affected. `}
+        <Link
+          href="/terms#refunds"
+          className="font-medium text-foreground underline underline-offset-2"
+        >
+          Refunds &amp; cancelling in the Terms
+        </Link>
+        .
+      </>
+    ),
   },
   {
     q: "Do you take commission?",
@@ -459,7 +470,7 @@ export default async function AdvertisePage() {
 
   const sheets: Record<PackageDetail["id"], PriceSheetData> = {
     individual: {
-      caption: "Individual plans (one live slot)",
+      caption: "Individual slots (price per slot)",
       columns: ["Term", "Price"],
       rows: [
         ...retail.map((offer) => ({
