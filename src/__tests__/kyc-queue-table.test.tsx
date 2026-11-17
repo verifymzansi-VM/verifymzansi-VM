@@ -495,6 +495,33 @@ describe("KycQueueTable", () => {
     });
   });
 
+  // The evidence routes refuse anyone not holding the case's claim (403), so
+  // the document buttons wait for the viewer's claim and say why.
+  it("enables the documents only on the case the viewer has claimed", () => {
+    renderQueue();
+    const viewDocuments = screen.getAllByTitle("Compare ID and selfie") as HTMLButtonElement[];
+    expect(viewDocuments.map((button) => button.disabled)).toEqual([false, true]);
+    expect(screen.getAllByText("Claim this case first")).toHaveLength(1);
+    // Rows 1 and 2 are the claimed ID and selfie; row 3 is the colleague's ID.
+    const rowViews = screen.getAllByTitle("View") as HTMLButtonElement[];
+    expect(rowViews.map((button) => button.disabled)).toEqual([false, false, true]);
+  });
+
+  it.each([false, true])(
+    "asks for a claim before showing documents (evidence desk %s)",
+    (evidenceDeskEnabled) => {
+      renderQueue({ evidenceDeskEnabled }, {});
+      expect(screen.getAllByText("Claim this case first")).toHaveLength(2);
+      for (const button of screen.getAllByTitle("Compare ID and selfie")) {
+        expect(button).toBeDisabled();
+        fireEvent.click(button);
+      }
+      for (const button of screen.getAllByTitle("View")) expect(button).toBeDisabled();
+      expect(screen.queryByTestId("comparison-viewer")).not.toBeInTheDocument();
+      expect(global.fetch).not.toHaveBeenCalled();
+    }
+  );
+
   it("opens a row-level document preview for the selected step", async () => {
     fetchMock().mockResolvedValueOnce(staffJson(identityMetadata()));
 
