@@ -32,6 +32,15 @@ export type FoundationRefusal = {
   retryAfter?: number;
 };
 
+/** The GoTrue-verified caller given to a command that asks for it. */
+type FoundationOwnerCaller = {
+  accountId: string;
+  sessionId: string;
+  /** When this session last signed in with a password or Google (seconds),
+   * or null (foundationLatestSignIn in sign-in-claims.ts). */
+  signedInAt?: number | null;
+};
+
 /** Owner route on the foundation project: same-origin and CSRF for writes,
  * per-client rate limit (blocking when the limiter is degraded), a
  * GoTrue-verified session, bounded JSON and exactly one command with no
@@ -62,7 +71,7 @@ export async function handleFoundationOwnerRoute<T>({
   command: (
     api: FoundationAuthenticatedApi,
     input: unknown,
-    caller?: { accountId: string; sessionId: string }
+    caller?: FoundationOwnerCaller
   ) => Promise<T>;
   refusal: (error: unknown) => FoundationRefusal | null;
   includeAccountId?: boolean;
@@ -110,12 +119,16 @@ export async function handleFoundationOwnerRoute<T>({
           }
         )
       );
-    let caller: { accountId: string; sessionId: string } | undefined;
+    let caller: FoundationOwnerCaller | undefined;
     try {
       if (includeAccountId || requireCaller) {
         const verified = await context.authenticateCaller();
         api = verified.api;
-        caller = { accountId: verified.accountId, sessionId: verified.sessionId };
+        caller = {
+          accountId: verified.accountId,
+          sessionId: verified.sessionId,
+          signedInAt: verified.signedInAt,
+        };
       } else api = await context.authenticate();
     } catch (error) {
       if (!(error instanceof FoundationSessionError) || error.status === 503)

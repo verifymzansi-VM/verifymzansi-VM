@@ -10,10 +10,10 @@ const log = createLogger("AccountDelete");
  *
  * "Delete account" on the profile's Account tab: closes the signed-in
  * member's own account (api.close_my_account) once they typed DELETE. Same
- * origin and CSRF, a per-client limit (account:delete), a GoTrue-verified
- * session; the database checks that this session signed in within the last
- * 15 minutes and is not a staff account, and the account always comes from
- * the session.
+ * origin and CSRF, the account:delete limit per client and per account, a
+ * GoTrue-verified session that signed in with a password or Google in the
+ * last 15 minutes; the database refuses a staff account, and the account
+ * always comes from the session.
  */
 export async function POST(request: NextRequest) {
   return handleFoundationOwnerRoute({
@@ -21,11 +21,15 @@ export async function POST(request: NextRequest) {
     log,
     action: "account:delete",
     mutate: true,
+    requireCaller: true,
     maxBytes: 1024,
-    signInMessage: "Sign in again to delete your account.",
+    // Also the answer to a retry after a closure: its sessions are gone.
+    signInMessage:
+      "You are signed out. If you just deleted your account, it is closed; otherwise sign in again to delete it.",
+    // Only failures before the closure is sent reach this message.
     unavailableMessage:
-      "Your account could not be closed right now. Reload the page to check before trying again.",
+      "Your account could not be closed right now. Nothing was changed; try again in a few minutes.",
     refusal: accountClosureRefusal,
-    command: (api, body) => closeMyAccount(api, body),
+    command: (api, body, caller) => closeMyAccount(api, body, caller),
   });
 }

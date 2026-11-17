@@ -13,7 +13,12 @@ export function confirmsAccountClosure(value: string): boolean {
   return value.trim().toUpperCase() === ACCOUNT_CLOSURE_WORD;
 }
 
-/** How recent the member's sign-in must be (internal.account_closing_actor). */
+/** What the member is told when the closure was sent but its outcome is unknown. */
+export const ACCOUNT_CLOSURE_UNKNOWN_OUTCOME =
+  "We couldn't confirm whether your account was closed. Try signing in: if you can't, it was closed. Contact support if unsure.";
+
+/** How recent the member's password or Google sign-in must be (the route's
+ * rule; internal.account_closing_actor also counts other sign-in methods). */
 export const ACCOUNT_CLOSURE_SIGN_IN_MINUTES = 15;
 
 const DAY_MS = 24 * 60 * 60 * 1000;

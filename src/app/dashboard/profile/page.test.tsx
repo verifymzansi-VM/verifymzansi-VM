@@ -268,20 +268,32 @@ describe("ProfilePage", () => {
         expect(screen.getByRole("heading", { name: "My profile" })).toBeInTheDocument();
       });
       expect(screen.queryByRole("link", { name: "data request" })).not.toBeInTheDocument();
+      // The row says what is kept, not "for good".
+      expect(
+        screen.getByText(
+          /Closes your account and erases your data, except records we must keep by law, such as payments, invoices and ID-check history\. See our/
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/for good/)).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
 
       const dialog = screen.getByRole("dialog", { name: "Confirm account deletion" });
       for (const text of [
         "Your account closes as soon as you confirm. You can't undo this or reopen the account yourself.",
         "Your posts leave the site at once and are deleted with your account.",
-        /All your slots are cancelled\. Under our Terms, closing your account is a request to cancel them/,
-        /minus a R50 fee, so a 30-day slot usually returns nothing/,
+        "As our Terms say, closing your account counts as a request to cancel all your slots. If you are an individual or sole trader, we work out any credit for unused days after the 20-business-day notice period, minus a R50 fee; a 30-day slot usually returns nothing. Companies and other buyers that are not individuals get no credit.",
         "You are signed out on every device and can't sign in again.",
-        /erased on 17 December 2026, 30 days after closing/,
-        /We finish your deletion request by 24 December 2026\. If a payment, bank transfer, refund, unpaid invoice, report or hold is still open/,
-        "For your safety, this works only within 15 minutes of signing in.",
+        "Erasing your profile, posts, enquiries, photos and videos is planned for 17 December 2026, 30 days after closing. If a payment, refund, invoice, report or legal hold is still open, erasure waits until it is settled.",
+        /^Payment records and invoices are kept for 5 years for tax, as the law requires\. Some other records, such as ID-check history, are kept as our/,
+        "For your safety, this works only within 15 minutes of signing in with your password or Google.",
       ])
         expect(within(dialog).getByText(text)).toBeInTheDocument();
+      // Nothing promises an automatic credit, a cancelled slot or a fixed erasure.
+      expect(dialog).not.toHaveTextContent(
+        /slots are cancelled|are credited|erased on|without your name|finish your deletion request by/
+      );
+      for (const link of within(dialog).getAllByRole("link", { name: "Privacy Policy" }))
+        expect(link).toHaveAttribute("href", "/privacy#retention");
       // The server checks the sign-in's age; no password is asked for here.
       expect(within(dialog).queryByLabelText("Current password")).not.toBeInTheDocument();
     } finally {
@@ -401,6 +413,103 @@ describe("ProfilePage", () => {
     expect(screen.queryByRole("button", { name: "Sign in again" })).not.toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Confirm account deletion" })).toBeInTheDocument();
     window.location.hash = "";
+  });
+
+  async function confirmDeletion() {
+    render(<ProfilePage />);
+    await screen.findByRole("heading", { name: "My profile" });
+    fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
+    fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
+      target: { value: "DELETE" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+  }
+
+  it.each([
+    ["the reply is lost", () => vi.fn().mockRejectedValue(new TypeError("Failed to fetch"))],
+    [
+      "the reply is not JSON (a gateway page)",
+      () =>
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 502,
+          json: async () => {
+            throw new SyntaxError("Unexpected token <");
+          },
+        }),
+    ],
+    [
+      "the server says the outcome is unknown",
+      () =>
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 503,
+          json: async () => ({
+            code: "outcome_unknown",
+            error:
+              "We couldn't confirm whether your account was closed. Try signing in: if you can't, it was closed. Contact support if unsure.",
+          }),
+        }),
+    ],
+  ])("never says the account was not closed when %s", async (_, makeFetch) => {
+    vi.stubGlobal("fetch", makeFetch());
+    window.location.hash = "#account";
+    await confirmDeletion();
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Account status unknown",
+        description:
+          "We couldn't confirm whether your account was closed. Try signing in: if you can't, it was closed. Contact support if unsure.",
+        variant: "destructive",
+      })
+    );
+    expect(mockToast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Account deletion failed" })
+    );
+    window.location.hash = "";
+  });
+
+  it("after a lost answer, a retry that finds the session gone says so and goes to sign-in", async () => {
+    const message =
+      "You are signed out. If you just deleted your account, it is closed; otherwise sign in again to delete it.";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ error: message }) })
+    );
+    const originalLocation = window.location;
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: {
+        origin: "http://localhost",
+        href: "http://localhost/dashboard/profile#account",
+        pathname: "/dashboard/profile",
+        search: "",
+        hash: "#account",
+        assign,
+        replace: vi.fn(),
+      },
+    });
+    try {
+      await confirmDeletion();
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith({
+          title: "You are signed out",
+          description: message,
+          variant: "destructive",
+        })
+      );
+      expect(screen.queryByRole("button", { name: "Sign in again" })).not.toBeInTheDocument();
+      await waitFor(
+        () =>
+          expect(assign).toHaveBeenCalledWith(
+            "http://localhost/login?returnUrl=%2Fdashboard%2Fprofile%23account"
+          ),
+        { timeout: 3000 }
+      );
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+    }
   });
 
   it("shows password setup flow for Google-only users", async () => {
@@ -621,11 +730,17 @@ describe("ProfilePage", () => {
         expect(mockToast).toHaveBeenCalledWith({
           title: "Account deleted",
           description:
-            "Your account is closed and you are signed out. It will be erased on 17 December 2026.",
+            "Your account is closed and you are signed out. Erasure is planned for 17 December 2026; it waits while a payment, refund, invoice, report or legal hold is still open.",
           variant: "success",
         });
       });
       expect(mockSignOut).toHaveBeenCalledWith({ scope: "local" });
+      // A second try is impossible: the page shows the account closed.
+      expect(screen.queryByRole("button", { name: /^Delete$/i })).not.toBeInTheDocument();
+      expect(
+        screen.getByText("Your account is closed. Erasure is planned for 17 December 2026.")
+      ).toBeInTheDocument();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
       await waitFor(() => {
         expect(useAuthStore.getState().user).toBeNull();
         expect(useNotificationStore.getState().notifications).toHaveLength(0);

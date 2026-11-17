@@ -54,6 +54,7 @@ import {
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import {
   ACCOUNT_CLOSURE_SIGN_IN_MINUTES,
+  ACCOUNT_CLOSURE_UNKNOWN_OUTCOME,
   ACCOUNT_CLOSURE_WORD,
   accountClosureDates,
   confirmsAccountClosure,
@@ -61,6 +62,9 @@ import {
 import type { AccountVerificationStatus } from "@/types/enums";
 
 type TabValue = "profile" | "security" | "account";
+
+/** Sign-in that brings the member back to the Account tab. */
+const DELETE_SIGN_IN_PATH = `/login?returnUrl=${encodeURIComponent("/dashboard/profile#account")}`;
 
 /** How long the "Account deleted" toast stays readable before the full reload home. */
 const ACCOUNT_DELETED_REDIRECT_DELAY_MS = 1500;
@@ -131,6 +135,8 @@ export default function ProfilePage() {
   const [deleteSignInRequired, setDeleteSignInRequired] = useState(false);
   // The erasure dates the dialog shows, as of when it was opened.
   const [deletePreview, setDeletePreview] = useState(() => accountClosureDates(new Date()));
+  // Set once the server confirmed the closure; the page then shows it closed.
+  const [closedAccount, setClosedAccount] = useState<{ eraseAfter: Date | null } | null>(null);
   const [isPasswordAccount, setIsPasswordAccount] = useState(true);
   const [isDeleteVerifying, setIsDeleteVerifying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -562,55 +568,70 @@ export default function ProfilePage() {
   async function handleDeleteSignInAgain() {
     setIsDeleteVerifying(true);
     await forgetBrowserSession();
-    window.location.assign(
-      new URL(
-        `/login?returnUrl=${encodeURIComponent("/dashboard/profile#account")}`,
-        window.location.origin
-      ).toString()
-    );
+    window.location.assign(new URL(DELETE_SIGN_IN_PATH, window.location.origin).toString());
+  }
+
+  /** Leaves after the session ended, with a full page load so nothing from
+   * this session survives in memory; the delay lets the toast be read first. */
+  async function leaveAfterSessionEnded(path: string) {
+    await forgetBrowserSession();
+    window.setTimeout(() => {
+      window.location.assign(new URL(path, window.location.origin).toString());
+    }, ACCOUNT_DELETED_REDIRECT_DELAY_MS);
   }
 
   async function handleStartDeleteRequest() {
+    // Closed already: never send it again.
+    if (closedAccount) return;
     setIsDeleteVerifying(true);
     setDeleteSignInRequired(false);
     try {
-      const res = await fetch("/api/account/delete", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ confirmation: deleteConfirmation }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (data.code === "reauthentication_required") setDeleteSignInRequired(true);
-        toast({
-          title: "Account deletion failed",
-          description: data.error || "Please try again.",
-          variant: "destructive",
+      let data: Record<string, unknown>;
+      let status: number;
+      try {
+        const res = await fetch("/api/account/delete", {
+          method: "POST",
+          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ confirmation: deleteConfirmation }),
         });
+        status = res.ok ? 200 : res.status;
+        data = await res.json();
+      } catch {
+        // Sent, but no readable answer: the account may be closed.
+        status = 503;
+        data = { code: "outcome_unknown", error: ACCOUNT_CLOSURE_UNKNOWN_OUTCOME };
+      }
+
+      if (status !== 200) {
+        const message = typeof data.error === "string" ? data.error : "Please try again.";
+        if (data.code === "outcome_unknown") {
+          toast({ title: "Account status unknown", description: message, variant: "destructive" });
+        } else if (status === 401 && data.code !== "reauthentication_required") {
+          // The session is gone, for example because an earlier attempt closed
+          // the account; the answer says so. Sign-in decides either way.
+          handleDeleteDialogOpenChange(false);
+          toast({ title: "You are signed out", description: message, variant: "destructive" });
+          await leaveAfterSessionEnded(DELETE_SIGN_IN_PATH);
+        } else {
+          if (data.code === "reauthentication_required") setDeleteSignInRequired(true);
+          toast({ title: "Account deletion failed", description: message, variant: "destructive" });
+        }
         return;
       }
 
-      handleDeleteDialogOpenChange(false);
       const eraseAfter = typeof data.eraseAfter === "string" ? new Date(data.eraseAfter) : null;
+      const planned = eraseAfter && !Number.isNaN(eraseAfter.getTime()) ? eraseAfter : null;
+      setClosedAccount({ eraseAfter: planned });
+      handleDeleteDialogOpenChange(false);
       toast({
         title: "Account deleted",
-        description:
-          eraseAfter && !Number.isNaN(eraseAfter.getTime())
-            ? `Your account is closed and you are signed out. It will be erased on ${formatSaLongDate(eraseAfter)}.`
-            : "Your account is closed and you are signed out.",
+        description: planned
+          ? `Your account is closed and you are signed out. Erasure is planned for ${formatSaLongDate(planned)}; it waits while a payment, refund, invoice, report or legal hold is still open.`
+          : "Your account is closed and you are signed out.",
         variant: "success",
       });
-      // The server has already ended every session; drop this browser's copy
-      // and the account's auth/notification state, then leave with a full
-      // page load so nothing from this session survives in memory. The short
-      // delay lets the confirmation toast be read first.
-      await forgetBrowserSession();
-      window.setTimeout(() => {
-        window.location.assign(new URL("/", window.location.origin).toString());
-      }, ACCOUNT_DELETED_REDIRECT_DELAY_MS);
-    } catch {
-      toast({ title: "Something went wrong", variant: "destructive" });
+      // The server has already ended every session.
+      await leaveAfterSessionEnded("/");
     } finally {
       setIsDeleteVerifying(false);
     }
@@ -1170,22 +1191,37 @@ export default function ProfilePage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-destructive">Delete account</p>
-                  <p className="text-xs text-muted-foreground">
-                    Removes your account and personal data for good.
-                  </p>
+                  {closedAccount ? (
+                    <p role="status" className="text-xs text-muted-foreground">
+                      Your account is closed.
+                      {closedAccount.eraseAfter &&
+                        ` Erasure is planned for ${formatSaLongDate(closedAccount.eraseAfter)}.`}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Closes your account and erases your data, except records we must keep by law,
+                      such as payments, invoices and ID-check history. See our{" "}
+                      <Link className="underline" href="/privacy#retention">
+                        Privacy Policy
+                      </Link>
+                      .
+                    </p>
+                  )}
                 </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="h-11 gap-1.5"
-                  onClick={() => {
-                    setDeletePreview(accountClosureDates(new Date()));
-                    setIsDeleteDialogOpen(true);
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </Button>
+                {!closedAccount && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-11 gap-1.5"
+                    onClick={() => {
+                      setDeletePreview(accountClosureDates(new Date()));
+                      setIsDeleteDialogOpen(true);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </Button>
+                )}
               </div>
 
               <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
@@ -1204,27 +1240,31 @@ export default function ProfilePage() {
                     <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
                       <li>Your posts leave the site at once and are deleted with your account.</li>
                       <li>
-                        All your slots are cancelled. Under our Terms, closing your account is a
-                        request to cancel them: if you are an individual or sole trader, the unused
-                        whole days left after a 20-business-day notice period are credited at the
-                        slot&apos;s daily price, minus a R50 fee, so a 30-day slot usually returns
-                        nothing. Companies and other buyers that are not individuals get no credit.
+                        As our Terms say, closing your account counts as a request to cancel all
+                        your slots. If you are an individual or sole trader, we work out any credit
+                        for unused days after the 20-business-day notice period, minus a R50 fee; a
+                        30-day slot usually returns nothing. Companies and other buyers that are not
+                        individuals get no credit.
                       </li>
                       <li>You are signed out on every device and can&apos;t sign in again.</li>
                       <li>
-                        Your profile, posts, enquiries, photos and videos are erased on{" "}
-                        {formatSaLongDate(deletePreview.eraseAfter)}, 30 days after closing. Payment
-                        records and invoices are kept for 5 years for tax, without your name.
+                        Erasing your profile, posts, enquiries, photos and videos is planned for{" "}
+                        {formatSaLongDate(deletePreview.eraseAfter)}, 30 days after closing. If a
+                        payment, refund, invoice, report or legal hold is still open, erasure waits
+                        until it is settled.
                       </li>
                       <li>
-                        We finish your deletion request by {formatSaLongDate(deletePreview.eraseBy)}
-                        . If a payment, bank transfer, refund, unpaid invoice, report or hold is
-                        still open, the erasure waits until it is settled.
+                        Payment records and invoices are kept for 5 years for tax, as the law
+                        requires. Some other records, such as ID-check history, are kept as our{" "}
+                        <Link className="underline" href="/privacy#retention">
+                          Privacy Policy
+                        </Link>{" "}
+                        says.
                       </li>
                     </ul>
                     <p className="text-xs text-muted-foreground">
                       For your safety, this works only within {ACCOUNT_CLOSURE_SIGN_IN_MINUTES}{" "}
-                      minutes of signing in.
+                      minutes of signing in with your password or Google.
                     </p>
                     {deleteSignInRequired && (
                       <p role="alert" className="text-sm">

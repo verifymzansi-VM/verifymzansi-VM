@@ -1257,11 +1257,17 @@ test.describe("account recovery and self-service", () => {
     for (const text of [
       "Your posts leave the site at once and are deleted with your account.",
       "You are signed out on every device and can't sign in again.",
-      "For your safety, this works only within 15 minutes of signing in.",
+      "For your safety, this works only within 15 minutes of signing in with your password or Google.",
     ])
       await expect(dialog.getByText(text)).toBeVisible();
-    await expect(dialog.getByText(/All your slots are cancelled\./)).toBeVisible();
-    await expect(dialog.getByText(/30 days after closing/)).toBeVisible();
+    await expect(
+      dialog.getByText(/closing your account counts as a request to cancel all your slots/)
+    ).toBeVisible();
+    await expect(dialog.getByText(/is planned for .*, 30 days after closing/)).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
+      "href",
+      "/privacy#retention"
+    );
     await expect(dialog.getByLabel("Current password")).toHaveCount(0);
     const confirm = dialog.getByRole("button", { name: "Continue" });
     await expect(confirm).toBeDisabled();

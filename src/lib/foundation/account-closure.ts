@@ -4,9 +4,11 @@ import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationRefusal } from "./owner-route";
 import { hasDatabaseReason } from "./error-reasons";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 import {
   ACCOUNT_CLOSURE_SIGN_IN_MINUTES,
   ACCOUNT_CLOSURE_WORD,
+  ACCOUNT_CLOSURE_UNKNOWN_OUTCOME,
   accountErasureDeadline,
   confirmsAccountClosure,
 } from "@/lib/account/account-closure";
@@ -35,15 +37,32 @@ const closureReply = z.object({
   request_id: z.uuid(),
 });
 
-/** What the database's refusal means for the member; null for anything else. */
+const recentSignInRequired = () =>
+  new AccountClosureRefusal({
+    status: 401,
+    error: `For your safety, sign in again, then delete your account within ${ACCOUNT_CLOSURE_SIGN_IN_MINUTES} minutes.`,
+    reason: "recent_sign_in_required",
+    code: "reauthentication_required",
+  });
+
+/** The request was sent and its outcome is unknown: the account may be closed. */
+const outcomeUnknown = () =>
+  new AccountClosureRefusal({
+    status: 503,
+    error: ACCOUNT_CLOSURE_UNKNOWN_OUTCOME,
+    reason: "outcome_unknown",
+    code: "outcome_unknown",
+  });
+
+/** A code the database (SQLSTATE) or PostgREST (PGRST…) gave: the request was
+ * answered, so its transaction did not commit. Anything else (no reply, a
+ * gateway error) leaves the outcome unknown. */
+const ANSWERED_CODE = /^(?:[0-9A-Z]{5}|PGRST\d{3})$/;
+
+/** What the database's refusal means for the member. */
 function refusalOf(error: { code?: string | null; details?: string | null }) {
   if (error.code === "42501" && hasDatabaseReason(error, "recent_sign_in_required"))
-    return new AccountClosureRefusal({
-      status: 401,
-      error: `For your safety, sign in again, then delete your account within ${ACCOUNT_CLOSURE_SIGN_IN_MINUTES} minutes.`,
-      reason: "recent_sign_in_required",
-      code: "reauthentication_required",
-    });
+    return recentSignInRequired();
   if (error.code === "42501" && hasDatabaseReason(error, "staff_account"))
     return new AccountClosureRefusal({
       status: 409,
@@ -64,35 +83,75 @@ function refusalOf(error: { code?: string | null; details?: string | null }) {
       error: "This account no longer exists.",
       reason: "account_unavailable",
     });
-  // Sign-in could not be blocked or a session could not be ended: the whole
-  // closure was rolled back (internal.close_account_now).
-  if (error.code === "55000")
-    return new AccountClosureRefusal({
-      status: 503,
-      error: "Your account could not be closed. Nothing was changed; try again in a few minutes.",
-      reason: "closure_incomplete",
-    });
-  return null;
+  if (typeof error.code !== "string" || !ANSWERED_CODE.test(error.code)) return outcomeUnknown();
+  // Any other answered error rolled the whole closure back, including sign-in
+  // that could not be blocked or a session that could not be ended (55000,
+  // internal.close_account_now).
+  return new AccountClosureRefusal({
+    status: 503,
+    error: "Your account could not be closed. Nothing was changed; try again in a few minutes.",
+    reason: "closure_failed",
+  });
 }
 
+/** The verified caller (owner-route.ts): `signedInAt` comes only from a
+ * password or Google sign-in in this session (foundationLatestSignIn). */
+type Caller = { accountId: string; signedInAt?: number | null };
+
 /**
- * Closes the caller's own account (api.close_my_account). The database decides
- * everything else: the session's own account, a sign-in in the last 15
- * minutes, never a staff account; the posts leave the site, sign-in is
- * blocked, every session ends, slots are cancelled under the Terms, and the
- * account is erased 30 days later. Exactly one call, never retried.
+ * Closes the caller's own account (api.close_my_account). Before the call:
+ * the typed word, a per-account limit, and a password or Google sign-in in
+ * the last 15 minutes. The database's own check also accepts a session opened
+ * by an emailed link (reset, magic link, invite) or an authenticator step, so
+ * this route refuses those first. The database decides the rest: the
+ * session's own account, never a staff account; the posts leave the site,
+ * sign-in is blocked, every session ends, and the account is erased 30 days
+ * later. Exactly one call, never retried.
  */
-export async function closeMyAccount(api: FoundationAuthenticatedApi, input: unknown) {
+export async function closeMyAccount(
+  api: FoundationAuthenticatedApi,
+  input: unknown,
+  caller: Caller | undefined,
+  now = Date.now()
+) {
   closureRequest.parse(input);
-  const { data, error } = await api.rpc("close_my_account", {}, { get: false });
-  if (error) throw refusalOf(error) ?? new Error("Account closure unavailable");
-  const reply = closureReply.safeParse(data);
-  if (!reply.success) throw new Error("Account closure acknowledgement unavailable");
+  if (!caller) throw new Error("Verified caller required");
+  const limit = await checkRateLimit({
+    key: caller.accountId,
+    action: "account:delete",
+    degradedMode: "block",
+  });
+  if (limit.degraded || limit.limited)
+    throw new AccountClosureRefusal(
+      limit.degraded
+        ? { status: 503, error: "Protection is temporarily unavailable", reason: "limiter" }
+        : {
+            status: 429,
+            error: "Too many requests; try again shortly",
+            reason: "rate_limited",
+            code: "rate_limited",
+            retryAfter: limit.retryAfter ?? 60,
+          }
+    );
+  const signedInAt = caller.signedInAt ?? null;
+  if (signedInAt === null || now / 1000 - signedInAt > ACCOUNT_CLOSURE_SIGN_IN_MINUTES * 60)
+    throw recentSignInRequired();
+
+  let reply: { data: unknown; error: { code?: string | null; details?: string | null } | null };
+  try {
+    reply = await api.rpc("close_my_account", {}, { get: false });
+  } catch {
+    throw outcomeUnknown();
+  }
+  if (reply.error) throw refusalOf(reply.error);
+  const closed = closureReply.safeParse(reply.data);
+  // Answered without an error, so it committed; but the dates are unreadable.
+  if (!closed.success) throw outcomeUnknown();
   return {
     status: "closed" as const,
-    closedAt: reply.data.closed_at,
-    eraseAfter: reply.data.erase_after,
-    eraseBy: accountErasureDeadline(new Date(reply.data.erase_after)).toISOString(),
+    closedAt: closed.data.closed_at,
+    eraseAfter: closed.data.erase_after,
+    eraseBy: accountErasureDeadline(new Date(closed.data.erase_after)).toISOString(),
   };
 }
 
