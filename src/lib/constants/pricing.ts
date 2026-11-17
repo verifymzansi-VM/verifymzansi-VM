@@ -1,6 +1,7 @@
 import type { MarketplaceArea, PlanTier, RetailPlanTier } from "@/types/enums";
 import { formatRandAmount } from "@/lib/utils/format";
 import { getStablePlanId } from "@/lib/constants/plan-ids";
+import { SHOW_PAID_ADDONS } from "@/lib/hidden-features";
 
 export const ACTIVE_MARKETPLACE_AREAS = [
   "MZANSI_MARKET",
@@ -375,7 +376,8 @@ export function getPlanFeatureItems(
       : "Videos",
     features.videoAllowed
   );
-  push("Optional Urgent label add-on", features.boostAllowed);
+  // Hidden until paid add-ons deliver (src/lib/hidden-features.ts).
+  if (SHOW_PAID_ADDONS) push("Optional Urgent label add-on", features.boostAllowed);
   push("No automatic renewal");
 
   return items;

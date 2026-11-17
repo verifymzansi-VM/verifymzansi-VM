@@ -2,13 +2,18 @@ import Link from "next/link";
 import { ArrowRight, Building2, Landmark, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  ENTERPRISE_ADMINS_INCLUDED,
-  ENTERPRISE_QUOTE_ABOVE_SLOTS,
   SPONSOR_PROGRAMME_ADMINS,
   SPONSOR_PROGRAMME_PRICES,
   formatPlanPrice,
 } from "@/lib/constants/pricing";
+import {
+  PACKAGE_MIN_SLOTS,
+  PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS,
+  packageTotalCents,
+} from "@/lib/billing/slot-packages";
 import type { EnterpriseCatalogPlan } from "@/lib/commercial/plans";
+import { SHOW_SPONSOR_OFFER } from "@/lib/hidden-features";
+import { cn } from "@/lib/utils";
 import { MultiListingPlans } from "@/components/billing/multi-listing-plans";
 
 const PROPOSAL_HREF = "/contact?topic=organisation_proposal";
@@ -20,10 +25,10 @@ const PROPOSAL_HREF = "/contact?topic=organisation_proposal";
  * and everything it includes, is explained on /advertise.
  */
 export function EnterprisePricing({
-  plans,
   retailFromCents,
   onlineMaxCents = null,
 }: {
+  /** Kept for callers; the package prices follow the P4a rules (slot-packages.ts). */
   plans: EnterpriseCatalogPlan[];
   /** Kept for callers; packages are bought on the checkout only while on sale. */
   checkoutEnabled: boolean;
@@ -32,7 +37,6 @@ export function EnterprisePricing({
   /** The most one online (Ozow) payment may be; above it a package is by invoice. */
   onlineMaxCents?: number | null;
 }) {
-  const smallest = [...plans].sort((a, b) => a.slots - b.slots || a.priceCents - b.priceCents)[0];
   const sponsorFrom = SPONSOR_PROGRAMME_PRICES[0]!;
   const sponsorMax = SPONSOR_PROGRAMME_PRICES[SPONSOR_PROGRAMME_PRICES.length - 1]!;
 
@@ -52,9 +56,9 @@ export function EnterprisePricing({
       icon: Building2,
       name: "Multi-listing",
       who: "Dealers, agencies, shops and landlords with several things to list.",
-      price: smallest ? `From ${formatPlanPrice(smallest.priceCents)}` : "Quoted",
-      per: smallest ? `for ${smallest.durationDays} days` : "",
-      detail: `${smallest?.slots ?? 10} to ${ENTERPRISE_QUOTE_ABOVE_SLOTS} live posts at once and ${ENTERPRISE_ADMINS_INCLUDED} named administrators.`,
+      price: `From ${formatPlanPrice(packageTotalCents(PACKAGE_MIN_SLOTS, 30))}`,
+      per: "for 30 days",
+      detail: `From ${PACKAGE_MIN_SLOTS} slots at ${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days, for 30, 90 or 180 days.`,
       href: "/advertise#multi-listing",
       priceHref: "#multi-listing-prices",
       priceCta: "Choose a multi-listing plan",
@@ -70,7 +74,8 @@ export function EnterprisePricing({
       priceHref: "#programme-prices",
       priceCta: "See sponsor fees",
     },
-  ] as const;
+    // The sponsor offer is on hold (src/lib/hidden-features.ts).
+  ].filter((pkg) => SHOW_SPONSOR_OFFER || pkg.name !== "Business Sponsor");
 
   return (
     <section
@@ -84,13 +89,18 @@ export function EnterprisePricing({
             Choose the package that fits
           </h2>
           <p className="section-lede">
-            Three ways to advertise, depending on who you are and how much you need to list. See who
-            each one is for, then go straight to its prices.
+            {packages.length === 3 ? "Three" : "Two"} ways to advertise, depending on who you are
+            and how much you need to list. See who each one is for, then go straight to its prices.
           </p>
         </div>
       </div>
 
-      <ul className="mt-6 grid gap-4 lg:grid-cols-3">
+      <ul
+        className={cn(
+          "mt-6 grid gap-4",
+          packages.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"
+        )}
+      >
         {packages.map(
           ({ icon: Icon, name, who, price, per, detail, href, priceHref, priceCta }) => (
             <li
@@ -131,54 +141,60 @@ export function EnterprisePricing({
         <MultiListingPlans onlineMaxCents={onlineMaxCents} />
       </div>
 
-      <div id="programme-prices" className="mt-4 scroll-mt-28 space-y-4">
-        <div className="overflow-hidden rounded-2xl border border-border/70">
-          <table className="w-full text-sm">
-            <caption className="bg-muted/60 px-4 py-3 text-left font-semibold text-foreground">
-              Sponsor fee (total for the term)
-            </caption>
-            <thead>
-              <tr className="border-t border-border/60 text-left text-muted-foreground">
-                <th scope="col" className="px-4 py-2 font-medium">
-                  Businesses
-                </th>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  90 days
-                </th>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  180 days
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {SPONSOR_PROGRAMME_PRICES.map((row) => (
-                <tr key={row.capacity} className="border-t border-border/60">
-                  <th scope="row" className="px-4 py-2.5 text-left font-semibold">
-                    Up to {row.capacity}
+      {SHOW_SPONSOR_OFFER ? (
+        <div id="programme-prices" className="mt-4 scroll-mt-28 space-y-4">
+          <div className="overflow-hidden rounded-2xl border border-border/70">
+            <table className="w-full text-sm">
+              <caption className="bg-muted/60 px-4 py-3 text-left font-semibold text-foreground">
+                Sponsor fee (total for the term)
+              </caption>
+              <thead>
+                <tr className="border-t border-border/60 text-left text-muted-foreground">
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Businesses
                   </th>
-                  <td className="px-4 py-2.5 tabular-nums">{formatPlanPrice(row.price90Cents)}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{formatPlanPrice(row.price180Cents)}</td>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    90 days
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    180 days
+                  </th>
                 </tr>
-              ))}
-              <tr className="border-t border-border/60">
-                <th scope="row" className="px-4 py-2.5 text-left font-semibold">
-                  More than {sponsorMax.capacity}
-                </th>
-                <td colSpan={2} className="px-4 py-2.5 text-muted-foreground">
-                  Custom proposal
-                </td>
-              </tr>
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {SPONSOR_PROGRAMME_PRICES.map((row) => (
+                  <tr key={row.capacity} className="border-t border-border/60">
+                    <th scope="row" className="px-4 py-2.5 text-left font-semibold">
+                      Up to {row.capacity}
+                    </th>
+                    <td className="px-4 py-2.5 tabular-nums">
+                      {formatPlanPrice(row.price90Cents)}
+                    </td>
+                    <td className="px-4 py-2.5 tabular-nums">
+                      {formatPlanPrice(row.price180Cents)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t border-border/60">
+                  <th scope="row" className="px-4 py-2.5 text-left font-semibold">
+                    More than {sponsorMax.capacity}
+                  </th>
+                  <td colSpan={2} className="px-4 py-2.5 text-muted-foreground">
+                    Custom proposal
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Includes {SPONSOR_PROGRAMME_ADMINS} named administrators. Nothing renews or charges
+            automatically.
+          </p>
+          <Button asChild variant="ink" className="h-11 w-full rounded-full sm:w-auto">
+            <Link href={PROPOSAL_HREF}>Request a sponsor proposal</Link>
+          </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Includes {SPONSOR_PROGRAMME_ADMINS} named administrators. Nothing renews or charges
-          automatically.
-        </p>
-        <Button asChild variant="ink" className="h-11 w-full rounded-full sm:w-auto">
-          <Link href={PROPOSAL_HREF}>Request a sponsor proposal</Link>
-        </Button>
-      </div>
+      ) : null}
     </section>
   );
 }

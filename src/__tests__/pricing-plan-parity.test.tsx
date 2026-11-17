@@ -119,11 +119,15 @@ describe("Active-area pricing parity", () => {
     render(await BillingPage());
     // The trial rules now live once, in the "How billing works" FAQ.
     expect(screen.getByText("How does the free introductory post work?")).toBeInTheDocument();
-    expect(screen.getByText(/post once for free for\s+7\s+days from approval/)).toBeInTheDocument();
-    expect(screen.queryByText(/30-day launch trial|while spaces/)).not.toBeInTheDocument();
     expect(
-      screen.getByText(/Strategic, founding partner and organisation-sponsored/)
+      screen.getByText(/your first post is free for\s+7\s+days, in Mzansi Market/)
     ).toBeInTheDocument();
+    expect(screen.getByText(/The\s+7\s+days start when we approve the post/)).toBeInTheDocument();
+    expect(screen.queryByText(/30-day launch trial|while spaces/)).not.toBeInTheDocument();
+    // The Terms describe one free post per ID-reviewed person, not a campaign.
+    expect(
+      screen.queryByText(/Strategic, founding partner|Campaign availability/)
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Mall Shops")).not.toBeInTheDocument();
   });
 

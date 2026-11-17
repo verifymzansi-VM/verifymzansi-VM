@@ -741,6 +741,10 @@ it("acknowledges a removed recipient without sending a warning or requiring eras
   queue(job({ kind: "account_warning", recipient: null, notice_reason: null }));
   expect(await run()).toMatchObject({ succeeded: 1 });
   expect(deliver).not.toHaveBeenCalled();
+  // Recorded as skipped, so the member's email history does not list it as sent.
+  expect(calls("complete_notification_outbox")).toEqual([
+    ["complete_notification_outbox", { p_id: id, p_claim: claim, p_ok: true, p_error: "skipped" }],
+  ]);
 });
 it("declares and delivers the sold-post notice within the database's kind limit", async () => {
   queue(job({ kind: "post_sold" }));
@@ -802,6 +806,37 @@ it("finishes a renewal reminder the database no longer addresses without sending
   queue(job({ kind: "slot_renewal_reminder", recipient: null, subject_id: id }));
   expect(await run()).toMatchObject({ succeeded: 1 });
   expect(deliver).not.toHaveBeenCalled();
+  expect(calls("complete_notification_outbox")).toEqual([
+    ["complete_notification_outbox", { p_id: id, p_claim: claim, p_ok: true, p_error: "skipped" }],
+  ]);
+});
+it("records a sent email without a reason and a skipped one as skipped", async () => {
+  const skippedId = "00000000-0000-4000-8000-0000000000f6";
+  queue(job(), job({ id: skippedId, kind: "post_deleted", recipient: null }));
+  expect(await run()).toMatchObject({ claimed: 2, succeeded: 2, retrying: 0, failed: [] });
+  expect(deliver).toHaveBeenCalledOnce();
+  const outcomes = calls("complete_notification_outbox").map(([, a]) => [
+    a.p_id,
+    a.p_ok,
+    a.p_error,
+  ]);
+  expect(outcomes).toEqual(
+    expect.arrayContaining([
+      [id, true, undefined],
+      [skippedId, true, "skipped"],
+    ])
+  );
+  expect(outcomes).toHaveLength(2);
+});
+it("never records a failed send as skipped", async () => {
+  deliver.mockResolvedValue({ success: false });
+  expect(await run()).toMatchObject({ succeeded: 0, retrying: 1 });
+  expect(rpc).toHaveBeenCalledWith("complete_notification_outbox", {
+    p_id: id,
+    p_claim: claim,
+    p_ok: false,
+    p_error: "delivery_failed",
+  });
 });
 describe("a database without the newer kinds", () => {
   const refuse = (message: string) => {
@@ -1098,7 +1133,10 @@ describe("payment receipts (M3.7)", () => {
       expect(await run()).toMatchObject({ succeeded: 1, retrying: 0, failed: [] });
       expect(deliver).not.toHaveBeenCalled();
       expect(calls("complete_notification_outbox")).toEqual([
-        ["complete_notification_outbox", { p_id: id, p_claim: claim, p_ok: true }],
+        [
+          "complete_notification_outbox",
+          { p_id: id, p_claim: claim, p_ok: true, p_error: "skipped" },
+        ],
       ]);
     }
   );

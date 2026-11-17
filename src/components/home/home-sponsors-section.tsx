@@ -3,6 +3,7 @@ import { AnalyticsImpressions } from "@/components/analytics/analytics-impressio
 import { SponsorLink } from "@/components/organisations/sponsor-link";
 import { SponsorLogo } from "@/components/organisations/sponsor-logo";
 import { Button } from "@/components/ui/button";
+import { SHOW_SPONSOR_OFFER } from "@/lib/hidden-features";
 import { getPublicSponsors } from "@/lib/organisations/sponsors";
 
 const MAX_TILES = 8;
@@ -53,9 +54,12 @@ export async function HomeSponsorsSection() {
           <Button asChild variant="ink" className="h-11 rounded-full px-5">
             <Link href="/sponsors">See supported businesses</Link>
           </Button>
-          <Button asChild variant="outline" className="h-11 rounded-full px-5">
-            <Link href="/advertise#programmes">Become a Business Sponsor</Link>
-          </Button>
+          {/* The sponsor offer is on hold (src/lib/hidden-features.ts). */}
+          {SHOW_SPONSOR_OFFER ? (
+            <Button asChild variant="outline" className="h-11 rounded-full px-5">
+              <Link href="/advertise#programmes">Become a Business Sponsor</Link>
+            </Button>
+          ) : null}
         </div>
         <AnalyticsImpressions
           items={sponsors.map((sponsor) => ({ table: "organisations", id: sponsor.id }))}

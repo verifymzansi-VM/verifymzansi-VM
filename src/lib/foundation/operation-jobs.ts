@@ -341,8 +341,11 @@ export async function runFoundationOperationJobs(
       if (!receiptWithdrawn && tooLate()) return giveBack("deferred");
     }
     // Nothing to send: no recipient, or a receipt no longer due. The message
-    // is finished as handled.
-    let success = job.recipient === null || receiptWithdrawn;
+    // is finished as handled, recorded as skipped so the member's email
+    // history does not list it as sent (a database before
+    // 20261117123240_skipped_email_status ignores the reason).
+    const skipped = job.recipient === null || receiptWithdrawn;
+    let success = skipped;
     // The provider refused a repeat of an earlier request with the same key:
     // that earlier request may have been delivered.
     let unknown = false;
@@ -384,7 +387,13 @@ export async function runFoundationOperationJobs(
       p_id: job.id,
       p_claim: job.claim_token,
       p_ok: success,
-      p_error: success ? undefined : unknown ? "outcome_unknown" : "delivery_failed",
+      p_error: skipped
+        ? "skipped"
+        : success
+          ? undefined
+          : unknown
+            ? "outcome_unknown"
+            : "delivery_failed",
     });
     // `false` means the lease was lost (retried later); an error means the
     // outcome could not be recorded at all.
