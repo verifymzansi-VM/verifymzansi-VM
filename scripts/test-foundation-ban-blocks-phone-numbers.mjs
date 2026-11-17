@@ -22,8 +22,9 @@
 //
 // Needs a local Docker daemon; it takes no connection settings at all.
 import assert from "node:assert/strict";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { phoneChecks } from "./lib/foundation-phone-checks.mjs";
 import {
   applyStepsBefore,
   applyWithRollbackCheck,
@@ -72,31 +73,14 @@ try {
   const { steps, index, step } = applyStepsBefore(database, UPDATE);
 
   // ------------------------------------------------------- synthetic world
-  const hash = () => `h${randomBytes(24).toString("hex")}`;
-  const createSql = (owner, phone, digest = hash()) =>
-    service(
-      `select api.create_verification_phone_challenge('${owner.id}','${phone}','${digest}');`
-    );
-  const create = (owner, phone) => {
-    const digest = hash();
-    return { digest, ...json(createSql(owner, phone, digest)) };
-  };
-  const finalizeSql = (owner, challenge) =>
-    service(
-      `select api.claim_verification_phone_attempt('${owner.id}','${challenge.challenge_id}');
-       select api.finalize_verification_phone('${owner.id}','${challenge.challenge_id}','${challenge.digest}');`
-    );
-  /** A verified phone for `owner`, made as the website's server does. */
-  const prove = (owner, phone) => q(finalizeSql(owner, create(owner, phone)));
-  /** The database refuses with PT409 and this listed reason. */
-  const refused = (sql, reason) => {
-    const stderr = fails(sql, "PT409");
-    assert.equal(/^DETAIL:\s+(\S+)/m.exec(stderr)?.[1], reason, stderr);
-  };
-  const challengeCount = (owner) =>
-    Number(
-      q(`select count(*) from private.verification_phone_challenges where owner_id='${owner.id}';`)
-    );
+  const {
+    createSql,
+    create,
+    finalizeSql,
+    prove,
+    refusedWith: refused,
+    challengeCount,
+  } = phoneChecks({ q, json, fails, service });
   const asOwner = (sql) =>
     q(`set session_replication_role=replica;\n${sql}\nset session_replication_role=origin;`);
   const fingerprintOf = (label) =>
