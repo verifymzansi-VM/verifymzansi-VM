@@ -19,6 +19,7 @@ begin
   end if;
   insert into private.notifications(account_id,kind,subject_id,post_id) values(x.owner_id,'business_check_update',event_id,x.business_id);
   insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key) values('business_check_update',event_id,x.owner_id,'business_check_update:'||event_id);
+  perform internal.signal_owner_inbox(x.owner_id);
   return new;
 end$function$;
 alter function internal.notify_frontend_business_check() owner to postgres;

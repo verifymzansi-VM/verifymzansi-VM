@@ -26,4 +26,5 @@ CREATE TRIGGER capture_frontend_post_approval AFTER INSERT ON private.moderation
 CREATE TRIGGER guard_frontend_offline_review_budget BEFORE INSERT ON private.moderation_log FOR EACH ROW EXECUTE FUNCTION internal.guard_frontend_offline_review_budget();
 CREATE TRIGGER moderation_log_append_only BEFORE DELETE OR UPDATE ON private.moderation_log FOR EACH ROW EXECUTE FUNCTION internal.append_only_guard();
 CREATE TRIGGER moderation_log_no_truncate BEFORE TRUNCATE ON private.moderation_log FOR EACH STATEMENT EXECUTE FUNCTION internal.append_only_guard();
+CREATE TRIGGER notify_post_moderation AFTER INSERT ON private.moderation_log FOR EACH ROW EXECUTE FUNCTION internal.notify_post_moderation();
 revoke all on private.moderation_log from public;

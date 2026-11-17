@@ -12,6 +12,28 @@ import { inboxRefusal } from "@/lib/foundation/inbox-refusal";
 import { createBooleanFlagSchema, createBoundedIntegerSchema } from "../validations/shared";
 import { createLogger } from "../utils/logger";
 const log = createLogger("RestoredNotifications");
+/** Account events that reach the bell beside their email
+ * (20261117140533_member_notices_in_app.sql). */
+const MEMBER_EVENT_KINDS = [
+  "identity_accepted",
+  "verification_phone_confirmed",
+  "payment_completed",
+  "payment_reversed",
+  "payment_reconciliation_required",
+  "trial_started",
+  "post_approved",
+  "post_rejected",
+  "post_changes_approved",
+  "post_changes_rejected",
+  "post_expired",
+  "post_sold",
+  "post_kept",
+  "draft_deletion_warning",
+  "post_deleted",
+  "slot_renewal_reminder",
+  "invoice_issued",
+  "content_restored",
+] as const;
 const row = foundationNotificationPageSchema.shape.items.element
   .extend({
     kind: z.enum([
@@ -23,6 +45,7 @@ const row = foundationNotificationPageSchema.shape.items.element
       "appeal_decided",
       "business_check_update",
       "verification_returned",
+      ...MEMBER_EVENT_KINDS,
     ]),
     warning_reason: z.string().min(10).max(500).nullable().optional(),
     organisation_slug: z
@@ -35,6 +58,37 @@ const page = z.strictObject({
   items: z.array(row).max(50),
   unread_count: z.number().int().nonnegative(),
 });
+const knownKinds: ReadonlySet<unknown> = new Set(row.shape.kind.options);
+/** A notice of a kind this release cannot present yet (a database update
+ * applied ahead of its website) is left out, so it cannot hide every other
+ * notice behind an error. A known notice that is malformed is still refused. */
+function withoutUnknownKinds(data: unknown): { data: unknown; unreadLeftOut: number } {
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    !Array.isArray((data as { items?: unknown }).items)
+  )
+    return { data, unreadLeftOut: 0 };
+  const items = (data as { items: unknown[] }).items;
+  const isKnown = (item: unknown) =>
+    typeof item !== "object" || item === null || knownKinds.has((item as { kind?: unknown }).kind);
+  const unknown = items.filter((item) => !isKnown(item));
+  if (unknown.length === 0) return { data, unreadLeftOut: 0 };
+  log.warn("Left out notifications of a kind this release does not know", {
+    count: unknown.length,
+  });
+  return {
+    data: { ...data, items: items.filter(isKnown) },
+    // The badge counts only what the list can show.
+    unreadLeftOut: unknown.filter((item) => (item as { read_at?: unknown }).read_at === null)
+      .length,
+  };
+}
+/** The post's title in quotes, or a plain fallback. */
+function postName(title: string | null, fallback: string) {
+  const trimmed = title?.trim();
+  return trimmed ? `\u201c${trimmed}\u201d` : fallback;
+}
 const mutation = z.union([
   z.strictObject({ all: z.literal(true) }),
   z.strictObject({ id: z.uuid() }),
@@ -45,7 +99,117 @@ const query = z.object({
   before: z.iso.datetime({ offset: true }).optional(),
 });
 function presentedNotification(n: z.infer<typeof row>) {
+  const post = postName(n.post_title, "your post");
+  const Post = postName(n.post_title, "Your post");
   const content = {
+    identity_accepted: [
+      "Your ID check was accepted",
+      "Your identity is verified. Open verification to see any steps that remain.",
+      "/verification",
+      "success",
+    ],
+    verification_phone_confirmed: [
+      "Mobile number verified",
+      "Your mobile number was verified on your account. Not you? Contact support.",
+      "/verification",
+      "success",
+    ],
+    payment_completed: [
+      "Payment received",
+      "We received your payment. Your receipt and invoice were emailed to you.",
+      "/dashboard/slots",
+      "success",
+    ],
+    payment_reversed: [
+      "Refund recorded",
+      "Part or all of a payment was refunded or reversed. The details were emailed to you.",
+      "/dashboard/slots",
+      "warning",
+    ],
+    payment_reconciliation_required: [
+      "Payment being checked",
+      "We received your payment but could not apply it automatically. We are checking it; there is no need to pay again.",
+      "/dashboard/slots",
+      "info",
+    ],
+    invoice_issued: [
+      "New invoice to pay",
+      "An invoice was issued to your account. Open it to see the amount and how to pay.",
+      "/billing/invoices",
+      "info",
+    ],
+    content_restored: [
+      "Your post is visible again",
+      `${Post} was reviewed and is showing again.`,
+      "/dashboard/listings",
+      "success",
+    ],
+    trial_started: [
+      "Your introductory posting allowance is ready",
+      "Your free introductory period has started. Your dashboard shows when it ends.",
+      "/dashboard",
+      "success",
+    ],
+    post_approved: [
+      "Your post is live",
+      `${Post} was approved and is now live.`,
+      "/dashboard/listings",
+      "success",
+    ],
+    post_rejected: [
+      "Post not approved",
+      `${Post} was not approved. Open your posts to see why and what to change.`,
+      "/dashboard/listings",
+      "warning",
+    ],
+    post_changes_approved: [
+      "Your changes are live",
+      `Your changes to ${post} were approved.`,
+      "/dashboard/listings",
+      "success",
+    ],
+    post_changes_rejected: [
+      "Changes not approved",
+      `Your changes to ${post} were not approved. Open your posts to see why.`,
+      "/dashboard/listings",
+      "warning",
+    ],
+    post_expired: [
+      "Post expired",
+      `${Post} is no longer shown. Reactivate it from your posts to keep it, or it will be deleted with its photos and videos.`,
+      "/dashboard/listings",
+      "warning",
+    ],
+    post_sold: [
+      "Post marked as sold",
+      `${Post} is marked as sold and will be deleted shortly. Marked it by mistake? Reactivate it from your posts.`,
+      "/dashboard/listings",
+      "info",
+    ],
+    post_kept: [
+      "Post kept after your payment",
+      `Your payment is confirmed, so ${post} is kept for a few more days. Reactivate it to show it again.`,
+      "/dashboard/listings",
+      "success",
+    ],
+    draft_deletion_warning: [
+      "Post will be deleted soon",
+      `${Post} is not showing and has not been changed for 45 days. Update it within about 15 days to keep it, or it will be deleted with its photos and videos.`,
+      "/dashboard/listings",
+      "warning",
+    ],
+    post_deleted: [
+      "Post deleted",
+      "One of your posts was deleted, with its photos and videos.",
+      "/dashboard/listings",
+      "info",
+    ],
+    slot_renewal_reminder: [
+      "Your slot ends soon",
+      "One of your slots ends within 3 days. Renew it now so your post stays live without a break.",
+      "/dashboard/slots",
+      "warning",
+    ],
     business_check_update: [
       "Business verification update",
       "Open your business verification to see the details.",
@@ -162,11 +326,12 @@ export function handleRestoredNotifications(
           ...(parsed.data.before ? { p_before: parsed.data.before } : {}),
         });
         if (error) throw new FoundationInboxError("unavailable");
-        const result = page.parse(data);
+        const known = withoutUnknownKinds(data);
+        const result = page.parse(known.data);
         return {
           accountId: account.account_id,
           notifications: result.items.map(presentedNotification),
-          unreadCount: result.unread_count,
+          unreadCount: Math.max(0, result.unread_count - known.unreadLeftOut),
         };
       }
       const parsed = mutation.safeParse(input);
