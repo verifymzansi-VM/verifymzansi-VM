@@ -1,5 +1,5 @@
 import "server-only";
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { handleFoundationOwnerRoute } from "./owner-route";
 import {
@@ -168,7 +168,7 @@ export function handleNativeCipcOwnerAction(request: NextRequest, id: string, ac
 }
 
 export function handleNativeCipcStaffAction(
-  request: Request,
+  request: NextRequest,
   id: string,
   action: "representative" | "office",
   schema: z.ZodType<
@@ -194,7 +194,7 @@ export function handleNativeCipcStaffAction(
   >
 ) {
   return handleFoundationOwnerRoute({
-    request: request instanceof NextRequest ? request : new NextRequest(request),
+    request,
     log,
     action: "business-verification:" + action,
     mutate: true,

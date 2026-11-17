@@ -17,4 +17,5 @@ alter table private.banned_identities owner to postgres;
 alter table private.banned_identities enable row level security;
 CREATE INDEX banned_identities_decision_id_idx ON private.banned_identities USING btree (decision_id);
 CREATE INDEX banned_identities_expiry_idx ON private.banned_identities USING btree (retain_until);
+CREATE TRIGGER ban_identity_phone_numbers AFTER INSERT OR UPDATE ON private.banned_identities FOR EACH ROW EXECUTE FUNCTION internal.ban_identity_phone_numbers();
 revoke all on private.banned_identities from public;

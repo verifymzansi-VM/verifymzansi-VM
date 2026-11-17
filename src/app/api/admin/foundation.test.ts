@@ -46,7 +46,7 @@ type OwnerRouteOptions = Parameters<typeof handleFoundationOwnerRoute>[0];
 const id = "00000000-0000-4000-8000-000000000001";
 const answer = NextResponse.json({ ok: true });
 const post = (path: string) =>
-  new Request(`https://verifymzansi.com/api/admin/${path}`, {
+  new NextRequest(`https://verifymzansi.com/api/admin/${path}`, {
     method: "POST",
     headers: { "x-csrf-token": "token" },
   });

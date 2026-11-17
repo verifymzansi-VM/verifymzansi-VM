@@ -26,9 +26,13 @@ export const FOUNDATION_PHONE_REFUSALS = [
   "phone_already_verified",
   "phone_change_cooldown",
   "phone_change_identity_required",
+  "phone_banned",
   "phone_in_use",
 ] as const satisfies readonly FoundationErrorReason[];
 export type FoundationPhoneRefusal = (typeof FOUNDATION_PHONE_REFUSALS)[number];
+/** A number blocked by a ban is refused (403, recorded as a security event);
+ * the others conflict with the account's or another account's state (409). */
+const refusalStatus = (refusal: FoundationPhoneRefusal) => (refusal === "phone_banned" ? 403 : 409);
 
 export class FoundationPhoneError extends Error {
   override name = "FoundationPhoneError";
@@ -124,7 +128,7 @@ export async function issueFoundationPhoneChallenge(
         : undefined;
     if (refusal)
       throw new FoundationPhoneError(
-        409,
+        refusalStatus(refusal),
         refusal,
         refusal === "phone_change_cooldown" ? changeAllowedFrom(error.hint) : undefined
       );
@@ -176,7 +180,10 @@ export async function verifyFoundationPhoneChallenge(
   });
   // 23505: another account proved the number while this code was open.
   if (finalized.error?.code === "23505") throw new FoundationPhoneError(409, "phone_in_use");
-  // PT409: this code was superseded, or the change stopped being allowed.
+  // PT409 phone_banned: the number was banned after its code was sent.
+  if (finalized.error?.code === "PT409" && hasDatabaseReason(finalized.error, "phone_banned"))
+    throw new FoundationPhoneError(refusalStatus("phone_banned"), "phone_banned");
+  // Other PT409: this code was superseded, or the change stopped being allowed.
   if (finalized.error?.code === "PT409") throw new FoundationPhoneError(400);
   if (finalized.error) failed(finalized.error);
   if (!proof.safeParse(finalized.data).success) throw new FoundationPhoneError(503);

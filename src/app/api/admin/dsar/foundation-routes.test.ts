@@ -43,7 +43,7 @@ const assignee = "44444444-4444-4444-8444-444444444444";
 const csrf = "c".repeat(64);
 const rpc = vi.fn();
 const authenticate = vi.fn();
-type Handler = (request: Request) => Promise<Response>;
+type Handler = (request: NextRequest) => Promise<Response>;
 
 function post(path: string, body: unknown, headers: Record<string, string> = {}) {
   return new NextRequest(`https://verifymzansi.com/api/admin/dsar/${path}`, {

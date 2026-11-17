@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { PREMISES_TYPES } from "@/lib/business-verification/seen";
@@ -35,9 +35,9 @@ const schema = z.discriminatedUnion("action", [
  * told the date and the verifier's first name). "report": the verifier who
  * took it records what they saw; a different staff member approves.
  */
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return handleFoundationOwnerRoute({
-    request: request instanceof NextRequest ? request : new NextRequest(request),
+    request: request,
     log,
     action: "business-verification:visit",
     mutate: true,

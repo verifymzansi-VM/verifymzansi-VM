@@ -36,7 +36,9 @@ const api = { rpc: vi.fn() } as unknown as Parameters<OwnerRouteOptions["command
 async function command() {
   const answer = NextResponse.json({ ok: true });
   vi.mocked(handleFoundationOwnerRoute).mockResolvedValueOnce(answer);
-  const request = new Request("https://verifymzansi.com/api/admin/commercial", { method: "POST" });
+  const request = new NextRequest("https://verifymzansi.com/api/admin/commercial", {
+    method: "POST",
+  });
   expect(await POST(request)).toBe(answer);
   const options = vi.mocked(handleFoundationOwnerRoute).mock.calls[0][0] as OwnerRouteOptions;
   expect(options).toMatchObject({ action: "admin:commercial", mutate: true, maxBytes: 16000 });

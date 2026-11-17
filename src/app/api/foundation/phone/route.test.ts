@@ -9,7 +9,11 @@ import { FOUNDATION_PHONE_CHALLENGE_COOKIE } from "@/lib/foundation/phone-challe
 import { FoundationSessionError } from "@/lib/foundation/request-api";
 import { FoundationPhoneError } from "@/lib/foundation/phone-verification";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
-import { ACCOUNT_PHONE_ALREADY_VERIFIED, ACCOUNT_PHONE_IN_USE_ERROR } from "@/lib/utils/phone";
+import {
+  ACCOUNT_PHONE_ALREADY_VERIFIED,
+  ACCOUNT_PHONE_IN_USE_ERROR,
+  PHONE_NUMBER_UNAVAILABLE,
+} from "@/lib/utils/phone";
 const { authenticate, readAccount, service, issue, prove, limit, context } = vi.hoisted(() => ({
   authenticate: vi.fn(),
   readAccount: vi.fn(),
@@ -166,16 +170,38 @@ it.each([
     undefined,
     "You must complete identity re-verification before changing your phone number.",
   ],
+  ["phone_banned", undefined, PHONE_NUMBER_UNAVAILABLE],
 ] as const)(
   "tells the member at the send step why no code is sent (%s), without a challenge cookie",
   async (refusal, changeAllowedFrom, message) => {
-    issue.mockRejectedValue(new FoundationPhoneError(409, refusal, changeAllowedFrom));
+    const status = refusal === "phone_banned" ? 403 : 409;
+    issue.mockRejectedValue(new FoundationPhoneError(status, refusal, changeAllowedFrom));
     const sent = await restoredSend(request({ phone: "0820000000" }));
-    expect(sent.status).toBe(409);
+    expect(sent.status).toBe(status);
     expect(await sent.json()).toEqual({ error: message, reason: refusal, code: refusal });
     expect(sent.cookies.get(FOUNDATION_PHONE_CHALLENGE_COOKIE)).toBeUndefined();
   }
 );
+it("refuses a banned number at the code step with the same neutral message", async () => {
+  vi.stubEnv("FOUNDATION_PHONE_OTP_KEY", "0123456789abcdef".repeat(4));
+  issue.mockResolvedValue({
+    challenge_id: challenge,
+    expires_at: new Date(Date.now() + 300_000).toISOString(),
+  });
+  const sent = await restoredSend(request({ phone: "0820000000" }));
+  const cookie = sent.cookies.get(FOUNDATION_PHONE_CHALLENGE_COOKIE)!.value;
+  prove.mockRejectedValue(new FoundationPhoneError(403, "phone_banned"));
+  const incoming = request({ phone: "0820000000", otp: "123456" });
+  incoming.cookies.set(FOUNDATION_PHONE_CHALLENGE_COOKIE, cookie);
+  const verified = await restoredVerify(incoming);
+  expect(verified.status).toBe(403);
+  expect(await verified.json()).toEqual({
+    error: PHONE_NUMBER_UNAVAILABLE,
+    reason: "phone_banned",
+    code: "phone_banned",
+  });
+  expect(JSON.stringify(PHONE_NUMBER_UNAVAILABLE)).not.toMatch(/ban/i);
+});
 it("keeps other phone refusals generic", async () => {
   issue.mockRejectedValue(new FoundationPhoneError(409));
   const sent = await send(request({ phone: "+27820000000" }));

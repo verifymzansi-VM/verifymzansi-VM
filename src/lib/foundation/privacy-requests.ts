@@ -1,5 +1,5 @@
 import "server-only";
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { handleFoundationOwnerRoute } from "./owner-route";
@@ -106,13 +106,13 @@ export async function processFrontendPrivacyRequest(
   return { status: result.status, ...(result.due ? { due: result.due } : {}) };
 }
 export function handlePrivacyStaffRoute<T>(
-  request: Request,
+  request: NextRequest,
   log: Logger,
   operation: "intake" | "case" | "decide" | "complete",
   command: (api: FoundationAuthenticatedApi, body: unknown) => Promise<T>
 ) {
   return handleFoundationOwnerRoute({
-    request: request instanceof NextRequest ? request : new NextRequest(request),
+    request,
     log,
     action: "admin:dsar:" + operation,
     mutate: true,
