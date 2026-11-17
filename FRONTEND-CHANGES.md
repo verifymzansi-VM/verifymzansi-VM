@@ -83,8 +83,8 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 39. Claim a case before viewing documents    |              0 | awaiting owner (with the claim-first part of 1 row in group 3)                                | Staff only: on the ID check queue, 'View documents' and each row's 'View' are greyed out with 'Claim this case first' until the staff member holds the case's claim, instead of failing with a refusal                                                                                                                                                                                                   |
 | 40. The site matches the Terms (v5)          |              1 | approved by owner 2026-11-17 (owner question 30; with the group 40 part of 14 rows elsewhere) | Advertise, Pricing, Business Sponsors, the home sponsor band and the showroom help: no Business Sponsor offer and no paid add-ons (hidden until they work); 'Can I cancel?' states the Terms' refund, cancelling and cooling-off rules; 1 to 4 Individual slots; edits 'up to 2, 6 or 12 for a 30-, 90- or 180-day slot'; the free post as the Terms describe it; 'VAT status: not registered for VAT'   |
 | 41. Account events in the bell               |              0 | awaiting owner (owner question 31)                                                            | The bell lists 'Your ID check was accepted', payments, new invoices, post approved or not approved, posts shown again, post expiry and slot reminders                                                                                                                                                                                                                                                    |
-| 43. A working Delete account button          |              0 | awaiting owner (owner question 32; with the group 43 part of 2 rows elsewhere)                | Account tab: 'Delete account' is back and works; its dialog says what closing does, asks for DELETE and a sign-in from the last 15 minutes (no password field); the data request line is gone                                                                                                                                                                                                            |
-| **Total**                                    |        **350** |                                                                                               |                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 43. A working Delete account button          |              1 | awaiting owner (owner question 32; with the group 43 part of 2 rows elsewhere)                | Account tab: 'Delete account' is back and works; its dialog says what closing does, asks for DELETE and a sign-in from the last 15 minutes (no password field); the data request line is gone                                                                                                                                                                                                            |
+| **Total**                                    |        **351** |                                                                                               |                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 Questions for the owner:
 
@@ -1860,12 +1860,23 @@ changed); anything else gets the route's general message with a reference. Open
 payments, bank transfers, refunds, invoices, reports and holds do not stop the
 closure; they make the erasure wait, as the dialog says.
 
-Both changed files already have rows in the table above (Differences), so this
-group has no file rows (Files 0); each says 'Group 43'. Tests outside the
+A fix found by the phone browser check: on every member dashboard page, Chrome
+on phones made the page wider than the screen (841 instead of 412 points on a
+Pixel 7) to fit the hidden width of the scrolling 'Leads, Profile and settings,
+Notifications' strip, so fixed elements (this dialog, toasts) were placed partly
+off-screen and the dialog's 'Continue' could not be pressed. The strip now keeps
+its hidden width to itself (`contain: paint`); it looks and scrolls the same.
+
+The two profile files already have rows in the table above (Differences); each
+says 'Group 43'. The strip's file has its row below (Files 1). Tests outside the
 checked scope: `src/lib/foundation/account-closure.test.ts`,
 `src/app/api/account/delete/route.test.ts` and the 'delete my account' step of
 `e2e/foundation/account-recovery.spec.ts`, which no longer expects SEC-02.
 Proposed: keep. Decision: awaiting owner.
+
+| File                                                | Kind              | Reason                                                                                                                                                                               | What changes on screen                                                                                  | Proposed | Owner decision | Date       | Version      |
+| --------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | -------- | -------------- | ---------- | ------------ |
+| `src/components/dashboard/dashboard-mobile-nav.tsx` | wording-behaviour | Group 43: Chrome on phones widened every dashboard page to fit the strip's hidden width, putting dialogs and toasts partly off-screen; the strip now contains it (`contain: paint`). | Nothing visible on the strip; on phones, dialogs and toasts on dashboard pages sit on the screen again. | keep     | awaiting owner | 2026-11-17 | b52fc789e65b |
 
 <!-- frontend-ledger:end -->
 
