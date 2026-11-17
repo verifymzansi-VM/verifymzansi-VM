@@ -126,6 +126,15 @@ describe("proxy — real 404 for missing detail pages", () => {
     }
   );
 
+  it("throttles organisation pages like the other browse pages, before any read", async () => {
+    const headers = { "x-forwarded-for": "203.0.113.77" };
+    let last = 0;
+    for (let i = 0; i < 61; i++)
+      last = (await routeRequest(request("/organisation/some-org", { headers }))).status;
+    expect(last).toBe(429);
+    expect(isMissingDetailPage).toHaveBeenCalledTimes(60);
+  });
+
   it("renders the 404 page with the normal page policy, nonce and CSRF token", async () => {
     isMissingDetailPage.mockResolvedValue(true);
     const response = await middleware(

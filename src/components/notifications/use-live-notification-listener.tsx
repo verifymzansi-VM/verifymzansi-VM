@@ -77,7 +77,7 @@ export function useLiveNotificationListener({
       const version = generation.current;
       const readVersion = ++nativeReadVersion.current;
       // Shares the bell's request when both react to the same signal.
-      void sharedInboxRead(NOTIFICATION_FEED_URL)
+      void sharedInboxRead(NOTIFICATION_FEED_URL, { fresh: true })
         .then((result) => {
           if (!result.ok) return;
           const data = result.data as { accountId?: string; notifications?: unknown };

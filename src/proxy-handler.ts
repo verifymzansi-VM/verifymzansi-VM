@@ -55,6 +55,8 @@ const MARKETPLACE_BROWSE_PREFIXES = [
   "/mzansi-market",
   "/mzansi-business",
   "/tourism-events",
+  // Organisation pages: the missing-page check below reads the database there too.
+  "/organisation/",
 ];
 
 /**

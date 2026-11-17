@@ -30,8 +30,9 @@ export function useLeadsUnread(): UseLeadsUnreadResult {
       return;
     }
 
-    // One request for every badge and alert on the page (shared-inbox-reads).
-    const result = await sharedInboxRead(LEADS_UNREAD_URL);
+    // A realtime signal: one fresh request for every badge and alert on the
+    // page (shared-inbox-reads).
+    const result = await sharedInboxRead(LEADS_UNREAD_URL, { fresh: true });
 
     if (!result.ok) {
       return;

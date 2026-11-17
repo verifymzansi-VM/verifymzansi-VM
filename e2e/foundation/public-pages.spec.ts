@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { readTestCopy } from "./support/test-copy";
 
 // Public pages of the restored website in foundation mode: the checks of the
 // stub suite's smoke.spec.ts and golden.spec.ts that need no account or data,
@@ -473,6 +474,22 @@ test.describe("pricing and organisations", () => {
       expect(response?.status(), path).toBe(404);
       await expect(page.getByRole("heading", { name: heading }), path).toBeVisible();
     }
+
+    // Live posts still answer 200, so the check cannot hide a real page. A
+    // business post opened as a listing is not a listing: 404.
+    const posts = readTestCopy().posts;
+    const idOf = (title: string) => posts.find((post) => post.title === title)?.id ?? "";
+    const business = idOf("Fixture Mzansi Motor Workshop");
+    const event = idOf("Fixture Soweto Craft Market");
+    expect(business && event).toBeTruthy();
+    for (const path of [`/mzansi-business/${business}`, `/tourism-events/${event}`]) {
+      const response = await page.goto(path);
+      expect(response?.status(), path).toBe(200);
+      await expect(page.getByRole("heading", { name: /isn't available|not found/i })).toHaveCount(
+        0
+      );
+    }
+    expect((await page.goto(`/listing/${business}`))?.status()).toBe(404);
   });
 });
 

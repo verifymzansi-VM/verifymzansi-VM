@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LEADS_UNREAD_URL, sharedInboxRead, subscribeSharedPoll } from "./shared-inbox-reads";
+import {
+  LEADS_UNREAD_URL,
+  READ_TIMEOUT_MS,
+  sharedInboxRead,
+  subscribeSharedPoll,
+} from "./shared-inbox-reads";
 
 function deferredResponse() {
   let resolve!: (response: Response) => void;
@@ -26,6 +31,7 @@ describe("sharedInboxRead", () => {
       method: "GET",
       cache: "no-store",
       credentials: "same-origin",
+      signal: expect.any(AbortSignal),
     });
     first.resolve(Response.json({ unreadCount: 2 }));
     await expect(a).resolves.toEqual({ ok: true, status: 200, data: { unreadCount: 2 } });
@@ -35,6 +41,59 @@ describe("sharedInboxRead", () => {
       data: { unreadCount: 3 },
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives a change signal that arrives during a read one more read that starts after it", async () => {
+    const first = deferredResponse();
+    const second = deferredResponse();
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const load = sharedInboxRead(LEADS_UNREAD_URL);
+    const signalA = sharedInboxRead(LEADS_UNREAD_URL, { fresh: true });
+    const signalB = sharedInboxRead(LEADS_UNREAD_URL, { fresh: true });
+    expect(signalA).toBe(signalB);
+    // Still one request until the first settles.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    first.resolve(Response.json({ unreadCount: 1 }));
+    await expect(load).resolves.toMatchObject({ data: { unreadCount: 1 } });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    second.resolve(Response.json({ unreadCount: 2 }));
+    await expect(signalA).resolves.toMatchObject({ data: { unreadCount: 2 } });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels a read that never settles, so later refreshes are not blocked", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi
+        .fn()
+        .mockImplementationOnce(
+          (_url: string, init: RequestInit) =>
+            new Promise<Response>((_resolve, reject) =>
+              init.signal?.addEventListener("abort", () =>
+                reject(new DOMException("The operation was aborted.", "AbortError"))
+              )
+            )
+        )
+        .mockResolvedValueOnce(Response.json({ unreadCount: 4 }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      const stuck = sharedInboxRead(LEADS_UNREAD_URL);
+      const stuckResult = expect(stuck).rejects.toThrow(/abort/i);
+      // A change signal meanwhile waits for the stuck read, then reads afresh.
+      const signal = sharedInboxRead(LEADS_UNREAD_URL, { fresh: true });
+      await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
+      await stuckResult;
+      await expect(signal).resolves.toMatchObject({ data: { unreadCount: 4 } });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reports refusals and unreadable bodies as not ok, and recovers after a network error", async () => {

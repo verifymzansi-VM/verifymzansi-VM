@@ -95,14 +95,17 @@ export function NotificationBell({ userId }: { userId?: string }) {
   }, []);
 
   const refreshNotifications = useCallback(
-    async (signal?: AbortSignal) => {
+    // `signal`: ignore this read's answer once the bell unmounts or the account
+    // changes (the shared request itself is not cancelled; other bells may use it).
+    // `fresh`: a change was signalled, so never accept a read that started earlier.
+    async ({ signal, fresh = false }: { signal?: AbortSignal; fresh?: boolean } = {}) => {
       const requestUserId = currentUserRef.current;
       const requestGeneration = accountGenerationRef.current;
       const version = ++refreshVersion.current;
       if (!requestUserId) return;
 
       // One request for every bell and listener on the page (shared-inbox-reads).
-      await sharedInboxRead(NOTIFICATION_FEED_URL)
+      await sharedInboxRead(NOTIFICATION_FEED_URL, { fresh })
         .then((result) => {
           if (!result.ok) throw new Error(`HTTP ${result.status}`);
           return result.data as {
@@ -154,7 +157,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
     clearAll();
 
     const controller = new AbortController();
-    void refreshNotifications(controller.signal);
+    void refreshNotifications({ signal: controller.signal });
 
     return () => controller.abort();
   }, [userId, refreshNotifications, clearAll]);
@@ -176,7 +179,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
     filterValue: userId,
     enabled: !!userId,
     onEvent: (payload: Record<string, unknown>) => {
-      if (payload.eventType === "REVALIDATE") void refreshNotifications();
+      if (payload.eventType === "REVALIDATE") void refreshNotifications({ fresh: true });
     },
   });
 
@@ -187,7 +190,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
       const requestGeneration = accountGenerationRef.current;
       void syncNotificationMutation(body, method).catch(() => {
         if (!mountedRef.current || accountGenerationRef.current !== requestGeneration) return;
-        void refreshNotifications();
+        void refreshNotifications({ fresh: true });
       });
     },
     [refreshNotifications]

@@ -5,16 +5,23 @@
  * desktop and one for phones, both mounted), the live toasts, the dashboard's
  * lead badge and lead alerts. Each used to fetch on mount, on every realtime
  * signal and on its own timer, so one page load sent the same request about
- * five times at once. Here every caller of the same read joins the one request
- * already in flight, and each refresh timer is shared by everyone who wants it.
+ * five times at once. Here callers of the same read share one request, and
+ * each refresh timer is shared by everyone who wants it.
  *
- * Nothing is kept after a request settles: a caller that arrives later starts
- * a fresh read, so a realtime signal never gets an answer older than itself
- * unless a read was already on its way.
+ * - A caller without `fresh` (first load, a timer tick) joins the request
+ *   already in flight.
+ * - A `fresh` caller (a realtime signal that something changed, or a check
+ *   after a failed update) must not get data read before it asked: if a
+ *   request is already in flight it gets one more read that starts when that
+ *   request settles, shared with every other fresh caller meanwhile.
+ * - Nothing is kept after a request settles, and a request that takes longer
+ *   than READ_TIMEOUT_MS is cancelled, so one stuck request never blocks later
+ *   refreshes.
  */
 
 export const NOTIFICATION_FEED_URL = "/api/notifications?limit=25";
 export const LEADS_UNREAD_URL = "/api/leads?countOnly=true";
+export const READ_TIMEOUT_MS = 15_000;
 
 export interface SharedReadResult {
   ok: boolean;
@@ -23,26 +30,45 @@ export interface SharedReadResult {
   data: unknown;
 }
 
-const inFlight = new Map<string, Promise<SharedReadResult>>();
+type Read = { request: Promise<SharedReadResult>; after?: Promise<SharedReadResult> };
+const inFlight = new Map<string, Read>();
 
-/** GET `url` as JSON, sharing the request already in flight for the same URL. */
-export function sharedInboxRead(url: string): Promise<SharedReadResult> {
+function startRead(url: string): Read {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+  const read: Read = {
+    request: (async (): Promise<SharedReadResult> => {
+      const response = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        signal: controller.signal,
+      });
+      if (!response.ok) return { ok: false, status: response.status, data: null };
+      const data: unknown = await response.json().catch(() => null);
+      return { ok: data !== null, status: response.status, data };
+    })().finally(() => {
+      clearTimeout(timer);
+      if (inFlight.get(url) === read) inFlight.delete(url);
+    }),
+  };
+  inFlight.set(url, read);
+  return read;
+}
+
+/** GET `url` as JSON, shared with other callers of the same URL (see above). */
+export function sharedInboxRead(
+  url: string,
+  { fresh = false }: { fresh?: boolean } = {}
+): Promise<SharedReadResult> {
   const current = inFlight.get(url);
-  if (current) return current;
-  const request = (async (): Promise<SharedReadResult> => {
-    const response = await fetch(url, {
-      method: "GET",
-      cache: "no-store",
-      credentials: "same-origin",
-    });
-    if (!response.ok) return { ok: false, status: response.status, data: null };
-    const data: unknown = await response.json().catch(() => null);
-    return { ok: data !== null, status: response.status, data };
-  })().finally(() => {
-    if (inFlight.get(url) === request) inFlight.delete(url);
-  });
-  inFlight.set(url, request);
-  return request;
+  if (!current) return startRead(url).request;
+  if (!fresh) return current.request;
+  current.after ??= current.request.then(
+    () => sharedInboxRead(url),
+    () => sharedInboxRead(url)
+  );
+  return current.after;
 }
 
 type Poll = { listeners: Set<() => void>; stop: () => void };

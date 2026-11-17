@@ -186,12 +186,19 @@ describe("NotificationBell", () => {
         <NotificationBell userId="member-1" />
       </>
     );
-    // A realtime catch-up signal while the first read is on its way joins it.
+    // Both bells' first loads share one request. A realtime signal while it is
+    // on its way gets one more read, shared by both bells, after it settles.
     for (const options of realtimeOptions)
       (options.onEvent as (payload: Record<string, unknown>) => void)({
         eventType: "REVALIDATE",
       });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      release?.();
+    });
+    await flushNotificationFetch();
+    await flushNotificationFetch();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     await act(async () => {
       release?.();
     });
@@ -202,14 +209,14 @@ describe("NotificationBell", () => {
     await act(async () => {
       vi.advanceTimersByTime(60_000);
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
 
     // Visible again: one refresh for both bells, then one per minute.
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
     await act(async () => {
       document.dispatchEvent(new Event("visibilitychange"));
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     await act(async () => {
       release?.();
     });
@@ -217,11 +224,11 @@ describe("NotificationBell", () => {
     await act(async () => {
       vi.advanceTimersByTime(59_000);
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     await act(async () => {
       vi.advanceTimersByTime(1_000);
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     await act(async () => {
       release?.();
     });
