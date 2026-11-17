@@ -62,6 +62,7 @@ function phoneRefusalMessage(refusal: FoundationPhoneRefusal, changeAllowedFrom?
 }
 /** A phone limit was reached; `retryAfter` is the seconds until it resets. */
 class PhoneRateLimitError extends FoundationPhoneError {
+  override name = "PhoneRateLimitError";
   constructor(readonly retryAfter: number) {
     super(429);
   }
