@@ -186,7 +186,7 @@ const SLOT_CHECKOUT_REFUSALS: Readonly<
   ],
   PT413: [
     400,
-    "Orders above R10,000 are paid by invoice. Email billing@verifymzansi.com to ask for one.",
+    "This total is more than Ozow accepts in one payment. Get an invoice instead and pay it by bank transfer.",
     "INVOICE_REQUIRED",
   ],
   PT428: [409, "The price changed. Check the total and try again.", "PRICE_CHANGED"],
@@ -207,6 +207,11 @@ const RENEWAL_CHECKOUT_REFUSALS: Readonly<
     "This slot cannot be renewed: it has ended or is not yours. Buy a new slot instead.",
     "SLOT_UNAVAILABLE",
   ],
+  PT413: [
+    400,
+    "This total is more than Ozow accepts in one payment. Renew fewer slots now and the rest in a second payment.",
+    "ONLINE_LIMIT_EXCEEDED",
+  ],
   PT429: [
     409,
     "You can renew only as many slots ahead as your slot limit allows. Let a slot end before renewing another.",
@@ -225,7 +230,7 @@ const PACKAGE_CHECKOUT_REFUSALS: Readonly<
   ],
   PT413: [
     400,
-    "Packages above 100 slots or R10,000 are paid by invoice. Email billing@verifymzansi.com to ask for one.",
+    "Packages of more than 100 slots, or above what Ozow accepts in one payment, are paid by invoice. Email billing@verifymzansi.com to ask for one.",
     "INVOICE_REQUIRED",
   ],
   PT428: [409, "The price changed. Check the total and try again.", "PRICE_CHANGED"],
@@ -470,7 +475,8 @@ const slotOrderSchema = z.strictObject({
 });
 
 /** SQL owns the price (slot price x slots), the consent record, the ID review,
- * the R10,000 online limit and the person's slot limit; a total other than the
+ * the online payment limit (the most Ozow accepts in one payment) and the
+ * person's slot limit; a total other than the
  * one shown is refused, so the price shown is the price charged. */
 export async function startFoundationSlotCheckout(
   api: FoundationAuthenticatedApi,
@@ -513,7 +519,7 @@ const slotRenewalSchema = z.strictObject({
 
 /** SQL owns which slots may be renewed (the member's own, still running, from
  * 14 days before they end), the price, the consent record, the ID review, the
- * R10,000 online limit and the person's limit; each renewal starts when its
+ * online payment limit and the person's limit; each renewal starts when its
  * slot's current days end. */
 export async function startFoundationSlotRenewalCheckout(
   api: FoundationAuthenticatedApi,
@@ -551,8 +557,8 @@ const packageOrderSchema = z.strictObject({
 });
 
 /** SQL owns the sales switch, the price (R100 per slot per 30 days), the
- * consent record, the ID review, the 5 to 100 slots and R10,000 online limits
- * and one package per account; a total other than the one shown is refused. */
+ * consent record, the ID review, the 5 to 100 slots online, the online payment
+ * limit (internal.online_payment_max_cents) and one package per account; a total other than the one shown is refused. */
 export async function startFoundationPackageCheckout(
   api: FoundationAuthenticatedApi,
   ownerId: string,

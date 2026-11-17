@@ -1143,7 +1143,7 @@ describe("the Individual slot checkout", () => {
   });
   it.each([
     ["PT412", 403, "ID_REVIEW_REQUIRED", /ID review must be accepted/],
-    ["PT413", 400, "INVOICE_REQUIRED", /above R10,000 are paid by invoice/],
+    ["PT413", 400, "INVOICE_REQUIRED", /more than Ozow accepts in one payment. Get an invoice/],
     ["PT428", 409, "PRICE_CHANGED", /price changed/],
     ["PT429", 409, "SLOT_LIMIT_REACHED", /most Individual slots you can hold at once/],
   ])("tells the member why the database refused (%s)", async (sqlstate, status, code, message) => {
@@ -1232,7 +1232,7 @@ describe("renewing slots early (P3)", () => {
       /has ended or is not yours/,
     ],
     [{ code: "PT412" }, 403, "ID_REVIEW_REQUIRED", /before you renew a slot/],
-    [{ code: "PT413" }, 400, "INVOICE_REQUIRED", /paid by invoice/],
+    [{ code: "PT413" }, 400, "ONLINE_LIMIT_EXCEEDED", /Renew fewer slots now/],
     [{ code: "PT428" }, 409, "PRICE_CHANGED", /price changed/],
     [{ code: "PT429" }, 409, "RENEWAL_LIMIT_REACHED", /as many slots ahead/],
   ])("tells the member why the database refused (%o)", async (error, status, code, message) => {

@@ -21,8 +21,8 @@ describe("MultiListingPlans (P4a rules)", () => {
     expect(screen.getByText(/R100 per slot per 30 days, from 5 slots/)).toBeInTheDocument();
   });
 
-  it("offers totals above R10,000 by invoice, never online", () => {
-    render(<MultiListingPlans />);
+  it("offers totals above Ozow's maximum by invoice, never online", () => {
+    render(<MultiListingPlans onlineMaxCents={1_000_000} />);
     expect(screen.queryByRole("link", { name: /Choose 50 slots for 90 days/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /Choose 100 slots for 180 days/ })).toBeNull();
     expect(screen.getAllByText("By invoice").length).toBeGreaterThan(0);

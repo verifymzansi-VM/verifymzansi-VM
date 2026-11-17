@@ -58,7 +58,8 @@ export default async function MyInvoicesPage() {
             </p>
           ) : invoices.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-border p-5 text-sm text-muted-foreground">
-              You have no invoices. For a larger order paid by invoice, email{" "}
+              You have no invoices. Need one before you pay? Choose Get an invoice at checkout, or
+              email{" "}
               <a href={`mailto:${BILLING_EMAIL}`} className="font-medium underline">
                 {BILLING_EMAIL}
               </a>

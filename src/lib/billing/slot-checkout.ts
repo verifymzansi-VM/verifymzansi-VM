@@ -4,9 +4,6 @@
  * (api.start_slot_checkout); these only decide what the page offers.
  */
 
-/** Orders of R10,000 or less are paid online; more is paid by invoice. */
-export const ONLINE_ORDER_LIMIT_CENTS = 1_000_000;
-
 /** Where members ask for an invoice (and send cancellation requests). */
 export const BILLING_EMAIL = "billing@verifymzansi.com";
 
@@ -67,4 +64,41 @@ export function slotOrderTotalCents(term: Pick<SlotCheckoutTerm, "priceCents">, 
 export function slotsAvailable(status: SlotCheckoutStatus | null | undefined): number | null {
   if (!status) return null;
   return Math.max(0, status.limit - status.held - status.pending);
+}
+
+/**
+ * The cooling-off confirmation for an invoice (posting-v5: if the invoice is
+ * paid by EFT, the member confirms it when asking for the invoice). The same
+ * words the database records for invoice Pay now
+ * (internal.customer_invoice_consent, invoice-cooling-off-v1).
+ */
+export const INVOICE_COOLING_OFF_CONSENT =
+  "My slots start as soon as this invoice is paid; the 7-day cooling-off does not apply because the service starts immediately.";
+
+/**
+ * Asking for an invoice before paying (owner's decision of 16 November 2026):
+ * an email to billing with the order filled in. Staff issue the invoice to the
+ * account of the address it comes from; the member then adds their billing
+ * details on the invoice and pays it with "Pay now" (Ozow) or by bank transfer.
+ */
+export function invoiceRequestHref(order: {
+  slots: number;
+  durationLabel: string;
+  totalLabel: string;
+}): string {
+  const body = [
+    "Please send me an invoice for:",
+    `${order.slots} Individual ${order.slots === 1 ? "slot" : "slots"}, ${order.durationLabel} each`,
+    `Total: ${order.totalLabel}`,
+    "",
+    `I confirm: ${INVOICE_COOLING_OFF_CONSENT}`,
+    "",
+    "I am sending this from the email address of my VerifyMzansi account.",
+  ].join("\n");
+  return `mailto:${BILLING_EMAIL}?subject=${encodeURIComponent("Invoice for slots")}&body=${encodeURIComponent(body)}`;
+}
+
+/** The online payment limit is known and the total is above it. */
+export function aboveOnlineLimit(totalCents: number, onlineMaxCents: number | null | undefined) {
+  return typeof onlineMaxCents === "number" && totalCents > onlineMaxCents;
 }

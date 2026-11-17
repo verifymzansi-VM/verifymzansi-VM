@@ -10,6 +10,7 @@ import {
 } from "@/lib/foundation/server-session";
 import { FoundationInvoiceError, readMyInvoice } from "@/lib/foundation/customer-invoices";
 import { invoiceBankDetails, invoiceSellerAddress } from "@/lib/billing/invoice-settings";
+import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 
 export const metadata = { title: "Invoice", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ number
   // (including malformed escapes) reads as not found.
   const invoice = await loadInvoice(number);
   if (!invoice) notFound();
+  const onlineMaxCents = invoice.status === "issued" ? await readOnlinePaymentMaxCents() : null;
   return (
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
@@ -49,6 +51,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ number
               invoice={invoice}
               sellerAddress={invoiceSellerAddress()}
               bank={invoice.status === "issued" ? invoiceBankDetails() : null}
+              onlineMaxCents={onlineMaxCents}
             />
             <InvoicePayPanel
               invoiceNumber={invoice.invoice_number}
@@ -59,6 +62,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ number
               consentWording={invoice.consent.wording}
               checkoutOpen={invoice.latest_attempt?.checkout_open === true}
               transferWaiting={invoice.transfer_waiting}
+              onlineMaxCents={onlineMaxCents}
             />
           </div>
         </div>

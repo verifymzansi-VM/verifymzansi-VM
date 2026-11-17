@@ -4,7 +4,7 @@ import { buildTermsTextSections } from "./terms-text";
 import manifest from "./terms-documents/catalogue.json";
 import { ENTERPRISE_PLANS, PACKAGES_ON_SALE, RETAIL_OFFERS } from "@/lib/constants/pricing";
 import { buildCommercialCatalog, buildFoundationCommercialCatalog } from "@/lib/commercial/plans";
-import { ONLINE_ORDER_LIMIT_CENTS, POSTS_PER_SLOT_PER_30_DAYS } from "@/lib/billing/slot-checkout";
+import { POSTS_PER_SLOT_PER_30_DAYS } from "@/lib/billing/slot-checkout";
 import { readFileSync } from "node:fs";
 
 const text = (version: string) =>
@@ -52,8 +52,7 @@ it("makes posting-v3 current with the post lifecycle rules decided on 9 November
   expect(content).toContain("at least 14 days' notice");
 });
 
-it("makes posting-v4 the site's one set of Terms", () => {
-  expect(manifest.active_version).toBe("posting-v4");
+it("keeps posting-v4 published unchanged", () => {
   const v4 = getPublishedPostingTerms("posting-v4")!;
   expect(v4.document_hash).toBe("HnObmeyoZjiuPQSF0z0aUgs_t_st87EUjVQGjDahozg");
   // Visitors never see version names: the text does not mention versions.
@@ -137,7 +136,9 @@ it("puts on sale exactly the Individual slots the active Terms state, at the sit
     `each paid slot can take at most ${POSTS_PER_SLOT_PER_30_DAYS} posts going live in each 30-day period`
   );
   expect(content).toContain("You may hold 1 to 4 Individual slots at a time");
-  expect(content).toContain(`Orders of ${rand(ONLINE_ORDER_LIMIT_CENTS)} or less are paid online`);
+  // No fixed online limit: only the payment provider's maximum (posting-v5).
+  expect(content).not.toMatch(/R10,000/);
+  expect(content).toContain("Our payment provider sets a maximum for each online payment");
   // The pricing page sells those plans, in every section, at those prices.
   const catalogue = buildFoundationCommercialCatalog({
     plans: rows.map((row) => ({
@@ -240,6 +241,54 @@ it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
     expect(content).not.toContain(retired);
   // "R50" appears once, as the cancellation fee of the refund policy, never as a price.
   expect(content.match(/R50\b/g)).toEqual(["R50"]);
+});
+
+// Owner's decisions of 16 November 2026: no R10,000 online limit; an invoice
+// first at any amount, paid with Pay now or by EFT; above the payment
+// provider's maximum (internal.online_payment_max_cents), an invoice paid by
+// EFT. posting-v5 is posting-v4 with only those paragraphs changed.
+it("makes posting-v5 the site's one set of Terms, stating how people pay now", () => {
+  expect(manifest.active_version).toBe("posting-v5");
+  const v5 = getPublishedPostingTerms("posting-v5")!;
+  expect(v5.document_hash).toBe("LkgzMkvecZ75fguL1-eUNxwRsHZpg9pi42CTae2Q5mc");
+  const content = text("posting-v5");
+  expect(content).not.toMatch(/version/i);
+  for (const rule of [
+    "You can pay online in South African rand through our payment provider's secure hosted checkout",
+    "If you need an invoice before you pay, ask for one at checkout. We issue the invoice first",
+    "You pay it online with Pay now, through the same secure checkout, or by EFT into the bank account shown on the invoice",
+    "The slots start when the payment is confirmed; for an EFT, when the money has cleared in our bank account",
+    "Our payment provider sets a maximum for each online payment, and the checkout shows it",
+    "An order or invoice above that maximum cannot be paid online: we issue an invoice and you pay it by EFT",
+    "A renewal is not invoiced: if renewing your slots together would be above that maximum, renew them in more than one payment",
+    "At the online checkout, and before you pay an invoice with Pay now, you tick a box",
+    "if you pay an invoice by EFT, you confirm it when you ask for the invoice",
+    "through our payment provider's refund service (or by EFT for a payment made by EFT)",
+  ])
+    expect(content).toContain(rule);
+  for (const retired of ["R10,000", "Orders of", "For an order of more than"])
+    expect(content).not.toContain(retired);
+  const v4 = getPublishedPostingTerms("posting-v4")!;
+  expect(v5.sections.map((section) => section.id)).toEqual(v4.sections.map((s) => s.id));
+  const changed = v5.sections.flatMap((section, s) =>
+    section.content.flatMap((line, i) =>
+      line === v4.sections[s].content[i] ? [] : [`${section.id}[${i}]`]
+    )
+  );
+  expect(changed).toEqual([
+    "paying[0]",
+    "paying[1]",
+    "paying[2]",
+    "paying[3]",
+    "paying[4]",
+    "paying[5]",
+    "paying[6]",
+    "refunds[7]",
+  ]);
+  // paying[3] and paying[5] are posting-v4's price and VAT paragraphs, moved down one.
+  const v4Paying = v4.sections.find((section) => section.id === "paying")!.content;
+  const v5Paying = v5.sections.find((section) => section.id === "paying")!.content;
+  expect([v5Paying[3], v5Paying[5]]).toEqual([v4Paying[2], v4Paying[4]]);
 });
 
 it("keeps posting-v3's unchanged sections in posting-v4 word for word", () => {

@@ -39,8 +39,11 @@ begin
       using errcode='PT409', detail='package_active';
   end if;
   total := plan.price_cents * p_slots;
-  if total > 1000000 then
-    raise exception 'orders above R10,000 are paid by invoice' using errcode='PT413';
+  -- Above the most Ozow accepts in one payment (internal.online_payment_max_cents,
+  -- the one setting): the order is paid by invoice and bank transfer.
+  if total > internal.online_payment_max_cents() then
+    raise exception 'this order is above the online payment limit of % cents; ask for an invoice',
+      internal.online_payment_max_cents() using errcode='PT413', detail='online_payment_above_limit';
   end if;
   if total <> p_expected_total_cents then
     raise exception 'the price changed; check the total again' using errcode='PT428';

@@ -26,6 +26,12 @@ begin
       raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
     end if;
   end if;
+  -- Final guard (20261117082020): a new Ozow request is never created above
+  -- the most Ozow accepts in one payment; every checkout refuses first.
+  if pay.checkout_url is null and pay.amount_cents > internal.online_payment_max_cents() then
+    raise exception 'this payment is above the online payment limit of % cents', internal.online_payment_max_cents()
+      using errcode='PT413', detail='online_payment_above_limit';
+  end if;
   if pay.checkout_url is null then
     -- No request is attached, so every earlier attempt ended before Ozow's
     -- page reached the member. Each attempt gets a fresh 30-minute window;

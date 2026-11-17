@@ -38,8 +38,11 @@ begin
     raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
   end if;
   total := plan.price_cents * p_slots;
-  if p_slots > 100 or total > 1000000 then
-    raise exception 'packages above 100 slots or R10,000 are paid by invoice' using errcode='PT413',
+  -- More than 100 slots, or above the most Ozow accepts in one payment
+  -- (internal.online_payment_max_cents, the one setting): by invoice.
+  if p_slots > 100 or total > internal.online_payment_max_cents() then
+    raise exception 'packages above 100 slots or the online payment limit of % cents are paid by invoice',
+      internal.online_payment_max_cents() using errcode='PT413',
       detail='package_invoice_required';
   end if;
   if total <> p_expected_total_cents then

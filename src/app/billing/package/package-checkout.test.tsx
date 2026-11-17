@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PackageCheckout } from "./package-checkout";
+import { formatPlanPrice } from "@/lib/constants/pricing";
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
@@ -35,7 +36,14 @@ describe("PackageCheckout (P4a)", () => {
   });
 
   it("prices the typed number of slots for the chosen term", () => {
-    render(<PackageCheckout terms={terms} initialSlots={25} initialDays={90} />);
+    render(
+      <PackageCheckout
+        terms={terms}
+        initialSlots={25}
+        initialDays={90}
+        onlineMaxCents={1_000_000}
+      />
+    );
     expect(total()).toBe("R7 500");
     expect(screen.getByText("Up to 33 slots for 90 days can be paid online.")).toBeInTheDocument();
     type("10");
@@ -62,10 +70,15 @@ describe("PackageCheckout (P4a)", () => {
     expect(payButton()).toBeDisabled();
   });
 
-  it("sends a total above R10,000 to an invoice instead of a payment", () => {
-    render(<PackageCheckout terms={terms} initialSlots={34} initialDays={90} />);
+  it("sends a total above Ozow's maximum to an invoice instead of a payment", () => {
+    render(
+      <PackageCheckout terms={terms} initialSlots={34} initialDays={90} onlineMaxCents={130_000} />
+    );
     expect(total()).toBe("R10 200");
-    expect(screen.getByTestId("package-invoice")).toHaveTextContent(/paid by invoice/);
+    expect(screen.getByTestId("package-invoice").textContent).toContain(
+      `Ozow takes payments of up to ${formatPlanPrice(130_000)}, so this package is paid by invoice, at the same price.`
+    );
+    expect(screen.getByText("A package for 90 days is paid by invoice.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ask for an invoice" })).toHaveAttribute(
       "href",
       expect.stringContaining("mailto:billing@verifymzansi.com")

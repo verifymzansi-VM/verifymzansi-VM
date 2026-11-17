@@ -94,7 +94,7 @@ try {
   // ------------------------------------------------------------ before
   const early = user("early");
   await check("the shipped posting-v4 document is the one the update publishes", () => {
-    assert.ok(["posting-v3", "posting-v4"].includes(CATALOGUE.active_version));
+    assert.ok(["posting-v3", "posting-v4", "posting-v5"].includes(CATALOGUE.active_version));
     assert.equal(DOCUMENT.version, "posting-v4");
     assert.equal(
       createHash("sha256").update(JSON.stringify(DOCUMENT)).digest("base64url"),
@@ -212,8 +212,9 @@ try {
   if (later.length) {
     applySteps(database, later);
     await check("later updates keep posting-v4 published unchanged", () => {
-      // The switch (20261112173841) makes posting-v4 current; nothing else may.
-      assert.ok([V3.version, V4.version].includes(currentTerms().version));
+      // The switch (20261112173841) makes posting-v4 current; a later version's
+      // own switch (posting-v5, 20261117082021) may replace it.
+      assert.ok(["posting-v3", "posting-v4", "posting-v5"].includes(currentTerms().version));
       assert.deepEqual(v4Rows(), [V4.document_hash]);
     });
   }

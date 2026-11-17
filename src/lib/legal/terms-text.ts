@@ -1,9 +1,9 @@
-import current from "./terms-documents/posting-v4.json";
+import current from "./terms-documents/posting-v5.json";
 
 /**
  * The Terms page's text when the published posting terms cannot be read (no
  * foundation connection, for example in local previews): the sections of the
- * current version, posting-v4, word for word, plus the configured merchant
+ * current version, posting-v5, word for word, plus the configured merchant
  * name and VAT status under "Paying, VAT & invoices".
  */
 export function buildTermsTextSections(trustConfig: {

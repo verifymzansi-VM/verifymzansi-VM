@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowRight, LockKeyhole, ReceiptText, Users } from "lucide-react";
 import { BrandSurface } from "@/components/brand";
 import { MultiListingPlans } from "@/components/billing/multi-listing-plans";
+import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
@@ -25,7 +26,7 @@ export const metadata = {
 const STEPS = [
   {
     title: "Choose your slots and a term",
-    text: `Type how many posts you want live at once (from ${PACKAGE_MIN_SLOTS}) and pick 30, 90 or 180 days. Pay securely with Ozow; above R10,000, by invoice.`,
+    text: `Type how many posts you want live at once (from ${PACKAGE_MIN_SLOTS}) and pick 30, 90 or 180 days. Pay securely with Ozow; above the most Ozow accepts in one payment, by invoice.`,
   },
   {
     title: "Post as usual",
@@ -47,6 +48,7 @@ const STEPS = [
 export default async function MultiListingPage() {
   const offer = await readPackagesOnSale();
   if (!offer) notFound();
+  const onlineMaxCents = await readOnlinePaymentMaxCents();
   const heroPoints = [
     { icon: ReceiptText, label: "Does not renew automatically" },
     { icon: LockKeyhole, label: "Secure Ozow checkout" },
@@ -94,9 +96,9 @@ export default async function MultiListingPage() {
             Choose your package
           </h2>
           <p className="section-lede mb-6">
-            {`Prices are the total for the term. Up to ${PACKAGE_MAX_ONLINE_SLOTS} slots and R10,000 are paid online. For 1 to 4 posts, Individual slots cost ${formatPlanPrice(RETAIL_OFFERS[0].priceCents)} each per 30 days.`}
+            {`Prices are the total for the term. Up to ${PACKAGE_MAX_ONLINE_SLOTS} slots and ${onlineMaxCents === null ? "the most Ozow accepts in one payment" : formatPlanPrice(onlineMaxCents)} are paid online. For 1 to 4 posts, Individual slots cost ${formatPlanPrice(RETAIL_OFFERS[0].priceCents)} each per 30 days.`}
           </p>
-          <MultiListingPlans />
+          <MultiListingPlans onlineMaxCents={onlineMaxCents} />
         </section>
 
         <section

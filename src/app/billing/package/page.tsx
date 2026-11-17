@@ -3,6 +3,7 @@ import { PackageCheckout, type PackageCheckoutBlock } from "./package-checkout";
 import { readPackagesOnSale } from "@/lib/foundation/slot-package-offer";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFoundationMySlotPackage } from "@/lib/foundation/billing-runtime";
+import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 import { isPackageTerm, PACKAGE_MAX_SLOTS, PACKAGE_MIN_SLOTS } from "@/lib/billing/slot-packages";
 import { createLogger } from "@/lib/utils/logger";
 import { logDegradedRead } from "@/lib/utils/request-failure";
@@ -46,13 +47,14 @@ export default async function PackageCheckoutPage({
       ? typed
       : 25;
   const term = Number(days);
-  const block = await packageBlock();
+  const [block, onlineMaxCents] = await Promise.all([packageBlock(), readOnlinePaymentMaxCents()]);
   return (
     <PackageCheckout
       terms={offer.plans.map((plan) => ({ planId: plan.id, days: plan.term_days }))}
       initialSlots={initialSlots}
       initialDays={isPackageTerm(term) ? term : 30}
       block={block}
+      onlineMaxCents={onlineMaxCents}
     />
   );
 }

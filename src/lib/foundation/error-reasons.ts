@@ -92,6 +92,7 @@ export const FOUNDATION_ERROR_REASONS = {
   logo_unavailable: ["22023"],
   no_account: ["PT409"],
   notification_ids_invalid: ["22023"],
+  online_payment_above_limit: ["PT413"],
   organisation_changed: ["PT409"],
   organisation_inactive: ["PT409"],
   organisation_invalid: ["22023"],

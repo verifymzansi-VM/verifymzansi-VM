@@ -3,6 +3,7 @@ import { formatRandAmount, formatSaLongDate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
 import type { CustomerInvoice } from "@/lib/foundation/customer-invoices";
 import type { InvoiceBankDetails } from "@/lib/billing/invoice-settings";
+import { aboveOnlineLimit, BILLING_EMAIL } from "@/lib/billing/slot-checkout";
 
 /** Rand with cents, as on an invoice ("R1 035.00"). */
 export function formatInvoiceAmount(cents: number) {
@@ -53,15 +54,20 @@ export function InvoiceDocument({
   bank,
   className,
   headingLevel: Heading = "h2",
+  onlineMaxCents = null,
 }: {
   invoice: CustomerInvoice;
   sellerAddress: string | null;
   bank: InvoiceBankDetails | null;
   className?: string;
+  /** The most one online (Ozow) payment may be, in cents; above it the
+   * invoice is paid by bank transfer only. Null when unknown. */
+  onlineMaxCents?: number | null;
   /** h1 when the invoice is the page itself. */
   headingLevel?: "h1" | "h2";
 }) {
   const status = invoiceStatusLabel(invoice);
+  const bankTransferOnly = aboveOnlineLimit(invoice.total_cents, onlineMaxCents);
   const lineDescription = invoice.description.replace(/^\d+ × /, "");
   return (
     <article
@@ -187,14 +193,23 @@ export function InvoiceDocument({
           <h3 id="invoice-how-to-pay" className="font-semibold">
             How to pay
           </h3>
-          <p>
-            Pay online with Ozow, straight from your bank: sign in at verifymzansi.com, open this
-            invoice under Invoices and choose <strong>Pay now</strong>. Your slots start as soon as
-            the payment is confirmed. The invoice number is your payment reference.
-          </p>
+          {bankTransferOnly ? (
+            <p data-testid="invoice-bank-only">
+              {`Pay by bank transfer (EFT): Ozow takes payments of up to ${formatInvoiceAmount(onlineMaxCents ?? 0)}, so this invoice cannot be paid online. The invoice number is your payment reference.`}
+              {bank ? null : ` Email ${BILLING_EMAIL} for our bank details.`}
+            </p>
+          ) : (
+            <p>
+              Pay online with Ozow, straight from your bank: sign in at verifymzansi.com, open this
+              invoice under Invoices and choose <strong>Pay now</strong>. Your slots start as soon
+              as the payment is confirmed. The invoice number is your payment reference.
+            </p>
+          )}
           {bank ? (
             <div className="rounded-xl border border-border/70 p-3" data-testid="invoice-bank">
-              <p className="font-medium">Or pay by bank transfer (EFT)</p>
+              <p className="font-medium">
+                {bankTransferOnly ? "Bank transfer (EFT)" : "Or pay by bank transfer (EFT)"}
+              </p>
               <dl className="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2">
                 <Detail label="Account name">{bank.accountName}</Detail>
                 <Detail label="Bank">{bank.bankName}</Detail>

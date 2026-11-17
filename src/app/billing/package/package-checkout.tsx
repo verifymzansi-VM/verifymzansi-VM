@@ -13,6 +13,7 @@ import { BILLING_EMAIL } from "@/lib/billing/slot-checkout";
 import {
   PACKAGE_COOLING_OFF_CONSENT,
   PACKAGE_MAX_SLOTS,
+  PACKAGE_MAX_ONLINE_SLOTS,
   PACKAGE_MIN_SLOTS,
   PACKAGE_POSTS_PER_SLOT_PER_30_DAYS,
   PACKAGE_QUICK_SIZES,
@@ -52,7 +53,8 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
  * "Choose your package" (roadmap P4a; the owner's approved draft p4-01/p4-02):
  * the member types the number of slots (5 to 100 online, shortcuts 5, 10, 25,
  * 50 and 100) and picks 30, 90 or 180 days; the total is R100 per slot per 30
- * days. Above R10,000 (or 100 slots) the package is bought by invoice. The
+ * days. Above Ozow's maximum for one payment (or 100 slots) the package is
+ * bought by invoice. The
  * database applies every rule again; this page is shown only while packages
  * are on sale.
  */
@@ -61,11 +63,15 @@ export function PackageCheckout({
   initialSlots = 25,
   initialDays = 30,
   block = null,
+  onlineMaxCents = null,
 }: {
   terms: PackageCheckoutTerm[];
   initialSlots?: number;
   initialDays?: number;
   block?: PackageCheckoutBlock | null;
+  /** The most one online (Ozow) payment may be, in cents; null when unknown
+   * (the database still applies it). */
+  onlineMaxCents?: number | null;
 }) {
   const ids = useId();
   const firstTerm = terms.find((term) => term.days === initialDays) ?? terms[0];
@@ -73,9 +79,9 @@ export function PackageCheckout({
   const term = terms.find((entry) => entry.days === days) ?? firstTerm;
   const [text, setText] = useState(String(initialSlots));
   const slots = parseSlotCount(text);
-  const quote = packageQuote(slots, days);
+  const quote = packageQuote(slots, days, onlineMaxCents);
   const totalCents = quote.kind === "online" || quote.kind === "invoice" ? quote.totalCents : null;
-  const onlineMax = packageOnlineMaxSlots(days);
+  const onlineMax = packageOnlineMaxSlots(days, onlineMaxCents);
   const [consent, setConsent] = useState(false);
   const [state, setState] = useState<"idle" | "submitting" | "redirecting">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +156,9 @@ export function PackageCheckout({
       ? `Packages start at ${PACKAGE_MIN_SLOTS} slots. For 1-4, use Individual slots (R69).`
       : quote.kind === "too_large"
         ? `A package holds at most ${PACKAGE_MAX_SLOTS} slots for now.`
-        : `Up to ${onlineMax} slots for ${formatDurationDays(days)} can be paid online.`;
+        : onlineMax >= PACKAGE_MIN_SLOTS
+          ? `Up to ${onlineMax} slots for ${formatDurationDays(days)} can be paid online.`
+          : `A package for ${formatDurationDays(days)} is paid by invoice.`;
 
   return (
     <CheckoutShell>
@@ -368,7 +376,9 @@ export function PackageCheckout({
               className="rounded-xl border border-border/80 bg-muted/40 p-3.5 text-sm leading-6 text-foreground/80"
             >
               <p>
-                {`Above ${formatPlanPrice(1_000_000)} (or ${onlineMax} slots for ${formatDurationDays(days)}) is paid by invoice, at the same price.`}{" "}
+                {onlineMaxCents !== null && totalCents !== null && totalCents > onlineMaxCents
+                  ? `Ozow takes payments of up to ${formatPlanPrice(onlineMaxCents)}, so this package is paid by invoice, at the same price.`
+                  : `More than ${PACKAGE_MAX_ONLINE_SLOTS} slots is paid by invoice, at the same price.`}{" "}
                 <a
                   href={`mailto:${BILLING_EMAIL}?subject=Invoice%20for%20a%20Multi-listing%20package`}
                   className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"

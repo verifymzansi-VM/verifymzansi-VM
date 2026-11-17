@@ -3,6 +3,7 @@ import { CheckoutConfirm, type RenewalSlot } from "./checkout-confirm";
 import { readFoundationCheckoutSummary } from "@/lib/foundation/checkout-summary";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFoundationMySlots, type FoundationMySlots } from "@/lib/foundation/billing-runtime";
+import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import {
   individualSlotPlans,
@@ -68,10 +69,11 @@ function renewalSlots(mine: FoundationMySlots, renew: string, now = Date.now()):
 async function loadSummary(planId: string, renew: string | undefined) {
   const summary = await readFoundationCheckoutSummary(planId);
   if (!summary?.slotTerms) return summary;
-  const mine = await loadMySlots();
+  const [mine, onlineMaxCents] = await Promise.all([loadMySlots(), readOnlinePaymentMaxCents()]);
   return {
     ...summary,
     slotStatus: slotStatus(mine),
+    onlineMaxCents,
     ...(renew !== undefined && { renewal: mine ? renewalSlots(mine, renew) : null }),
   };
 }

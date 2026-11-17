@@ -6,6 +6,7 @@ import { PrintButton } from "@/components/billing/print-button";
 import { InvoiceTransferForm } from "@/components/admin/commercial/invoice-transfer-form";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readStaffInvoice } from "@/lib/foundation/customer-invoices";
+import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 import { invoiceBankDetails, invoiceSellerAddress } from "@/lib/billing/invoice-settings";
 import { formatSaLongDate } from "@/lib/utils/format";
 
@@ -27,6 +28,9 @@ export default async function StaffInvoicePage({
   const { number } = await params;
   const { api } = await readFoundationServerSession();
   const invoice = await readStaffInvoice(api, number);
+  // Above Ozow's maximum the printed invoice offers bank transfer only, as the
+  // customer's does; unknown, it shows both ways to pay.
+  const onlineMaxCents = invoice?.status === "issued" ? await readOnlinePaymentMaxCents() : null;
   if (!invoice) notFound();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com";
   return (
@@ -103,6 +107,7 @@ export default async function StaffInvoicePage({
         invoice={invoice}
         sellerAddress={invoiceSellerAddress()}
         bank={invoice.status === "issued" ? invoiceBankDetails() : null}
+        onlineMaxCents={onlineMaxCents}
       />
       <PrintButton />
     </div>

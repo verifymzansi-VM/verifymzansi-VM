@@ -36,6 +36,44 @@ describe("the customer invoice document", () => {
     expect(screen.getByRole("article")).toHaveTextContent("1 Example Street, Town");
   });
 
+  it("offers only a bank transfer above Ozow's maximum, and Pay now at or below it", () => {
+    const { rerender } = render(
+      <InvoiceDocument
+        invoice={FIXTURE_INVOICE}
+        sellerAddress={null}
+        bank={FAKE_INVOICE_BANK}
+        onlineMaxCents={62100}
+      />
+    );
+    expect(screen.getByRole("article")).toHaveTextContent("choose Pay now");
+    expect(screen.getByTestId("invoice-bank")).toHaveTextContent("Or pay by bank transfer (EFT)");
+    rerender(
+      <InvoiceDocument
+        invoice={FIXTURE_INVOICE}
+        sellerAddress={null}
+        bank={FAKE_INVOICE_BANK}
+        onlineMaxCents={62000}
+      />
+    );
+    const doc = screen.getByRole("article");
+    expect(doc).not.toHaveTextContent("Pay now");
+    expect(screen.getByTestId("invoice-bank-only").textContent).toBe(
+      `Pay by bank transfer (EFT): Ozow takes payments of up to ${formatInvoiceAmount(62000)}, so this invoice cannot be paid online. The invoice number is your payment reference.`
+    );
+    expect(screen.getByTestId("invoice-bank")).toHaveTextContent(/^Bank transfer \(EFT\)/);
+    rerender(
+      <InvoiceDocument
+        invoice={FIXTURE_INVOICE}
+        sellerAddress={null}
+        bank={null}
+        onlineMaxCents={62000}
+      />
+    );
+    expect(screen.getByTestId("invoice-bank-only")).toHaveTextContent(
+      "Email billing@verifymzansi.com for our bank details."
+    );
+  });
+
   it("shows the buyer's billing details and, once paid, no payment instructions", () => {
     render(
       <InvoiceDocument

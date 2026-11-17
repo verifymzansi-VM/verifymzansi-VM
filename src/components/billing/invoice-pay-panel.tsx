@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { formatPlanPrice } from "@/lib/constants/pricing";
+import { aboveOnlineLimit } from "@/lib/billing/slot-checkout";
 import { PrintButton } from "./print-button";
 
 export interface InvoicePayPanelProps {
@@ -20,6 +22,9 @@ export interface InvoicePayPanelProps {
   checkoutOpen: boolean;
   /** A bank transfer to this invoice waits for staff to confirm it. */
   transferWaiting?: boolean;
+  /** The most one online (Ozow) payment may be, in cents; null when unknown
+   * (the database still refuses Pay now above it). */
+  onlineMaxCents?: number | null;
 }
 
 const field =
@@ -49,7 +54,10 @@ export function InvoicePayPanel({
   consentWording,
   checkoutOpen,
   transferWaiting = false,
+  onlineMaxCents = null,
 }: InvoicePayPanelProps) {
+  // Above the most Ozow accepts in one payment, only a bank transfer pays it.
+  const bankTransferOnly = aboveOnlineLimit(totalCents, onlineMaxCents);
   const router = useRouter();
   const busy = useRef(false);
   const [editing, setEditing] = useState(buyer === null);
@@ -91,7 +99,8 @@ export function InvoicePayPanel({
   }
 
   async function payNow() {
-    if (busy.current || !consent || !buyer || editing || transferWaiting) return;
+    if (busy.current || !consent || !buyer || editing || transferWaiting || bankTransferOnly)
+      return;
     busy.current = true;
     setPaying(true);
     setError(null);
@@ -223,6 +232,13 @@ export function InvoicePayPanel({
               <p role="status" className="rounded-xl bg-muted/60 p-3 text-sm">
                 Your bank transfer to this invoice is being checked. You do not need to pay again;
                 your slots start once it is confirmed.
+              </p>
+            ) : bankTransferOnly ? (
+              <p
+                data-testid="invoice-bank-transfer-only"
+                className="rounded-xl bg-muted/60 p-3 text-sm"
+              >
+                {`Ozow takes payments of up to ${formatPlanPrice(onlineMaxCents ?? 0)}, so pay this invoice by bank transfer. Use the bank details on the invoice and its number as your reference; your slots start once the money has cleared.`}
               </p>
             ) : (
               <>

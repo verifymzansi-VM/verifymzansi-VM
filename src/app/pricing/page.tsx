@@ -15,6 +15,7 @@ import { getCommercialSettings } from "@/lib/commercial/settings";
 import { PACKAGES_ON_SALE } from "@/lib/constants/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
+import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 
 const HERO_POINTS = [
   { icon: ReceiptText, label: "Never renews" },
@@ -38,7 +39,11 @@ async function loadSettings() {
 }
 
 export default async function PricingPage() {
-  const [catalog, settings] = await Promise.all([getCommercialCatalog(), loadSettings()]);
+  const [catalog, settings, onlineMaxCents] = await Promise.all([
+    getCommercialCatalog(),
+    loadSettings(),
+    PACKAGES_ON_SALE ? readOnlinePaymentMaxCents() : null,
+  ]);
   const trustConfig = getTrustPublicConfig();
   // Offers are described for search engines only while they can be bought.
   const jsonLd = catalog.onSale && {
@@ -175,6 +180,7 @@ export default async function PricingPage() {
               <EnterprisePricing
                 plans={catalog.enterprise}
                 checkoutEnabled={settings?.features.enterpriseCheckout ?? true}
+                onlineMaxCents={onlineMaxCents}
                 retailFromCents={
                   catalog.retail.length > 0
                     ? Math.min(...catalog.retail.map((offer) => offer.priceCents))
