@@ -2626,7 +2626,8 @@ When another update merges first, regenerate this pull request's
 
 ## A skipped email is no longer listed as sent, 17 November 2026
 
-`20261117123240_skipped_email_status.sql` is pending.
+`20261117123240_skipped_email_status.sql` was applied on 17 November 2026 at
+13:58 UTC with the owner's approval.
 
 The email job finishes a queued message without sending it when there is nothing
 to send: the account has no confirmed address (or is anonymous, or is closed for
@@ -4508,6 +4509,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   posting-v5: 0", after "current posting-v5 (update already applied)"; data
   only, the production fingerprint rechecked unchanged; the live /terms page
   shows the new "Paying, VAT & invoices" text
-- `20261117123240_skipped_email_status.sql`: pending
+- `20261117123240_skipped_email_status.sql`: applied 2026-11-17 13:58 UTC; time
+  approximate, owner-approved, Supabase SQL editor (browser), preflight +
+  fingerprint checked; from the reviewed file (sha256 starting 1b4b387bfa4f1816,
+  files from raw GitHub at ce8616a9) before pull request #245 was merged
+  (14:00:25 UTC, 64d58596); preflight before "skipped email status: update not
+  applied; finished emails: 2; marked skipped: 0", after "already applied;
+  finished emails: 2; marked skipped: 0"; production fingerprint after it
+  matched the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
