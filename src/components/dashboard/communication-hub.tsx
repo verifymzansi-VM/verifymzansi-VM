@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { useToast } from "@/hooks/use-toast";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { SHOW_DATA_USE_CHOICES } from "@/lib/hidden-features";
 
 interface NotificationItem {
   id: string;
@@ -393,26 +394,30 @@ export function CommunicationHub() {
                   disabled={savingKey !== null}
                   onCheckedChange={(checked) => void togglePreference("marketing_sms", checked)}
                 />
-                <PreferenceRow
-                  icon={BarChart2}
-                  id="analytics"
-                  label="Analytics"
-                  description="Allow usage analytics to improve platform features."
-                  checked={preferences.analytics}
-                  disabled={savingKey !== null}
-                  onCheckedChange={(checked) => void togglePreference("analytics", checked)}
-                />
-                <PreferenceRow
-                  icon={ShieldCheck}
-                  id="third-party-sharing"
-                  label="Third-party sharing"
-                  description="Allow approved third-party processing for extended services."
-                  checked={preferences.third_party_sharing}
-                  disabled={savingKey !== null}
-                  onCheckedChange={(checked) =>
-                    void togglePreference("third_party_sharing", checked)
-                  }
-                />
+                {SHOW_DATA_USE_CHOICES && (
+                  <>
+                    <PreferenceRow
+                      icon={BarChart2}
+                      id="analytics"
+                      label="Analytics"
+                      description="Allow usage analytics to improve platform features."
+                      checked={preferences.analytics}
+                      disabled={savingKey !== null}
+                      onCheckedChange={(checked) => void togglePreference("analytics", checked)}
+                    />
+                    <PreferenceRow
+                      icon={ShieldCheck}
+                      id="third-party-sharing"
+                      label="Third-party sharing"
+                      description="Allow approved third-party processing for extended services."
+                      checked={preferences.third_party_sharing}
+                      disabled={savingKey !== null}
+                      onCheckedChange={(checked) =>
+                        void togglePreference("third_party_sharing", checked)
+                      }
+                    />
+                  </>
+                )}
               </>
             )}
           </CardContent>

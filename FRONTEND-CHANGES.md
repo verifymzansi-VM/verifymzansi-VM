@@ -79,8 +79,9 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 33. Multi-listing packages (P4a)             |             11 | approved by owner 2026-11-16 (with the P4a part of 7 rows elsewhere)                       | Nothing while packages are not on sale (the owner's switch). Then: 'Choose your package' (a typed number of slots from 5 at R100 per slot per 30 days, 30, 90 or 180 days, the 'My slots start now' tick; above R10,000 by invoice), the package on My slots, the Multi-listing page's new words and prices, and a message when Individual slots or invoices are refused while a package runs            |
 | 35. Live-test fixes (17 November)            |             10 | awaiting owner (with the live-test part of 10 rows elsewhere)                              | Dashboard: 'Three steps to your first post' ticks the verification step only once the ID is accepted ('Verification in review' keeps its number 1). Nothing else on screen: missing posts answer a real 404 with the same page, pages name their canonical address, the error page is kept out of search results, and the bell checks for news once a minute with one request                            |
 | 36. Invoice choice and Ozow's maximum        |              0 | approved by owner 2026-11-17 (owner question 29)                                           | Checkout: 'Need an invoice before you pay? Get an invoice' at every amount; above Ozow's maximum (R1 300 today) the invoice only; invoices above it by bank transfer; packages above it by invoice; new Terms                                                                                                                                                                                            |
+| 37. Hidden until it works, part 4            |              2 | hidden until it works (owner decision 2026-11-16)                                          | Notifications page, Preferences tab: no 'Analytics' or 'Third-party sharing' switch; the two marketing switches stay                                                                                                                                                                                                                                                                                     |
 | 39. Claim a case before viewing documents    |              0 | awaiting owner (with the claim-first part of 1 row in group 3)                             | Staff only: on the ID check queue, 'View documents' and each row's 'View' are greyed out with 'Claim this case first' until the staff member holds the case's claim, instead of failing with a refusal                                                                                                                                                                                                   |
-| **Total**                                    |        **347** |                                                                                            |                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Total**                                    |        **349** |                                                                                            |                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 Questions for the owner:
 
@@ -1215,7 +1216,8 @@ shows on screen. Outside the checked scope: the two routes under
 `src/app/api/communications/`, `src/lib/foundation/communication-choices.ts`,
 `src/lib/foundation/restored-communication-route.ts` and
 `src/lib/foundation/registration.ts`. The page component
-(`src/components/dashboard/communication-hub.tsx`) is unchanged.
+(`src/components/dashboard/communication-hub.tsx`) is unchanged here; group 37
+later hides two of its switches.
 
 | File                                       | Kind     | Reason                                                                                                   | What changes on screen                                                                                              | Proposed | Owner decision                              | Date       | Version      |
 | ------------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------- | ---------- | ------------ |
@@ -1591,6 +1593,25 @@ immediately.', 'I am sending this from the email address of my VerifyMzansi
 account.'), the refusals in `src/lib/foundation/billing-runtime.ts` and
 `src/lib/foundation/customer-invoices.ts`, and the Terms posting-v5
 (`src/lib/legal/terms-documents/posting-v5.json`).
+
+### 37. Hidden until it works, part 4: Analytics and Third-party sharing (roadmap M1.7)
+
+Owner decision 2026-11-16 (owner rule 2): the 'Analytics' and 'Third-party
+sharing' switches on the Notifications page's Preferences tab
+(`/dashboard/communication`, group 25) are hidden, because the site does not use
+usage analytics or third-party processing yet. Nothing new is added and nothing
+is restyled; 'Marketing email' and 'Marketing SMS' work as before, and their
+saving and history are unchanged. The switch `SHOW_DATA_USE_CHOICES` is in
+`src/lib/hidden-features.ts`. Outside the checked scope, with no change on
+screen: while the switch is off, the preferences route
+(`src/lib/foundation/communication-choices.ts`) refuses a request that turns
+either choice on ('Check the details and try again') and still accepts turning
+one off, so a member who chose one earlier can withdraw it.
+
+| File                                                  | Kind              | Reason                                                                                                                                                                  | What changes on screen                                                                                                                                  | Proposed | Owner decision                                    | Date       | Version      |
+| ----------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------- | ---------- | ------------ |
+| `src/components/dashboard/communication-hub.tsx`      | wording-behaviour | Hidden until it works (owner rule 2). The site does not use usage analytics or third-party processing yet, so the two switches asked for a choice that changed nothing. | Notifications page, Preferences tab: the 'Analytics' and 'Third-party sharing' switches are gone; 'Marketing email' and 'Marketing SMS' stay as before. | keep     | hidden until it works (owner decision 2026-11-16) | 2026-11-17 | c549170dd1e8 |
+| `src/components/dashboard/communication-hub.test.tsx` | test              | Checks that the Preferences tab shows the two marketing switches and hides 'Analytics' and 'Third-party sharing'.                                                       | Nothing (not part of a page)                                                                                                                            | keep     | hidden until it works (owner decision 2026-11-16) | 2026-11-17 | 81bf8ef5ebee |
 
 ### 39. Claim a case before viewing its ID documents
 
