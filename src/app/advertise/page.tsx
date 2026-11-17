@@ -36,8 +36,6 @@ import { Button } from "@/components/ui/button";
 import {
   ADDON_PRICES,
   BOOST_DURATION_DAYS,
-  ENTERPRISE_ADMINS_INCLUDED,
-  ENTERPRISE_QUOTE_ABOVE_SLOTS,
   FEATURED_DURATION_DAYS,
   SPONSOR_PROGRAMME_ADMINS,
   SPONSOR_PROGRAMME_PRICES,
@@ -46,16 +44,32 @@ import {
   PACKAGES_ON_SALE,
 } from "@/lib/constants/pricing";
 import { PLAN_SALES_PAUSED_NOTE } from "@/lib/billing/plan-sales";
+import { BILLING_EMAIL } from "@/lib/billing/slot-checkout";
+import {
+  PACKAGE_MAX_ONLINE_SLOTS,
+  PACKAGE_MIN_SLOTS,
+  PACKAGE_POSTS_PER_SLOT_PER_30_DAYS,
+  PACKAGE_QUICK_SIZES,
+  PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS,
+  PACKAGE_TERMS,
+  packageTotalCents,
+} from "@/lib/billing/slot-packages";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
+import { SHOW_PAID_ADDONS, SHOW_SPONSOR_OFFER } from "@/lib/hidden-features";
+import { SLOT_EDIT_ALLOWANCE } from "@/lib/posting/package-rules";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Advertise",
-  description:
-    "Why advertise on VerifyMzansi, and which package fits: individual posts and Business Sponsor packages that support local businesses.",
+  description: SHOW_SPONSOR_OFFER
+    ? "Why advertise on VerifyMzansi, and which package fits: individual posts and Business Sponsor packages that support local businesses."
+    : "Why advertise on VerifyMzansi: individual posts in any section, from people whose ID our team has reviewed.",
   alternates: { canonical: "https://verifymzansi.com/advertise" },
 };
+
+/** A post's approved edits over its whole life, set by its slot (internal.edit_allowance). */
+const EDITS_LINE = `Each live post: ${SLOT_EDIT_ALLOWANCE}`;
 
 const PROPOSAL_HREF = "/contact?topic=organisation_proposal";
 
@@ -120,7 +134,7 @@ const CHECKS = {
     "We only visit a business (in person or on live video) if it asks for the Seen sticker",
     "We do not check property, vehicles or quality",
     "We do not hold money or guarantee transactions",
-    "“Supported by” is programme membership, not a verification",
+    ...(SHOW_SPONSOR_OFFER ? ["“Supported by” is programme membership, not a verification"] : []),
   ],
 } as const;
 
@@ -189,7 +203,7 @@ const PACKAGES: readonly PackageDetail[] = [
     name: "Individual",
     eyebrow: "For one post or one business",
     title: "Sell something, or put your business on the map",
-    lede: "One live slot, in any section. The simplest way to reach local buyers with a post people can trust.",
+    lede: "Each slot keeps one post live, in any section, and you can hold 1 to 4 slots at a time. The simplest way to reach local buyers, with your ID reviewed before you post.",
     who: "Anyone selling one thing or running one business profile.",
     audience: [
       "Private sellers: a car, phone, furniture or equipment",
@@ -198,13 +212,13 @@ const PACKAGES: readonly PackageDetail[] = [
       "Community groups sharing an event (events are always free)",
     ],
     includes: [
-      "1 live slot in Mzansi Market, Mzansi Business or Tourism & Events",
+      "1 to 4 live slots at a time in Mzansi Market, Mzansi Business or Tourism & Events, one post each",
       "An ID reviewed sticker, plus optional CIPC registered and Seen stickers for businesses",
       "Photos and a short video on your post",
       "Calls and WhatsApp straight to you, with no commission",
       "Your first post free once your ID is reviewed (7 days), then 30, 90 or 180 days",
       "Your package sets the posting limits and how long a post stays active",
-      "Up to 2 approved edits per live post",
+      EDITS_LINE,
     ],
     notIncluded: "Not included: guaranteed views, enquiries or sales.",
     pricesHref: "/pricing#plans",
@@ -217,7 +231,7 @@ const PACKAGES: readonly PackageDetail[] = [
     name: "Multi-listing",
     eyebrow: "For dealers, agencies and shops with stock",
     title: "List everything you have, from one account",
-    lede: `From 10 up to ${ENTERPRISE_QUOTE_ABOVE_SLOTS} live slots at once and ${ENTERPRISE_ADMINS_INCLUDED} named administrators, so your whole stock is in front of buyers together.`,
+    lede: `From ${PACKAGE_MIN_SLOTS} slots at ${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days, for 30, 90 or 180 days, so your whole stock is in front of buyers together.`,
     who: "Dealers, agencies, shops and landlords with several things to list.",
     audience: [
       "Car, bike and equipment dealers",
@@ -226,14 +240,12 @@ const PACKAGES: readonly PackageDetail[] = [
       "Lodges, tour operators and venues with many units or offerings",
     ],
     includes: [
-      `10 to ${ENTERPRISE_QUOTE_ABOVE_SLOTS} live slots at the same time, across every section`,
-      "90 or 180 day terms with a fixed end date",
-      `${ENTERPRISE_ADMINS_INCLUDED} named administrators to manage posts`,
+      `${PACKAGE_MIN_SLOTS} or more live slots at the same time, across every section`,
+      "30, 90 or 180 days; all your slots end together",
       "Every poster ID reviewed and every post reviewed before it goes live",
-      "Change stock within your plan's live-post and activation limits",
-      "Up to 2 approved edits per live post",
-      "Bought online and paid once; a written quote is available for procurement",
-      `More than ${ENTERPRISE_QUOTE_ABOVE_SLOTS} live posts: a written quote`,
+      `Up to ${PACKAGE_POSTS_PER_SLOT_PER_30_DAYS} posts going live per slot per 30 days`,
+      EDITS_LINE,
+      `Paid online up to the most Ozow accepts in one payment; more than that, or more than ${PACKAGE_MAX_ONLINE_SLOTS} slots, by invoice at the same price`,
     ],
     notIncluded: "Not included: guaranteed views, enquiries or sales.",
     pricesHref: "/pricing#multi-listing-prices",
@@ -412,40 +424,53 @@ const FAQ = [
   },
   {
     q: "Can I cancel?",
-    a: "Yes, you can take your post down at any time. Unused days are not refunded. We refund rejected posts, duplicate charges and billing errors, and your statutory cooling-off rights apply.",
+    a: (
+      <>
+        {`You can take your post down at any time. Before you pay, you agree that your slot starts as soon as your payment is confirmed, so the 7-day cooling-off does not apply and a change of mind is not a reason for a refund. A rejected post keeps its slot: correct it and submit it again. If we wrongly reject a post, a paid slot does not work, or the site is down for more than 24 hours in a row, we first add the days you lost; if you still ask, we refund a reasonable part of the price for those days. If you are an individual (sole traders included), you can cancel a slot by emailing ${BILLING_EMAIL} from your account's email address. The slot runs for 20 more business days, then we credit its unused whole days, less a R50 fee; if that is R0 or less, nothing is paid, so cancelling a 30-day slot usually returns nothing. Closing your account cancels all your slots. Companies and other organisations are not refunded for unused days. Billing errors and duplicate payments are refunded in full once we have checked them. Refunds go to the account that paid, within 30 days after we approve them. Your rights under the Consumer Protection Act are not affected. `}
+        <Link
+          href="/terms#refunds"
+          className="font-medium text-foreground underline underline-offset-2"
+        >
+          Refunds &amp; cancelling in the Terms
+        </Link>
+        .
+      </>
+    ),
   },
   {
     q: "Do you take commission?",
     a: "No. Buyers and guests contact you directly by phone or WhatsApp. We never take a cut of a sale or booking.",
   },
-  {
-    q: "Does “Supported by” mean a business is verified?",
-    a: "No. It means the business is part of an organisation’s programme. VerifyMzansi reviews every poster’s identity separately, and the label is not a safety or quality endorsement.",
-  },
-  {
-    q: "Can sponsors claim B-BBEE or ESD points?",
-    a: "Recognition is assessed by your own B-BBEE verification agency. We provide programme records and reports, but we cannot promise points.",
-  },
+  ...(SHOW_SPONSOR_OFFER
+    ? [
+        {
+          q: "Does “Supported by” mean a business is verified?",
+          a: "No. It means the business is part of an organisation’s programme. VerifyMzansi reviews every poster’s identity separately, and the label is not a safety or quality endorsement.",
+        },
+        {
+          q: "Can sponsors claim B-BBEE or ESD points?",
+          a: "Recognition is assessed by your own B-BBEE verification agency. We provide programme records and reports, but we cannot promise points.",
+        },
+      ]
+    : []),
 ] as const;
 
 export default async function AdvertisePage() {
   const catalog = await getCommercialCatalog();
   const retail = [...catalog.retail].sort((a, b) => a.durationDays - b.durationDays);
-  const slotSizes = [...new Set(catalog.enterprise.map((plan) => plan.slots))].sort(
-    (a, b) => a - b
-  );
-  const enterprisePrice = (slots: number, days: number) => {
-    const plan = catalog.enterprise.find((p) => p.slots === slots && p.durationDays === days);
-    return plan ? formatPlanPrice(plan.priceCents) : "—";
-  };
   const sponsorMax = SPONSOR_PROGRAMME_PRICES[SPONSOR_PROGRAMME_PRICES.length - 1]!;
-  // Multi-listing is not on sale under posting-v4 and sponsor fees are agreed in
-  // writing until their new prices are published: hide both price lists.
-  const packages = PACKAGES.filter((pkg) => PACKAGES_ON_SALE || pkg.id !== "multi-listing");
+  // Multi-listing is not on sale under the current Terms and sponsor fees are agreed in
+  // writing until their new prices are published: hide both price lists. The sponsor
+  // programme itself is on hold (src/lib/hidden-features.ts).
+  const packages = PACKAGES.filter(
+    (pkg) =>
+      (PACKAGES_ON_SALE || pkg.id !== "multi-listing") &&
+      (SHOW_SPONSOR_OFFER || pkg.id !== "programmes")
+  );
 
   const sheets: Record<PackageDetail["id"], PriceSheetData> = {
     individual: {
-      caption: "Individual plans (one live slot)",
+      caption: "Individual slots (price per slot)",
       columns: ["Term", "Price"],
       rows: [
         ...retail.map((offer) => ({
@@ -460,18 +485,12 @@ export default async function AdvertisePage() {
     },
     "multi-listing": {
       caption: "Multi-listing price (total for the term)",
-      columns: ["Live slots", "90 days", "180 days"],
-      rows: [
-        ...slotSizes.map((slots) => ({
-          label: `${slots} slots`,
-          cells: [enterprisePrice(slots, 90), enterprisePrice(slots, 180)],
-        })),
-        {
-          label: `More than ${ENTERPRISE_QUOTE_ABOVE_SLOTS}`,
-          cells: ["Written quote"],
-        },
-      ],
-      footnote: `${ENTERPRISE_ADMINS_INCLUDED} named administrators included.`,
+      columns: ["Live slots", ...PACKAGE_TERMS.map((days) => `${days} days`)],
+      rows: PACKAGE_QUICK_SIZES.map((slots) => ({
+        label: `${slots} slots`,
+        cells: PACKAGE_TERMS.map((days) => formatPlanPrice(packageTotalCents(slots, days))),
+      })),
+      footnote: `${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days, any number from ${PACKAGE_MIN_SLOTS}. Does not renew automatically.`,
     },
     programmes: PACKAGES_ON_SALE
       ? {
@@ -635,50 +654,54 @@ export default async function AdvertisePage() {
           </Reveal>
         </section>
 
-        {/* 3 ── Which one is for you ────────────────────────── */}
-        <section
-          id="packages"
-          aria-labelledby="advertise-ways-title"
-          className="scroll-mt-24 border-y border-border/60 bg-card/50"
-        >
-          <div className="container-page py-12 sm:py-16">
-            <h2 id="advertise-ways-title" className="section-title">
-              Which one is for you?
-            </h2>
-            <p className="section-lede">
-              {packages.length === 3 ? "Three" : "Two"} ways to advertise. Pick the one that matches
-              what you do, then read the full details below.
-            </p>
-            <Reveal>
-              <ul
-                className={cn(
-                  "mt-8 grid gap-4",
-                  packages.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"
-                )}
-              >
-                {packages.map(({ id, icon: Icon, name, who }) => (
-                  <SpotlightCard
-                    as="li"
-                    key={id}
-                    className="flex flex-col rounded-3xl border border-border/70 bg-background p-5 elev-xs sm:p-6"
-                  >
-                    <span className="icon-tile h-11 w-11 rounded-2xl area-business-tile">
-                      <Icon aria-hidden="true" className="h-5 w-5" />
-                    </span>
-                    <h3 className="mt-4 font-display text-xl font-bold text-foreground">{name}</h3>
-                    <p className="mt-1 flex-1 text-sm leading-6 text-muted-foreground">{who}</p>
-                    <Button asChild variant="outline" className="mt-5 h-11 w-full rounded-full">
-                      <Link href={`#${id}`}>
-                        Full details of {name}
-                        <ArrowRight aria-hidden="true" className="ml-1.5 h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </SpotlightCard>
-                ))}
-              </ul>
-            </Reveal>
-          </div>
-        </section>
+        {/* 3 ── Which one is for you (only when there is a choice) ── */}
+        {packages.length > 1 ? (
+          <section
+            id="packages"
+            aria-labelledby="advertise-ways-title"
+            className="scroll-mt-24 border-y border-border/60 bg-card/50"
+          >
+            <div className="container-page py-12 sm:py-16">
+              <h2 id="advertise-ways-title" className="section-title">
+                Which one is for you?
+              </h2>
+              <p className="section-lede">
+                {packages.length === 3 ? "Three" : "Two"} ways to advertise. Pick the one that
+                matches what you do, then read the full details below.
+              </p>
+              <Reveal>
+                <ul
+                  className={cn(
+                    "mt-8 grid gap-4",
+                    packages.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"
+                  )}
+                >
+                  {packages.map(({ id, icon: Icon, name, who }) => (
+                    <SpotlightCard
+                      as="li"
+                      key={id}
+                      className="flex flex-col rounded-3xl border border-border/70 bg-background p-5 elev-xs sm:p-6"
+                    >
+                      <span className="icon-tile h-11 w-11 rounded-2xl area-business-tile">
+                        <Icon aria-hidden="true" className="h-5 w-5" />
+                      </span>
+                      <h3 className="mt-4 font-display text-xl font-bold text-foreground">
+                        {name}
+                      </h3>
+                      <p className="mt-1 flex-1 text-sm leading-6 text-muted-foreground">{who}</p>
+                      <Button asChild variant="outline" className="mt-5 h-11 w-full rounded-full">
+                        <Link href={`#${id}`}>
+                          Full details of {name}
+                          <ArrowRight aria-hidden="true" className="ml-1.5 h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </SpotlightCard>
+                  ))}
+                </ul>
+              </Reveal>
+            </div>
+          </section>
+        ) : null}
 
         {/* 4 ── The three packages in full ──────────────────── */}
         {packages.map((pkg, index) => (
@@ -781,82 +804,86 @@ export default async function AdvertisePage() {
           </Link>
         </section>
 
-        {/* 7 ── Get more eyes on a post ─────────────────────── */}
-        <section
-          aria-labelledby="advertise-extras-title"
-          className="border-y border-border/60 bg-card/50"
-        >
-          <div className="container-page py-12 sm:py-16">
-            <h2 id="advertise-extras-title" className="section-title">
-              Get more eyes on a post
-            </h2>
-            <p className="section-lede">
-              Optional, clearly labelled and still moderated. No guaranteed number of views.
-            </p>
-            <Reveal>
-              <ul className="mt-7 grid gap-4 sm:grid-cols-3">
-                {EXTRAS.map(({ icon: Icon, name, price, body }) => (
-                  <SpotlightCard
-                    as="li"
-                    key={name}
-                    className="surface-card flex gap-4 p-4 sm:flex-col sm:gap-0 sm:p-5"
-                  >
-                    <span className="icon-tile h-11 w-11 bg-brand-gold/20 text-brand-gold-800 dark:bg-brand-gold/15 dark:text-brand-gold-300">
-                      <Icon aria-hidden="true" className="h-5 w-5" />
-                    </span>
-                    <div className="min-w-0">
-                      <h3 className="font-body text-base font-bold text-foreground sm:mt-4">
-                        {name}
-                      </h3>
-                      <p className="mt-0.5 text-sm font-semibold text-brand-green-700 dark:text-brand-gold-300">
-                        {price}
-                      </p>
-                      <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{body}</p>
-                    </div>
-                  </SpotlightCard>
-                ))}
-              </ul>
-            </Reveal>
-          </div>
-        </section>
+        {/* 7 ── Get more eyes on a post (hidden until paid add-ons deliver) ── */}
+        {SHOW_PAID_ADDONS ? (
+          <section
+            aria-labelledby="advertise-extras-title"
+            className="border-y border-border/60 bg-card/50"
+          >
+            <div className="container-page py-12 sm:py-16">
+              <h2 id="advertise-extras-title" className="section-title">
+                Get more eyes on a post
+              </h2>
+              <p className="section-lede">
+                Optional, clearly labelled and still moderated. No guaranteed number of views.
+              </p>
+              <Reveal>
+                <ul className="mt-7 grid gap-4 sm:grid-cols-3">
+                  {EXTRAS.map(({ icon: Icon, name, price, body }) => (
+                    <SpotlightCard
+                      as="li"
+                      key={name}
+                      className="surface-card flex gap-4 p-4 sm:flex-col sm:gap-0 sm:p-5"
+                    >
+                      <span className="icon-tile h-11 w-11 bg-brand-gold/20 text-brand-gold-800 dark:bg-brand-gold/15 dark:text-brand-gold-300">
+                        <Icon aria-hidden="true" className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="font-body text-base font-bold text-foreground sm:mt-4">
+                          {name}
+                        </h3>
+                        <p className="mt-0.5 text-sm font-semibold text-brand-green-700 dark:text-brand-gold-300">
+                          {price}
+                        </p>
+                        <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{body}</p>
+                      </div>
+                    </SpotlightCard>
+                  ))}
+                </ul>
+              </Reveal>
+            </div>
+          </section>
+        ) : null}
 
-        {/* 8 ── Sample report ───────────────────────────────── */}
-        <section aria-labelledby="advertise-report-title">
-          <div className="container-page py-12 sm:py-16">
-            <h2 id="advertise-report-title" className="section-title">
-              What a partner report looks like
-            </h2>
-            <figure className="mt-7 max-w-3xl rounded-2xl border border-border/70 bg-card p-5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="flex items-center gap-2 font-semibold">
-                  <BarChart3 aria-hidden="true" className="h-5 w-5 text-brand-green-600" />
-                  30-day activity summary
-                </p>
-                <span className="rounded-full bg-brand-gold/20 px-2.5 py-1 text-xs font-bold text-brand-gold-900 dark:text-brand-gold-200">
-                  Example — not real results
-                </span>
-              </div>
-              <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {[
-                  ["Businesses activated", "21 of 25"],
-                  ["Live profiles", "19"],
-                  ["Profile views", "1,240"],
-                  ["Unique contact clicks", "86"],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-xl bg-muted/60 p-3">
-                    <dt className="text-xs text-muted-foreground">{label}</dt>
-                    <dd className="font-display text-xl font-bold tabular-nums">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-              <figcaption className="mt-4 text-xs leading-5 text-muted-foreground">
-                Known limitations: views and clicks are counted on VerifyMzansi only. A click on
-                &ldquo;Call&rdquo; or &ldquo;WhatsApp&rdquo; is not a confirmed enquiry or sale, and
-                visitors who block tracking are not counted.
-              </figcaption>
-            </figure>
-          </div>
-        </section>
+        {/* 8 ── Sample report (sponsor programme, on hold) ──── */}
+        {SHOW_SPONSOR_OFFER ? (
+          <section aria-labelledby="advertise-report-title">
+            <div className="container-page py-12 sm:py-16">
+              <h2 id="advertise-report-title" className="section-title">
+                What a partner report looks like
+              </h2>
+              <figure className="mt-7 max-w-3xl rounded-2xl border border-border/70 bg-card p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="flex items-center gap-2 font-semibold">
+                    <BarChart3 aria-hidden="true" className="h-5 w-5 text-brand-green-600" />
+                    30-day activity summary
+                  </p>
+                  <span className="rounded-full bg-brand-gold/20 px-2.5 py-1 text-xs font-bold text-brand-gold-900 dark:text-brand-gold-200">
+                    Example — not real results
+                  </span>
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {[
+                    ["Businesses activated", "21 of 25"],
+                    ["Live profiles", "19"],
+                    ["Profile views", "1,240"],
+                    ["Unique contact clicks", "86"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-xl bg-muted/60 p-3">
+                      <dt className="text-xs text-muted-foreground">{label}</dt>
+                      <dd className="font-display text-xl font-bold tabular-nums">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <figcaption className="mt-4 text-xs leading-5 text-muted-foreground">
+                  Known limitations: views and clicks are counted on VerifyMzansi only. A click on
+                  &ldquo;Call&rdquo; or &ldquo;WhatsApp&rdquo; is not a confirmed enquiry or sale,
+                  and visitors who block tracking are not counted.
+                </figcaption>
+              </figure>
+            </div>
+          </section>
+        ) : null}
 
         {/* 9 ── How it works ────────────────────────────────── */}
         <section aria-labelledby="advertise-steps-title" className="container-page py-12 sm:py-16">
@@ -930,17 +957,19 @@ export default async function AdvertisePage() {
               <Button asChild size="lg" variant="trust-verified" className="h-12 rounded-full px-6">
                 <Link href="/post/create">Post for free</Link>
               </Button>
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className={cn("h-12 rounded-full px-6", brandOutlineButtonClassName)}
-              >
-                <Link href={PROPOSAL_HREF}>
-                  <Users aria-hidden="true" className="mr-1.5 h-4 w-4" />
-                  Talk to us about sponsoring
-                </Link>
-              </Button>
+              {SHOW_SPONSOR_OFFER ? (
+                <Button
+                  asChild
+                  size="lg"
+                  variant="outline"
+                  className={cn("h-12 rounded-full px-6", brandOutlineButtonClassName)}
+                >
+                  <Link href={PROPOSAL_HREF}>
+                    <Users aria-hidden="true" className="mr-1.5 h-4 w-4" />
+                    Talk to us about sponsoring
+                  </Link>
+                </Button>
+              ) : null}
             </div>
           </div>
         </BrandSurface>

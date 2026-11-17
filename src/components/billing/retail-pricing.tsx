@@ -18,6 +18,7 @@ import {
   formatThirtyDayEquivalent,
   getRetailSavingsCents,
 } from "@/lib/constants/pricing";
+import { SHOW_PAID_ADDONS } from "@/lib/hidden-features";
 import { cn } from "@/lib/utils";
 import type { MarketplaceArea, RetailPlanTier } from "@/types/enums";
 
@@ -120,7 +121,7 @@ function TourismTrialCard({ shortDays }: { shortDays: number }) {
             Start free: {shortDays} days
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            One free trial per verified person. No payment, nothing renews.
+            One free post per ID-reviewed person. No payment, nothing renews.
           </p>
         </div>
       </div>
@@ -233,7 +234,8 @@ export function RetailPricing({
               <ul className="mt-5 flex-1 space-y-2.5 border-t border-border/60 pt-5">
                 <FeatureItem>{AREA_UNIT[area]}</FeatureItem>
                 <FeatureItem>10 photos and 1 video</FeatureItem>
-                <FeatureItem>Urgent label add-on</FeatureItem>
+                {/* Hidden until paid add-ons deliver (src/lib/hidden-features.ts). */}
+                {SHOW_PAID_ADDONS ? <FeatureItem>Urgent label add-on</FeatureItem> : null}
                 {savings > 0 ? (
                   <FeatureItem strong>Save {formatPlanPrice(savings)} vs. 30-day plans</FeatureItem>
                 ) : null}

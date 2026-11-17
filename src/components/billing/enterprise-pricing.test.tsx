@@ -6,12 +6,12 @@ import { EnterprisePricing } from "./enterprise-pricing";
 describe("EnterprisePricing", () => {
   const plans = ENTERPRISE_PLANS.map((plan) => ({ ...plan, planId: null }));
 
-  it("offers all three packages, each linking to its full details on the advertise page", () => {
+  it("offers Individual and Multi-listing, each linking to its full details on the advertise page", () => {
     render(<EnterprisePricing plans={plans} checkoutEnabled retailFromCents={5000} />);
 
     expect(screen.getByText("From R50")).toBeInTheDocument();
-    expect(screen.getByText(/^From R1\s200$/)).toBeInTheDocument();
-    expect(screen.getByText(/^From R15\s000$/)).toBeInTheDocument();
+    // The package rules (P4a): from 5 slots at R100 per slot per 30 days.
+    expect(screen.getByText(/^From R500$/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Full details of Individual/ })).toHaveAttribute(
       "href",
       "/advertise#individual"
@@ -20,21 +20,19 @@ describe("EnterprisePricing", () => {
       "href",
       "/advertise#multi-listing"
     );
-    expect(screen.getByRole("link", { name: /Full details of Business Sponsor/ })).toHaveAttribute(
-      "href",
-      "/advertise#programmes"
-    );
+    // The sponsor offer is on hold (src/lib/hidden-features.ts).
+    expect(screen.queryByRole("link", { name: /Full details of Business Sponsor/ })).toBeNull();
   });
 
-  it("shows the sponsor fee table on the pricing page", () => {
+  it("shows the multi-listing prices and no sponsor fee table while the sponsor offer is on hold", () => {
     const { container } = render(
       <EnterprisePricing plans={plans} checkoutEnabled retailFromCents={5000} />
     );
 
-    expect(container.querySelector("#programme-prices")).not.toBeNull();
+    expect(container.querySelector("#programme-prices")).toBeNull();
     expect(container.querySelector("#multi-listing-prices")).not.toBeNull();
-    expect(screen.getByText("Sponsor fee (total for the term)")).toBeInTheDocument();
-    expect(screen.getByText("Custom proposal")).toBeInTheDocument();
+    expect(screen.queryByText("Sponsor fee (total for the term)")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Request a sponsor proposal" })).toBeNull();
   });
 
   it("lets people choose a multi-listing package straight to the package checkout", () => {
