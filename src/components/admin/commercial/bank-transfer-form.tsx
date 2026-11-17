@@ -177,18 +177,38 @@ function WaitingTransfers({
 }
 
 /** Recorded bank transfers nobody confirmed within 14 days, oldest first,
- * listed until each is followed up (recorded again, or its invoice paid or
- * voided). */
-function ExpiredTransfers({ expired, count }: { expired: ExpiredTransfer[]; count: number }) {
-  if (expired.length === 0) return null;
+ * listed until each is followed up: the same money recorded again and
+ * confirmed, or resolved by staff (money returned, or it never arrived). */
+function ExpiredTransfers({
+  expired,
+  count,
+  canResolve,
+}: {
+  expired: ExpiredTransfer[];
+  count: number;
+  canResolve: boolean;
+}) {
+  const { run, busy, message } = useCommercialAction();
+  // Resolving the last listed transfer empties the list on refresh: the
+  // outcome stays on screen.
+  if (expired.length === 0) return <ActionMessage message={message} />;
+  const resolve = (t: ExpiredTransfer, resolution: "returned" | "never_arrived") => {
+    const reason = window.prompt("Reason (audited, at least 5 characters):")?.trim();
+    if (reason && reason.length >= 5)
+      void run(
+        { action: "payment.transfer_resolve", transferId: t.transfer_id, resolution, reason },
+        "Expired bank transfer resolved."
+      );
+  };
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold">
         Not confirmed within 14 days{count > expired.length ? ` · ${count}, oldest shown` : ""}
       </h3>
       <p className="text-xs text-muted-foreground">
-        Listed until the money is recorded again or the invoice is paid or voided.
+        Listed until the same money is recorded again and confirmed, or it is resolved below.
       </p>
+      <ActionMessage message={message} />
       <ul className="space-y-2" aria-label="Expired bank transfers">
         {expired.map((t) => (
           <li
@@ -214,6 +234,28 @@ function ExpiredTransfers({ expired, count }: { expired: ExpiredTransfer[]; coun
             <span className="w-full text-xs text-muted-foreground">
               Nothing was paid or started. If the money is in the bank account, record it again.
             </span>
+            {canResolve ? (
+              <span className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-10"
+                  disabled={busy}
+                  onClick={() => resolve(t, "returned")}
+                >
+                  Money returned
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-10"
+                  disabled={busy}
+                  onClick={() => resolve(t, "never_arrived")}
+                >
+                  Never arrived
+                </Button>
+              </span>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -256,7 +298,7 @@ export function BankTransferPanel({
         invoice.
       </p>
       <WaitingTransfers waiting={waiting} canConfirm={canConfirm} />
-      <ExpiredTransfers expired={expired} count={expiredCount} />
+      <ExpiredTransfers expired={expired} count={expiredCount} canResolve={canConfirm} />
       <ActionMessage message={check ? { tone: "error", text: check } : message} />
       {!canRecord ? null : !open ? (
         <Button type="button" variant="outline" className="h-11" onClick={() => setOpen(true)}>

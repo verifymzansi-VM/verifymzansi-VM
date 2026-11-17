@@ -7,10 +7,11 @@ CREATE OR REPLACE FUNCTION internal.expire_waiting_bank_transfers(p_limit intege
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare due uuid[]; one uuid; expired integer := 0; with_invoice integer := 0; failed integer := 0;
+declare due uuid[]; one uuid; expired integer := 0; with_invoice integer := 0; failures jsonb := '[]'::jsonb;
+  state text;
 begin
-  if p_limit is null or p_limit not between 1 and 1000 then
-    raise exception 'limit 1 to 1000' using errcode='22023';
+  if p_limit is null or p_limit not between 1 and 50 then
+    raise exception 'limit 1 to 50' using errcode='22023';
   end if;
   select coalesce(array_agg(x.id order by x.recorded_at, x.id), '{}') into due
   from (select t.id, t.recorded_at from private.invoice_transfers t
@@ -28,10 +29,12 @@ begin
         end if;
       end if;
     exception when others then
-      failed := failed + 1;
+      get stacked diagnostics state = returned_sqlstate;
+      failures := failures || jsonb_build_array(jsonb_build_object('transfer_id', one, 'sqlstate', state));
     end;
   end loop;
-  return jsonb_build_object('expired', expired, 'with_invoice', with_invoice, 'failed', failed);
+  return jsonb_build_object('expired', expired, 'with_invoice', with_invoice,
+    'failed', jsonb_array_length(failures), 'failures', failures);
 end;
 $function$;
 alter function internal.expire_waiting_bank_transfers(integer) owner to postgres;

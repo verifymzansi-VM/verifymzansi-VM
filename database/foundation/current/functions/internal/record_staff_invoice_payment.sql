@@ -64,12 +64,14 @@ begin
   -- credit that has waited 14 days is marked expired first, so it
   -- no longer holds them; the unique indexes still allow one open record. A
   -- credit that cleared more than 90 days ago is accepted only to record again
-  -- exactly the credit of an expired transfer.
+  -- exactly the credit of an expired transfer of the same account (and of the
+  -- same invoice, when that transfer named one).
   perform internal.expire_invoice_transfer(t.id) from private.invoice_transfers t
     where t.status = 'awaiting_confirmation'
       and (t.amount_received_cents = p_amount_cents and t.cleared_on = cleared
         and upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key);
-  if cleared < today - 90 and not internal.invoice_transfer_credit_expired(reference_key, p_amount_cents, cleared) then
+  if cleared < today - 90 and not internal.invoice_transfer_credit_expired(reference_key, p_amount_cents, cleared,
+      buyer, null) then
     raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
   end if;
   -- The same bank credit (reference, amount, date cleared) waiting or

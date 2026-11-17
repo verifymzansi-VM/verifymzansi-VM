@@ -35,32 +35,44 @@
 --      member), the "Possible duplicate" count and the two new reads count an
 --      expired transfer as expired.
 -- 3. The sweep api.expire_waiting_bank_transfers(p_limit) (service role only,
---    1 to 1000) records the status, the time and so the audit row of every
---    transfer that has waited 14 days, oldest first, each row on its own: a
---    row that cannot be changed is counted as failed and tried again next run,
---    and never stops the others. Rows a staff member holds are skipped. The
---    website's operation job runs it every minute with p_limit 100.
+--    1 to 50, so the subtransactions stay within the per-transaction cache)
+--    records the status and the time of every transfer that has waited 14
+--    days, oldest first, each row on its own: a row that cannot be changed is
+--    returned with its SQLSTATE (the website's job logs it), tried again next
+--    run, and never stops the others. Rows a staff member holds are skipped.
+--    The website's operation job runs it every minute with p_limit 50.
 -- 4. Recording a bank credit again: both record commands first record the
 --    expiry of any waiting record of the same credit (or, for an invoice, to
 --    the same invoice) that has waited 14 days, so the unique indexes (which,
 --    like the commands, leave out declined and expired records) still allow
 --    exactly one open record of a credit and of an invoice. A credit that
 --    cleared more than 90 days ago is accepted only when it is exactly the
---    credit (bank reference, amount, date cleared) of an expired transfer.
+--    credit (bank reference, amount, date cleared) of an expired transfer of
+--    the same account, and of the same invoice when that transfer named one.
+--    The "Possible duplicate" count includes expired records of the same
+--    money, so the second staff member is warned.
 -- 5. The staff audit trail (private.frontend_staff_audit_events) lists each
---    recorded expiry as 'payment:invoice_expired' with no staff member, the
---    transfer as its target and "Bank transfer <reference> expired: not
---    confirmed within 14 days of being recorded", the way it lists a decline.
+--    expiry as 'payment:invoice_expired' with no staff member, the transfer as
+--    its target and "Bank transfer <reference> expired: not confirmed within 14
+--    days of being recorded", at the recorded expiry or, while the sweep has
+--    not marked it, at the moment it passed 14 days; and each resolution
+--    (below) as 'payment:invoice_expired_resolved' with the staff member.
 -- 6. Retention (internal.retention_commerce) counts an expired transfer's five
 --    tax years from its expiry; the privacy export
 --    (internal.frontend_privacy_export_data) adds expired_at to each bank
 --    transfer.
--- 7. Two reads: api.get_staff_expired_invoice_transfers() (staff with
---    payments:view: every expired transfer not yet followed up by a later
---    record of the same credit or invoice, or by its invoice being paid or
---    voided; oldest first, at most 200, with the count) and
---    api.get_my_invoice_transfer_expiry(p_invoice_number) (the member's own
---    invoice: when its latest transfer expired while the invoice is unpaid,
+-- 7. Staff follow-up: api.resolve_expired_invoice_transfer(p_transfer_id,
+--    p_resolution, p_reason) (payments:confirm_transfer, as confirming)
+--    records once, with an audited reason, that the money of an expired
+--    transfer was returned outside VerifyMzansi ('returned') or never arrived
+--    ('never_arrived'): columns resolution, resolution_reason, resolved_by,
+--    resolved_at, set only on an expired transfer.
+--    api.get_staff_expired_invoice_transfers() (payments:view) lists every
+--    expired transfer not yet followed up, that is, neither resolved nor with
+--    the same money recorded again and confirmed; oldest first, at most 200,
+--    with the count. api.get_my_invoice_transfer_expiry(p_invoice_number) (the
+--    member's own invoice) says when its latest transfer expired while the
+--    invoice is unpaid,
 --    else null). No existing read changes shape.
 --
 -- No email is sent; the member sees the expiry on the invoice page.
@@ -99,17 +111,17 @@ begin
   loop
     if shape not in (
         'internal.invoice_transfer_guard() 494dcdb720573571dd36edf97b055332',
-        'internal.invoice_transfer_guard() 8a6697d7fc6026bc14e771df9b7ac999',
+        'internal.invoice_transfer_guard() 40022dab9a8357b0b1ba4101c48f5196',
         'internal.confirm_staff_invoice_payment(uuid) e0c308df14f38f1de76bdced4e8683f2',
         'internal.confirm_staff_invoice_payment(uuid) 66e96f9682fbab67236ccf83142fbd05',
         'internal.decline_staff_invoice_payment(uuid,text) cc8641faee31c5a9a043e4c510d26302',
         'internal.decline_staff_invoice_payment(uuid,text) 2812080d676629d5f74e4f4d0063c368',
         'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) 594b47bc794e335a3f3be505a4b1637e',
-        'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) 68cfba77e196105dd3c686b935f11e11',
+        'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) dbf38f038bee7e1cf43b91288dbdab94',
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 171c0ad6f18a7f5329ff00dcfff4608d',
-        'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 49ae9a41906abbca8ceff68e6489a689',
+        'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 4f74538d08ca0abdac2103d71e0fdd07',
         'internal.invoice_transfer_dto(private.invoice_transfers,uuid) b91dbdd96bec847ddb165d6a663cc7cb',
-        'internal.invoice_transfer_dto(private.invoice_transfers,uuid) cbcd92ebaf7e89f07960f74f036f46fd',
+        'internal.invoice_transfer_dto(private.invoice_transfers,uuid) 1817387f19f8a1fd9b278247f9e69c15',
         'internal.get_staff_invoice_transfers() 37ec35ae8968df035025e3c69234f3be',
         'internal.get_staff_invoice_transfers() 13f1c0cf67460052d334b32e70b1ebe8',
         'internal.customer_invoice_dto(private.customer_invoices,uuid) 5ce8a88fc44ed9e59a1cfd7dd6214382',
@@ -143,6 +155,23 @@ alter table private.invoice_transfers drop constraint if exists invoice_transfer
     check (status = any (array['awaiting_confirmation'::text, 'confirmed'::text, 'declined'::text, 'expired'::text])),
   drop constraint if exists invoice_transfers_expired,
   add constraint invoice_transfers_expired check ((status = 'expired'::text) = (expired_at is not null));
+-- An expired transfer's follow-up by staff (api.resolve_expired_invoice_transfer).
+alter table private.invoice_transfers add column if not exists resolution text,
+  add column if not exists resolution_reason text,
+  add column if not exists resolved_by uuid references auth.users(id) on delete restrict,
+  add column if not exists resolved_at timestamp with time zone;
+alter table private.invoice_transfers drop constraint if exists invoice_transfers_resolution_check,
+  add constraint invoice_transfers_resolution_check
+    check (resolution is null or resolution = any (array['returned'::text, 'never_arrived'::text])),
+  drop constraint if exists invoice_transfers_resolution_reason_check,
+  add constraint invoice_transfers_resolution_reason_check
+    check (resolution_reason is null or internal.plain_text_valid(resolution_reason, 5, 500, true)),
+  drop constraint if exists invoice_transfers_resolved,
+  add constraint invoice_transfers_resolved check ((resolved_at is null) = (resolved_by is null)
+    and (resolved_at is null) = (resolution is null) and (resolved_at is null) = (resolution_reason is null)
+    and (resolved_at is null or status = 'expired'::text));
+create index if not exists invoice_transfers_resolved_by_idx on private.invoice_transfers (resolved_by)
+  where resolved_by is not null;
 
 -- 4. An expired transfer, like a declined one, holds neither its bank credit
 -- nor its invoice.
@@ -199,9 +228,10 @@ $function$;
 alter function internal.invoice_transfer_waiting(private.invoice_transfers) owner to postgres;
 revoke all on function internal.invoice_transfer_waiting(private.invoice_transfers) from public, anon, authenticated, service_role;
 
--- A bank credit (reference, amount, date cleared) that an expired transfer
--- named: it may be recorded again whatever its age.
-CREATE OR REPLACE FUNCTION internal.invoice_transfer_credit_expired(p_reference_key text, p_amount_cents bigint, p_cleared_on date)
+-- A bank credit (reference, amount, date cleared) that an expired transfer of
+-- the same account named (and of the same invoice, when that transfer named
+-- one): it may be recorded again for them whatever its age.
+CREATE OR REPLACE FUNCTION internal.invoice_transfer_credit_expired(p_reference_key text, p_amount_cents bigint, p_cleared_on date, p_account_id uuid, p_invoice_id uuid)
  RETURNS boolean
  LANGUAGE sql
  STABLE
@@ -210,10 +240,12 @@ AS $function$
   select exists(select 1 from private.invoice_transfers t
     where upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = p_reference_key
       and t.amount_received_cents = p_amount_cents and t.cleared_on = p_cleared_on
+      and t.account_id = p_account_id
+      and (t.customer_invoice_id is null or t.customer_invoice_id = p_invoice_id)
       and internal.invoice_transfer_expired(t));
 $function$;
-alter function internal.invoice_transfer_credit_expired(text,bigint,date) owner to postgres;
-revoke all on function internal.invoice_transfer_credit_expired(text,bigint,date) from public, anon, authenticated, service_role;
+alter function internal.invoice_transfer_credit_expired(text,bigint,date,uuid,uuid) owner to postgres;
+revoke all on function internal.invoice_transfer_credit_expired(text,bigint,date,uuid,uuid) from public, anon, authenticated, service_role;
 
 -- Records the expiry of one transfer that has waited 14 days (status, time;
 -- the audit trail reads them); false when it is not such a transfer.
@@ -262,6 +294,17 @@ begin
         or new.payment_id is not null or new.declined_by is not null or new.declined_at is not null
         or new.decline_reason is not null or new.expired_at is not null then
       raise exception 'a bank transfer is recorded as waiting for confirmation' using errcode='23514';
+    end if;
+    return new;
+  end if;
+  -- An expired transfer is resolved once by a staff member (money returned
+  -- outside the system, or it never arrived), with nothing else changed.
+  if old.status = 'expired' then
+    if old.resolved_at is not null or new.resolved_at is null or new.resolved_by is null
+        or new.resolution is null or new.resolution_reason is null
+        or (to_jsonb(new) - array['resolution','resolution_reason','resolved_by','resolved_at'])
+          is distinct from (to_jsonb(old) - array['resolution','resolution_reason','resolved_by','resolved_at']) then
+      raise exception 'an expired bank transfer is only resolved once, with nothing else changed' using errcode='23514';
     end if;
     return new;
   end if;
@@ -559,12 +602,14 @@ begin
   -- credit that has waited 14 days is marked expired first, so it
   -- no longer holds them; the unique indexes still allow one open record. A
   -- credit that cleared more than 90 days ago is accepted only to record again
-  -- exactly the credit of an expired transfer.
+  -- exactly the credit of an expired transfer of the same account (and of the
+  -- same invoice, when that transfer named one).
   perform internal.expire_invoice_transfer(t.id) from private.invoice_transfers t
     where t.status = 'awaiting_confirmation'
       and (t.amount_received_cents = p_amount_cents and t.cleared_on = cleared
         and upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key);
-  if cleared < today - 90 and not internal.invoice_transfer_credit_expired(reference_key, p_amount_cents, cleared) then
+  if cleared < today - 90 and not internal.invoice_transfer_credit_expired(reference_key, p_amount_cents, cleared,
+      buyer, null) then
     raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
   end if;
   -- The same bank credit (reference, amount, date cleared) waiting or
@@ -696,12 +741,14 @@ begin
   -- credit or of this invoice that has waited 14 days is marked expired first, so it
   -- no longer holds them; the unique indexes still allow one open record. A
   -- credit that cleared more than 90 days ago is accepted only to record again
-  -- exactly the credit of an expired transfer.
+  -- exactly the credit of an expired transfer of the same account (and of the
+  -- same invoice, when that transfer named one).
   perform internal.expire_invoice_transfer(t.id) from private.invoice_transfers t
     where t.status = 'awaiting_confirmation'
       and (t.customer_invoice_id = inv.id or (t.amount_received_cents = inv.total_cents and t.cleared_on = cleared
         and upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key));
-  if cleared < today - 90 and not internal.invoice_transfer_credit_expired(reference_key, inv.total_cents, cleared) then
+  if cleared < today - 90 and not internal.invoice_transfer_credit_expired(reference_key, inv.total_cents, cleared,
+      inv.account_id, inv.id) then
     raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
   end if;
   -- The same bank credit waiting or confirmed: the same request again by the
@@ -786,11 +833,16 @@ AS $function$
   select jsonb_build_object('transfer_id', t.id, 'status', t.status, 'account_id', t.account_id,
     'customer_email', (select u.email from auth.users u where u.id = t.account_id),
     'similar_records', (select count(*) from private.invoice_transfers x where x.id <> t.id
-      and x.status <> 'declined' and not internal.invoice_transfer_expired(x)
-      and x.amount_received_cents = t.amount_received_cents
-      and (upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
-          = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g'))
-        or (x.account_id = t.account_id and x.cleared_on = t.cleared_on))),
+      and x.status <> 'declined' and x.amount_received_cents = t.amount_received_cents
+      -- 20261117141803: an expired record counts only for the same money
+      -- (reference, amount, date cleared), so a record of it again is flagged.
+      and ((not internal.invoice_transfer_expired(x)
+          and (upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
+              = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g'))
+            or (x.account_id = t.account_id and x.cleared_on = t.cleared_on)))
+        or (internal.invoice_transfer_expired(x) and x.cleared_on = t.cleared_on
+          and upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
+            = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g'))))),
     'customer_name', internal.profile_public_name((select f.display_name from private.profiles f where f.account_id = t.account_id)),
     'term_days', (select v.duration_days from private.plan_versions v where v.id = t.plan_version_id),
     'slots', t.slots, 'amount_received_cents', t.amount_received_cents, 'bank_reference', t.bank_reference,
@@ -1312,21 +1364,23 @@ revoke all on function internal.frontend_privacy_export_data(uuid) from public;
 
 -- 3 and 7. The sweep and the two reads.
 -- The sweep: records the expiry of every transfer that has waited 14 days,
--- oldest first, at most p_limit per run, each in its own subtransaction so one
--- row that cannot be changed never stops the others (it is counted as failed
--- and tried again next run). Rows a staff member holds at that moment are
--- skipped. The rule itself (internal.invoice_transfer_expired) does not wait
--- for the sweep.
+-- oldest first, at most p_limit (1 to 50, so the subtransactions stay within
+-- the per-transaction cache) per run, each in its own subtransaction so one
+-- row that cannot be changed never stops the others: it is returned with its
+-- SQLSTATE (the worker logs it) and tried again next run, and every command,
+-- read and the audit trail already treat it as expired. Rows a staff member
+-- holds at that moment are skipped.
 CREATE OR REPLACE FUNCTION internal.expire_waiting_bank_transfers(p_limit integer)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare due uuid[]; one uuid; expired integer := 0; with_invoice integer := 0; failed integer := 0;
+declare due uuid[]; one uuid; expired integer := 0; with_invoice integer := 0; failures jsonb := '[]'::jsonb;
+  state text;
 begin
-  if p_limit is null or p_limit not between 1 and 1000 then
-    raise exception 'limit 1 to 1000' using errcode='22023';
+  if p_limit is null or p_limit not between 1 and 50 then
+    raise exception 'limit 1 to 50' using errcode='22023';
   end if;
   select coalesce(array_agg(x.id order by x.recorded_at, x.id), '{}') into due
   from (select t.id, t.recorded_at from private.invoice_transfers t
@@ -1344,10 +1398,12 @@ begin
         end if;
       end if;
     exception when others then
-      failed := failed + 1;
+      get stacked diagnostics state = returned_sqlstate;
+      failures := failures || jsonb_build_array(jsonb_build_object('transfer_id', one, 'sqlstate', state));
     end;
   end loop;
-  return jsonb_build_object('expired', expired, 'with_invoice', with_invoice, 'failed', failed);
+  return jsonb_build_object('expired', expired, 'with_invoice', with_invoice,
+    'failed', jsonb_array_length(failures), 'failures', failures);
 end;
 $function$;
 alter function internal.expire_waiting_bank_transfers(integer) owner to postgres;
@@ -1366,11 +1422,12 @@ revoke all on function api.expire_waiting_bank_transfers(integer) from public, a
 grant execute on function api.expire_waiting_bank_transfers(integer) to service_role;
 
 -- Staff (payments:view): every expired transfer still to be followed up,
--- oldest expiry first, at most 200 (with the full count): not followed by a
--- later record of the same bank credit or to the same invoice, and not naming
--- an invoice since paid or voided. Each as the waiting list shows it, with
--- status 'expired', when it expired (or, before the sweep marked it, when it
--- passed 14 days) and the invoice number.
+-- oldest expiry first, at most 200 (with the full count). One is followed up
+-- only when the same money (reference, amount, date cleared) was recorded
+-- again and confirmed, or a staff member resolved it
+-- (api.resolve_expired_invoice_transfer). Each as the waiting list shows it,
+-- with status 'expired', when it expired (or, before the sweep marked it, when
+-- it passed 14 days) and the invoice number.
 CREATE OR REPLACE FUNCTION internal.get_staff_expired_invoice_transfers()
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1383,14 +1440,11 @@ begin
   with open as (
     select t as transfer, t.id, coalesce(t.expired_at, t.recorded_at + internal.invoice_transfer_expires_after()) as expired_on
     from private.invoice_transfers t
-    where internal.invoice_transfer_expired(t)
-      and not exists(select 1 from private.invoice_transfers x where x.id <> t.id and x.recorded_at > t.recorded_at
-        and ((x.customer_invoice_id is not null and x.customer_invoice_id = t.customer_invoice_id)
-          or (x.amount_received_cents = t.amount_received_cents and x.cleared_on = t.cleared_on
-            and upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
-              = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')))))
-      and not exists(select 1 from private.customer_invoices i where i.id = t.customer_invoice_id
-        and i.status in ('paid', 'void'))
+    where internal.invoice_transfer_expired(t) and t.resolved_at is null
+      and not exists(select 1 from private.invoice_transfers x where x.id <> t.id and x.status = 'confirmed'
+        and x.amount_received_cents = t.amount_received_cents and x.cleared_on = t.cleared_on
+        and upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
+          = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')))
   )
   select jsonb_build_object('unresolved', (select count(*) from open),
       'items', coalesce((select jsonb_agg(internal.invoice_transfer_dto(o.transfer, actor)
@@ -1460,6 +1514,66 @@ $function$;
 alter function api.get_my_invoice_transfer_expiry(text) owner to postgres;
 revoke all on function api.get_my_invoice_transfer_expiry(text) from public, anon, authenticated, service_role;
 grant execute on function api.get_my_invoice_transfer_expiry(text) to authenticated;
+
+-- Staff (payments:confirm_transfer, as for confirming or declining) resolve an
+-- expired transfer that will not be recorded again: the money was returned
+-- outside the system ('returned') or never arrived ('never_arrived'), with an
+-- audited reason. Once only; the same request again returns the result. A
+-- transfer that has waited 14 days but is not marked yet is marked first.
+CREATE OR REPLACE FUNCTION internal.resolve_expired_invoice_transfer(p_transfer_id uuid, p_resolution text, p_reason text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid; t private.invoice_transfers;
+begin
+  actor := internal.staff_actor('payments:confirm_transfer');
+  if p_resolution is null or p_resolution not in ('returned', 'never_arrived') then
+    raise exception 'resolution must be returned or never_arrived' using errcode='22023';
+  end if;
+  if not coalesce(internal.plain_text_valid(p_reason, 5, 500, true), false) then
+    raise exception 'resolution reason required' using errcode='22023';
+  end if;
+  t := internal.lock_invoice_transfer_for_review(p_transfer_id, actor);
+  if t.resolved_at is not null then
+    if t.resolved_by = actor and t.resolution = p_resolution and t.resolution_reason = btrim(p_reason) then
+      return internal.invoice_transfer_dto(t, actor) || jsonb_build_object('status', 'expired',
+        'resolution', t.resolution, 'repeated', true);
+    end if;
+    raise exception 'this expired bank transfer was already resolved' using errcode='PT409', detail='transfer_resolved';
+  end if;
+  if not internal.invoice_transfer_expired(t) then
+    raise exception 'only an expired bank transfer is resolved; confirm or decline a waiting one'
+      using errcode='PT409', detail='transfer_not_expired';
+  end if;
+  if t.status = 'awaiting_confirmation' then
+    perform internal.expire_invoice_transfer(t.id);
+  end if;
+  update private.invoice_transfers set resolution = p_resolution, resolution_reason = btrim(p_reason),
+      resolved_by = actor, resolved_at = statement_timestamp()
+    where id = t.id returning * into t;
+  if internal.staff_actor('payments:confirm_transfer') is distinct from actor then
+    raise exception 'staff actor changed' using errcode='42501';
+  end if;
+  return internal.invoice_transfer_dto(t, actor) || jsonb_build_object('status', 'expired',
+    'resolution', t.resolution, 'repeated', false);
+end;
+$function$;
+alter function internal.resolve_expired_invoice_transfer(uuid,text,text) owner to postgres;
+revoke all on function internal.resolve_expired_invoice_transfer(uuid,text,text) from public, anon, authenticated, service_role;
+grant execute on function internal.resolve_expired_invoice_transfer(uuid,text,text) to authenticated;
+
+CREATE OR REPLACE FUNCTION api.resolve_expired_invoice_transfer(p_transfer_id uuid, p_resolution text, p_reason text)
+ RETURNS jsonb
+ LANGUAGE sql
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select internal.resolve_expired_invoice_transfer(p_transfer_id, p_resolution, p_reason);
+$function$;
+alter function api.resolve_expired_invoice_transfer(uuid,text,text) owner to postgres;
+revoke all on function api.resolve_expired_invoice_transfer(uuid,text,text) from public, anon, authenticated, service_role;
+grant execute on function api.resolve_expired_invoice_transfer(uuid,text,text) to authenticated;
 
 -- 5. The staff audit trail.
 create or replace view private.frontend_staff_audit_events with (security_invoker=true) as
@@ -1559,14 +1673,26 @@ UNION ALL
   WHERE t.declined_by IS NOT NULL
 UNION ALL
  SELECT 'payment_invoice_expired:'::text || t.id::text AS id,
-    t.expired_at AS occurred_at,
+    COALESCE(t.expired_at, t.recorded_at + internal.invoice_transfer_expires_after()) AS occurred_at,
     NULL::uuid AS actor_id,
     t.id AS target_id,
     'payment'::text AS target_type,
     'payment:invoice_expired'::text AS action,
     ('Bank transfer '::text || t.bank_reference) || ' expired: not confirmed within 14 days of being recorded'::text AS reason
    FROM private.invoice_transfers t
-  WHERE t.expired_at IS NOT NULL
+  WHERE internal.invoice_transfer_expired(t.*)
+UNION ALL
+ SELECT 'payment_invoice_resolved:'::text || t.id::text AS id,
+    t.resolved_at AS occurred_at,
+    t.resolved_by AS actor_id,
+    t.id AS target_id,
+    'payment'::text AS target_type,
+    'payment:invoice_expired_resolved'::text AS action,
+    (((('Bank transfer '::text || t.bank_reference) || ' expired, resolved: '::text)
+      || CASE t.resolution WHEN 'returned'::text THEN 'money returned outside VerifyMzansi'::text ELSE 'money never arrived'::text END)
+      || ': '::text) || t.resolution_reason AS reason
+   FROM private.invoice_transfers t
+  WHERE t.resolved_by IS NOT NULL
 UNION ALL
  SELECT 'customer_invoice_issued:'::text || i.id::text AS id,
     i.issued_at AS occurred_at,
@@ -1596,7 +1722,8 @@ begin
   for f, expected in select * from (values
       ('api.expire_waiting_bank_transfers(integer)', '{"anon":false,"authenticated":false,"service_role":true}'::jsonb),
       ('api.get_staff_expired_invoice_transfers()', '{"anon":false,"authenticated":true,"service_role":false}'::jsonb),
-      ('api.get_my_invoice_transfer_expiry(text)', '{"anon":false,"authenticated":true,"service_role":false}'::jsonb)) v
+      ('api.get_my_invoice_transfer_expiry(text)', '{"anon":false,"authenticated":true,"service_role":false}'::jsonb),
+      ('api.resolve_expired_invoice_transfer(uuid,text,text)', '{"anon":false,"authenticated":true,"service_role":false}'::jsonb)) v
   loop
     if (select jsonb_object_agg(r, has_function_privilege(r, f, 'execute'))
         from unnest(array['anon','authenticated','service_role']) r) is distinct from expected then

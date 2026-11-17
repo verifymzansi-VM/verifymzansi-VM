@@ -265,14 +265,36 @@ describe("bank transfers waiting for a second staff member", () => {
     expect(screen.getByText(/R138 from Thandi D. for 2 × 30-day slots/)).toBeInTheDocument();
   });
 
-  it("lists expired transfers with an Expired badge and no actions", () => {
+  it("lets staff who confirm transfers resolve an expired one, with a reason", async () => {
+    vi.stubGlobal(
+      "prompt",
+      vi.fn(() => "Refunded by EFT on 2026-11-30")
+    );
+    const { similar_records: _ignored, ...rest } = waiting;
+    const expired = { ...rest, expired_at: "2026-11-27T08:01:00Z", invoice_number: null };
+    render(<BankTransferPanel canRecord={false} canConfirm waiting={[]} expired={[expired]} />);
+    const list = screen.getByRole("list", { name: "Expired bank transfers" });
+    expect(within(list).getByRole("button", { name: "Never arrived" })).toBeEnabled();
+    fireEvent.click(within(list).getByRole("button", { name: "Money returned" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(sent()).toEqual({
+      action: "payment.transfer_resolve",
+      transferId: waiting.transfer_id,
+      resolution: "returned",
+      reason: "Refunded by EFT on 2026-11-30",
+    });
+  });
+
+  it("lists expired transfers with an Expired badge and no actions without the right", () => {
     const { similar_records: _ignored, ...rest } = waiting;
     const expired = {
       ...rest,
       expired_at: "2026-11-27T08:01:00Z",
       invoice_number: "VM-2026-000012",
     };
-    render(<BankTransferPanel canRecord={false} canConfirm waiting={[]} expired={[expired]} />);
+    render(
+      <BankTransferPanel canRecord={false} canConfirm={false} waiting={[]} expired={[expired]} />
+    );
     const list = screen.getByRole("list", { name: "Expired bank transfers" });
     expect(within(list).getByText("Expired")).toBeInTheDocument();
     expect(within(list).getByText(/R138 from Thandi D. for 2 × 30-day slots/)).toBeInTheDocument();
@@ -284,7 +306,9 @@ describe("bank transfers waiting for a second staff member", () => {
     ).toBeNull();
     expect(screen.getByRole("heading", { name: "Not confirmed within 14 days" })).toBeVisible();
     expect(
-      screen.getByText("Listed until the money is recorded again or the invoice is paid or voided.")
+      screen.getByText(
+        "Listed until the same money is recorded again and confirmed, or it is resolved below."
+      )
     ).toBeInTheDocument();
   });
 

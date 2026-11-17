@@ -516,7 +516,7 @@ try {
     sql(`set session_replication_role=replica;
       update private.invoice_transfers set recorded_at=now()-interval '15 days' where id='${transfer.transfer_id}';
       set session_replication_role=origin;`);
-    const swept = await call("expire_waiting_bank_transfers", { p_limit: 100 }, null, true);
+    const swept = await call("expire_waiting_bank_transfers", { p_limit: 50 }, null, true);
     assert.equal(swept.expired, 1);
     world.otherInvoice = invoice.invoice_number;
     world.otherTransfer = transfer.transfer_id;

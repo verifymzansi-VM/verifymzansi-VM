@@ -235,6 +235,11 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
       "This bank transfer is no longer waiting for confirmation: it was confirmed or declined, or nobody confirmed it within 14 days and it expired. Reload the page.",
     ],
   ],
+  ["transfer_resolved", [409, "This expired bank transfer was already resolved. Reload the page."]],
+  [
+    "transfer_not_expired",
+    [409, "Only an expired bank transfer is resolved here. Confirm or decline a waiting one."],
+  ],
   [
     "invoice_amount_mismatch",
     [422, "The amount received is not the order total. Check the term and the number of slots."],
@@ -593,6 +598,38 @@ export async function readStaffBankTransfersExpired(
   return settleStaffCommand(
     Promise.resolve(result),
     z.strictObject({ unresolved: count, items: z.array(staffExpiredTransfer).max(200) })
+  );
+}
+
+/** How staff followed up an expired transfer that will not be recorded again. */
+export const EXPIRED_TRANSFER_RESOLUTIONS = ["returned", "never_arrived"] as const;
+export type ExpiredTransferResolution = (typeof EXPIRED_TRANSFER_RESOLUTIONS)[number];
+
+/** Records once (audited, with a reason) that the money of an expired
+ * transfer was returned outside VerifyMzansi or never arrived; it then leaves
+ * the follow-up list. Nothing is paid or started. */
+export function resolveStaffExpiredTransfer(
+  api: FoundationAuthenticatedApi,
+  transferId: string,
+  resolution: ExpiredTransferResolution,
+  reason: string
+) {
+  return settlePaymentCommand(
+    api.rpc(
+      "resolve_expired_invoice_transfer",
+      {
+        p_transfer_id: transferId,
+        p_resolution: z.enum(EXPIRED_TRANSFER_RESOLUTIONS).parse(resolution),
+        p_reason: staffReason.parse(reason),
+      },
+      { get: false }
+    ),
+    staffTransferRecord.extend({
+      transfer_id: z.literal(transferId),
+      status: z.literal("expired"),
+      resolution: z.literal(resolution),
+      repeated: z.boolean(),
+    })
   );
 }
 

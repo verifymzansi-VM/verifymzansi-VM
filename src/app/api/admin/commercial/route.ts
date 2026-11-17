@@ -10,6 +10,8 @@ import {
   approveStaffPaymentRefund,
   confirmStaffBankTransfer,
   declineStaffBankTransfer,
+  EXPIRED_TRANSFER_RESOLUTIONS,
+  resolveStaffExpiredTransfer,
   declineStaffPaymentRefund,
   readStaffBankTransferCustomer,
   recordStaffBankTransfer,
@@ -143,6 +145,13 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("payment.activate"), paymentId: uuid, reason }),
   z.object({ action: z.literal("payment.transfer_confirm"), transferId: uuid }),
   z.object({ action: z.literal("payment.transfer_decline"), transferId: uuid, reason }),
+  // An expired transfer followed up outside the site (audited).
+  z.object({
+    action: z.literal("payment.transfer_resolve"),
+    transferId: uuid,
+    resolution: z.enum(EXPIRED_TRANSFER_RESOLUTIONS),
+    reason,
+  }),
   z.object({
     action: z.literal("payment.transfer_customer"),
     accountEmail: z.string().trim().min(3).max(254),
@@ -300,6 +309,16 @@ export async function POST(request: NextRequest) {
         return {
           success: true,
           data: await declineStaffBankTransfer(api, body.transferId.toLowerCase(), body.reason),
+        };
+      if (body.action === "payment.transfer_resolve")
+        return {
+          success: true,
+          data: await resolveStaffExpiredTransfer(
+            api,
+            body.transferId.toLowerCase(),
+            body.resolution,
+            body.reason
+          ),
         };
       if (body.action === "payment.transfer_customer")
         return {

@@ -27,17 +27,17 @@ with bodies as (
     (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)) as body
   from (values
     ('internal.invoice_transfer_guard()',
-      '494dcdb720573571dd36edf97b055332', '8a6697d7fc6026bc14e771df9b7ac999'),
+      '494dcdb720573571dd36edf97b055332', '40022dab9a8357b0b1ba4101c48f5196'),
     ('internal.confirm_staff_invoice_payment(uuid)',
       'e0c308df14f38f1de76bdced4e8683f2', '66e96f9682fbab67236ccf83142fbd05'),
     ('internal.decline_staff_invoice_payment(uuid,text)',
       'cc8641faee31c5a9a043e4c510d26302', '2812080d676629d5f74e4f4d0063c368'),
     ('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)',
-      '594b47bc794e335a3f3be505a4b1637e', '68cfba77e196105dd3c686b935f11e11'),
+      '594b47bc794e335a3f3be505a4b1637e', 'dbf38f038bee7e1cf43b91288dbdab94'),
     ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)',
-      '171c0ad6f18a7f5329ff00dcfff4608d', '49ae9a41906abbca8ceff68e6489a689'),
+      '171c0ad6f18a7f5329ff00dcfff4608d', '4f74538d08ca0abdac2103d71e0fdd07'),
     ('internal.invoice_transfer_dto(private.invoice_transfers,uuid)',
-      'b91dbdd96bec847ddb165d6a663cc7cb', 'cbcd92ebaf7e89f07960f74f036f46fd'),
+      'b91dbdd96bec847ddb165d6a663cc7cb', '1817387f19f8a1fd9b278247f9e69c15'),
     ('internal.get_staff_invoice_transfers()',
       '37ec35ae8968df035025e3c69234f3be', '13f1c0cf67460052d334b32e70b1ebe8'),
     ('internal.customer_invoice_dto(private.customer_invoices,uuid)',
@@ -59,7 +59,8 @@ added as (
       and a.attname = 'expired_at' and not a.attisdropped) as column_added,
     to_regprocedure('api.expire_waiting_bank_transfers(integer)') is not null
       and to_regprocedure('api.get_staff_expired_invoice_transfers()') is not null
-      and to_regprocedure('api.get_my_invoice_transfer_expiry(text)') is not null as commands_added
+      and to_regprocedure('api.get_my_invoice_transfer_expiry(text)') is not null
+      and to_regprocedure('api.resolve_expired_invoice_transfer(uuid,text,text)') is not null as commands_added
 ),
 state as (
   select bool_and(b.body is not distinct from b.reviewed) and not bool_or(a.column_added) as absent,

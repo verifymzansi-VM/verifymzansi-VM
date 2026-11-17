@@ -134,6 +134,10 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       };
       get_staff_invoice_transfers: { Args: Record<never, never>; Returns: Json };
       get_staff_expired_invoice_transfers: { Args: Record<never, never>; Returns: Json };
+      resolve_expired_invoice_transfer: {
+        Args: { p_transfer_id: string; p_resolution: string; p_reason: string };
+        Returns: Json;
+      };
       get_staff_invoice_customer: { Args: { p_account_email: string }; Returns: Json };
       get_staff_invoice_payments: { Args: { p_payment_ids: string[] }; Returns: Json };
       issue_staff_invoice: {

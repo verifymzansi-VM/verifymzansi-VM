@@ -98,14 +98,28 @@ UNION ALL
   WHERE t.declined_by IS NOT NULL
 UNION ALL
  SELECT 'payment_invoice_expired:'::text || t.id::text AS id,
-    t.expired_at AS occurred_at,
+    COALESCE(t.expired_at, t.recorded_at + internal.invoice_transfer_expires_after()) AS occurred_at,
     NULL::uuid AS actor_id,
     t.id AS target_id,
     'payment'::text AS target_type,
     'payment:invoice_expired'::text AS action,
     ('Bank transfer '::text || t.bank_reference) || ' expired: not confirmed within 14 days of being recorded'::text AS reason
    FROM private.invoice_transfers t
-  WHERE t.expired_at IS NOT NULL
+  WHERE internal.invoice_transfer_expired(t.*)
+UNION ALL
+ SELECT 'payment_invoice_resolved:'::text || t.id::text AS id,
+    t.resolved_at AS occurred_at,
+    t.resolved_by AS actor_id,
+    t.id AS target_id,
+    'payment'::text AS target_type,
+    'payment:invoice_expired_resolved'::text AS action,
+    (((('Bank transfer '::text || t.bank_reference) || ' expired, resolved: '::text) ||
+        CASE t.resolution
+            WHEN 'returned'::text THEN 'money returned outside VerifyMzansi'::text
+            ELSE 'money never arrived'::text
+        END) || ': '::text) || t.resolution_reason AS reason
+   FROM private.invoice_transfers t
+  WHERE t.resolved_by IS NOT NULL
 UNION ALL
  SELECT 'customer_invoice_issued:'::text || i.id::text AS id,
     i.issued_at AS occurred_at,

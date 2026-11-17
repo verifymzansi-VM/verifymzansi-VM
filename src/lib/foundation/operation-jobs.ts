@@ -118,7 +118,8 @@ const SWEEPS = [
   // Records the expiry (status, time, audit row) of bank transfers that have
   // waited 14 days; the database treats them as expired already
   // (20261117141803_bank_transfer_expiry.sql).
-  ["expire_waiting_bank_transfers", { p_limit: 100 }],
+  // At most 50 rows a run: each is its own subtransaction in the database.
+  ["expire_waiting_bank_transfers", { p_limit: 50 }],
 ] as const;
 // Sweeps an earlier database does not have yet: until their update is
 // applied, the missing command does not fail the run, but a warning is logged
@@ -129,7 +130,15 @@ export const MISSING_SWEEP_WARNING_MS = 60 * 60 * 1000;
 const missingSweepWarnedAt = new Map<string, number>();
 const missingCommand = (error: { code?: string } | null) =>
   error?.code === "PGRST202" || error?.code === "42883";
-const sweepFailures = z.object({ failed: z.number().int().min(0) });
+// A sweep that reports rows it could not change (and, for the bank transfer
+// expiry, which rows with their SQLSTATE).
+const sweepFailures = z.object({
+  failed: z.number().int().min(0),
+  failures: z
+    .array(z.object({ transfer_id: z.uuid(), sqlstate: z.string().regex(/^[0-9A-Z]{5}$/) }))
+    .max(50)
+    .optional(),
+});
 
 const jobSchema = z
   .object({
@@ -274,6 +283,7 @@ export async function runFoundationOperationJobs(
           log.warn("Sweep left rows it could not change", {
             sweep: name,
             failed: failures.data.failed,
+            ...(failures.data.failures ? { rows: failures.data.failures } : {}),
           });
       }
     }

@@ -35,12 +35,12 @@ begin
       ('internal.frontend_privacy_export_data(uuid)')) v(sig)
   loop
     if shape not in (
-        'internal.invoice_transfer_guard() 8a6697d7fc6026bc14e771df9b7ac999',
+        'internal.invoice_transfer_guard() 40022dab9a8357b0b1ba4101c48f5196',
         'internal.confirm_staff_invoice_payment(uuid) 66e96f9682fbab67236ccf83142fbd05',
         'internal.decline_staff_invoice_payment(uuid,text) 2812080d676629d5f74e4f4d0063c368',
-        'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) 68cfba77e196105dd3c686b935f11e11',
-        'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 49ae9a41906abbca8ceff68e6489a689',
-        'internal.invoice_transfer_dto(private.invoice_transfers,uuid) cbcd92ebaf7e89f07960f74f036f46fd',
+        'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) dbf38f038bee7e1cf43b91288dbdab94',
+        'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 4f74538d08ca0abdac2103d71e0fdd07',
+        'internal.invoice_transfer_dto(private.invoice_transfers,uuid) 1817387f19f8a1fd9b278247f9e69c15',
         'internal.get_staff_invoice_transfers() 13f1c0cf67460052d334b32e70b1ebe8',
         'internal.customer_invoice_dto(private.customer_invoices,uuid) 27604995d3de7e7a5794c1bf220b3213',
         'internal.start_invoice_payment(text,bigint,boolean) ea362defef15f7d6116a0f96cc53fef5',
@@ -63,6 +63,8 @@ drop function if exists api.get_staff_expired_invoice_transfers();
 drop function if exists internal.get_staff_expired_invoice_transfers();
 drop function if exists api.get_my_invoice_transfer_expiry(text);
 drop function if exists internal.get_my_invoice_transfer_expiry(text);
+drop function if exists api.resolve_expired_invoice_transfer(uuid,text,text);
+drop function if exists internal.resolve_expired_invoice_transfer(uuid,text,text);
 
 create or replace view private.frontend_staff_audit_events with (security_invoker=true) as
  SELECT frontend_staff_nonpayment_audit_events.id,
@@ -1194,12 +1196,18 @@ alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
 revoke all on function internal.frontend_privacy_export_data(uuid) from public;
 
 drop function if exists internal.expire_invoice_transfer(uuid);
-drop function if exists internal.invoice_transfer_credit_expired(text,bigint,date);
+drop function if exists internal.invoice_transfer_credit_expired(text,bigint,date,uuid,uuid);
 drop function if exists internal.invoice_transfer_waiting(private.invoice_transfers);
 drop function if exists internal.invoice_transfer_expired(private.invoice_transfers);
 drop function if exists internal.invoice_transfer_expires_after();
 
 drop index if exists private.invoice_transfers_expired_idx;
+drop index if exists private.invoice_transfers_resolved_by_idx;
+alter table private.invoice_transfers drop constraint if exists invoice_transfers_resolved,
+  drop constraint if exists invoice_transfers_resolution_check,
+  drop constraint if exists invoice_transfers_resolution_reason_check,
+  drop column if exists resolution, drop column if exists resolution_reason,
+  drop column if exists resolved_by, drop column if exists resolved_at;
 drop index if exists private.invoice_transfers_open_reference_idx;
 create unique index invoice_transfers_open_reference_idx on private.invoice_transfers
   (upper(regexp_replace(bank_reference, '[^A-Za-z0-9]', '', 'g')), amount_received_cents, cleared_on)

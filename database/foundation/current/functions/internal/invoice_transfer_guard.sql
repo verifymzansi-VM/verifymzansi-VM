@@ -33,6 +33,17 @@ begin
     end if;
     return new;
   end if;
+  -- An expired transfer is resolved once by a staff member (money returned
+  -- outside the system, or it never arrived), with nothing else changed.
+  if old.status = 'expired' then
+    if old.resolved_at is not null or new.resolved_at is null or new.resolved_by is null
+        or new.resolution is null or new.resolution_reason is null
+        or (to_jsonb(new) - array['resolution','resolution_reason','resolved_by','resolved_at'])
+          is distinct from (to_jsonb(old) - array['resolution','resolution_reason','resolved_by','resolved_at']) then
+      raise exception 'an expired bank transfer is only resolved once, with nothing else changed' using errcode='23514';
+    end if;
+    return new;
+  end if;
   if old.status <> 'awaiting_confirmation' or new.status not in ('confirmed', 'declined', 'expired')
       or (to_jsonb(new) - array['status','confirmed_by','confirmed_at','payment_id','declined_by','declined_at','decline_reason','expired_at'])
         is distinct from (to_jsonb(old) - array['status','confirmed_by','confirmed_at','payment_id','declined_by','declined_at','decline_reason','expired_at']) then

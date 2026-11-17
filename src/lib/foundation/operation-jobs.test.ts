@@ -120,7 +120,7 @@ describe("independent steps", () => {
   it("expires waiting bank transfers on every run (the 14 days are decided in the database)", async () => {
     await run();
     expect(calls("expire_waiting_bank_transfers")).toEqual([
-      ["expire_waiting_bank_transfers", { p_limit: 100 }],
+      ["expire_waiting_bank_transfers", { p_limit: 50 }],
     ]);
   });
 
@@ -170,13 +170,24 @@ describe("independent steps", () => {
     const base = rpc.getMockImplementation()!;
     rpc.mockImplementation(async (name, args) =>
       name === "expire_waiting_bank_transfers"
-        ? { data: { expired: 3, with_invoice: 1, failed: 2 }, error: null }
+        ? {
+            data: {
+              expired: 3,
+              with_invoice: 1,
+              failed: 1,
+              failures: [{ transfer_id: id, sqlstate: "P0001" }],
+            },
+            error: null,
+          }
         : base(name, args)
     );
     await expect(run()).resolves.toMatchObject({ failed: [] });
-    expect(
-      warn.mock.calls.some(([line]) => String(line).includes("Sweep left rows it could not change"))
-    ).toBe(true);
+    const line = warn.mock.calls
+      .map(([text]) => String(text))
+      .find((text) => text.includes("Sweep left rows it could not change"));
+    // Each failed row is logged with its transfer id and SQLSTATE.
+    expect(line).toContain(id);
+    expect(line).toContain("P0001");
     warn.mockRestore();
   });
 

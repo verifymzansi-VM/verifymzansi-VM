@@ -2723,14 +2723,16 @@ written):
   with nothing else changed; an expired record never changes again and nothing
   is deleted.
 - **The sweep records it.** `api.expire_waiting_bank_transfers(p_limit)`
-  (service role only, `p_limit` 1 to 1000) marks every transfer that has waited
-  14 days (status, time and so the audit row), oldest first, each row in its own
-  subtransaction: a row that cannot be changed is counted as `failed` and tried
-  again next run, and never stops the others. Records a staff member holds at
-  that moment are skipped. The website's operation job
+  (service role only, `p_limit` 1 to 50, so the subtransactions stay within the
+  per-transaction cache) marks every transfer that has waited 14 days (status
+  and time), oldest first, each row in its own subtransaction: a row that cannot
+  be changed is returned in `failures` with its transfer id and SQLSTATE (the
+  job logs them), tried again next run, and never stops the others; every
+  command, read and the audit trail already treat it as expired. Records a staff
+  member holds at that moment are skipped. The website's operation job
   (`src/lib/foundation/operation-jobs.ts`, run every minute by the ops-jobs
   worker, like `run_post_lifecycle` and `run_slot_renewals`) calls it with
-  `p_limit` 100 and logs a warning when rows failed; until this update is
+  `p_limit` 50 and logs a warning naming the failed rows; until this update is
   applied it logs "Sweep command missing" at most once an hour per worker
   instance (Workers logs, context `FoundationOperationJobs`) instead of failing
   the run.
@@ -2740,24 +2742,35 @@ written):
   commands, leave out declined and expired records) still allow exactly one open
   record of a credit and of an invoice: the money is never counted twice. A
   credit that cleared more than 90 days ago is accepted only when it is exactly
-  the credit (bank reference, amount, date cleared) of an expired transfer. A
-  waiting transfer holds no slots or payment (an invoice attempt never sent to
-  Ozow was already closed when the transfer was recorded), so nothing else is
-  released.
-- **History and records.** The staff audit trail lists each recorded expiry as
+  the credit (bank reference, amount, date cleared) of an expired transfer of
+  the same account, and of the same invoice when that transfer named one. The
+  "Possible duplicate" count includes expired records of the same money, so the
+  second staff member is warned. A waiting transfer holds no slots or payment
+  (an invoice attempt never sent to Ozow was already closed when the transfer
+  was recorded), so nothing else is released.
+- **History and records.** The staff audit trail lists each expiry as
   `payment:invoice_expired`, with no staff member, the transfer as its target
   and "Bank transfer <reference> expired: not confirmed within 14 days of being
-  recorded", the way it lists a decline. Retention counts an expired record's
-  five tax years from its expiry. The privacy export gives each bank transfer's
-  `expired_at` next to `confirmed_at` and `declined_at`.
+  recorded", the way it lists a decline (at the recorded expiry, or while the
+  sweep has not marked it at the moment it passed 14 days), and each resolution
+  as `payment:invoice_expired_resolved` with the staff member. Retention counts
+  an expired record's five tax years from its expiry. The privacy export gives
+  each bank transfer's `expired_at` next to `confirmed_at` and `declined_at`.
+- **Staff follow-up.**
+  `api.resolve_expired_invoice_transfer(p_transfer_id, p_resolution, p_reason)`
+  (payments:confirm_transfer, as confirming) records once, with an audited
+  reason, that the money of an expired transfer was returned outside
+  VerifyMzansi (`returned`) or never arrived (`never_arrived`): new columns
+  `resolution`, `resolution_reason`, `resolved_by`, `resolved_at`, set only on
+  an expired transfer and never changed after.
 - **Two reads.** `api.get_staff_expired_invoice_transfers()` (payments:view:
-  every expired transfer still to be followed up, that is not followed by a
-  later record of the same bank credit or to the same invoice and not naming an
-  invoice since paid or voided; oldest first, at most 200, with the count) and
-  `api.get_my_invoice_transfer_expiry(p_invoice_number)` (the member's own
-  invoice: when its latest transfer expired while the invoice is unpaid, else
-  null; a declined transfer is still not shown). No existing read changes shape,
-  so the strict website adapters of either release keep working.
+  every expired transfer still to be followed up, that is neither resolved nor
+  with the same money recorded again and confirmed; a paid or voided invoice or
+  a declined new record is not a follow-up; oldest first, at most 200, with the
+  count) and `api.get_my_invoice_transfer_expiry(p_invoice_number)` (the
+  member's own invoice: when its latest transfer expired while the invoice is
+  unpaid, else null; a declined transfer is still not shown). No existing read
+  changes shape, so the strict website adapters of either release keep working.
 
 The website release from the same pull request lists the expired transfers still
 to be followed up on the staff payments page with an "Expired" badge, tells the
@@ -2793,9 +2806,10 @@ The reviewed rollback is
 `../rollback/20261117141803_bank_transfer_expiry.down.sql` (only with the
 owner's decision; prefer a forward fix). It refuses once any transfer has been
 marked expired (the earlier schema cannot hold that state) and unless the
-thirteen functions have this update's bodies; otherwise it drops the sweep and
-the reads, puts back the earlier bodies, view, indexes and status rule byte for
-byte, drops the rule and the setting, and drops `expired_at`.
+thirteen functions have this update's bodies; otherwise it drops the sweep, the
+reads and the resolution command, puts back the earlier bodies, view, indexes
+and status rule byte for byte, drops the rule and the setting, and drops
+`expired_at` and the resolution columns.
 
 `node --import tsx scripts/test-foundation-bank-transfer-expiry.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
@@ -2807,9 +2821,11 @@ it); 13 days 23 hours 59 minutes still waits; the sweep marks 14 days or more,
 reruns change nothing, the limit holds and a row that cannot be changed does not
 stop the others; the record guard; recording the money again, once, also when it
 cleared more than 90 days ago (only the exact credit of an expired transfer);
-the invoice takes a new transfer and shows the expiry only to its member; staff
-see each expired transfer until it is followed up; the audit trail; the privacy
-export; the grants; and the rollback refusal.
+the invoice takes a new transfer and shows the expiry only to its member; old
+money for another account or invoice is refused; the duplicate count flags
+expired records of the same money; staff resolve an expired transfer once,
+audited; staff see each expired transfer until it is followed up; the audit
+trail; the privacy export; the grants; and the rollback refusal.
 `scripts/test-foundation-access-matrix.mjs` gives another member an invoice
 whose transfer expired, and checks that only the service role runs the sweep and
 only that member reads the expiry.

@@ -178,8 +178,10 @@ export const FOUNDATION_ERROR_REASONS = {
   staff_same_identity: ["42501"],
   staff_visibility_hold: ["PT423"],
   transfer_confirmer_same: ["42501"],
+  transfer_not_expired: ["PT409"],
   transfer_not_waiting: ["PT409"],
   transfer_recorder_inactive: ["PT409"],
+  transfer_resolved: ["PT409"],
   verification_required: ["42501", "PT409"],
 } as const satisfies Record<string, readonly string[]>;
 // </database-reasons>
