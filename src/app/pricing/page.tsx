@@ -25,6 +25,7 @@ const HERO_POINTS = [
 
 export const metadata = {
   title: "Pricing",
+  alternates: { canonical: "/pricing" },
   description:
     "VerifyMzansi pricing: your first post is free and events are free. Individual slots cost R69 for 30 days, R207 for 90 days or R414 for 180 days, in any section.",
 };

@@ -37,7 +37,8 @@ export function DashboardOnboarding({
           : "Complete your verification",
       href: "/verification",
       icon: BrandShield,
-      completed: verificationSubmitted,
+      // Done only once the ID is accepted; "in review" is still step 1.
+      completed: isVerified,
     },
     {
       label: "Post your first item",

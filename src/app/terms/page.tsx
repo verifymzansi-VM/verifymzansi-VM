@@ -9,6 +9,7 @@ import { getConfiguredLegalIdentityRows, getTrustPublicConfig } from "@/lib/trus
 
 export const metadata = {
   title: "Terms of Service",
+  alternates: { canonical: "/terms" },
   description:
     "VerifyMzansi terms of service: our role, what our checks mean, payments, refunds and posting rules for marketplace listings, businesses, tourism and events in South Africa.",
 };

@@ -20,6 +20,8 @@ const SKIPPED_DIRS = new Set(["__tests__", "node_modules"]);
 const TEST_FILE = /\.(?:test|spec|stories)\.[cm]?[jt]sx?$/;
 const SOURCE_FILE = /\.[cm]?[jt]sx?$/;
 const REQUEST_CONSTRUCTORS = new Set(["NextRequest", "Request"]);
+/** Text every `new NextRequest(…)` / `new Request(…)` contains (comments may sit between). */
+const MAY_CONSTRUCT_REQUEST = /\bnew\b[\s\S]{0,200}?\b(?:Next)?Request\b/;
 /** A string-valued property: `new NextRequest(request.url, …)` builds from a URL. */
 const URL_PROPERTY = /^(url|href)$/i;
 /** A variable named like a URL holds a string or URL, not an incoming request. */
@@ -90,15 +92,18 @@ describe("incoming requests are passed on unchanged", () => {
   it("no source file builds a new request from an existing one", () => {
     const files = sourceFiles(SRC_DIR);
     expect(files.length).toBeGreaterThan(1000);
-    const offenders = files.flatMap((file) =>
-      findRequestRebuilds(file, fs.readFileSync(file, "utf8")).map(
+    // Only files that construct a request at all are parsed: parsing all ~1,900
+    // files took over the 10 s limit under coverage. Any hit below needs this
+    // text, so the scan finds the same offenders.
+    const offenders = files.flatMap((file) => {
+      const text = fs.readFileSync(file, "utf8");
+      if (!MAY_CONSTRUCT_REQUEST.test(text)) return [];
+      return findRequestRebuilds(file, text).map(
         (hit) => `${path.relative(SRC_DIR, file).replaceAll("\\", "/")}:${hit}`
-      )
-    );
+      );
+    });
     expect(offenders).toEqual([]);
-    // Parsing every source file takes close to the 10 s default under the CI
-    // coverage run (it timed out there on pull request #234).
-  }, 60_000);
+  });
 
   it.each([
     ["new NextRequest(request)", 1],
@@ -116,5 +121,7 @@ describe("incoming requests are passed on unchanged", () => {
     ["new NextRequest(new URL('/x', base))", 0],
   ])("scanner: %s", (code, count) => {
     expect(findRequestRebuilds("sample.ts", code)).toHaveLength(count);
+    // The text pre-filter never skips a file the parser would flag.
+    if (count > 0) expect(MAY_CONSTRUCT_REQUEST.test(code)).toBe(true);
   });
 });

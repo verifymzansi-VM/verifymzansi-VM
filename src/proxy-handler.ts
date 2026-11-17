@@ -1,11 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { applySecurityHeaders, withSecurityHeaders } from "@/lib/middleware/security-headers";
+import {
+  applySecurityHeaders,
+  REWRITTEN_REQUEST_HEADER,
+  withSecurityHeaders,
+} from "@/lib/middleware/security-headers";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 import { addReferenceTiming } from "@/lib/utils/request-reference";
 import { logRequestFailure } from "@/lib/utils/request-failure";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isAutomatedUserAgent } from "@/lib/analytics/automated-agent";
+import { detailPageKeyIsMalformed, matchDetailPage } from "@/lib/routing/detail-pages";
 import {
   dropIncomingFoundationPageSession,
   forwardFoundationPageSession,
@@ -56,6 +61,12 @@ const MARKETPLACE_BROWSE_PREFIXES = [
   "/tourism-events",
 ];
 
+// Throttled only when a browser or crawler loads the address, because the
+// missing-page check below reads the database for it then. Not the app's own
+// prefetches: sponsor strips and affiliation badges link to many organisation
+// pages, and counting those would use up a visitor's browse allowance.
+const DOCUMENT_BROWSE_PREFIXES = ["/organisation/"];
+
 /**
  * Segment-boundary prefix match. A bare `startsWith` would let a route like
  * `/api/profileevil` match the protected prefix `/api/profile`. Matching on an
@@ -64,6 +75,57 @@ const MARKETPLACE_BROWSE_PREFIXES = [
  */
 function matchesPrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(prefix + "/");
+}
+
+/** Hosts that only redirect, permanently, to the site's one address. */
+const REDIRECT_HOSTS: Readonly<Record<string, string>> = {
+  "www.verifymzansi.com": "verifymzansi.com",
+};
+
+function redirectHostTarget(request: NextRequest): URL | null {
+  for (const host of [request.headers.get("host"), request.nextUrl.host]) {
+    const name = host?.trim().toLowerCase().replace(/:\d+$/, "");
+    const apex = name ? REDIRECT_HOSTS[name] : undefined;
+    if (apex) {
+      const target = new URL(`https://${apex}`);
+      target.pathname = request.nextUrl.pathname;
+      target.search = request.nextUrl.search;
+      return target;
+    }
+  }
+  return null;
+}
+
+/** A browser or crawler loading the address, not the app's own in-page
+ * navigation or prefetch. Next.js removes its RSC headers before the proxy
+ * runs, so the browser's own fetch metadata tells them apart: a page load is
+ * `Sec-Fetch-Mode: navigate`, also when the site's service worker passes it on
+ * (it then arrives with `Sec-Fetch-Dest: empty`); the app's own fetches are
+ * "cors" or "same-origin". Crawlers and link checkers send no fetch metadata
+ * and count as page loads. */
+function isDocumentRequest(request: NextRequest): boolean {
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  const mode = request.headers.get("sec-fetch-mode");
+  const destination = request.headers.get("sec-fetch-dest");
+  if (mode === null && destination === null) return true;
+  return mode === "navigate" || destination === "document";
+}
+
+/** Render the page as usual but with HTTP 404, so it keeps its own "not
+ * available" design while browsers, crawlers and link checkers see a real
+ * 404 status (set before streaming starts).
+ *
+ * On Cloudflare (OpenNext) the status travels on a rewrite to the same
+ * address. `next start` (the local and CI server) treats a rewrite whose host
+ * differs from the one it listens on as an outside address and fetches it
+ * again, which looped; there the status travels on the pass-through instead,
+ * which `next start` keeps (OpenNext does not, hence the rewrite). A rewritten
+ * request is marked (REWRITTEN_REQUEST_HEADER) and never rewritten twice. */
+function notFoundPage(request: NextRequest): NextResponse {
+  if (request.headers.get("host") === request.nextUrl.host) {
+    return NextResponse.rewrite(request.nextUrl.clone(), { status: 404 });
+  }
+  return NextResponse.next({ status: 404 });
 }
 
 // -- Core routing logic (testable without security headers) ------------------
@@ -75,6 +137,13 @@ function matchesPrefix(pathname: string, prefix: string): boolean {
 export async function routeRequest(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
+
+  // One address for the whole site: www.verifymzansi.com moves for good to
+  // verifymzansi.com, keeping the path and query (308 keeps the method too).
+  const hostTarget = redirectHostTarget(request);
+  if (hostTarget) {
+    return NextResponse.redirect(hostTarget, 308);
+  }
 
   // Recover legacy signup links that land on "/?code=..." instead of the
   // dedicated auth callback route. Keep this scoped to the root path so
@@ -133,7 +202,11 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     AUTH_ROUTES.some((r) => matchesPrefix(pathname, r));
 
   // Rate-limit public marketplace pages to deter scraping.
-  if (!needsAuth && MARKETPLACE_BROWSE_PREFIXES.some((p) => pathname.startsWith(p))) {
+  if (
+    !needsAuth &&
+    (MARKETPLACE_BROWSE_PREFIXES.some((p) => pathname.startsWith(p)) ||
+      (isDocumentRequest(request) && DOCUMENT_BROWSE_PREFIXES.some((p) => pathname.startsWith(p))))
+  ) {
     const ip = getClientIp(request);
     const { limited, retryAfter } = checkLocalRateLimit(ip, "marketplace:browse", 60);
     if (limited) {
@@ -141,6 +214,21 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
         status: 429,
         headers: { "Retry-After": String(retryAfter ?? 60) },
       });
+    }
+  }
+
+  // Unknown posts and organisations, and the multi-listing page while packages
+  // are not on sale. Their pages call notFound(), but streaming has already
+  // sent 200 by then, so answer the 404 status here, before rendering. A
+  // malformed address costs no read; a well-formed one costs one public read
+  // (remembered for a minute when it exists), and a failed read lets the page
+  // decide as before.
+  if (!needsAuth && isDocumentRequest(request) && !request.headers.has(REWRITTEN_REQUEST_HEADER)) {
+    const detailPage = matchDetailPage(pathname);
+    if (detailPage) {
+      if (detailPageKeyIsMalformed(detailPage)) return notFoundPage(request);
+      const { isMissingDetailPage } = await import("@/lib/foundation/missing-detail-page");
+      if (await isMissingDetailPage(detailPage)) return notFoundPage(request);
     }
   }
 

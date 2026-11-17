@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useRealtime } from "@/hooks/use-realtime";
 import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 import { getOwnerColumn, type OwnerColumn } from "@/lib/account/compat";
+import { LEADS_UNREAD_URL, sharedInboxRead } from "@/lib/notifications/shared-inbox-reads";
 
 interface UseLeadsUnreadResult {
   unreadCount: number;
@@ -29,17 +30,15 @@ export function useLeadsUnread(): UseLeadsUnreadResult {
       return;
     }
 
-    const response = await fetch("/api/leads?countOnly=true", {
-      method: "GET",
-      cache: "no-store",
-      credentials: "same-origin",
-    });
+    // A realtime signal: one fresh request for every badge and alert on the
+    // page (shared-inbox-reads).
+    const result = await sharedInboxRead(LEADS_UNREAD_URL, { fresh: true });
 
-    if (!response.ok) {
+    if (!result.ok) {
       return;
     }
 
-    const payload = (await response.json().catch(() => null)) as {
+    const payload = result.data as {
       unreadCount?: number;
       accountId?: string;
     } | null;
@@ -69,17 +68,13 @@ export function useLeadsUnread(): UseLeadsUnreadResult {
           setOwnerColumn(detectedOwnerColumn);
         }
 
-        const response = await fetch("/api/leads?countOnly=true", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-        });
+        const result = await sharedInboxRead(LEADS_UNREAD_URL);
 
-        if (!response.ok || cancelled) {
+        if (!result.ok || cancelled) {
           return;
         }
 
-        const payload = (await response.json().catch(() => null)) as {
+        const payload = result.data as {
           unreadCount?: number;
           accountId?: string;
         } | null;
