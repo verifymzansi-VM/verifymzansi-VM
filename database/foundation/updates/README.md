@@ -2485,12 +2485,14 @@ Two updates, applied in this order, **after**
 `20261116175757_close_and_erase_account.sql` (pull request #230),
 `20261116194000_phone_in_use_before_sms.sql` (pull request #232) and
 `20261117064820_ban_blocks_phone_numbers.sql` (pull request #237), which are
-applied first; these updates do not depend on them. Both are pending. Owner's
-decisions of 16 November 2026: remove the R10,000 online limit; checkout offers
-Ozow and, below it, an invoice first at every amount; the only online limit left
-is the most Ozow accepts in one payment on our site (its "Maximum Transaction
-Amount", R1,300 for site VER-VER-020 today; the owner has asked Ozow to raise
-it), held in one setting; the Terms say so.
+applied first; these updates do not depend on them. Both were applied on 17
+November 2026 with the owner's approval: the first at 11:40 UTC, just before
+pull request #234 was merged, and the second at 12:11 UTC, after its deploy.
+Owner's decisions of 16 November 2026: remove the R10,000 online limit; checkout
+offers Ozow and, below it, an invoice first at every amount; the only online
+limit left is the most Ozow accepts in one payment on our site (its "Maximum
+Transaction Amount", R1,300 for site VER-VER-020 today; the owner has asked Ozow
+to raise it), held in one setting; the Terms say so.
 
 ### 1. The limit and posting-v5 published: `20261117082020_online_payment_limit.sql`
 
@@ -4421,7 +4423,23 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   0; numbers to block: 0" with no problem rows, after "already applied; running
   bans: 0; numbers blocked: 0; numbers to block: 0"; production fingerprint
   after it matched the full replay (except the known schema grant difference)
-- `20261117082020_online_payment_limit.sql`: pending
-- `20261117082021_switch_posting_terms_v5.sql`: pending
+- `20261117082020_online_payment_limit.sql`: applied 2026-11-17 11:40 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file (sha256 starting 96a026e368629c6f, files from
+  raw GitHub at bbf65bd3) before the pull request was merged (#234 merged
+  11:40:48 UTC, deploy da99bc33 succeeded 12:09 UTC); preflight before "online
+  payment limit: update not applied (apply before the website release that uses
+  it is deployed)" (1 row, no problem rows), after "already applied; current
+  posting terms: posting-v4; posting-v5 published; payments pending at Ozow
+  above R1,300: 0; unpaid invoices above R1,300: 0"; production fingerprint
+  after it matched the full replay (except the known schema grant difference)
+- `20261117082021_switch_posting_terms_v5.sql`: applied 2026-11-17 12:11 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight checked; from the
+  reviewed file (sha256 starting bd338d34da916b72, files from raw GitHub at
+  da99bc33) after the deploy of pull request #234; preflight before "current
+  posting-v4 (update not applied); posting-v5 published; accounts that accepted
+  posting-v5: 0", after "current posting-v5 (update already applied)"; data
+  only, the production fingerprint rechecked unchanged; the live /terms page
+  shows the new "Paying, VAT & invoices" text
 
 <!-- applied-register:end -->
