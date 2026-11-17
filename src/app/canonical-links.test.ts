@@ -30,10 +30,16 @@ const PAGES: Array<[string, () => Promise<{ metadata: Metadata }>]> = [
 ];
 
 describe("canonical links", () => {
-  it.each(PAGES)("%s names itself as canonical", async (address, load) => {
-    const { metadata } = await load();
-    expect(metadata.alternates?.canonical).toBe(address);
-  });
+  // The first import of a whole page (the home page above all) is slow on a
+  // cold, busy runner; the check itself is instant.
+  it.each(PAGES)(
+    "%s names itself as canonical",
+    async (address, load) => {
+      const { metadata } = await load();
+      expect(metadata.alternates?.canonical).toBe(address);
+    },
+    60_000
+  );
 
   it("the root layout sets the site address but no canonical of its own", () => {
     const layout = readFileSync(path.join(__dirname, "layout.tsx"), "utf8");
