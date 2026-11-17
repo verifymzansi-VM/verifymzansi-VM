@@ -96,7 +96,9 @@ describe("incoming requests are passed on unchanged", () => {
       )
     );
     expect(offenders).toEqual([]);
-  });
+    // Parsing every source file takes close to the 10 s default under the CI
+    // coverage run (it timed out there on pull request #234).
+  }, 60_000);
 
   it.each([
     ["new NextRequest(request)", 1],
