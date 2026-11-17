@@ -9,7 +9,7 @@ import { FOUNDATION_PHONE_CHALLENGE_COOKIE } from "@/lib/foundation/phone-challe
 import { FoundationSessionError } from "@/lib/foundation/request-api";
 import { FoundationPhoneError } from "@/lib/foundation/phone-verification";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
-import { ACCOUNT_PHONE_IN_USE_ERROR } from "@/lib/utils/phone";
+import { ACCOUNT_PHONE_ALREADY_VERIFIED, ACCOUNT_PHONE_IN_USE_ERROR } from "@/lib/utils/phone";
 const { authenticate, readAccount, service, issue, prove, limit, context } = vi.hoisted(() => ({
   authenticate: vi.fn(),
   readAccount: vi.fn(),
@@ -152,16 +152,30 @@ it("binds delivery to the canonical account and reserves IP/account/phone limits
     { key: "+27820000000", action: "otp:send", degradedMode: "block" },
   ]);
 });
-it("says the number is linked to another account at the send step, without a challenge cookie", async () => {
-  issue.mockRejectedValue(new FoundationPhoneError(409, true));
-  const sent = await restoredSend(request({ phone: "0820000000" }));
-  expect(sent.status).toBe(409);
-  expect(await sent.json()).toEqual({
-    error: ACCOUNT_PHONE_IN_USE_ERROR,
-    reason: "phone_in_use",
-  });
-  expect(sent.cookies.get(FOUNDATION_PHONE_CHALLENGE_COOKIE)).toBeUndefined();
-});
+it.each([
+  ["phone_in_use", undefined, ACCOUNT_PHONE_IN_USE_ERROR],
+  ["phone_already_verified", undefined, ACCOUNT_PHONE_ALREADY_VERIFIED],
+  [
+    "phone_change_cooldown",
+    new Date("2026-12-01T09:30:00Z"),
+    "You can change your phone number again after 1 December 2026.",
+  ],
+  ["phone_change_cooldown", undefined, "You can change your phone number once every 15 days."],
+  [
+    "phone_change_identity_required",
+    undefined,
+    "You must complete identity re-verification before changing your phone number.",
+  ],
+] as const)(
+  "tells the member at the send step why no code is sent (%s), without a challenge cookie",
+  async (refusal, changeAllowedFrom, message) => {
+    issue.mockRejectedValue(new FoundationPhoneError(409, refusal, changeAllowedFrom));
+    const sent = await restoredSend(request({ phone: "0820000000" }));
+    expect(sent.status).toBe(409);
+    expect(await sent.json()).toEqual({ error: message, reason: refusal, code: refusal });
+    expect(sent.cookies.get(FOUNDATION_PHONE_CHALLENGE_COOKIE)).toBeUndefined();
+  }
+);
 it("keeps other phone refusals generic", async () => {
   issue.mockRejectedValue(new FoundationPhoneError(409));
   const sent = await send(request({ phone: "+27820000000" }));

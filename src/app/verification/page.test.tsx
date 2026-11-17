@@ -826,6 +826,32 @@ describe("VerificationPage", () => {
     expect(screen.queryByLabelText(/6-digit code/i)).not.toBeInTheDocument();
   });
 
+  it.each([
+    ["phone_in_use", "This phone number is already linked to another account."],
+    ["phone_already_verified", "This phone number is already verified on your account."],
+  ])("says why no code was sent (%s) without the SMS delivery hint", async (code, error) => {
+    otpSendResponse = jsonResponse({ error, reason: code, code }, 409);
+
+    render(<VerificationPage />);
+
+    fireEvent.change(await screen.findByLabelText(/SA mobile number/i), {
+      target: { value: "0712345678" },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Send code/i })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Send code/i }));
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Failed to send code", description: error })
+      );
+    });
+    expect(screen.queryByText(/SMS delivery can take up to 60 seconds/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/6-digit code/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Send code/i })).toBeEnabled();
+  });
+
   it("falls back to /dashboard when no returnUrl is provided", async () => {
     sessionResponse = jsonResponse(
       {

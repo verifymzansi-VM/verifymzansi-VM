@@ -3,15 +3,16 @@
 -- owner has decided so; prefer a forward fix. Websites deployed before and after
 -- the update work without it, so it can be run at any time.
 -- The rollback restores internal.create_verification_phone_challenge byte for
--- byte: a number another account holds is again refused only at the last step,
--- after the SMS has been sent.
+-- byte: a number another account holds, and a change of number that is not
+-- allowed yet, are again refused only at the last step, after the SMS has been
+-- sent, and a member can again ask for a code to their own verified number.
 begin;
 set local lock_timeout='5s';
 
 do $$begin
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
       where oid=to_regprocedure('internal.create_verification_phone_challenge(uuid,text,text)'))
-      is distinct from 'e0329c5c47cfca2a502467e6430acdad' then
+      is distinct from '6bd315ea00157c1caf6655ed17a079be' then
     raise exception 'rollback precondition: the phone in use before sms update is not applied' using errcode='55000';
   end if;
 end$$;

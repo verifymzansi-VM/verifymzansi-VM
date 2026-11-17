@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // Behaviour checks for 20261116194000_phone_in_use_before_sms.sql: creating a
-// phone challenge for a number another account has verified is refused with
-// PT409 before a challenge is stored, so the website sends no SMS for a number
-// that could never be proved.
+// phone challenge is refused with PT409 and a listed reason, before a challenge
+// is stored, for the member's own verified number (phone_already_verified), a
+// change of number within 15 days (phone_change_cooldown, with the time it is
+// allowed from as the hint) or without a current verified identity
+// (phone_change_identity_required), and a number another account has verified
+// (phone_in_use), so the website sends no SMS for a code that could not be used.
 //
 // Replays database/foundation (prelude, candidate.sql, every update before this
 // one) into the throwaway, network-less Postgres 17 container of the SQL lint
@@ -40,6 +43,8 @@ const API_CREATE = "api.create_verification_phone_challenge(uuid,text,text)";
 const HELD = "+27710000001";
 const FREE = "+27710000002";
 const OTHER = "+27710000003";
+const NEIGHBOUR = "+27710000004";
+const MOVED = "+27710000005";
 
 const {
   started,
@@ -86,6 +91,16 @@ try {
     Number(
       q(`select count(*) from private.verification_phone_challenges where owner_id='${owner.id}';`)
     );
+  /** Creating a code for `phone` fails with PT409 and this listed reason. */
+  const refused = (owner, phone, reason) => {
+    const stderr = fails(createSql(owner, phone), "PT409");
+    assert.match(stderr, new RegExp(`DETAIL:\\s+${reason}\\b`), stderr);
+    return stderr;
+  };
+  const activePhones = (owner) =>
+    json(
+      `select coalesce(jsonb_agg(phone),'[]') from private.verification_phone_proofs where owner_id='${owner.id}' and revoked_at is null;`
+    );
   const pendingUntil = (challenge) =>
     q(
       `select expires_at>clock_timestamp() from private.verification_phone_challenges where id='${challenge.challenge_id}';`
@@ -102,6 +117,12 @@ try {
     assert.ok(challenge.challenge_id);
     // This is where the SMS would have been paid for.
     fails(finalizeSql(newcomer, challenge), "23505");
+    // The holder could also get a code for their own number, and for a change
+    // finalization refuses (changed less than 15 days ago).
+    assert.ok(create(holder, HELD).challenge_id);
+    const change = create(holder, OTHER);
+    assert.ok(change.challenge_id);
+    fails(finalizeSql(holder, change), "PT409", /contact change not eligible/);
   });
   await check("preflight: read only, summary only, before the update", () => {
     const rows = preflight();
@@ -150,25 +171,46 @@ try {
   await check("a number another account holds is refused before a challenge is stored", () => {
     const earlier = create(newcomer, OTHER);
     const stored = challengeCount(newcomer);
-    fails(createSql(newcomer, HELD), "PT409", /phone number in use/);
+    refused(newcomer, HELD, "phone_in_use");
     assert.equal(challengeCount(newcomer), stored, "no challenge row");
     assert.equal(pendingUntil(earlier), "t", "the member's open code stays usable");
   });
-  await check("the holder may prove their own number again", () => {
-    const again = create(holder, HELD);
-    q(finalizeSql(holder, again));
-    assert.deepEqual(
-      json(
-        `select jsonb_agg(phone) from private.verification_phone_proofs where owner_id='${holder.id}' and revoked_at is null;`
-      ),
-      [HELD]
+  await check("the member's own verified number gets no new code", () => {
+    const stored = challengeCount(holder);
+    refused(holder, HELD, "phone_already_verified");
+    assert.equal(challengeCount(holder), stored, "no challenge row");
+    assert.deepEqual(activePhones(holder), [HELD]);
+  });
+  await check("a change within 15 days gets no code, and says from when", () => {
+    const stored = challengeCount(holder);
+    const allowedFrom = q(
+      `select to_char((contact_changed_at+interval '15 days') at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"')
+        from private.verification_phone_proofs where owner_id='${holder.id}' and revoked_at is null;`
     );
+    assert.match(allowedFrom, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    const stderr = refused(holder, OTHER, "phone_change_cooldown");
+    assert.match(stderr, new RegExp(`HINT:\\s+${allowedFrom}`));
+    // Eligibility comes first: a member who may not change their number learns
+    // nothing about who holds another one.
+    prove(syntheticMember("phone-neighbour"), NEIGHBOUR);
+    refused(holder, NEIGHBOUR, "phone_change_cooldown");
+    assert.equal(challengeCount(holder), stored, "no challenge row");
+  });
+  await check("a change without a current verified identity gets no code", () => {
+    q(
+      `update private.verification_phone_proofs set contact_changed_at=clock_timestamp()-interval '16 days'
+        where owner_id='${holder.id}' and revoked_at is null;`
+    );
+    const stored = challengeCount(holder);
+    refused(holder, OTHER, "phone_change_identity_required");
+    assert.equal(challengeCount(holder), stored, "no challenge row");
+    assert.deepEqual(activePhones(holder), [HELD]);
   });
   await check("a free number, and a number released by its holder, still work", () => {
     const freeProof = prove(newcomer, FREE);
     assert.ok(freeProof);
     const leaver = syntheticMember("phone-leaver");
-    fails(createSql(leaver, HELD), "PT409", /phone number in use/);
+    refused(leaver, HELD, "phone_in_use");
     q(
       `update private.verification_phone_proofs set revoked_at=clock_timestamp() where owner_id='${holder.id}' and revoked_at is null;`
     );
@@ -203,9 +245,32 @@ try {
       const keeper = syntheticMember("phone-keeper");
       const seeker = syntheticMember("phone-seeker");
       prove(keeper, "+27710000009");
-      fails(createSql(seeker, "+27710000009"), "PT409", /phone number in use/);
+      refused(seeker, "+27710000009", "phone_in_use");
+      refused(keeper, "+27710000009", "phone_already_verified");
     });
   }
+
+  // Last, because it replaces internal.current_verified_identity with a
+  // stand-in (an accepted identity is out of scope here): an allowed change of
+  // number still gets a code and is verified.
+  await check("an allowed change of number still gets a code and is verified", () => {
+    const mover = syntheticMember("phone-mover");
+    prove(mover, "+27710000006");
+    q(`create or replace function internal.current_verified_identity(p_owner uuid) returns text
+        language sql set search_path to 'pg_catalog' as $fn$
+        select 'stand-in' where p_owner='${mover.id}' $fn$;`);
+    refused(mover, MOVED, "phone_change_cooldown");
+    q(
+      `update private.verification_phone_proofs set contact_changed_at=clock_timestamp()-interval '16 days'
+        where owner_id='${mover.id}' and revoked_at is null;`
+    );
+    const change = create(mover, MOVED);
+    assert.ok(change.challenge_id);
+    q(finalizeSql(mover, change));
+    assert.deepEqual(activePhones(mover), [MOVED]);
+    // The new number starts a new 15 days.
+    refused(mover, "+27710000006", "phone_change_cooldown");
+  });
 } catch (error) {
   console.error(`FAIL ${current()}`);
   throw error;

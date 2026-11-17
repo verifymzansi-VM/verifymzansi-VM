@@ -9,9 +9,15 @@ import {
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import {
   FoundationPhoneError,
+  type FoundationPhoneRefusal,
   issueFoundationPhoneChallenge,
   verifyFoundationPhoneChallenge,
 } from "@/lib/foundation/phone-verification";
+import {
+  PHONE_CHANGE_COOLDOWN_DAYS,
+  phoneCooldown,
+  phoneReverificationRequired,
+} from "@/lib/account/identity-policy";
 import {
   foundationPhoneSendSchema,
   foundationPhoneVerifySchema,
@@ -20,7 +26,11 @@ import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { otpVerifySchema } from "@/lib/validations/auth";
 import { saPhoneSchema } from "@/lib/validations/shared";
-import { ACCOUNT_PHONE_IN_USE_ERROR, normalizeSaPhone } from "@/lib/utils/phone";
+import {
+  ACCOUNT_PHONE_ALREADY_VERIFIED,
+  ACCOUNT_PHONE_IN_USE_ERROR,
+  normalizeSaPhone,
+} from "@/lib/utils/phone";
 import { z } from "zod";
 import {
   FOUNDATION_PHONE_CHALLENGE_COOKIE,
@@ -30,6 +40,22 @@ import {
 } from "@/lib/foundation/phone-challenge-cookie";
 
 const log = createLogger("FoundationPhone");
+/** What the member is told for a refusal they can act on (the site's existing
+ * wording for each case). */
+function phoneRefusalMessage(refusal: FoundationPhoneRefusal, changeAllowedFrom?: Date) {
+  switch (refusal) {
+    case "phone_in_use":
+      return ACCOUNT_PHONE_IN_USE_ERROR;
+    case "phone_already_verified":
+      return ACCOUNT_PHONE_ALREADY_VERIFIED;
+    case "phone_change_cooldown":
+      return changeAllowedFrom
+        ? phoneCooldown(changeAllowedFrom).message
+        : `You can change your phone number once every ${PHONE_CHANGE_COOLDOWN_DAYS} days.`;
+    case "phone_change_identity_required":
+      return phoneReverificationRequired().message;
+  }
+}
 async function reserve(key: string, action: string) {
   const result = await checkRateLimit({ key, action, degradedMode: "block" });
   if (result.degraded || result.limited)
@@ -113,8 +139,13 @@ export async function handleFoundationPhoneRoute(
       return restoredForm ? { success: true, ...verified } : verified;
     },
     refusal(error) {
-      if (error instanceof FoundationPhoneError && error.phoneInUse)
-        return { status: 409, reason: "phone_in_use", error: ACCOUNT_PHONE_IN_USE_ERROR };
+      if (error instanceof FoundationPhoneError && error.refusal)
+        return {
+          status: 409,
+          reason: error.refusal,
+          code: error.refusal,
+          error: phoneRefusalMessage(error.refusal, error.changeAllowedFrom),
+        };
       const status =
         error instanceof FoundationPhoneError
           ? error.status

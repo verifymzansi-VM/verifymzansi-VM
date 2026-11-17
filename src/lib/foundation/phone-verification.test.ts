@@ -2,6 +2,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { FoundationServiceApi } from "./service-api";
 import {
+  FoundationPhoneError,
   issueFoundationPhoneChallenge,
   verifyFoundationPhoneChallenge,
 } from "./phone-verification";
@@ -118,23 +119,83 @@ it("does not retry failed delivery or expose a challenge as successfully deliver
   expect(deliver).toHaveBeenCalledTimes(1);
   expect(rpc).toHaveBeenCalledTimes(1);
 });
-it("sends no SMS for a number another account has verified", async () => {
+it.each(["phone_in_use", "phone_already_verified", "phone_change_identity_required"] as const)(
+  "sends no SMS when the database refuses with %s",
+  async (reason) => {
+    rpc.mockResolvedValue({ data: null, error: { code: "PT409", details: reason } });
+    const refused = await issued().catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(FoundationPhoneError);
+    expect(refused).toMatchObject({ status: 409, refusal: reason, changeAllowedFrom: undefined });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(deliver).not.toHaveBeenCalled();
+  }
+);
+it("sends no SMS during the change cooldown and keeps the date the database gives", async () => {
+  rpc.mockResolvedValue({
+    data: null,
+    error: { code: "PT409", details: "phone_change_cooldown", hint: "2026-12-01T09:30:00Z" },
+  });
+  const refused = (await issued().catch((error: unknown) => error)) as FoundationPhoneError;
+  expect(refused).toMatchObject({ status: 409, refusal: "phone_change_cooldown" });
+  expect(refused.changeAllowedFrom?.toISOString()).toBe("2026-12-01T09:30:00.000Z");
+  expect(deliver).not.toHaveBeenCalled();
+});
+it.each([null, "", "soon", "2026-12-01"])(
+  "ignores a cooldown date that is not a UTC time (%s)",
+  async (hint) => {
+    rpc.mockResolvedValue({
+      data: null,
+      error: { code: "PT409", details: "phone_change_cooldown", hint },
+    });
+    await expect(issued()).rejects.toMatchObject({
+      refusal: "phone_change_cooldown",
+      changeAllowedFrom: undefined,
+    });
+    expect(deliver).not.toHaveBeenCalled();
+  }
+);
+it.each([
+  ["PT409", "some_other_reason", 409],
+  ["PT409", null, 409],
+  ["22023", "phone_in_use", 400],
+  ["42501", null, 403],
+  ["unavailable", null, 503],
+] as const)(
+  "a %s refusal with reason %s is not named to the member and sends no SMS",
+  async (code, details, status) => {
+    rpc.mockResolvedValue({ data: null, error: { code, details } });
+    await expect(issued()).rejects.toMatchObject({ status, refusal: undefined });
+    expect(deliver).not.toHaveBeenCalled();
+  }
+);
+it("an expired, replaced or used-up code asks for a new code, not 'number in use'", async () => {
   rpc.mockResolvedValue({ data: null, error: { code: "PT409" } });
-  await expect(issued()).rejects.toMatchObject({ status: 409, phoneInUse: true });
+  await expect(
+    verifyFoundationPhoneChallenge(
+      api,
+      owner,
+      { challenge_id: challenge, code: "000000" },
+      environment
+    )
+  ).rejects.toMatchObject({ status: 400, refusal: undefined });
   expect(rpc).toHaveBeenCalledTimes(1);
-  expect(deliver).not.toHaveBeenCalled();
 });
 it.each([
-  ["42501", 403],
-  ["22023", 400],
-  ["unavailable", 503],
-] as const)("a %s refusal while creating a challenge sends no SMS", async (code, status) => {
-  rpc.mockResolvedValue({ data: null, error: { code } });
-  await expect(issued()).rejects.toMatchObject({ status, phoneInUse: false });
-  expect(deliver).not.toHaveBeenCalled();
+  ["23505", 409, "phone_in_use"],
+  ["PT409", 400, undefined],
+  ["42501", 403, undefined],
+] as const)("a %s refusal at finalization becomes %s", async (code, status, refusal) => {
+  const { code: otp } = await issued();
+  rpc.mockImplementation(async (name: string) =>
+    name === "claim_verification_phone_attempt"
+      ? { data: { challenge_id: challenge, phone, otp_hash: storedHash }, error: null }
+      : { data: null, error: { code } }
+  );
+  await expect(
+    verifyFoundationPhoneChallenge(api, owner, { challenge_id: challenge, code: otp }, environment)
+  ).rejects.toMatchObject({ status, refusal });
 });
 it.each([
-  ["PT409", 409],
   ["42501", 403],
   ["unavailable", 503],
 ] as const)("preserves a %s service refusal without retries", async (code, status) => {
