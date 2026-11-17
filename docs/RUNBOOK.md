@@ -675,6 +675,122 @@ pnpm exec wrangler deploy --config wrangler.rate-limiter.toml
 pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 ```
 
+### Staging copy
+
+A separate copy for rehearsals (roadmap M0.15b). Nothing in it is shared with
+production:
+
+| Part                | Staging                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| Website             | Worker `verifymzansi-staging`, https://verifymzansi-staging.verifymzansi.workers.dev  |
+| Database            | Supabase project `verifymzansi-staging` (`vgplszqfcmdskwseoyam`, London, Free)        |
+| Storage             | R2 `verifymzansi-public-staging`, `verifymzansi-private-staging`                      |
+| Rate-limit state    | KV `verifymzansi-otp-rate-limits-staging`; Worker `verifymzansi-rate-limiter-staging` |
+| PDF and share cards | Worker `verifymzansi-offload-staging`                                                 |
+| Durable Objects     | Belong to the staging Worker names, so never production's                             |
+
+Left out on purpose: payments (no Ozow settings exist for staging, so checkout
+cannot start), phone codes (no SMS; Africa's Talking sandbox only), and
+Cloudflare Images (its free monthly allowance is shared with production, so
+staging refuses photo uploads). Every staging response carries
+`X-Robots-Tag: noindex` and its `robots.txt` disallows everything; files served
+straight from the static assets (scripts, styles) do not pass through the
+Worker. To keep strangers out entirely, the owner can put the staging address
+behind Cloudflare Access (Zero Trust, free for up to 50 users); the smoke test
+would then need an Access service token.
+
+**Release order.** The Deploy workflow deploys every main commit to staging
+first (job `deploy-staging`), confirms the staging Worker serves that commit,
+runs `e2e/foundation/fixture-smoke.spec.ts` against it
+(`playwright.staging.config.ts`), and only then deploys production. A failed
+staging deploy or smoke test stops the release. The job `staging-config` decides
+first:
+
+- None of the 15 `STAGING_*` secrets set: "Staging skipped", production deploys
+  as before.
+- Some but not all set (`STAGING_CLOUDFLARE_API_TOKEN` included): the release
+  fails until they are complete.
+- The staging project does not answer (paused or unreachable), or
+  `STAGING_FOUNDATION_SUPABASE_SECRET_KEY` is not a key of the staging project:
+  the release fails before anything deploys.
+
+`pnpm cloudflare:staging:isolation -- --require-staging` runs in CI and before
+every staging deploy. It reads the staging settings both as written and as
+wrangler resolves them, and refuses any production identifier, any route or
+custom domain (inherited ones included), inherited cron triggers or shared
+bindings, and any wrangler warning about the staging environment. A wrangler
+upgrade that adds a new warning therefore fails this check on purpose: read the
+warning, fix the staging settings or, if it is harmless, allow that exact
+message in `scripts/check-staging-isolation.mjs` with a reason.
+
+**Rehearse once first.** Before staging gates production, run Actions → Deploy →
+Run workflow with target `staging`: it deploys and smoke-tests staging only and
+never touches production.
+
+**Releasing without staging (owner bypass).** Do not delete staging secrets. Set
+the repository Actions variable `STAGING_BYPASS_UNTIL` (Settings → Secrets and
+variables → Actions → Variables; only admins can change it) to a UTC time at
+most 72 hours ahead, written exactly as `YYYY-MM-DDTHH:MMZ` or
+`YYYY-MM-DDTHH:MM:SSZ`, for example `2026-11-20T18:00Z`. Until then every
+release skips staging with a loud warning in the run and its summary. Any other
+form ("tomorrow", "+48 hours", a time zone offset), an expired time or a time
+more than 72 hours ahead is ignored with a warning. Remove the variable
+afterwards.
+
+**Do not add a protection rule** (required reviewers or a wait timer) to the
+GitHub environment `staging`: both staging jobs use it, so every release would
+wait for that approval. Limiting its deployment branches to `main` is fine.
+
+**Keeping the project awake.** Free projects pause after a week without use; a
+paused staging project stops the release. The workflow `Staging keep-alive`
+reads the staging project anonymously once a day, but only after the owner sets
+the admin-only repository variable `STAGING_ENABLED` to `true` (do that once
+staging is configured, so an unfinished copy opens no daily failure issues). If
+it reports "paused", restore the project in the Supabase dashboard (or use the
+bypass above).
+
+**Database.** Staging was built from `database/foundation/` (`candidate.sql`,
+`replay/baseline-supplement.sql` before
+`20261103154538_owner_signup_access.sql`, then every applied update in filename
+order). `fingerprint.sql` on staging matches production's recorded fingerprint,
+except `schema_grants` (7 instead of 8 until the Auth "Before user created" hook
+is switched on in the staging dashboard). New updates reach staging before merge
+(see `database/foundation/updates/README.md`).
+
+**Secrets the owner sets.** Every staging secret lives in one place, the GitHub
+environment `staging` (Settings → Environments → `staging`, deployment branches
+limited to `main`), and the deploy sends them to the staging Workers. Never copy
+a production value; every one is new.
+
+| Environment secret                                         | Value                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STAGING_CLOUDFLARE_API_TOKEN`                             | A new Cloudflare API token for this account: Account → Workers Scripts Edit, plus only what the deploy needs (Account → Workers KV Storage Read, Account Settings Read). **No** Zone, Workers Routes or DNS permissions, so it can never move a domain. The staging deploy never uses the production deploy token |
+| `STAGING_FOUNDATION_SUPABASE_SECRET_KEY`                   | Staging Supabase project → Project Settings → API Keys → new secret key (`sb_secret_…`)                                                                                                                                                                                                                           |
+| `STAGING_FOUNDATION_PHONE_OTP_KEY`                         | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_KYC_ENCRYPTION_KEY`                               | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_ID_ENCRYPTION_KEY`                                | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_HMAC_SECRET`                                      | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_IP_HASH_SECRET`                                   | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_INTERNAL_JOBS_SECRET`                             | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_OPS_JOBS_SECRET`                                  | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_HEALTH_DIAGNOSTIC_TOKEN`                          | New random 64 hex characters¹                                                                                                                                                                                                                                                                                     |
+| `STAGING_RATE_LIMITER_API_KEY`                             | New random 64 hex characters¹ (also given to the staging rate limiter)                                                                                                                                                                                                                                            |
+| `STAGING_RESEND_API_KEY`                                   | A separate Resend API key named for staging, sending access only (`re_…`)                                                                                                                                                                                                                                         |
+| `STAGING_AFRICASTALKING_API_KEY`                           | The API key of the Africa's Talking sandbox app (username `sandbox` is set in `wrangler.toml`; no real SMS)                                                                                                                                                                                                       |
+| `STAGING_R2_ACCESS_KEY_ID`, `STAGING_R2_SECRET_ACCESS_KEY` | R2 → Manage API tokens → token with Object Read & Write on the two `-staging` buckets only                                                                                                                                                                                                                        |
+
+¹ `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+
+Turnstile on staging uses Cloudflare's published always-pass test keys; nothing
+to set.
+
+**Staging dashboard settings.** In the staging Supabase project: Data API
+exposed schemas `api` only (the smoke test expects the `public` schema to be
+refused); Auth site URL and redirect URLs on the staging address; Auth bot
+protection with Turnstile and Cloudflare's published test secret; the "Before
+user created" hook on `internal.acceptance_signup_guard`. Optionally attach the
+custom domain `media-staging.verifymzansi.com` to `verifymzansi-public-staging`.
+
 ### Current Known-Good Runtime Baseline
 
 - Current validated rollback baseline: `next@16.1.5`, `@next/env@16.1.5`, and

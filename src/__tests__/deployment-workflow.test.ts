@@ -1,9 +1,15 @@
-import { readFileSync, readdirSync, mkdtempSync, rmSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
+import { parse as parseToml } from "smol-toml";
+import {
+  collectStagingSecrets,
+  STAGING_WORKER_SECRETS,
+} from "../../scripts/prepare-staging-worker-secrets.mjs";
+import { deployedVersionProblem } from "../../scripts/check-staging-deployed-version.mjs";
 import {
   withPendingSecretBindings,
   inspectSecretBindings,
@@ -17,8 +23,12 @@ describe("production deployment wiring", () => {
       types: ["completed"],
       branches: ["main"],
     });
+    // One queue per target: every production release (CI-triggered or a
+    // manual production run) is in "deploy-production", as before; a manual
+    // staging rehearsal is in "deploy-staging" and cannot cancel it.
     expect(workflow.concurrency).toEqual({
-      group: "deploy-production",
+      group:
+        "deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}",
       "cancel-in-progress": false,
     });
     for (const condition of [
@@ -79,7 +89,7 @@ describe("production deployment wiring", () => {
           expect(JSON.stringify(step.with ?? {}), where).not.toMatch(/rollback|versions\s+deploy/i);
         }
     }
-    expect(Object.keys(workflow.jobs)).toEqual(["deploy"]);
+    expect(Object.keys(workflow.jobs)).toEqual(["staging-config", "deploy-staging", "deploy"]);
     const steps = workflow.jobs.deploy.steps as Step[];
     const firstChange = steps.findIndex((step) => step.id === "deploy-monitor");
     const stop = steps.findIndex((step) => step.name === "Stop for manual rollback");
@@ -110,6 +120,284 @@ describe("production deployment wiring", () => {
     const runbook = readFileSync("docs/RUNBOOK.md", "utf8");
     expect(runbook).toContain("### Manual rollback (all Workers)");
     expect(runbook).toContain("gh workflow disable deploy.yml");
+  });
+});
+
+describe("staging before production (M0.15b)", () => {
+  const workflow = parse(readFileSync(".github/workflows/deploy.yml", "utf8"));
+  type Step = { name?: string; run?: string; if?: string; env?: Record<string, string> };
+  type Job = {
+    if?: string;
+    needs?: string[] | string;
+    env?: Record<string, string>;
+    environment?: string | { name: string };
+    steps?: Step[];
+  };
+  const jobs = workflow.jobs as Record<string, Job>;
+  const text = (value: unknown) => JSON.stringify(value);
+  const secretsOf = (value: unknown) =>
+    [...text(value).matchAll(/secrets\.([A-Z0-9_]+)/g)].map((match) => match[1]);
+  const wranglerStaging = (
+    parseToml(readFileSync("wrangler.toml", "utf8")) as {
+      env: { staging: { vars: Record<string, string> } };
+    }
+  ).env.staging.vars;
+
+  it("makes production wait for staging, but never for a staging copy that is skipped", () => {
+    expect(jobs.deploy.needs).toEqual(["staging-config", "deploy-staging"]);
+    for (const condition of [
+      "!cancelled()",
+      "needs.staging-config.result == 'success'",
+      "needs.deploy-staging.result == 'success' || needs.deploy-staging.result == 'skipped'",
+      // A manual staging-only rehearsal never deploys production.
+      "(github.event_name != 'workflow_dispatch' || inputs.environment == 'production')",
+    ])
+      expect(jobs.deploy.if).toContain(condition);
+    expect(workflow.on.workflow_dispatch.inputs.environment.options).toEqual([
+      "production",
+      "staging",
+    ]);
+    for (const condition of [
+      "conclusion == 'success'",
+      "event == 'push'",
+      "head_branch == 'main'",
+      "head_repository.full_name == github.repository",
+      "head_sha == github.sha",
+    ])
+      expect(jobs["staging-config"].if).toContain(condition);
+    expect(jobs["deploy-staging"].needs).toBe("staging-config");
+    expect(jobs["deploy-staging"].if).toBe("needs.staging-config.outputs.configured == 'true'");
+  });
+
+  it("skips, bypasses or fails staging on purpose, and probes the project first", () => {
+    const steps = jobs["staging-config"].steps!;
+    const decide = steps[0].run!;
+    expect(steps[0].env?.STAGING_BYPASS_UNTIL).toBe("${{ vars.STAGING_BYPASS_UNTIL }}");
+    expect(decide).toContain("72 * 3600");
+    expect(decide).toContain("Staging skipped");
+    // Some but not all secrets set: the release stops.
+    expect(decide).toMatch(/Staging half configured[\s\S]*exit 1/);
+    const probe = steps.find((step) => step.run?.includes("/auth/v1/health"));
+    expect(probe?.run).toContain("Staging project paused/unreachable");
+    const keyProbe = steps.find((step) => step.run?.includes("/auth/v1/admin/users"));
+    expect(Object.keys(keyProbe?.env ?? {})).toEqual(["STAGING_FOUNDATION_SUPABASE_SECRET_KEY"]);
+    expect(keyProbe?.run).not.toMatch(/echo[^\n]*\$STAGING_FOUNDATION_SUPABASE_SECRET_KEY/);
+    // The secret key travels only in the apikey header.
+    expect(keyProbe?.run).toContain('-H "apikey: $STAGING_FOUNDATION_SUPABASE_SECRET_KEY"');
+    expect(keyProbe?.run).not.toContain("Authorization");
+  });
+
+  it("checks for exactly the secrets the staging Worker needs", () => {
+    const declared = Object.keys(jobs["staging-config"].steps![0].env!).filter(
+      (name) => name !== "STAGING_BYPASS_UNTIL"
+    );
+    expect(new Set(declared)).toEqual(
+      new Set([
+        "STAGING_CLOUDFLARE_API_TOKEN",
+        ...STAGING_WORKER_SECRETS.map(([name]: [string, string]) => `STAGING_${name}`),
+      ])
+    );
+    const prepare = jobs["deploy-staging"].steps!.find((step) =>
+      step.run?.includes("prepare-staging-worker-secrets.mjs")
+    );
+    expect(new Set(Object.keys(prepare!.env!))).toEqual(
+      new Set([
+        "CLOUDFLARE_ACCOUNT_ID",
+        ...STAGING_WORKER_SECRETS.map(([name]: [string, string]) => `STAGING_${name}`),
+      ])
+    );
+  });
+
+  it("gives staging only STAGING_* secrets, scoped to the steps that need them", () => {
+    for (const name of ["staging-config", "deploy-staging"]) {
+      const secrets = secretsOf(jobs[name]);
+      expect(secrets.length, name).toBeGreaterThan(0);
+      for (const secret of secrets)
+        expect(
+          secret.startsWith("STAGING_") || secret === "CLOUDFLARE_ACCOUNT_ID",
+          `${name} uses ${secret}`
+        ).toBe(true);
+      expect(secretsOf(jobs[name].env), `${name} job-level env`).toEqual([]);
+    }
+    const deploys = jobs["deploy-staging"].steps!.filter((step) =>
+      /wrangler deploy|opennextjs-cloudflare deploy|check-staging-deployed-version/.test(
+        step.run ?? ""
+      )
+    );
+    for (const step of deploys)
+      expect(step.env?.CLOUDFLARE_API_TOKEN, step.name).toBe(
+        "${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}"
+      );
+    expect(text(jobs["deploy-staging"].environment)).toContain("staging");
+    expect(jobs["deploy-staging"].env?.ENVIRONMENT).toBe("staging");
+  });
+
+  it("deploys only staging Workers, checks isolation first and smoke-tests this commit", () => {
+    const runs = jobs["deploy-staging"].steps!.map((step) => step.run ?? "");
+    const deploys = runs.filter((run) => /wrangler deploy|opennextjs-cloudflare deploy/.test(run));
+    expect(deploys).toHaveLength(3);
+    for (const run of deploys) expect(run).toContain("--env staging");
+    expect(runs.join("\n")).not.toMatch(/--env production|--env=production/);
+    const at = (needle: string) => runs.findIndex((run) => run.includes(needle));
+    const firstDeploy = runs.findIndex((run) => deploys.includes(run));
+    expect(runs[at("cloudflare:staging:isolation")]).toContain("--require-staging");
+    expect(at("cloudflare:staging:isolation")).toBeLessThan(firstDeploy);
+    expect(at("prepare-staging-worker-secrets.mjs")).toBeLessThan(firstDeploy);
+    expect(at("export-cloudflare-public-env.mjs --env=staging")).toBeLessThan(firstDeploy);
+    expect(at("check-staging-deployed-version.mjs")).toBeGreaterThan(firstDeploy);
+    expect(at("playwright.staging.config.ts")).toBeGreaterThan(
+      at("check-staging-deployed-version.mjs")
+    );
+  });
+
+  it("deploys production's companion Workers to their top-level environment explicitly", () => {
+    for (const config of ["wrangler.offload.toml", "wrangler.rate-limiter.toml"]) {
+      const step = jobs.deploy.steps!.find((candidate) => candidate.run?.includes(config));
+      expect(step?.run, config).toContain('--env=""');
+    }
+  });
+
+  it("keeps the public staging values in the workflows in step with wrangler.toml", () => {
+    const keepalive = parse(readFileSync(".github/workflows/staging-keepalive.yml", "utf8"));
+    for (const env of [jobs["staging-config"].env!, keepalive.jobs.keepalive.env]) {
+      expect(env.STAGING_SUPABASE_URL).toBe(wranglerStaging.FOUNDATION_SUPABASE_URL);
+      expect(env.STAGING_PUBLISHABLE_KEY).toBe(wranglerStaging.FOUNDATION_SUPABASE_PUBLISHABLE_KEY);
+    }
+    expect(keepalive.on.schedule).toHaveLength(1);
+    // Only once the owner switches staging on.
+    expect(keepalive.jobs.keepalive.if).toBe("vars.STAGING_ENABLED == 'true'");
+    expect(secretsOf(keepalive)).toEqual([]);
+  });
+
+  it("prepares the staging secrets without printing or accepting malformed values", () => {
+    const env: Record<string, string> = { CLOUDFLARE_ACCOUNT_ID: "a".repeat(32) };
+    const hex = "0123456789abcdef".repeat(4);
+    for (const [name, rule] of STAGING_WORKER_SECRETS as [string, string][])
+      env[`STAGING_${name}`] =
+        rule === "hex64"
+          ? hex
+          : rule === "supabase-secret"
+            ? "sb_secret_" + "s".repeat(24) // secret-scan: allow synthetic shape only
+            : rule === "resend"
+              ? "re_" + "r".repeat(20) // secret-scan: allow synthetic shape only
+              : "x".repeat(40);
+    const good = collectStagingSecrets(env);
+    expect(good.problems).toEqual([]);
+    expect(good.secrets.SUPABASE_SERVICE_ROLE_KEY).toBe(
+      good.secrets.FOUNDATION_SUPABASE_SECRET_KEY
+    );
+    expect(good.secrets.R2_ACCOUNT_ID).toBe(env.CLOUDFLARE_ACCOUNT_ID);
+    // Cloudflare's published always-pass Turnstile test secret.
+    expect(good.secrets.TURNSTILE_SECRET_KEY).toMatch(/^1x0{31}AA$/);
+    const bad = collectStagingSecrets({
+      ...env,
+      STAGING_HMAC_SECRET: "0".repeat(64),
+      STAGING_RESEND_API_KEY: "",
+    });
+    expect(bad.problems).toEqual([
+      "STAGING_HMAC_SECRET is malformed (hex64)",
+      "STAGING_RESEND_API_KEY is missing",
+    ]);
+    expect(JSON.stringify(bad.problems)).not.toContain(hex);
+  });
+
+  it("confirms the deployed staging version by its commit tag", () => {
+    const sha = "a".repeat(40);
+    expect(deployedVersionProblem(["v1"], [{ annotations: { "workers/tag": sha } }], sha)).toBe(
+      null
+    );
+    expect(deployedVersionProblem(["v1"], [{ annotations: {} }], sha)).toMatch(/tagged "\(none\)"/);
+    expect(deployedVersionProblem(["v1", "v2"], [], sha)).toMatch(/split over 2 versions/);
+  });
+});
+
+describe("staging decision (the staging-config bash block, run for real)", () => {
+  const workflow = parse(readFileSync(".github/workflows/deploy.yml", "utf8"));
+  const decide = workflow.jobs["staging-config"].steps[0];
+  const secretNames = Object.keys(decide.env).filter(
+    (name: string) => name !== "STAGING_BYPASS_UNTIL"
+  );
+  const allSecrets = Object.fromEntries(
+    secretNames.map((name: string) => [name, "synthetic-value"])
+  );
+  const iso = (offsetHours: number, seconds = false) =>
+    new Date(Date.now() + offsetHours * 3_600_000)
+      .toISOString()
+      .slice(0, seconds ? 19 : 16)
+      .concat("Z");
+
+  function run(env: Record<string, string>) {
+    const dir = mkdtempSync(path.join(tmpdir(), "vm-staging-decide-"));
+    try {
+      const script = path.join(dir, "decide.sh");
+      const output = path.join(dir, "output");
+      writeFileSync(script, decide.run);
+      writeFileSync(output, "");
+      const result = spawnSync("bash", [script], {
+        env: {
+          NODE_ENV: "test",
+          PATH: process.env.PATH,
+          GITHUB_OUTPUT: output,
+          GITHUB_STEP_SUMMARY: path.join(dir, "summary"),
+          STAGING_ONLY: "false",
+          ...env,
+        },
+        encoding: "utf8",
+        windowsHide: true,
+      });
+      return {
+        status: result.status,
+        configured: /configured=(\w+)/.exec(readFileSync(output, "utf8"))?.[1],
+        log: result.stdout + result.stderr,
+      };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("counts all 15 staging secrets, the deploy token included", () => {
+    expect(secretNames).toHaveLength(15);
+    expect(secretNames).toContain("STAGING_CLOUDFLARE_API_TOKEN");
+    const none = run({});
+    expect([none.status, none.configured]).toEqual([0, "false"]);
+    expect(none.log).toContain("Staging skipped");
+    const all = run(allSecrets);
+    expect([all.status, all.configured]).toEqual([0, "true"]);
+    const { STAGING_CLOUDFLARE_API_TOKEN: _token, ...withoutToken } = allSecrets;
+    const noToken = run(withoutToken);
+    expect(noToken.status).toBe(1);
+    expect(noToken.log).toMatch(/Staging half configured.*STAGING_CLOUDFLARE_API_TOKEN/);
+    const onlyToken = run({ STAGING_CLOUDFLARE_API_TOKEN: "synthetic-value" });
+    expect(onlyToken.status).toBe(1);
+    expect(onlyToken.log).toContain("STAGING_RESEND_API_KEY");
+  });
+
+  it("obeys only a strictly formatted bypass time at most 72 hours ahead", () => {
+    for (const until of [iso(24), iso(71, true)]) {
+      const bypassed = run({ ...allSecrets, STAGING_BYPASS_UNTIL: until });
+      expect([bypassed.status, bypassed.configured], until).toEqual([0, "false"]);
+      expect(bypassed.log).toContain("owner bypass");
+    }
+    for (const until of [
+      "tomorrow",
+      "+48 hours",
+      "now + 1 day",
+      iso(24).replace("Z", "+00:00"),
+      iso(24).replace("T", " "),
+      "2026-13-40T99:99Z",
+      iso(-1),
+      iso(80),
+    ]) {
+      const ignored = run({ ...allSecrets, STAGING_BYPASS_UNTIL: until });
+      expect([ignored.status, ignored.configured], until).toEqual([0, "true"]);
+      expect(ignored.log, until).toMatch(/::warning::STAGING_BYPASS_UNTIL .*ignored/);
+    }
+  });
+
+  it("fails a staging-only rehearsal that cannot run, and ignores the bypass there", () => {
+    expect(run({ STAGING_ONLY: "true" }).status).toBe(1);
+    const rehearsal = run({ ...allSecrets, STAGING_ONLY: "true", STAGING_BYPASS_UNTIL: iso(24) });
+    expect([rehearsal.status, rehearsal.configured]).toEqual([0, "true"]);
   });
 });
 

@@ -111,6 +111,13 @@ remain in place. The seven-day release-age guard remains enabled, with exact
 security-release exceptions documented in `.npmrc`. No advisory is suppressed by
 this compatibility patch.
 
+Upgrading wrangler: `pnpm cloudflare:staging:isolation` resolves the staging
+Worker settings with wrangler's own reader and fails on any wrangler warning
+about the staging environment. A new warning after an upgrade fails CI on
+purpose; read it, then fix the staging settings or allow that exact message in
+`scripts/check-staging-isolation.mjs` with a reason (docs/RUNBOOK.md, "Staging
+copy").
+
 The PGlite lanes, `test:db:isolated` and the static migration checks covered
 only the retired `supabase/migrations` schema and were retired with it.
 Production's schema is rebuilt and checked by `foundation-replay`,

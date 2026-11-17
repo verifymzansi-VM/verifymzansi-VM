@@ -18,6 +18,7 @@ on:
       - Database Backup
       - CodeQL Security Analysis
       - OpenSSF Scorecard
+      - Staging keep-alive
     types: [completed]
     # Every completed run of a watched workflow starts this one, and GitHub
     # lists it as a skipped run when the job's condition is false. Pull request
