@@ -277,6 +277,20 @@ try {
     q(`update private.frontend_content_holds set version=version+1 where id='${hold}';`);
     assert.deepEqual(notices(held, "content_restored"), [{ subject: hold, post: pid }]);
   });
+  await check("an invoice issued to a member's account notifies them once", () => {
+    const buyer = syntheticMember("notice-invoice");
+    const invoice =
+      q(`with y as (select extract(year from internal.customer_invoice_day(statement_timestamp()))::integer as year),
+        n as (insert into private.customer_invoice_numbers(invoice_year,last_number) select year,1 from y returning invoice_year)
+      insert into private.customer_invoices(invoice_number,invoice_year,sequence_number,account_id,plan_version_id,slots,
+          unit_price_cents,total_cents,description,due_on,issued_by,issue_reason,request_id,seller)
+        select 'VM-'||n.invoice_year||'-000001',n.invoice_year,1,'${buyer.id}',(select id from private.plan_versions limit 1),1,
+          6900,6900,'Individual slot, 30 days',internal.customer_invoice_day(statement_timestamp())+7,'${staffer.id}',
+          'Invoice requested by email','${crypto.randomUUID()}','{}'
+        from n returning id;`);
+    assert.deepEqual(notices(buyer, "invoice_issued"), [{ subject: invoice, post: null }]);
+    assert.equal(count(`private.notifications where account_id='${staffer.id}'`), 0);
+  });
   await check("post_expiry_reminder, which nothing queues any more, is not mirrored", () => {
     const pid = post(owner);
     queue("post_expiry_reminder", owner.id, pid);

@@ -154,8 +154,8 @@ the earlier bodies and kind list, and deletes every notice of the 18 new kinds
 to do so; queued emails are untouched.
 `scripts/test-foundation-member-notices.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves apply, rollback and re-apply and the
-notices above; the post lifecycle and customer invoice tests check them through
-the real moderation, lifecycle job and invoice commands.
+notices above; the post lifecycle test checks them through the real moderation
+command and lifecycle job.
 
 ## Members are told when their ID is sent back, 10 November 2026
 
