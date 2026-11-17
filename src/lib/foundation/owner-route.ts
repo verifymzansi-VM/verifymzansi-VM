@@ -28,6 +28,8 @@ export type FoundationRefusal = {
   details?: Record<string, string>;
   redirectUrl?: string;
   upgradeUrl?: string;
+  /** Seconds until the request may be made again (sent as Retry-After too). */
+  retryAfter?: number;
 };
 
 /** Owner route on the foundation project: same-origin and CSRF for writes,
@@ -100,6 +102,7 @@ export async function handleFoundationOwnerRoute<T>({
             error: limit.degraded
               ? "Protection is temporarily unavailable"
               : "Too many requests; try again shortly",
+            ...(limit.degraded ? {} : { code: "rate_limited", retryAfter: limit.retryAfter ?? 60 }),
           },
           {
             status: limit.degraded ? 503 : 429,
@@ -166,8 +169,12 @@ export async function handleFoundationOwnerRoute<T>({
           ...(known.details ? { details: known.details } : {}),
           ...(known.redirectUrl ? { redirectUrl: known.redirectUrl } : {}),
           ...(known.upgradeUrl ? { upgradeUrl: known.upgradeUrl } : {}),
+          ...(known.retryAfter ? { retryAfter: known.retryAfter } : {}),
         },
-        { status: known.status }
+        {
+          status: known.status,
+          ...(known.retryAfter ? { headers: { "Retry-After": String(known.retryAfter) } } : {}),
+        }
       )
     );
   }

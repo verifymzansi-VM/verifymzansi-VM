@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
+  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
@@ -491,35 +492,8 @@ function formatCountdown(totalSeconds: number): string {
   return `${minutes}m ${seconds}s`;
 }
 
-/** Refusals for which no SMS was sent: the toast already says why. */
-const OTP_NOT_SENT_CODES = new Set([
-  "phone_in_use",
-  "phone_already_verified",
-  "phone_change_cooldown",
-  "phone_change_identity_required",
-  "phone_banned",
-]);
-
-function buildOtpSupportMessage(
-  payload: VerificationApiResponse,
-  retryAfterSeconds: number,
-  formattedPhone: string
-): string | null {
-  if (payload.code && OTP_NOT_SENT_CODES.has(payload.code)) return null;
-  if (payload.code === "hourly_limit_reached" || payload.code === "rate_limited") {
-    return retryAfterSeconds > 0
-      ? `Too many code requests were made for this number. Wait ${formatCountdown(retryAfterSeconds)} before resending.`
-      : "Too many code requests were made for this number. Please wait before resending.";
-  }
-
-  if (payload.code === "sms_delivery_failed") {
-    return `We could not hand your code to the SMS provider. Confirm ${formattedPhone} is correct, wait a minute, then resend.`;
-  }
-
-  if (payload.code === "unauthorized") {
-    return "Your session expired before the code request completed. Sign in again, then retry.";
-  }
-
+/** The hint shown under a code that was sent. */
+function otpDeliveryHint(formattedPhone: string): string {
   return `SMS delivery can take up to 60 seconds. If nothing arrives, confirm ${formattedPhone} and resend once the timer ends.`;
 }
 
@@ -532,6 +506,14 @@ export default function VerificationPage() {
   const [otpRetryAfterSeconds, setOtpRetryAfterSeconds] = useState(0);
   const [otpExpirySeconds, setOtpExpirySeconds] = useState(0);
   const [otpSupportMessage, setOtpSupportMessage] = useState<string | null>(null);
+  // Errors show under the field they are about, never as an easily missed
+  // corner toast. A wait for a rate limit stays until it is over.
+  const [phoneError, setPhoneError] = useState<{ message: string; rateLimited: boolean } | null>(
+    null
+  );
+  const [otpError, setOtpError] = useState<string | null>(null);
+  // A "too many attempts" message stops showing once its wait is over.
+  const shownPhoneError = phoneError?.rateLimited && otpRetryAfterSeconds === 0 ? null : phoneError;
   const [emailConfirmationRequired, setEmailConfirmationRequired] = useState(false);
   const [verificationUnavailable, setVerificationUnavailable] = useState(false);
 
@@ -996,22 +978,28 @@ export default function VerificationPage() {
     setPhone(sanitizeSaPhoneInput(value));
     setOtp("");
     setOtpSent(false);
-    setOtpRetryAfterSeconds(0);
     setOtpExpirySeconds(0);
     setOtpSupportMessage(null);
+    setOtpError(null);
+    // A rate-limit wait still applies to a different number.
+    if (!shownPhoneError?.rateLimited) {
+      setOtpRetryAfterSeconds(0);
+      setPhoneError(null);
+    }
   }
 
   async function handleSendOtp() {
     if (!isPhoneValid) {
-      toast({
-        title: "Enter a valid SA mobile number",
-        description: "Use a South African mobile number such as 071 234 5678.",
-        variant: "destructive",
+      setPhoneError({
+        message: "Enter a valid SA mobile number, such as 071 234 5678.",
+        rateLimited: false,
       });
       return;
     }
 
     setIsLoading(true);
+    setPhoneError(null);
+    setOtpError(null);
 
     try {
       const res = await fetch("/api/otp/send", {
@@ -1026,27 +1014,28 @@ export default function VerificationPage() {
         if (retryAfterSeconds > 0) {
           setOtpRetryAfterSeconds(retryAfterSeconds);
         }
-
-        const supportMessage = buildOtpSupportMessage(payload, retryAfterSeconds, formattedPhone);
-        setOtpSupportMessage(supportMessage);
-        throw new Error(payload.error || supportMessage || "Please try again.");
+        setOtpSupportMessage(null);
+        setPhoneError({
+          message: payload.error || "Could not send the code. Please try again.",
+          rateLimited: res.status === 429 && retryAfterSeconds > 0,
+        });
+        return;
       }
 
       setOtpSent(true);
       setOtp("");
       setOtpRetryAfterSeconds(OTP_RESEND_COOLDOWN_SECONDS);
       setOtpExpirySeconds(OTP_EXPIRY_SECONDS);
-      setOtpSupportMessage(buildOtpSupportMessage({}, OTP_RESEND_COOLDOWN_SECONDS, formattedPhone));
+      setOtpSupportMessage(otpDeliveryHint(formattedPhone));
       toast({
         title: otpSent ? "Code resent" : "Code sent",
         description: `Check ${formattedPhone} for the 6-digit code. Delivery can take up to 60 seconds.`,
         variant: "success",
       });
-    } catch (err) {
-      toast({
-        title: "Failed to send code",
-        description: err instanceof Error ? err.message : "Please try again.",
-        variant: "destructive",
+    } catch {
+      setPhoneError({
+        message: "Could not send the code. Check your connection and try again.",
+        rateLimited: false,
       });
     } finally {
       setIsLoading(false);
@@ -1055,23 +1044,23 @@ export default function VerificationPage() {
 
   async function handleVerifyOtp() {
     if (!isOtpValid) {
-      toast({
-        title: "Enter the 6-digit code",
-        description: "Use the code sent to your phone, then try again.",
-        variant: "destructive",
-      });
+      setOtpError("Enter the 6-digit code sent to your phone.");
       return;
     }
 
     setIsLoading(true);
+    setOtpError(null);
     try {
       const res = await fetch("/api/otp/verify", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ phone, otp }),
       });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload.error || "Invalid OTP");
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setOtpError(payload.error || "Invalid or expired code. Please try again.");
+        return;
+      }
 
       setPhoneVerified(true);
       setOtpSupportMessage(null);
@@ -1085,12 +1074,8 @@ export default function VerificationPage() {
         description: `${formattedPhone} is now linked to your verification profile.`,
         variant: "success",
       });
-    } catch (err) {
-      toast({
-        title: "Invalid OTP",
-        description: err instanceof Error ? err.message : "Please try again.",
-        variant: "destructive",
-      });
+    } catch {
+      setOtpError("Could not check the code. Check your connection and try again.");
     } finally {
       setIsLoading(false);
     }
@@ -1671,8 +1656,19 @@ export default function VerificationPage() {
                         pattern="^(\\+27|0)[6-8][0-9]{8}$"
                         title="Enter a valid SA mobile number (e.g. 071 234 5678)"
                         disabled={phoneVerified || verificationUnavailable}
-                        className="h-12 text-base sm:h-12 sm:text-base"
+                        aria-invalid={shownPhoneError ? "true" : undefined}
+                        aria-describedby={shownPhoneError ? "phone-error" : undefined}
+                        className={cn(
+                          "h-12 text-base sm:h-12 sm:text-base",
+                          shownPhoneError && "border-destructive"
+                        )}
                       />
+                      {shownPhoneError && (
+                        <p id="phone-error" role="alert" className="inline-form-error flex gap-1.5">
+                          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span>{shownPhoneError.message}</span>
+                        </p>
+                      )}
                     </div>
 
                     {!phoneVerified && (
@@ -1740,9 +1736,27 @@ export default function VerificationPage() {
                             inputMode="numeric"
                             autoComplete="one-time-code"
                             value={otp}
-                            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                            className="h-14 max-w-xs text-center font-display text-2xl font-semibold tracking-[0.4em] sm:h-14 sm:text-2xl"
+                            onChange={(e) => {
+                              setOtp(e.target.value.replace(/\D/g, ""));
+                              setOtpError(null);
+                            }}
+                            aria-invalid={otpError ? "true" : undefined}
+                            aria-describedby={otpError ? "otp-error" : undefined}
+                            className={cn(
+                              "h-14 max-w-xs text-center font-display text-2xl font-semibold tracking-[0.4em] sm:h-14 sm:text-2xl",
+                              otpError && "border-destructive"
+                            )}
                           />
+                          {otpError && (
+                            <p
+                              id="otp-error"
+                              role="alert"
+                              className="inline-form-error flex gap-1.5"
+                            >
+                              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                              <span>{otpError}</span>
+                            </p>
+                          )}
                         </div>
                         <Button
                           onClick={handleVerifyOtp}
