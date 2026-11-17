@@ -22,7 +22,8 @@ import { COVERAGE_EXCLUDED_SUITES } from "../src/test/coverage-excluded-suites";
 import { validateLicenseReport } from "./lib/license-policy";
 import { validateDuplication } from "./lib/duplication-policy";
 import { scanFile } from "./lib/secret-scan-files";
-import { dependencyAuditVerdict } from "./dependency-audit-policy";
+import { dependencyAuditVerdict, readAuditExceptions } from "./dependency-audit-policy";
+import { parse as parseToml } from "smol-toml";
 import { qualityRegressions } from "./lib/quality-policy";
 import { socialWatermarks } from "./lib/social-watermarks";
 import sharp from "sharp";
@@ -193,6 +194,106 @@ test("installed braces guards all public string and AST walkers with bounded err
     "file-b-3.js",
   ]);
   assert.equal(braces.compile("foo/{a,b}/bar"), "foo/(a|b)/bar");
+});
+test("reviewed, dated exceptions clear only their own advisory, counted per finding", () => {
+  const picomatch = {
+    github_advisory_id: "GHSA-fc5q-39xc-vjpf",
+    module_name: "picomatch",
+    severity: "high",
+    findings: [{ version: "4.0.4" }, { version: "2.3.2" }, { version: "4.0.7" }],
+  };
+  // pnpm audit counts one finding per vulnerable version: three, not one.
+  const report = {
+    metadata: { vulnerabilities: { info: 0, low: 0, moderate: 0, high: 3, critical: 0 } },
+    advisories: { glob: picomatch },
+  };
+  const now = new Date("2026-11-17T18:00:00Z");
+  const active = {
+    id: picomatch.github_advisory_id,
+    until: new Date("2027-01-31T00:00:00Z"),
+    reason: "Reviewed: build tools only.",
+  };
+  const proof = { verified: true };
+  // Without an exception the finding blocks (FAIL, not an unreadable report).
+  assert.equal(assessPatchedAudit(1, report, proof, [], now).assessment, "FAIL");
+  const cleared = assessPatchedAudit(1, report, proof, [active], now);
+  assert.equal(cleared.assessment, "WARN");
+  assert.deepEqual(cleared.excepted, [picomatch.github_advisory_id]);
+  assert.equal(cleared.effectiveVulnerabilityCounts?.high, 0);
+  // An expired exception, or one without a reason, no longer applies.
+  assert.equal(
+    assessPatchedAudit(1, report, proof, [{ ...active, until: now }], now).assessment,
+    "FAIL"
+  );
+  assert.equal(
+    assessPatchedAudit(1, report, proof, [{ ...active, reason: " " }], now).assessment,
+    "FAIL"
+  );
+  // Any other finding still blocks.
+  const other = {
+    metadata: { vulnerabilities: { info: 0, low: 0, moderate: 1, high: 3, critical: 0 } },
+    advisories: {
+      glob: picomatch,
+      other: {
+        github_advisory_id: "unrelated",
+        module_name: "x",
+        severity: "moderate",
+        findings: [{ version: "1" }],
+      },
+    },
+  };
+  assert.equal(assessPatchedAudit(1, other, proof, [active], now).assessment, "FAIL");
+  // braces is cleared only by its verified backport, never by an exception.
+  const braces = {
+    metadata: { vulnerabilities: { info: 0, low: 0, moderate: 0, high: 1, critical: 0 } },
+    advisories: {
+      known: {
+        github_advisory_id: BRACES_ADVISORY,
+        module_name: "braces",
+        severity: "high",
+        findings: [{ version: "3.0.3" }],
+      },
+    },
+  };
+  const bracesException = { ...active, id: BRACES_ADVISORY };
+  assert.equal(
+    assessPatchedAudit(1, braces, { verified: false }, [bracesException], now).assessment,
+    "FAIL"
+  );
+  // Counts that do not add up are refused.
+  assert.equal(
+    assessPatchedAudit(
+      1,
+      { ...report, metadata: { vulnerabilities: { ...report.metadata.vulnerabilities, high: 1 } } },
+      proof,
+      [active],
+      now
+    ).assessment,
+    "INVALID"
+  );
+});
+test("the repository's reviewed exceptions parse, and malformed ones fail closed", async () => {
+  const exceptions = readAuditExceptions(await readFile("osv-scanner.toml", "utf8"), parseToml);
+  assert.ok(exceptions.length >= 1);
+  for (const e of exceptions) {
+    assert.match(e.id, /^GHSA-/);
+    assert.ok(e.until.getTime() > Date.parse("2026-11-01T00:00:00Z"));
+  }
+  assert.deepEqual(readAuditExceptions("", parseToml), []);
+  const entry = (body: string) => `[[IgnoredVulns]]\n${body}\n`;
+  for (const bad of [
+    entry('id = "GHSA-fc5q-39xc-vjpf"\nignoreUntil = 2027-01-31T00:00:00Z'),
+    entry(
+      'id = "GHSA-fc5q-39xc-vjpf"\nreason = "A long enough written reason for this reviewed exception."'
+    ),
+    entry(
+      'id = "CVE-2026-1"\nignoreUntil = 2027-01-31T00:00:00Z\nreason = "A long enough written reason for this reviewed exception."'
+    ),
+    entry(
+      'id = "GHSA-fc5q-39xc-vjpf"\nignoreUntil = "soon"\nreason = "A long enough written reason for this reviewed exception."'
+    ),
+  ])
+    assert.throws(() => readAuditExceptions(bad, parseToml));
 });
 test("audit retains other findings and requires the exact verified backport", async () => {
   assert.equal((await verifyBracesBackport()).verified, true);
