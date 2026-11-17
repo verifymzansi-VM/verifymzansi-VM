@@ -27,6 +27,7 @@ create table private.privacy_requests (
   completed_at timestamp with time zone,
   created_at timestamp with time zone default clock_timestamp() not null,
   revision integer default 1 not null,
+  minimised_at timestamp with time zone,
   constraint privacy_requests_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES auth.users(id) ON DELETE SET NULL,
   constraint privacy_requests_check CHECK (due_by > received_at),
   constraint privacy_requests_check1 CHECK (extended_due_at > due_by),

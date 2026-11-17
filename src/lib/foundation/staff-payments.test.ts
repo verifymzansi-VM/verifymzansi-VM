@@ -80,6 +80,19 @@ describe("staff payment adapters", () => {
     await expect(readStaffPaymentList(api, 1)).rejects.toMatchObject({ status: 503 });
   });
 
+  it("keeps listing a payment whose account was erased (no person on it)", async () => {
+    const { api } = fixture({
+      total: 1,
+      page: 1,
+      needs_attention: 0,
+      awaiting_approval: 0,
+      items: [{ ...item, user_id: null }],
+    });
+    await expect(readStaffPaymentList(api, 1)).resolves.toMatchObject({
+      items: [{ id, user_id: null }],
+    });
+  });
+
   it("refuses a refund without a usable reference before calling the database", async () => {
     const { rpc, api } = fixture({});
     await expect(

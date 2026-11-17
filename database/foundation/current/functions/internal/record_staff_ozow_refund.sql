@@ -35,14 +35,14 @@ begin
   end if;
   if p_payment_id is null then raise exception 'payment required' using errcode='22023'; end if;
   select p.owner_id, p.id into buyer, payment from private.payments p where p.id = p_payment_id;
-  if buyer is null then raise exception 'payment not found' using errcode='22023'; end if;
+  if payment is null then raise exception 'payment not found' using errcode='22023'; end if;
   if p_line_id is not null and not exists(select 1 from private.payment_lines l
       where l.id = p_line_id and l.payment_id = payment) then
     raise exception 'slot payment line not found' using errcode='22023';
   end if;
   perform internal.assert_staff_payment_actor(actor, buyer);
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('frontend-payment-reversal:'||payment::text, 0));
-  perform internal.lock_evidence_subject(buyer);
+  perform internal.lock_kept_record_subject(buyer, payment);
   select * into pay from private.payments p where p.id = payment for update;
   if p_line_id is not null then
     select * into line from private.payment_lines l where l.id = p_line_id for update;
@@ -108,7 +108,8 @@ begin
     end if;
   end if;
   refunded_before := internal.payment_refunded_before_cents(pay.id);
-  approval := internal.refund_needs_approval('refunded', refunded_before, amount);
+  -- A payment of an erased account: always a second staff member.
+  approval := internal.refund_needs_approval('refunded', refunded_before, amount) or pay.owner_id is null;
   if p_channel = 'dashboard' and not approval then
     -- The money already went back in the Ozow dashboard: it takes effect now,
     -- as today's recorded refunds do.

@@ -10,6 +10,13 @@ declare changed text[]; allowed text[];
   ozow_facts constant text[] := array['ozow_refund_id','ozow_status','ozow_status_at','ozow_requested_at',
     'ozow_completed_at','send_outcome','ozow_checked_at','ozow_missing_at'];
 begin
+  -- An erasure unlinks the erased account from this kept record (20261116175757_close_and_erase_account.sql);
+  -- nothing else may change with it.
+  if tg_op = 'UPDATE' and coalesce(pg_catalog.current_setting('vm.erasure', true), '') <> '' then
+    if internal.erasure_unlinks(to_jsonb(old), to_jsonb(new), array['account_id']) then
+      return new;
+    end if;
+  end if;
   -- The request, its reference, amount, account, channel and Ozow transaction
   -- never change. A waiting record is approved, applied or declined once; an
   -- API record is then sent once and settles once (applied, failed or

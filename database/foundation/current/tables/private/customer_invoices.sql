@@ -6,7 +6,7 @@ create table private.customer_invoices (
   invoice_number text not null,
   invoice_year integer not null,
   sequence_number integer not null,
-  account_id uuid not null,
+  account_id uuid,
   plan_version_id uuid not null,
   slots integer not null,
   unit_price_cents bigint not null,

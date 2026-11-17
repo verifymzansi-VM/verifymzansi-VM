@@ -5,7 +5,7 @@ create table private.partner_commissions (
   id uuid default gen_random_uuid() not null,
   partner_id uuid not null,
   payment_id uuid not null,
-  referred_account_id uuid not null,
+  referred_account_id uuid,
   base_cents bigint not null,
   rate_bps integer not null,
   amount_cents bigint not null,

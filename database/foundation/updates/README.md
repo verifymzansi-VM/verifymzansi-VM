@@ -1946,6 +1946,166 @@ the sweep does not wait and leaves it to the next run, and while another holds a
 post's search document a refund does not wait and the sweep corrects the
 document afterwards. And the rollback refuses once a package was bought.
 
+## Close and erase an account, 16 November 2026
+
+`20261116175757_close_and_erase_account.sql` was applied on 17 November 2026 at
+03:50 UTC with the owner's approval (roadmap M1.6b; owner decision OD-10: close
+at once; delete the profile, posts, enquiries and media after 30 days; keep
+payment records for 5 years, no longer linked to the person; keep the
+identity-ban fingerprint as the privacy notice says; owner decisions of 16
+November 2026 on the review: a deletion request is due 7 days after the grace
+period; staff finish a cancellation refund within the 30 days; enquiries the
+person sent are deleted from other owners' inboxes; verification history stays 5
+years after closure). It needs `20261114093742_renew_slots_early.sql`, the
+bodies it replaces with their reviewed bodies and the five it builds on
+(`internal.close_account_evidence`, `internal.lock_evidence_subject`,
+`internal.staff_actor`, `internal.media_object_in_use`,
+`internal.release_sponsorship_entitlement`) and
+`20261114154823_slot_packages.sql`, and refuses (55000) otherwise. It only adds:
+no API command, argument or grant is removed or changed. Nothing calls the new
+commands from the website yet; the "Delete account" button and the staff privacy
+screen move to them in M1.6c.
+
+- **Kept payment records lose their person.** The person's column becomes
+  nullable in `private.payments` (`owner_id`), `private.customer_invoices`,
+  `private.invoice_transfers`, `private.payment_refund_requests` (`account_id`),
+  `private.entitlements`, `private.post_activations` (`owner_id`),
+  `private.partner_commissions` (`referred_account_id`) and
+  `private.individual_slot_limits` (`account_id`). The record guards of these
+  tables (full bodies) allow one more change, through
+  `internal.erasure_unlinks`: that column going from the erased account to null
+  while its erasure runs (transaction setting `vm.erasure`); every other column
+  still never changes.
+- **Kept records stay usable.** The staff refund, chargeback, approval, Ozow
+  refund, slot reversal and invoice void commands (full bodies) tell "not found"
+  apart from "no account" and lock a record with no account by its own id
+  (`internal.lock_kept_record_subject`); a chargeback still reverses the partner
+  commission. A refund or chargeback of a payment with no account always waits
+  for a second staff member, whatever the amount (the check
+  `payment_refund_requests_approval_rule` allows it). The trigger
+  `outbox_events_unlinked` drops a payment email (`payment_*` kinds) for nobody,
+  so a late Ozow payment of an erased account is accepted (and can be refunded)
+  on every retry; any other email without a person is still an error.
+- **Erasure records.** `private.account_erasures` holds one row per closed
+  account, with no foreign key so it outlives the Auth user: closed when and by
+  whom, `erase_after` (exactly 30 days later), the end of the paid time it still
+  had, when it was erased and counts of what was erased, when the Auth user was
+  removed, and why it waits (`blocked_reason`, with the error code
+  `blocked_detail` for a failure). `private.account_erasure_requests` links
+  deletion privacy requests to it.
+- **Closing (member).** `api.close_my_account()`: the caller's own live
+  confirmed session that signed in (any method but anonymous, the JWT `amr`
+  time) in the last 15 minutes (42501 `recent_sign_in_required`), never a staff
+  account (42501 `staff_account`). At once: the existing closure record (posts
+  leave every public read, identity facts and phone proofs revoked, open
+  identity cases closed, evidence files scheduled, trial fingerprint detached);
+  sign-in blocked (Auth `banned_until` 100 years on); every session and refresh
+  token ended (refused if the ban or the session clean-up does not take); a
+  partner record suspended, with a partner event; the erasure scheduled; a
+  deletion privacy request recorded (identity checked by the session, due 7 days
+  after the grace period) with its "received" notice. A second call is refused:
+  the session has ended.
+- **Ordering (staff).** `api.fulfil_account_deletion(p_request, p_revision)`:
+  `dsar:manage` with a recent authenticator code. It calls
+  `internal.order_account_erasure` (no API role may call it; the runbook's owner
+  SQL session uses it until the staff screen exists): a verified deletion
+  request in progress, a staff member with the privacy role who is not the
+  requester and did not verify the identity (42501 `second_person_required`),
+  never a staff account (PT409 `staff_account`). It closes the account if still
+  open, links the request, records the order on the request (event
+  `erasure_ordered`, a new allowed action), sets its deadline to 7 days after
+  the grace period, and erases at once when the 30 days have passed.
+  `api.get_account_erasure(p_request)` reads the state (dates, status, the
+  reason it waits, the error code, counts), no personal data.
+- **Erasure.** `internal.erase_closed_account`, 30 days after closure. It waits
+  (and records why; the sweep tries again an hour later) while a legal hold,
+  open fraud hold, unreleased staff content hold, open report about the person
+  or their posts, staff role, rejected deletion request, pending payment, paid
+  order still to be delivered, open refund, bank transfer waiting for
+  confirmation, unpaid invoice or unpaid commission owed to the person as a
+  partner applies. It deletes posts (edit copies, contacts, media links, search
+  documents, received enquiries), sponsored places, event submissions, the
+  enquiries it sent (and the other owner's notice and email), notifications,
+  profile, drafts, organisation roles and applications, team memberships, post
+  commands and receipts, the acquisition record, consent and terms records, home
+  area and emails; queues every photo and video it uploaded that nothing kept
+  still uses for deletion from storage; revokes its paid time and unlinks every
+  kept payment record; removes the sign-in (sessions, refresh tokens,
+  authenticator factors, linked sign-in providers, one-time tokens, sign-in
+  flows, the Auth audit entries since the account was created in one bounded
+  batch; email, phone, password, metadata and pending changes cleared; banned
+  and marked deleted). The Auth user is deleted as soon as nothing kept names it
+  (`internal.remove_erased_auth_user`); until then it is an empty row (kept
+  verification history, an identity ban, a report, a released legal hold, a
+  partner record or a staff history keep it until their own retention ends). A
+  failure deleting it is recorded and never undoes the erasure.
+- **Privacy requests.** `internal.process_frontend_privacy_request` (full body):
+  a deletion request linked to an account is completed only after the erasure
+  (PT409 `erasure_pending`); one naming an account only after the erasure was
+  ordered (PT409 `erasure_required`). `internal.claim_frontend_privacy_notice`
+  (full body) sends the notices of a request linked to an erasure to the address
+  stored with the request (the Auth user may be gone), never those of a
+  minimised request. `private.privacy_requests` gains `minimised_at`: once a
+  completed or rejected request's last notice was sent (or 30 days after it
+  closed), its address is replaced by the marker `removed` (nothing needs to
+  match a later request) and its phone and description cleared; it is deleted 5
+  years after it closed, never while it is linked to an erasure that has not run
+  (`internal.retention_privacy_requests`; provisional periods, the lawyer
+  confirms). Rejecting a deletion request linked to an account not yet erased
+  (`internal.reject_account_erasure`, under the account lock; PT409
+  `account_erased` if the erasure already ran) records `rejected_at` on the
+  erasure and places a legal hold "Deletion request rejected; review by <date>"
+  (12 months on), so neither the purge of the request record nor anything else
+  lets the sweep erase it; a later ordered request clears `rejected_at` (the
+  hold is released by staff).
+- **Sweep.** `internal.run_retention` (full body) runs
+  `internal.run_account_erasures(least(p_limit, 20))` (key `accounts`) and
+  `internal.retention_privacy_requests` (key `privacy_requests`). Each account
+  runs on its own: a failure is recorded with its error code and the job carries
+  on. `accounts.stuck` counts erasures recorded as failed; the retention job
+  (`src/lib/foundation/retention-jobs.ts`) logs the alert
+  `account_erasure_errors` while any remain.
+- **Preflight.** Besides the bodies, it checks that the role owning the
+  functions may make every Auth change the erasure needs (on each Auth table
+  present) and names any it may not, and that row level security on those tables
+  cannot hide rows from that role (or that it bypasses it). The Auth sign-in log
+  has no index on the actor: the erasure clears it in one bounded batch (entries
+  since the account was created, up to 10,000).
+- **Multi-listing packages.** `private.slot_packages.owner_id` (from
+  `20261114154823_slot_packages.sql`, which this update needs) becomes nullable
+  and `internal.slot_package_guard` (full body) allows only the erasure unlink;
+  the erasure keeps an erased owner's package, unlinked, with its revoked
+  grants.
+- **Not in this update.** Sponsored places of the erased person are deleted (the
+  earlier design deletes them with the Auth user), not unlinked. A staff-only
+  reopen during the grace period is a later slice. The older service command
+  `api.close_account_evidence` still closes without scheduling an erasure;
+  nothing calls it.
+
+Behaviour test: `scripts/test-foundation-account-erasure.mjs` (in
+`pnpm db:foundation:lifecycle-test`) checks the preflight (including a missing
+Auth privilege) and refusals, apply -> rollback -> apply, the grants, closing,
+nothing erased before 30 days, the second-person rule, each hold in turn (legal
+hold, content hold, report, unpaid invoice, partner commission, rejected
+request), the content deleted (edit copy, sponsored place, event submission,
+business check, organisation role, enquiries) and payments, the grant, invoices,
+the bank transfer and a partner commission kept with no person, the sign-in
+removed, the guards still refusing any other change, a chargeback (reversing the
+commission), an approved refund and a late Ozow payment refunded after the
+erasure, an erased partner keeping an empty Auth row, an unverified account's
+Auth user deleted after the media cleanup, the completed notice sent to the
+stored address and the request then minimised, a failing account recorded
+without stopping the job (and a failed Auth delete not undoing the erasure), the
+identity-ban fingerprint kept, the runbook's interim command, replays, and that
+the rollback refuses once an account was closed. Second review: a rejected
+request places a legal hold and its account is not erased even after the request
+record is purged; a refund or chargeback of a payment with no account waits for
+a second staff member; only payment emails may lose their person; a closed
+partner gets a partner event; the preflight names row level security on an Auth
+table. Final review: rejecting a request whose account was already erased is
+refused (PT409 `account_erased`); an erased owner's Multi-listing package is
+kept, unlinked.
+
 ## Customer invoices with an Ozow "Pay now" link, 14 November 2026
 
 `20261114041000_customer_invoice_pay_now.sql` was applied on 14 November 2026 at
@@ -3939,5 +4099,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   packages: 0; package payments: 0"; production fingerprint after it matched the
   full replay (except the known schema grant difference); sales stay switched
   off
+- `20261116175757_close_and_erase_account.sql`: applied 2026-11-17 03:50 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file (sha256 starting 8d39dcd6550b1ec7, files from
+  raw GitHub at d755e130) before the pull request was merged; preflight before
+  "update not applied" with no problem rows (Auth table privilege and row
+  security checks included), after "close and erase accounts: already applied;
+  accounts closed: 0; erased: 0; waiting with a hold: 0"; production fingerprint
+  after it matched the full replay (except the known schema grant difference)
+  (roadmap M1.6b)
 
 <!-- applied-register:end -->

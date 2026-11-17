@@ -49,7 +49,8 @@ const cents = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const staffPaymentItem = z.strictObject({
   id: z.uuid(),
-  user_id: z.uuid(),
+  // Null once the paying account was erased: the payment is kept, unlinked.
+  user_id: z.uuid().nullable(),
   area: z.enum(["market", "business", "tourism_events", "all"]),
   amount_cents: cents,
   status: z.enum(actualStatuses),
@@ -450,7 +451,8 @@ const term = z.union([z.literal(30), z.literal(90), z.literal(180)]);
 const staffTransferRecord = z.strictObject({
   transfer_id: z.uuid(),
   status: z.enum(["awaiting_confirmation", "confirmed", "declined"]),
-  account_id: z.uuid(),
+  // Null once the account was erased (the record is kept, unlinked).
+  account_id: z.uuid().nullable(),
   customer_email: z.string().max(254).nullable(),
   similar_records: count,
   customer_name: z.string().max(120).nullable(),

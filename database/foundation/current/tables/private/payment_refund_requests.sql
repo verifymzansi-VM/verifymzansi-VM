@@ -5,7 +5,7 @@ create table private.payment_refund_requests (
   id uuid default gen_random_uuid() not null,
   payment_id uuid not null,
   payment_line_id uuid,
-  account_id uuid not null,
+  account_id uuid,
   kind text not null,
   reason_code text not null,
   reason text not null,
@@ -46,8 +46,8 @@ create table private.payment_refund_requests (
   constraint payment_refund_requests_applied CHECK ((status = 'applied'::text) = (applied_at IS NOT NULL) AND (released_activations IS NULL OR status = 'applied'::text)),
   constraint payment_refund_requests_approval_rule CHECK (
 CASE
-    WHEN kind = 'refunded'::text THEN needs_approval = ((recorded_before_cents + amount_cents) > 100000)
-    ELSE NOT needs_approval OR (recorded_before_cents + amount_cents) > 100000
+    WHEN kind = 'refunded'::text THEN needs_approval = ((recorded_before_cents + amount_cents) > 100000) OR account_id IS NULL AND needs_approval
+    ELSE NOT needs_approval OR (recorded_before_cents + amount_cents) > 100000 OR account_id IS NULL
 END),
   constraint payment_refund_requests_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint payment_refund_requests_approver CHECK (

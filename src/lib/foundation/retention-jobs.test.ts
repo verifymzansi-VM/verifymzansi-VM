@@ -643,6 +643,19 @@ it.each([
   expect(logLine().line).toContain(`"${alert}"`);
 });
 
+it("raises an alert while account erasures are recorded as failed", async () => {
+  const world = createWorld({ media: 1 });
+  world.overrides.run_retention = () => ({
+    data: { accounts: { erased: 0, failed: 1, stuck: 2 } },
+    error: null,
+  });
+  await world.run();
+  expect(logLine()).toMatchObject({ level: "warn" });
+  expect(logLine().line).toContain('"account_erasure_errors"');
+  expect(logLine().line).toContain('"accountErasureErrors":2');
+  expect(world.objects.every((o) => o.state === "deleted")).toBe(true);
+});
+
 it("still cleans storage when a sweep request throws", async () => {
   const world = createWorld({ media: 2 });
   world.overrides.run_retention = () => {

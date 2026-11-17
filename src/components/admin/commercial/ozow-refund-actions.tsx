@@ -59,7 +59,8 @@ export type OzowRefundTarget = {
   amountCents: number;
   priorCents: number;
   label: string;
-  accountId: string;
+  /** Null once the paying account was erased. */
+  accountId: string | null;
 };
 
 const APPROVAL_ABOVE_CENTS = 100_000;

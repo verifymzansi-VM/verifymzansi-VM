@@ -3,7 +3,7 @@
 
 create table private.payments (
   id uuid default gen_random_uuid() not null,
-  owner_id uuid not null,
+  owner_id uuid,
   product_kind text not null,
   plan_version_id uuid,
   addon_version_id uuid,
