@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { adminDsarDecideSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
 import {
@@ -16,7 +17,7 @@ const log = createLogger("DSARDecide");
  *   reject          → rejected (+ rejection notification email)
  *   verify_identity → identity_verified = true (unblocks export/complete)
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   return handlePrivacyStaffRoute(req, log, "decide", (api, body) => {
     const input = adminDsarDecideSchema.extend({ revision: privacyRevision }).strict().parse(body);
     return processFrontendPrivacyRequest(api, {

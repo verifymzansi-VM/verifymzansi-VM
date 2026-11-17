@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { adminDsarCompleteSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
 import {
@@ -15,7 +16,7 @@ const log = createLogger("DSARComplete");
  * Requires identity verification first, and deletion-type cases require an
  * explicit operator attestation.
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   return handlePrivacyStaffRoute(req, log, "complete", (api, body) => {
     const input = adminDsarCompleteSchema
       .extend({ revision: privacyRevision })

@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { uploadSeenPhoto } from "@/lib/foundation/seen-media-route";
 
 /**
@@ -6,6 +7,6 @@ import { uploadSeenPhoto } from "@/lib/foundation/seen-media-route";
  * Server time is recorded; for visits the browser's location is kept with
  * the photo as evidence. Photos are private and deleted with the case files.
  */
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return uploadSeenPhoto(request, (await params).id);
 }
