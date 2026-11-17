@@ -1,5 +1,5 @@
 import { CalendarDays, LockKeyhole, ReceiptText, ShieldCheck } from "lucide-react";
-import { CURRENT_EDIT_RULE } from "@/lib/posting/package-rules";
+import { EDIT_RULE } from "@/lib/posting/package-rules";
 
 import { TrialPolicy } from "@/components/billing/trial-policy";
 import { BillingFaq } from "@/components/billing/billing-faq";
@@ -133,7 +133,7 @@ export default async function PricingPage() {
             <h2 id="package-rules-title" className="font-display text-lg font-bold">
               How your package works
             </h2>
-            <p className="mt-3 text-sm text-muted-foreground">{CURRENT_EDIT_RULE}</p>
+            <p className="mt-3 text-sm text-muted-foreground">{EDIT_RULE}</p>
           </div>
         </section>
 

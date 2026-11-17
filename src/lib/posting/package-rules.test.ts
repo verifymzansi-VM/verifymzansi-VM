@@ -3,9 +3,17 @@ import {
   editAllowanceForDays,
   editLimitReachedMessage,
   editScreenRules,
+  EDIT_RULE,
   EVENT_EDIT_RULE,
   CURRENT_EDIT_RULE,
 } from "./package-rules";
+
+it("states the live edit allowance on the pricing page (2 per 30 days, not 2 in total)", () => {
+  expect(EDIT_RULE).toContain(
+    `30 days: ${editAllowanceForDays(30)}, 90 days: ${editAllowanceForDays(90)}, 180 days: ${editAllowanceForDays(180)}`
+  );
+  expect(EDIT_RULE).not.toMatch(/up to 2 approved edits/i);
+});
 
 describe("package rules (DEC-28/29)", () => {
   it("gives 2 edits per started 30 days, matching internal.edit_allowance", () => {

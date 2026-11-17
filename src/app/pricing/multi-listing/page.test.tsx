@@ -42,7 +42,8 @@ describe("the hidden Multi-listing page (P4a)", () => {
     const text = container.textContent ?? "";
     expect(text).toMatch(/From 5 slots at R100 per slot per 30 days, for 30, 90 or 180 days/);
     expect(screen.getByText("Does not renew automatically")).toBeInTheDocument();
-    expect(screen.getByText("You + 1 person (you + 4 from 50 slots)")).toBeInTheDocument();
+    // Package teams are not built yet: hidden until they work.
+    expect(text).not.toMatch(/You \+ 1 person|you \+ 4/);
     expect(text).toMatch(/up to 4 posts going live per slot per 30 days/);
     expect(text).not.toMatch(/Paid once|never renews|administrators|10 to 100|for 90 or 180 days/);
     // Ozow's maximum (the database setting), never the old R10,000.

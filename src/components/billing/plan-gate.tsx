@@ -25,6 +25,7 @@ import {
   type PlanDefinition,
 } from "@/lib/constants/pricing";
 import { PLAN_SALES_PAUSED_NOTE } from "@/lib/billing/plan-sales";
+import { SHOW_PAID_ADDONS } from "@/lib/hidden-features";
 import { PLAN_TIER_LABELS, type MarketplaceArea, type PlanTier } from "@/types/enums";
 import { trialAvailabilityMessage, type IntroTrialOffer } from "@/lib/billing/free-posts";
 
@@ -114,7 +115,10 @@ function planFeatureList(plan: PlanDefinition): { text: string; enabled: boolean
   return [
     { text: "1 active posting slot, reusable once its post is deleted", enabled: true },
     { text: `${f.maxPhotos} photos and ${f.maxVideos ?? 1} video per post`, enabled: true },
-    { text: "Optional Urgent label add-on", enabled: f.urgentAllowed },
+    // Hidden until paid add-ons deliver (src/lib/hidden-features.ts).
+    ...(SHOW_PAID_ADDONS
+      ? [{ text: "Optional Urgent label add-on", enabled: f.urgentAllowed }]
+      : []),
     { text: "No automatic renewal", enabled: true },
   ];
 }

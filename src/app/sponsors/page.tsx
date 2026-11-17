@@ -15,6 +15,7 @@ import {
   organisationTypeLabel,
   sponsorArea,
 } from "@/lib/organisations/sponsors";
+import { SHOW_SPONSOR_OFFER } from "@/lib/hidden-features";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -41,14 +42,17 @@ export default async function SponsorsPage() {
               <Button asChild variant="trust-verified" size="lg" className="h-12 rounded-full">
                 <Link href="/mzansi-business">Browse Mzansi Business</Link>
               </Button>
-              <Button
-                asChild
-                variant="outline"
-                size="lg"
-                className={cn("h-12 rounded-full", brandOutlineButtonClassName)}
-              >
-                <Link href="/advertise#programmes">Become a Business Sponsor</Link>
-              </Button>
+              {/* The sponsor offer is on hold (src/lib/hidden-features.ts). */}
+              {SHOW_SPONSOR_OFFER ? (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="lg"
+                  className={cn("h-12 rounded-full", brandOutlineButtonClassName)}
+                >
+                  <Link href="/advertise#programmes">Become a Business Sponsor</Link>
+                </Button>
+              ) : null}
             </>
           }
         />
@@ -65,15 +69,17 @@ export default async function SponsorsPage() {
           </p>
 
           {sponsors.length === 0 ? (
-            <div className="mt-8 rounded-2xl border border-dashed p-8 text-center">
-              <p className="font-display text-lg font-semibold">
-                Our first Business Sponsors are joining
-              </p>
-              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                Founding programmes open in the City of uMhlathuze. Their businesses appear here as
-                they go live.
-              </p>
-            </div>
+            SHOW_SPONSOR_OFFER ? (
+              <div className="mt-8 rounded-2xl border border-dashed p-8 text-center">
+                <p className="font-display text-lg font-semibold">
+                  Our first Business Sponsors are joining
+                </p>
+                <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                  Founding programmes open in the City of uMhlathuze. Their businesses appear here
+                  as they go live.
+                </p>
+              </div>
+            ) : null
           ) : (
             <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {sponsors.map((sponsor) => {
@@ -130,25 +136,27 @@ export default async function SponsorsPage() {
           />
         </section>
 
-        <section aria-labelledby="sponsors-cta" className="container-page pb-14 sm:pb-20">
-          <div className="flex flex-col gap-5 rounded-3xl bg-muted/70 p-6 sm:p-8 md:flex-row md:items-center md:justify-between">
-            <div className="max-w-2xl">
-              <h2
-                id="sponsors-cta"
-                className="font-display text-2xl font-bold tracking-tight text-foreground"
-              >
-                Want to support local businesses?
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
-                Give 25 to 250 businesses a free profile (each owner still passes our ID review), a
-                branded showcase and an activity summary every 30 days.
-              </p>
+        {SHOW_SPONSOR_OFFER ? (
+          <section aria-labelledby="sponsors-cta" className="container-page pb-14 sm:pb-20">
+            <div className="flex flex-col gap-5 rounded-3xl bg-muted/70 p-6 sm:p-8 md:flex-row md:items-center md:justify-between">
+              <div className="max-w-2xl">
+                <h2
+                  id="sponsors-cta"
+                  className="font-display text-2xl font-bold tracking-tight text-foreground"
+                >
+                  Want to support local businesses?
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
+                  Give 25 to 250 businesses a free profile (each owner still passes our ID review),
+                  a branded showcase and an activity summary every 30 days.
+                </p>
+              </div>
+              <Button asChild variant="ink" className="h-11 shrink-0 rounded-full px-5">
+                <Link href="/advertise#programmes">Become a Business Sponsor</Link>
+              </Button>
             </div>
-            <Button asChild variant="ink" className="h-11 shrink-0 rounded-full px-5">
-              <Link href="/advertise#programmes">Become a Business Sponsor</Link>
-            </Button>
-          </div>
-        </section>
+          </section>
+        ) : null}
       </main>
       <Footer />
     </div>

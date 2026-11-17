@@ -20,7 +20,8 @@ export function editAllowanceForDays(packageDays: number): number {
 
 export type PostKind = "listing" | "business" | "event";
 
-const EDIT_RULE =
+/** The live backend's rule (internal.edit_allowance): 2 approved edits per started 30 days. */
+export const EDIT_RULE =
   "Each live post gets 2 edits for every 30 days of its package (30 days: 2, 90 days: 6, 180 days: 12). One price change a day doesn't count. Your post stays visible while we check an edit.";
 
 export const EVENT_EDIT_RULE =

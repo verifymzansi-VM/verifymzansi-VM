@@ -15,6 +15,7 @@ import {
   PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS,
 } from "@/lib/billing/slot-packages";
 import { readPackagesOnSale } from "@/lib/foundation/slot-package-offer";
+import { SHOW_PACKAGE_TEAMS } from "@/lib/hidden-features";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,10 @@ export default async function MultiListingPage() {
   const heroPoints = [
     { icon: ReceiptText, label: "Does not renew automatically" },
     { icon: LockKeyhole, label: "Secure Ozow checkout" },
-    { icon: Users, label: "You + 1 person (you + 4 from 50 slots)" },
+    // Hidden until package teams work (src/lib/hidden-features.ts).
+    ...(SHOW_PACKAGE_TEAMS
+      ? [{ icon: Users, label: "You + 1 person (you + 4 from 50 slots)" }]
+      : []),
   ];
 
   return (
