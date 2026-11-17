@@ -1948,11 +1948,12 @@ document afterwards. And the rollback refuses once a package was bought.
 
 ## Close and erase an account, 16 November 2026
 
-`20261116175757_close_and_erase_account.sql` is pending (roadmap M1.6b; owner
-decision OD-10: close at once; delete the profile, posts, enquiries and media
-after 30 days; keep payment records for 5 years, no longer linked to the person;
-keep the identity-ban fingerprint as the privacy notice says; owner decisions of
-16 November 2026 on the review: a deletion request is due 7 days after the grace
+`20261116175757_close_and_erase_account.sql` was applied on 17 November 2026 at
+03:50 UTC with the owner's approval (roadmap M1.6b; owner decision OD-10: close
+at once; delete the profile, posts, enquiries and media after 30 days; keep
+payment records for 5 years, no longer linked to the person; keep the
+identity-ban fingerprint as the privacy notice says; owner decisions of 16
+November 2026 on the review: a deletion request is due 7 days after the grace
 period; staff finish a cancellation refund within the 30 days; enquiries the
 person sent are deleted from other owners' inboxes; verification history stays 5
 years after closure). It needs `20261114093742_renew_slots_early.sql`, the
@@ -4098,7 +4099,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   packages: 0; package payments: 0"; production fingerprint after it matched the
   full replay (except the known schema grant difference); sales stay switched
   off
-- `20261116175757_close_and_erase_account.sql`: pending; apply before the pull
-  request that uses it is merged (roadmap M1.6b)
+- `20261116175757_close_and_erase_account.sql`: applied 2026-11-17 03:50 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file (sha256 starting 8d39dcd6550b1ec7, files from
+  raw GitHub at d755e130) before the pull request was merged; preflight before
+  "update not applied" with no problem rows (Auth table privilege and row
+  security checks included), after "close and erase accounts: already applied;
+  accounts closed: 0; erased: 0; waiting with a hold: 0"; production fingerprint
+  after it matched the full replay (except the known schema grant difference)
+  (roadmap M1.6b)
 
 <!-- applied-register:end -->
