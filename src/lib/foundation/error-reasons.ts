@@ -124,6 +124,7 @@ export const FOUNDATION_ERROR_REASONS = {
   payment_slot_reversed: ["PT409"],
   payment_slots_refunded: ["PT409"],
   phone_already_verified: ["PT409"],
+  phone_banned: ["PT409"],
   phone_change_cooldown: ["PT409"],
   phone_change_identity_required: ["PT409"],
   phone_in_use: ["PT409"],

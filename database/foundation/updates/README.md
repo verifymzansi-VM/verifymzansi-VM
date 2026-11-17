@@ -2325,9 +2325,89 @@ tax years after confirmation, keeps a recent transfer, and no delete works
 outside the job; the audit trail; the grants; and that the rollback refuses once
 an invoice was issued.
 
+## A ban also blocks the person's phone numbers, 17 November 2026
+
+`20261117064820_ban_blocks_phone_numbers.sql` is pending.
+
+Owner decision of 17 November 2026: a banned person must not be able to make us
+send (and pay for) SMS codes by entering their number again on a new account.
+Until now a ban stored only the identity fingerprint
+(`private.banned_identities`, 5 years), which stops the person at the ID step,
+after the SMS; their number stayed blocked only while their banned account held
+it.
+
+From this update:
+
+- **The numbers a ban blocks** are kept in the new table
+  `private.banned_phone_numbers` (identity fingerprint and number), tied to the
+  ban's row in `private.banned_identities` (on delete cascade). So a number is
+  blocked exactly as long as the ban: released at once when the ban is lifted,
+  and after its 5 years (a ban whose time has passed blocks nothing even before
+  `internal.purge_expired_identity_bans` removes it). A replacement decision
+  that keeps the ban keeps its numbers. No API role can read it.
+- **Which numbers:** every number verified (active or revoked, while the proof
+  is still on record) by any account whose accepted identity has the banned
+  fingerprint, except a number another person currently holds as an active
+  proof, so a re-issued number already verified by someone else is never blocked
+  under them. The trigger `ban_identity_phone_numbers` copies them when a ban is
+  recorded, so they stay blocked after the proofs are deleted. Bans recorded
+  before the update are filled in once by the update.
+- **No SMS:** `internal.create_verification_phone_challenge` refuses a blocked
+  number with PT409 and the reason `phone_banned` before it stores a challenge
+  (after the member's own number and the two change rules, before
+  `phone_in_use`), and `internal.finalize_verification_phone` refuses it too,
+  for a code sent just before the ban.
+- **What the member sees:** "This phone number can't be used on VerifyMzansi.
+  Contact support if you think this is a mistake." (owner's choice), never that
+  a ban exists: networks re-issue numbers, and a ban is personal information
+  about the number's earlier owner. The website answers 403 and records it as a
+  refused request.
+
+No API command changes, so the order does not matter: a website release without
+the matching code shows its generic refusal for the new reason (still with no
+SMS), and the release with it works without the update (a banned person's number
+is then blocked only while their banned account holds it, as before).
+
+**Applying.**
+
+1. Run `../preflight/20261117064820_ban_blocks_phone_numbers.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "ban blocks phone numbers: update not
+   applied; running bans: N; numbers to block: M" (any counts).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "ban blocks phone numbers: already applied; running bans:
+   N; numbers blocked: M; numbers to block: M", with the two number counts
+   equal.
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261117064820_ban_blocks_phone_numbers.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update is
+applied, puts back the two phone functions byte for byte and drops the trigger,
+the two helper functions and the table with its numbers. The identity bans are
+unchanged.
+
+`node --import tsx scripts/test-foundation-ban-blocks-phone-numbers.mjs` (part
+of `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: before
+the update a banned person's older number gets a code; the preflight before and
+after, read only; the refusals with a drifted body of either function and a
+premature rollback, changing nothing; apply, rollback and re-apply return the
+same fingerprints; a ban recorded before the update blocks the person's current
+and older numbers, and a returning account gets `phone_banned` for both with no
+challenge stored while a free number still gets a code; a re-issued number
+someone else holds is not blocked; a ban recorded after the update blocks at
+once, and a code sent before it is refused at the last step; a replacement
+decision keeps the numbers and lifting the ban releases them; a ban whose 5
+years have passed blocks nothing and the purge removes its numbers; no API role
+can read the table or run the helpers; and account and number validation still
+come first.
+
 ## A phone code is sent only when the number can be verified, 16 November 2026
 
-`20261116194000_phone_in_use_before_sms.sql` is pending.
+`20261116194000_phone_in_use_before_sms.sql` was applied on 17 November 2026 at
+05:36 UTC with the owner's approval.
 
 Until now the website paid for an SMS code that could never be used: a member
 who entered a number another account had already verified, or who changed their
@@ -4323,8 +4403,16 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   accounts closed: 0; erased: 0; waiting with a hold: 0"; production fingerprint
   after it matched the full replay (except the known schema grant difference)
   (roadmap M1.6b)
-- `20261116194000_phone_in_use_before_sms.sql`: pending
+- `20261116194000_phone_in_use_before_sms.sql`: applied 2026-11-17 05:36 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file (sha256 starting ce981e4b9ae4adb2, files from
+  raw GitHub at 5a36e5fb) before the pull request was merged; preflight before
+  "phone in use before sms: update not applied; active phone proofs: 1; open
+  codes for a number in use: 0" with no problem rows, after "already applied"
+  with the same counts; production fingerprint after it matched the full replay
+  (except the known schema grant difference)
 - `20261116211438_online_payment_limit.sql`: pending
 - `20261116211439_switch_posting_terms_v5.sql`: pending
+- `20261117064820_ban_blocks_phone_numbers.sql`: pending
 
 <!-- applied-register:end -->

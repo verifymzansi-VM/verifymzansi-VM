@@ -50,7 +50,8 @@ export default function PrivacyPolicyPage() {
       dataType: "Phone number",
       purpose: "OTP checks, account recovery, safety contact, and posting accountability",
       recipients: "SMS provider, internal platform systems, and support reviewers",
-      retention: "Kept while account is active and as required for fraud or legal records",
+      retention:
+        "Kept while account is active and as required for fraud or legal records. If an account is banned, the numbers it verified are kept for 5 years (or until the ban is lifted) so they cannot be used to verify again",
       deletion: "Update or delete through account/data-rights workflow where legally allowed",
     },
     {
