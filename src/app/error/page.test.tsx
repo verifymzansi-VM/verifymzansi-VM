@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import ErrorPage from "./page";
+import ErrorPage, { metadata } from "./page";
 
 const { authState } = vi.hoisted(() => ({
   authState: { isAuthenticated: false, isLoading: false },
@@ -21,6 +21,10 @@ async function renderPage(reason?: string) {
 }
 
 describe("App error page", () => {
+  it("is kept out of search results (a redirect target, not a page to find)", () => {
+    expect(metadata.robots).toEqual({ index: false, follow: false });
+  });
+
   beforeEach(() => {
     authState.isAuthenticated = false;
     authState.isLoading = false;

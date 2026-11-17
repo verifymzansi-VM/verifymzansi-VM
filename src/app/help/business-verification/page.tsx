@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Business verification",
+  alternates: { canonical: "/help/business-verification" },
   description:
     "What the ID reviewed, CIPC registered and Seen by VerifyMzansi stickers mean, and how to get them.",
 };

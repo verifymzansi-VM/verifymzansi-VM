@@ -25,6 +25,7 @@ import {
 
 export const metadata: Metadata = {
   title: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism & Events",
+  alternates: { canonical: "/" },
   description: VERIFY_MZANSI_SITE_DESCRIPTION,
   openGraph: {
     title: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism & Events",

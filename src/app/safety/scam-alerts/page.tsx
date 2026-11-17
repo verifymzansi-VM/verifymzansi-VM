@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 
 export const metadata = {
   title: "Scam alerts",
+  alternates: { canonical: "/safety/scam-alerts" },
   description:
     "Learn how to spot and avoid scams on online marketplaces. Stay safe when buying and selling in South Africa.",
 };

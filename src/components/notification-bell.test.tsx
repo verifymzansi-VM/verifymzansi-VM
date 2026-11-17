@@ -163,12 +163,76 @@ describe("NotificationBell", () => {
     );
 
     await act(async () => {
-      vi.advanceTimersByTime(10_000);
+      vi.advanceTimersByTime(60_000);
     });
     await flushNotificationFetch();
 
     expect(screen.getByLabelText("Notifications (2 unread)")).toBeTruthy();
     expect(screen.getByText("Fresh admin item")).toBeTruthy();
+  });
+
+  it("shares one request and one timer between the desktop and phone bells", async () => {
+    let release: (() => void) | undefined;
+    const fetchMock = vi.fn(() =>
+      new Promise<Response>((resolve) => {
+        release = () => void resolve(mockNotificationsResponse([]) as unknown as Response);
+      }).then((response) => response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <>
+        <NotificationBell userId="member-1" />
+        <NotificationBell userId="member-1" />
+      </>
+    );
+    // Both bells' first loads share one request. A realtime signal while it is
+    // on its way gets one more read, shared by both bells, after it settles.
+    for (const options of realtimeOptions)
+      (options.onEvent as (payload: Record<string, unknown>) => void)({
+        eventType: "REVALIDATE",
+      });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      release?.();
+    });
+    await flushNotificationFetch();
+    await flushNotificationFetch();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      release?.();
+    });
+    await flushNotificationFetch();
+
+    // Hidden tab: no polling.
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // Visible again: one refresh for both bells, then one per minute.
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await act(async () => {
+      release?.();
+    });
+    await flushNotificationFetch();
+    await act(async () => {
+      vi.advanceTimersByTime(59_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await act(async () => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    await act(async () => {
+      release?.();
+    });
+    await flushNotificationFetch();
   });
 
   it("still subscribes to realtime inserts for immediate updates", () => {
