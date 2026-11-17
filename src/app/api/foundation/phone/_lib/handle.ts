@@ -29,6 +29,7 @@ import { saPhoneSchema } from "@/lib/validations/shared";
 import {
   ACCOUNT_PHONE_ALREADY_VERIFIED,
   ACCOUNT_PHONE_IN_USE_ERROR,
+  PHONE_NUMBER_UNAVAILABLE,
   normalizeSaPhone,
 } from "@/lib/utils/phone";
 import { z } from "zod";
@@ -54,6 +55,9 @@ function phoneRefusalMessage(refusal: FoundationPhoneRefusal, changeAllowedFrom?
         : `You can change your phone number once every ${PHONE_CHANGE_COOLDOWN_DAYS} days.`;
     case "phone_change_identity_required":
       return phoneReverificationRequired().message;
+    case "phone_banned":
+      // Owner decision 2026-11-17: neutral, never says that a ban exists.
+      return PHONE_NUMBER_UNAVAILABLE;
   }
 }
 async function reserve(key: string, action: string) {
@@ -141,7 +145,7 @@ export async function handleFoundationPhoneRoute(
     refusal(error) {
       if (error instanceof FoundationPhoneError && error.refusal)
         return {
-          status: 409,
+          status: error.status,
           reason: error.refusal,
           code: error.refusal,
           error: phoneRefusalMessage(error.refusal, error.changeAllowedFrom),

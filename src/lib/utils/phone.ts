@@ -3,6 +3,9 @@ import { maskPhone } from "@/lib/utils/mask";
 export const ACCOUNT_PHONE_IN_USE_ERROR = "This phone number is already linked to another account.";
 export const ACCOUNT_PHONE_ALREADY_VERIFIED =
   "This phone number is already verified on your account.";
+/** Shown for a number a ban blocks; never says that a ban exists. */
+export const PHONE_NUMBER_UNAVAILABLE =
+  "This phone number can't be used on VerifyMzansi. Contact support if you think this is a mistake.";
 const SA_PHONE_E164_REGEX = /^\+27[6-8][0-9]{8}$/;
 const SA_PHONE_LOCAL_REGEX = /^0[6-8][0-9]{8}$/;
 

@@ -497,6 +497,7 @@ const OTP_NOT_SENT_CODES = new Set([
   "phone_already_verified",
   "phone_change_cooldown",
   "phone_change_identity_required",
+  "phone_banned",
 ]);
 
 function buildOtpSupportMessage(

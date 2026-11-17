@@ -26,6 +26,9 @@ begin
   if old_proof.id is not null and old_proof.phone<>challenge.phone and
     (old_proof.contact_changed_at+interval '15 days'>clock_timestamp() or internal.current_verified_identity(p_owner) is null) then
     raise exception 'contact change not eligible' using errcode='PT409'; end if;
+  -- A number banned after its code was sent is still refused here.
+  if internal.phone_number_banned(challenge.phone) then
+    raise exception 'phone number unavailable' using errcode='PT409', detail='phone_banned'; end if;
   update private.verification_phone_proofs set revoked_at=clock_timestamp() where id=old_proof.id;
   insert into private.verification_phone_proofs(owner_id,challenge_id,phone,contact_changed_at)
     values(p_owner,challenge.id,challenge.phone,case when old_proof.phone=challenge.phone then old_proof.contact_changed_at else clock_timestamp() end) returning * into proof;
