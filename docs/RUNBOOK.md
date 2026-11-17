@@ -418,9 +418,10 @@ Everything below uses the live (foundation) backend. The old tables
 
 1. Requests arrive from the `/dsar` page (a signed-in member: the account is
    checked by its session), by email (staff record it in **Admin → DSAR**, with
-   a manual identity check), or, once M1.6c ships, from **Delete account** (a
-   deletion request is recorded automatically when the member closes the
-   account).
+   a manual identity check), or from **Delete account** on the profile's Account
+   tab (a deletion request is recorded automatically when the member closes the
+   account; it needs a sign-in from the last 15 minutes and is refused for a
+   staff account).
 2. Work in **Admin → DSAR** (`/admin/dsar`). You need the admin or governor role
    and an authenticator code from the last 15 minutes. You can never process
    your own request, and the database refuses it.

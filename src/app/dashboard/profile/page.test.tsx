@@ -1,18 +1,7 @@
 /// <reference types="vitest/globals" />
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type * as HiddenFeatures from "@/lib/hidden-features";
-
-// "Delete account" is hidden until it works (src/lib/hidden-features.ts); the
-// tests switch it on to keep the code behind the switch checked.
-const hiddenFeature = vi.hoisted(() => ({ shown: true }));
-vi.mock("@/lib/hidden-features", async (importOriginal) => ({
-  ...(await importOriginal<typeof HiddenFeatures>()),
-  get SHOW_ACCOUNT_DELETION() {
-    return hiddenFeature.shown;
-  },
-}));
 import ProfilePage from "./page";
 import { useAuthStore } from "@/stores/auth-store";
 import { useNotificationStore } from "@/stores/notification-store";
@@ -270,24 +259,38 @@ describe("ProfilePage", () => {
     expect(screen.queryByText("Legal surname")).not.toBeInTheDocument();
   });
 
-  it("while account deletion is hidden, offers a data request instead of Delete", async () => {
+  it("says plainly what deleting the account does before it can be confirmed", async () => {
     window.location.hash = "#account";
-    hiddenFeature.shown = false;
+    vi.useFakeTimers({ now: new Date("2026-11-17T10:00:00Z"), toFake: ["Date"] });
     try {
       render(<ProfilePage />);
       await waitFor(() => {
         expect(screen.getByRole("heading", { name: "My profile" })).toBeInTheDocument();
       });
-      expect(screen.queryByRole("button", { name: /^Delete$/i })).not.toBeInTheDocument();
-      expect(screen.queryByText("Delete account")).not.toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "data request" })).toHaveAttribute("href", "/dsar");
+      expect(screen.queryByRole("link", { name: "data request" })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
+
+      const dialog = screen.getByRole("dialog", { name: "Confirm account deletion" });
+      for (const text of [
+        "Your account closes as soon as you confirm. You can't undo this or reopen the account yourself.",
+        "Your posts leave the site at once and are deleted with your account.",
+        /All your slots are cancelled\. Under our Terms, closing your account is a request to cancel them/,
+        /minus a R50 fee, so a 30-day slot usually returns nothing/,
+        "You are signed out on every device and can't sign in again.",
+        /erased on 17 December 2026, 30 days after closing/,
+        /We finish your deletion request by 24 December 2026\. If a payment, bank transfer, refund, unpaid invoice, report or hold is still open/,
+        "For your safety, this works only within 15 minutes of signing in.",
+      ])
+        expect(within(dialog).getByText(text)).toBeInTheDocument();
+      // The server checks the sign-in's age; no password is asked for here.
+      expect(within(dialog).queryByLabelText("Current password")).not.toBeInTheDocument();
     } finally {
-      hiddenFeature.shown = true;
+      vi.useRealTimers();
       window.location.hash = "";
     }
   });
 
-  it("requires DELETE text and current password before enabling delete continue", async () => {
+  it("enables Continue only once DELETE is typed", async () => {
     window.location.hash = "#account";
     render(<ProfilePage />);
 
@@ -301,15 +304,102 @@ describe("ProfilePage", () => {
     expect(continueButton).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
-      target: { value: "DELETE" },
+      target: { value: "DELET" },
     });
     expect(continueButton).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText("Current password"), {
-      target: { value: "MyPassword123!" },
+    fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
+      target: { value: "delete" },
     });
-
     expect(continueButton).toBeEnabled();
+    window.location.hash = "";
+  });
+
+  it("offers a fresh sign-in, back to this tab, when the sign-in is too old to delete", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({
+          code: "reauthentication_required",
+          reason: "recent_sign_in_required",
+          error: "For your safety, sign in again, then delete your account within 15 minutes.",
+        }),
+      })
+    );
+    const originalLocation = window.location;
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: {
+        origin: "http://localhost",
+        href: "http://localhost/dashboard/profile#account",
+        pathname: "/dashboard/profile",
+        search: "",
+        hash: "#account",
+        assign,
+        replace: vi.fn(),
+      },
+    });
+    try {
+      render(<ProfilePage />);
+      await screen.findByRole("heading", { name: "My profile" });
+      fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
+      fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
+        target: { value: "DELETE" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith({
+          title: "Account deletion failed",
+          description:
+            "For your safety, sign in again, then delete your account within 15 minutes.",
+          variant: "destructive",
+        })
+      );
+      fireEvent.click(await screen.findByRole("button", { name: "Sign in again" }));
+      await waitFor(() =>
+        expect(assign).toHaveBeenCalledWith(
+          "http://localhost/login?returnUrl=%2Fdashboard%2Fprofile%23account"
+        )
+      );
+      expect(mockSignOut).toHaveBeenCalledWith({ scope: "local" });
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+    }
+  });
+
+  it("shows the server's explanation when a staff account tries to delete itself", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({
+          reason: "staff_account",
+          error:
+            "A staff account can't be deleted while it has a staff role. Ask another administrator to end your staff roles first.",
+        }),
+      })
+    );
+    window.location.hash = "#account";
+    render(<ProfilePage />);
+    await screen.findByRole("heading", { name: "My profile" });
+    fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
+    fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
+      target: { value: "DELETE" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Account deletion failed",
+          description:
+            "A staff account can't be deleted while it has a staff role. Ask another administrator to end your staff roles first.",
+        })
+      )
+    );
+    expect(screen.queryByRole("button", { name: "Sign in again" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Confirm account deletion" })).toBeInTheDocument();
     window.location.hash = "";
   });
 
@@ -442,38 +532,7 @@ describe("ProfilePage", () => {
     window.location.hash = "";
   });
 
-  it("does not require a current password before deleting Google-only accounts", async () => {
-    window.location.hash = "#account";
-    mockGetUser.mockResolvedValue({
-      data: {
-        user: {
-          id: "user-1",
-          email: "user@gmail.com",
-          identities: [{ provider: "google" }],
-          app_metadata: { provider: "google" },
-        },
-      },
-    });
-
-    render(<ProfilePage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "My profile" })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
-    expect(screen.queryByLabelText("Current password")).not.toBeInTheDocument();
-
-    const continueButton = screen.getByRole("button", { name: /^Continue$/i });
-    expect(continueButton).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
-      target: { value: "DELETE" },
-    });
-    expect(continueButton).toBeEnabled();
-    window.location.hash = "";
-  });
-
-  it("calls account delete API from the delete dialog", async () => {
+  it("calls account delete API from the delete dialog with the typed word only", async () => {
     window.location.hash = "#account";
     render(<ProfilePage />);
 
@@ -484,9 +543,6 @@ describe("ProfilePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
     fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
       target: { value: "DELETE" },
-    });
-    fireEvent.change(screen.getByLabelText("Current password"), {
-      target: { value: "MyPassword123!" },
     });
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
@@ -495,10 +551,7 @@ describe("ProfilePage", () => {
         "/api/account/delete",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({
-            confirmation: "DELETE",
-            currentPassword: "MyPassword123!",
-          }),
+          body: JSON.stringify({ confirmation: "DELETE" }),
         })
       );
     });
@@ -526,6 +579,18 @@ describe("ProfilePage", () => {
       1
     );
     document.cookie = "x-phone-ok=1; path=/";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: "closed",
+          closedAt: "2026-11-17T10:00:00+00:00",
+          eraseAfter: "2026-12-17T10:00:00+00:00",
+          eraseBy: "2026-12-24T10:00:00.000Z",
+        }),
+      })
+    );
 
     const originalLocation = window.location;
     const assign = vi.fn();
@@ -550,16 +615,17 @@ describe("ProfilePage", () => {
       fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
         target: { value: "DELETE" },
       });
-      fireEvent.change(screen.getByLabelText("Current password"), {
-        target: { value: "MyPassword123!" },
-      });
       fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
       await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith(
-          expect.objectContaining({ title: "Account deleted", variant: "success" })
-        );
+        expect(mockToast).toHaveBeenCalledWith({
+          title: "Account deleted",
+          description:
+            "Your account is closed and you are signed out. It will be erased on 17 December 2026.",
+          variant: "success",
+        });
       });
+      expect(mockSignOut).toHaveBeenCalledWith({ scope: "local" });
       await waitFor(() => {
         expect(useAuthStore.getState().user).toBeNull();
         expect(useNotificationStore.getState().notifications).toHaveLength(0);

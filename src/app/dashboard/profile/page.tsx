@@ -52,7 +52,12 @@ import {
   EMAIL_CHANGE_COOLDOWN_MS,
 } from "@/lib/account/identity-policy";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { SHOW_ACCOUNT_DELETION } from "@/lib/hidden-features";
+import {
+  ACCOUNT_CLOSURE_SIGN_IN_MINUTES,
+  ACCOUNT_CLOSURE_WORD,
+  accountClosureDates,
+  confirmsAccountClosure,
+} from "@/lib/account/account-closure";
 import type { AccountVerificationStatus } from "@/types/enums";
 
 type TabValue = "profile" | "security" | "account";
@@ -123,7 +128,9 @@ export default function ProfilePage() {
   const [isChangingEmail, setIsChangingEmail] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
-  const [deleteCurrentPassword, setDeleteCurrentPassword] = useState("");
+  const [deleteSignInRequired, setDeleteSignInRequired] = useState(false);
+  // The erasure dates the dialog shows, as of when it was opened.
+  const [deletePreview, setDeletePreview] = useState(() => accountClosureDates(new Date()));
   const [isPasswordAccount, setIsPasswordAccount] = useState(true);
   const [isDeleteVerifying, setIsDeleteVerifying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -535,43 +542,47 @@ export default function ProfilePage() {
     setIsDeleteDialogOpen(open);
     if (!open) {
       setDeleteConfirmation("");
-      setDeleteCurrentPassword("");
+      setDeleteSignInRequired(false);
       setIsDeleteVerifying(false);
     }
   }
 
-  async function handleStartDeleteRequest() {
-    if (!email) {
-      toast({
-        title: "Email unavailable",
-        description: "Please reload the page and try again.",
-        variant: "destructive",
-      });
-      return;
+  /** Ends this browser's session only and drops the account's client state. */
+  async function forgetBrowserSession() {
+    try {
+      await createClient().auth.signOut({ scope: "local" });
+    } catch {
+      // After a closure the server has already ended the session; Auth then
+      // refuses the sign-out and the client drops its copy anyway.
     }
+    await clearClientAccountState();
+  }
 
-    if (isPasswordAccount && !deleteCurrentPassword) {
-      toast({
-        title: "Current password required",
-        description: "Enter your current password to confirm this request.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  /** Opens the sign-in page, which brings the member back to this tab. */
+  async function handleDeleteSignInAgain() {
     setIsDeleteVerifying(true);
+    await forgetBrowserSession();
+    window.location.assign(
+      new URL(
+        `/login?returnUrl=${encodeURIComponent("/dashboard/profile#account")}`,
+        window.location.origin
+      ).toString()
+    );
+  }
+
+  async function handleStartDeleteRequest() {
+    setIsDeleteVerifying(true);
+    setDeleteSignInRequired(false);
     try {
       const res = await fetch("/api/account/delete", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          confirmation: deleteConfirmation,
-          currentPassword: isPasswordAccount ? deleteCurrentPassword : undefined,
-        }),
+        body: JSON.stringify({ confirmation: deleteConfirmation }),
       });
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.code === "reauthentication_required") setDeleteSignInRequired(true);
         toast({
           title: "Account deletion failed",
           description: data.error || "Please try again.",
@@ -581,15 +592,20 @@ export default function ProfilePage() {
       }
 
       handleDeleteDialogOpenChange(false);
+      const eraseAfter = typeof data.eraseAfter === "string" ? new Date(data.eraseAfter) : null;
       toast({
         title: "Account deleted",
-        description: "Your account has been permanently deleted. Taking you to the home page…",
+        description:
+          eraseAfter && !Number.isNaN(eraseAfter.getTime())
+            ? `Your account is closed and you are signed out. It will be erased on ${formatSaLongDate(eraseAfter)}.`
+            : "Your account is closed and you are signed out.",
         variant: "success",
       });
-      // Drop the deleted account's auth/notification state, then leave with a
-      // full page load so nothing from this session survives in memory. The
-      // short delay lets the confirmation toast be read first.
-      await clearClientAccountState();
+      // The server has already ended every session; drop this browser's copy
+      // and the account's auth/notification state, then leave with a full
+      // page load so nothing from this session survives in memory. The short
+      // delay lets the confirmation toast be read first.
+      await forgetBrowserSession();
       window.setTimeout(() => {
         window.location.assign(new URL("/", window.location.origin).toString());
       }, ACCOUNT_DELETED_REDIRECT_DELAY_MS);
@@ -1150,103 +1166,114 @@ export default function ProfilePage() {
 
               <Separator />
 
-              {/* Delete account: hidden until it works (src/lib/hidden-features.ts). */}
-              {SHOW_ACCOUNT_DELETION ? (
-                <>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-destructive">Delete account</p>
-                      <p className="text-xs text-muted-foreground">
-                        Removes your account and personal data for good.
+              {/* Delete account */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-destructive">Delete account</p>
+                  <p className="text-xs text-muted-foreground">
+                    Removes your account and personal data for good.
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-11 gap-1.5"
+                  onClick={() => {
+                    setDeletePreview(accountClosureDates(new Date()));
+                    setIsDeleteDialogOpen(true);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </Button>
+              </div>
+
+              <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
+                {/* On phones this long dialog sits at the bottom, clear of the
+                    site header (which stays above dialogs), so its title shows. */}
+                <DialogContent className="max-sm:bottom-3 max-sm:top-auto max-sm:max-h-[calc(100dvh-9.5rem)] max-sm:translate-y-0">
+                  <DialogHeader>
+                    <DialogTitle>Confirm account deletion</DialogTitle>
+                    <DialogDescription>
+                      Your account closes as soon as you confirm. You can&apos;t undo this or reopen
+                      the account yourself.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-2">
+                    <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
+                      <li>Your posts leave the site at once and are deleted with your account.</li>
+                      <li>
+                        All your slots are cancelled. Under our Terms, closing your account is a
+                        request to cancel them: if you are an individual or sole trader, the unused
+                        whole days left after a 20-business-day notice period are credited at the
+                        slot&apos;s daily price, minus a R50 fee, so a 30-day slot usually returns
+                        nothing. Companies and other buyers that are not individuals get no credit.
+                      </li>
+                      <li>You are signed out on every device and can&apos;t sign in again.</li>
+                      <li>
+                        Your profile, posts, enquiries, photos and videos are erased on{" "}
+                        {formatSaLongDate(deletePreview.eraseAfter)}, 30 days after closing. Payment
+                        records and invoices are kept for 5 years for tax, without your name.
+                      </li>
+                      <li>
+                        We finish your deletion request by {formatSaLongDate(deletePreview.eraseBy)}
+                        . If a payment, bank transfer, refund, unpaid invoice, report or hold is
+                        still open, the erasure waits until it is settled.
+                      </li>
+                    </ul>
+                    <p className="text-xs text-muted-foreground">
+                      For your safety, this works only within {ACCOUNT_CLOSURE_SIGN_IN_MINUTES}{" "}
+                      minutes of signing in.
+                    </p>
+                    {deleteSignInRequired && (
+                      <p role="alert" className="text-sm">
+                        Your session needs a fresh sign-in.{" "}
+                        <button
+                          type="button"
+                          className="underline"
+                          onClick={handleDeleteSignInAgain}
+                          disabled={isDeleteVerifying}
+                        >
+                          Sign in again
+                        </button>
                       </p>
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="h-11 gap-1.5"
-                      onClick={() => setIsDeleteDialogOpen(true)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
-                    </Button>
+                    )}
+                    <p className="text-sm text-muted-foreground">
+                      Type <strong>{ACCOUNT_CLOSURE_WORD}</strong> to continue.
+                    </p>
+                    <Input
+                      value={deleteConfirmation}
+                      onChange={(e) => setDeleteConfirmation(e.target.value)}
+                      placeholder={`Type ${ACCOUNT_CLOSURE_WORD}`}
+                      aria-label={`Type ${ACCOUNT_CLOSURE_WORD} to confirm`}
+                    />
                   </div>
 
-                  <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Confirm account deletion</DialogTitle>
-                        <DialogDescription>
-                          This permanently deletes your account and personal data. This action
-                          cannot be undone.
-                        </DialogDescription>
-                      </DialogHeader>
-
-                      <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">
-                          Type <strong>DELETE</strong> to continue.
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Your account will be removed immediately after confirmation.
-                        </p>
-                        {isPasswordAccount && (
-                          <div className="space-y-1">
-                            <Label htmlFor="deleteCurrentPassword">Current password</Label>
-                            <Input
-                              id="deleteCurrentPassword"
-                              type="password"
-                              autoComplete="current-password"
-                              value={deleteCurrentPassword}
-                              onChange={(e) => setDeleteCurrentPassword(e.target.value)}
-                              placeholder="Enter current password"
-                            />
-                          </div>
-                        )}
-                        <Input
-                          value={deleteConfirmation}
-                          onChange={(e) => setDeleteConfirmation(e.target.value)}
-                          placeholder="Type DELETE"
-                          aria-label="Type DELETE to confirm"
-                        />
-                      </div>
-
-                      <DialogFooter>
-                        <Button
-                          variant="outline"
-                          className="h-11"
-                          onClick={() => handleDeleteDialogOpenChange(false)}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          onClick={handleStartDeleteRequest}
-                          disabled={
-                            isDeleteVerifying ||
-                            deleteConfirmation.trim().toUpperCase() !== "DELETE" ||
-                            (isPasswordAccount && !deleteCurrentPassword)
-                          }
-                          className="h-11 gap-1.5"
-                        >
-                          {isDeleteVerifying ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
-                          )}
-                          {isDeleteVerifying ? "Verifying…" : "Continue"}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  To close your account, send us a{" "}
-                  <Link className="underline" href="/dsar">
-                    data request
-                  </Link>
-                  .
-                </p>
-              )}
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      className="h-11"
+                      onClick={() => handleDeleteDialogOpenChange(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleStartDeleteRequest}
+                      disabled={isDeleteVerifying || !confirmsAccountClosure(deleteConfirmation)}
+                      className="h-11 gap-1.5"
+                    >
+                      {isDeleteVerifying ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                      {isDeleteVerifying ? "Verifying…" : "Continue"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
         </TabsContent>

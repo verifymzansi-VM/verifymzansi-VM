@@ -86,14 +86,6 @@ export const SHOW_STAFF_INTELLIGENCE: boolean = false;
 export const SHOW_ORGANISATION_REPORT: boolean = false;
 
 /**
- * "Delete account" on the profile's Account tab, its confirmation dialog, and
- * the route behind it (/api/account/delete). Deleting an account does not work
- * on the live backend yet (SEC-02). While hidden, the tab says to send a data
- * request instead and the route answers 404.
- */
-export const SHOW_ACCOUNT_DELETION: boolean = false;
-
-/**
  * "Renew using my paid plan" and "Switch pending post to 7 days" on the
  * dashboard's trial card, and the route behind them (/api/trials). The live
  * backend has no way to change a free week yet. While hidden, the route
