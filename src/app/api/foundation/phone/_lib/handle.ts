@@ -60,10 +60,24 @@ function phoneRefusalMessage(refusal: FoundationPhoneRefusal, changeAllowedFrom?
       return PHONE_NUMBER_UNAVAILABLE;
   }
 }
+/** A phone limit was reached; `retryAfter` is the seconds until it resets. */
+class PhoneRateLimitError extends FoundationPhoneError {
+  override name = "PhoneRateLimitError";
+  constructor(readonly retryAfter: number) {
+    super(429);
+  }
+}
+/** "in about a minute", "in 14 minutes", "in 3 hours". */
+export function phoneRetryWait(seconds: number) {
+  if (seconds <= 60) return "in about a minute";
+  if (seconds < 3600) return `in ${Math.ceil(seconds / 60)} minutes`;
+  const hours = Math.ceil(seconds / 3600);
+  return hours === 1 ? "in an hour" : `in ${hours} hours`;
+}
 async function reserve(key: string, action: string) {
   const result = await checkRateLimit({ key, action, degradedMode: "block" });
-  if (result.degraded || result.limited)
-    throw new FoundationPhoneError(result.degraded ? 503 : 429);
+  if (result.degraded) throw new FoundationPhoneError(503);
+  if (result.limited) throw new PhoneRateLimitError(Math.max(1, result.retryAfter ?? 60));
 }
 export async function handleFoundationPhoneRoute(
   request: NextRequest,
@@ -143,6 +157,14 @@ export async function handleFoundationPhoneRoute(
       return restoredForm ? { success: true, ...verified } : verified;
     },
     refusal(error) {
+      if (error instanceof PhoneRateLimitError)
+        return {
+          status: 429,
+          reason: "phone_rate_limited",
+          code: "rate_limited",
+          retryAfter: error.retryAfter,
+          error: `Too many attempts. Try again ${phoneRetryWait(error.retryAfter)}.`,
+        };
       if (error instanceof FoundationPhoneError && error.refusal)
         return {
           status: error.status,

@@ -8,6 +8,7 @@ import { POST as restoredVerify } from "@/app/api/otp/verify/route";
 import { FOUNDATION_PHONE_CHALLENGE_COOKIE } from "@/lib/foundation/phone-challenge-cookie";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
 import { FoundationPhoneError } from "@/lib/foundation/phone-verification";
+import { phoneRetryWait } from "./_lib/handle";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import {
   ACCOUNT_PHONE_ALREADY_VERIFIED,
@@ -215,6 +216,32 @@ it("does not accept a browser-supplied account selector", async () => {
   expect((await send(request({ phone: "+27820000000", owner_id: challenge }))).status).toBe(400);
   expect(service).not.toHaveBeenCalled();
   expect(issue).not.toHaveBeenCalled();
+});
+it("says when a rate-limited member can try again, in the body and Retry-After", async () => {
+  limit
+    .mockResolvedValueOnce({ limited: false })
+    .mockResolvedValueOnce({ limited: true, retryAfter: 840 });
+  const sent = await restoredSend(request({ phone: "0820000000" }));
+  expect(sent.status).toBe(429);
+  expect(sent.headers.get("Retry-After")).toBe("840");
+  expect(await sent.json()).toEqual({
+    error: "Too many attempts. Try again in 14 minutes.",
+    reason: "phone_rate_limited",
+    code: "rate_limited",
+    retryAfter: 840,
+  });
+  expect(issue).not.toHaveBeenCalled();
+});
+it.each([
+  [30, "in about a minute"],
+  [60, "in about a minute"],
+  [61, "in 2 minutes"],
+  [3599, "in 60 minutes"],
+  [3600, "in an hour"],
+  [3601, "in 2 hours"],
+  [86400, "in 24 hours"],
+])("words a wait of %s seconds as %s", (seconds, words) => {
+  expect(phoneRetryWait(seconds)).toBe(words);
 });
 it("does not send SMS when the shared account protection is degraded", async () => {
   limit
