@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowRight, LockKeyhole, ReceiptText, Users } from "lucide-react";
 import { BrandSurface } from "@/components/brand";
 import { MultiListingPlans } from "@/components/billing/multi-listing-plans";
+import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
@@ -47,6 +48,7 @@ const STEPS = [
 export default async function MultiListingPage() {
   const offer = await readPackagesOnSale();
   if (!offer) notFound();
+  const onlineMaxCents = await readOnlinePaymentMaxCents();
   const heroPoints = [
     { icon: ReceiptText, label: "Does not renew automatically" },
     { icon: LockKeyhole, label: "Secure Ozow checkout" },
@@ -96,7 +98,7 @@ export default async function MultiListingPage() {
           <p className="section-lede mb-6">
             {`Prices are the total for the term. Up to ${PACKAGE_MAX_ONLINE_SLOTS} slots and R10,000 are paid online. For 1 to 4 posts, Individual slots cost ${formatPlanPrice(RETAIL_OFFERS[0].priceCents)} each per 30 days.`}
           </p>
-          <MultiListingPlans />
+          <MultiListingPlans onlineMaxCents={onlineMaxCents} />
         </section>
 
         <section

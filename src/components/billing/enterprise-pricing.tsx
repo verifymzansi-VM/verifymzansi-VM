@@ -22,12 +22,15 @@ const PROPOSAL_HREF = "/contact?topic=organisation_proposal";
 export function EnterprisePricing({
   plans,
   retailFromCents,
+  onlineMaxCents = null,
 }: {
   plans: EnterpriseCatalogPlan[];
   /** Kept for callers; packages are bought on the checkout only while on sale. */
   checkoutEnabled: boolean;
   /** Cheapest retail price, shown on the Individual card; null when no retail offer is live. */
   retailFromCents: number | null;
+  /** The most one online (Ozow) payment may be; above it a package is by invoice. */
+  onlineMaxCents?: number | null;
 }) {
   const smallest = [...plans].sort((a, b) => a.slots - b.slots || a.priceCents - b.priceCents)[0];
   const sponsorFrom = SPONSOR_PROGRAMME_PRICES[0]!;
@@ -125,7 +128,7 @@ export function EnterprisePricing({
 
       <div id="multi-listing-prices" className="mt-6 scroll-mt-28 space-y-3">
         <h3 className="font-display text-lg font-bold text-foreground">Multi-listing plans</h3>
-        <MultiListingPlans />
+        <MultiListingPlans onlineMaxCents={onlineMaxCents} />
       </div>
 
       <div id="programme-prices" className="mt-4 scroll-mt-28 space-y-4">

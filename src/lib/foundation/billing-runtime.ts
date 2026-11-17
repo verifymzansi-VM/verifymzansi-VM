@@ -47,8 +47,7 @@ type BillingRpcName =
   | "start_slot_renewal_checkout"
   | "get_my_slots_v2"
   | "start_package_checkout"
-  | "get_my_slot_package"
-  | "get_payment_limits";
+  | "get_my_slot_package";
 type BillingRpc = {
   rpc: (
     name: BillingRpcName,
@@ -368,19 +367,6 @@ export async function readFoundationMySlots(
   api: FoundationAuthenticatedApi
 ): Promise<FoundationMySlots> {
   return mySlotsSchema.parse(await command(api, "get_my_slots_v2"));
-}
-const paymentLimitsSchema = z.strictObject({
-  online_max_cents: z.number().int().positive().max(100_000_000),
-});
-/** The most one online (Ozow) payment may be, in cents: the database's one
- * setting (api.get_payment_limits, 20261116211438_online_payment_limit.sql).
- * Above it, a new order is paid by invoice and bank transfer, a renewal is
- * split, and an invoice is paid by bank transfer only. */
-export async function readFoundationPaymentLimits(
-  api: FoundationAuthenticatedApi
-): Promise<{ onlineMaxCents: number }> {
-  const limits = paymentLimitsSchema.parse(await command(api, "get_payment_limits"));
-  return { onlineMaxCents: limits.online_max_cents };
 }
 export async function readFoundationPayment(
   api: FoundationAuthenticatedApi,

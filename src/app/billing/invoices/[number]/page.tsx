@@ -10,26 +10,10 @@ import {
 } from "@/lib/foundation/server-session";
 import { FoundationInvoiceError, readMyInvoice } from "@/lib/foundation/customer-invoices";
 import { invoiceBankDetails, invoiceSellerAddress } from "@/lib/billing/invoice-settings";
-import { readFoundationPaymentLimits } from "@/lib/foundation/billing-runtime";
-import { createLogger } from "@/lib/utils/logger";
-import { logDegradedRead } from "@/lib/utils/request-failure";
+import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 
 export const metadata = { title: "Invoice", robots: { index: false } };
 export const dynamic = "force-dynamic";
-
-const log = createLogger("InvoicePage");
-
-/** The most one online (Ozow) payment may be; null when it cannot be read
- * (Pay now stays offered and the database still refuses above it). */
-async function loadOnlineMax(): Promise<number | null> {
-  try {
-    return (await readFoundationPaymentLimits((await readFoundationServerSession()).api))
-      .onlineMaxCents;
-  } catch (error) {
-    logDegradedRead(log, "Invoice payment limit unavailable", error);
-    return null;
-  }
-}
 
 /** The signed-in member's own invoice; anyone else's number is not found. */
 async function loadInvoice(number: string) {
@@ -49,7 +33,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ number
   // (including malformed escapes) reads as not found.
   const invoice = await loadInvoice(number);
   if (!invoice) notFound();
-  const onlineMaxCents = invoice.status === "issued" ? await loadOnlineMax() : null;
+  const onlineMaxCents = invoice.status === "issued" ? await readOnlinePaymentMaxCents() : null;
   return (
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />

@@ -82,3 +82,21 @@ export async function readFoundationBillingCatalogue(
   if (error) throw new Error("Foundation billing catalogue unavailable");
   return parseFoundationBillingCatalogue(data);
 }
+
+const paymentLimitsSchema = z.strictObject({
+  online_max_cents: z.number().int().positive().max(100_000_000),
+});
+/** The most one online (Ozow) payment may be, in cents: the database's one
+ * setting (api.get_payment_limits, public like the catalogue,
+ * 20261116211438_online_payment_limit.sql). Above it a new order is paid by
+ * invoice and bank transfer, a renewal is split, a package is bought by
+ * invoice and an invoice is paid by bank transfer only. */
+export async function readFoundationPaymentLimits(
+  api: FoundationPublicApi
+): Promise<{ onlineMaxCents: number }> {
+  const { data, error } = await api.rpc("get_payment_limits");
+  if (error) throw new Error("Foundation payment limits unavailable");
+  const parsed = paymentLimitsSchema.safeParse(data);
+  if (!parsed.success) throw new Error("Invalid foundation payment limits");
+  return { onlineMaxCents: parsed.data.online_max_cents };
+}

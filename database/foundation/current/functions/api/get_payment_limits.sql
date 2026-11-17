@@ -4,10 +4,12 @@
 CREATE OR REPLACE FUNCTION api.get_payment_limits()
  RETURNS jsonb
  LANGUAGE sql
+ STABLE
  SET search_path TO 'pg_catalog'
 AS $function$
   select internal.get_payment_limits();
 $function$;
 alter function api.get_payment_limits() owner to postgres;
 revoke all on function api.get_payment_limits() from public;
+grant execute on function api.get_payment_limits() to anon;
 grant execute on function api.get_payment_limits() to authenticated;

@@ -63,15 +63,15 @@
     },
     "function_bodies": {
       "items": 945,
-      "fingerprint": "85f12dc1687d8f8150e9d20ca9ec69fc"
+      "fingerprint": "f47d198e5371b359e0fae2490e4bc3f4"
     },
     "function_grants": {
-      "items": 707,
-      "fingerprint": "0d84a785cfc636335dcdf773b8e4a485"
+      "items": 709,
+      "fingerprint": "551fbd1eb8efedd0a068a6ec8905d514"
     },
     "function_metadata": {
       "items": 945,
-      "fingerprint": "86fa59a0a0021bf74dc135f8b34554a8"
+      "fingerprint": "a3418ecdc37f2c56209cdb0d406678ec"
     },
     "indexes": {
       "items": 510,

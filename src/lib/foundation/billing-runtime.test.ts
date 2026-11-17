@@ -20,7 +20,6 @@ import {
   readFoundationBilling,
   readFoundationMySlotPackage,
   readFoundationMySlots,
-  readFoundationPaymentLimits,
   reconcileFoundationPayment,
   runFoundationPaymentReconciliation,
   startFoundationCheckout,
@@ -1297,15 +1296,6 @@ describe("My slots", () => {
     limit: 4,
     limit_ends_at: null,
   };
-  it("reads the online payment limit, refusing an unexpected shape", async () => {
-    rpc.mockResolvedValueOnce({ data: { online_max_cents: 130000 }, error: null });
-    expect(await readFoundationPaymentLimits(api)).toEqual({ onlineMaxCents: 130000 });
-    expect(rpc).toHaveBeenCalledExactlyOnceWith("get_payment_limits", {});
-    rpc.mockResolvedValueOnce({ data: { online_max_cents: 0 }, error: null });
-    await expect(readFoundationPaymentLimits(api)).rejects.toThrow();
-    rpc.mockResolvedValueOnce({ data: { online_max_cents: 130000, extra: 1 }, error: null });
-    await expect(readFoundationPaymentLimits(api)).rejects.toThrow();
-  });
   it("reads the member's slots, their renewals and counts (v2)", async () => {
     rpc.mockResolvedValueOnce({ data: { slots: [slot], individual }, error: null });
     expect(await readFoundationMySlots(api)).toEqual({ slots: [slot], individual });

@@ -293,6 +293,10 @@ describe("CheckoutConfirm for Individual slots", () => {
     expect(body).toContain("2 Individual slots, 180 days each");
     expect(body).toContain(`Total: ${formatPlanPrice(82_800)}`);
     expect(body).toContain("from the email address of my VerifyMzansi account");
+    // The written cooling-off confirmation for an invoice paid by EFT (posting-v5).
+    expect(body).toContain(
+      "I confirm: My slots start as soon as this invoice is paid; the 7-day cooling-off does not apply because the service starts immediately."
+    );
   });
 
   it("offers only the invoice above Ozow's maximum; the total at the maximum stays online", () => {

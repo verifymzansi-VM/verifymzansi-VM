@@ -29,8 +29,8 @@ export function packageCheckoutHref(slots: number, days: PackageTerm) {
  * 2026): R100 per slot per 30 days, from 5 slots, for 30, 90 or 180 days. One
  * card per common size with the total for each term; any number from 5 can be
  * typed at checkout. Totals above Ozow's maximum for one payment (or above 100
- * slots) are paid by invoice at the same price. The maximum is known only for
- * a signed-in member (`onlineMaxCents`); otherwise the checkout says so.
+ * slots) are paid by invoice at the same price (`onlineMaxCents`, read by the
+ * page; unknown, the checkout says so).
  */
 export function MultiListingPlans({
   headingLevel = "h3",

@@ -2,11 +2,8 @@ import { redirect } from "next/navigation";
 import { CheckoutConfirm, type RenewalSlot } from "./checkout-confirm";
 import { readFoundationCheckoutSummary } from "@/lib/foundation/checkout-summary";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
-import {
-  readFoundationMySlots,
-  readFoundationPaymentLimits,
-  type FoundationMySlots,
-} from "@/lib/foundation/billing-runtime";
+import { readFoundationMySlots, type FoundationMySlots } from "@/lib/foundation/billing-runtime";
+import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import {
   individualSlotPlans,
@@ -30,19 +27,6 @@ async function loadMySlots(): Promise<FoundationMySlots | null> {
     return await readFoundationMySlots((await readFoundationServerSession()).api);
   } catch (error) {
     logDegradedRead(log, "Checkout slot status unavailable", error);
-    return null;
-  }
-}
-
-/** The most one online (Ozow) payment may be (api.get_payment_limits); null
- * when it cannot be read (signed out included): the page then offers both
- * ways to pay and the database still refuses a total above it. */
-async function loadOnlineMax(): Promise<number | null> {
-  try {
-    return (await readFoundationPaymentLimits((await readFoundationServerSession()).api))
-      .onlineMaxCents;
-  } catch (error) {
-    logDegradedRead(log, "Checkout payment limit unavailable", error);
     return null;
   }
 }
@@ -85,7 +69,7 @@ function renewalSlots(mine: FoundationMySlots, renew: string, now = Date.now()):
 async function loadSummary(planId: string, renew: string | undefined) {
   const summary = await readFoundationCheckoutSummary(planId);
   if (!summary?.slotTerms) return summary;
-  const [mine, onlineMaxCents] = await Promise.all([loadMySlots(), loadOnlineMax()]);
+  const [mine, onlineMaxCents] = await Promise.all([loadMySlots(), readOnlinePaymentMaxCents()]);
   return {
     ...summary,
     slotStatus: slotStatus(mine),

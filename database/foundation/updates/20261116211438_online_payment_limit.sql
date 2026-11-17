@@ -5,14 +5,18 @@
 -- still ask for an invoice first at any amount, and pay it with "Pay now"
 -- (Ozow) or by bank transfer.
 --
--- Apply after 20261114154823_slot_packages.sql (it refuses with 55000
--- unless the four functions it replaces have their reviewed bodies, or this
+-- Apply after 20261114154823_slot_packages.sql and after
+-- 20261116175757_close_and_erase_account.sql (pull request #230, applied
+-- first; this update does not depend on it). It refuses with 55000
+-- unless the five functions it replaces have their reviewed bodies, or this
 -- update's). Only adds: no API command, argument or grant is removed or
 -- changed. In one transaction it:
 --
 -- 1. Adds internal.online_payment_max_cents(), the one setting: 130000 cents
 --    (R1,300). When Ozow changes our site's maximum, a reviewed update
 --    replaces only this function; the checks below and the website follow.
+--    STABLE, not IMMUTABLE, so a changed value is never folded into a plan a
+--    pooled connection keeps.
 -- 2. Replaces internal.start_slot_checkout (api.start_slot_checkout) and
 --    internal.start_slot_renewal_checkout (api.start_slot_renewal_checkout),
 --    full bodies, changing only their limit: an order or renewal whose total
@@ -32,11 +36,15 @@
 --    PT413 package_invoice_required as before; more than 100 slots stays by
 --    invoice. One cap for every online payment (coordinator's review, owner's
 --    decision that Ozow's maximum is the only online limit).
--- 5. Adds the member read api.get_payment_limits() (authenticated; a signed-in
---    account with current access and a live session): {"online_max_cents"}.
+-- 5. Replaces internal.claim_checkout_request (api.claim_checkout_request,
+--    the server's lease before it asks Ozow for a payment page), full body,
+--    adding a final guard: no new Ozow request above the setting (PT413
+--    online_payment_above_limit). An Ozow page already open is unaffected.
+-- 6. Adds the public read api.get_payment_limits() (anon and authenticated,
+--    like the price catalogue; no account data): {"online_max_cents"}.
 --    The checkout uses it to offer only the invoice above the limit, and the
 --    invoice page to offer only bank transfer above it.
--- 6. Publishes posting terms version posting-v5
+-- 7. Publishes posting terms version posting-v5
 --    (src/lib/legal/terms-documents/posting-v5.json, canonical hash pinned
 --    below and in catalogue.json): it inserts one row into
 --    private.posting_terms_versions and does NOT make posting-v5 current;
@@ -68,7 +76,8 @@ begin
     from (values ('internal.start_slot_checkout(uuid,integer,bigint,boolean)'),
       ('internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean)'),
       ('internal.start_invoice_payment(text,bigint,boolean)'),
-      ('internal.start_package_checkout(uuid,integer,bigint,boolean)')) v(sig)
+      ('internal.start_package_checkout(uuid,integer,bigint,boolean)'),
+      ('internal.claim_checkout_request(uuid,uuid)')) v(sig)
   loop
     if shape not in (
         'internal.start_slot_checkout(uuid,integer,bigint,boolean) cae84c17b05a49fc3937064eaaff38f2',
@@ -76,9 +85,11 @@ begin
         'internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean) e014633dd37ebb3fa212fc2944dd7ed6',
         'internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean) 4c9ceef45be61e47ec685d82e8392c96',
         'internal.start_invoice_payment(text,bigint,boolean) 157a3a3a51c3abfdef565e37a2af3785',
-        'internal.start_invoice_payment(text,bigint,boolean) 2269112508c2af33e80fccf331f7479c',
+        'internal.start_invoice_payment(text,bigint,boolean) 58e3e24aa91f41a476435c8b152b94d2',
         'internal.start_package_checkout(uuid,integer,bigint,boolean) feb6e6f31e0bc1f6a1de41e8c927acb8',
-        'internal.start_package_checkout(uuid,integer,bigint,boolean) 947486cd48be84b7a45714ec51d1bae4') then
+        'internal.start_package_checkout(uuid,integer,bigint,boolean) 947486cd48be84b7a45714ec51d1bae4',
+        'internal.claim_checkout_request(uuid,uuid) 0234950a11ec46ce9ccb0e707b940e72',
+        'internal.claim_checkout_request(uuid,uuid) 68360e84202bdb13b2c690d6ae0ce452') then
       raise exception 'online payment limit precondition: % is not a reviewed body', shape using errcode='55000';
     end if;
   end loop;
@@ -88,7 +99,7 @@ begin
       coalesce(current_version,'missing') using errcode='55000';
   end if;
   select v.document_hash into published_hash from private.posting_terms_versions v where v.version='posting-v5';
-  if published_hash is not null and published_hash<>'xXIllN5MmRH6TZR8Cdh3DqqmZI9Nwomh04vExnO5K4Y' then
+  if published_hash is not null and published_hash<>'LkgzMkvecZ75fguL1-eUNxwRsHZpg9pi42CTae2Q5mc' then
     raise exception 'posting-v5 is already published with a different document' using errcode='55000';
   end if;
   -- Read by the final check: this file never changes the current version.
@@ -99,7 +110,7 @@ end$$;
 CREATE OR REPLACE FUNCTION internal.online_payment_max_cents()
  RETURNS bigint
  LANGUAGE sql
- IMMUTABLE
+ STABLE
  SET search_path TO 'pg_catalog'
 AS $function$
   select 130000::bigint;
@@ -107,30 +118,33 @@ $function$;
 alter function internal.online_payment_max_cents() owner to postgres;
 revoke all on function internal.online_payment_max_cents() from public, anon, authenticated, service_role;
 
+-- Public, like the price catalogue: no account data, so the price pages can
+-- show it to signed-out visitors too.
 CREATE OR REPLACE FUNCTION internal.get_payment_limits()
  RETURNS jsonb
- LANGUAGE plpgsql
+ LANGUAGE sql
+ STABLE
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-begin
-  perform internal.price_draft_actor(); -- a signed-in account with current access and a live session
-  return jsonb_build_object('online_max_cents', internal.online_payment_max_cents());
-end;
+  select jsonb_build_object('online_max_cents', internal.online_payment_max_cents());
 $function$;
 alter function internal.get_payment_limits() owner to postgres;
 revoke all on function internal.get_payment_limits() from public, anon, authenticated, service_role;
+grant execute on function internal.get_payment_limits() to anon;
 grant execute on function internal.get_payment_limits() to authenticated;
 
 CREATE OR REPLACE FUNCTION api.get_payment_limits()
  RETURNS jsonb
  LANGUAGE sql
+ STABLE
  SET search_path TO 'pg_catalog'
 AS $function$
   select internal.get_payment_limits();
 $function$;
 alter function api.get_payment_limits() owner to postgres;
 revoke all on function api.get_payment_limits() from public, anon, authenticated, service_role;
+grant execute on function api.get_payment_limits() to anon;
 grant execute on function api.get_payment_limits() to authenticated;
 
 CREATE OR REPLACE FUNCTION internal.start_slot_checkout(p_plan_id uuid, p_slots integer, p_expected_total_cents bigint, p_cooling_off_consent boolean)
@@ -414,12 +428,6 @@ begin
   if inv.total_cents <> p_expected_total_cents then
     raise exception 'the invoice total is % cents', inv.total_cents using errcode='PT428', detail='invoice_amount_mismatch';
   end if;
-  -- Above the most Ozow accepts in one payment: the invoice is paid by bank
-  -- transfer only (staff record it; a second staff member confirms it).
-  if inv.total_cents > internal.online_payment_max_cents() then
-    raise exception 'this invoice is above the online payment limit of % cents; pay it by bank transfer',
-      internal.online_payment_max_cents() using errcode='PT413', detail='online_payment_above_limit';
-  end if;
   select * into plan from private.plan_versions v where v.id = inv.plan_version_id and v.retired_at is null
     and v.is_public and internal.individual_slot_plan(v.plan_code) and v.price_cents = inv.unit_price_cents;
   if not found then
@@ -461,6 +469,13 @@ begin
     if latest.status <> 'pending' then
       latest := null; -- closed (expired, cancelled or failed): a new attempt
     end if;
+  end if;
+  -- Above the most Ozow accepts in one payment: the invoice is paid by bank
+  -- transfer only (staff record it; a second staff member confirms it). After
+  -- the "already paid" check, so a paid invoice still says it is paid.
+  if inv.total_cents > internal.online_payment_max_cents() then
+    raise exception 'this invoice is above the online payment limit of % cents; pay it by bank transfer',
+      internal.online_payment_max_cents() using errcode='PT413', detail='online_payment_above_limit';
   end if;
   if latest.id is null then
     select count(*) into attempts from private.customer_invoice_payments l where l.invoice_id = inv.id;
@@ -630,13 +645,64 @@ alter function internal.start_package_checkout(uuid,integer,bigint,boolean) owne
 revoke all on function internal.start_package_checkout(uuid,integer,bigint,boolean) from public;
 grant execute on function internal.start_package_checkout(uuid,integer,bigint,boolean) to authenticated;
 
+CREATE OR REPLACE FUNCTION internal.claim_checkout_request(p_payment_id uuid, p_owner_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare pay private.payments;
+begin
+  perform internal.payment_invoice_config();
+  select * into pay from private.payments where id=p_payment_id and owner_id=p_owner_id for update;
+  if not found or pay.status<>'pending' or not exists(select 1 from private.current_account_access a where a.id=p_owner_id) then
+    raise exception 'pending checkout unavailable' using errcode='PT409'; end if;
+  if pay.checkout_url is null and pay.checkout_claim_until>clock_timestamp() then
+    raise exception 'checkout is being created' using errcode='PT409'; end if;
+  -- A Multi-listing package (20261114154823) reaches Ozow only while packages
+  -- are on sale and the member's ID review is still accepted.
+  if exists(select 1 from private.plan_versions v where v.id=pay.plan_version_id
+      and internal.slot_package_plan(v.plan_code)) then
+    if not internal.slot_packages_on_sale() then
+      raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
+    end if;
+    if internal.current_verified_identity(pay.owner_id) is null then
+      raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
+    end if;
+  end if;
+  -- Final guard (20261116211438): a new Ozow request is never created above
+  -- the most Ozow accepts in one payment; every checkout refuses first.
+  if pay.checkout_url is null and pay.amount_cents > internal.online_payment_max_cents() then
+    raise exception 'this payment is above the online payment limit of % cents', internal.online_payment_max_cents()
+      using errcode='PT413', detail='online_payment_above_limit';
+  end if;
+  if pay.checkout_url is null then
+    -- No request is attached, so every earlier attempt ended before Ozow's
+    -- page reached the member. Each attempt gets a fresh 30-minute window;
+    -- after an earlier lease, also a new idempotency key (Ozow must not see a
+    -- key it already answered with another expiry).
+    update private.payments set checkout_claim_token=pg_catalog.gen_random_uuid(),
+      checkout_claim_until=clock_timestamp()+interval '2 minutes',
+      checkout_expires_at=clock_timestamp()+interval '30 minutes',
+      provider_idempotency_key=case when checkout_claim_token is null then provider_idempotency_key
+        else pg_catalog.gen_random_uuid() end
+      where id=pay.id returning * into pay;
+  end if;
+  return internal.billing_payment_dto(pay)||jsonb_build_object('claim_token',pay.checkout_claim_token,
+    'idempotency_key',pay.provider_idempotency_key,'correlation_id',pay.provider_correlation_id);
+end;
+$function$;
+alter function internal.claim_checkout_request(uuid,uuid) owner to postgres;
+revoke all on function internal.claim_checkout_request(uuid,uuid) from public;
+grant execute on function internal.claim_checkout_request(uuid,uuid) to service_role;
+
 -- posting-v5: published, not current (the switch makes it current).
-insert into private.posting_terms_versions(version,document_hash) values('posting-v5','xXIllN5MmRH6TZR8Cdh3DqqmZI9Nwomh04vExnO5K4Y')
+insert into private.posting_terms_versions(version,document_hash) values('posting-v5','LkgzMkvecZ75fguL1-eUNxwRsHZpg9pi42CTae2Q5mc')
   on conflict(version) do nothing;
 
 do $$begin
   if not exists(select 1 from private.posting_terms_versions v
-      where v.version='posting-v5' and v.document_hash='xXIllN5MmRH6TZR8Cdh3DqqmZI9Nwomh04vExnO5K4Y') then
+      where v.version='posting-v5' and v.document_hash='LkgzMkvecZ75fguL1-eUNxwRsHZpg9pi42CTae2Q5mc') then
     raise exception 'posting-v5 was not published';
   end if;
   if (select c.version from private.posting_terms_current c where c.singleton)

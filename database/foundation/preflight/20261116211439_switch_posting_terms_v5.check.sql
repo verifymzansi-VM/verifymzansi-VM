@@ -19,7 +19,7 @@ select 'summary' as kind,
     || case t.current_version when 'posting-v4' then ' (update not applied)'
          when 'posting-v5' then ' (update already applied)' else ' (unexpected)' end
     || '; posting-v5 ' || case when t.v5_hash is null then 'not published (apply 20261116211438_online_payment_limit.sql first)'
-         when t.v5_hash = 'xXIllN5MmRH6TZR8Cdh3DqqmZI9Nwomh04vExnO5K4Y' then 'published' else 'published with another document' end
+         when t.v5_hash = 'LkgzMkvecZ75fguL1-eUNxwRsHZpg9pi42CTae2Q5mc' then 'published' else 'published with another document' end
     || '; accounts that accepted posting-v5: ' || (select count(*) from private.posting_terms_acceptances a where a.version = 'posting-v5')
     as detail
 from t
@@ -28,4 +28,4 @@ select 'problem', 'current posting terms are ' || coalesce(t.current_version, 'm
 from t where t.current_version is null or t.current_version not in ('posting-v4', 'posting-v5')
 union all
 select 'problem', 'posting-v5 is not published with the reviewed document'
-from t where t.v5_hash is distinct from 'xXIllN5MmRH6TZR8Cdh3DqqmZI9Nwomh04vExnO5K4Y';
+from t where t.v5_hash is distinct from 'LkgzMkvecZ75fguL1-eUNxwRsHZpg9pi42CTae2Q5mc';

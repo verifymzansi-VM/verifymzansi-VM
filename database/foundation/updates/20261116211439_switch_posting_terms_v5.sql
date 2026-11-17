@@ -27,7 +27,7 @@ begin
       coalesce(current_version,'missing') using errcode='55000';
   end if;
   select v.document_hash into v5_hash from private.posting_terms_versions v where v.version='posting-v5';
-  if v5_hash is distinct from 'xXIllN5MmRH6TZR8Cdh3DqqmZI9Nwomh04vExnO5K4Y' then
+  if v5_hash is distinct from 'LkgzMkvecZ75fguL1-eUNxwRsHZpg9pi42CTae2Q5mc' then
     raise exception 'switch precondition: apply 20261116211438_online_payment_limit.sql first (posting-v5 is %)',
       case when v5_hash is null then 'not published' else 'published with a different document' end
       using errcode='55000';

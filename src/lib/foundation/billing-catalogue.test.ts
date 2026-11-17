@@ -2,6 +2,7 @@
 import { expect, it, vi } from "vitest";
 import { createFoundationPublicApi } from "./public-api";
 import {
+  readFoundationPaymentLimits,
   parseFoundationBillingCatalogue,
   readFoundationBillingCatalogue,
 } from "./billing-catalogue";
@@ -127,4 +128,21 @@ it("disables SDK retries even for a caller selecting a GET read", async () => {
   );
   expect(result.error).not.toBeNull();
   expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it("reads the public online payment limit, refusing an unexpected shape", async () => {
+  const answer = (data: unknown, error: unknown = null) =>
+    ({ rpc: vi.fn(async () => ({ data, error })) }) as unknown as Parameters<
+      typeof readFoundationPaymentLimits
+    >[0];
+  const api = answer({ online_max_cents: 130000 });
+  expect(await readFoundationPaymentLimits(api)).toEqual({ onlineMaxCents: 130000 });
+  expect(api.rpc).toHaveBeenCalledWith("get_payment_limits");
+  await expect(readFoundationPaymentLimits(answer({ online_max_cents: 0 }))).rejects.toThrow();
+  await expect(
+    readFoundationPaymentLimits(answer({ online_max_cents: 130000, extra: 1 }))
+  ).rejects.toThrow();
+  await expect(readFoundationPaymentLimits(answer(null, { code: "42501" }))).rejects.toThrow(
+    "Foundation payment limits unavailable"
+  );
 });

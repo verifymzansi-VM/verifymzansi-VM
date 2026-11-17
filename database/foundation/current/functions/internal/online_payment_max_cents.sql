@@ -4,7 +4,7 @@
 CREATE OR REPLACE FUNCTION internal.online_payment_max_cents()
  RETURNS bigint
  LANGUAGE sql
- IMMUTABLE
+ STABLE
  SET search_path TO 'pg_catalog'
 AS $function$
   select 130000::bigint;

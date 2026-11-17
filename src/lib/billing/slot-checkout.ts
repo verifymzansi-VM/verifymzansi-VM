@@ -67,6 +67,15 @@ export function slotsAvailable(status: SlotCheckoutStatus | null | undefined): n
 }
 
 /**
+ * The cooling-off confirmation for an invoice (posting-v5: if the invoice is
+ * paid by EFT, the member confirms it when asking for the invoice). The same
+ * words the database records for invoice Pay now
+ * (internal.customer_invoice_consent, invoice-cooling-off-v1).
+ */
+export const INVOICE_COOLING_OFF_CONSENT =
+  "My slots start as soon as this invoice is paid; the 7-day cooling-off does not apply because the service starts immediately.";
+
+/**
  * Asking for an invoice before paying (owner's decision of 16 November 2026):
  * an email to billing with the order filled in. Staff issue the invoice to the
  * account of the address it comes from; the member then adds their billing
@@ -81,6 +90,8 @@ export function invoiceRequestHref(order: {
     "Please send me an invoice for:",
     `${order.slots} Individual ${order.slots === 1 ? "slot" : "slots"}, ${order.durationLabel} each`,
     `Total: ${order.totalLabel}`,
+    "",
+    `I confirm: ${INVOICE_COOLING_OFF_CONSENT}`,
     "",
     "I am sending this from the email address of my VerifyMzansi account.",
   ].join("\n");

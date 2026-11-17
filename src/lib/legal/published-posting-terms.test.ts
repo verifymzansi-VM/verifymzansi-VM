@@ -250,7 +250,7 @@ it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
 it("makes posting-v5 the site's one set of Terms, stating how people pay now", () => {
   expect(manifest.active_version).toBe("posting-v5");
   const v5 = getPublishedPostingTerms("posting-v5")!;
-  expect(v5.document_hash).toBe("xXIllN5MmRH6TZR8Cdh3DqqmZI9Nwomh04vExnO5K4Y");
+  expect(v5.document_hash).toBe("LkgzMkvecZ75fguL1-eUNxwRsHZpg9pi42CTae2Q5mc");
   const content = text("posting-v5");
   expect(content).not.toMatch(/version/i);
   for (const rule of [
@@ -260,6 +260,7 @@ it("makes posting-v5 the site's one set of Terms, stating how people pay now", (
     "The slots start when the payment is confirmed; for an EFT, when the money has cleared in our bank account",
     "Our payment provider sets a maximum for each online payment, and the checkout shows it",
     "An order or invoice above that maximum cannot be paid online: we issue an invoice and you pay it by EFT",
+    "A renewal is not invoiced: if renewing your slots together would be above that maximum, renew them in more than one payment",
     "At the online checkout, and before you pay an invoice with Pay now, you tick a box",
     "if you pay an invoice by EFT, you confirm it when you ask for the invoice",
     "through our payment provider's refund service (or by EFT for a payment made by EFT)",

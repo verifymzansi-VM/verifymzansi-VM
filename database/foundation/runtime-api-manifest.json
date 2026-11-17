@@ -4762,13 +4762,13 @@
       "updates": ["updates/20261116211438_online_payment_limit.sql"],
       "arguments": [],
       "returns": "jsonb",
-      "volatility": "v",
+      "volatility": "s",
       "execute": {
-        "anon": false,
+        "anon": true,
         "authenticated": true,
         "service_role": false
       },
-      "authority": "A signed-in account with current access and a live session: the most one online (Ozow) payment may be, in cents (online_max_cents, internal.online_payment_max_cents()); no account data."
+      "authority": "Public, like the price catalogue (anon and authenticated): the most one online (Ozow) payment may be, in cents (online_max_cents, internal.online_payment_max_cents()); no account data."
     }
   ]
 }

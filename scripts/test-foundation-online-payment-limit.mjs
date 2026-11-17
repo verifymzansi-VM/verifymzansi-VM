@@ -168,11 +168,13 @@ try {
   });
 
   // ------------------------------------------------------------- limits
-  await check("members read the limit; anon and service_role cannot", () => {
+  await check("members and visitors read the limit (public, no account data)", () => {
     const reader = verified("limit-reader");
     assert.deepEqual(json(limitsSql(reader)), { online_max_cents: LIMIT });
     assert.deepEqual(json(limitsSql(world.user("limit-unverified"))), { online_max_cents: LIMIT });
-    fails(asRole("anon", "select api.get_payment_limits();"), "42501");
+    assert.deepEqual(json(asRole("anon", "select api.get_payment_limits();")), {
+      online_max_cents: LIMIT,
+    });
     fails(service("select api.get_payment_limits();"), "42501");
     fails(asRole("authenticated", `select ${SETTING};`), "42501");
   });
@@ -204,6 +206,58 @@ try {
     } finally {
       q(`${body};`);
     }
+  });
+
+  await check("a raised setting reaches a long-lived session that already used it", () => {
+    // STABLE, not IMMUTABLE: a pooled connection that has run the checkout
+    // sees a new value at once (one psql session throughout).
+    const mpho = verified("limit-mpho");
+    const body = q(`select pg_get_functiondef('${SETTING}'::regprocedure);`);
+    try {
+      const out = q(
+        member(
+          mpho,
+          `do $$begin
+             perform api.start_slot_checkout('${P180.id}',4,165600,true);
+             raise exception 'accepted above the limit';
+           exception when sqlstate 'PT413' then null; end$$;
+           reset role;
+           ${body.replace("130000::bigint", "200000::bigint")};
+           set role authenticated;
+           select 'amount='||(api.start_slot_checkout('${P180.id}',4,165600,true)->>'amount_cents');`
+        )
+      );
+      assert.match(out, /amount=165600$/);
+    } finally {
+      q(`${body};`);
+    }
+    assert.equal(q(`select ${SETTING};`), String(LIMIT));
+    assert.equal(q(`select provolatile from pg_proc where oid='${SETTING}'::regprocedure;`), "s");
+  });
+
+  await check("the server never opens an Ozow request above the limit (final guard)", () => {
+    // A payment started while the setting was higher (here 200000), then
+    // lowered back: the lease before asking Ozow refuses it.
+    const lindi = verified("limit-lindi");
+    const body = q(`select pg_get_functiondef('${SETTING}'::regprocedure);`);
+    let paymentId;
+    try {
+      q(body.replace("130000::bigint", "200000::bigint") + ";");
+      paymentId = json(
+        member(lindi, `select api.start_slot_checkout('${P180.id}',4,165600,true);`)
+      ).payment_id;
+    } finally {
+      q(`${body};`);
+    }
+    fails(
+      service(`select api.claim_checkout_request('${paymentId}','${lindi.id}');`),
+      "PT413",
+      /online_payment_above_limit/
+    );
+    assert.equal(
+      q(`select checkout_claim_token is null from private.payments where id='${paymentId}';`),
+      "t"
+    );
   });
 
   await check(
