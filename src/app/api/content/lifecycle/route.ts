@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { handleRestoredPostAction } from "@/lib/foundation/restored-post-actions";
 
 /**
@@ -7,6 +7,6 @@ import { handleRestoredPostAction } from "@/lib/foundation/restored-post-actions
  * reactivate saved content (uses a slot; unchanged approved content goes
  * straight back live). The foundation post actions apply every rule.
  */
-export async function POST(request: Request) {
-  return handleRestoredPostAction(new NextRequest(request), "lifecycle");
+export async function POST(request: NextRequest) {
+  return handleRestoredPostAction(request, "lifecycle");
 }

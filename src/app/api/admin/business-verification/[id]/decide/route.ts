@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { CIPC_REASON_CODES } from "@/lib/cipc/screen";
@@ -34,9 +34,9 @@ const schema = z.object({
 });
 
 /** POST /api/admin/business-verification/[id]/decide — staff decide a case. */
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return handleFoundationOwnerRoute({
-    request: request instanceof NextRequest ? request : new NextRequest(request),
+    request: request,
     log,
     action: "business-verification:decide",
     mutate: true,

@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
@@ -264,9 +264,9 @@ const schema = z.discriminatedUnion("action", [
  * overrides, refunds, partners, organisations) runs in a SECURITY DEFINER RPC
  * that re-checks the actor's role and writes the audit row atomically.
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   return handleFoundationOwnerRoute({
-    request: request instanceof NextRequest ? request : new NextRequest(request),
+    request: request,
     log,
     action: "admin:commercial",
     mutate: true,

@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { handleRestoredIdentityDecision } from "@/lib/foundation/restored-identity-decision-route";
 
 /**
@@ -9,6 +9,6 @@ import { handleRestoredIdentityDecision } from "@/lib/foundation/restored-identi
  * here and applied only when another governor or admin approves it on the
  * escalations page. Nobody decides their own verification.
  */
-export async function POST(request: Request) {
-  return handleRestoredIdentityDecision(new NextRequest(request));
+export async function POST(request: NextRequest) {
+  return handleRestoredIdentityDecision(request);
 }

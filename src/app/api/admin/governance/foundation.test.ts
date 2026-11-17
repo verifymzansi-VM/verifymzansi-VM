@@ -21,9 +21,9 @@ const answer = NextResponse.json({ ok: true });
 const rpc = vi.fn();
 const api = { rpc } as unknown as Parameters<OwnerRouteOptions["command"]>[0];
 const post = (path: string) =>
-  new Request(`https://verifymzansi.com/api/admin/governance/${path}`, { method: "POST" });
+  new NextRequest(`https://verifymzansi.com/api/admin/governance/${path}`, { method: "POST" });
 
-async function optionsFor(route: (request: Request) => Promise<Response>, path: string) {
+async function optionsFor(route: (request: NextRequest) => Promise<Response>, path: string) {
   await route(post(path));
   const options = vi.mocked(handleFoundationOwnerRoute).mock.calls[0][0] as OwnerRouteOptions;
   expect(options.request).toBeInstanceOf(NextRequest);
