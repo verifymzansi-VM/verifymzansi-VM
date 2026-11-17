@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { readSampleContact } from "./contact";
 
@@ -21,5 +23,28 @@ describe("VerifyMzansi's sample contact numbers", () => {
         SAMPLE_CONTACT_WHATSAPP: "0821234568",
       })
     ).toEqual({ phone: "+27821234567", whatsapp: "+27821234568" });
+  });
+});
+
+describe("wrangler.toml", () => {
+  const toml = readFileSync(path.join(process.cwd(), "wrangler.toml"), "utf8");
+  const values = (name: string) =>
+    [...toml.matchAll(new RegExp(`^${name} = "([^"]*)"\\r?$`, "gm"))].map((match) => match[1]);
+
+  it("gives every environment the same valid VerifyMzansi number", () => {
+    for (const name of ["SAMPLE_CONTACT_PHONE", "SAMPLE_CONTACT_WHATSAPP"]) {
+      expect(values(name)).toHaveLength(3);
+      expect(new Set(values(name)).size).toBe(1);
+    }
+    expect(
+      readSampleContact({
+        SAMPLE_CONTACT_PHONE: values("SAMPLE_CONTACT_PHONE")[0],
+        SAMPLE_CONTACT_WHATSAPP: values("SAMPLE_CONTACT_WHATSAPP")[0],
+      })
+    ).toEqual({ phone: "+27717484185", whatsapp: "+27717484185" });
+  });
+
+  it("keeps samples switched off everywhere", () => {
+    expect(values("SAMPLE_POSTS_ENABLED")).toEqual(["false", "false", "false"]);
   });
 });
