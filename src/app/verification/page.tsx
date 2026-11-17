@@ -491,11 +491,20 @@ function formatCountdown(totalSeconds: number): string {
   return `${minutes}m ${seconds}s`;
 }
 
+/** Refusals for which no SMS was sent: the toast already says why. */
+const OTP_NOT_SENT_CODES = new Set([
+  "phone_in_use",
+  "phone_already_verified",
+  "phone_change_cooldown",
+  "phone_change_identity_required",
+]);
+
 function buildOtpSupportMessage(
   payload: VerificationApiResponse,
   retryAfterSeconds: number,
   formattedPhone: string
-): string {
+): string | null {
+  if (payload.code && OTP_NOT_SENT_CODES.has(payload.code)) return null;
   if (payload.code === "hourly_limit_reached" || payload.code === "rate_limited") {
     return retryAfterSeconds > 0
       ? `Too many code requests were made for this number. Wait ${formatCountdown(retryAfterSeconds)} before resending.`
@@ -1019,7 +1028,7 @@ export default function VerificationPage() {
 
         const supportMessage = buildOtpSupportMessage(payload, retryAfterSeconds, formattedPhone);
         setOtpSupportMessage(supportMessage);
-        throw new Error(payload.error || supportMessage);
+        throw new Error(payload.error || supportMessage || "Please try again.");
       }
 
       setOtpSent(true);
