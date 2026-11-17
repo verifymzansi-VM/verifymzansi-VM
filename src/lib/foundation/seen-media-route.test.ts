@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
-import type { NextResponse } from "next/server";
+import { NextRequest, type NextResponse } from "next/server";
 import { readSeenEvidenceFile, sendSeenOwnerMessage, uploadSeenPhoto } from "./seen-media-route";
 import { attachNativeCipcReplyFile } from "./cipc-document-route";
 import { readMyBusinessChecks } from "./business-seen";
@@ -57,7 +57,7 @@ const photo = () => new File([jpeg], "shop.jpg", { type: "image/jpeg" });
 const post = (fields: Array<[string, string | File]>) => {
   const form = new FormData();
   for (const [name, value] of fields) form.append(name, value);
-  return new Request("https://verifymzansi.com/api/x", {
+  return new NextRequest("https://verifymzansi.com/api/x", {
     method: "POST",
     body: form,
     headers: {
@@ -180,7 +180,7 @@ describe("readSeenEvidenceFile", () => {
   };
   const read = () =>
     readSeenEvidenceFile(
-      new Request("https://verifymzansi.com/api/x", { method: "GET" }),
+      new NextRequest("https://verifymzansi.com/api/x", { method: "GET" }),
       artifact
     );
   beforeEach(() => {

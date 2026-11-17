@@ -11,6 +11,6 @@ import { handleRestoredGovernanceDecision } from "@/lib/foundation/restored-gove
  * decision's effects. KYC overrides then run the verification workflow and
  * record whether it succeeded; a failure stays visible and retryable.
  */
-export async function POST(request: Request) {
-  return handleRestoredGovernanceDecision(request as NextRequest);
+export async function POST(request: NextRequest) {
+  return handleRestoredGovernanceDecision(request);
 }

@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { handleNativeCipcStaffAction } from "@/lib/foundation/cipc-commands";
@@ -20,6 +21,6 @@ const schema = z.object({
  * PATCH /api/admin/business-verification/[id]/office
  * Staff correct how we read the registered office before approving.
  */
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return handleNativeCipcStaffAction(request, (await params).id, "office", schema.strict());
 }

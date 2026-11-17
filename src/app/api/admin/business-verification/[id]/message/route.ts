@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { createLogger } from "@/lib/utils/logger";
@@ -14,9 +14,9 @@ const schema = z.object({ body: z.string().trim().min(1).max(2000) });
  * A note to the owner that does not change the case status. To pause the
  * case for the owner, use the "request info" decision instead.
  */
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return handleFoundationOwnerRoute({
-    request: request instanceof NextRequest ? request : new NextRequest(request),
+    request: request,
     log,
     action: "business-verification:message",
     mutate: true,

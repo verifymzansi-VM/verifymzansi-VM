@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { uuidSchema } from "@/lib/validations/shared";
@@ -30,7 +31,7 @@ const caseActionSchema = z.discriminatedUnion("action", [
  *            The requester is notified by a durable email job.
  *   assign → give the case to someone who can handle data requests.
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   return handlePrivacyStaffRoute(request, log, "case", (api, body) => {
     const input = z
       .discriminatedUnion("action", [

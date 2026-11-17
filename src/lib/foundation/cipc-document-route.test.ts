@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
-import type { NextResponse } from "next/server";
+import { NextRequest, type NextResponse } from "next/server";
 import {
   attachNativeCipcReplyFile,
   attachNativeOfficialCipc,
@@ -71,7 +71,7 @@ const file = (over: Partial<CipcFile> = {}) =>
 const upload = (fields: Array<[string, string | File]>, withCsrf = true) => {
   const form = new FormData();
   for (const [name, value] of fields) form.append(name, value);
-  return new Request("https://verifymzansi.com/api/businesses/x/verification/cipc", {
+  return new NextRequest("https://verifymzansi.com/api/businesses/x/verification/cipc", {
     method: "POST",
     body: form,
     headers: {

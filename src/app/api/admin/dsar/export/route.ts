@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
@@ -27,9 +27,9 @@ const FOUNDATION_EXPORT_DATASET_COUNT = 33;
  * verified requester identity. Nothing is stored: the file goes straight to
  * the staff member, who sends it to the requester.
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   return handleFoundationOwnerRoute<{ request_id: string }>({
-    request: request instanceof NextRequest ? request : new NextRequest(request),
+    request: request,
     log,
     action: "admin:dsar:export:local",
     mutate: true,

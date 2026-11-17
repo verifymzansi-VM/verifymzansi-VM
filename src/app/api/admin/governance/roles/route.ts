@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
@@ -44,9 +44,9 @@ const roleChangeSchema = z.discriminatedUnion("action", [
  *
  * Every action needs a second factor verified in the last 15 minutes.
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   return handleFoundationOwnerRoute({
-    request: request instanceof NextRequest ? request : new NextRequest(request),
+    request: request,
     log,
     action: "admin:role:review",
     mutate: true,
