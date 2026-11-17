@@ -10,14 +10,25 @@ AS $function$
 declare actor uuid; result jsonb;
 begin
   actor := internal.staff_actor('payments:view');
-  select jsonb_build_object('items', coalesce(jsonb_agg(internal.invoice_transfer_dto(t, actor)
-      || jsonb_build_object('expired_at', t.expired_at, 'invoice_number',
-        (select i.invoice_number from private.customer_invoices i where i.id = t.customer_invoice_id))
-      order by t.expired_at desc, t.id desc), '[]'::jsonb))
-    into result
-  from (select * from private.invoice_transfers x where x.status = 'expired'
-      and x.expired_at > statement_timestamp() - interval '30 days'
-    order by x.expired_at desc, x.id desc limit 20) t;
+  with open as (
+    select t as transfer, t.id, coalesce(t.expired_at, t.recorded_at + internal.invoice_transfer_expires_after()) as expired_on
+    from private.invoice_transfers t
+    where internal.invoice_transfer_expired(t)
+      and not exists(select 1 from private.invoice_transfers x where x.id <> t.id and x.recorded_at > t.recorded_at
+        and ((x.customer_invoice_id is not null and x.customer_invoice_id = t.customer_invoice_id)
+          or (x.amount_received_cents = t.amount_received_cents and x.cleared_on = t.cleared_on
+            and upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
+              = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')))))
+      and not exists(select 1 from private.customer_invoices i where i.id = t.customer_invoice_id
+        and i.status in ('paid', 'void'))
+  )
+  select jsonb_build_object('unresolved', (select count(*) from open),
+      'items', coalesce((select jsonb_agg(internal.invoice_transfer_dto(o.transfer, actor)
+        || jsonb_build_object('status', 'expired', 'expired_at', o.expired_on, 'invoice_number',
+          (select i.invoice_number from private.customer_invoices i where i.id = (o.transfer).customer_invoice_id))
+        order by o.expired_on, o.id)
+      from (select * from open order by expired_on, id limit 200) o), '[]'::jsonb))
+    into result;
   if internal.staff_actor('payments:view') is distinct from actor then
     raise exception 'staff actor changed' using errcode='42501';
   end if;

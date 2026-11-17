@@ -176,12 +176,19 @@ function WaitingTransfers({
   );
 }
 
-/** Recorded bank transfers that expired in the last 30 days (newest first). */
-function ExpiredTransfers({ expired }: { expired: ExpiredTransfer[] }) {
+/** Recorded bank transfers nobody confirmed within 14 days, oldest first,
+ * listed until each is followed up (recorded again, or its invoice paid or
+ * voided). */
+function ExpiredTransfers({ expired, count }: { expired: ExpiredTransfer[]; count: number }) {
   if (expired.length === 0) return null;
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold">Not confirmed within 14 days</h3>
+      <h3 className="text-sm font-semibold">
+        Not confirmed within 14 days{count > expired.length ? ` · ${count}, oldest shown` : ""}
+      </h3>
+      <p className="text-xs text-muted-foreground">
+        Listed until the money is recorded again or the invoice is paid or voided.
+      </p>
       <ul className="space-y-2" aria-label="Expired bank transfers">
         {expired.map((t) => (
           <li
@@ -219,12 +226,15 @@ export function BankTransferPanel({
   canConfirm,
   waiting,
   expired = [],
+  expiredCount = expired.length,
 }: {
   canRecord: boolean;
   canConfirm: boolean;
   waiting: WaitingTransfer[];
-  /** Transfers nobody confirmed within 14 days (expired in the last 30). */
+  /** Transfers nobody confirmed within 14 days, still to be followed up. */
   expired?: ExpiredTransfer[];
+  /** How many there are in all (the list shows at most 200, oldest first). */
+  expiredCount?: number;
 }) {
   const { run, busy, message } = useCommercialAction();
   const { checking, check, checkCustomer } = useCustomerCheck("Nothing was recorded.");
@@ -246,7 +256,7 @@ export function BankTransferPanel({
         invoice.
       </p>
       <WaitingTransfers waiting={waiting} canConfirm={canConfirm} />
-      <ExpiredTransfers expired={expired} />
+      <ExpiredTransfers expired={expired} count={expiredCount} />
       <ActionMessage message={check ? { tone: "error", text: check } : message} />
       {!canRecord ? null : !open ? (
         <Button type="button" variant="outline" className="h-11" onClick={() => setOpen(true)}>

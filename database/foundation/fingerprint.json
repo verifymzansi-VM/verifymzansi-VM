@@ -33,7 +33,9 @@
       "row_level_security": "64ad562a0bdcc3267c51bcc81bab0605",
       "triggers": "a138c3d73b46265b6954c38553954405"
     },
-    "pendingApplication": ["20261117141803_bank_transfer_expiry.sql"]
+    "pendingApplication": [
+      "20261117141803_bank_transfer_expiry.sql"
+    ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
@@ -59,16 +61,16 @@
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 975,
-      "fingerprint": "bba613939ea93604ebf35fba5e60f8c3"
+      "items": 979,
+      "fingerprint": "0cc5f7deb358c2ce6ff142b473587066"
     },
     "function_grants": {
       "items": 721,
       "fingerprint": "a2b7c18d08c962b6fd12ece2538e6d40"
     },
     "function_metadata": {
-      "items": 975,
-      "fingerprint": "8c7fc52d37281996744177d22474c315"
+      "items": 979,
+      "fingerprint": "012ff030704f6265a22b0ea6076b1dbf"
     },
     "indexes": {
       "items": 519,

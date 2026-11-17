@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FoundationServiceApi } from "./service-api";
 import {
+  MISSING_SWEEP_WARNING_MS,
   OperationJobsIncompleteError,
   OUTBOX_FINAL_ATTEMPT,
   OUTBOX_RUN_LIMIT,
@@ -124,7 +125,17 @@ describe("independent steps", () => {
   });
 
   it("skips the bank transfer expiry against a database without it, and fails on other errors", async () => {
-    for (const code of ["PGRST202", "42883"]) {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const missingWarnings = () =>
+      warn.mock.calls.filter(([line]) => String(line).includes("Sweep command missing")).length;
+    // A clock of its own, far from the other tests' runs.
+    const clock = { t: Date.now() + 400 * 86_400_000 };
+    for (const [code, advance, warned] of [
+      ["PGRST202", 0, 1],
+      ["42883", MISSING_SWEEP_WARNING_MS / 2, 1],
+      ["PGRST202", MISSING_SWEEP_WARNING_MS, 2],
+    ] as const) {
+      clock.t += advance;
       queue(job());
       const queued = rpc.getMockImplementation()!;
       rpc.mockImplementation(async (name, args) =>
@@ -132,8 +143,11 @@ describe("independent steps", () => {
           ? { data: null, error: { code, message: "not found" } }
           : queued(name, args)
       );
-      await expect(run()).resolves.toMatchObject({ failed: [] });
+      await expect(run({ now: () => clock.t })).resolves.toMatchObject({ failed: [] });
+      // Logged, at most once an hour.
+      expect(missingWarnings()).toBe(warned);
     }
+    warn.mockRestore();
     queue(job());
     const base = rpc.getMockImplementation()!;
     rpc.mockImplementation(async (name, args) =>
@@ -149,6 +163,21 @@ describe("independent steps", () => {
       name === "run_slot_renewals" ? { data: null, error: { code: "PGRST202" } } : base(name, args)
     );
     expect((await run().catch((e) => e)).failed).toEqual(["sweep:run_slot_renewals"]);
+  });
+
+  it("warns when the expiry sweep left rows it could not change", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "expire_waiting_bank_transfers"
+        ? { data: { expired: 3, with_invoice: 1, failed: 2 }, error: null }
+        : base(name, args)
+    );
+    await expect(run()).resolves.toMatchObject({ failed: [] });
+    expect(
+      warn.mock.calls.some(([line]) => String(line).includes("Sweep left rows it could not change"))
+    ).toBe(true);
+    warn.mockRestore();
   });
 
   it("does not wait for a slow sweep before sending emails", async () => {

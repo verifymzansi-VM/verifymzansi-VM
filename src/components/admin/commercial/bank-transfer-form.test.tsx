@@ -282,6 +282,21 @@ describe("bank transfers waiting for a second staff member", () => {
     expect(
       screen.queryByRole("list", { name: "Bank transfers waiting for confirmation" })
     ).toBeNull();
+    expect(screen.getByRole("heading", { name: "Not confirmed within 14 days" })).toBeVisible();
+    expect(
+      screen.getByText("Listed until the money is recorded again or the invoice is paid or voided.")
+    ).toBeInTheDocument();
+  });
+
+  it("names how many expired transfers there are when more than the list shows", () => {
+    const { similar_records: _ignored, ...rest } = waiting;
+    const expired = { ...rest, expired_at: "2026-11-27T08:01:00Z", invoice_number: null };
+    render(
+      <BankTransferPanel canRecord canConfirm waiting={[]} expired={[expired]} expiredCount={240} />
+    );
+    expect(
+      screen.getByRole("heading", { name: "Not confirmed within 14 days · 240, oldest shown" })
+    ).toBeVisible();
   });
 
   it("shows no expired list when there are none", () => {

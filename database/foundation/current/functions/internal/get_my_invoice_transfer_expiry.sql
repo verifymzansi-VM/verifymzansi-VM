@@ -20,7 +20,8 @@ begin
   end if;
   perform internal.price_draft_actor();
   return jsonb_build_object('invoice_number', inv.invoice_number,
-    'transfer_expired_at', case when latest.status = 'expired' then latest.expired_at end);
+    'transfer_expired_at', case when latest.id is not null and internal.invoice_transfer_expired(latest)
+      then coalesce(latest.expired_at, latest.recorded_at + internal.invoice_transfer_expires_after()) end);
 end;
 $function$;
 alter function internal.get_my_invoice_transfer_expiry(text) owner to postgres;

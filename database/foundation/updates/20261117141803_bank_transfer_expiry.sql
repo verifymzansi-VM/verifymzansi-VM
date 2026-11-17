@@ -9,63 +9,67 @@
 -- transfer, and the account cannot be erased.
 --
 -- Apply after 20261117123240_skipped_email_status.sql (filename order; this
--- update does not depend on it). It refuses with 55000 unless the six
--- functions it replaces have their reviewed bodies (or this update's) and the
--- audit view lists bank transfers. Only adds: no API command, argument or grant
--- is removed or changed, and no row is written. In one transaction it:
+-- update does not depend on it), and only once staff have confirmed or declined
+-- every transfer that has waited 14 days or more: from this update on those can
+-- never be confirmed (the preflight lists them). It refuses with 55000 unless
+-- the thirteen functions it replaces have their reviewed bodies (or this
+-- update's) and the audit view lists bank transfers. Only adds: no API
+-- command, argument or grant is removed or changed, and no row is written. In
+-- one transaction it:
 --
 -- 1. Adds private.invoice_transfers.expired_at and a fourth status 'expired'
 --    (constraint invoice_transfers_expired: expired exactly when expired_at is
---    set). No row changes: every existing row stays as it is.
--- 2. Adds internal.invoice_transfer_expires_after(), the one setting
---    (14 days), and the service-only sweep api.expire_waiting_bank_transfers
---    (p_limit 1 to 1000): every waiting transfer recorded 14 days ago or longer
---    becomes 'expired' with expired_at, oldest first, skipping rows a staff
---    member is deciding at that moment. Nothing is deleted. The website's
---    operation job (every minute) runs it with p_limit 100. Rerunning it
---    changes nothing more.
--- 3. internal.invoice_transfer_guard (trigger): a waiting transfer may also
---    change once to 'expired', only 14 days or more after it was recorded, with
---    expired_at and nothing else; no other change may set expired_at, and a new
---    row cannot be expired. An expired transfer never changes again.
--- 4. internal.confirm_staff_invoice_payment: an expired transfer is refused as
---    before for any decided one (PT409 transfer_not_waiting, "already
---    expired"), and so is a waiting one recorded 14 days ago or longer that the
---    sweep has not reached yet. Declining an expired transfer is refused the
---    same way (body unchanged); a waiting one can still be declined.
--- 5. What the transfer held is released as a decline releases it: an expired
---    transfer is not "waiting", so the invoice it named (still 'issued') can be
---    paid with Pay now, voided or given a new transfer, and the account's
---    erasure no longer waits for it. The partial unique indexes
---    invoice_transfers_open_reference_idx (the same bank credit) and
---    invoice_transfers_customer_invoice_open_idx (one open transfer per
---    invoice) leave out expired rows as they leave out declined ones, and
---    internal.record_staff_invoice_payment, internal.record_staff_invoice_transfer
---    and the "Possible duplicate" count (internal.invoice_transfer_dto) do the
---    same, so staff can record the bank credit again if the money did arrive.
---    A waiting transfer holds no slots and no payment (an invoice attempt never
---    sent to Ozow was already closed when the transfer was recorded), so
---    nothing else is released.
--- 6. The staff audit trail (private.frontend_staff_audit_events) lists each
---    expiry as 'payment:invoice_expired' with no staff member, the transfer as
---    its target and "Bank transfer <reference> expired: not confirmed within 14
---    days of being recorded", the same way it lists a decline.
--- 7. Retention (internal.retention_commerce) counts an expired transfer's five
---    tax years from when it expired.
--- 8. Two reads: api.get_staff_expired_invoice_transfers() (staff with
---    payments:view: transfers that expired in the last 30 days, newest first,
---    at most 20, as the waiting list shows them plus expired_at and the
---    invoice number) and api.get_my_invoice_transfer_expiry(p_invoice_number)
---    (the member's own invoice: when its latest transfer expired while the
---    invoice is unpaid, else null). No existing read changes shape.
+--    set). Existing rows are not changed.
+-- 2. One rule, internal.invoice_transfer_expired(t): a transfer has expired
+--    when it is marked expired, or when it still waits and was recorded 14 days
+--    ago or longer (internal.invoice_transfer_expires_after(), the one
+--    setting). internal.invoice_transfer_waiting(t) is "waiting and not
+--    expired". Every command and read below uses them, so nothing depends on
+--    the sweep having run:
+--    - confirming and declining refuse an expired transfer (PT409
+--      transfer_not_waiting), and so does the record guard;
+--    - Pay now (internal.start_invoice_payment), voiding an invoice, recording
+--      a transfer to an invoice and the account erasure hold wait only for a
+--      transfer that is still waiting;
+--    - the staff waiting list, the invoice "transfer_waiting" flag (staff and
+--      member), the "Possible duplicate" count and the two new reads count an
+--      expired transfer as expired.
+-- 3. The sweep api.expire_waiting_bank_transfers(p_limit) (service role only,
+--    1 to 1000) records the status, the time and so the audit row of every
+--    transfer that has waited 14 days, oldest first, each row on its own: a
+--    row that cannot be changed is counted as failed and tried again next run,
+--    and never stops the others. Rows a staff member holds are skipped. The
+--    website's operation job runs it every minute with p_limit 100.
+-- 4. Recording a bank credit again: both record commands first record the
+--    expiry of any waiting record of the same credit (or, for an invoice, to
+--    the same invoice) that has waited 14 days, so the unique indexes (which,
+--    like the commands, leave out declined and expired records) still allow
+--    exactly one open record of a credit and of an invoice. A credit that
+--    cleared more than 90 days ago is accepted only when it is exactly the
+--    credit (bank reference, amount, date cleared) of an expired transfer.
+-- 5. The staff audit trail (private.frontend_staff_audit_events) lists each
+--    recorded expiry as 'payment:invoice_expired' with no staff member, the
+--    transfer as its target and "Bank transfer <reference> expired: not
+--    confirmed within 14 days of being recorded", the way it lists a decline.
+-- 6. Retention (internal.retention_commerce) counts an expired transfer's five
+--    tax years from its expiry; the privacy export
+--    (internal.frontend_privacy_export_data) adds expired_at to each bank
+--    transfer.
+-- 7. Two reads: api.get_staff_expired_invoice_transfers() (staff with
+--    payments:view: every expired transfer not yet followed up by a later
+--    record of the same credit or invoice, or by its invoice being paid or
+--    voided; oldest first, at most 200, with the count) and
+--    api.get_my_invoice_transfer_expiry(p_invoice_number) (the member's own
+--    invoice: when its latest transfer expired while the invoice is unpaid,
+--    else null). No existing read changes shape.
 --
 -- No email is sent; the member sees the expiry on the invoice page.
 --
 -- Safe in either order. Database first: the earlier website never calls the
--- sweep or the reads, so nothing expires until the release is deployed; it
--- refuses to confirm a transfer recorded 14 days ago or longer with its
--- "no longer waiting" message. Website first: the release tolerates the missing
--- sweep and reads (no expiry shown) until this update is applied.
+-- sweep or the reads; transfers that have waited 14 days count as expired at
+-- once (their invoices can be paid again) and confirming one shows the earlier
+-- website's "no longer waiting" message. Website first: the release tolerates
+-- the missing sweep and reads (no expiry shown) until this update is applied.
 -- Read-only preflight: ../preflight/20261117141803_bank_transfer_expiry.check.sql.
 -- Rollback: ../rollback/20261117141803_bank_transfer_expiry.down.sql.
 begin;
@@ -81,24 +85,45 @@ begin
     select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)),'absent')
     from (values ('internal.invoice_transfer_guard()'),
       ('internal.confirm_staff_invoice_payment(uuid)'),
+      ('internal.decline_staff_invoice_payment(uuid,text)'),
       ('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)'),
       ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)'),
       ('internal.invoice_transfer_dto(private.invoice_transfers,uuid)'),
-      ('internal.retention_commerce(integer)')) v(sig)
+      ('internal.get_staff_invoice_transfers()'),
+      ('internal.customer_invoice_dto(private.customer_invoices,uuid)'),
+      ('internal.start_invoice_payment(text,bigint,boolean)'),
+      ('internal.void_staff_invoice(uuid,text)'),
+      ('internal.account_erasure_hold(uuid)'),
+      ('internal.retention_commerce(integer)'),
+      ('internal.frontend_privacy_export_data(uuid)')) v(sig)
   loop
     if shape not in (
         'internal.invoice_transfer_guard() 494dcdb720573571dd36edf97b055332',
-        'internal.invoice_transfer_guard() af70f9825c745ba7b8befd4fac7eb172',
+        'internal.invoice_transfer_guard() 8a6697d7fc6026bc14e771df9b7ac999',
         'internal.confirm_staff_invoice_payment(uuid) e0c308df14f38f1de76bdced4e8683f2',
-        'internal.confirm_staff_invoice_payment(uuid) d5e6989a1e81cd2936ed9294aecb4574',
+        'internal.confirm_staff_invoice_payment(uuid) 66e96f9682fbab67236ccf83142fbd05',
+        'internal.decline_staff_invoice_payment(uuid,text) cc8641faee31c5a9a043e4c510d26302',
+        'internal.decline_staff_invoice_payment(uuid,text) 2812080d676629d5f74e4f4d0063c368',
         'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) 594b47bc794e335a3f3be505a4b1637e',
-        'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) 76c273eb51960b75755d1adf6725772f',
+        'internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text) 68cfba77e196105dd3c686b935f11e11',
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 171c0ad6f18a7f5329ff00dcfff4608d',
-        'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 131c741d783cdd500496d1ce049ae0b0',
+        'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 49ae9a41906abbca8ceff68e6489a689',
         'internal.invoice_transfer_dto(private.invoice_transfers,uuid) b91dbdd96bec847ddb165d6a663cc7cb',
-        'internal.invoice_transfer_dto(private.invoice_transfers,uuid) de3c7355b17b84d785e06abe80aa8e91',
+        'internal.invoice_transfer_dto(private.invoice_transfers,uuid) cbcd92ebaf7e89f07960f74f036f46fd',
+        'internal.get_staff_invoice_transfers() 37ec35ae8968df035025e3c69234f3be',
+        'internal.get_staff_invoice_transfers() 13f1c0cf67460052d334b32e70b1ebe8',
+        'internal.customer_invoice_dto(private.customer_invoices,uuid) 5ce8a88fc44ed9e59a1cfd7dd6214382',
+        'internal.customer_invoice_dto(private.customer_invoices,uuid) 27604995d3de7e7a5794c1bf220b3213',
+        'internal.start_invoice_payment(text,bigint,boolean) 58e3e24aa91f41a476435c8b152b94d2',
+        'internal.start_invoice_payment(text,bigint,boolean) ea362defef15f7d6116a0f96cc53fef5',
+        'internal.void_staff_invoice(uuid,text) 21763bcb62e398b6d1b8e8d64ef38ea5',
+        'internal.void_staff_invoice(uuid,text) 6c997c846aa9d114150e11d2591d5ad7',
+        'internal.account_erasure_hold(uuid) 5bd01c33cf23f3e6516ceb96c3dc3236',
+        'internal.account_erasure_hold(uuid) f450a4cad9855826d8dc6212d1a614cb',
         'internal.retention_commerce(integer) 422a63c6d6fd2be5a1556893a8975d3f',
-        'internal.retention_commerce(integer) 55051470a07c224838cb58dc45d66406') then
+        'internal.retention_commerce(integer) 55051470a07c224838cb58dc45d66406',
+        'internal.frontend_privacy_export_data(uuid) 1a16274c11f77a9a6d72482ca43d6753',
+        'internal.frontend_privacy_export_data(uuid) 86a879279ebd9dcadf6f3f4fa11e7f44') then
       raise exception 'bank transfer expiry precondition: % is not a reviewed body', shape using errcode='55000';
     end if;
   end loop;
@@ -119,7 +144,7 @@ alter table private.invoice_transfers drop constraint if exists invoice_transfer
   drop constraint if exists invoice_transfers_expired,
   add constraint invoice_transfers_expired check ((status = 'expired'::text) = (expired_at is not null));
 
--- 5. An expired transfer, like a declined one, holds neither its bank credit
+-- 4. An expired transfer, like a declined one, holds neither its bank credit
 -- nor its invoice.
 drop index if exists private.invoice_transfers_open_reference_idx;
 create unique index invoice_transfers_open_reference_idx on private.invoice_transfers
@@ -128,11 +153,10 @@ create unique index invoice_transfers_open_reference_idx on private.invoice_tran
 drop index if exists private.invoice_transfers_customer_invoice_open_idx;
 create unique index invoice_transfers_customer_invoice_open_idx on private.invoice_transfers (customer_invoice_id)
   where customer_invoice_id is not null and status <> all (array['declined'::text, 'expired'::text]);
--- The staff list of recent expiries.
 create index if not exists invoice_transfers_expired_idx on private.invoice_transfers (expired_at)
   where status = 'expired';
 
--- 2. The setting, the sweep and (8) the two reads.
+-- 2. The setting and the rule (used by the bodies below).
 -- The one setting: how long a recorded bank transfer may wait for a second
 -- staff member before it expires. STABLE, not IMMUTABLE, so a changed value
 -- is never folded into a plan a pooled connection keeps.
@@ -147,135 +171,68 @@ $function$;
 alter function internal.invoice_transfer_expires_after() owner to postgres;
 revoke all on function internal.invoice_transfer_expires_after() from public, anon, authenticated, service_role;
 
--- The sweep: every waiting transfer recorded 14 days ago or longer becomes
--- expired, oldest first, at most p_limit per run. Rows a staff member is
--- confirming or declining right now are skipped (that command decides them;
--- confirming refuses an expired one anyway). Nothing is deleted; an invoice the
--- transfer named stays issued, so it can be paid again (as after a decline).
-CREATE OR REPLACE FUNCTION internal.expire_waiting_bank_transfers(p_limit integer)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
+-- The one rule: a transfer has expired when it is marked expired, or when it
+-- still waits and was recorded 14 days ago or longer (the sweep has not marked
+-- it yet). Every command and read uses this, so nothing depends on the sweep
+-- having run.
+CREATE OR REPLACE FUNCTION internal.invoice_transfer_expired(t private.invoice_transfers)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
  SET search_path TO 'pg_catalog'
 AS $function$
-declare expired integer; invoices integer;
+  select t.status = 'expired' or (t.status = 'awaiting_confirmation'
+    and t.recorded_at <= statement_timestamp() - internal.invoice_transfer_expires_after());
+$function$;
+alter function internal.invoice_transfer_expired(private.invoice_transfers) owner to postgres;
+revoke all on function internal.invoice_transfer_expired(private.invoice_transfers) from public, anon, authenticated, service_role;
+
+-- Waiting for a second staff member: recorded, not decided, not expired.
+CREATE OR REPLACE FUNCTION internal.invoice_transfer_waiting(t private.invoice_transfers)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select t.status = 'awaiting_confirmation' and not internal.invoice_transfer_expired(t);
+$function$;
+alter function internal.invoice_transfer_waiting(private.invoice_transfers) owner to postgres;
+revoke all on function internal.invoice_transfer_waiting(private.invoice_transfers) from public, anon, authenticated, service_role;
+
+-- A bank credit (reference, amount, date cleared) that an expired transfer
+-- named: it may be recorded again whatever its age.
+CREATE OR REPLACE FUNCTION internal.invoice_transfer_credit_expired(p_reference_key text, p_amount_cents bigint, p_cleared_on date)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select exists(select 1 from private.invoice_transfers t
+    where upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = p_reference_key
+      and t.amount_received_cents = p_amount_cents and t.cleared_on = p_cleared_on
+      and internal.invoice_transfer_expired(t));
+$function$;
+alter function internal.invoice_transfer_credit_expired(text,bigint,date) owner to postgres;
+revoke all on function internal.invoice_transfer_credit_expired(text,bigint,date) from public, anon, authenticated, service_role;
+
+-- Records the expiry of one transfer that has waited 14 days (status, time;
+-- the audit trail reads them); false when it is not such a transfer.
+CREATE OR REPLACE FUNCTION internal.expire_invoice_transfer(p_transfer_id uuid)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
 begin
-  if p_limit is null or p_limit not between 1 and 1000 then
-    raise exception 'limit 1 to 1000' using errcode='22023';
-  end if;
-  with due as (
-    select t.id from private.invoice_transfers t
-    where t.status = 'awaiting_confirmation'
-      and t.recorded_at <= statement_timestamp() - internal.invoice_transfer_expires_after()
-    order by t.recorded_at, t.id
-    limit p_limit
-    for update skip locked
-  ), done as (
-    update private.invoice_transfers t set status = 'expired', expired_at = statement_timestamp()
-    from due where t.id = due.id
-    returning t.customer_invoice_id
-  )
-  select count(*), count(done.customer_invoice_id) into expired, invoices from done;
-  return jsonb_build_object('expired', expired, 'invoices_open_again', invoices);
+  update private.invoice_transfers t set status = 'expired', expired_at = statement_timestamp()
+    where t.id = p_transfer_id and t.status = 'awaiting_confirmation'
+      and t.recorded_at <= statement_timestamp() - internal.invoice_transfer_expires_after();
+  return found;
 end;
 $function$;
-alter function internal.expire_waiting_bank_transfers(integer) owner to postgres;
-revoke all on function internal.expire_waiting_bank_transfers(integer) from public, anon, authenticated, service_role;
-grant execute on function internal.expire_waiting_bank_transfers(integer) to service_role;
+alter function internal.expire_invoice_transfer(uuid) owner to postgres;
+revoke all on function internal.expire_invoice_transfer(uuid) from public, anon, authenticated, service_role;
 
-CREATE OR REPLACE FUNCTION api.expire_waiting_bank_transfers(p_limit integer)
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  select internal.expire_waiting_bank_transfers(p_limit);
-$function$;
-alter function api.expire_waiting_bank_transfers(integer) owner to postgres;
-revoke all on function api.expire_waiting_bank_transfers(integer) from public, anon, authenticated, service_role;
-grant execute on function api.expire_waiting_bank_transfers(integer) to service_role;
-
--- Staff (payments:view): the transfers that expired in the last 30 days, newest
--- first, at most 20, each as the waiting list shows it plus when it expired and
--- the invoice it named.
-CREATE OR REPLACE FUNCTION internal.get_staff_expired_invoice_transfers()
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'pg_catalog'
-AS $function$
-declare actor uuid; result jsonb;
-begin
-  actor := internal.staff_actor('payments:view');
-  select jsonb_build_object('items', coalesce(jsonb_agg(internal.invoice_transfer_dto(t, actor)
-      || jsonb_build_object('expired_at', t.expired_at, 'invoice_number',
-        (select i.invoice_number from private.customer_invoices i where i.id = t.customer_invoice_id))
-      order by t.expired_at desc, t.id desc), '[]'::jsonb))
-    into result
-  from (select * from private.invoice_transfers x where x.status = 'expired'
-      and x.expired_at > statement_timestamp() - interval '30 days'
-    order by x.expired_at desc, x.id desc limit 20) t;
-  if internal.staff_actor('payments:view') is distinct from actor then
-    raise exception 'staff actor changed' using errcode='42501';
-  end if;
-  return result;
-end;
-$function$;
-alter function internal.get_staff_expired_invoice_transfers() owner to postgres;
-revoke all on function internal.get_staff_expired_invoice_transfers() from public, anon, authenticated, service_role;
-grant execute on function internal.get_staff_expired_invoice_transfers() to authenticated;
-
-CREATE OR REPLACE FUNCTION api.get_staff_expired_invoice_transfers()
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  select internal.get_staff_expired_invoice_transfers();
-$function$;
-alter function api.get_staff_expired_invoice_transfers() owner to postgres;
-revoke all on function api.get_staff_expired_invoice_transfers() from public, anon, authenticated, service_role;
-grant execute on function api.get_staff_expired_invoice_transfers() to authenticated;
-
--- The member (own invoice only): when the latest bank transfer recorded to
--- this still unpaid invoice expired, or null. Nothing else about the transfer;
--- a declined transfer is not shown, as before.
-CREATE OR REPLACE FUNCTION internal.get_my_invoice_transfer_expiry(p_invoice_number text)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'pg_catalog'
-AS $function$
-declare actor uuid := internal.price_draft_actor(); inv private.customer_invoices; latest private.invoice_transfers;
-begin
-  select * into inv from private.customer_invoices i
-    where i.invoice_number = internal.customer_invoice_number(p_invoice_number) and i.account_id = actor;
-  if not found then
-    raise exception 'invoice not found' using errcode='PT404', detail='invoice_unavailable';
-  end if;
-  if inv.status = 'issued' then
-    select * into latest from private.invoice_transfers t where t.customer_invoice_id = inv.id
-      order by t.recorded_at desc, t.id desc limit 1;
-  end if;
-  perform internal.price_draft_actor();
-  return jsonb_build_object('invoice_number', inv.invoice_number,
-    'transfer_expired_at', case when latest.status = 'expired' then latest.expired_at end);
-end;
-$function$;
-alter function internal.get_my_invoice_transfer_expiry(text) owner to postgres;
-revoke all on function internal.get_my_invoice_transfer_expiry(text) from public, anon, authenticated, service_role;
-grant execute on function internal.get_my_invoice_transfer_expiry(text) to authenticated;
-
-CREATE OR REPLACE FUNCTION api.get_my_invoice_transfer_expiry(p_invoice_number text)
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  select internal.get_my_invoice_transfer_expiry(p_invoice_number);
-$function$;
-alter function api.get_my_invoice_transfer_expiry(text) owner to postgres;
-revoke all on function api.get_my_invoice_transfer_expiry(text) from public, anon, authenticated, service_role;
-grant execute on function api.get_my_invoice_transfer_expiry(text) to authenticated;
-
--- 3. The record guard.
+-- 2, 4, 6. The replaced bodies.
 CREATE OR REPLACE FUNCTION internal.invoice_transfer_guard()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -326,6 +283,12 @@ begin
   if new.expired_at is not null then
     raise exception 'only an expired bank transfer has an expiry time' using errcode='23514';
   end if;
+  -- Confirmed or declined: only while the transfer has not expired, also when
+  -- the sweep has not marked it yet.
+  if internal.invoice_transfer_expired(old) then
+    raise exception 'a bank transfer that waited 14 days has expired and is never confirmed or declined'
+      using errcode='23514';
+  end if;
   if new.status = 'confirmed' then
     select * into pay from private.payments p where p.id = new.payment_id;
     if not found or pay.provider <> 'invoice' or pay.status <> 'complete' or pay.owner_id <> new.account_id
@@ -345,7 +308,6 @@ $function$;
 alter function internal.invoice_transfer_guard() owner to postgres;
 revoke all on function internal.invoice_transfer_guard() from public;
 
--- 4. Confirming.
 CREATE OR REPLACE FUNCTION internal.confirm_staff_invoice_payment(p_transfer_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -365,10 +327,9 @@ begin
     raise exception 'this bank transfer was already %; it cannot be confirmed', t.status
       using errcode='PT409', detail='transfer_not_waiting';
   end if;
-  -- A transfer that has waited 14 days has expired
-  -- (20261117141803_bank_transfer_expiry.sql): never confirmed, also before
-  -- the sweep (api.expire_waiting_bank_transfers) has marked it.
-  if t.recorded_at <= statement_timestamp() - internal.invoice_transfer_expires_after() then
+  -- One rule (20261117141803_bank_transfer_expiry.sql): a transfer that has
+  -- waited 14 days has expired, whether or not the sweep has marked it.
+  if internal.invoice_transfer_expired(t) then
     raise exception 'this bank transfer waited 14 days without confirmation and expired; it cannot be confirmed'
       using errcode='PT409', detail='transfer_not_waiting';
   end if;
@@ -496,7 +457,45 @@ alter function internal.confirm_staff_invoice_payment(uuid) owner to postgres;
 revoke all on function internal.confirm_staff_invoice_payment(uuid) from public;
 grant execute on function internal.confirm_staff_invoice_payment(uuid) to authenticated;
 
--- 5. Recording again, and the duplicate count.
+CREATE OR REPLACE FUNCTION internal.decline_staff_invoice_payment(p_transfer_id uuid, p_reason text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid; t private.invoice_transfers;
+begin
+  actor := internal.staff_actor('payments:confirm_transfer');
+  if not coalesce(internal.plain_text_valid(p_reason, 5, 500, true), false) then
+    raise exception 'decline reason required' using errcode='22023';
+  end if;
+  t := internal.lock_invoice_transfer_for_review(p_transfer_id, actor);
+  if t.status = 'declined' and t.declined_by = actor and t.decline_reason = btrim(p_reason) then
+    return internal.invoice_transfer_dto(t, actor) || jsonb_build_object('repeated', true);
+  end if;
+  if t.status <> 'awaiting_confirmation' then
+    raise exception 'this bank transfer was already %; it cannot be declined', t.status
+      using errcode='PT409', detail='transfer_not_waiting';
+  end if;
+  -- One rule (20261117141803_bank_transfer_expiry.sql): a transfer that has
+  -- waited 14 days has expired, whether or not the sweep has marked it.
+  if internal.invoice_transfer_expired(t) then
+    raise exception 'this bank transfer waited 14 days without confirmation and expired; it cannot be declined'
+      using errcode='PT409', detail='transfer_not_waiting';
+  end if;
+  update private.invoice_transfers set status = 'declined', declined_by = actor,
+      declined_at = statement_timestamp(), decline_reason = btrim(p_reason)
+    where id = t.id returning * into t;
+  if internal.staff_actor('payments:confirm_transfer') is distinct from actor then
+    raise exception 'staff actor changed' using errcode='42501';
+  end if;
+  return internal.invoice_transfer_dto(t, actor) || jsonb_build_object('repeated', false);
+end;
+$function$;
+alter function internal.decline_staff_invoice_payment(uuid,text) owner to postgres;
+revoke all on function internal.decline_staff_invoice_payment(uuid,text) from public;
+grant execute on function internal.decline_staff_invoice_payment(uuid,text) to authenticated;
+
 CREATE OR REPLACE FUNCTION internal.record_staff_invoice_payment(p_account_email text, p_term_days integer, p_slots integer, p_amount_cents bigint, p_bank_reference text, p_cleared_on text, p_cooling_off_waiver boolean, p_reason text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -536,7 +535,9 @@ begin
   exception when others then
     raise exception 'date the money cleared required' using errcode='22023', detail='cleared_date_invalid';
   end;
-  if cleared > today or cleared < today - 90 then
+  -- More than 90 days ago only to record again exactly the bank credit of an
+  -- expired transfer (checked below, under the locks).
+  if cleared > today then
     raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
   end if;
   if p_cooling_off_waiver is distinct from true then
@@ -554,6 +555,18 @@ begin
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, buyer);
   perform internal.assert_staff_not_referrer(actor, buyer);
+  -- 20261117141803_bank_transfer_expiry.sql: a waiting record of this bank
+  -- credit that has waited 14 days is marked expired first, so it
+  -- no longer holds them; the unique indexes still allow one open record. A
+  -- credit that cleared more than 90 days ago is accepted only to record again
+  -- exactly the credit of an expired transfer.
+  perform internal.expire_invoice_transfer(t.id) from private.invoice_transfers t
+    where t.status = 'awaiting_confirmation'
+      and (t.amount_received_cents = p_amount_cents and t.cleared_on = cleared
+        and upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key);
+  if cleared < today - 90 and not internal.invoice_transfer_credit_expired(reference_key, p_amount_cents, cleared) then
+    raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
+  end if;
   -- The same bank credit (reference, amount, date cleared) waiting or
   -- confirmed: the same request again by the same staff member returns it;
   -- anything else is refused. A declined or expired record does not count.
@@ -653,7 +666,9 @@ begin
   exception when others then
     raise exception 'date the money cleared required' using errcode='22023', detail='cleared_date_invalid';
   end;
-  if cleared > today or cleared < today - 90 then
+  -- More than 90 days ago only to record again exactly the bank credit of an
+  -- expired transfer (checked below, under the locks).
+  if cleared > today then
     raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
   end if;
   if p_cooling_off_waiver is distinct from true then
@@ -677,6 +692,18 @@ begin
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, inv.account_id);
   perform internal.assert_staff_not_referrer(actor, inv.account_id);
+  -- 20261117141803_bank_transfer_expiry.sql: a waiting record of this bank
+  -- credit or of this invoice that has waited 14 days is marked expired first, so it
+  -- no longer holds them; the unique indexes still allow one open record. A
+  -- credit that cleared more than 90 days ago is accepted only to record again
+  -- exactly the credit of an expired transfer.
+  perform internal.expire_invoice_transfer(t.id) from private.invoice_transfers t
+    where t.status = 'awaiting_confirmation'
+      and (t.customer_invoice_id = inv.id or (t.amount_received_cents = inv.total_cents and t.cleared_on = cleared
+        and upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key));
+  if cleared < today - 90 and not internal.invoice_transfer_credit_expired(reference_key, inv.total_cents, cleared) then
+    raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
+  end if;
   -- The same bank credit waiting or confirmed: the same request again by the
   -- same staff member returns it; anything else is refused. A declined or
   -- expired record does not count.
@@ -698,7 +725,7 @@ begin
     raise exception 'this invoice was voided' using errcode='PT409', detail='invoice_void';
   end if;
   if exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = inv.id
-      and t.status = 'awaiting_confirmation') then
+      and internal.invoice_transfer_waiting(t)) then
     raise exception 'a bank transfer to this invoice already waits for confirmation'
       using errcode='PT409', detail='invoice_transfer_waiting';
   end if;
@@ -759,7 +786,8 @@ AS $function$
   select jsonb_build_object('transfer_id', t.id, 'status', t.status, 'account_id', t.account_id,
     'customer_email', (select u.email from auth.users u where u.id = t.account_id),
     'similar_records', (select count(*) from private.invoice_transfers x where x.id <> t.id
-      and x.status not in ('declined', 'expired') and x.amount_received_cents = t.amount_received_cents
+      and x.status <> 'declined' and not internal.invoice_transfer_expired(x)
+      and x.amount_received_cents = t.amount_received_cents
       and (upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
           = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g'))
         or (x.account_id = t.account_id and x.cleared_on = t.cleared_on))),
@@ -774,7 +802,313 @@ $function$;
 alter function internal.invoice_transfer_dto(private.invoice_transfers,uuid) owner to postgres;
 revoke all on function internal.invoice_transfer_dto(private.invoice_transfers,uuid) from public;
 
--- 7. Retention.
+CREATE OR REPLACE FUNCTION internal.get_staff_invoice_transfers()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid; result jsonb;
+begin
+  actor := internal.staff_actor('payments:view');
+  select jsonb_build_object('waiting', (select count(*) from private.invoice_transfers t where internal.invoice_transfer_waiting(t)),
+      'items', coalesce(jsonb_agg(internal.invoice_transfer_dto(t, actor) order by t.recorded_at, t.id), '[]'::jsonb))
+    into result
+  from (select * from private.invoice_transfers x where internal.invoice_transfer_waiting(x)
+    order by x.recorded_at, x.id limit 50) t;
+  if internal.staff_actor('payments:view') is distinct from actor then
+    raise exception 'staff actor changed' using errcode='42501';
+  end if;
+  return result;
+end;
+$function$;
+alter function internal.get_staff_invoice_transfers() owner to postgres;
+revoke all on function internal.get_staff_invoice_transfers() from public;
+grant execute on function internal.get_staff_invoice_transfers() to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.customer_invoice_dto(i private.customer_invoices, p_staff uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select jsonb_build_object('invoice_id', i.id, 'invoice_number', i.invoice_number, 'status', i.status,
+    'issued_at', i.issued_at, 'due_on', to_char(i.due_on::timestamp, 'YYYY-MM-DD'),
+    'seller', i.seller,
+    'buyer', case when i.buyer_name is null then null else jsonb_build_object('name', i.buyer_name,
+      'address', i.buyer_address, 'registration_number', i.buyer_registration_number) end,
+    'revision', i.revision, 'term_days', (select v.duration_days from private.plan_versions v where v.id = i.plan_version_id),
+    'slots', i.slots, 'unit_price_cents', i.unit_price_cents, 'total_cents', i.total_cents,
+    'description', i.description, 'currency', 'ZAR', 'payment_reference', i.invoice_number,
+    'cooling_off_consent_at', i.cooling_off_consent_at, 'cooling_off_consent_version', i.cooling_off_consent_version,
+    'consent', internal.customer_invoice_consent(),
+    'paid_at', i.paid_at, 'payment_id', i.payment_id,
+    'payment_status', (select p.status from private.payments p where p.id = i.payment_id),
+    'voided_at', i.voided_at,
+    'transfer_waiting', exists(select 1 from private.invoice_transfers t
+      where t.customer_invoice_id = i.id and internal.invoice_transfer_waiting(t)),
+    'latest_attempt', (select jsonb_build_object('payment_id', p.id, 'attempt', l.attempt, 'status', p.status,
+        'checkout_open', p.status = 'pending' and p.checkout_url is not null
+          and p.checkout_expires_at > pg_catalog.clock_timestamp())
+      from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
+      where l.invoice_id = i.id order by l.attempt desc limit 1))
+  || case when p_staff is null then '{}'::jsonb else jsonb_build_object('account_id', i.account_id,
+    'customer_email', (select u.email from auth.users u where u.id = i.account_id),
+    'customer_name', internal.profile_public_name((select f.display_name from private.profiles f where f.account_id = i.account_id)),
+    'issued_by_me', internal.same_identity(i.issued_by, p_staff),
+    'issued_by_name', internal.profile_public_name((select f.display_name from private.profiles f where f.account_id = i.issued_by)),
+    'issue_reason', i.issue_reason, 'void_reason', i.void_reason,
+    'attempts', (select count(*) from private.customer_invoice_payments l where l.invoice_id = i.id),
+    'extra_payments', coalesce((select jsonb_agg(p.id order by p.completed_at, p.id)
+      from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
+      where l.invoice_id = i.id and p.completed_at is not null and p.id is distinct from i.payment_id), '[]'::jsonb)) end;
+$function$;
+alter function internal.customer_invoice_dto(private.customer_invoices,uuid) owner to postgres;
+revoke all on function internal.customer_invoice_dto(private.customer_invoices,uuid) from public;
+
+CREATE OR REPLACE FUNCTION internal.start_invoice_payment(p_invoice_number text, p_expected_total_cents bigint, p_cooling_off_consent boolean)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid := internal.price_draft_actor(); inv private.customer_invoices; plan private.plan_versions;
+  latest private.payments; other private.payments; pay private.payments; fingerprint text; counted jsonb;
+  attempts integer; consent jsonb := internal.customer_invoice_consent();
+begin
+  if p_expected_total_cents is null then
+    raise exception 'invoice total required' using errcode='22023';
+  end if;
+  if p_cooling_off_consent is distinct from true then
+    raise exception 'cooling-off consent required before payment' using errcode='22023', detail='invoice_consent_required';
+  end if;
+  inv := internal.lock_my_issued_invoice(actor, p_invoice_number);
+  if exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = inv.id
+      and internal.invoice_transfer_waiting(t)) then
+    raise exception 'your bank transfer to this invoice is being checked; you do not need to pay again'
+      using errcode='PT409', detail='invoice_transfer_waiting';
+  end if;
+  if inv.buyer_name is null then
+    raise exception 'add your billing details before paying' using errcode='PT409', detail='invoice_billing_required';
+  end if;
+  if inv.total_cents <> p_expected_total_cents then
+    raise exception 'the invoice total is % cents', inv.total_cents using errcode='PT428', detail='invoice_amount_mismatch';
+  end if;
+  select * into plan from private.plan_versions v where v.id = inv.plan_version_id and v.retired_at is null
+    and v.is_public and internal.individual_slot_plan(v.plan_code) and v.price_cents = inv.unit_price_cents;
+  if not found then
+    raise exception 'this invoice can no longer be paid online; ask for a new one'
+      using errcode='PT409', detail='invoice_plan_unavailable';
+  end if;
+  fingerprint := internal.current_verified_identity(actor);
+  if fingerprint is null then
+    raise exception 'your ID review must be accepted before you pay' using errcode='PT412', detail='invoice_buyer_unverified';
+  end if;
+  -- E3 (20261114154823): while the person's Multi-listing package runs (until
+  -- its last 7 days), no Individual slot is sold, whatever the way it is paid.
+  if internal.slot_package_blocks_individual(fingerprint, actor) then
+    raise exception 'Individual slots cannot be sold while the person''s Multi-listing package runs'
+      using errcode='PT409', detail='package_active';
+  end if;
+  -- One person at a time (every account of the identity), then this account,
+  -- as the slot checkout does.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('individual-slots:'||fingerprint, 707));
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text, 707));
+  select p.* into latest from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
+    where l.invoice_id = inv.id order by l.attempt desc limit 1 for update of p;
+  if latest.id is not null then
+    if latest.status in ('complete', 'refunded', 'chargeback') then
+      raise exception 'this invoice is already paid' using errcode='PT409', detail='invoice_paid';
+    end if;
+    if latest.status = 'pending' and latest.checkout_url is not null
+        and latest.checkout_expires_at > pg_catalog.clock_timestamp() then
+      -- Its Ozow page is still open: the customer continues there.
+      perform internal.price_draft_actor();
+      return jsonb_build_object('payment_id', latest.id, 'merchant_reference', latest.merchant_reference,
+        'amount_cents', latest.amount_cents::text, 'currency', latest.currency, 'status', latest.status,
+        'slots', inv.slots, 'reused', true);
+    end if;
+    if internal.customer_invoice_attempt_live(latest) then
+      raise exception 'your last payment of this invoice is still being checked; try again in a few minutes'
+        using errcode='PT409', detail='invoice_payment_checking';
+    end if;
+    if latest.status <> 'pending' then
+      latest := null; -- closed (expired, cancelled or failed): a new attempt
+    end if;
+  end if;
+  -- Above the most Ozow accepts in one payment: the invoice is paid by bank
+  -- transfer only (staff record it; a second staff member confirms it). After
+  -- the "already paid" check, so a paid invoice still says it is paid.
+  if inv.total_cents > internal.online_payment_max_cents() then
+    raise exception 'this invoice is above the online payment limit of % cents; pay it by bank transfer',
+      internal.online_payment_max_cents() using errcode='PT413', detail='online_payment_above_limit';
+  end if;
+  if latest.id is null then
+    select count(*) into attempts from private.customer_invoice_payments l where l.invoice_id = inv.id;
+    if attempts >= 20 then
+      raise exception 'this invoice has had too many payment attempts; contact us'
+        using errcode='PT429', detail='invoice_attempts_exhausted';
+    end if;
+    -- Another payment open for the same slot term (one per term at a time).
+    select * into other from private.payments p
+      where p.owner_id = actor and p.status = 'pending' and p.plan_version_id = plan.id and p.target_post_id is null
+      for update;
+    if found then
+      if other.checkout_url is not null or other.checkout_claim_until > pg_catalog.clock_timestamp() then
+        raise exception 'finish or cancel your other open payment for this slot first'
+          using errcode='PT409', detail='invoice_checkout_open';
+      end if;
+      -- Never sent to Ozow, so it can never be paid: closed.
+      update private.payments set status = 'cancelled', status_changed_at = pg_catalog.clock_timestamp()
+        where id = other.id;
+    end if;
+  end if;
+  counted := internal.individual_slots_counted(fingerprint, actor, latest.id);
+  if (counted->>'held')::integer + (counted->>'pending')::integer + inv.slots > internal.individual_slot_limit(fingerprint) then
+    raise exception 'you can hold at most % Individual slots at a time', internal.individual_slot_limit(fingerprint)
+      using errcode='PT429', detail='slot_limit_reached';
+  end if;
+  if inv.cooling_off_consent_at is null then
+    update private.customer_invoices set cooling_off_consent_at = statement_timestamp(),
+        cooling_off_consent_version = consent->>'version'
+      where id = inv.id returning * into inv;
+  end if;
+  if latest.id is not null then
+    -- An attempt never sent to Ozow: the website sends it now.
+    perform internal.price_draft_actor();
+    return jsonb_build_object('payment_id', latest.id, 'merchant_reference', latest.merchant_reference,
+      'amount_cents', latest.amount_cents::text, 'currency', latest.currency, 'status', latest.status,
+      'slots', inv.slots, 'reused', true);
+  end if;
+  insert into private.payments (owner_id, product_kind, plan_version_id, amount_cents, currency, snapshot, merchant_reference)
+    values (actor, 'plan', plan.id, inv.total_cents, plan.currency, jsonb_build_object('kind', 'plan',
+        'category', 'individual', 'code', plan.plan_code, 'version', plan.version, 'label', plan.label, 'area', plan.area,
+        'price_cents', plan.price_cents, 'slots', inv.slots, 'total_cents', inv.total_cents,
+        'duration_days', plan.duration_days, 'slot_capacity', plan.slot_capacity,
+        'activations_per_period', plan.activations_per_period, 'activation_period_days', plan.activation_period_days,
+        'max_photos', plan.max_photos, 'max_videos', plan.max_videos,
+        'addon_capabilities', to_jsonb(plan.addon_capabilities),
+        'invoice_description', inv.description,
+        'customer_invoice_id', inv.id, 'customer_invoice_number', inv.invoice_number, 'attempt', attempts + 1,
+        'cooling_off_consent', jsonb_build_object('method', 'invoice', 'accepted_at', inv.cooling_off_consent_at,
+          'version', inv.cooling_off_consent_version, 'wording', consent->>'wording',
+          'terms_version', (select c.version from private.posting_terms_current c where c.singleton))),
+      case when attempts = 0 then inv.invoice_number else inv.invoice_number || '-' || (attempts + 1)::text end)
+    returning * into pay;
+  insert into private.payment_lines (payment_id, line_number, plan_version_id, amount_cents)
+    select pay.id, n, plan.id, inv.unit_price_cents from pg_catalog.generate_series(1, inv.slots) n;
+  insert into private.customer_invoice_payments (payment_id, invoice_id, attempt) values (pay.id, inv.id, attempts + 1);
+  perform internal.price_draft_actor(); -- final live owner/session check after all waits
+  return jsonb_build_object('payment_id', pay.id, 'merchant_reference', pay.merchant_reference,
+    'amount_cents', pay.amount_cents::text, 'currency', pay.currency, 'status', pay.status,
+    'slots', inv.slots, 'reused', false);
+end;
+$function$;
+alter function internal.start_invoice_payment(text,bigint,boolean) owner to postgres;
+revoke all on function internal.start_invoice_payment(text,bigint,boolean) from public;
+grant execute on function internal.start_invoice_payment(text,bigint,boolean) to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.void_staff_invoice(p_invoice_id uuid, p_reason text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid; inv private.customer_invoices;
+begin
+  actor := internal.staff_actor('payments:refund');
+  if p_invoice_id is null then
+    raise exception 'invoice not found' using errcode='PT404', detail='invoice_unavailable';
+  end if;
+  if not coalesce(internal.plain_text_valid(p_reason, 5, 500, true), false) then
+    raise exception 'audit reason required' using errcode='22023';
+  end if;
+  select * into inv from private.customer_invoices i where i.id = p_invoice_id;
+  if not found then
+    raise exception 'invoice not found' using errcode='PT404', detail='invoice_unavailable';
+  end if;
+  perform internal.assert_staff_payment_actor(actor, inv.account_id);
+  perform internal.lock_kept_record_subject(inv.account_id, inv.id);
+  select * into inv from private.customer_invoices i where i.id = p_invoice_id for update;
+  perform internal.staff_actor('payments:refund'); -- authority after the lock waits
+  perform internal.assert_staff_payment_actor(actor, inv.account_id);
+  if inv.status = 'void' and inv.voided_by = actor and inv.void_reason = btrim(p_reason) then
+    return internal.customer_invoice_dto(inv, actor) || jsonb_build_object('repeated', true);
+  end if;
+  if inv.status = 'paid' then
+    raise exception 'this invoice is paid; refund the payment instead' using errcode='PT409', detail='invoice_paid';
+  elsif inv.status = 'void' then
+    raise exception 'this invoice is already void' using errcode='PT409', detail='invoice_void';
+  end if;
+  if exists(select 1 from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
+      where l.invoice_id = inv.id and internal.customer_invoice_attempt_live(p)) then
+    raise exception 'a payment of this invoice is still open at Ozow; try again when it has closed'
+      using errcode='PT409', detail='invoice_payment_open';
+  end if;
+  if exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = inv.id
+      and internal.invoice_transfer_waiting(t)) then
+    raise exception 'a bank transfer to this invoice waits for confirmation; confirm or decline it first'
+      using errcode='PT409', detail='invoice_transfer_waiting';
+  end if;
+  update private.payments p set status = 'cancelled', status_changed_at = pg_catalog.clock_timestamp()
+    from private.customer_invoice_payments l
+    where l.invoice_id = inv.id and l.payment_id = p.id and p.status = 'pending';
+  update private.customer_invoices set status = 'void', voided_by = actor, voided_at = statement_timestamp(),
+      void_reason = btrim(p_reason)
+    where id = inv.id returning * into inv;
+  perform internal.staff_actor('payments:refund');
+  return internal.customer_invoice_dto(inv, actor) || jsonb_build_object('repeated', false);
+end;
+$function$;
+alter function internal.void_staff_invoice(uuid,text) owner to postgres;
+revoke all on function internal.void_staff_invoice(uuid,text) from public;
+grant execute on function internal.void_staff_invoice(uuid,text) to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.account_erasure_hold(p_user uuid)
+ RETURNS text
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select case
+    when exists (select 1 from private.legal_holds h where h.subject_id = p_user and h.released_at is null)
+      then 'legal_hold'
+    when exists (select 1 from private.evidence_cases c join private.evidence_fraud_holds f on f.case_id = c.id
+        where c.subject_id = p_user and f.closed_at is null)
+      then 'fraud_hold'
+    when exists (select 1 from private.frontend_content_holds h where h.released_at is null
+        and (h.account_id = p_user or h.post_id in (select p.id from private.posts p where p.owner_id = p_user)))
+      then 'content_hold'
+    when exists (select 1 from private.reports r where r.status = 'open'
+        and (r.subject_account_id = p_user or r.post_id in (select p.id from private.posts p where p.owner_id = p_user)))
+      then 'report_open'
+    when exists (select 1 from private.staff_roles r where r.user_id = p_user and r.revoked_at is null)
+      then 'staff_role'
+    -- Staff rejected the deletion request (recorded on the erasure itself, so
+    -- it outlives the request record) and no later request was ordered.
+    when exists (select 1 from private.account_erasures e where e.user_id = p_user and e.rejected_at is not null)
+      then 'request_rejected'
+    when exists (select 1 from private.payments p where p.owner_id = p_user and p.status = 'pending')
+      then 'payment_pending'
+    when exists (select 1 from private.payments p where p.owner_id = p_user and p.status = 'complete'
+        and p.fulfillment_status = 'needs_reconciliation')
+      then 'payment_unresolved'
+    when exists (select 1 from private.payment_refund_requests r where r.account_id = p_user
+        and r.status in ('awaiting_approval', 'approved', 'sent'))
+      then 'refund_open'
+    when exists (select 1 from private.invoice_transfers t where t.account_id = p_user
+        and internal.invoice_transfer_waiting(t))
+      then 'transfer_waiting'
+    when exists (select 1 from private.customer_invoices i where i.account_id = p_user and i.status = 'issued')
+      then 'invoice_unpaid'
+    when exists (select 1 from private.partner_commissions c join private.partners x on x.id = c.partner_id
+        where x.account_id = p_user and c.status in ('pending', 'approved'))
+      then 'commission_unpaid'
+  end;
+$function$;
+alter function internal.account_erasure_hold(uuid) owner to postgres;
+revoke all on function internal.account_erasure_hold(uuid) from public;
+
 CREATE OR REPLACE FUNCTION internal.retention_commerce(p_limit integer)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -878,7 +1212,256 @@ $function$;
 alter function internal.retention_commerce(integer) owner to postgres;
 revoke all on function internal.retention_commerce(integer) from public;
 
--- 6. The staff audit trail.
+CREATE OR REPLACE FUNCTION internal.frontend_privacy_export_data(p_subject uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare entry record;items jsonb;row_count integer;result jsonb:='{}';size_so_far bigint:=0;
+begin
+  for entry in select * from (values
+    ('profile',$q$select account_id,display_name,bio,legal_first_name,legal_last_name,legal_name_locked_at,created_at,updated_at from private.profiles where account_id=$1$q$),
+    ('account',$q$select id,email,email_confirmed_at,phone,phone_confirmed_at,created_at,last_sign_in_at from auth.users where id=$1 and deleted_at is null$q$),
+    ('listing_drafts',$q$select category_key,price_mode,price_cents,price_negotiable,revision,expires_at from private.listing_price_drafts where owner_id=$1$q$),
+    ('posts',$q$select p.id,p.kind,p.area,p.category_key,p.activity_key,p.title,p.description,p.province_id,p.city_id,p.locality_label,
+      p.status,p.status_reason,p.created_at,p.submitted_at,p.published_at,p.visible_until,p.edit_of,
+      l.price_mode,l.price_cents,l.price_negotiable,l.attributes,b.business_type,e.starts_at,e.ends_at,e.timezone,
+      s.slug,d.data presentation,d.contacts contact_details,c.channels
+      from private.posts p left join private.listing_details l on l.post_id=p.id left join private.business_details b on b.post_id=p.id
+      left join private.event_details e on e.post_id=p.id left join private.post_slugs s on s.post_id=p.id
+      left join private.post_presentations d on d.post_id=p.id left join private.post_contacts c on c.post_id=p.id
+      where p.owner_id=$1 order by p.created_at,p.id$q$),
+    ('post_reviews',$q$select m.post_id,m.edit_id,m.decision,m.reason,m.decided_at,m.price_only
+      from private.moderation_log m join private.posts p on p.id=m.post_id where p.owner_id=$1 order by m.decided_at,m.id$q$),
+    ('media_metadata',$q$select id,kind,size_bytes,mime,width,height,state,created_at,deleted_at from private.media_objects where owner_id=$1 order by created_at,id$q$),
+    ('payments',$q$select p.id,p.product_kind,p.target_post_id,p.amount_cents,p.currency,p.status,p.fulfillment_status,p.merchant_reference,
+      p.provider,p.created_at,p.completed_at,coalesce((p.snapshot->>'renewal')::boolean,false) renewal,
+      p.snapshot->'cooling_off_consent' cooling_off_consent,p.snapshot->'renewal_starts' renewal_starts,
+      (select jsonb_agg(jsonb_build_object('line_number',l.line_number,'amount_cents',l.amount_cents,'status',l.status,
+          'renews_entitlement_id',l.renews_entitlement_id,'slot_count',l.slot_count,'reversal_kind',l.reversal_kind,
+          'reversed_at',l.reversed_at)
+        order by l.line_number) from private.payment_lines l where l.payment_id=p.id) lines
+      from private.payments p where p.owner_id=$1 order by p.created_at,p.id$q$),
+    ('invoices',$q$select i.id,i.payment_id,i.invoice_number,i.amount_ex_vat_cents,i.vat_cents,i.total_cents,i.description,i.issued_at
+      from private.invoices i join private.payments p on p.id=i.payment_id where p.owner_id=$1 order by i.issued_at,i.id$q$),
+    ('customer_invoices',$q$select i.invoice_number,i.status,i.description,i.slots,i.unit_price_cents,i.total_cents,i.issued_at,i.due_on,
+      i.buyer_name,i.buyer_address,i.buyer_registration_number,i.buyer_saved_at,i.cooling_off_consent_at,i.cooling_off_consent_version,
+      i.payment_id,i.paid_at,i.voided_at,(select array_agg(l.payment_id order by l.attempt) from private.customer_invoice_payments l
+        where l.invoice_id=i.id) payment_attempts
+      from private.customer_invoices i where i.account_id=$1 order by i.issued_at,i.id$q$),
+    ('bank_transfers',$q$select t.id,t.payment_id,v.duration_days term_days,t.slots,t.amount_received_cents,t.bank_reference,t.cleared_on,
+      t.cooling_off_waiver_confirmed,t.status,t.recorded_at,t.confirmed_at,t.declined_at,t.expired_at
+      from private.invoice_transfers t join private.plan_versions v on v.id=t.plan_version_id where t.account_id=$1 order by t.recorded_at,t.id$q$),
+    ('entitlements',$q$select id,source,area,slot_capacity,activations_per_period,activation_period_days,max_photos,max_videos,starts_at,ends_at,status,revoked_reason,
+      renews_entitlement_id,slot_id,package_id
+      from private.entitlements where owner_id=$1 order by created_at,id$q$),
+    ('slot_packages',$q$select id,term_days,slot_count,created_at from private.slot_packages where owner_id=$1
+      order by created_at,id$q$),
+    ('post_activations',$q$select post_id,entitlement_id,activated_at,released_at,release_reason,continued
+      from private.post_activations where owner_id=$1 order by activated_at,id$q$),
+    ('event_submissions',$q$select post_id,submitted_at,released_at,release_reason
+      from private.event_submissions where owner_id=$1 order by submitted_at,id$q$),
+    ('introductory_trials',$q$select post_id,trial_entitlement_id,claimed_at,converted_at
+      from private.post_trial_claims where owner_id=$1 order by claimed_at,post_id$q$),
+    ('posting_terms',$q$select version,document_hash,accepted_at from private.posting_terms_acceptances where owner_id=$1 order by accepted_at,version$q$),
+    ('signup_terms',$q$select version,document_hash,method,accepted_at from private.signup_terms_acceptances where account_id=$1$q$),
+    ('communication_choices',$q$select purpose,granted,wording_version,recorded_at from private.communication_choice_events
+      where account_id=$1 order by recorded_at,id$q$),
+    ('verification_cases',$q$select id,kind,status,created_at from private.evidence_cases where subject_id=$1 order by created_at,id$q$),
+    ('verification_reviews',$q$select r.case_id,r.reason,r.decision,r.created_at from private.verification_return_requests r join private.evidence_cases c on c.id=r.case_id
+      where c.subject_id=$1 order by r.created_at,r.id$q$),
+    ('evidence_metadata',$q$select id,case_id,purpose,state,size_bytes,created_at,retain_until,deleted_at
+      from private.evidence_artifacts where owner_id=$1 order by created_at,id$q$),
+    ('phone_verification',$q$select phone,verified_at,contact_changed_at,revoked_at from private.verification_phone_proofs where owner_id=$1 order by verified_at,id$q$),
+    ('locality_verification',$q$select province_id,city_id,assurance,confirmed_at from private.verification_localities where owner_id=$1$q$),
+    ('enquiries_sent',$q$select id,post_id,message,created_at from private.enquiries where sender_account_id=$1 order by created_at,id$q$),
+    ('enquiries_received',$q$select id,post_id,message,status,created_at from private.enquiries where owner_id=$1 order by created_at,id$q$),
+    ('notifications',$q$select id,kind,post_id,created_at,read_at from private.notifications where account_id=$1 order by created_at,id$q$),
+    ('reports_submitted',$q$select id,post_id,coalesce(frontend_reason,category) category,description,status,created_at,resolved_at
+      from private.reports where reporter_id=$1 order by created_at,id$q$),
+    ('moderation_decisions',$q$select id,kind,reason,starts_at,ends_at,active from private.frontend_appealable_actions
+      where account_id=$1 order by starts_at,id$q$),
+    ('appeals',$q$select id,action_id,kind,reason,status,reviewer_rationale,created_at,resolved_at from private.frontend_appeals
+      where appellant_id=$1 order by created_at,id$q$),
+    ('organisation_applications',$q$select id,organisation_id,programme_id,post_id,reason,member_reference,share_representative_name,consented_at,
+      status,info_request,info_response,decision_at,decision_note,created_at from private.organisation_applications where applicant_id=$1 order by created_at,id$q$),
+    ('organisation_affiliations',$q$select a.id,a.organisation_id,a.programme_id,a.post_id,a.affiliation_type,a.status,a.confirmed_at,a.revoked_at,a.revoke_reason
+      from private.organisation_affiliations a join private.posts p on p.id=a.post_id where p.owner_id=$1 order by a.created_at,a.id$q$),
+    ('organisation_roles',$q$select organisation_id,role,created_at from private.organisation_admins where account_id=$1 order by created_at,organisation_id$q$),
+    ('sponsorships',$q$select id,organisation_id,post_id,sponsor_type,status,starts_at,ends_at,ended_at,end_reason
+      from private.organisation_sponsorships where owner_id=$1 order by created_at,id$q$),
+    ('partner_account',$q$select id,code,status,commission_bps,created_at,updated_at from private.partners where account_id=$1 order by created_at,id$q$),
+    ('partner_commissions',$q$select c.id,c.base_cents,c.rate_bps,c.amount_cents,c.status,c.eligible_at,c.approved_at,c.paid_at,c.reversed_at
+      from private.partner_commissions c join private.partners p on p.id=c.partner_id where p.account_id=$1 order by c.created_at,c.id$q$),
+    ('acquisition',$q$select source,campaign,landing_path,referrer_host,first_touch_at,recorded_at from private.account_acquisitions where account_id=$1$q$),
+    ('account_closure',$q$select closed_at,evidence_delete_after from private.account_closures where user_id=$1$q$),
+    ('data_requests',$q$select id,type,description,status,received_at,due_by,extended_due_at,extension_reason,response_summary,completed_at
+      from private.privacy_requests where subject_user_id=$1 order by received_at,id$q$)
+  ) as registry(dataset,statement) loop
+    execute 'select coalesce(jsonb_agg(to_jsonb(x)),''[]''::jsonb),count(*) from ('||entry.statement||' limit 2501)x'
+      into items,row_count using p_subject;
+    size_so_far:=size_so_far+octet_length(items::text);
+    if row_count>2500 or size_so_far>4194304 then raise exception 'privacy export exceeds the direct delivery limit' using errcode='PT413';end if;
+    result:=result||jsonb_build_object(entry.dataset,items);
+  end loop;
+  return result;
+end$function$;
+alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
+revoke all on function internal.frontend_privacy_export_data(uuid) from public;
+
+-- 3 and 7. The sweep and the two reads.
+-- The sweep: records the expiry of every transfer that has waited 14 days,
+-- oldest first, at most p_limit per run, each in its own subtransaction so one
+-- row that cannot be changed never stops the others (it is counted as failed
+-- and tried again next run). Rows a staff member holds at that moment are
+-- skipped. The rule itself (internal.invoice_transfer_expired) does not wait
+-- for the sweep.
+CREATE OR REPLACE FUNCTION internal.expire_waiting_bank_transfers(p_limit integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare due uuid[]; one uuid; expired integer := 0; with_invoice integer := 0; failed integer := 0;
+begin
+  if p_limit is null or p_limit not between 1 and 1000 then
+    raise exception 'limit 1 to 1000' using errcode='22023';
+  end if;
+  select coalesce(array_agg(x.id order by x.recorded_at, x.id), '{}') into due
+  from (select t.id, t.recorded_at from private.invoice_transfers t
+    where t.status = 'awaiting_confirmation'
+      and t.recorded_at <= statement_timestamp() - internal.invoice_transfer_expires_after()
+    order by t.recorded_at, t.id
+    limit p_limit
+    for update skip locked) x;
+  foreach one in array due loop
+    begin
+      if internal.expire_invoice_transfer(one) then
+        expired := expired + 1;
+        if exists(select 1 from private.invoice_transfers t where t.id = one and t.customer_invoice_id is not null) then
+          with_invoice := with_invoice + 1;
+        end if;
+      end if;
+    exception when others then
+      failed := failed + 1;
+    end;
+  end loop;
+  return jsonb_build_object('expired', expired, 'with_invoice', with_invoice, 'failed', failed);
+end;
+$function$;
+alter function internal.expire_waiting_bank_transfers(integer) owner to postgres;
+revoke all on function internal.expire_waiting_bank_transfers(integer) from public, anon, authenticated, service_role;
+grant execute on function internal.expire_waiting_bank_transfers(integer) to service_role;
+
+CREATE OR REPLACE FUNCTION api.expire_waiting_bank_transfers(p_limit integer)
+ RETURNS jsonb
+ LANGUAGE sql
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select internal.expire_waiting_bank_transfers(p_limit);
+$function$;
+alter function api.expire_waiting_bank_transfers(integer) owner to postgres;
+revoke all on function api.expire_waiting_bank_transfers(integer) from public, anon, authenticated, service_role;
+grant execute on function api.expire_waiting_bank_transfers(integer) to service_role;
+
+-- Staff (payments:view): every expired transfer still to be followed up,
+-- oldest expiry first, at most 200 (with the full count): not followed by a
+-- later record of the same bank credit or to the same invoice, and not naming
+-- an invoice since paid or voided. Each as the waiting list shows it, with
+-- status 'expired', when it expired (or, before the sweep marked it, when it
+-- passed 14 days) and the invoice number.
+CREATE OR REPLACE FUNCTION internal.get_staff_expired_invoice_transfers()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid; result jsonb;
+begin
+  actor := internal.staff_actor('payments:view');
+  with open as (
+    select t as transfer, t.id, coalesce(t.expired_at, t.recorded_at + internal.invoice_transfer_expires_after()) as expired_on
+    from private.invoice_transfers t
+    where internal.invoice_transfer_expired(t)
+      and not exists(select 1 from private.invoice_transfers x where x.id <> t.id and x.recorded_at > t.recorded_at
+        and ((x.customer_invoice_id is not null and x.customer_invoice_id = t.customer_invoice_id)
+          or (x.amount_received_cents = t.amount_received_cents and x.cleared_on = t.cleared_on
+            and upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
+              = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')))))
+      and not exists(select 1 from private.customer_invoices i where i.id = t.customer_invoice_id
+        and i.status in ('paid', 'void'))
+  )
+  select jsonb_build_object('unresolved', (select count(*) from open),
+      'items', coalesce((select jsonb_agg(internal.invoice_transfer_dto(o.transfer, actor)
+        || jsonb_build_object('status', 'expired', 'expired_at', o.expired_on, 'invoice_number',
+          (select i.invoice_number from private.customer_invoices i where i.id = (o.transfer).customer_invoice_id))
+        order by o.expired_on, o.id)
+      from (select * from open order by expired_on, id limit 200) o), '[]'::jsonb))
+    into result;
+  if internal.staff_actor('payments:view') is distinct from actor then
+    raise exception 'staff actor changed' using errcode='42501';
+  end if;
+  return result;
+end;
+$function$;
+alter function internal.get_staff_expired_invoice_transfers() owner to postgres;
+revoke all on function internal.get_staff_expired_invoice_transfers() from public, anon, authenticated, service_role;
+grant execute on function internal.get_staff_expired_invoice_transfers() to authenticated;
+
+CREATE OR REPLACE FUNCTION api.get_staff_expired_invoice_transfers()
+ RETURNS jsonb
+ LANGUAGE sql
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select internal.get_staff_expired_invoice_transfers();
+$function$;
+alter function api.get_staff_expired_invoice_transfers() owner to postgres;
+revoke all on function api.get_staff_expired_invoice_transfers() from public, anon, authenticated, service_role;
+grant execute on function api.get_staff_expired_invoice_transfers() to authenticated;
+
+-- The member (own invoice only): when the latest bank transfer recorded to
+-- this still unpaid invoice expired, or null. Nothing else about the transfer;
+-- a declined transfer is not shown, as before.
+CREATE OR REPLACE FUNCTION internal.get_my_invoice_transfer_expiry(p_invoice_number text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid := internal.price_draft_actor(); inv private.customer_invoices; latest private.invoice_transfers;
+begin
+  select * into inv from private.customer_invoices i
+    where i.invoice_number = internal.customer_invoice_number(p_invoice_number) and i.account_id = actor;
+  if not found then
+    raise exception 'invoice not found' using errcode='PT404', detail='invoice_unavailable';
+  end if;
+  if inv.status = 'issued' then
+    select * into latest from private.invoice_transfers t where t.customer_invoice_id = inv.id
+      order by t.recorded_at desc, t.id desc limit 1;
+  end if;
+  perform internal.price_draft_actor();
+  return jsonb_build_object('invoice_number', inv.invoice_number,
+    'transfer_expired_at', case when latest.id is not null and internal.invoice_transfer_expired(latest)
+      then coalesce(latest.expired_at, latest.recorded_at + internal.invoice_transfer_expires_after()) end);
+end;
+$function$;
+alter function internal.get_my_invoice_transfer_expiry(text) owner to postgres;
+revoke all on function internal.get_my_invoice_transfer_expiry(text) from public, anon, authenticated, service_role;
+grant execute on function internal.get_my_invoice_transfer_expiry(text) to authenticated;
+
+CREATE OR REPLACE FUNCTION api.get_my_invoice_transfer_expiry(p_invoice_number text)
+ RETURNS jsonb
+ LANGUAGE sql
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select internal.get_my_invoice_transfer_expiry(p_invoice_number);
+$function$;
+alter function api.get_my_invoice_transfer_expiry(text) owner to postgres;
+revoke all on function api.get_my_invoice_transfer_expiry(text) from public, anon, authenticated, service_role;
+grant execute on function api.get_my_invoice_transfer_expiry(text) to authenticated;
+
+-- 5. The staff audit trail.
 create or replace view private.frontend_staff_audit_events with (security_invoker=true) as
  SELECT frontend_staff_nonpayment_audit_events.id,
     frontend_staff_nonpayment_audit_events.occurred_at,

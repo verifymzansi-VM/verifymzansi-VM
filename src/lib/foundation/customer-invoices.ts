@@ -455,7 +455,10 @@ const STAFF_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new
   ],
   [
     "cleared_date_invalid",
-    [422, "Enter the date the money cleared: today or in the last 90 days."],
+    [
+      422,
+      "Enter the date the money cleared: today or in the last 90 days, or an earlier date only to record again the money of an expired transfer (same reference, amount and date).",
+    ],
   ],
   [
     "cooling_off_waiver_required",

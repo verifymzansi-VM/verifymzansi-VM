@@ -254,18 +254,22 @@ describe("bank transfer adapters", () => {
       expired_at: "2026-11-27T10:01:00.000+00:00",
       invoice_number: "VM-2026-000012",
     };
-    const { rpc, api } = fixture({ items: [expired, { ...expired, invoice_number: null }] });
-    await expect(readStaffBankTransfersExpired(api)).resolves.toEqual([
-      expired,
-      { ...expired, invoice_number: null },
-    ]);
+    const items = [expired, { ...expired, invoice_number: null }];
+    const { rpc, api } = fixture({ unresolved: 240, items });
+    await expect(readStaffBankTransfersExpired(api)).resolves.toEqual({ unresolved: 240, items });
     expect(rpc).toHaveBeenCalledWith("get_staff_expired_invoice_transfers", {}, { get: false });
     for (const code of ["PGRST202", "42883"]) {
       rpc.mockResolvedValueOnce(refused(code));
-      await expect(readStaffBankTransfersExpired(api)).resolves.toEqual([]);
+      await expect(readStaffBankTransfersExpired(api)).resolves.toEqual({
+        unresolved: 0,
+        items: [],
+      });
     }
-    // A waiting record is not an expired one; other refusals are reported.
-    rpc.mockResolvedValueOnce(ok({ items: [record] }));
+    // At most 200 listed; a waiting record is not an expired one; other
+    // refusals are reported.
+    rpc.mockResolvedValueOnce(ok({ unresolved: 201, items: Array(201).fill(expired) }));
+    await expect(readStaffBankTransfersExpired(api)).rejects.toMatchObject({ status: 503 });
+    rpc.mockResolvedValueOnce(ok({ unresolved: 1, items: [record] }));
     await expect(readStaffBankTransfersExpired(api)).rejects.toMatchObject({ status: 503 });
     rpc.mockResolvedValueOnce(refused("42501"));
     await expect(readStaffBankTransfersExpired(api)).rejects.toMatchObject({ status: 403 });

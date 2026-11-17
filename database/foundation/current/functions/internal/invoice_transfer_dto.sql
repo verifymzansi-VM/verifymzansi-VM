@@ -10,7 +10,8 @@ AS $function$
   select jsonb_build_object('transfer_id', t.id, 'status', t.status, 'account_id', t.account_id,
     'customer_email', (select u.email from auth.users u where u.id = t.account_id),
     'similar_records', (select count(*) from private.invoice_transfers x where x.id <> t.id
-      and x.status not in ('declined', 'expired') and x.amount_received_cents = t.amount_received_cents
+      and x.status <> 'declined' and not internal.invoice_transfer_expired(x)
+      and x.amount_received_cents = t.amount_received_cents
       and (upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))
           = upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g'))
         or (x.account_id = t.account_id and x.cleared_on = t.cleared_on))),

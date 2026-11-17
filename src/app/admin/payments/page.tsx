@@ -46,6 +46,7 @@ export default async function PaymentsAdminPage({
     transfersUnavailable,
     waiting,
     expired,
+    expiredCount,
     ozow,
     invoices,
   } = await (async () => {
@@ -95,10 +96,10 @@ export default async function PaymentsAdminPage({
           missing(error);
           return [];
         }),
-      // Transfers nobody confirmed within 14 days (expired in the last 30).
+      // Transfers nobody confirmed within 14 days, until each is followed up.
       readStaffBankTransfersExpired(api).catch((error: unknown) => {
         missing(error);
-        return [];
+        return { unresolved: 0, items: [] };
       }),
       // Customer invoices (P2b): the payments list still loads without them.
       readStaffInvoices(api).catch((error: unknown) => {
@@ -110,7 +111,8 @@ export default async function PaymentsAdminPage({
     return {
       transfersUnavailable: unavailable,
       waiting: waitingTransfers,
-      expired: expiredTransfers,
+      expired: expiredTransfers.items,
+      expiredCount: expiredTransfers.unresolved,
       rows: result.items.map((item) => {
         const transfer = transfers.get(item.id);
         return transfer
@@ -208,6 +210,7 @@ export default async function PaymentsAdminPage({
           canConfirm={canConfirm}
           waiting={waiting}
           expired={expired}
+          expiredCount={expiredCount}
         />
       ) : null}
       {invoices ? (

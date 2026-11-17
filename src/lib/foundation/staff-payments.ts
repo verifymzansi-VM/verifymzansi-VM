@@ -185,7 +185,10 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   [
     "cleared_date_invalid",
-    [422, "Enter the date the money cleared: today or in the last 90 days."],
+    [
+      422,
+      "Enter the date the money cleared: today or in the last 90 days, or an earlier date only to record again the money of an expired transfer (same reference, amount and date).",
+    ],
   ],
   [
     "cooling_off_waiver_required",
@@ -576,20 +579,21 @@ const staffExpiredTransfer = staffTransferRecord.extend({
 });
 export type StaffExpiredTransfer = z.infer<typeof staffExpiredTransfer>;
 
-/** The recorded bank transfers that expired in the last 30 days (newest
- * first): nobody confirmed them within 14 days of being recorded, so the
- * database marked them expired (20261117141803_bank_transfer_expiry.sql).
- * Against a database without that update there are none. */
+/** The recorded bank transfers nobody confirmed within 14 days of being
+ * recorded (20261117141803_bank_transfer_expiry.sql) that still need a
+ * follow-up: not recorded again and not naming an invoice since paid or
+ * voided. Oldest first, at most 200, with the full count. Against a database
+ * without that update there are none. */
 export async function readStaffBankTransfersExpired(
   api: FoundationAuthenticatedApi
-): Promise<StaffExpiredTransfer[]> {
+): Promise<{ unresolved: number; items: StaffExpiredTransfer[] }> {
   const result = await api.rpc("get_staff_expired_invoice_transfers", {}, { get: false });
-  if (result.error?.code === "PGRST202" || result.error?.code === "42883") return [];
-  const read = await settleStaffCommand(
+  if (result.error?.code === "PGRST202" || result.error?.code === "42883")
+    return { unresolved: 0, items: [] };
+  return settleStaffCommand(
     Promise.resolve(result),
-    z.strictObject({ items: z.array(staffExpiredTransfer).max(20) })
+    z.strictObject({ unresolved: count, items: z.array(staffExpiredTransfer).max(200) })
   );
-  return read.items;
 }
 
 /** Whose account an email names, before staff record a bank transfer for it. */

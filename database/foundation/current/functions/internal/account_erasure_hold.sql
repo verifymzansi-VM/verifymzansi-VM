@@ -34,7 +34,7 @@ AS $function$
         and r.status in ('awaiting_approval', 'approved', 'sent'))
       then 'refund_open'
     when exists (select 1 from private.invoice_transfers t where t.account_id = p_user
-        and t.status = 'awaiting_confirmation')
+        and internal.invoice_transfer_waiting(t))
       then 'transfer_waiting'
     when exists (select 1 from private.customer_invoices i where i.account_id = p_user and i.status = 'issued')
       then 'invoice_unpaid'

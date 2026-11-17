@@ -6,14 +6,19 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and reads "update not applied".
 --
--- The summary says whether the six functions the update replaces have the
+-- Before the update, each bank transfer that has waited 14 days or more is a
+-- "problem" row: the update makes it expired at once, and it can never be
+-- confirmed after that. Staff confirm it (the money is in the bank) or
+-- decline it first, then run this file again.
+--
+-- The summary says whether the thirteen functions the update replaces have the
 -- reviewed earlier bodies and the table has no expired_at column (update not
 -- applied), the update's bodies, column and three new commands (already
 -- applied), or a mix (unexpected state), and counts:
 -- - "waiting": bank transfers waiting for a second staff member;
--- - "waiting 14 days or more": those the first sweep after the website release
---   will mark expired (it releases their invoices, as a decline does);
--- - "expired": transfers already expired (always 0 before the update).
+-- - "waiting 14 days or more": those (they are expired once the update is
+--   applied, and the sweep then marks them);
+-- - "expired": transfers marked expired (always 0 before the update).
 do $$begin
   set transaction read only;
 end$$;
@@ -22,17 +27,31 @@ with bodies as (
     (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)) as body
   from (values
     ('internal.invoice_transfer_guard()',
-      '494dcdb720573571dd36edf97b055332', 'af70f9825c745ba7b8befd4fac7eb172'),
+      '494dcdb720573571dd36edf97b055332', '8a6697d7fc6026bc14e771df9b7ac999'),
     ('internal.confirm_staff_invoice_payment(uuid)',
-      'e0c308df14f38f1de76bdced4e8683f2', 'd5e6989a1e81cd2936ed9294aecb4574'),
+      'e0c308df14f38f1de76bdced4e8683f2', '66e96f9682fbab67236ccf83142fbd05'),
+    ('internal.decline_staff_invoice_payment(uuid,text)',
+      'cc8641faee31c5a9a043e4c510d26302', '2812080d676629d5f74e4f4d0063c368'),
     ('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)',
-      '594b47bc794e335a3f3be505a4b1637e', '76c273eb51960b75755d1adf6725772f'),
+      '594b47bc794e335a3f3be505a4b1637e', '68cfba77e196105dd3c686b935f11e11'),
     ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)',
-      '171c0ad6f18a7f5329ff00dcfff4608d', '131c741d783cdd500496d1ce049ae0b0'),
+      '171c0ad6f18a7f5329ff00dcfff4608d', '49ae9a41906abbca8ceff68e6489a689'),
     ('internal.invoice_transfer_dto(private.invoice_transfers,uuid)',
-      'b91dbdd96bec847ddb165d6a663cc7cb', 'de3c7355b17b84d785e06abe80aa8e91'),
+      'b91dbdd96bec847ddb165d6a663cc7cb', 'cbcd92ebaf7e89f07960f74f036f46fd'),
+    ('internal.get_staff_invoice_transfers()',
+      '37ec35ae8968df035025e3c69234f3be', '13f1c0cf67460052d334b32e70b1ebe8'),
+    ('internal.customer_invoice_dto(private.customer_invoices,uuid)',
+      '5ce8a88fc44ed9e59a1cfd7dd6214382', '27604995d3de7e7a5794c1bf220b3213'),
+    ('internal.start_invoice_payment(text,bigint,boolean)',
+      '58e3e24aa91f41a476435c8b152b94d2', 'ea362defef15f7d6116a0f96cc53fef5'),
+    ('internal.void_staff_invoice(uuid,text)',
+      '21763bcb62e398b6d1b8e8d64ef38ea5', '6c997c846aa9d114150e11d2591d5ad7'),
+    ('internal.account_erasure_hold(uuid)',
+      '5bd01c33cf23f3e6516ceb96c3dc3236', 'f450a4cad9855826d8dc6212d1a614cb'),
     ('internal.retention_commerce(integer)',
-      '422a63c6d6fd2be5a1556893a8975d3f', '55051470a07c224838cb58dc45d66406')
+      '422a63c6d6fd2be5a1556893a8975d3f', '55051470a07c224838cb58dc45d66406'),
+    ('internal.frontend_privacy_export_data(uuid)',
+      '1a16274c11f77a9a6d72482ca43d6753', '86a879279ebd9dcadf6f3f4fa11e7f44')
   ) v(sig, reviewed, updated)
 ),
 added as (
@@ -47,10 +66,21 @@ state as (
     bool_and(b.body is not distinct from b.updated) and bool_and(a.column_added) and bool_and(a.commands_added) as applied
   from bodies b cross join added a
 ),
+overdue as (
+  select t.id, t.recorded_at, t.amount_received_cents, t.bank_reference
+  from private.invoice_transfers t
+  where t.status = 'awaiting_confirmation' and t.recorded_at <= statement_timestamp() - interval '14 days'
+),
 problems as (
   select 'problem' as kind,
     sig || ' is neither the reviewed body nor the update''s (md5 ' || coalesce(body, 'missing') || '); do not apply the update' as detail
   from bodies where body is distinct from reviewed and body is distinct from updated
+  union all
+  select 'problem',
+    'bank transfer ' || o.id || ' (' || o.bank_reference || ', ' || o.amount_received_cents || ' cents) recorded '
+      || to_char(o.recorded_at at time zone 'Africa/Johannesburg', 'YYYY-MM-DD')
+      || ' has waited 14 days or more: confirm or decline it before applying the update'
+  from overdue o cross join state s where not s.applied
 )
 select 'summary' as kind,
   'bank transfer expiry: '
@@ -60,8 +90,7 @@ select 'summary' as kind,
     || '; waiting: '
     || (select count(*) from private.invoice_transfers t where t.status = 'awaiting_confirmation')
     || '; waiting 14 days or more: '
-    || (select count(*) from private.invoice_transfers t where t.status = 'awaiting_confirmation'
-        and t.recorded_at <= statement_timestamp() - interval '14 days')
+    || (select count(*) from overdue)
     || '; expired: '
     || (select count(*) from private.invoice_transfers t where t.status = 'expired') as detail
 from state s

@@ -1,26 +1,27 @@
 #!/usr/bin/env node
 // Behaviour checks for 20261117141803_bank_transfer_expiry.sql: a recorded bank
 // transfer still waiting for a second staff member 14 days after it was
-// recorded expires (owner's decision of 16 November 2026).
+// recorded has expired (owner's decision of 16 November 2026).
 //
 // Replays database/foundation (prelude, candidate.sql, every update before this
 // one) into the throwaway, network-less Postgres 17 container of the SQL lint
 // gate. Staff act with a verified authenticator app and an AAL2 session,
 // members with synthetic sessions, the operation job's sweep as
-// `service_role`. A transfer's age is set by moving its recorded time back
-// (as the database owner, with triggers off); nothing else is written
-// directly. The script checks the read-only preflight and the update's
-// refusals, applies the update, proves apply -> rollback -> apply returns the
-// schema fingerprint to the same values, then checks: a transfer waiting 13
-// days stays waiting and one waiting 14 days or more expires (a transfer
-// recorded before the update too); a rerun of the sweep changes nothing; an
-// expired transfer, or one past 14 days the sweep has not reached, cannot be
-// confirmed or declined; one younger than 14 days is confirmed as before; the
-// record guard; an invoice whose transfer expired can be paid again and given
-// a new transfer, and its member sees the expiry (only theirs); the bank credit
-// can be recorded again; staff see expired transfers (and the waiting list
-// leaves them out); the audit trail; the account erasure no longer waits; the
-// grants; and that the rollback refuses once a transfer expired.
+// `service_role`. A transfer's age (and, for one check, the date its money
+// cleared) is set as the database owner with triggers off; nothing else is
+// written directly. The script checks the read-only preflight (which lists
+// transfers waiting 14 days or more) and the update's refusals, applies the
+// update, proves apply -> rollback -> apply returns the schema fingerprint to
+// the same values, then checks: one rule, so a transfer that has waited 14
+// days counts as expired before the sweep marks it (never confirmed or
+// declined, its invoice payable, the account's erasure not held, listed for
+// staff and shown to its member); 13 days still waits; the sweep marks it, a
+// rerun changes nothing, the limit holds and one row that cannot be changed
+// does not stop the others; the record guard; the bank credit can be recorded
+// again, also when it cleared more than 90 days ago, but never counted twice;
+// the invoice takes a new transfer; staff see each expired transfer until it
+// is followed up; the audit trail; the privacy export; the grants; and that
+// the rollback refuses once a transfer was marked expired.
 //
 //   node --import tsx scripts/test-foundation-bank-transfer-expiry.mjs
 //
@@ -47,13 +48,21 @@ const UPDATE = "20261117141803_bank_transfer_expiry.sql";
 const REVIEWED = {
   "internal.invoice_transfer_guard()": "494dcdb720573571dd36edf97b055332",
   "internal.confirm_staff_invoice_payment(uuid)": "e0c308df14f38f1de76bdced4e8683f2",
+  "internal.decline_staff_invoice_payment(uuid,text)": "cc8641faee31c5a9a043e4c510d26302",
   "internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)":
     "594b47bc794e335a3f3be505a4b1637e",
   "internal.record_staff_invoice_transfer(text,text,text,boolean,text)":
     "171c0ad6f18a7f5329ff00dcfff4608d",
   "internal.invoice_transfer_dto(private.invoice_transfers,uuid)":
     "b91dbdd96bec847ddb165d6a663cc7cb",
+  "internal.get_staff_invoice_transfers()": "37ec35ae8968df035025e3c69234f3be",
+  "internal.customer_invoice_dto(private.customer_invoices,uuid)":
+    "5ce8a88fc44ed9e59a1cfd7dd6214382",
+  "internal.start_invoice_payment(text,bigint,boolean)": "58e3e24aa91f41a476435c8b152b94d2",
+  "internal.void_staff_invoice(uuid,text)": "21763bcb62e398b6d1b8e8d64ef38ea5",
+  "internal.account_erasure_hold(uuid)": "5bd01c33cf23f3e6516ceb96c3dc3236",
   "internal.retention_commerce(integer)": "422a63c6d6fd2be5a1556893a8975d3f",
+  "internal.frontend_privacy_export_data(uuid)": "1a16274c11f77a9a6d72482ca43d6753",
 };
 const NEW_API = [
   "api.expire_waiting_bank_transfers(integer)",
@@ -74,6 +83,8 @@ try {
   world.review(admin2, admin, "expiry-admin2");
   const verified = (label) => world.verified(label, admin);
   const today = q("select to_char((now() at time zone 'Africa/Johannesburg')::date,'YYYY-MM-DD');");
+  const daysAgo = (n) =>
+    q(`select to_char((now() at time zone 'Africa/Johannesburg')::date - ${n},'YYYY-MM-DD');`);
   const transfers = bankTransferCommands(kit, today);
   const bodyMd5 = (signature) =>
     q(
@@ -91,9 +102,18 @@ try {
       from private.invoice_transfers t where t.id='${id}';`);
   const sweepSql = (limit = 100) => service(`select api.expire_waiting_bank_transfers(${limit});`);
   const sweep = (limit) => json(sweepSql(limit));
+  const swept = (expired, withInvoice = 0, failed = 0) => ({
+    expired,
+    with_invoice: withInvoice,
+    failed,
+  });
   /** A direct bank transfer (no invoice) of one 30-day slot for `owner`. */
-  const recordDirect = (owner, reference) =>
-    transfers.record(admin, { email: owner.email, term: 30, slots: 1, reference });
+  const recordDirect = (owner, reference, cleared = today) =>
+    transfers.record(admin, { email: owner.email, term: 30, slots: 1, reference, cleared });
+  const staffExpired = () =>
+    json(staff(admin2, "select api.get_staff_expired_invoice_transfers();"));
+  const staffWaiting = () => json(staff(admin2, "select api.get_staff_invoice_transfers();"));
+  const listedExpired = (id) => staffExpired().items.find((t) => t.transfer_id === id);
 
   // Customer invoices (P2b): issue, billing details, record a transfer to it.
   const issue = (owner) =>
@@ -110,10 +130,10 @@ try {
         `select api.save_my_invoice_billing(${sqlValue(number)},1,'Fixture Traders','1 Example Road, Empangeni',null);`
       )
     );
-  const transferToInvoiceSql = (number, reference) =>
+  const transferToInvoiceSql = (number, reference, cleared = today) =>
     staff(
       admin,
-      `select api.record_staff_invoice_transfer(${sqlValue(number)},${sqlValue(reference)},'${today}',true,'EFT cleared; written waiver on file');`
+      `select api.record_staff_invoice_transfer(${sqlValue(number)},${sqlValue(reference)},'${cleared}',true,'EFT cleared; written waiver on file');`
     );
   const myInvoice = (owner, number) =>
     json(member(owner, `select api.get_my_invoice(${sqlValue(number)});`));
@@ -121,6 +141,8 @@ try {
     member(owner, `select api.get_my_invoice_transfer_expiry(${sqlValue(number)});`);
   const payNowSql = (owner, number) =>
     member(owner, `select api.start_invoice_payment(${sqlValue(number)},6900,true);`);
+  const voidSql = (invoiceId) =>
+    staff(admin, `select api.void_staff_invoice('${invoiceId}','Issued for the wrong term');`);
 
   // ------------------------------------------------------------ before
   const early = verified("expiry-early");
@@ -137,16 +159,22 @@ try {
     });
     fails(sweepSql(), "42883");
   });
-  await check("preflight: read only, summary only, before the update", () => {
+  await check("preflight: read only; lists each transfer waiting 14 days or more", () => {
     const rows = preflight();
     assert.deepEqual(
       rows.map((r) => r[0]),
-      ["summary"],
+      ["summary", "problem"],
       JSON.stringify(rows)
     );
     assert.equal(
       rows[0][1],
       "bank transfer expiry: update not applied; waiting: 1; waiting 14 days or more: 1; expired: 0"
+    );
+    assert.match(
+      rows[1][1],
+      new RegExp(
+        `^bank transfer ${earlyTransfer.transfer_id} \\(FNB EARLY 0020, 6900 cents\\) recorded \\d{4}-\\d{2}-\\d{2} has waited 14 days or more: confirm or decline it before applying the update$`
+      )
     );
     assertReadOnlyPreflight(database, kit.preflightSql);
   });
@@ -160,7 +188,7 @@ try {
         `do $$begin execute replace(pg_get_functiondef('${signature}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
       );
       const rows = preflight();
-      assert.equal(rows.length, 2, JSON.stringify(rows));
+      assert.equal(rows.length, 3, JSON.stringify(rows));
       assert.match(rows[0][1], /^bank transfer expiry: unexpected state;/);
       assert.ok(rows[1][1].startsWith(`${signature} is neither the reviewed body`), rows[1][1]);
       assert.match(fails(kit.step.sql, "55000"), /bank transfer expiry precondition/);
@@ -177,8 +205,39 @@ try {
     notApplied: /^bank transfer expiry: update not applied;/,
   });
 
-  await check("the earlier transfer still waits until the sweep runs", () => {
+  await check("one rule: 14 days waiting is expired before the sweep marks it", () => {
     assert.equal(status(earlyTransfer.transfer_id).status, "awaiting_confirmation");
+    for (const sql of [
+      transfers.confirmSql(admin2, earlyTransfer.transfer_id),
+      transfers.declineSql(admin2, earlyTransfer.transfer_id),
+    ])
+      assert.match(
+        fails(sql, "PT409"),
+        /waited 14 days without confirmation and expired[\s\S]*transfer_not_waiting/
+      );
+    assert.ok(!staffWaiting().items.some((t) => t.transfer_id === earlyTransfer.transfer_id));
+    const listed = listedExpired(earlyTransfer.transfer_id);
+    assert.equal(listed.status, "expired");
+    assert.equal(listed.invoice_number, null);
+    assert.equal(
+      Date.parse(listed.expired_at),
+      Date.parse(
+        json(
+          `select to_jsonb(recorded_at+interval '14 days') from private.invoice_transfers where id='${earlyTransfer.transfer_id}';`
+        )
+      )
+    );
+    // Even the record guard refuses deciding it (the commands are not the only path).
+    fails(
+      `update private.invoice_transfers set status='declined',declined_by='${admin2.id}',declined_at=now(),
+        decline_reason='Declined after expiry' where id='${earlyTransfer.transfer_id}';`,
+      "23514",
+      /has expired and is never confirmed or declined/
+    );
+    assert.notEqual(
+      q(`select coalesce(internal.account_erasure_hold('${early.id}'),'none');`),
+      "transfer_waiting"
+    );
   });
 
   const thandi = verified("expiry-thandi");
@@ -190,16 +249,17 @@ try {
   age(t13.transfer_id, "13 days 23 hours 59 minutes");
   age(t14.transfer_id, "14 days 1 second");
 
-  await check("13 days waiting stays waiting; 14 days or more expires", () => {
-    assert.deepEqual(sweep(), { expired: 2, invoices_open_again: 0 });
+  await check("the sweep marks 14 days or more; 13 days stays waiting", () => {
+    assert.deepEqual(sweep(), swept(2));
     assert.deepEqual(status(t13.transfer_id), {
       status: "awaiting_confirmation",
       expired: false,
       payment: false,
     });
-    assert.deepEqual(status(fresh.transfer_id).status, "awaiting_confirmation");
+    assert.equal(status(fresh.transfer_id).status, "awaiting_confirmation");
     for (const t of [t14, earlyTransfer])
       assert.deepEqual(status(t.transfer_id), { status: "expired", expired: true, payment: false });
+    assert.ok(staffWaiting().items.some((t) => t.transfer_id === t13.transfer_id));
     assert.match(
       preflight()[0][1],
       /^bank transfer expiry: already applied; waiting: 2; waiting 14 days or more: 0; expired: 2$/
@@ -207,12 +267,11 @@ try {
   });
   await check("a rerun of the sweep changes nothing more", () => {
     const at = q(`select expired_at from private.invoice_transfers where id='${t14.transfer_id}';`);
-    assert.deepEqual(sweep(), { expired: 0, invoices_open_again: 0 });
+    assert.deepEqual(sweep(), swept(0));
     assert.equal(
       q(`select expired_at from private.invoice_transfers where id='${t14.transfer_id}';`),
       at
     );
-    assert.equal(status(t14.transfer_id).status, "expired");
   });
   await check("the sweep's limit is bounded and each run takes the oldest first", () => {
     fails(sweepSql(0), "22023");
@@ -222,11 +281,31 @@ try {
     const two = recordDirect(verified("expiry-limit-2"), "FNB LIMIT 0002");
     age(one.transfer_id, "16 days");
     age(two.transfer_id, "15 days");
-    assert.deepEqual(sweep(1), { expired: 1, invoices_open_again: 0 });
+    assert.deepEqual(sweep(1), swept(1));
     assert.equal(status(one.transfer_id).status, "expired");
     assert.equal(status(two.transfer_id).status, "awaiting_confirmation");
-    assert.deepEqual(sweep(1), { expired: 1, invoices_open_again: 0 });
+    assert.deepEqual(sweep(1), swept(1));
     assert.equal(status(two.transfer_id).status, "expired");
+  });
+  await check("one row that cannot be changed does not stop the others", () => {
+    const blocked = recordDirect(verified("expiry-blocked"), "FNB BLOCK 0001");
+    const next = recordDirect(verified("expiry-next"), "FNB BLOCK 0002");
+    age(blocked.transfer_id, "17 days");
+    age(next.transfer_id, "16 days");
+    q(`create function vmtest.block_one() returns trigger language plpgsql as $$
+        begin if old.bank_reference='FNB BLOCK 0001' then raise exception 'synthetic failure'; end if; return new; end$$;
+      create trigger vmtest_block_one before update on private.invoice_transfers
+        for each row execute function vmtest.block_one();`);
+    assert.deepEqual(sweep(), swept(1, 0, 1));
+    assert.equal(status(blocked.transfer_id).status, "awaiting_confirmation");
+    assert.equal(status(next.transfer_id).status, "expired");
+    // Still expired by the rule, and listed for staff, before it is marked.
+    assert.ok(listedExpired(blocked.transfer_id));
+    q(
+      "drop trigger vmtest_block_one on private.invoice_transfers; drop function vmtest.block_one();"
+    );
+    assert.deepEqual(sweep(), swept(1));
+    assert.equal(status(blocked.transfer_id).status, "expired");
   });
   await check("an expired transfer cannot be confirmed or declined", () => {
     assert.match(fails(transfers.confirmSql(admin2, t14.transfer_id), "PT409"), /already expired/);
@@ -238,30 +317,16 @@ try {
       "no payment for the expired transfer"
     );
   });
-  await check("past 14 days but not swept yet: never confirmed, still declinable", () => {
-    const late = recordDirect(verified("expiry-late"), "FNB LATE 0001");
-    age(late.transfer_id, "14 days 5 minutes");
-    const error = fails(transfers.confirmSql(admin2, late.transfer_id), "PT409");
-    assert.match(error, /waited 14 days without confirmation and expired/);
-    assert.match(error, /transfer_not_waiting/);
-    assert.equal(status(late.transfer_id).status, "awaiting_confirmation");
-    const declined = json(transfers.declineSql(admin2, late.transfer_id));
-    assert.equal(declined.status, "declined");
-    assert.deepEqual(sweep(), { expired: 0, invoices_open_again: 0 });
-  });
   await check("a transfer younger than 14 days is confirmed as before", () => {
-    const confirmed = transfers.confirm(admin2, t13.transfer_id);
-    assert.equal(confirmed.status, "confirmed");
+    assert.equal(transfers.confirm(admin2, t13.transfer_id).status, "confirmed");
     assert.deepEqual(status(t13.transfer_id), {
       status: "confirmed",
       expired: false,
       payment: true,
     });
     // A confirmed transfer is never expired, however old it gets.
-    q(`set session_replication_role=replica;
-      update private.invoice_transfers set recorded_at=now()-interval '40 days' where id='${t13.transfer_id}';
-      set session_replication_role=origin;`);
-    assert.deepEqual(sweep(), { expired: 0, invoices_open_again: 0 });
+    age(t13.transfer_id, "40 days");
+    assert.deepEqual(sweep(), swept(0));
     assert.equal(status(t13.transfer_id).status, "confirmed");
   });
   await check("the record guard: expiry only after 14 days, once, with nothing else", () => {
@@ -287,10 +352,6 @@ try {
       `update private.invoice_transfers set status='awaiting_confirmation',expired_at=null where id='${t14.transfer_id}';`,
       "23514"
     );
-    fails(
-      `update private.invoice_transfers set expired_at=statement_timestamp() where id='${t14.transfer_id}';`,
-      "23514"
-    );
     fails(`delete from private.invoice_transfers where id='${t14.transfer_id}';`, "23514");
     fails(
       `insert into private.invoice_transfers(account_id,plan_version_id,slots,amount_received_cents,bank_reference,
@@ -305,15 +366,93 @@ try {
        update private.invoice_transfers set status='expired' where id='${fresh.transfer_id}';`,
       "23514"
     );
-    assert.deepEqual(sweep(), { expired: 1, invoices_open_again: 0 });
+    assert.deepEqual(sweep(), swept(1));
     assert.equal(status(fresh.transfer_id).status, "expired");
   });
-  await check("the bank credit of an expired transfer can be recorded again", () => {
+  await check("the bank credit of an expired transfer can be recorded again, once", () => {
     const again = recordDirect(sipho, "FNB DAY14 0001");
     assert.equal(again.status, "awaiting_confirmation");
     assert.notEqual(again.transfer_id, t14.transfer_id);
     assert.equal(again.similar_records, 0, "an expired record is not a possible duplicate");
+    assert.match(
+      fails(
+        transfers.recordSql(admin2, {
+          email: sipho.email,
+          term: 30,
+          slots: 1,
+          reference: "FNB DAY14 0001",
+        }),
+        "PT409"
+      ),
+      /bank_reference_used/
+    );
     assert.equal(transfers.confirm(admin2, again.transfer_id).status, "confirmed");
+    assert.match(
+      fails(
+        transfers.recordSql(admin2, {
+          email: sipho.email,
+          term: 30,
+          slots: 1,
+          reference: "FNB DAY14 0001",
+        }),
+        "PT409"
+      ),
+      /bank_reference_used/
+    );
+    // No longer to be followed up: a later record of the same credit exists.
+    assert.equal(listedExpired(t14.transfer_id), undefined);
+  });
+  await check("money that cleared more than 90 days ago: only an expired credit, exactly", () => {
+    const zola = verified("expiry-zola");
+    const first = recordDirect(zola, "FNB OLD 0090", daysAgo(80));
+    // The money cleared 100 days ago and the record has waited 20 days; the
+    // sweep has not marked it: recording the credit again marks it first.
+    q(`set session_replication_role=replica;
+      update private.invoice_transfers set cleared_on=current_date-100,recorded_at=now()-interval '20 days'
+        where id='${first.transfer_id}';
+      set session_replication_role=origin;`);
+    const cleared = q(
+      `select to_char(cleared_on,'YYYY-MM-DD') from private.invoice_transfers where id='${first.transfer_id}';`
+    );
+    for (const other of [
+      { reference: "FNB OLD 0091", cleared },
+      { reference: "FNB OLD 0090", cleared: daysAgo(101) },
+      { reference: "FNB OLD 0090", cleared, term: 90 },
+    ])
+      fails(
+        transfers.recordSql(admin, { email: zola.email, term: 30, slots: 1, ...other }),
+        "22023",
+        /cleared_date_invalid/
+      );
+    const again = recordDirect(zola, "FNB OLD 0090", cleared);
+    assert.equal(again.status, "awaiting_confirmation");
+    assert.deepEqual(status(first.transfer_id), {
+      status: "expired",
+      expired: true,
+      payment: false,
+    });
+    // Never counted twice: a second record of the credit is refused.
+    assert.match(
+      fails(
+        transfers.recordSql(admin2, {
+          email: zola.email,
+          term: 30,
+          slots: 1,
+          reference: "FNB OLD 0090",
+          cleared,
+        }),
+        "PT409"
+      ),
+      /bank_reference_used/
+    );
+    assert.equal(transfers.confirm(admin2, again.transfer_id).status, "confirmed");
+    assert.equal(
+      Number(
+        q(`select count(*) from private.invoice_transfers where status in ('awaiting_confirmation','confirmed')
+            and upper(regexp_replace(bank_reference,'[^A-Za-z0-9]','','g'))='FNBOLD0090';`)
+      ),
+      1
+    );
   });
 
   // ---------------------------------------------------- customer invoices
@@ -331,43 +470,80 @@ try {
       transfer_expired_at: null,
     });
     fails(payNowSql(buyer, number), "PT409", /invoice_transfer_waiting/);
+    fails(voidSql(invoice.invoice_id), "PT409", /invoice_transfer_waiting/);
     assert.equal(q(`select internal.account_erasure_hold('${buyer.id}');`), "transfer_waiting");
   });
-  await check("after 14 days the invoice is payable again and its member sees the expiry", () => {
+  await check("after 14 days the invoice is free at once, before the sweep", () => {
     age(toInvoice.transfer_id, "14 days 10 minutes");
-    assert.deepEqual(sweep(), { expired: 1, invoices_open_again: 1 });
     const read = myInvoice(buyer, number);
     assert.equal(read.status, "issued");
     assert.equal(read.transfer_waiting, false);
-    const expiry = json(expirySql(buyer, number));
-    assert.equal(expiry.invoice_number, number);
-    assert.equal(
-      expiry.transfer_expired_at,
-      json(
-        `select to_jsonb(expired_at) from private.invoice_transfers where id='${toInvoice.transfer_id}';`
-      )
-    );
+    const before = json(expirySql(buyer, number)).transfer_expired_at;
+    assert.match(before ?? "", /^\d{4}-\d{2}-\d{2}T/);
     assert.notEqual(
       q(`select coalesce(internal.account_erasure_hold('${buyer.id}'),'none');`),
       "transfer_waiting"
     );
+    assert.equal(listedExpired(toInvoice.transfer_id).invoice_number, number);
     // Only the invoice's own member: anyone else reads it as not found.
     fails(expirySql(stranger, number), "PT404", /invoice_unavailable/);
     fails(expirySql(buyer, "VM-1999-000001"), "PT404");
     fails(expirySql(buyer, "../admin"), "PT404");
-    const pay = json(payNowSql(buyer, number));
-    assert.equal(pay.status, "pending");
+    assert.equal(json(payNowSql(buyer, number)).status, "pending");
+    assert.deepEqual(sweep(), swept(1, 1));
+    assert.equal(
+      json(expirySql(buyer, number)).transfer_expired_at,
+      json(
+        `select to_jsonb(expired_at) from private.invoice_transfers where id='${toInvoice.transfer_id}';`
+      )
+    );
   });
   await check("staff can record the transfer to the invoice again; the notice then goes", () => {
     const again = json(transferToInvoiceSql(number, "FNB INVOICE 0001"));
     assert.equal(again.status, "awaiting_confirmation");
     assert.equal(myInvoice(buyer, number).transfer_waiting, true);
     assert.equal(json(expirySql(buyer, number)).transfer_expired_at, null);
+    assert.equal(listedExpired(toInvoice.transfer_id), undefined);
     // Declined (as before, members are not shown a decline): no notice.
     json(transfers.declineSql(admin2, again.transfer_id));
     assert.equal(json(expirySql(buyer, number)).transfer_expired_at, null);
     assert.equal(myInvoice(buyer, number).transfer_waiting, false);
   });
+  await check(
+    "an invoice's overdue transfer, unswept: re-recorded (cleared long ago) or voided",
+    () => {
+      const late = verified("expiry-late-invoice");
+      const lateInvoice = issue(late);
+      save(late, lateInvoice.invoice_number);
+      const first = json(transferToInvoiceSql(lateInvoice.invoice_number, "FNB LATEINV 0001"));
+      q(`set session_replication_role=replica;
+      update private.invoice_transfers set cleared_on=current_date-120,recorded_at=now()-interval '15 days'
+        where id='${first.transfer_id}';
+      set session_replication_role=origin;`);
+      const cleared = q(
+        `select to_char(cleared_on,'YYYY-MM-DD') from private.invoice_transfers where id='${first.transfer_id}';`
+      );
+      fails(
+        transferToInvoiceSql(lateInvoice.invoice_number, "FNB LATEINV 0002", cleared),
+        "22023",
+        /cleared_date_invalid/
+      );
+      const again = json(
+        transferToInvoiceSql(lateInvoice.invoice_number, "FNB LATEINV 0001", cleared)
+      );
+      assert.equal(again.status, "awaiting_confirmation");
+      assert.equal(status(first.transfer_id).status, "expired");
+      assert.equal(transfers.confirm(admin2, again.transfer_id).status, "confirmed");
+      assert.equal(myInvoice(late, lateInvoice.invoice_number).status, "paid");
+      // Voiding is not held by an overdue transfer either.
+      const other = verified("expiry-void");
+      const toVoid = issue(other);
+      const waiting = json(transferToInvoiceSql(toVoid.invoice_number, "FNB VOID 0001"));
+      age(waiting.transfer_id, "15 days");
+      assert.equal(json(voidSql(toVoid.invoice_id)).status, "void");
+      assert.equal(listedExpired(waiting.transfer_id), undefined, "a void invoice is followed up");
+    }
+  );
   await check("a paid invoice shows no expiry", () => {
     const paid = issue(stranger);
     save(stranger, paid.invoice_number);
@@ -375,7 +551,7 @@ try {
     age(first.transfer_id, "20 days");
     sweep();
     const second = json(transferToInvoiceSql(paid.invoice_number, "FNB PAID 0002"));
-    assert.ok(json(expirySql(stranger, paid.invoice_number)).transfer_expired_at === null);
+    assert.equal(json(expirySql(stranger, paid.invoice_number)).transfer_expired_at, null);
     transfers.confirm(admin2, second.transfer_id);
     assert.equal(myInvoice(stranger, paid.invoice_number).status, "paid");
     assert.deepEqual(json(expirySql(stranger, paid.invoice_number)), {
@@ -385,26 +561,27 @@ try {
   });
 
   // --------------------------------------------------- staff visibility
-  await check("staff see expired transfers; the waiting list leaves them out", () => {
-    const expired = json(staff(admin2, "select api.get_staff_expired_invoice_transfers();")).items;
-    const ids = expired.map((t) => t.transfer_id);
-    for (const t of [t14, earlyTransfer, toInvoice]) assert.ok(ids.includes(t.transfer_id));
-    const item = expired.find((t) => t.transfer_id === toInvoice.transfer_id);
-    assert.equal(item.status, "expired");
-    assert.equal(item.invoice_number, number);
-    assert.match(item.expired_at, /^\d{4}-\d{2}-\d{2}T/);
-    assert.equal(expired.find((t) => t.transfer_id === t14.transfer_id).invoice_number, null);
-    // Newest first, at most 20.
-    const times = expired.map((t) => Date.parse(t.expired_at));
+  await check("staff see each expired transfer until it is followed up", () => {
+    const read = staffExpired();
+    assert.equal(read.unresolved, read.items.length);
+    const ids = read.items.map((t) => t.transfer_id);
+    // Not followed up: listed however long ago it expired.
+    q(`set session_replication_role=replica;
+      update private.invoice_transfers set expired_at=now()-interval '200 days',recorded_at=now()-interval '214 days'
+        where id='${earlyTransfer.transfer_id}';
+      set session_replication_role=origin;`);
+    assert.ok(listedExpired(earlyTransfer.transfer_id), "an old unresolved transfer is listed");
+    assert.ok(ids.includes(fresh.transfer_id));
+    // Followed up: re-recorded, invoice paid or voided.
+    for (const t of [t14, toInvoice]) assert.ok(!ids.includes(t.transfer_id));
+    assert.ok(read.items.every((t) => t.status === "expired"));
+    const times = staffExpired().items.map((t) => Date.parse(t.expired_at));
     assert.deepEqual(
       times,
-      [...times].sort((a, b) => b - a)
+      [...times].sort((a, b) => a - b),
+      "oldest first"
     );
-    assert.ok(expired.length <= 20);
-    const waiting = json(staff(admin2, "select api.get_staff_invoice_transfers();"));
-    assert.ok(waiting.items.every((t) => t.status === "awaiting_confirmation"));
-    assert.ok(!waiting.items.some((t) => ids.includes(t.transfer_id)));
-    // Members and expired staff sessions are refused.
+    assert.ok(!staffWaiting().items.some((t) => ids.includes(t.transfer_id)));
     fails(member(buyer, "select api.get_staff_expired_invoice_transfers();"), "42501");
     fails(
       staff(
@@ -414,18 +591,8 @@ try {
       ),
       "42501"
     );
-    // Older than 30 days: no longer listed.
-    q(`set session_replication_role=replica;
-      update private.invoice_transfers set expired_at=now()-interval '31 days',recorded_at=now()-interval '45 days'
-        where id='${earlyTransfer.transfer_id}';
-      set session_replication_role=origin;`);
-    assert.ok(
-      !json(staff(admin2, "select api.get_staff_expired_invoice_transfers();")).items.some(
-        (t) => t.transfer_id === earlyTransfer.transfer_id
-      )
-    );
   });
-  await check("the audit trail lists each expiry with no staff member", () => {
+  await check("the audit trail lists each recorded expiry with no staff member", () => {
     const rows =
       json(`select coalesce(jsonb_agg(jsonb_build_object('actor',actor_id,'reason',reason)),'[]')
         from private.frontend_staff_audit_events
@@ -448,6 +615,18 @@ try {
       page.items.every((i) => i.action === "payment_invoice_expired" && i.actor_id === null)
     );
   });
+  await check("the privacy export names when a bank transfer expired", () => {
+    const exported = JSON.stringify(
+      json(`select internal.frontend_privacy_export_data('${sipho.id}');`)
+    );
+    const at = json(
+      `select to_jsonb(expired_at) from private.invoice_transfers where id='${t14.transfer_id}';`
+    );
+    assert.ok(
+      exported.includes(`"expired_at":"${at}"`) || exported.includes(`"expired_at": "${at}"`),
+      exported.slice(0, 400)
+    );
+  });
   await check("who may run the new commands", () => {
     assert.deepEqual(executeGrants(json, NEW_API), {
       "api.expire_waiting_bank_transfers(integer)": {
@@ -468,14 +647,20 @@ try {
     });
     fails(member(buyer, "select api.expire_waiting_bank_transfers(100);"), "42501");
     fails(staff(admin2, "select api.expire_waiting_bank_transfers(100);"), "42501");
-    assert.equal(
-      executeGrants(json, ["internal.invoice_transfer_expires_after()"])[
-        "internal.invoice_transfer_expires_after()"
-      ].authenticated,
-      false
-    );
+    for (const helper of [
+      "internal.invoice_transfer_expires_after()",
+      "internal.invoice_transfer_expired(private.invoice_transfers)",
+      "internal.invoice_transfer_waiting(private.invoice_transfers)",
+      "internal.invoice_transfer_credit_expired(text,bigint,date)",
+      "internal.expire_invoice_transfer(uuid)",
+    ])
+      assert.deepEqual(executeGrants(json, [helper])[helper], {
+        anon: false,
+        authenticated: false,
+        service_role: false,
+      });
   });
-  await check("the rollback refuses once a transfer has expired", () => {
+  await check("the rollback refuses once a transfer was marked expired", () => {
     const before = fingerprint();
     assert.match(fails(kit.rollbackSql, "55000"), /bank transfers have expired/);
     assert.equal(fingerprint(), before);

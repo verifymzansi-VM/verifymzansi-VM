@@ -51,6 +51,12 @@ begin
   if new.expired_at is not null then
     raise exception 'only an expired bank transfer has an expiry time' using errcode='23514';
   end if;
+  -- Confirmed or declined: only while the transfer has not expired, also when
+  -- the sweep has not marked it yet.
+  if internal.invoice_transfer_expired(old) then
+    raise exception 'a bank transfer that waited 14 days has expired and is never confirmed or declined'
+      using errcode='23514';
+  end if;
   if new.status = 'confirmed' then
     select * into pay from private.payments p where p.id = new.payment_id;
     if not found or pay.provider <> 'invoice' or pay.status <> 'complete' or pay.owner_id <> new.account_id

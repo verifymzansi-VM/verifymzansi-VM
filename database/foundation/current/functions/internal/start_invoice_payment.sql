@@ -19,7 +19,7 @@ begin
   end if;
   inv := internal.lock_my_issued_invoice(actor, p_invoice_number);
   if exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = inv.id
-      and t.status = 'awaiting_confirmation') then
+      and internal.invoice_transfer_waiting(t)) then
     raise exception 'your bank transfer to this invoice is being checked; you do not need to pay again'
       using errcode='PT409', detail='invoice_transfer_waiting';
   end if;
