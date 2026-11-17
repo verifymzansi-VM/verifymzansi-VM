@@ -98,15 +98,17 @@ function redirectHostTarget(request: NextRequest): URL | null {
 
 /** A browser or crawler loading the address, not the app's own in-page
  * navigation or prefetch. Next.js removes its RSC headers before the proxy
- * runs, so a browser's own `Sec-Fetch-Dest` tells them apart: "document" for
- * a page load, "empty" for the app's fetches. Crawlers and link checkers send
- * none and count as page loads. */
+ * runs, so the browser's own fetch metadata tells them apart: a page load is
+ * `Sec-Fetch-Mode: navigate`, also when the site's service worker passes it on
+ * (it then arrives with `Sec-Fetch-Dest: empty`); the app's own fetches are
+ * "cors" or "same-origin". Crawlers and link checkers send no fetch metadata
+ * and count as page loads. */
 function isDocumentRequest(request: NextRequest): boolean {
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  const mode = request.headers.get("sec-fetch-mode");
   const destination = request.headers.get("sec-fetch-dest");
-  return (
-    (request.method === "GET" || request.method === "HEAD") &&
-    (destination === null || destination === "document")
-  );
+  if (mode === null && destination === null) return true;
+  return mode === "navigate" || destination === "document";
 }
 
 /** Render the page as usual but with HTTP 404, so it keeps its own "not

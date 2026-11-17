@@ -110,20 +110,30 @@ describe("proxy — real 404 for missing detail pages", () => {
   });
 
   it("leaves the app's own navigation and prefetch fetches to the page", async () => {
-    // Next.js strips its RSC headers before the proxy; the browser's
-    // Sec-Fetch-Dest is "empty" for those fetches.
-    const response = await routeRequest(
-      request("/listing/not-a-uuid", { headers: { "sec-fetch-dest": "empty" } })
-    );
-    expect(response.status).toBe(200);
-    expect(response.headers.get("x-middleware-next")).toBe("1");
+    // Next.js strips its RSC headers before the proxy; the app's own fetches
+    // are "cors" (or "same-origin") with Sec-Fetch-Dest "empty".
+    for (const mode of ["cors", "same-origin"]) {
+      const response = await routeRequest(
+        request("/listing/not-a-uuid", {
+          headers: { "sec-fetch-dest": "empty", "sec-fetch-mode": mode },
+        })
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+    }
     expect(isMissingDetailPage).not.toHaveBeenCalled();
   });
 
-  it("checks a browser page load", async () => {
-    const response = await routeRequest(
-      request("/listing/not-a-uuid", { headers: { "sec-fetch-dest": "document" } })
-    );
+  it.each([
+    ["a browser page load", { "sec-fetch-dest": "document", "sec-fetch-mode": "navigate" }],
+    // The site's service worker passes page loads on with Sec-Fetch-Dest "empty".
+    [
+      "a page load passed on by the service worker",
+      { "sec-fetch-dest": "empty", "sec-fetch-mode": "navigate" },
+    ],
+    ["a crawler without fetch metadata", {}],
+  ])("checks %s", async (_label, headers) => {
+    const response = await routeRequest(request("/listing/not-a-uuid", { headers }));
     expect(response.status).toBe(404);
   });
 
