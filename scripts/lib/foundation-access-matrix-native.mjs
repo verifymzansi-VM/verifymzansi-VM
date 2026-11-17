@@ -287,7 +287,7 @@ export async function testAccessMatrix({
     notificationId: one(
       "select id from private.notifications where account_id='" +
         owner.id +
-        "' order by created_at limit 1;"
+        "' and kind='enquiry_received' order by created_at limit 1;"
     )[0],
     paymentId: checkout.payment_id,
     applicationId: application.id,

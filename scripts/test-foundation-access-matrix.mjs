@@ -469,7 +469,7 @@ try {
       proofId: verified.proofId,
       enquiryId: one(`select id from private.enquiries where owner_id='${owner.id}';`)[0],
       notificationId: one(
-        `select id from private.notifications where account_id='${owner.id}' order by created_at limit 1;`
+        `select id from private.notifications where account_id='${owner.id}' and kind='enquiry_received' order by created_at limit 1;`
       )[0],
       paymentId: payment,
       applicationId: application.id,

@@ -34,6 +34,7 @@
       "triggers": "a138c3d73b46265b6954c38553954405"
     },
     "pendingApplication": [
+      "20261117140533_member_notices_in_app.sql",
       "20261117141803_bank_transfer_expiry.sql"
     ]
   },
@@ -41,7 +42,7 @@
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 80,
+  "updateCount": 81,
   "lastUpdate": "20261117141803_bank_transfer_expiry.sql",
   "categories": {
     "column_grants": {
@@ -54,23 +55,23 @@
     },
     "constraints": {
       "items": 1154,
-      "fingerprint": "5d182bdb23cabc31c7293bfdf7ea18d4"
+      "fingerprint": "6a7b6ee6d6a21e1d7cf21884e7f74c0d"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 982,
-      "fingerprint": "ad1e75a4212e5b9ef2872a7df094785a"
+      "items": 986,
+      "fingerprint": "3e02ed64049e04791207f6cbc3daeeee"
     },
     "function_grants": {
       "items": 723,
       "fingerprint": "c4492091e8681840a10ee738ff3fe957"
     },
     "function_metadata": {
-      "items": 982,
-      "fingerprint": "5a573899c08db6a3f21eda049d0ff4fd"
+      "items": 986,
+      "fingerprint": "5f43f85338dcec7d1c3ccc26ed829901"
     },
     "indexes": {
       "items": 520,
@@ -89,8 +90,8 @@
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 119,
-      "fingerprint": "a138c3d73b46265b6954c38553954405"
+      "items": 123,
+      "fingerprint": "6fdff694ceabf3951897761f64490331"
     }
   }
 }
