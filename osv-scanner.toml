@@ -6,3 +6,8 @@
 id = "GHSA-vfj7-8cjw-p6xm"
 ignoreUntil = 2027-01-31T00:00:00Z
 reason = "braces 3.0.3 ships with the reviewed upstream fix backported (patches/braces@3.0.3.patch, review in patches/braces@3.0.3.review.json). The dependency gate (scripts/lib/braces-backport.ts) fails CI unless the installed files match the reviewed hashes. Remove once braces publishes a fixed release."
+
+[[IgnoredVulns]]
+id = "GHSA-fc5q-39xc-vjpf"
+ignoreUntil = 2026-12-17T00:00:00Z
+reason = "picomatch <= 4.0.7 (2.3.2, 4.0.4, 4.0.7 in the lockfile); no fixed release exists yet. The slow path needs an untrusted glob pattern. Every path is build or developer tooling (tailwindcss, the Sentry build plugin @rollup/plugin-commonjs, vite/vitest, eslint, knip, lint-staged, dependency-cruiser, jscpd) whose patterns come from repository config. The application never imports picomatch, micromatch or a glob library, and no request input reaches a glob matcher. Upgrade through the picomatch overrides in package.json once a fixed release passes the 7-day release-age guard, then remove this entry."
