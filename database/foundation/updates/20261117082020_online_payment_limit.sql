@@ -48,7 +48,7 @@
 --    (src/lib/legal/terms-documents/posting-v5.json, canonical hash pinned
 --    below and in catalogue.json): it inserts one row into
 --    private.posting_terms_versions and does NOT make posting-v5 current;
---    20261116211439_switch_posting_terms_v5.sql does that once the website
+--    20261117082021_switch_posting_terms_v5.sql does that once the website
 --    release that knows posting-v5 is deployed. posting-v5 is posting-v4 with
 --    "Paying, VAT & invoices" (and one refund sentence) rewritten: pay online
 --    at any amount up to the payment provider's maximum, an invoice first on
@@ -60,8 +60,8 @@
 -- this update applied it refuses orders above R1,300 with its old "paid by
 -- invoice" message (Ozow refuses those amounts today anyway) and never calls
 -- the new read. Then deploy, then apply the switch.
--- Read-only preflight: ../preflight/20261116211438_online_payment_limit.check.sql.
--- Rollback: ../rollback/20261116211438_online_payment_limit.down.sql.
+-- Read-only preflight: ../preflight/20261117082020_online_payment_limit.check.sql.
+-- Rollback: ../rollback/20261117082020_online_payment_limit.down.sql.
 begin;
 set local lock_timeout='5s';
 
@@ -89,7 +89,7 @@ begin
         'internal.start_package_checkout(uuid,integer,bigint,boolean) feb6e6f31e0bc1f6a1de41e8c927acb8',
         'internal.start_package_checkout(uuid,integer,bigint,boolean) 947486cd48be84b7a45714ec51d1bae4',
         'internal.claim_checkout_request(uuid,uuid) 0234950a11ec46ce9ccb0e707b940e72',
-        'internal.claim_checkout_request(uuid,uuid) 68360e84202bdb13b2c690d6ae0ce452') then
+        'internal.claim_checkout_request(uuid,uuid) ed0fda34dc274593ad117b51d47eb13c') then
       raise exception 'online payment limit precondition: % is not a reviewed body', shape using errcode='55000';
     end if;
   end loop;
@@ -670,7 +670,7 @@ begin
       raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
     end if;
   end if;
-  -- Final guard (20261116211438): a new Ozow request is never created above
+  -- Final guard (20261117082020): a new Ozow request is never created above
   -- the most Ozow accepts in one payment; every checkout refuses first.
   if pay.checkout_url is null and pay.amount_cents > internal.online_payment_max_cents() then
     raise exception 'this payment is above the online payment limit of % cents', internal.online_payment_max_cents()

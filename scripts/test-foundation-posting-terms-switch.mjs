@@ -276,7 +276,7 @@ try {
   if (later.length) {
     applySteps(database, later);
     await check("later updates keep posting-v4 current until a newer version's switch", () => {
-      // 20261116211439_switch_posting_terms_v5.sql makes posting-v5 current.
+      // 20261117082021_switch_posting_terms_v5.sql makes posting-v5 current.
       const terms = currentTerms();
       if (terms.version === "posting-v5")
         assert.equal(terms.document_hash, CATALOGUE.versions["posting-v5"]);

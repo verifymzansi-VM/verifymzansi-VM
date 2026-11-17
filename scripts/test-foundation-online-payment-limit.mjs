@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261116211438_online_payment_limit.sql and
-// 20261116211439_switch_posting_terms_v5.sql (owner's decisions of 16 November
+// Behaviour checks for 20261117082020_online_payment_limit.sql and
+// 20261117082021_switch_posting_terms_v5.sql (owner's decisions of 16 November
 // 2026): the R10,000 online limit is gone; the only online limit left is the
 // most Ozow accepts in one payment (internal.online_payment_max_cents, R1,300),
 // for new slots, renewals and invoice "Pay now"; members read it with
@@ -32,8 +32,8 @@ import {
   updateCheckKit,
 } from "./lib/foundation-staff-payment-world.mjs";
 
-const UPDATE = "20261116211438_online_payment_limit.sql";
-const SWITCH = "20261116211439_switch_posting_terms_v5.sql";
+const UPDATE = "20261117082020_online_payment_limit.sql";
+const SWITCH = "20261117082021_switch_posting_terms_v5.sql";
 const companion = (folder, file, suffix) =>
   readFileSync(`database/foundation/${folder}/${file.replace(/\.sql$/, suffix)}`, "utf8");
 const SWITCH_PREFLIGHT = companion("preflight", SWITCH, ".check.sql");

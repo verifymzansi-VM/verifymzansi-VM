@@ -213,7 +213,7 @@ try {
     applySteps(database, later);
     await check("later updates keep posting-v4 published unchanged", () => {
       // The switch (20261112173841) makes posting-v4 current; a later version's
-      // own switch (posting-v5, 20261116211439) may replace it.
+      // own switch (posting-v5, 20261117082021) may replace it.
       assert.ok(["posting-v3", "posting-v4", "posting-v5"].includes(currentTerms().version));
       assert.deepEqual(v4Rows(), [V4.document_hash]);
     });

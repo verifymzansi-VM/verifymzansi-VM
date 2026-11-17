@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261116211438_online_payment_limit.sql.
+-- Read-only preflight for updates/20261117082020_online_payment_limit.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes
@@ -26,7 +26,7 @@ with bodies as (
     ('internal.start_slot_renewal_checkout(uuid[],uuid,bigint,boolean)', 'e014633dd37ebb3fa212fc2944dd7ed6', '4c9ceef45be61e47ec685d82e8392c96'),
     ('internal.start_invoice_payment(text,bigint,boolean)', '157a3a3a51c3abfdef565e37a2af3785', '58e3e24aa91f41a476435c8b152b94d2'),
     ('internal.start_package_checkout(uuid,integer,bigint,boolean)', 'feb6e6f31e0bc1f6a1de41e8c927acb8', '947486cd48be84b7a45714ec51d1bae4'),
-    ('internal.claim_checkout_request(uuid,uuid)', '0234950a11ec46ce9ccb0e707b940e72', '68360e84202bdb13b2c690d6ae0ce452'),
+    ('internal.claim_checkout_request(uuid,uuid)', '0234950a11ec46ce9ccb0e707b940e72', 'ed0fda34dc274593ad117b51d47eb13c'),
     ('internal.online_payment_max_cents()', null, '60f453372263eb6dd30aad3239b10852'),
     ('internal.get_payment_limits()', null, '5500b885ed26d308f6ada61c3c3c7f14'),
     ('api.get_payment_limits()', null, '686d9a97358602b6ecd51648ef88133b')

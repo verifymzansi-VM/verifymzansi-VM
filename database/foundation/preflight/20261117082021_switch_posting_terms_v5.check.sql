@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261116211439_switch_posting_terms_v5.sql.
+-- Read-only preflight for updates/20261117082021_switch_posting_terms_v5.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes
@@ -18,7 +18,7 @@ select 'summary' as kind,
   'current ' || coalesce(t.current_version, 'missing')
     || case t.current_version when 'posting-v4' then ' (update not applied)'
          when 'posting-v5' then ' (update already applied)' else ' (unexpected)' end
-    || '; posting-v5 ' || case when t.v5_hash is null then 'not published (apply 20261116211438_online_payment_limit.sql first)'
+    || '; posting-v5 ' || case when t.v5_hash is null then 'not published (apply 20261117082020_online_payment_limit.sql first)'
          when t.v5_hash = 'LkgzMkvecZ75fguL1-eUNxwRsHZpg9pi42CTae2Q5mc' then 'published' else 'published with another document' end
     || '; accounts that accepted posting-v5: ' || (select count(*) from private.posting_terms_acceptances a where a.version = 'posting-v5')
     as detail

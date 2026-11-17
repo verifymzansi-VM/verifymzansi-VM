@@ -2481,16 +2481,17 @@ starts a new 15 days.
 ## Online payments up to Ozow's maximum, invoices at any amount, and posting-v5, 16 November 2026
 
 Two updates, applied in this order, **after**
-`20261116175757_close_and_erase_account.sql` (pull request #230, applied) and
-`20261116194000_phone_in_use_before_sms.sql` (pull request #232, applied first);
-these updates do not depend on either. Both are pending. Owner's decisions of 16
-November 2026: remove the R10,000 online limit; checkout offers Ozow and, below
-it, an invoice first at every amount; the only online limit left is the most
-Ozow accepts in one payment on our site (its "Maximum Transaction Amount",
-R1,300 for site VER-VER-020 today; the owner has asked Ozow to raise it), held
-in one setting; the Terms say so.
+`20261116175757_close_and_erase_account.sql` (pull request #230),
+`20261116194000_phone_in_use_before_sms.sql` (pull request #232) and
+`20261117064820_ban_blocks_phone_numbers.sql` (pull request #237), which are
+applied first; these updates do not depend on them. Both are pending. Owner's
+decisions of 16 November 2026: remove the R10,000 online limit; checkout offers
+Ozow and, below it, an invoice first at every amount; the only online limit left
+is the most Ozow accepts in one payment on our site (its "Maximum Transaction
+Amount", R1,300 for site VER-VER-020 today; the owner has asked Ozow to raise
+it), held in one setting; the Terms say so.
 
-### 1. The limit and posting-v5 published: `20261116211438_online_payment_limit.sql`
+### 1. The limit and posting-v5 published: `20261117082020_online_payment_limit.sql`
 
 It needs `20261114154823_slot_packages.sql`. The five function bodies it
 replaces (with that update's package checks) are checked by md5, and it refuses
@@ -2547,7 +2548,7 @@ applied, that website:
   refuses those amounts today anyway);
 - never calls the new read.
 
-**Applying.** Run `../preflight/20261116211438_online_payment_limit.check.sql`
+**Applying.** Run `../preflight/20261117082020_online_payment_limit.check.sql`
 unchanged in the SQL editor; it is read only. Continue only if the result is the
 single summary row starting "online payment limit: update not applied". It also
 counts payments pending at Ozow and unpaid invoices above R1,300. Then run the
@@ -2555,7 +2556,7 @@ update. It waits at most 5 seconds for locks and stops without changing anything
 if they are busy; run it again. Run the preflight again; it should read "already
 applied; current posting terms: posting-v4; posting-v5 published".
 
-**Rollback.** `../rollback/20261116211438_online_payment_limit.down.sql`:
+**Rollback.** `../rollback/20261117082020_online_payment_limit.down.sql`:
 
 - restores the four earlier function bodies and the lease, so five bodies in
   all;
@@ -2567,7 +2568,7 @@ The posting-v5 row stays (published terms are immutable). The rollback refuses
 while posting-v5 is current, and when a replaced body is neither this update's
 nor the earlier one. Revert the website release first: it calls the new read.
 
-### 2. Make posting-v5 current: `20261116211439_switch_posting_terms_v5.sql`
+### 2. Make posting-v5 current: `20261117082021_switch_posting_terms_v5.sql`
 
 It changes only `private.posting_terms_current` (posting-v4 to posting-v5). It
 refuses (55000) unless posting-v5 is published with the hash above and
@@ -2584,12 +2585,12 @@ the current terms, so no post could be submitted or edited. The full order:
 2. merge, which deploys;
 3. apply update 2.
 
-Preflight: `../preflight/20261116211439_switch_posting_terms_v5.check.sql`. It
+Preflight: `../preflight/20261117082021_switch_posting_terms_v5.check.sql`. It
 should read "current posting-v4 (update not applied); posting-v5 published"
 before, and "current posting-v5 (update already applied)" after. Open `/terms`:
 "Paying, VAT & invoices" shows the new text.
 
-**Rollback.** `../rollback/20261116211439_switch_posting_terms_v5.down.sql`
+**Rollback.** `../rollback/20261117082021_switch_posting_terms_v5.down.sql`
 makes posting-v4 current again; acceptances of posting-v5 stay as history. The
 website release can stay deployed.
 
@@ -4411,8 +4412,8 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   codes for a number in use: 0" with no problem rows, after "already applied"
   with the same counts; production fingerprint after it matched the full replay
   (except the known schema grant difference)
-- `20261116211438_online_payment_limit.sql`: pending
-- `20261116211439_switch_posting_terms_v5.sql`: pending
 - `20261117064820_ban_blocks_phone_numbers.sql`: pending
+- `20261117082020_online_payment_limit.sql`: pending
+- `20261117082021_switch_posting_terms_v5.sql`: pending
 
 <!-- applied-register:end -->

@@ -34,9 +34,9 @@
       "triggers": "720d3d7ee73a3b63fdc79047ac55fae6"
     },
     "pendingApplication": [
-      "20261116211438_online_payment_limit.sql",
-      "20261116211439_switch_posting_terms_v5.sql",
-      "20261117064820_ban_blocks_phone_numbers.sql"
+      "20261117064820_ban_blocks_phone_numbers.sql",
+      "20261117082020_online_payment_limit.sql",
+      "20261117082021_switch_posting_terms_v5.sql"
     ]
   },
   "knownDifferences": [
@@ -44,7 +44,7 @@
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
   "updateCount": 78,
-  "lastUpdate": "20261117064820_ban_blocks_phone_numbers.sql",
+  "lastUpdate": "20261117082021_switch_posting_terms_v5.sql",
   "categories": {
     "column_grants": {
       "items": 2,
@@ -64,7 +64,7 @@
     },
     "function_bodies": {
       "items": 968,
-      "fingerprint": "073b05693495a279189d36a36fe449ee"
+      "fingerprint": "7e877fb3b9ba779832c6db1a030fc225"
     },
     "function_grants": {
       "items": 715,

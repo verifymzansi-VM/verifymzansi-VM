@@ -6,7 +6,7 @@ const publicBusinessProjections = new Set([
   "get_public_frontend_business_cipc",
   "get_public_frontend_business_affiliations",
 ]);
-// Reviewed public settings (20261116211438_online_payment_limit.sql): no
+// Reviewed public settings (20261117082020_online_payment_limit.sql): no
 // arguments, no account data, readable by visitors like the price catalogue.
 const publicSettingReads = new Map([
   [

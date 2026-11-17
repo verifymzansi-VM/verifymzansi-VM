@@ -1,4 +1,4 @@
--- Reviewed rollback for updates/20261116211439_switch_posting_terms_v5.sql.
+-- Reviewed rollback for updates/20261117082021_switch_posting_terms_v5.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so.
 --

@@ -1,6 +1,6 @@
 -- Make posting-v5 the current posting terms (owner's decision of 16 November
 -- 2026: the Terms must describe how people pay now). posting-v5 is published
--- by 20261116211438_online_payment_limit.sql; this file refuses to run
+-- by 20261117082020_online_payment_limit.sql; this file refuses to run
 -- without it (canonical hash pinned below).
 --
 -- Order: apply AFTER the website release that contains
@@ -13,8 +13,8 @@
 -- plan, payment or acceptance. Every member then accepts posting-v5 once
 -- before their next submission or edit; new payments record posting-v5 with
 -- their cooling-off consent. Run again, it changes nothing.
--- Read-only preflight: ../preflight/20261116211439_switch_posting_terms_v5.check.sql.
--- Rollback: ../rollback/20261116211439_switch_posting_terms_v5.down.sql.
+-- Read-only preflight: ../preflight/20261117082021_switch_posting_terms_v5.check.sql.
+-- Rollback: ../rollback/20261117082021_switch_posting_terms_v5.down.sql.
 begin;
 set local lock_timeout='5s';
 
@@ -28,7 +28,7 @@ begin
   end if;
   select v.document_hash into v5_hash from private.posting_terms_versions v where v.version='posting-v5';
   if v5_hash is distinct from 'LkgzMkvecZ75fguL1-eUNxwRsHZpg9pi42CTae2Q5mc' then
-    raise exception 'switch precondition: apply 20261116211438_online_payment_limit.sql first (posting-v5 is %)',
+    raise exception 'switch precondition: apply 20261117082020_online_payment_limit.sql first (posting-v5 is %)',
       case when v5_hash is null then 'not published' else 'published with a different document' end
       using errcode='55000';
   end if;

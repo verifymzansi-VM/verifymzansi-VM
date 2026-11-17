@@ -151,11 +151,11 @@ test("posting terms published after the baseline must come from a database updat
     "utf8"
   );
   const v5 = readFileSync(
-    "database/foundation/updates/20261116211438_online_payment_limit.sql",
+    "database/foundation/updates/20261117082020_online_payment_limit.sql",
     "utf8"
   );
   const switchToV5 = readFileSync(
-    "database/foundation/updates/20261116211439_switch_posting_terms_v5.sql",
+    "database/foundation/updates/20261117082021_switch_posting_terms_v5.sql",
     "utf8"
   );
   const update = [v3, v4, switchToV4, v5, switchToV5].join("\n");

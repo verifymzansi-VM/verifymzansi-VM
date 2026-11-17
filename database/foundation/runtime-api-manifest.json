@@ -231,7 +231,7 @@
       "name": "start_slot_checkout",
       "updates": [
         "updates/20261113002421_individual_slots_r69.sql",
-        "updates/20261116211438_online_payment_limit.sql"
+        "updates/20261117082020_online_payment_limit.sql"
       ],
       "arguments": [
         {
@@ -4558,7 +4558,7 @@
       "name": "start_invoice_payment",
       "updates": [
         "updates/20261114041000_customer_invoice_pay_now.sql",
-        "updates/20261116211438_online_payment_limit.sql"
+        "updates/20261117082020_online_payment_limit.sql"
       ],
       "arguments": [
         {
@@ -4629,7 +4629,7 @@
       "name": "start_slot_renewal_checkout",
       "updates": [
         "updates/20261114093742_renew_slots_early.sql",
-        "updates/20261116211438_online_payment_limit.sql"
+        "updates/20261117082020_online_payment_limit.sql"
       ],
       "arguments": [
         {
@@ -4698,7 +4698,7 @@
       "name": "start_package_checkout",
       "updates": [
         "updates/20261114154823_slot_packages.sql",
-        "updates/20261116211438_online_payment_limit.sql"
+        "updates/20261117082020_online_payment_limit.sql"
       ],
       "arguments": [
         {
@@ -4815,7 +4815,7 @@
     },
     {
       "name": "get_payment_limits",
-      "updates": ["updates/20261116211438_online_payment_limit.sql"],
+      "updates": ["updates/20261117082020_online_payment_limit.sql"],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "s",

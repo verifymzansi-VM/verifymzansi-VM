@@ -88,7 +88,7 @@ const paymentLimitsSchema = z.strictObject({
 });
 /** The most one online (Ozow) payment may be, in cents: the database's one
  * setting (api.get_payment_limits, public like the catalogue,
- * 20261116211438_online_payment_limit.sql). Above it a new order is paid by
+ * 20261117082020_online_payment_limit.sql). Above it a new order is paid by
  * invoice and bank transfer, a renewal is split, a package is bought by
  * invoice and an invoice is paid by bank transfer only. */
 export async function readFoundationPaymentLimits(

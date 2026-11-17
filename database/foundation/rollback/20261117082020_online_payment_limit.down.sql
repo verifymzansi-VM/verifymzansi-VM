@@ -1,4 +1,4 @@
--- Reviewed rollback for updates/20261116211438_online_payment_limit.sql.
+-- Reviewed rollback for updates/20261117082020_online_payment_limit.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so, and only after reverting the website release that
 -- calls api.get_payment_limits (that release then reads no limit and the
@@ -10,7 +10,7 @@
 -- internal.get_payment_limits and api.get_payment_limits. The posting-v5
 -- version row stays (published terms are immutable; unused while not
 -- current). It refuses (55000) while posting-v5 is current (roll back
--- 20261116211439_switch_posting_terms_v5.sql first) or when a replaced
+-- 20261117082021_switch_posting_terms_v5.sql first) or when a replaced
 -- function is neither this update's body nor the earlier one (a later update
 -- changed it: undo that update first).
 begin;
@@ -20,7 +20,7 @@ do $$
 declare shape text;
 begin
   if (select c.version from private.posting_terms_current c where c.singleton) = 'posting-v5' then
-    raise exception 'rollback precondition: posting-v5 is current; roll back 20261116211439_switch_posting_terms_v5.sql first'
+    raise exception 'rollback precondition: posting-v5 is current; roll back 20261117082021_switch_posting_terms_v5.sql first'
       using errcode='55000';
   end if;
   for shape in
@@ -41,7 +41,7 @@ begin
         'internal.start_package_checkout(uuid,integer,bigint,boolean) feb6e6f31e0bc1f6a1de41e8c927acb8',
         'internal.start_package_checkout(uuid,integer,bigint,boolean) 947486cd48be84b7a45714ec51d1bae4',
         'internal.claim_checkout_request(uuid,uuid) 0234950a11ec46ce9ccb0e707b940e72',
-        'internal.claim_checkout_request(uuid,uuid) 68360e84202bdb13b2c690d6ae0ce452') then
+        'internal.claim_checkout_request(uuid,uuid) ed0fda34dc274593ad117b51d47eb13c') then
       raise exception 'rollback precondition: % is neither this update''s body nor the earlier one', shape using errcode='55000';
     end if;
   end loop;
