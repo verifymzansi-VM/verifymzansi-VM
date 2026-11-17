@@ -77,6 +77,71 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Account events reach the notification bell, 17 November 2026
+
+`20261117140533_member_notices_in_app.sql` is not applied yet. It adds no
+command and changes no API signature, so the website release that uses it also
+works with a database that does not have it: the bell then shows only the
+notices it showed before.
+
+Until now the bell listed only what was written to `private.notifications`. Many
+account events queued only an email: an accepted ID check (a member who was
+verified saw nothing on the website), a confirmed mobile number, payments
+received, reversed or under review, the introductory allowance, the post
+lifecycle notices and the slot renewal reminder. Post moderation told the owner
+nothing at all. From this update:
+
+- **Email events reach the bell.** A trigger on `private.outbox_events`
+  (`internal.notify_member_of_outbox_event`) adds a notice of the same kind for
+  the 13 email kinds that had none: `identity_accepted`,
+  `verification_phone_confirmed`, `payment_completed`, `payment_reversed`,
+  `payment_reconciliation_required`, `trial_started`, `post_expired`,
+  `post_expiry_reminder`, `draft_deletion_warning`, `post_deleted`, `post_sold`,
+  `post_kept` and `slot_renewal_reminder`. It fires only for a row actually
+  inserted, so the outbox's dedupe keys keep the bell free of repeats. A post
+  notice links its post and goes with it, except `post_deleted`. An owner
+  without an account gets no notice, and the event is never refused.
+- **Moderation decisions.** A trigger on `private.moderation_log`
+  (`internal.notify_post_moderation`) tells the owner of each decision:
+  `post_approved`, `post_rejected`, `post_changes_approved` and
+  `post_changes_rejected`. No reason is stored in the notice; the owner's posts
+  page shows it.
+- **Live refresh.** `internal.notify_frontend_business_check` also signals the
+  member's live inbox, like every other notice.
+- **Inbox reads.** The enquiry-inbox reads (`internal.list_my_notifications`,
+  `internal.list_my_frontend_notifications`) list an allowed set of their eight
+  kinds instead of leaving out account notices one by one.
+- **Kinds.** The closed notification kind list gains the 17 new kinds. The
+  outbox kinds and the mail claim are unchanged.
+- Events before the update are not notified afterwards.
+
+**Order: deploy first, then apply.** Apply this update after the website release
+from the same pull request is deployed. That release also leaves out any notice
+of a kind it does not know, but the website deployed before it cannot read the
+new notices: its notifications list would show its error state to a member who
+has one. If that release is ever reverted, run the rollback below first.
+
+**Applying.** The website release that knows these kinds must be live.
+
+1. Run `../preflight/20261117140533_member_notices_in_app.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "update not applied".
+2. Run the update. It locks the notification, outbox and moderation log tables
+   without waiting and stops without changing anything if any is busy; run it
+   again. Run the preflight again: it must now read "already applied".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261117140533_member_notices_in_app.down.sql` (only with the
+owner's decision; prefer a forward fix). It drops both triggers, restores the
+earlier bodies and kind list, and deletes every notice of the 17 new kinds to do
+so; queued emails are untouched. `scripts/test-foundation-member-notices.mjs`
+(part of `pnpm db:foundation:lifecycle-test`) proves apply, rollback and
+re-apply and the notices above.
+
 ## Members are told when their ID is sent back, 10 November 2026
 
 `20261110173012_verification_returned_notice.sql` is applied: the coordinator
@@ -4441,5 +4506,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   posting-v5: 0", after "current posting-v5 (update already applied)"; data
   only, the production fingerprint rechecked unchanged; the live /terms page
   shows the new "Paying, VAT & invoices" text
+- `20261117140533_member_notices_in_app.sql`: pending
 
 <!-- applied-register:end -->
