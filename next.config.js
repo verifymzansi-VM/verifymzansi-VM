@@ -8,7 +8,9 @@ if (
   process.env.NEXT_PUBLIC_DATA_BACKEND !== "foundation"
 )
   throw new Error("The retired backend has been removed; unset NEXT_PUBLIC_DATA_BACKEND");
-// Builds use only the approved London project, or the isolated local test copy.
+// Builds use only the approved London project, the separate staging copy (only
+// when the build is for the staging Worker, ENVIRONMENT=staging), or the
+// isolated local test copy. Keep in step with src/lib/foundation/hosted-projects.ts.
 (function assertApprovedPublicConnection() {
   let targetUrl;
   try {
@@ -16,7 +18,11 @@ if (
   } catch {
     throw new Error("Foundation builds require the approved public connection");
   }
-  const hosted = targetUrl.origin === "https://gntzjtuncsyefujajmjy.supabase.co";
+  const hostedOrigin =
+    process.env.ENVIRONMENT === "staging"
+      ? "https://vgplszqfcmdskwseoyam.supabase.co"
+      : "https://gntzjtuncsyefujajmjy.supabase.co";
+  const hosted = targetUrl.origin === hostedOrigin;
   const local =
     process.env.ENVIRONMENT === "test" &&
     process.env.VERIFYMZANSI_RUNTIME_MODE === "e2e" &&
@@ -265,6 +271,17 @@ const nextConfig = {
           },
         ],
       },
+      // Staging copy only (M0.15b; built with ENVIRONMENT=staging): keep every
+      // page and API answer out of search results. Production builds add
+      // nothing here.
+      ...(process.env.ENVIRONMENT === "staging"
+        ? [
+            {
+              source: "/:path*",
+              headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }],
+            },
+          ]
+        : []),
     ];
   },
 };

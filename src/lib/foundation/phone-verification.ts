@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import type { FoundationServiceApi } from "./service-api";
+import { hasDatabaseReason, type FoundationErrorReason } from "./error-reasons";
 import { sendOtpSms } from "../services/sms";
 import {
   foundationPhoneSendSchema,
@@ -19,11 +20,33 @@ const proof = z.strictObject({
   proof_id: z.uuid(),
 });
 
+/** Why the database sends no code for a number (each raised as PT409 before a
+ * challenge is stored), or why a typed code found the number taken. */
+export const FOUNDATION_PHONE_REFUSALS = [
+  "phone_already_verified",
+  "phone_change_cooldown",
+  "phone_change_identity_required",
+  "phone_in_use",
+] as const satisfies readonly FoundationErrorReason[];
+export type FoundationPhoneRefusal = (typeof FOUNDATION_PHONE_REFUSALS)[number];
+
 export class FoundationPhoneError extends Error {
   override name = "FoundationPhoneError";
-  constructor(readonly status: 400 | 403 | 409 | 429 | 503) {
+  constructor(
+    readonly status: 400 | 403 | 409 | 429 | 503,
+    /** A refusal the member is told about by name. */
+    readonly refusal?: FoundationPhoneRefusal,
+    /** For phone_change_cooldown: when a change of number is allowed, if known. */
+    readonly changeAllowedFrom?: Date
+  ) {
     super("Phone verification could not be completed");
   }
+}
+const utcTime = z.iso.datetime();
+/** The cooldown end the database gives as the refusal's hint, when valid. */
+function changeAllowedFrom(hint: unknown) {
+  const parsed = utcTime.safeParse(hint);
+  return parsed.success ? new Date(parsed.data) : undefined;
 }
 const bytesToHex = (bytes: Uint8Array) =>
   Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
@@ -64,7 +87,11 @@ function failed(error: { code?: string }) {
 /** Caller id comes only from the verified server account context. No code,
  * stored digest or recipient is ever returned to the browser. The separate
  * random key stays outside the database; a copied DB digest cannot test codes.
- * Delivery is attempted once. A failure never retries the SMS implicitly. */
+ * Delivery is attempted once. A failure never retries the SMS implicitly.
+ * Before any challenge is stored, SQL refuses (PT409, with a listed reason) a
+ * number already verified on this account, a change of number that is not
+ * allowed yet, and a number another account holds, so no SMS is paid for a
+ * code that could not be used; finalization keeps every check. */
 export async function issueFoundationPhoneChallenge(
   api: FoundationServiceApi,
   owner: string,
@@ -89,7 +116,20 @@ export async function issueFoundationPhoneChallenge(
     p_phone: parsed.data.phone,
     p_hash: hash,
   });
-  if (result.error) failed(result.error);
+  if (result.error) {
+    const { error } = result;
+    const refusal =
+      error.code === "PT409"
+        ? FOUNDATION_PHONE_REFUSALS.find((reason) => hasDatabaseReason(error, reason))
+        : undefined;
+    if (refusal)
+      throw new FoundationPhoneError(
+        409,
+        refusal,
+        refusal === "phone_change_cooldown" ? changeAllowedFrom(error.hint) : undefined
+      );
+    failed(error);
+  }
   const created = foundationPhoneChallengeSchema.safeParse(result.data);
   if (!created.success) throw new FoundationPhoneError(503);
   try {
@@ -114,6 +154,9 @@ export async function verifyFoundationPhoneChallenge(
     p_owner: owner,
     p_challenge: parsed.data.challenge_id,
   });
+  // PT409 here means the code expired, was replaced or used up its attempts:
+  // the member asks for a new code (400), never "number in use" (409).
+  if (result.error?.code === "PT409") throw new FoundationPhoneError(400);
   if (result.error) failed(result.error);
   const current = claimed.safeParse(result.data);
   if (!current.success || current.data.challenge_id !== parsed.data.challenge_id)
@@ -131,6 +174,10 @@ export async function verifyFoundationPhoneChallenge(
     p_challenge: parsed.data.challenge_id,
     p_expected_hash: current.data.otp_hash,
   });
+  // 23505: another account proved the number while this code was open.
+  if (finalized.error?.code === "23505") throw new FoundationPhoneError(409, "phone_in_use");
+  // PT409: this code was superseded, or the change stopped being allowed.
+  if (finalized.error?.code === "PT409") throw new FoundationPhoneError(400);
   if (finalized.error) failed(finalized.error);
   if (!proof.safeParse(finalized.data).success) throw new FoundationPhoneError(503);
   return { verified: true as const };

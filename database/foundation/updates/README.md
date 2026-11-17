@@ -2325,11 +2325,85 @@ tax years after confirmation, keeps a recent transfer, and no delete works
 outside the job; the audit trail; the grants; and that the rollback refuses once
 an invoice was issued.
 
+## A phone code is sent only when the number can be verified, 16 November 2026
+
+`20261116194000_phone_in_use_before_sms.sql` is pending.
+
+Until now the website paid for an SMS code that could never be used: a member
+who entered a number another account had already verified, or who changed their
+number less than 15 days after the last change or without a current verified
+identity, typed the code in and was only then refused by
+`internal.finalize_verification_phone`. A member could also ask for a code to
+the number already verified on their own account, which proves nothing new.
+
+From this update, `internal.create_verification_phone_challenge` (same
+signature, grants and owner) refuses each of these with PT409 and a listed
+reason, before it stores a challenge or expires the member's open code, so the
+website sends no SMS and tells the member at once, in the site's existing words:
+
+| Reason (`detail`)                | The member is told                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------------------- |
+| `phone_already_verified`         | "This phone number is already verified on your account."                            |
+| `phone_change_cooldown`          | "You can change your phone number again after {date}." (the `hint` is the UTC time) |
+| `phone_change_identity_required` | "You must complete identity re-verification before changing your phone number."     |
+| `phone_in_use`                   | "This phone number is already linked to another account."                           |
+
+The two change rules are the ones finalization already applies, checked the same
+way, and they come before `phone_in_use`, so a member who may not change their
+number learns nothing about anyone else's. Finalization keeps every check and
+stays the authority: two accounts that start on a free number at the same moment
+can still each get a code, and its unique index accepts only one.
+
+`phone_in_use` tells a signed-in member with a confirmed email whether a number
+is verified on some other account (never which one) without holding the phone;
+before, only someone who received the code learned it. That is the price of not
+paying for an SMS that can never succeed, and the source backend answered the
+same way. Every send request, refused or not, counts against the SMS limits (per
+account 5 an hour and 10 a day, per network 10 an hour and 30 a day), which
+bounds probing.
+
+No API command changes, so the order does not matter: the website release before
+this update shows its generic refusal for the new PT409 (still with no SMS), and
+the release with it works without the update (these numbers are then refused at
+the last step, as before).
+
+**Applying.**
+
+1. Run `../preflight/20261116194000_phone_in_use_before_sms.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "phone in use before sms: update not applied; active
+   phone proofs: N; open codes for a number in use: M" (any counts; open codes
+   expire within five minutes and are not changed).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "phone in use before sms: already applied; ...".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261116194000_phone_in_use_before_sms.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update's body is
+present, and puts back the earlier body byte for byte.
+
+`node --import tsx scripts/test-foundation-phone-in-use-before-sms.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: before
+the update a held number, the member's own number and a change within 15 days
+each get a code; the preflight before and after, read only; the refusals with a
+drifted body and a premature rollback, changing nothing; apply, rollback and
+re-apply return the same fingerprints; afterwards each of the four reasons is
+raised before a challenge is stored (with the cooldown's end as the hint, and
+the change rules before `phone_in_use`), and the member's open code stays
+usable; a free number, and a number its holder released, still work; account and
+number validation still come first; the grants, owner and settings are
+unchanged; and an allowed change of number still gets a code, is verified and
+starts a new 15 days.
+
 ## Online payments up to Ozow's maximum, invoices at any amount, and posting-v5, 16 November 2026
 
 Two updates, applied in this order, **after**
-`20261116175757_close_and_erase_account.sql` (pull request #230, applied first;
-these updates do not depend on it). Both are pending. Owner's decisions of 16
+`20261116175757_close_and_erase_account.sql` (pull request #230, applied) and
+`20261116194000_phone_in_use_before_sms.sql` (pull request #232, applied first);
+these updates do not depend on either. Both are pending. Owner's decisions of 16
 November 2026: remove the R10,000 online limit; checkout offers Ozow and, below
 it, an invoice first at every amount; the only online limit left is the most
 Ozow accepts in one payment on our site (its "Maximum Transaction Amount",
@@ -2462,8 +2536,9 @@ database:
 - the switch makes posting-v5 current and members accept it once;
 - both rollbacks work.
 
-After #230 merges, regenerate this pull request's `fingerprint.json`, the
-applied register, the manifests, `error-reasons.ts` and `package.json`.
+When another update merges first, regenerate this pull request's
+`fingerprint.json`, the applied register, the manifests, `error-reasons.ts` and
+`package.json`.
 
 ## Individual slots at R69, 12 November 2026
 
@@ -4248,6 +4323,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   accounts closed: 0; erased: 0; waiting with a hold: 0"; production fingerprint
   after it matched the full replay (except the known schema grant difference)
   (roadmap M1.6b)
+- `20261116194000_phone_in_use_before_sms.sql`: pending
 - `20261116211438_online_payment_limit.sql`: pending
 - `20261116211439_switch_posting_terms_v5.sql`: pending
 

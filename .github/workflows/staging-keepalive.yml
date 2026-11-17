@@ -1,0 +1,43 @@
+name: Staging keep-alive
+
+# The staging copy's Supabase project (M0.15b) is on the Free plan, which
+# pauses a project after a week without activity; a paused staging project
+# fails the staging gate and so holds back releases. Once a day this makes one
+# anonymous read through the public catalogue command, with the staging
+# publishable key (a public value, wrangler.toml [env.staging]). It needs no
+# secret, writes nothing and never touches production.
+on:
+  schedule:
+    - cron: "40 3 * * *" # Daily at 03:40 UTC (05:40 in South Africa)
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: staging-keepalive
+  cancel-in-progress: true
+
+jobs:
+  keepalive:
+    name: Read the staging project once
+    # Only once the owner switches staging on (admin-only repository variable
+    # STAGING_ENABLED = "true"), so an unfinished staging copy opens no daily
+    # failure issues.
+    if: vars.STAGING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      STAGING_SUPABASE_URL: https://vgplszqfcmdskwseoyam.supabase.co
+      STAGING_PUBLISHABLE_KEY: sb_publishable_mKDEhmQ-Ik-DIxdKVxVang_IA5aVLD1
+    steps:
+      - name: Anonymous read of the current posting terms
+        run: |
+          status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X POST \
+            -H "apikey: $STAGING_PUBLISHABLE_KEY" -H "Content-Type: application/json" \
+            -H "Content-Profile: api" -H "Accept-Profile: api" -d '{}' \
+            "$STAGING_SUPABASE_URL/rest/v1/rpc/get_current_posting_terms" || true)"
+          echo "Staging answered $status."
+          if [ "$status" != "200" ]; then
+            echo "::error title=Staging project paused/unreachable::The staging Supabase project answered '$status'. Restore it in the Supabase dashboard (docs/RUNBOOK.md, 'Staging copy')."
+            exit 1
+          fi

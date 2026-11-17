@@ -6,6 +6,8 @@
  * settings UI all reference a single source of truth.
  */
 
+import { formatSaLongDate } from "@/lib/utils/format";
+
 /* ── Cooldown windows ─────────────────────────────────────── */
 
 /** Minimum interval (ms) between successful phone changes. */
@@ -58,7 +60,7 @@ export function locationLocked(): IdentityPolicyError {
 export function phoneCooldown(nextEligibleAt: Date): IdentityPolicyError {
   return {
     code: "PHONE_COOLDOWN",
-    message: `You can change your phone number again after ${nextEligibleAt.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}.`,
+    message: `You can change your phone number again after ${formatSaLongDate(nextEligibleAt)}.`,
     retryAfter: nextEligibleAt.toISOString(),
   };
 }
@@ -73,7 +75,7 @@ export function phoneReverificationRequired(): IdentityPolicyError {
 export function emailCooldown(nextEligibleAt: Date): IdentityPolicyError {
   return {
     code: "EMAIL_COOLDOWN",
-    message: `You can change your email address again after ${nextEligibleAt.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}.`,
+    message: `You can change your email address again after ${formatSaLongDate(nextEligibleAt)}.`,
     retryAfter: nextEligibleAt.toISOString(),
   };
 }

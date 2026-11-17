@@ -1,5 +1,6 @@
 import "server-only";
 import { parseFoundationConnection } from "./connection";
+import { approvedHostedProjectRef } from "./hosted-projects";
 
 /** Separate bindings until cutover; legacy factories cannot supply this client. */
 export function readFoundationRuntimeConnection(environment = process.env) {
@@ -13,7 +14,10 @@ export function readFoundationRuntimeConnection(environment = process.env) {
     environment.ENVIRONMENT !== "production" &&
     (environment.NODE_ENV === "test" ||
       (environment.ENVIRONMENT === "test" && environment.VERIFYMZANSI_RUNTIME_MODE === "e2e"));
-  if (!localTest && connection.expectedProjectRef !== "gntzjtuncsyefujajmjy")
+  if (
+    !localTest &&
+    connection.expectedProjectRef !== approvedHostedProjectRef(environment.ENVIRONMENT)
+  )
     throw new Error("Unapproved foundation runtime project");
   return connection;
 }

@@ -1,6 +1,8 @@
 import { maskPhone } from "@/lib/utils/mask";
 
 export const ACCOUNT_PHONE_IN_USE_ERROR = "This phone number is already linked to another account.";
+export const ACCOUNT_PHONE_ALREADY_VERIFIED =
+  "This phone number is already verified on your account.";
 const SA_PHONE_E164_REGEX = /^\+27[6-8][0-9]{8}$/;
 const SA_PHONE_LOCAL_REGEX = /^0[6-8][0-9]{8}$/;
 
