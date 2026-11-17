@@ -9,10 +9,14 @@ CREATE OR REPLACE FUNCTION internal.complete_notification_outbox(p_id uuid, p_cl
 AS $function$
 declare changed integer;
 begin
-  if p_ok is null or (p_error is not null and p_error !~ '^[a-z_]{1,80}$') then
+  -- A finished message carries no reason (sent) or 'skipped' (nothing was
+  -- sent); a message given back carries its failure reason.
+  if p_ok is null or (p_error is not null and p_error !~ '^[a-z_]{1,80}$')
+    or (p_ok and p_error is distinct from 'skipped' and p_error is not null)
+    or (not p_ok and p_error = 'skipped') then
     raise exception 'invalid outcome' using errcode='22023'; end if;
   update private.outbox_events set processed_at=case when p_ok then statement_timestamp() else null end,
-    delivery_claim=null,delivery_until=null,delivery_error=case when p_ok then null else coalesce(p_error,'delivery_failed') end,
+    delivery_claim=null,delivery_until=null,delivery_error=case when p_ok then p_error else coalesce(p_error,'delivery_failed') end,
     delivery_after=statement_timestamp()+make_interval(secs=>least(21600,30*(2^least(delivery_attempts,9))::integer))
   where id=p_id and delivery_claim=p_claim and processed_at is null and delivery_until>statement_timestamp();
   get diagnostics changed=row_count;

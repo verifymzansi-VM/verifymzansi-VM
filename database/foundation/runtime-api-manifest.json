@@ -707,7 +707,10 @@
     },
     {
       "name": "list_my_email_history",
-      "updates": ["updates/20261113134500_communication_choices_and_signup_terms.sql"],
+      "updates": [
+        "updates/20261113134500_communication_choices_and_signup_terms.sql",
+        "updates/20261117123240_skipped_email_status.sql"
+      ],
       "arguments": [
         {
           "name": "p_limit",
@@ -722,7 +725,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current active self-only account (confirmed email) and live session; the caller's own finished account emails (kind, sent or failed, time), at most 50. No address, subject record, provider error or other account."
+      "authority": "Current active self-only account (confirmed email) and live session; the caller's own finished account emails (kind, sent or failed, time), at most 50; an email finished without sending (skipped) is not listed. No address, subject record, provider error or other account."
     },
     {
       "name": "get_frontend_staff_organisation_detail",

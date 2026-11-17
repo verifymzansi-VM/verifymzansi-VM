@@ -12,6 +12,8 @@ begin
   if p_limit is null or p_limit not between 1 and 50 then
     raise exception 'invalid limit' using errcode='22023';
   end if;
+  -- A message finished without sending (delivery_error 'skipped') is not an
+  -- email the member was sent: it is left out.
   select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'kind', x.kind, 'status', x.status, 'at', x.at)
       order by x.created_at desc, x.id), '[]'::jsonb)
     into items
@@ -19,7 +21,8 @@ begin
       case when o.processed_at is not null then 'sent' else 'failed' end as status,
       coalesce(o.processed_at, o.created_at) as at
     from private.outbox_events o
-    where o.owner_id = actor and (o.processed_at is not null
+    where o.owner_id = actor and o.delivery_error is distinct from 'skipped'
+      and (o.processed_at is not null
       or (o.delivery_attempts >= 8 and o.delivery_error is distinct from 'outcome_unknown'
         and (o.delivery_until is null or o.delivery_until < statement_timestamp())))
     order by o.created_at desc, o.id
