@@ -48,3 +48,19 @@ it("allows the fixed local fixture only in a test runtime", () => {
     }).url
   ).toBe("http://127.0.0.1:55441");
 });
+it("allows the staging project only on the staging Worker, and production never there", () => {
+  const staging = {
+    ...environment,
+    ENVIRONMENT: "staging",
+    FOUNDATION_SUPABASE_URL: "https://vgplszqfcmdskwseoyam.supabase.co",
+    FOUNDATION_PROJECT_REF: "vgplszqfcmdskwseoyam",
+  };
+  expect(readFoundationRuntimeConnection(staging).expectedProjectRef).toBe("vgplszqfcmdskwseoyam");
+  // The production Worker cannot be pointed at staging, nor staging at production.
+  expect(() => readFoundationRuntimeConnection({ ...staging, ENVIRONMENT: "production" })).toThrow(
+    "Unapproved"
+  );
+  expect(() => readFoundationRuntimeConnection({ ...environment, ENVIRONMENT: "staging" })).toThrow(
+    "Unapproved"
+  );
+});
