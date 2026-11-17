@@ -26,7 +26,7 @@ export const metadata = {
 const STEPS = [
   {
     title: "Choose your slots and a term",
-    text: `Type how many posts you want live at once (from ${PACKAGE_MIN_SLOTS}) and pick 30, 90 or 180 days. Pay securely with Ozow; above R10,000, by invoice.`,
+    text: `Type how many posts you want live at once (from ${PACKAGE_MIN_SLOTS}) and pick 30, 90 or 180 days. Pay securely with Ozow; above the most Ozow accepts in one payment, by invoice.`,
   },
   {
     title: "Post as usual",
@@ -96,7 +96,7 @@ export default async function MultiListingPage() {
             Choose your package
           </h2>
           <p className="section-lede mb-6">
-            {`Prices are the total for the term. Up to ${PACKAGE_MAX_ONLINE_SLOTS} slots and R10,000 are paid online. For 1 to 4 posts, Individual slots cost ${formatPlanPrice(RETAIL_OFFERS[0].priceCents)} each per 30 days.`}
+            {`Prices are the total for the term. Up to ${PACKAGE_MAX_ONLINE_SLOTS} slots and ${onlineMaxCents === null ? "the most Ozow accepts in one payment" : formatPlanPrice(onlineMaxCents)} are paid online. For 1 to 4 posts, Individual slots cost ${formatPlanPrice(RETAIL_OFFERS[0].priceCents)} each per 30 days.`}
           </p>
           <MultiListingPlans onlineMaxCents={onlineMaxCents} />
         </section>

@@ -17,6 +17,9 @@ vi.mock("next/link", () => ({
   ),
 }));
 vi.mock("@/lib/foundation/slot-package-offer", () => ({ readPackagesOnSale: vi.fn() }));
+vi.mock("@/lib/foundation/payment-limits", () => ({
+  readOnlinePaymentMaxCents: vi.fn(async () => 130000),
+}));
 vi.mock("@/components/layout/header", () => ({ Header: () => null }));
 vi.mock("@/components/layout/footer", () => ({ Footer: () => null }));
 vi.mock("@/components/layout/breadcrumbs", () => ({ Breadcrumbs: () => null }));
@@ -42,5 +45,9 @@ describe("the hidden Multi-listing page (P4a)", () => {
     expect(screen.getByText("You + 1 person (you + 4 from 50 slots)")).toBeInTheDocument();
     expect(text).toMatch(/up to 4 posts going live per slot per 30 days/);
     expect(text).not.toMatch(/Paid once|never renews|administrators|10 to 100|for 90 or 180 days/);
+    // Ozow's maximum (the database setting), never the old R10,000.
+    expect(text).toMatch(/Up to 100 slots and R1.300 are paid online/);
+    expect(text).toMatch(/above the most Ozow accepts in one payment, by invoice/);
+    expect(text).not.toMatch(/R10,000|above R10/);
   });
 });

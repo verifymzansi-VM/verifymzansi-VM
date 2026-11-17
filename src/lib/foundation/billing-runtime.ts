@@ -557,8 +557,8 @@ const packageOrderSchema = z.strictObject({
 });
 
 /** SQL owns the sales switch, the price (R100 per slot per 30 days), the
- * consent record, the ID review, the 5 to 100 slots and R10,000 online limits
- * and one package per account; a total other than the one shown is refused. */
+ * consent record, the ID review, the 5 to 100 slots online, the online payment
+ * limit (internal.online_payment_max_cents) and one package per account; a total other than the one shown is refused. */
 export async function startFoundationPackageCheckout(
   api: FoundationAuthenticatedApi,
   ownerId: string,

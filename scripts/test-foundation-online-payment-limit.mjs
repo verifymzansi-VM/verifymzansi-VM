@@ -224,10 +224,19 @@ try {
            reset role;
            ${body.replace("130000::bigint", "200000::bigint")};
            set role authenticated;
-           select 'amount='||(api.start_slot_checkout('${P180.id}',4,165600,true)->>'amount_cents');`
+           select 'amount='||(api.start_slot_checkout('${P180.id}',4,165600,true)->>'amount_cents');
+           reset role;
+           ${body};
+           set role authenticated;
+           -- Negative control: lowered again in the same session, refused again.
+           do $$begin
+             perform api.start_slot_checkout('${P180.id}',4,165600,true);
+             raise exception 'accepted after the setting was lowered again';
+           exception when sqlstate 'PT413' then null; end$$;
+           select 'control=refused';`
         )
       );
-      assert.match(out, /amount=165600$/);
+      assert.match(out, /amount=165600[\s\S]*control=refused$/);
     } finally {
       q(`${body};`);
     }
