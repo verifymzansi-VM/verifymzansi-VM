@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
@@ -19,9 +19,9 @@ const nativeLiftSchema = z.strictObject({
  * must not have taken part in imposing it. Content the restriction hid is
  * restored only when no other suspension or ban on the account remains.
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   return handleFoundationOwnerRoute({
-    request: request instanceof NextRequest ? request : new NextRequest(request),
+    request: request,
     log,
     action: "admin:governance:lift",
     mutate: true,

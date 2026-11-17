@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { handlePrivacyStaffRoute } from "@/lib/foundation/privacy-requests";
@@ -24,7 +25,7 @@ const intakeSchema = z.object({
  * by the database from the deadline rules. Identity starts unverified and
  * must be checked manually before anything is disclosed.
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   return handlePrivacyStaffRoute(request, log, "intake", async (api, body) => {
     const input = intakeSchema.strict().parse(body);
     const created = await settleStaffCommand(

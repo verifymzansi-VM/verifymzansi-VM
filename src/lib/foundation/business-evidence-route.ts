@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createFoundationRouteContext } from "./request-route";
 import { readFoundationRuntimeConnection } from "./runtime-connection";
@@ -76,12 +76,11 @@ export async function storeBusinessEvidence(
   if (completed.error) throw new Error("Evidence receipt unavailable");
 }
 export async function protectBusinessEvidenceRoute(
-  incoming: Request,
+  request: NextRequest,
   action: string,
   mutate: boolean,
   command: (caller: Caller, request: NextRequest) => Promise<NextResponse>
 ) {
-  const request = incoming instanceof NextRequest ? incoming : new NextRequest(incoming);
   if (mutate) {
     const refusal = enforceMutationRequest(request, log);
     if (refusal) return refusal;

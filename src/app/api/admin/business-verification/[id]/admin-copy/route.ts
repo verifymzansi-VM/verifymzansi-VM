@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { attachNativeOfficialCipc } from "@/lib/foundation/cipc-document-route";
 
 /**
@@ -6,6 +7,6 @@ import { attachNativeOfficialCipc } from "@/lib/foundation/cipc-document-route";
  * source of truth for approval; we parse it and compare it with the owner's
  * upload field by field.
  */
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return attachNativeOfficialCipc(request, (await params).id);
 }

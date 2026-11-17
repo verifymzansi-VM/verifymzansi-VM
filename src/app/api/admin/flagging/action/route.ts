@@ -11,6 +11,6 @@ import { handleRestoredReportAction } from "@/lib/foundation/restored-report-act
  * 72-hour suspension by a governor or admin, reviewed by someone else).
  * Nobody acts on a report they filed or one about their own account.
  */
-export async function POST(request: Request) {
-  return handleRestoredReportAction(request as NextRequest);
+export async function POST(request: NextRequest) {
+  return handleRestoredReportAction(request);
 }

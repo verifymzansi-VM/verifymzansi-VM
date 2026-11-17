@@ -46,7 +46,7 @@ const params = { params: Promise.resolve({ id }) };
 const rpc = vi.fn();
 const api = { rpc } as unknown as Parameters<OwnerRouteOptions["command"]>[0];
 const request = (path: string, method = "POST") =>
-  new Request(`https://verifymzansi.com/api/admin/business-verification/${id}/${path}`, {
+  new NextRequest(`https://verifymzansi.com/api/admin/business-verification/${id}/${path}`, {
     method,
   });
 

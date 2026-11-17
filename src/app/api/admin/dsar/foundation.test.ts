@@ -1,6 +1,6 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { POST as caseAction } from "./case/route";
 import { POST as complete } from "./complete/route";
 import { POST as decide } from "./decide/route";
@@ -23,10 +23,10 @@ const answer = NextResponse.json({ ok: true });
 const rpc = vi.fn();
 const api = { rpc } as unknown as Parameters<Command>[0];
 const post = (path: string) =>
-  new Request(`https://verifymzansi.com/api/admin/dsar/${path}`, { method: "POST" });
+  new NextRequest(`https://verifymzansi.com/api/admin/dsar/${path}`, { method: "POST" });
 
 /** Calls the route and returns the operation and command it gave the privacy handler. */
-async function commandFor(route: (request: Request) => Promise<Response>, path: string) {
+async function commandFor(route: (request: NextRequest) => Promise<Response>, path: string) {
   const request = post(path);
   expect(await route(request)).toBe(answer);
   const [forwarded, , operation, command] = vi.mocked(handlePrivacyStaffRoute).mock.calls[0];

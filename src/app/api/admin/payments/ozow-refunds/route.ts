@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import {
@@ -114,10 +114,9 @@ async function readDashboardRefund(
  * record's own Idempotency-Key; if that send does not happen, the 10-minute
  * payment job sends it.
  */
-export async function POST(request: Request) {
-  const next = request instanceof NextRequest ? request : new NextRequest(request);
+export async function POST(request: NextRequest) {
   return handleFoundationOwnerRoute({
-    request: next,
+    request,
     log,
     action: "admin:ozow-refunds",
     mutate: true,

@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { readBoundedRequestFormData } from "../utils/request-body";
 import { isIntakeError, readCipcFile, type CipcFile } from "../business-verification/intake";
@@ -101,7 +101,7 @@ async function requireReviewedBusiness(api: FoundationAuthenticatedApi, id: stri
   return business;
 }
 
-export function previewNativeCipc(request: Request, id: string) {
+export function previewNativeCipc(request: NextRequest, id: string) {
   return protectBusinessEvidenceRoute(
     request,
     "business-verification:preview",
@@ -139,7 +139,7 @@ export function previewNativeCipc(request: Request, id: string) {
   );
 }
 
-export function submitNativeCipc(request: Request, id: string) {
+export function submitNativeCipc(request: NextRequest, id: string) {
   return protectBusinessEvidenceRoute(
     request,
     "business-verification:cipc",
@@ -190,7 +190,7 @@ export function submitNativeCipc(request: Request, id: string) {
   );
 }
 
-export function attachNativeOfficialCipc(request: Request, id: string) {
+export function attachNativeOfficialCipc(request: NextRequest, id: string) {
   return protectBusinessEvidenceRoute(
     request,
     "business-verification:admin-copy",

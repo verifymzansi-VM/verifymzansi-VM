@@ -19,7 +19,7 @@ it.each([
   async (mode, post) => {
     const answer = NextResponse.json({ success: true });
     vi.mocked(handleRestoredPostAction).mockResolvedValueOnce(answer);
-    const request = new Request(`https://verifymzansi.com/api/content/${mode}`, {
+    const request = new NextRequest(`https://verifymzansi.com/api/content/${mode}`, {
       method: "POST",
       headers: { "x-csrf-token": "token" },
       body: JSON.stringify({ itemId: "00000000-0000-4000-8000-000000000001" }),

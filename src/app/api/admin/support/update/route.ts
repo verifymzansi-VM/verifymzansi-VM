@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { adminSupportUpdateSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
@@ -13,9 +13,9 @@ const log = createLogger("AdminSupportUpdate");
  * Sets a support request's status (new, in_progress or resolved; any
  * transition is allowed) against the revision the staff member last saw.
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   return handleFoundationOwnerRoute({
-    request: req instanceof NextRequest ? req : new NextRequest(req),
+    request: req,
     log,
     action: "admin:support:update",
     mutate: true,

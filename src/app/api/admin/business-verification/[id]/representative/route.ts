@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { handleNativeCipcStaffAction } from "@/lib/foundation/cipc-commands";
@@ -20,6 +21,6 @@ const schema = z.object({
  * log the call-back: the number's source (found by staff, never supplied by
  * the applicant), who confirmed, and the confirmed position.
  */
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return handleNativeCipcStaffAction(request, (await params).id, "representative", schema.strict());
 }
