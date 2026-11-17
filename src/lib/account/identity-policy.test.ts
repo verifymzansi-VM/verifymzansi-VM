@@ -43,6 +43,17 @@ describe("identity-policy", () => {
     expect(email.message).toContain("30 April 2026");
   });
 
+  it("names the South African date, not the server's UTC date", () => {
+    // 23:30 UTC on 30 November is 01:30 on 1 December in South Africa.
+    const nextEligibleAt = new Date("2026-11-30T23:30:00.000Z");
+    expect(phoneCooldown(nextEligibleAt).message).toBe(
+      "You can change your phone number again after 1 December 2026."
+    );
+    expect(emailCooldown(nextEligibleAt).message).toBe(
+      "You can change your email address again after 1 December 2026."
+    );
+  });
+
   it("creates phone re-verification required error", () => {
     expect(phoneReverificationRequired()).toEqual({
       code: "PHONE_REVERIFICATION_REQUIRED",
