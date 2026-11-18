@@ -4828,43 +4828,6 @@
         "service_role": false
       },
       "authority": "Public, like the price catalogue (anon and authenticated): the most one online (Ozow) payment may be, in cents (online_max_cents, internal.online_payment_max_cents()); no account data."
-    },
-    {
-      "name": "set_sample_post_hidden",
-      "updates": ["updates/20261117144001_sample_post_hide_list.sql"],
-      "arguments": [
-        {
-          "name": "p_slug",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
-          "name": "p_hidden",
-          "sqlType": "boolean",
-          "optional": false
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Staff with post:moderate and a recent authenticator code (internal.staff_actor): removes (p_hidden true) or restores (false) one display-only sample post by its catalogue slug in the private hide-list, recording who removed it and when; idempotent; at most 500 hidden slugs. The sample's text and media stay in the website's catalogue."
-    },
-    {
-      "name": "get_hidden_sample_posts",
-      "updates": ["updates/20261117144001_sample_post_hide_list.sql"],
-      "arguments": [],
-      "returns": "jsonb",
-      "volatility": "s",
-      "execute": {
-        "anon": true,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Public, like the price catalogue (anon and authenticated): the slugs of the display-only sample posts staff removed, sorted; never who removed them or when; no account data."
     }
   ]
 }
