@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatPlanPrice, formatThirtyDayEquivalent } from "@/lib/constants/pricing";
-import { POSTS_PER_SLOT_PER_30_DAYS } from "@/lib/billing/slot-checkout";
+import { INDIVIDUAL_SLOT_LIMIT, POSTS_PER_SLOT_PER_30_DAYS } from "@/lib/billing/slot-checkout";
 import {
   PACKAGE_MAX_SLOTS,
   PACKAGE_MIN_SLOTS,
@@ -28,9 +28,6 @@ import {
 } from "@/lib/billing/slot-packages";
 import { cn } from "@/lib/utils";
 import type { RetailPricingOffer } from "@/components/billing/retail-pricing";
-
-/** Individual slots a person may hold at a time (posting-v5, "1 to 4"). */
-const INDIVIDUAL_SLOT_LIMIT = 4;
 
 type OfferTab = "individual" | "multi-listing";
 
@@ -161,7 +158,7 @@ function IndividualPanel({
               onClick={onShowPackages}
               className="rounded-sm font-semibold text-brand-green-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-gold-300"
             >
-              Need {INDIVIDUAL_SLOT_LIMIT + 1} or more?
+              Need {PACKAGE_MIN_SLOTS} or more?
             </button>
           </>
         ) : null}
@@ -306,7 +303,7 @@ export function PricingOffers({
       <IndividualPanel
         offers={offers}
         onSale={onSale}
-        onShowPackages={showMultiListing ? () => select("multi-listing") : undefined}
+        onShowPackages={showMultiListing ? () => select("multi-listing", true) : undefined}
       />
     );
 
@@ -332,7 +329,8 @@ export function PricingOffers({
                   type="button"
                   role="tab"
                   aria-selected={selected}
-                  aria-controls={`offer-panel-${tab}`}
+                  // Only the selected tab's panel is rendered.
+                  aria-controls={selected ? `offer-panel-${tab}` : undefined}
                   tabIndex={selected ? 0 : -1}
                   onClick={() => select(tab)}
                   onKeyDown={onTabKeyDown}

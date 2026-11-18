@@ -120,10 +120,13 @@ describe("PricingOffers", () => {
     render(<PricingOffers offers={offers} onSale showMultiListing />);
 
     fireEvent.click(screen.getByRole("button", { name: "Need 5 or more?" }));
-    expect(screen.getByRole("tab", { name: "Multi-listing" })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    );
+    const multi = screen.getByRole("tab", { name: "Multi-listing" });
+    expect(multi).toHaveAttribute("aria-selected", "true");
+    // The link disappears with the Individual panel, so focus moves to the tab.
+    expect(multi).toHaveFocus();
+    // Only the rendered (selected) panel is named by aria-controls.
+    expect(multi).toHaveAttribute("aria-controls", screen.getByRole("tabpanel").id);
+    expect(screen.getByRole("tab", { name: "Individual" })).not.toHaveAttribute("aria-controls");
 
     fireEvent.keyDown(screen.getByRole("tab", { name: "Multi-listing" }), { key: "ArrowRight" });
     const individual = screen.getByRole("tab", { name: "Individual" });

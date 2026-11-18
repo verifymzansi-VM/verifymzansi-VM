@@ -9,13 +9,11 @@ import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { BrandSurface } from "@/components/brand";
 import { Reveal } from "@/components/marketing/reveal";
 import { PricingOffers } from "@/components/billing/pricing-offers";
-import { EnterprisePricing } from "@/components/billing/enterprise-pricing";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { getCommercialSettings } from "@/lib/commercial/settings";
 import { PACKAGES_ON_SALE } from "@/lib/constants/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
-import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 
 const HERO_POINTS = [
   { icon: ReceiptText, label: "Never renews" },
@@ -39,11 +37,7 @@ async function loadSettings() {
 }
 
 export default async function PricingPage() {
-  const [catalog, settings, onlineMaxCents] = await Promise.all([
-    getCommercialCatalog(),
-    loadSettings(),
-    PACKAGES_ON_SALE ? readOnlinePaymentMaxCents() : null,
-  ]);
+  const [catalog, settings] = await Promise.all([getCommercialCatalog(), loadSettings()]);
   const trustConfig = getTrustPublicConfig();
   // Offers are described for search engines only while they can be bought.
   const jsonLd = catalog.onSale && {
@@ -172,24 +166,6 @@ export default async function PricingPage() {
             </ul>
           </Reveal>
         </section>
-
-        {/* Multi-listing and sponsor packages are hidden until they are on sale. */}
-        {PACKAGES_ON_SALE ? (
-          <div className="container-page pb-12 sm:pb-16">
-            <Reveal>
-              <EnterprisePricing
-                plans={catalog.enterprise}
-                checkoutEnabled={settings?.features.enterpriseCheckout ?? true}
-                onlineMaxCents={onlineMaxCents}
-                retailFromCents={
-                  catalog.retail.length > 0
-                    ? Math.min(...catalog.retail.map((offer) => offer.priceCents))
-                    : null
-                }
-              />
-            </Reveal>
-          </div>
-        ) : null}
 
         <div className="border-t border-border/60 bg-card/50">
           <div className="container-page py-12 sm:py-16">
