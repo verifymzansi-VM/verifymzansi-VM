@@ -7,8 +7,9 @@ CREATE OR REPLACE FUNCTION internal.get_frontend_support_inbox(p_page integer DE
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid:=internal.staff_actor_recent('support:view');answer jsonb;can_update boolean;
+declare actor uuid:=internal.staff_actor('support:view');answer jsonb;can_update boolean;
 begin
+  perform internal.staff_actor_recent('support:view');
   if p_page is null or p_page not between 1 and 100000 then raise exception 'valid support page required' using errcode='22023';end if;
   can_update:=exists(select 1 from private.staff_roles s join private.staff_capabilities c on c.role=s.role and c.capability='support:update'
     where s.user_id=actor and s.revoked_at is null);

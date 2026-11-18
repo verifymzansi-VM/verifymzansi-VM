@@ -27,7 +27,7 @@ do $$begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_privacy_queue(text,integer)')) is distinct from '73c23d0393783b2a3760bdca0060923b'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from 'af1e804567d16989fe47019e6fcd33f7'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from '367f25173e66bb4fcf3d877c0fddff15'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from 'fa0d40ae6c3d89380fbafbd881e0365c'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from 'dd1dd2e21be1f6accde9652e10f7682b'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '50c7ba8869e2fc3f8cc5b68bb0e2f4ed'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoices()')) is distinct from '683c792ecb73a3c19eac080e23971cae'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice(text)')) is distinct from 'b048c33607a4a97a1027a74471aef453'

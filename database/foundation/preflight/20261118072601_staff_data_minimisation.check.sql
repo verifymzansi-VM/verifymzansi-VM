@@ -28,7 +28,7 @@ with bodies as (
     ('internal.get_frontend_privacy_queue(text,integer)', 'ffc1120344cf8eabd09d740521ced350', '73c23d0393783b2a3760bdca0060923b'),
     ('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)', '989e334ff4fecc3ce76132277e2ea13c', 'af1e804567d16989fe47019e6fcd33f7'),
     ('internal.export_frontend_privacy_request(uuid,integer)', 'e055b06c73169fd22e15fef574c0497b', '367f25173e66bb4fcf3d877c0fddff15'),
-    ('internal.get_frontend_support_inbox(integer,uuid)', '607e36e4c31fd96147b4b8d1d5155095', 'fa0d40ae6c3d89380fbafbd881e0365c'),
+    ('internal.get_frontend_support_inbox(integer,uuid)', '607e36e4c31fd96147b4b8d1d5155095', 'dd1dd2e21be1f6accde9652e10f7682b'),
     ('internal.get_frontend_organisation_dashboard(text)', '8823a5e28eac986cbc4df251b0c47183', '50c7ba8869e2fc3f8cc5b68bb0e2f4ed'),
     ('api.get_staff_invoices()', 'b76ac3d2c2e5fcdbbb12d5a1ec233c26', '683c792ecb73a3c19eac080e23971cae'),
     ('api.get_staff_invoice(text)', 'd05ae31e4d2aa228d99f8c88b28d16c0', 'b048c33607a4a97a1027a74471aef453'),

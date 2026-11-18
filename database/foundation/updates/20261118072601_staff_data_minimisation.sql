@@ -101,7 +101,7 @@ begin
     raise exception 'staff data minimisation drift: internal.export_frontend_privacy_request(uuid,integer) is not the reviewed body' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from '607e36e4c31fd96147b4b8d1d5155095'
-      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from 'fa0d40ae6c3d89380fbafbd881e0365c' then
+      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from 'dd1dd2e21be1f6accde9652e10f7682b' then
     raise exception 'staff data minimisation drift: internal.get_frontend_support_inbox(integer,uuid) is not the reviewed body' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '8823a5e28eac986cbc4df251b0c47183'
@@ -577,8 +577,9 @@ CREATE OR REPLACE FUNCTION internal.get_frontend_support_inbox(p_page integer DE
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid:=internal.staff_actor_recent('support:view');answer jsonb;can_update boolean;
+declare actor uuid:=internal.staff_actor('support:view');answer jsonb;can_update boolean;
 begin
+  perform internal.staff_actor_recent('support:view');
   if p_page is null or p_page not between 1 and 100000 then raise exception 'valid support page required' using errcode='22023';end if;
   can_update:=exists(select 1 from private.staff_roles s join private.staff_capabilities c on c.role=s.role and c.capability='support:update'
     where s.user_id=actor and s.revoked_at is null);
@@ -863,7 +864,7 @@ do $$begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_privacy_queue(text,integer)')) is distinct from '73c23d0393783b2a3760bdca0060923b'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from 'af1e804567d16989fe47019e6fcd33f7'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from '367f25173e66bb4fcf3d877c0fddff15'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from 'fa0d40ae6c3d89380fbafbd881e0365c'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from 'dd1dd2e21be1f6accde9652e10f7682b'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '50c7ba8869e2fc3f8cc5b68bb0e2f4ed'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoices()')) is distinct from '683c792ecb73a3c19eac080e23971cae'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice(text)')) is distinct from 'b048c33607a4a97a1027a74471aef453'
