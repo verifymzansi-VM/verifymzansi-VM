@@ -15,11 +15,12 @@ const mocks = vi.hoisted(() => ({
   enabled: vi.fn(() => true),
   secret: vi.fn<() => string | null>(),
   security: vi.fn(),
+  warn: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/config/env", () => ({ env: vi.fn(() => "") }));
 vi.mock("@/lib/utils/logger", () => ({
-  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
+  createLogger: () => ({ info: vi.fn(), warn: mocks.warn, error: vi.fn(), debug: vi.fn() }),
 }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: vi.fn(async () => ({ limited: false })),
@@ -51,7 +52,7 @@ function notice(
   body: unknown,
   { secret = SECRET, at = new Date(), id = "msg_synthetic_1", sign = true } = {}
 ) {
-  const raw = JSON.stringify(body);
+  const raw = typeof body === "string" ? body : JSON.stringify(body);
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (sign) {
     headers["svix-id"] = id;
@@ -80,12 +81,75 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("Ozow refund notices", () => {
-  it("are refused while refunds through Ozow are off or without the secret", async () => {
-    mocks.enabled.mockReturnValue(false);
-    expect((await POST(notice(thin()))).status).toBe(503);
-    mocks.enabled.mockReturnValue(true);
+  it("are refused without the secret, since none can be authenticated", async () => {
     mocks.secret.mockReturnValue(null);
-    expect((await POST(notice(thin()))).status).toBe(503);
+    for (const enabled of [true, false]) {
+      mocks.enabled.mockReturnValue(enabled);
+      expect((await POST(notice(thin()))).status).toBe(503);
+    }
+    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.apply).not.toHaveBeenCalled();
+  });
+
+  it("are acknowledged without acting when signed while refunds through Ozow are off", async () => {
+    mocks.enabled.mockReturnValue(false);
+    const full = {
+      type: "refund.complete",
+      data: { RefundId: REFUND, Amount: 69, BankName: "Synthetic", AccountNumber: "000" },
+    };
+    for (const body of [thin(), full, { type: "transaction.complete", data: { id: TX } }]) {
+      const response = await POST(notice(body));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.json()).toEqual({ success: true, ignored: "refunds_off" });
+    }
+    // Only the event type and the refund id are logged: no amount or body.
+    expect(mocks.warn.mock.calls).toEqual([
+      [expect.any(String), { type: "refund.complete", refundId: REFUND }],
+      [expect.any(String), { type: "refund.complete", refundId: REFUND }],
+      [expect.any(String), { type: "transaction.complete", refundId: null }],
+    ]);
+    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.apply).not.toHaveBeenCalled();
+    expect(mocks.security).not.toHaveBeenCalled();
+  });
+
+  it("refuse a stale notice while refunds through Ozow are off, as when on", async () => {
+    mocks.enabled.mockReturnValue(false);
+    const stale = notice(thin(), { at: new Date(Date.now() - 60 * 60 * 1000) });
+    expect((await POST(stale)).status).toBe(401);
+    expect(mocks.security).toHaveBeenCalledOnce();
+    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.apply).not.toHaveBeenCalled();
+  });
+
+  it("treat unreadable notices the same while refunds through Ozow are off as when on", async () => {
+    // Text that is not JSON fails the signature library's check (401); signed
+    // JSON that is not a notice is acknowledged as unreadable (200).
+    const answer = async (raw: string) => {
+      const response = await POST(notice(raw));
+      return [response.status, await response.json()];
+    };
+    const answers = async () => [await answer("not json {"), await answer("[1, 2]")];
+    const on = await answers();
+    mocks.enabled.mockReturnValue(false);
+    const off = await answers();
+    expect(off).toEqual(on);
+    expect(off).toEqual([
+      [401, { error: "Invalid webhook signature" }],
+      [200, { success: true, rejected: "invalid_json" }],
+    ]);
+    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.apply).not.toHaveBeenCalled();
+  });
+
+  it("refuse unsigned or wrongly signed notices while refunds through Ozow are off", async () => {
+    mocks.enabled.mockReturnValue(false);
+    const wrong = `whsec_${randomBytes(24).toString("base64")}`;
+    for (const request of [notice(thin(), { sign: false }), notice(thin(), { secret: wrong })]) {
+      expect((await POST(request)).status).toBe(401);
+    }
+    expect(mocks.security).toHaveBeenCalledTimes(2);
     expect(mocks.get).not.toHaveBeenCalled();
     expect(mocks.apply).not.toHaveBeenCalled();
   });
