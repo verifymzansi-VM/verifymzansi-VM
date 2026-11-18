@@ -194,11 +194,20 @@ Prefer this pattern instead:
 ## Secret Rotation
 
 Production is the `verifymzansi` Cloudflare Worker on `verifymzansi.com` (see
-`wrangler.toml`). Most app secrets are GitHub repository secrets that the Deploy
-workflow (`.github/workflows/deploy.yml`) installs into the Worker on every
-release; the optional ones listed in `wrangler.toml` are set directly with
-`pnpm wrangler secret put <NAME>`. "Redeploy" below means a new release through
-the Deploy workflow.
+`wrangler.toml`). "Updating a production secret" below depends on the name:
+
+- The Deploy workflow (`.github/workflows/deploy.yml`) installs only the names
+  listed in `scripts/prepare-cloudflare-candidate-secrets.mjs` (passed with
+  `--secrets-file`); that script is the source of truth. Update those as GitHub
+  repository secrets, then redeploy.
+- Every other secret is inherited from the current Worker version and is never
+  set by a deploy. Rotate it with `pnpm wrangler secret put <NAME>`. That
+  includes the Ozow secrets (`OZOW_CLIENT_*`, `OZOW_SITE_CODE`,
+  `OZOW_WEBHOOK_SECRET`, the refund keys), `RESEND_API_KEY`,
+  `AFRICASTALKING_API_KEY` and the `R2_*` keys. Changing only the GitHub
+  repository secret of such a name changes nothing in production.
+
+"Redeploy" below means a new release through the Deploy workflow.
 
 ### Supabase Keys
 
@@ -242,8 +251,10 @@ The webhook endpoint uses Svix-style signature verification (`svix-id`,
 2. Rotate (or regenerate) the webhook signing secret for the VerifyMzansi
    endpoint — Ozow may expose this via `GET /v1/webhooks/{id}/secret`
 3. Copy the new secret (base64-encoded Svix signing key)
-4. Update the `OZOW_WEBHOOK_SECRET` repository secret (the Deploy workflow
-   installs it into the `verifymzansi` Worker)
+4. Update the Worker secret (the Deploy workflow does not install this one):
+   ```bash
+   pnpm wrangler secret put OZOW_WEBHOOK_SECRET
+   ```
 5. Redeploy the application
 6. Send a test webhook from the Ozow dashboard or trigger a small test payment
 7. Verify the webhook is accepted (HTTP 200) — check application logs for

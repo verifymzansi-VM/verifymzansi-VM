@@ -101,10 +101,14 @@ export async function POST(request: NextRequest) {
     if (!ozowApiRefundsEnabled()) {
       // Authenticated, but refunds through Ozow are off: acknowledged so Svix
       // does not retry or disable the endpoint, and never acted on.
-      const named = refundId.safeParse(parsed.data?.id ?? parsed.data?.RefundId);
+      // Only a refund notice names a refund; other events' ids are not logged.
+      const named =
+        type === "refund.complete"
+          ? refundId.safeParse(parsed.data?.id ?? parsed.data?.RefundId)
+          : null;
       log.warn("Signed Ozow refund notice ignored: refunds through Ozow are off", {
         type: type.slice(0, 40) || "unknown",
-        refundId: named.success ? named.data : null,
+        refundId: named?.success ? named.data : null,
       });
       return NextResponse.json({ success: true, ignored: "refunds_off" }, { headers: noStore });
     }
