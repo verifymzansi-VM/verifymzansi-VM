@@ -9,7 +9,9 @@ CREATE OR REPLACE FUNCTION internal.staff_refund_repeat(p_actor uuid, p_payment_
 AS $function$
 declare prior private.payment_refund_requests;
 begin
-  select * into prior from private.payment_refund_requests r where lower(r.ozow_reference) = lower(btrim(p_ozow_reference));
+  -- A declined record took no effect, so its reference may be recorded again.
+  select * into prior from private.payment_refund_requests r where lower(r.ozow_reference) = lower(btrim(p_ozow_reference))
+    and r.status <> 'declined';
   if not found then return null; end if;
   if prior.payment_id = p_payment_id and prior.payment_line_id is not distinct from p_line_id and prior.kind = p_kind
       and prior.reason_code = p_reason_code and prior.reason = btrim(p_reason) and prior.requested_by = p_actor then
@@ -17,7 +19,7 @@ begin
       'released_activations', prior.released_activations,
       'payment_status', (select p.status from private.payments p where p.id = prior.payment_id), 'repeated', true);
   end if;
-  if exists(select 1 from private.payments p where p.id = p_payment_id and p.provider = 'invoice') then
+  if internal.refund_by_bank_transfer(p_payment_id, p_kind) then
     raise exception 'this refund reference was already recorded' using errcode='PT409', detail='refund_reference_used';
   end if;
   raise exception 'this Ozow reference was already recorded' using errcode='PT409', detail='ozow_reference_used';

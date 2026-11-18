@@ -67,7 +67,7 @@ END),
   constraint payment_refund_requests_decline_reason_check CHECK (decline_reason IS NULL OR internal.plain_text_valid(decline_reason, 5, 500, true)),
   constraint payment_refund_requests_declined CHECK ((status = 'declined'::text) = (declined_at IS NOT NULL AND declined_by IS NOT NULL AND decline_reason IS NOT NULL)),
   constraint payment_refund_requests_declined_by_fkey FOREIGN KEY (declined_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
-  constraint payment_refund_requests_failed CHECK ((status = 'failed'::text) = (failed_at IS NOT NULL AND failure_reason IS NOT NULL) AND (failure_reason IS NULL OR (failure_reason = ANY (ARRAY['ozow_refused'::text, 'ozow_auth'::text, 'ozow_failed'::text, 'ozow_cancelled'::text, 'ozow_invalid'::text, 'payment_changed'::text, 'closed_by_staff'::text])))),
+  constraint payment_refund_requests_failed CHECK ((status = 'failed'::text) = (failed_at IS NOT NULL AND failure_reason IS NOT NULL) AND (failure_reason IS NULL OR (failure_reason = ANY (ARRAY['ozow_refused'::text, 'ozow_auth'::text, 'ozow_failed'::text, 'ozow_cancelled'::text, 'ozow_invalid'::text, 'payment_changed'::text, 'closed_by_staff'::text, 'outside_refund_window'::text])))),
   constraint payment_refund_requests_kind_check CHECK (kind = ANY (ARRAY['refunded'::text, 'chargeback'::text])),
   constraint payment_refund_requests_line_fkey FOREIGN KEY (payment_line_id, payment_id) REFERENCES private.payment_lines(id, payment_id) ON DELETE CASCADE,
   constraint payment_refund_requests_ozow_reference_check CHECK (ozow_reference ~ '^[A-Za-z0-9][A-Za-z0-9 ._:/-]{3,99}$'::text AND ozow_reference = btrim(ozow_reference) AND ozow_reference !~~ '%  %'::text),
@@ -75,7 +75,7 @@ END),
   constraint payment_refund_requests_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES private.payments(id) ON DELETE CASCADE,
   constraint payment_refund_requests_pkey PRIMARY KEY (id),
   constraint payment_refund_requests_reason_check CHECK (internal.plain_text_valid(reason, 5, 500, true)),
-  constraint payment_refund_requests_reason_code_check CHECK (reason_code = ANY (ARRAY['billing_error'::text, 'duplicate'::text, 'our_failure_after_fix_offered'::text, 's14_cancellation'::text, 'breach_credit'::text])),
+  constraint payment_refund_requests_reason_code_check CHECK (reason_code = ANY (ARRAY['billing_error'::text, 'duplicate'::text, 'our_failure_after_fix_offered'::text, 's14_cancellation'::text, 'breach_credit'::text, 'renewal_cancelled_before_start'::text])),
   constraint payment_refund_requests_recorded_before_cents_check CHECK (recorded_before_cents >= 0),
   constraint payment_refund_requests_released_activations_check CHECK (released_activations >= 0),
   constraint payment_refund_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
@@ -94,7 +94,7 @@ CREATE INDEX payment_refund_requests_line_idx ON private.payment_refund_requests
 CREATE UNIQUE INDEX payment_refund_requests_ozow_key_idx ON private.payment_refund_requests USING btree (lower(COALESCE((ozow_refund_id)::text, ozow_reference))) WHERE (status <> 'declined'::text);
 CREATE UNIQUE INDEX payment_refund_requests_ozow_refund_idx ON private.payment_refund_requests USING btree (ozow_refund_id) WHERE ((ozow_refund_id IS NOT NULL) AND (status <> 'declined'::text));
 CREATE INDEX payment_refund_requests_payment_idx ON private.payment_refund_requests USING btree (payment_id);
-CREATE UNIQUE INDEX payment_refund_requests_reference_idx ON private.payment_refund_requests USING btree (lower(ozow_reference));
+CREATE UNIQUE INDEX payment_refund_requests_reference_idx ON private.payment_refund_requests USING btree (lower(ozow_reference)) WHERE (status <> 'declined'::text);
 CREATE INDEX payment_refund_requests_requested_by_idx ON private.payment_refund_requests USING btree (requested_by);
 CREATE INDEX payment_refund_requests_send_due_idx ON private.payment_refund_requests USING btree (status, last_send_at) WHERE ((channel = 'api'::text) AND (status = ANY (ARRAY['approved'::text, 'sent'::text])));
 CREATE INDEX payment_refund_requests_transaction_idx ON private.payment_refund_requests USING btree (ozow_transaction_id) WHERE (ozow_transaction_id IS NOT NULL);

@@ -152,6 +152,7 @@ jobs:
           fi
           echo "The staging gateway answers."
       - name: Confirm the staging secret key belongs to the staging project
+        id: staging-key-probe
         if: steps.decide.outputs.configured == 'true'
         env:
           STAGING_FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_FOUNDATION_SUPABASE_SECRET_KEY }}
@@ -221,6 +222,7 @@ jobs:
       - name: Refuse any staging setting that names production (as wrangler resolves it)
         run: pnpm cloudflare:staging:isolation -- --require-staging
       - name: Check every staging Worker secret and prepare them outside the checkout
+        id: staging-secrets
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           STAGING_FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_FOUNDATION_SUPABASE_SECRET_KEY }}
@@ -241,16 +243,19 @@ jobs:
       - name: Use the staging copy's public build settings
         run: node scripts/export-cloudflare-public-env.mjs --env=staging
       - name: Build for Cloudflare (staging settings)
+        id: staging-build
         env:
           # The build only checks that a server key exists; it is not bundled.
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_FOUNDATION_SUPABASE_SECRET_KEY }}
         run: pnpm run build:cloudflare
       - name: Deploy staging Offload Worker
+        id: staging-offload
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.offload.toml --env staging --tag "$DEPLOY_TARGET_SHA"
       - name: Deploy staging website
+        id: staging-website
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -259,11 +264,13 @@ jobs:
           --secrets-file "$RUNNER_TEMP/staging-worker-secrets.json"
           --tag "$DEPLOY_TARGET_SHA" --message verified-main-staging
       - name: Deploy staging Rate Limiter Worker
+        id: staging-limiter
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.rate-limiter.toml --env staging --tag "$DEPLOY_TARGET_SHA" --secrets-file "$RUNNER_TEMP/staging-limiter-secrets.json"
       - name: Confirm the staging Worker serves this commit
+        id: staging-version
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -332,54 +339,35 @@ jobs:
         github.event.workflow_run.head_sha == github.sha &&
         github.event.workflow_run.head_branch == 'main' &&
         github.event.workflow_run.head_repository.full_name == github.repository))
+    # Production secrets belong in the protected "production" environment
+    # (deployment branch: main only). Until the owner creates it and moves the
+    # values there, GitHub creates an empty, unprotected "production"
+    # environment on the first run and every secret below resolves from the
+    # repository-level copy, exactly as before. No secret is set at job level:
+    # each step gets only the values it reads, and dependency installation, the
+    # build, browser installation and upload steps receive none. Runtime-only
+    # keys (ID evidence encryption, ID fingerprint, IP hashing) are not read
+    # here at all; they live on the Worker in Cloudflare.
+    environment: production
     env:
       NODE_ENV: production
       DEPLOY_TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       WRANGLER_SEND_ERROR_REPORTS: "false"
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
-      FOUNDATION_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
-      FOUNDATION_PROJECT_REF: ${{ secrets.FOUNDATION_PROJECT_REF }}
-      FOUNDATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
-      FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
-      FOUNDATION_PHONE_OTP_KEY: ${{ secrets.FOUNDATION_PHONE_OTP_KEY }}
-      NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
-      AFRICASTALKING_API_KEY: ${{ secrets.AFRICASTALKING_API_KEY }}
-      AFRICASTALKING_USERNAME: ${{ secrets.AFRICASTALKING_USERNAME }}
-      AFRICASTALKING_SENDER_ID: ${{ secrets.AFRICASTALKING_SENDER_ID }}
-      OZOW_ENV: ${{ secrets.OZOW_ENV }}
-      OZOW_CLIENT_ID: ${{ secrets.OZOW_CLIENT_ID }}
-      OZOW_CLIENT_SECRET: ${{ secrets.OZOW_CLIENT_SECRET }}
-      OZOW_SITE_CODE: ${{ secrets.OZOW_SITE_CODE }}
-      OZOW_PAYMENT_OAUTH_SCOPE: ${{ secrets.OZOW_PAYMENT_OAUTH_SCOPE }}
-      OZOW_WEBHOOK_SECRET: ${{ secrets.OZOW_WEBHOOK_SECRET }}
-      KYC_PROVIDER: ${{ secrets.KYC_PROVIDER }}
-      KYC_WEBHOOK_SECRET: ${{ secrets.KYC_WEBHOOK_SECRET }}
-      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_PUBLIC_BUCKET: verifymzansi-public
       R2_PRIVATE_BUCKET: verifymzansi-private
-      KYC_ENCRYPTION_KEY: ${{ secrets.KYC_ENCRYPTION_KEY }}
-      ID_ENCRYPTION_KEY: ${{ secrets.ID_ENCRYPTION_KEY }}
-      HMAC_SECRET: ${{ secrets.HMAC_SECRET }}
-      IP_HASH_SECRET: ${{ secrets.IP_HASH_SECRET }}
-      NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
-      TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
-      INTERNAL_JOBS_SECRET: ${{ secrets.INTERNAL_JOBS_SECRET }}
-      OPS_JOBS_SECRET: ${{ secrets.OPS_JOBS_SECRET }}
-      HEALTH_DIAGNOSTIC_TOKEN: ${{ secrets.HEALTH_DIAGNOSTIC_TOKEN }}
-      RATE_LIMITER_API_KEY: ${{ secrets.RATE_LIMITER_API_KEY }}
-      SITE_MONITOR_API_KEY: ${{ secrets.SITE_MONITOR_API_KEY }}
       OTP_RATE_LIMITER_URL: https://verifymzansi-rate-limiter.verifymzansi.workers.dev
       OTP_RATE_LIMITER_TIMEOUT_MS: "2500"
+      # The Wrangler build hook may only verify the artifact built above,
+      # never rebuild it inside a step that holds Cloudflare credentials.
+      CLOUDFLARE_BUILD_HOOK: verify-only
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.DEPLOY_TARGET_SHA }}
           fetch-depth: 0
+          # The repository is public: the later `git fetch` steps need no
+          # token, so none is left in .git/config for installed code to read.
+          persist-credentials: false
       - name: Reject stale deployment sources before using provider credentials
         run: |
           [[ "$DEPLOY_TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]
@@ -400,6 +388,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: pnpm exec tsx scripts/check-deployment-ci.ts
       - name: Normalize deploy env aliases
+        id: normalize-env
         env:
           RAW_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
           RAW_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL || secrets.APP_URL || secrets.PRODUCTION_APP_URL }}
@@ -447,8 +436,19 @@ jobs:
           echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=$RAW_TURNSTILE_SITE_KEY" >> "$GITHUB_ENV"
           echo "KYC_PROVIDER=$NORMALIZED_KYC_PROVIDER" >> "$GITHUB_ENV"
       - name: Verify London release and API contracts
+        id: preflight
+        env:
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
+          FOUNDATION_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
+          FOUNDATION_PROJECT_REF: ${{ secrets.FOUNDATION_PROJECT_REF }}
+          FOUNDATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
+          FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
         run: pnpm run preflight:foundation -- --provisioned-runtime
       - name: Match public build settings to production bindings
+        id: public-settings
+        env:
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
         run: node scripts/export-cloudflare-public-env.mjs
       - name: Strict secret scan
         run: pnpm run secret-scan:strict
@@ -456,9 +456,36 @@ jobs:
         run: pnpm run security:audit
       - name: License policy check
         run: pnpm run licenses:check
+      # Reads the provider settings it validates, and the job secrets whose
+      # values it compares with the known test-suite secrets.
       - name: Validate production launch env
-        run: pnpm exec tsx scripts/validate-launch-env.ts --mode=production
+        id: validate-launch-env
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
+          FOUNDATION_PHONE_OTP_KEY: ${{ secrets.FOUNDATION_PHONE_OTP_KEY }}
+          AFRICASTALKING_API_KEY: ${{ secrets.AFRICASTALKING_API_KEY }}
+          AFRICASTALKING_USERNAME: ${{ secrets.AFRICASTALKING_USERNAME }}
+          AFRICASTALKING_SENDER_ID: ${{ secrets.AFRICASTALKING_SENDER_ID }}
+          OZOW_ENV: ${{ secrets.OZOW_ENV }}
+          OZOW_CLIENT_ID: ${{ secrets.OZOW_CLIENT_ID }}
+          OZOW_CLIENT_SECRET: ${{ secrets.OZOW_CLIENT_SECRET }}
+          OZOW_SITE_CODE: ${{ secrets.OZOW_SITE_CODE }}
+          OZOW_PAYMENT_OAUTH_SCOPE: ${{ secrets.OZOW_PAYMENT_OAUTH_SCOPE }}
+          OZOW_WEBHOOK_SECRET: ${{ secrets.OZOW_WEBHOOK_SECRET }}
+          KYC_WEBHOOK_SECRET: ${{ secrets.KYC_WEBHOOK_SECRET }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+          INTERNAL_JOBS_SECRET: ${{ secrets.INTERNAL_JOBS_SECRET }}
+          OPS_JOBS_SECRET: ${{ secrets.OPS_JOBS_SECRET }}
+          RATE_LIMITER_API_KEY: ${{ secrets.RATE_LIMITER_API_KEY }}
+        run: pnpm exec tsx scripts/validate-launch-env.ts --mode=production --runtime-secrets-in-cloudflare
       - name: Enforce production Ozow mode
+        id: ozow-mode
+        env:
+          OZOW_ENV: ${{ secrets.OZOW_ENV }}
         run: |
           if [ -z "$OZOW_ENV" ]; then
             echo "::error::OZOW_ENV is required for production deploys"
@@ -484,8 +511,9 @@ jobs:
           done
           exit $FAILED
       # The retired database's public-table checks must never run on London.
+      # Synthetic private values only; refuses to run beside a real credential.
       - name: Build for Cloudflare
-        run: pnpm run build:cloudflare
+        run: node scripts/build-cloudflare-release.mjs
       - name: Verify built Worker startup before deployment
         timeout-minutes: 5
         run: pnpm test:cloudflare:startup
@@ -496,15 +524,27 @@ jobs:
           echo "::notice::Treat new warning patterns outside those classes as actionable."
 
       - name: Validate Cloudflare deploy credentials
+        id: cloudflare-credentials
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/validate-cloudflare-deploy-credentials.mjs
 
       - name: Verify Cloudflare Worker secrets before deploy
+        id: worker-secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
+          FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
+          FOUNDATION_PHONE_OTP_KEY: ${{ secrets.FOUNDATION_PHONE_OTP_KEY }}
+          INTERNAL_JOBS_SECRET: ${{ secrets.INTERNAL_JOBS_SECRET }}
+          OPS_JOBS_SECRET: ${{ secrets.OPS_JOBS_SECRET }}
+          KYC_WEBHOOK_SECRET: ${{ secrets.KYC_WEBHOOK_SECRET }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+          HEALTH_DIAGNOSTIC_TOKEN: ${{ secrets.HEALTH_DIAGNOSTIC_TOKEN }}
+          RATE_LIMITER_API_KEY: ${{ secrets.RATE_LIMITER_API_KEY }}
+          SITE_MONITOR_API_KEY: ${{ secrets.SITE_MONITOR_API_KEY }}
         run: |
           node scripts/prepare-cloudflare-candidate-secrets.mjs --include-workers
           pnpm run cloudflare:secrets:check -- --env=production "--pending-secrets-file=$RUNNER_TEMP/cloudflare-candidate-secrets.json"
@@ -525,12 +565,14 @@ jobs:
       # and link-preview cards, M9.9), so it must exist before the website
       # deploys. No routes, secrets or storage.
       - name: Deploy Offload Worker
+        id: deploy-offload
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.offload.toml --env="" --tag "$DEPLOY_TARGET_SHA"
 
       - name: Deploy to Cloudflare
+        id: deploy-website
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -540,12 +582,14 @@ jobs:
           --tag "$DEPLOY_TARGET_SHA" --message verified-main-deployment
 
       - name: Deploy Rate Limiter Worker
+        id: deploy-limiter
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.rate-limiter.toml --env="" --tag "$DEPLOY_TARGET_SHA" --secrets-file "$RUNNER_TEMP/cloudflare-limiter-secrets.json"
 
       - name: Deploy Retention Cleanup Worker
+        id: deploy-retention
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -554,6 +598,7 @@ jobs:
       # Expires abandoned checkouts. It was missing here, so production kept
       # running a build from before the payment fulfillment hardening.
       - name: Deploy Payment Cleanup Worker
+        id: deploy-payment-cleanup
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -563,10 +608,22 @@ jobs:
       # minute. Needs OPS_JOBS_SECRET set on this worker and on the app; until
       # then the app's endpoint refuses its calls and jobs wait in the queue.
       - name: Deploy Ops Jobs Worker
+        id: deploy-ops-jobs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.ops-jobs.toml --tag "$DEPLOY_TARGET_SHA" --secrets-file "$RUNNER_TEMP/cloudflare-ops-secrets.json"
+
+      # The secret files are needed only by the deploy steps above. Remove them
+      # before the health check, browser installation and every later step.
+      - name: Remove temporary deployment credentials
+        if: always()
+        run: |
+          rm -f -- "$RUNNER_TEMP/cloudflare-candidate-secrets.json" \
+            "$RUNNER_TEMP/cloudflare-cleanup-secrets.json" \
+            "$RUNNER_TEMP/cloudflare-limiter-secrets.json" \
+            "$RUNNER_TEMP/cloudflare-ops-secrets.json" \
+            "$RUNNER_TEMP/cloudflare-monitor-secrets.json"
 
       - name: Post-deploy health check
         id: health-check
@@ -580,6 +637,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           RATE_LIMITER_API_KEY: ${{ secrets.RATE_LIMITER_API_KEY }}
+          SITE_MONITOR_API_KEY: ${{ secrets.SITE_MONITOR_API_KEY }}
+          FOUNDATION_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
+          FOUNDATION_PROJECT_REF: ${{ secrets.FOUNDATION_PROJECT_REF }}
+          FOUNDATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
+          FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
         run: |
           echo "Waiting for deployment to propagate..."
           sleep 30
@@ -607,6 +670,7 @@ jobs:
       # the browser install, so a failed install cannot skip it. A network error
       # is retried and then reported as inconclusive, never as exposure.
       - name: Recheck live project security settings
+        id: security-settings
         timeout-minutes: 3
         env:
           FOUNDATION_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
@@ -636,12 +700,3 @@ jobs:
           name: deploy-safety-gate-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/safety-gate/**
           if-no-files-found: ignore
-
-      - name: Remove temporary deployment credentials
-        if: always()
-        run: |
-          rm -f -- "$RUNNER_TEMP/cloudflare-candidate-secrets.json" \
-            "$RUNNER_TEMP/cloudflare-cleanup-secrets.json" \
-            "$RUNNER_TEMP/cloudflare-limiter-secrets.json" \
-            "$RUNNER_TEMP/cloudflare-ops-secrets.json" \
-            "$RUNNER_TEMP/cloudflare-monitor-secrets.json"

@@ -38,8 +38,10 @@ import {
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 import {
   applyAndProveRollback,
+  assertDriftRefused,
   bankTransferCommands,
   createPaymentWorld,
+  functionBodyMd5,
   sqlValue,
   updateCheckKit,
 } from "./lib/foundation-staff-payment-world.mjs";
@@ -87,10 +89,7 @@ try {
   const daysAgo = (n) =>
     q(`select to_char((now() at time zone 'Africa/Johannesburg')::date - ${n},'YYYY-MM-DD');`);
   const transfers = bankTransferCommands(kit, today);
-  const bodyMd5 = (signature) =>
-    q(
-      `select coalesce((select md5(replace(prosrc,E'\\r\\n',E'\\n')) from pg_proc where oid=to_regprocedure('${signature}')),'missing');`
-    );
+  const bodyMd5 = (signature) => functionBodyMd5(kit, signature);
   /** Moves a transfer's recorded time back by `interval` (triggers off). */
   const age = (id, interval) =>
     q(`set session_replication_role=replica;
@@ -191,22 +190,11 @@ try {
     assertReadOnlyPreflight(database, kit.preflightSql);
   });
   await check("drift and a premature rollback are refused", () => {
-    const before = fingerprint();
-    assert.match(fails(kit.rollbackSql, "55000"), /rollback precondition/);
-    assert.equal(fingerprint(), before);
-    for (const signature of Object.keys(REVIEWED)) {
-      const live = q(`select pg_get_functiondef('${signature}'::regprocedure);`);
-      q(
-        `do $$begin execute replace(pg_get_functiondef('${signature}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
-      );
-      const rows = preflight();
-      assert.equal(rows.length, 3, JSON.stringify(rows));
-      assert.match(rows[0][1], /^bank transfer expiry: unexpected state;/);
-      assert.ok(rows[1][1].startsWith(`${signature} is neither the reviewed body`), rows[1][1]);
-      assert.match(fails(kit.step.sql, "55000"), /bank transfer expiry precondition/);
-      q(`${live};`);
-    }
-    assert.equal(fingerprint(), before);
+    assertDriftRefused(kit, {
+      label: "bank transfer expiry",
+      signatures: Object.keys(REVIEWED),
+      rows: 3,
+    });
   });
 
   // ------------------------------------------------------------- apply

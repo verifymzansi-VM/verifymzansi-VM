@@ -721,6 +721,69 @@ describe("backup and alert scripts, run for real on sample inputs", () => {
       ).toEqual(["archive-files.txt", "problems.txt"]);
     }));
 
+  describe("backup storage credentials", () => {
+    const upload = (env: Record<string, string>) =>
+      withDir((dir) => {
+        writeFileSync(path.join(dir, "backup.gpg"), "synthetic");
+        const stub = `aws() { if [ "$1" = s3api ]; then stat -c %s "$BACKUP_FILE"; else echo "used=$AWS_ACCESS_KEY_ID"; fi; }`;
+        return sh(
+          dir,
+          `${stub}\n${runOf(backupWorkflow.jobs.backup, "Upload to the private R2 bucket")}`,
+          {
+            BACKUP_FILE: "backup.gpg",
+            BACKUP_KEY: "database/x/backup.gpg",
+            BACKUP_BUCKET: "verifymzansi-backups",
+            R2_ACCOUNT_ID: "synthetic",
+            ...env,
+          }
+        );
+      });
+    const freshnessCheck = (env: Record<string, string>) =>
+      withDir((dir) => {
+        const now = new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00");
+        const stub = `aws() { echo "used=$AWS_ACCESS_KEY_ID" >&2; printf '%s\\t1\\n' '${now}'; }`;
+        return sh(dir, `${stub}\n${runOf(freshness.jobs["stored-backup"])}`, {
+          ...freshness.jobs["stored-backup"].env,
+          MAX_FUTURE_SECONDS: "300",
+          R2_ACCOUNT_ID: "synthetic",
+          ...env,
+        });
+      });
+    const scoped = { BACKUP_R2_ACCESS_KEY_ID: "scoped-id", BACKUP_R2_SECRET_ACCESS_KEY: "s" };
+    const legacy = { LEGACY_R2_ACCESS_KEY_ID: "app-id", LEGACY_R2_SECRET_ACCESS_KEY: "s" };
+
+    for (const [label, run] of [
+      ["upload", upload],
+      ["freshness check", freshnessCheck],
+    ] as const) {
+      it(`${label}: prefers the bucket-scoped token over the app's storage key`, () => {
+        const result = run({ ...scoped, ...legacy });
+        expect(result.status, result.log).toBe(0);
+        expect(result.log).toContain("used=scoped-id");
+        expect(result.log).not.toContain("Backups still use the app's storage key");
+      });
+
+      it(`${label}: falls back to the app's storage key with a warning`, () => {
+        const result = run(legacy);
+        expect(result.status, result.log).toBe(0);
+        expect(result.log).toContain("used=app-id");
+        expect(result.log).toContain("::warning::Backups still use the app's storage key");
+      });
+
+      it(`${label}: refuses half a token and no credentials at all`, () => {
+        const half = run({ BACKUP_R2_ACCESS_KEY_ID: "scoped-id", ...legacy });
+        expect(half.status).toBe(1);
+        expect(half.log).toContain(
+          "Set both BACKUP_R2_ACCESS_KEY_ID and BACKUP_R2_SECRET_ACCESS_KEY"
+        );
+        expect(half.log).not.toContain("used=");
+        const none = run({});
+        expect(none.status).toBe(1);
+        expect(none.log).not.toContain("used=");
+      });
+    }
+  });
+
   describe("the freshness check's age arithmetic", () => {
     const iso = (offsetMinutes: number) =>
       new Date(Date.now() + offsetMinutes * 60_000).toISOString().replace(/\.\d{3}Z$/, "+00:00");
@@ -731,6 +794,8 @@ describe("backup and alert scripts, run for real on sample inputs", () => {
           ...stored.env,
           MAX_FUTURE_SECONDS: stored.steps[0].env!.MAX_FUTURE_SECONDS,
           R2_ACCOUNT_ID: "synthetic",
+          BACKUP_R2_ACCESS_KEY_ID: "synthetic-id",
+          BACKUP_R2_SECRET_ACCESS_KEY: "synthetic-secret",
         })
       );
 
@@ -1265,8 +1330,8 @@ describe("workflow hygiene", () => {
   });
 
   it("keeps the checkout token out of the workspace unless the job pushes", () => {
-    // deploy.yml is covered by its own change; update-visual-baselines pushes a branch.
-    const allowed = new Set(["deploy.yml", "update-visual-baselines.yml"]);
+    // update-visual-baselines pushes a branch.
+    const allowed = new Set(["update-visual-baselines.yml"]);
     for (const file of files.filter((name) => !allowed.has(name))) {
       for (const step of steps(file).filter((item) => item.uses?.startsWith("actions/checkout@")))
         expect(step.with?.["persist-credentials"], file).toBe(false);
