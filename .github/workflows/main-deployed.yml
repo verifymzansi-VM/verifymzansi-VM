@@ -40,6 +40,9 @@ jobs:
         run: |
           read -r main main_date <<< "$(gh api "repos/${GH_REPO}/commits/main" \
             --jq '"\(.sha) \(.commit.committer.date)"')"
+          # An empty date would read as midnight and give a misleading answer.
+          [ -n "$main" ] || { echo "::error::Could not read the newest main commit."; exit 1; }
+          [ -n "$main_date" ] || { echo "::error::Could not read the date of the newest main commit."; exit 1; }
           # Newest first. A cancelled run may have stopped between Workers, so
           # it never counts as live (the failure alert reports a deploy
           # cancelled after production changes began). A run whose production

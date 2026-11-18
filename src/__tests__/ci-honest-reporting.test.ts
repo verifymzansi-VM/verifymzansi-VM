@@ -787,6 +787,11 @@ describe("backup and alert scripts, run for real on sample inputs", () => {
   // filter with jq (GitHub's runners have jq; gh itself embeds the same
   // language). Issue writes are recorded in calls.txt instead.
   const hasJq = spawnSync(bash, ["-c", "command -v jq"], { windowsHide: true }).status === 0;
+  // Only a local machine without jq may skip; in CI a missing jq fails.
+  const skipJq = !hasJq && !process.env.CI;
+  it.runIf(process.env.CI)("has jq in CI for the alert script tests", () => {
+    expect(hasJq).toBe(true);
+  });
   const ghStub = `gh() {
   local filter="" key="" i
   local args=("$@")
@@ -837,7 +842,7 @@ describe("backup and alert scripts, run for real on sample inputs", () => {
     })),
   });
 
-  describe.skipIf(!hasJq)("the failure alert script", () => {
+  describe.skipIf(skipJq)("the failure alert script", () => {
     const alert = parse(readFileSync(".github/workflows/failure-alert.yml", "utf8")) as {
       jobs: Record<string, Job>;
     };
@@ -963,7 +968,7 @@ describe("backup and alert scripts, run for real on sample inputs", () => {
     });
   });
 
-  describe.skipIf(!hasJq)("the main-deployed check", () => {
+  describe.skipIf(skipJq)("the main-deployed check", () => {
     const job = (
       parse(readFileSync(".github/workflows/main-deployed.yml", "utf8")) as {
         jobs: Record<string, Job & { env: Record<string, string> }>;
@@ -1037,6 +1042,12 @@ describe("backup and alert scripts, run for real on sample inputs", () => {
       const result = check(fixtures(sha("e"), 10, [[10, "e"]]));
       expect(result.status).toBe(1);
       expect(result.log).toContain("not among the last 100 pushes");
+    });
+
+    it("fails clearly when main cannot be read", () => {
+      const result = check({ ...fixtures(sha("b"), 600, [[600, "b"]]), commits_main: undefined });
+      expect(result.status).toBe(1);
+      expect(result.log).toContain("Could not read the newest main commit");
     });
   });
 });
