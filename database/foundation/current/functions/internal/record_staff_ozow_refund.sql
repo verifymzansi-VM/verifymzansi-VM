@@ -26,13 +26,8 @@ begin
       or p_ozow_fact->>'refund_id' is distinct from p_ozow_refund_id::text) then
     raise exception 'valid Ozow refund required' using errcode='22023';
   end if;
-  if p_reason_code is null or p_reason_code not in ('billing_error', 'duplicate', 'our_failure_after_fix_offered',
-      's14_cancellation', 'breach_credit') then
-    raise exception 'valid refund reason code required' using errcode='22023', detail='refund_reason_code_invalid';
-  end if;
-  if not coalesce(internal.plain_text_valid(p_reason, 5, 500, true), false) then
-    raise exception 'audit reason required' using errcode='22023';
-  end if;
+  -- The one list of reasons (an Ozow refund is always a refund).
+  perform internal.assert_staff_refund_reason('refunded', p_reason_code, p_reason);
   if p_payment_id is null then raise exception 'payment required' using errcode='22023'; end if;
   select p.owner_id, p.id into buyer, payment from private.payments p where p.id = p_payment_id;
   if payment is null then raise exception 'payment not found' using errcode='22023'; end if;
@@ -47,6 +42,9 @@ begin
   if p_line_id is not null then
     select * into line from private.payment_lines l where l.id = p_line_id for update;
   end if;
+  -- The refunded period's grants: a renewal bought at the same moment waits for
+  -- this, so the renewal rules below see it.
+  perform 1 from private.entitlements e where e.payment_id = pay.id order by e.id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, buyer);
   -- A repeat of the same request by the same staff member returns its state.
@@ -96,6 +94,19 @@ begin
   end if;
   if exists(select 1 from private.payment_refund_requests r where r.payment_id = pay.id and r.status in ('approved', 'sent')) then
     raise exception 'a refund of this payment is on its way through Ozow' using errcode='PT409', detail='refund_in_flight';
+  end if;
+  if p_reason_code = 'renewal_cancelled_before_start' and not internal.refund_renewal_not_started(pay.id, line.id) then
+    raise exception 'this reason is only for a renewal whose days have not started' using errcode='PT409', detail='renewal_already_started';
+  end if;
+  if internal.refund_renewal_waiting(pay.id, line.id) then
+    raise exception 'a renewal of this slot is waiting; refund the renewal first, then this period' using errcode='PT409', detail='renewal_queued';
+  end if;
+  -- Ozow refunds a payment only within its window (internal.ozow_refund_window);
+  -- after that staff pay it back by bank transfer and record the bank reference.
+  -- A refund already made in the Ozow dashboard is recorded whenever it was made.
+  if p_channel = 'api' and not internal.ozow_refund_window_open(pay.id) then
+    raise exception 'Ozow refunds only within 13 days of the payment; pay it back by bank transfer and record the bank reference'
+      using errcode='PT409', detail='outside_refund_window';
   end if;
   amount := coalesce(line.amount_cents, pay.amount_cents);
   if p_ozow_fact is not null then

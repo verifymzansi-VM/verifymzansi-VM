@@ -42,9 +42,11 @@ it("looks reasons up in a map keyed by listed reasons", () => {
 });
 
 it("matches the reasons of a pending database update like listed ones", () => {
-  // Pending or applied, these reasons of the refund follow-ups update match.
+  // A pending reason is never also in the generated list. The refund
+  // follow-ups reasons were pending, and match the same way now they are listed.
   for (const reason of Object.keys(FOUNDATION_UPCOMING_ERROR_REASONS))
     expect(Object.hasOwn(FOUNDATION_ERROR_REASONS, reason)).toBe(false);
+  expect(Object.hasOwn(FOUNDATION_ERROR_REASONS, "renewal_queued")).toBe(true);
   const error = { code: "PT409", details: "renewal_queued", message: "x" };
   expect(hasDatabaseReason(error, "renewal_queued")).toBe(true);
   expect(hasDatabaseReason(error, "outside_refund_window")).toBe(false);
