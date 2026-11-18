@@ -2705,10 +2705,12 @@ When another update merges first, regenerate this pull request's
 
 ## Sample post hide-list removed, 18 November 2026
 
-`20261118033538_remove_sample_post_hide_list.sql` is not applied yet. It is the
-contract step of `20261117144001_sample_post_hide_list.sql` (applied 18 November
-2026, pull request 105), recorded in `../contract-steps.json`. The display-only
-sample posts were removed from the website in the same pull request (catalogue,
+`20261118033538_remove_sample_post_hide_list.sql` was applied on 18 November
+2026 at 05:46 UTC with the owner's approval, after the website release from this
+pull request was deployed (see the applied register). It is the contract step of
+`20261117144001_sample_post_hide_list.sql` (applied 18 November 2026, pull
+request 105), recorded in `../contract-steps.json`. The display-only sample
+posts were removed from the website in the same pull request (catalogue,
 `/sample/<slug>` pages, the staff page and the showroom cards), so no release
 calls the hide-list any more.
 
@@ -4729,6 +4731,15 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   both commands exist) and recorded from the Claude Code session on 2026-11-18;
   production fingerprint after both updates matched the full replay (except the
   known schema grant difference)
-- `20261118033538_remove_sample_post_hide_list.sql`: pending
+- `20261118033538_remove_sample_post_hide_list.sql`: applied 2026-11-18 05:46
+  UTC; owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; the update's statement is in the production Postgres log at 05:46:14
+  UTC; from the reviewed file at a0576863 (pull request #258, sha256 starting
+  16aacf5f8668154e) after the website release containing it was deployed
+  (5b4a4b08, 05:38 UTC); preflight (sha256 starting cbccf780) before "remove
+  sample post hide list: update not applied; hidden samples: 0", after "remove
+  sample post hide list: already applied" (no problem rows); production
+  fingerprint after it matched the full replay (except the known schema grant
+  difference)
 
 <!-- applied-register:end -->
