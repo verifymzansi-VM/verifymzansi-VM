@@ -997,11 +997,16 @@ still stores the main backup and then fails, so the failure alert fires.
 - **Failure alerts:** GitHub emails the owner when a scheduled run fails, and
   the Failure alert workflow opens an issue.
   `.github/workflows/backup-freshness.yml` runs every 6 hours and fails (opening
-  the same issue) when the newest object under `database/` in the bucket is 26
-  hours old or older, or when the latest commit is 45 days old or older. GitHub
-  pauses schedules in public repositories after 60 days without commits, the
-  freshness check included; merge a change before then, or re-enable the
-  workflows if that happens. A paused run sends no email, so the optional
+  the same issue) when the newest object under `database/` in the bucket is 27
+  hours old or older (two runs in a row stored nothing; one missed run leaves at
+  most about 26.5 hours) or dated in the future, or when the latest commit is 45
+  days old or older. It lists the bucket with the backup job's own R2 key
+  (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`); a separate R2 API token that
+  can only list and read `verifymzansi-backups` is preferred, and the owner may
+  create one later and switch the freshness check to it. GitHub pauses schedules
+  in public repositories after 60 days without commits, the freshness check
+  included; merge a change before then, or re-enable the workflows if that
+  happens. A paused run sends no email, so the optional
   `HEARTBEAT_URL_DATABASE_BACKUP` heartbeat (see
   [Monitoring and Alerts](#monitoring-and-alerts)) is what catches backups that
   silently stop once schedules are paused.

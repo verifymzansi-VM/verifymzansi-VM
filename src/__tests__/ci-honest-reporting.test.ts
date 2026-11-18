@@ -1,4 +1,15 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
@@ -331,10 +342,17 @@ describe("scheduled monitoring reports what it checked", () => {
     );
     expect(platform).toContain(">> problems.txt");
 
-    const counts = step("Record row counts and the schema fingerprint");
-    expect(counts).toContain(".github/backup/backup-manifest.sql");
+    const countsStep = job.steps.find(
+      (candidate) => candidate.name === "Record row counts and the schema fingerprint"
+    )!;
+    expect(countsStep.env?.PGSSLMODE).toBe("require");
+    const counts = countsStep.run!;
+    expect(counts).toContain('"$tools/backup-manifest.sql"');
+    expect(counts).toContain('"$tools/dump-row-counts.awk"');
+    expect(counts).toContain('"$tools/merge-row-counts.awk"');
     // Counts and hashes only reach the log; the per-table file is archived.
     expect(counts).not.toMatch(/cat (ROW-COUNTS|row-counts)/);
+    expect(counts).not.toContain("/dev/stderr");
     expect(counts).toContain("cat FINGERPRINT.tsv");
     const manifest = readFileSync(".github/backup/backup-manifest.sql", "utf8");
     expect(manifest).toContain("repeatable read read only");
@@ -365,10 +383,11 @@ describe("scheduled monitoring reports what it checked", () => {
     expect("schedule" in freshness.on).toBe(true);
     const stored = freshness.jobs["stored-backup"];
     expect(stored.permissions).toBeUndefined();
-    expect(stored.env.MAX_AGE_HOURS).toBe("26");
+    expect(stored.env.MAX_AGE_HOURS).toBe("27");
     const check = stored.steps[0];
     expect(check.run).toContain("list-objects-v2");
-    expect(check.run).toContain('[ "$age_hours" -ge "$MAX_AGE_HOURS" ]');
+    expect(check.run).toContain('[ "$age_seconds" -ge "$((MAX_AGE_HOURS * 3600))" ]');
+    expect(check.run).toContain('[ "$age_seconds" -lt 0 ]');
     // Lists only: no download, copy or delete.
     expect(check.run).not.toMatch(/get-object|s3 cp|s3 rm|delete-object/);
     const pause = freshness.jobs["schedule-pause"];
@@ -380,6 +399,245 @@ describe("scheduled monitoring reports what it checked", () => {
         expect(each["continue-on-error"]).toBeUndefined();
         expect(each.run ?? "").toContain("exit 1");
       }
+  });
+});
+
+describe("backup scripts, run for real on sample inputs", () => {
+  // GitHub runs these blocks with bash; on Windows use Git's bash (and its
+  // awk and GNU date) rather than whatever "bash" resolves to.
+  const gitBash = "C:\\Program Files\\Git\\bin\\bash.exe";
+  const bash = process.platform === "win32" && existsSync(gitBash) ? gitBash : "bash";
+  const posix = (file: string) => path.resolve(file).replace(/\\/g, "/");
+  const backupWorkflow = parse(readFileSync(".github/workflows/database-backup.yml", "utf8")) as {
+    jobs: Record<string, Job>;
+  };
+  const freshness = parse(readFileSync(".github/workflows/backup-freshness.yml", "utf8")) as {
+    jobs: Record<string, Job & { env: Record<string, string> }>;
+  };
+  const runOf = (job: Job, name?: string) =>
+    (name ? job.steps.find((step) => step.name === name)! : job.steps[0]).run!;
+
+  function withDir<T>(body: (dir: string) => T): T {
+    const dir = mkdtempSync(path.join(tmpdir(), "vm-backup-"));
+    try {
+      return body(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  // Runs `script` the way GitHub does (bash -eo pipefail) in `cwd`.
+  function sh(cwd: string, script: string, env: Record<string, string> = {}) {
+    const file = path.join(cwd, "step.sh");
+    writeFileSync(file, script);
+    const result = spawnSync(bash, ["-eo", "pipefail", "step.sh"], {
+      cwd,
+      env: { NODE_ENV: "test", PATH: process.env.PATH, ...env },
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    return { status: result.status, log: result.stdout + result.stderr };
+  }
+
+  const awkFile = (name: string) => posix(`.github/backup/${name}`);
+
+  it("counts one row per COPY line, escaped newlines included", () =>
+    withDir((dir) => {
+      writeFileSync(
+        path.join(dir, "data.sql"),
+        [
+          "SET session_replication_role = replica;",
+          'COPY "private"."posts" ("id", "body") FROM stdin;',
+          "1\trow one\\nstill row one",
+          "2\trow two",
+          "\\.",
+          "",
+          'COPY "private"."profiles" ("id") FROM stdin;',
+          "\\.",
+          'COPY "auth"."users" ("id") FROM stdin;',
+          "a",
+          "\\.",
+          "RESET ALL;",
+          "",
+        ].join("\n")
+      );
+      writeFileSync(
+        path.join(dir, "platform-data.sql"),
+        'COPY "supabase_migrations"."schema_migrations" ("version") FROM stdin;\n1\n2\n3\n\\.\n'
+      );
+      const result = sh(
+        dir,
+        `awk -f "${awkFile("dump-row-counts.awk")}" data.sql platform-data.sql > out.tsv`
+      );
+      expect(result.status, result.log).toBe(0);
+      expect(readFileSync(path.join(dir, "out.tsv"), "utf8")).toBe(
+        "private\tposts\t2\nprivate\tprofiles\t0\nauth\tusers\t1\nsupabase_migrations\tschema_migrations\t3\n"
+      );
+    }));
+
+  it("merges live and dump counts and counts only application-schema gaps", () =>
+    withDir((dir) => {
+      writeFileSync(
+        path.join(dir, "dump.tsv"),
+        "private\tposts\t7\nprivate\tlocked\t0\nsupabase_migrations\tschema_migrations\t2\n"
+      );
+      writeFileSync(
+        path.join(dir, "live.tsv"),
+        [
+          "auth\tschema_migrations\t7", // left out by the CLI: not an application gap
+          "private\tlocked\tno_access", // unreadable: a gap
+          "private\tmissing\t3", // not in the dump: a gap
+          "private\tposts\t7",
+          "supabase_migrations\tschema_migrations\t3", // written during the dump
+          "",
+        ].join("\n")
+      );
+      const result = sh(
+        dir,
+        `awk -v app_schemas=api,private,internal,public -v gaps_file=gaps.txt -f "${awkFile("merge-row-counts.awk")}" dump.tsv live.tsv > ROW-COUNTS.tsv`
+      );
+      expect(result.status, result.log).toBe(0);
+      expect(readFileSync(path.join(dir, "ROW-COUNTS.tsv"), "utf8")).toBe(
+        [
+          "schema\ttable\tlive_rows\tdump_rows",
+          "auth\tschema_migrations\t7\tnot_in_dump",
+          "private\tlocked\tno_access\t0",
+          "private\tmissing\t3\tnot_in_dump",
+          "private\tposts\t7\t7",
+          "supabase_migrations\tschema_migrations\t3\t2",
+          "",
+        ].join("\n")
+      );
+      expect(readFileSync(path.join(dir, "gaps.txt"), "utf8").trim()).toBe("2");
+    }));
+
+  describe("the row-count step records every failure and never stops the backup", () => {
+    const step = runOf(backupWorkflow.jobs.backup, "Record row counts and the schema fingerprint");
+    const live = "private\tposts\t1\nprivate\tprofiles\t0\n";
+    const dataSql =
+      'COPY "private"."posts" ("id") FROM stdin;\n1\n\\.\nCOPY "private"."profiles" ("id") FROM stdin;\n\\.\n';
+
+    function runStep(options: { live?: string; fingerprint?: boolean; workspace?: string }) {
+      return withDir((dir) => {
+        const backup = path.join(dir, "backup");
+        mkdirSync(backup);
+        writeFileSync(path.join(backup, "data.sql"), dataSql);
+        // A stand-in psql: writes what backup-manifest.sql would.
+        const fakePsql = [
+          "psql() {",
+          `  printf '%s' '${options.live ?? live}' > row-counts-live.tsv`,
+          options.fingerprint === false
+            ? "  :"
+            : "  printf 'columns\\t4\\tabc\\n' > fingerprint.tsv",
+          "}",
+        ].join("\n");
+        const result = sh(dir, `${fakePsql}\n${step}`, {
+          RUNNER_TEMP: posix(dir),
+          GITHUB_ENV: posix(path.join(dir, "env")),
+          GITHUB_WORKSPACE: options.workspace ?? posix("."),
+          BACKUP_SCHEMAS: "api,private,internal,public,auth,extensions",
+          APP_SCHEMAS: "api,private,internal,public",
+          DB_URL: "postgresql://unused",
+        });
+        const read = (name: string) =>
+          existsSync(path.join(backup, name))
+            ? readFileSync(path.join(backup, name), "utf8")
+            : null;
+        return {
+          ...result,
+          problems: read("problems.txt"),
+          rowCounts: read("ROW-COUNTS.tsv"),
+          fingerprint: read("FINGERPRINT.tsv"),
+          leftovers: readdirSync(backup).filter((name) => /^row-count/.test(name)),
+        };
+      });
+    }
+
+    it("writes ROW-COUNTS.tsv and FINGERPRINT.tsv when everything is present", () => {
+      const result = runStep({});
+      expect(result.status, result.log).toBe(0);
+      expect(result.problems).toBeNull();
+      expect(result.rowCounts).toBe(
+        "schema\ttable\tlive_rows\tdump_rows\nprivate\tposts\t1\t1\nprivate\tprofiles\t0\t0\n"
+      );
+      expect(result.fingerprint).toBe("columns\t4\tabc\n");
+      expect(result.leftovers).toEqual([]);
+    });
+
+    it("records an application table missing from the dump, naming no table in the log", () => {
+      const result = runStep({ live: `${live}private\tsecret_table\t5\n` });
+      expect(result.status, result.log).toBe(0);
+      expect(result.problems).toContain("1 table(s) in api,private,internal,public missing");
+      expect(result.log).not.toContain("secret_table");
+      expect(result.rowCounts).toContain("private\tsecret_table\t5\tnot_in_dump");
+    });
+
+    it("records a failed awk and keeps going", () => {
+      const result = runStep({ workspace: posix(path.join(tmpdir(), "vm-backup-no-such-dir")) });
+      expect(result.status, result.log).toBe(0);
+      expect(result.problems).toContain("summary failed");
+      expect(result.rowCounts).toBeNull();
+      expect(result.leftovers).toEqual([]);
+    });
+
+    it("records a failed mv and keeps going", () => {
+      const result = runStep({ fingerprint: false });
+      expect(result.status, result.log).toBe(0);
+      expect(result.problems).toContain("summary failed");
+      expect(result.rowCounts).toBeNull();
+      expect(result.fingerprint).toBeNull();
+    });
+  });
+
+  describe("the freshness check's age arithmetic", () => {
+    const iso = (offsetMinutes: number) =>
+      new Date(Date.now() + offsetMinutes * 60_000).toISOString().replace(/\.\d{3}Z$/, "+00:00");
+    const stored = freshness.jobs["stored-backup"];
+    const check = (newest: string) =>
+      withDir((dir) =>
+        sh(dir, `aws() { printf '%s\\n' '${newest}'; }\n${runOf(stored)}`, {
+          ...stored.env,
+          R2_ACCOUNT_ID: "synthetic",
+        })
+      );
+
+    it("passes a backup just under 27 hours old", () => {
+      const result = check(`${iso(-(27 * 60 - 10))}\t1234`);
+      expect(result.status, result.log).toBe(0);
+      expect(result.log).toContain("(26 hours ago, 1234 bytes)");
+    });
+
+    it("fails at 27 hours", () => {
+      const result = check(`${iso(-(27 * 60 + 1))}\t1234`);
+      expect(result.status).toBe(1);
+      expect(result.log).toContain("Database backups stopped");
+    });
+
+    it("fails a timestamp in the future", () => {
+      const result = check(`${iso(120)}\t1234`);
+      expect(result.status).toBe(1);
+      expect(result.log).toContain("Backup date in the future");
+    });
+
+    it("fails an empty bucket and an empty object", () => {
+      expect(check("None").status).toBe(1);
+      expect(check(`${iso(-60)}\t0`).status).toBe(1);
+    });
+
+    it("warns from 45 days without a commit", () => {
+      const pause = freshness.jobs["schedule-pause"];
+      const run = (offsetMinutes: number) =>
+        withDir((dir) =>
+          sh(dir, `gh() { printf '%s\\n' '${iso(offsetMinutes)}'; }\n${runOf(pause)}`, {
+            ...pause.env,
+            GH_REPO: "owner/repo",
+          })
+        );
+      expect(run(-(44 * 24 * 60)).status).toBe(0);
+      const late = run(-(45 * 24 * 60 + 60));
+      expect(late.status).toBe(1);
+      expect(late.log).toContain("Scheduled workflows pause soon");
+    });
   });
 });
 

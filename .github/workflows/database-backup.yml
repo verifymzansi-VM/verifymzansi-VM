@@ -11,7 +11,7 @@ name: Database Backup
 # is public, so this job never prints, caches or uploads unencrypted data as
 # an artifact; its log shows only sizes, counts, hashes and times. Restore
 # steps: docs/RUNBOOK.md, "Database backups". backup-freshness.yml alerts when
-# no new backup has been stored for 26 hours.
+# no new backup has been stored for 27 hours.
 
 on:
   schedule:
@@ -140,54 +140,56 @@ jobs:
       # transaction; only numbers and catalogue hashes, never row contents.
       # Live and dump counts can differ by rows written during the dump.
       - name: Record row counts and the schema fingerprint
+        env:
+          # The pooler accepts TLS; never let psql fall back to plain text.
+          PGSSLMODE: require
+          APP_SCHEMAS: api,private,internal,public
         run: |
           cd "$RUNNER_TEMP/backup"
           echo "COUNTS_CAPTURED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          # Every failure below is recorded, not fatal: the main backup must
+          # still be encrypted and stored, and the run fails after the upload.
+          problem() {
+            echo "::error::${1}"
+            echo "$1" >> problems.txt
+          }
+          tools="$GITHUB_WORKSPACE/.github/backup"
           if ! command -v psql > /dev/null; then
-            echo "::error::psql is not installed on the runner; no row counts or fingerprint recorded."
-            echo "row counts and fingerprint not recorded (no psql)" >> problems.txt
+            problem "row counts and fingerprint not recorded (no psql on the runner)"
             exit 0
           fi
           if ! psql "$DB_URL" --no-psqlrc --quiet -v schemas="${BACKUP_SCHEMAS},supabase_migrations" \
-              -f "$GITHUB_WORKSPACE/.github/backup/backup-manifest.sql"; then
-            echo "::error::Row counts and the schema fingerprint could not be read."
-            echo "row counts and fingerprint not recorded (query failed)" >> problems.txt
+              -f "$tools/backup-manifest.sql"; then
+            problem "row counts and fingerprint not recorded (query failed)"
             rm -f row-counts-live.tsv fingerprint.tsv
             exit 0
           fi
-          # Rows per COPY section of the dump: COPY text escapes newlines, so
-          # every line up to the closing \. is one row.
           dumps=(data.sql)
           if [ -f platform-data.sql ]; then dumps+=(platform-data.sql); fi
-          awk -v OFS='\t' '
-            /^COPY / { name = $2; gsub(/"/, "", name); rows = 0; inside = 1; next }
-            inside && $0 == "\\." {
-              schema = name; sub(/\..*$/, "", schema)
-              table = name; sub(/^[^.]*\./, "", table)
-              print schema, table, rows; inside = 0; next
-            }
-            inside { rows++ }' "${dumps[@]}" > row-counts-dump.tsv
-          awk -F'\t' -v OFS='\t' '
-            FILENAME == ARGV[1] { dump[$1 FS $2] = $3; next }
-            FNR == 1 { print "schema", "table", "live_rows", "dump_rows" }
-            {
-              key = $1 FS $2
-              dumped = "not_in_dump"
-              if (key in dump) dumped = dump[key]
-              print $1, $2, $3, dumped
-              tables++
-              if ($3 ~ /^[0-9]+$/) live += $3; else unreadable++
-              if (!(key in dump)) missing++
-              else if (dump[key] != $3) differing++
-            }
-            END {
-              printf "%d tables, %d live rows; %d not in the dump, %d with a different dump count, %d unreadable\n",
-                tables, live, missing, differing, unreadable > "/dev/stderr"
-            }' row-counts-dump.tsv row-counts-live.tsv > ROW-COUNTS.tsv
-          mv fingerprint.tsv FINGERPRINT.tsv
-          rm -f row-counts-live.tsv row-counts-dump.tsv
-          echo "Schema fingerprint (category, items, md5):"
-          cat FINGERPRINT.tsv
+          gaps=0
+          # errexit does not apply inside an `if` condition, so each command
+          # returns explicitly.
+          summarise() {
+            awk -f "$tools/dump-row-counts.awk" "${dumps[@]}" > row-counts-dump.tsv || return 1
+            awk -v app_schemas="$APP_SCHEMAS" -v gaps_file=row-count-gaps.txt \
+              -f "$tools/merge-row-counts.awk" row-counts-dump.tsv row-counts-live.tsv > ROW-COUNTS.tsv || return 1
+            read -r gaps < row-count-gaps.txt || return 1
+            mv fingerprint.tsv FINGERPRINT.tsv || return 1
+          }
+          if ! summarise; then
+            problem "row counts and fingerprint not recorded (summary failed)"
+            rm -f ROW-COUNTS.tsv FINGERPRINT.tsv fingerprint.tsv
+            gaps=0
+          fi
+          rm -f row-counts-live.tsv row-counts-dump.tsv row-count-gaps.txt
+          # Only the number reaches the log; ROW-COUNTS.tsv names the tables.
+          if [ "$gaps" != 0 ]; then
+            problem "${gaps} table(s) in ${APP_SCHEMAS} missing from the dump or unreadable (see ROW-COUNTS.tsv)"
+          fi
+          if [ -f FINGERPRINT.tsv ]; then
+            echo "Schema fingerprint (category, items, md5):"
+            if ! cat FINGERPRINT.tsv; then problem "fingerprint could not be printed"; fi
+          fi
 
       - name: Write the manifest
         run: |
