@@ -1,5 +1,5 @@
 {
-  "tool": "plpgsql_check 2.8 in public.ecr.aws/supabase/postgres:17.11.0.004 (pnpm db:foundation:lint)",
+  "tool": "plpgsql_check 2.8 in ghcr.io/supabase/postgres:17.11.0.004 (pnpm db:foundation:lint)",
   "rules": "Errors fail unless listed in knownErrors with a reason. Warnings fail when they exceed the counts below. Entries that no longer occur fail too, so this file can only shrink: run pnpm db:foundation:lint -- --write-baseline.",
   "knownErrors": [],
   "warnings": [

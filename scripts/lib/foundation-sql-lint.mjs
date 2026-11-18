@@ -53,16 +53,17 @@ const imagePresent = (image) =>
   spawnSync("docker", ["image", "inspect", image], { stdio: "ignore", windowsHide: true })
     .status === 0;
 const dockerPull = (image) =>
-  spawnSync("docker", ["pull", image], { stdio: "inherit", timeout: 180_000, windowsHide: true })
+  spawnSync("docker", ["pull", image], { stdio: "inherit", timeout: 120_000, windowsHide: true })
     .status === 0;
 
-/** Pulls LINT_IMAGE, 3 tries of up to 180 s each, then LINT_IMAGE_FALLBACK; returns the one pulled. */
+/** Pulls LINT_IMAGE, 2 tries of up to 120 s each, then LINT_IMAGE_FALLBACK; returns the one pulled. */
 export async function pullLintImage({
   pull = dockerPull,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   log = console.log,
 } = {}) {
-  const tries = 3;
+  // Worst case, both registries hanging: 4 x 120 s + 2 x 15 s, well inside the 15-minute job.
+  const tries = 2;
   for (const image of [LINT_IMAGE, LINT_IMAGE_FALLBACK]) {
     for (let attempt = 1; attempt <= tries; attempt += 1) {
       if (pull(image)) return image;

@@ -67,14 +67,14 @@ test("the image is pulled from GHCR with retries, then from ECR, always by diges
   };
   assert.equal(await pullLintImage({ pull: pullAs(0), ...quiet }), LINT_IMAGE);
   calls.length = 0;
-  assert.equal(await pullLintImage({ pull: pullAs(2), ...quiet }), LINT_IMAGE);
-  assert.deepEqual(calls, [LINT_IMAGE, LINT_IMAGE, LINT_IMAGE]);
+  assert.equal(await pullLintImage({ pull: pullAs(1), ...quiet }), LINT_IMAGE);
+  assert.deepEqual(calls, [LINT_IMAGE, LINT_IMAGE]);
   calls.length = 0;
-  assert.equal(await pullLintImage({ pull: pullAs(3), ...quiet }), LINT_IMAGE_FALLBACK);
-  assert.deepEqual(calls, [LINT_IMAGE, LINT_IMAGE, LINT_IMAGE, LINT_IMAGE_FALLBACK]);
+  assert.equal(await pullLintImage({ pull: pullAs(2), ...quiet }), LINT_IMAGE_FALLBACK);
+  assert.deepEqual(calls, [LINT_IMAGE, LINT_IMAGE, LINT_IMAGE_FALLBACK]);
   calls.length = 0;
-  await assert.rejects(pullLintImage({ pull: pullAs(6), ...quiet }), /Could not pull/);
-  assert.equal(calls.length, 6);
+  await assert.rejects(pullLintImage({ pull: pullAs(4), ...quiet }), /Could not pull/);
+  assert.equal(calls.length, 4);
   assert.ok(calls.every((image) => image.endsWith(LINT_IMAGE.slice(LINT_IMAGE.indexOf("@")))));
 });
 
