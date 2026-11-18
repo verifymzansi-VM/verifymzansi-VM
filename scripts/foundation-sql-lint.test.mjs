@@ -3,13 +3,13 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   LINT_IMAGE,
-  LINT_IMAGE_IDS,
-  LINT_IMAGE_MIRRORS,
+  LINT_IMAGE_FALLBACK,
   assertLocalDocker,
   collapseFindings,
   compareLint,
   lintContainerArgs,
-  lintImageRef,
+  localLintImage,
+  pullLintImage,
   nextLintBaseline,
   readLintBaseline,
 } from "./lib/foundation-sql-lint.mjs";
@@ -53,39 +53,46 @@ test("the lint database only runs on a local Docker daemon, without any network"
     !args.some((arg) => ["-p", "--publish", "-P", "--publish-all", "--add-host"].includes(arg))
   );
   assert.ok(args.includes(LINT_IMAGE));
-  assert.match(
-    LINT_IMAGE,
-    /^public\.ecr\.aws\/supabase\/postgres:17\.[0-9.]+@sha256:[0-9a-f]{64}$/
-  );
+  assert.match(LINT_IMAGE, /^ghcr\.io\/supabase\/postgres:17\.[0-9.]+@sha256:[0-9a-f]{64}$/);
+  // The fallback is the same tag and digest on ECR Public.
+  assert.equal(LINT_IMAGE_FALLBACK, LINT_IMAGE.replace(/^ghcr\.io\//, "public.ecr.aws/"));
 });
 
-test("a loaded or mirrored copy runs by ID only when the ID is pinned", () => {
-  const tagged = LINT_IMAGE.slice(0, LINT_IMAGE.indexOf("@"));
-  assert.equal(LINT_IMAGE_IDS[0], LINT_IMAGE.slice(LINT_IMAGE.indexOf("@") + 1));
-  for (const id of LINT_IMAGE_IDS) assert.match(id, /^sha256:[0-9a-f]{64}$/);
-  for (const mirror of LINT_IMAGE_MIRRORS) assert.match(mirror, /^[a-z0-9.-]+\/[a-z0-9/_-]+$/);
-  const asked = [];
-  for (const id of LINT_IMAGE_IDS) {
-    assert.equal(
-      lintImageRef((ref) => {
-        asked.push(ref);
-        return id;
-      }),
-      id
-    );
-  }
-  assert.deepEqual(new Set(asked), new Set([tagged]));
-  // Another image under the same tag, or no local copy: Docker pulls the pinned digest.
+test("the image is pulled from GHCR with retries, then from ECR, always by digest", async () => {
+  const calls = [];
+  const quiet = { sleep: async () => {}, log: () => {} };
+  const pullAs = (failures) => (image) => {
+    calls.push(image);
+    return calls.length > failures;
+  };
+  assert.equal(await pullLintImage({ pull: pullAs(0), ...quiet }), LINT_IMAGE);
+  calls.length = 0;
+  assert.equal(await pullLintImage({ pull: pullAs(2), ...quiet }), LINT_IMAGE);
+  assert.deepEqual(calls, [LINT_IMAGE, LINT_IMAGE, LINT_IMAGE]);
+  calls.length = 0;
+  assert.equal(await pullLintImage({ pull: pullAs(3), ...quiet }), LINT_IMAGE_FALLBACK);
+  assert.deepEqual(calls, [LINT_IMAGE, LINT_IMAGE, LINT_IMAGE, LINT_IMAGE_FALLBACK]);
+  calls.length = 0;
+  await assert.rejects(pullLintImage({ pull: pullAs(6), ...quiet }), /Could not pull/);
+  assert.equal(calls.length, 6);
+  assert.ok(calls.every((image) => image.endsWith(LINT_IMAGE.slice(LINT_IMAGE.indexOf("@")))));
+});
+
+test("the lint runs the fallback copy only when the GHCR copy is absent", () => {
   assert.equal(
-    lintImageRef(() => `sha256:${"0".repeat(64)}`),
+    localLintImage(() => true),
     LINT_IMAGE
   );
   assert.equal(
-    lintImageRef(() => ""),
+    localLintImage(() => false),
     LINT_IMAGE
   );
-  const args = lintContainerArgs("vm-foundation-sql-lint-test", "pw", LINT_IMAGE_IDS[1]);
-  assert.ok(args.includes(LINT_IMAGE_IDS[1]) && !args.includes(LINT_IMAGE));
+  assert.equal(
+    localLintImage((image) => image === LINT_IMAGE_FALLBACK),
+    LINT_IMAGE_FALLBACK
+  );
+  const args = lintContainerArgs("vm-foundation-sql-lint-test", "pw", LINT_IMAGE_FALLBACK);
+  assert.ok(args.includes(LINT_IMAGE_FALLBACK) && !args.includes(LINT_IMAGE));
 });
 
 test("a trigger finding counts only when every attached table reports it", () => {

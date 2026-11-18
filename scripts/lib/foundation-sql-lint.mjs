@@ -11,22 +11,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { FOUNDATION_DIR } from "./foundation-replay.mjs";
 
-/** Same Postgres major and plpgsql_check as Supabase production (CLI 2.120.0 local image). */
-export const LINT_IMAGE =
-  "public.ecr.aws/supabase/postgres:17.11.0.004@sha256:b15d862126dd2dac02da524696ccfde2dcce2ceaee0a58973b2727befe492706"; // secret-scan: allow public image digest
+const LINT_IMAGE_DIGEST = "sha256:b15d862126dd2dac02da524696ccfde2dcce2ceaee0a58973b2727befe492706"; // secret-scan: allow public image digest
 /**
- * The local image IDs only LINT_IMAGE can have. Both are content digests: the
- * multi-platform index (its ID in Docker's containerd image store) and its
- * linux/amd64 image config (its ID in the classic store, which GitHub's
- * runners use). Docker checks every layer against the config when it loads
- * an image, so a matching ID pins the whole image.
+ * Same Postgres major and plpgsql_check as Supabase production (CLI 2.120.0
+ * local image), from GHCR: ECR Public refuses anonymous pulls from busy
+ * shared CI addresses ("Data limit exceeded"). ECR serves the same index
+ * digest and is the fallback. Both are pulled by digest, so Docker checks
+ * the content whichever registry serves it.
  */
-export const LINT_IMAGE_IDS = [
-  LINT_IMAGE.slice(LINT_IMAGE.indexOf("@") + 1),
-  "sha256:c4be96218454e68421a29c712e1a83c7a9fe186208c725d8bb2ebb474e2042f2", // secret-scan: allow public image digest
-];
-/** Registries that serve the same index digest; CI pulls from them when ECR refuses. */
-export const LINT_IMAGE_MIRRORS = ["ghcr.io/supabase/postgres"];
+export const LINT_IMAGE = `ghcr.io/supabase/postgres:17.11.0.004@${LINT_IMAGE_DIGEST}`;
+export const LINT_IMAGE_FALLBACK = `public.ecr.aws/supabase/postgres:17.11.0.004@${LINT_IMAGE_DIGEST}`;
 export const LINT_BASELINE_FILE = `${FOUNDATION_DIR}/lint-baseline.json`;
 export const LINT_STUBS_FILE = `${FOUNDATION_DIR}/replay/lint-platform-stubs.sql`;
 const CONTAINER_LABEL = "verifymzansi.foundation-sql-lint=1";
@@ -55,25 +49,33 @@ function docker(args, { input, allowFailure = false, timeout = 600_000 } = {}) {
   return result;
 }
 
-function localImageId(ref) {
-  const result = spawnSync("docker", ["image", "inspect", "--format", "{{.Id}}", ref], {
-    encoding: "utf8",
-    timeout: 60_000,
-    windowsHide: true,
-  });
-  return result.status === 0 ? result.stdout.trim() : "";
+const imagePresent = (image) =>
+  spawnSync("docker", ["image", "inspect", image], { stdio: "ignore", windowsHide: true })
+    .status === 0;
+const dockerPull = (image) =>
+  spawnSync("docker", ["pull", image], { stdio: "inherit", timeout: 180_000, windowsHide: true })
+    .status === 0;
+
+/** Pulls LINT_IMAGE, 3 tries of up to 180 s each, then LINT_IMAGE_FALLBACK; returns the one pulled. */
+export async function pullLintImage({
+  pull = dockerPull,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  log = console.log,
+} = {}) {
+  const tries = 3;
+  for (const image of [LINT_IMAGE, LINT_IMAGE_FALLBACK]) {
+    for (let attempt = 1; attempt <= tries; attempt += 1) {
+      if (pull(image)) return image;
+      log(`Pull ${attempt} of ${tries} of ${image.split("@")[0]} failed.`);
+      if (attempt < tries) await sleep(attempt * 15_000);
+    }
+  }
+  throw new Error(`Could not pull ${LINT_IMAGE} or ${LINT_IMAGE_FALLBACK}.`);
 }
 
-/**
- * The image reference `docker run` should use. CI loads the image from its
- * cache or pulls it from a mirror; Docker's classic store then knows it by
- * its tag and ID but not by the ECR digest, so `docker run LINT_IMAGE` would
- * download it again. The tagged copy is used, by ID, only when that ID is one
- * of LINT_IMAGE_IDS; otherwise LINT_IMAGE (Docker pulls it and checks the digest).
- */
-export function lintImageRef(imageId = localImageId) {
-  const id = imageId(LINT_IMAGE.slice(0, LINT_IMAGE.indexOf("@")));
-  return LINT_IMAGE_IDS.includes(id) ? id : LINT_IMAGE;
+/** The pinned reference this machine has: GHCR's, or ECR's after a fallback pull. */
+export function localLintImage(present = imagePresent) {
+  return !present(LINT_IMAGE) && present(LINT_IMAGE_FALLBACK) ? LINT_IMAGE_FALLBACK : LINT_IMAGE;
 }
 
 /**
@@ -125,8 +127,9 @@ export function lintContainerArgs(name, password, image = LINT_IMAGE) {
 export async function startLintDatabase({ log = () => {} } = {}) {
   assertLocalDocker();
   const name = `vm-foundation-sql-lint-${randomBytes(4).toString("hex")}`;
-  log(`Starting ${name} from ${LINT_IMAGE.split("@")[0]} ...`);
-  docker(lintContainerArgs(name, randomBytes(18).toString("base64url"), lintImageRef()), {
+  const image = localLintImage();
+  log(`Starting ${name} from ${image.split("@")[0]} ...`);
+  docker(lintContainerArgs(name, randomBytes(18).toString("base64url"), image), {
     timeout: 900_000,
   });
   const stop = () => docker(["rm", "--force", name], { allowFailure: true, timeout: 60_000 });

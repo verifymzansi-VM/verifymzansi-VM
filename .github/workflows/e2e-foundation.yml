@@ -73,11 +73,6 @@ jobs:
       # out to outgoing connections; binding them explicitly still works.
       - name: Keep the test copy's ports out of the ephemeral range
         run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55440-55460
-      # The stack's largest image (the same pinned Postgres as the SQL lint),
-      # so that `supabase start` finds it locally instead of pulling it from
-      # ECR Public, whose anonymous limit on shared runner IPs fails pulls.
-      - name: Load the pinned Postgres image
-        uses: ./.github/actions/foundation-postgres-image
       - name: Start the test copy (local stack, schema proof, test people)
         timeout-minutes: 5
         run: node --import tsx scripts/foundation-e2e.mjs up

@@ -33,10 +33,9 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { replaySteps } from "./lib/foundation-replay.mjs";
 import {
-  LINT_IMAGE,
   applySteps,
   assertLocalDocker,
-  lintImageRef,
+  localLintImage,
   startLintDatabase,
 } from "./lib/foundation-sql-lint.mjs";
 
@@ -175,7 +174,8 @@ async function startHostedLikeDatabase() {
   const docker = (args, input) =>
     spawnSync("docker", args, { input, encoding: "utf8", timeout: 600_000, windowsHide: true });
   const name = `vm-foundation-hostedlike-${randomBytes(4).toString("hex")}`;
-  console.log(`Starting ${name} from ${LINT_IMAGE.split("@")[0]} with Supabase start-up ...`);
+  const image = localLintImage();
+  console.log(`Starting ${name} from ${image.split("@")[0]} with Supabase start-up ...`);
   const started = docker([
     "run",
     "--detach",
@@ -190,7 +190,7 @@ async function startHostedLikeDatabase() {
     "/var/lib/postgresql/data",
     "--env",
     `POSTGRES_PASSWORD=${randomBytes(18).toString("base64url")}`,
-    lintImageRef(),
+    image,
     "postgres",
     "-D",
     "/etc/postgresql",
