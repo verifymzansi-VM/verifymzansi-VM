@@ -2890,7 +2890,9 @@ nothing, and the grants, owners and settings are unchanged.
 
 ## Waiting bank transfers expire after 14 days, 17 November 2026
 
-`20261118044440_bank_transfer_expiry.sql` is pending.
+`20261118044440_bank_transfer_expiry.sql` was applied on 18 November 2026 at
+07:40 UTC with the owner's approval, before the website release from this pull
+request (see the applied register).
 
 Owner's decision of 16 November 2026: a bank transfer staff recorded (slice P2b,
 with or without a customer invoice) that is still waiting for a second staff
@@ -4883,6 +4885,15 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   sample post hide list: already applied" (no problem rows); production
   fingerprint after it matched the full replay (except the known schema grant
   difference)
-- `20261118044440_bank_transfer_expiry.sql`: pending
+- `20261118044440_bank_transfer_expiry.sql`: applied 2026-11-18 07:40 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file at c81018cf (pull request #248, sha256
+  starting 4b69a8fd98fcf666) before the website release containing it was
+  deployed; preflight (sha256 starting 62b861fc) before "bank transfer expiry:
+  update not applied; waiting: 0; waiting 14 days or more: 0; expired: 0", after
+  (07:41:14 UTC) "bank transfer expiry: already applied; waiting: 0; waiting 14
+  days or more: 0; expired: 0" (no problem rows); production fingerprint after
+  it (fingerprint.sql at 93e69753) matched the full replay (except the known
+  schema grant difference)
 
 <!-- applied-register:end -->
