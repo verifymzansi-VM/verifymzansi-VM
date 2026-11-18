@@ -33,7 +33,11 @@ concurrency:
 jobs:
   backup:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # The extras after the main dump (platform dumps, row counts, fingerprint)
+    # are capped at 5 + 5 + 7 minutes by `timeout`, so even if every one of
+    # them hangs, at least 28 minutes remain for the main dump, encryption and
+    # upload, which normally take a few minutes in total.
+    timeout-minutes: 45
     env:
       SUPABASE_PROJECT_REF: gntzjtuncsyefujajmjy
       SUPABASE_POOLER_HOST: aws-0-eu-west-2.pooler.supabase.com
@@ -47,6 +51,15 @@ jobs:
         with:
           persist-credentials: false
 
+      # Installed before the connection string exists, so this third-party
+      # action never sees it.
+      - uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0
+        with:
+          version: 2.120.0
+
+      # The connection string goes into a private file that only the three
+      # steps needing it read, not into GITHUB_ENV (which every later step,
+      # the heartbeat included, would inherit); it is deleted after the last.
       - name: Build the database connection string
         env:
           DB_PASSWORD: ${{ secrets.SUPABASE_BACKUP_DB_PASSWORD }}
@@ -60,14 +73,13 @@ jobs:
           encoded=$(DB_PASSWORD="$DB_PASSWORD" python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["DB_PASSWORD"], safe=""))')
           echo "::add-mask::$encoded"
           # Session mode (port 5432) supports pg_dump; the transaction pooler does not.
-          echo "DB_URL=postgresql://postgres.${SUPABASE_PROJECT_REF}:${encoded}@${SUPABASE_POOLER_HOST}:5432/postgres" >> "$GITHUB_ENV"
-
-      - uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0
-        with:
-          version: 2.120.0
+          umask 077
+          printf '%s' "postgresql://postgres.${SUPABASE_PROJECT_REF}:${encoded}@${SUPABASE_POOLER_HOST}:5432/postgres" \
+            > "$RUNNER_TEMP/db-url"
 
       - name: Dump roles, schema and data
         run: |
+          DB_URL=$(cat "$RUNNER_TEMP/db-url")
           mkdir -p "$RUNNER_TEMP/backup"
           cd "$RUNNER_TEMP/backup"
           echo "DUMP_STARTED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
@@ -83,18 +95,20 @@ jobs:
       # selective restore. Realtime rows are transient broadcasts and session
       # state that Supabase recreates, so only its schema is kept. storage and
       # vault stay out: the app keeps files in R2 and stores no Vault secrets.
-      # A failure here is recorded and fails the run only after the main
-      # backup is stored ("Fail if part of the backup is missing").
+      # A failure here, or a dump running over 5 minutes, is recorded and
+      # fails the run only after the main backup is stored ("Fail if part of
+      # the backup is missing").
       - name: Dump the Supabase platform schemas
         run: |
+          DB_URL=$(cat "$RUNNER_TEMP/db-url")
           cd "$RUNNER_TEMP/backup"
           status=complete
-          if ! supabase db dump --db-url "$DB_URL" --schema "$PLATFORM_SCHEMAS" -f platform-schema.sql; then
-            status="platform schema dump failed"
+          if ! timeout 300 supabase db dump --db-url "$DB_URL" --schema "$PLATFORM_SCHEMAS" -f platform-schema.sql; then
+            status="platform schema dump failed or timed out"
           elif ! grep -Eq '^CREATE POLICY "owner_inbox_receive" ON "realtime"\."messages" ' platform-schema.sql; then
             status="platform-schema.sql is missing the owner_inbox_receive policy"
-          elif ! supabase db dump --db-url "$DB_URL" --schema supabase_migrations -f platform-data.sql --use-copy --data-only; then
-            status="migration ledger dump failed"
+          elif ! timeout 300 supabase db dump --db-url "$DB_URL" --schema supabase_migrations -f platform-data.sql --use-copy --data-only; then
+            status="migration ledger dump failed or timed out"
           elif ! grep -Eq '^COPY "supabase_migrations"\."schema_migrations" ' platform-data.sql; then
             status="platform-data.sql has no migration ledger"
           fi
@@ -143,8 +157,12 @@ jobs:
         env:
           # The pooler accepts TLS; never let psql fall back to plain text.
           PGSSLMODE: require
+          # Bounded: 15 s to connect, 3 min per query and 10 s per lock wait in
+          # backup-manifest.sql, and 7 min in all through `timeout` below.
+          PGCONNECT_TIMEOUT: "15"
           APP_SCHEMAS: api,private,internal,public
         run: |
+          DB_URL=$(cat "$RUNNER_TEMP/db-url")
           cd "$RUNNER_TEMP/backup"
           echo "COUNTS_CAPTURED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
           # Every failure below is recorded, not fatal: the main backup must
@@ -158,38 +176,49 @@ jobs:
             problem "row counts and fingerprint not recorded (no psql on the runner)"
             exit 0
           fi
-          if ! psql "$DB_URL" --no-psqlrc --quiet -v schemas="${BACKUP_SCHEMAS},supabase_migrations" \
+          if ! timeout 420 psql "$DB_URL" --no-psqlrc --quiet -v schemas="${BACKUP_SCHEMAS},supabase_migrations" \
               -f "$tools/backup-manifest.sql"; then
-            problem "row counts and fingerprint not recorded (query failed)"
+            problem "row counts and fingerprint not recorded (query failed or timed out)"
             rm -f row-counts-live.tsv fingerprint.tsv
             exit 0
           fi
           dumps=(data.sql)
           if [ -f platform-data.sql ]; then dumps+=(platform-data.sql); fi
           gaps=0
+          why=""
           # errexit does not apply inside an `if` condition, so each command
           # returns explicitly.
           summarise() {
+            why="no live row counts were returned"
+            [ -s row-counts-live.tsv ] || return 1
+            why="the dump could not be counted"
             awk -f "$tools/dump-row-counts.awk" "${dumps[@]}" > row-counts-dump.tsv || return 1
+            why="the counts could not be merged"
             awk -v app_schemas="$APP_SCHEMAS" -v gaps_file=row-count-gaps.txt \
               -f "$tools/merge-row-counts.awk" row-counts-dump.tsv row-counts-live.tsv > ROW-COUNTS.tsv || return 1
             read -r gaps < row-count-gaps.txt || return 1
+            why="no fingerprint was returned"
+            [ -s fingerprint.tsv ] || return 1
             mv fingerprint.tsv FINGERPRINT.tsv || return 1
           }
           if ! summarise; then
-            problem "row counts and fingerprint not recorded (summary failed)"
+            problem "row counts and fingerprint not recorded (${why})"
             rm -f ROW-COUNTS.tsv FINGERPRINT.tsv fingerprint.tsv
             gaps=0
           fi
           rm -f row-counts-live.tsv row-counts-dump.tsv row-count-gaps.txt
           # Only the number reaches the log; ROW-COUNTS.tsv names the tables.
           if [ "$gaps" != 0 ]; then
-            problem "${gaps} table(s) in ${APP_SCHEMAS} missing from the dump or unreadable (see ROW-COUNTS.tsv)"
+            problem "${gaps} table(s) in ${APP_SCHEMAS} missing from the dump, unreadable or short of rows (see ROW-COUNTS.tsv)"
           fi
           if [ -f FINGERPRINT.tsv ]; then
             echo "Schema fingerprint (category, items, md5):"
             if ! cat FINGERPRINT.tsv; then problem "fingerprint could not be printed"; fi
           fi
+
+      # Nothing after this point connects to the database.
+      - name: Forget the connection string
+        run: rm -f "$RUNNER_TEMP/db-url"
 
       - name: Write the manifest
         run: |
@@ -226,9 +255,18 @@ jobs:
             | gpg --batch --quiet --trust-model always \
                 --recipient-file "$GITHUB_WORKSPACE/.github/backup/database-backup-public-key.asc" \
                 --output "$name" --encrypt
-          xargs shred -u < archive-files.txt
           echo "BACKUP_FILE=$RUNNER_TEMP/backup/$name" >> "$GITHUB_ENV"
           echo "BACKUP_KEY=database/$(date -u +%Y/%m/%d)/$name" >> "$GITHUB_ENV"
+          # A shred failure must not stop the encrypted copy being stored: it
+          # is recorded and fails the run after the upload. The runner is
+          # discarded after the job either way.
+          if ! xargs shred -u < archive-files.txt; then
+            echo "::error::Plaintext backup files could not be shredded; deleting them instead."
+            echo "plaintext files could not be shredded" >> problems.txt
+            if ! xargs rm -f < archive-files.txt; then
+              echo "plaintext files could not be deleted" >> problems.txt
+            fi
+          fi
 
       - name: Upload to the private R2 bucket
         env:

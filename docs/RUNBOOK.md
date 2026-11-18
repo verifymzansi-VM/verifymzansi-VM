@@ -976,7 +976,10 @@ Each encrypted archive holds:
   schemas above plus `supabase_migrations`), read from the live database just
   after the dump (`live_rows`) and counted from the dump itself (`dump_rows`).
   They can differ by rows written during the dump; `not_in_dump` marks tables
-  the CLI leaves out (such as `auth.schema_migrations`).
+  the CLI leaves out (such as `auth.schema_migrations`). In `api`, `private`,
+  `internal` and `public`, a table that is unreadable, not in the dump, has live
+  rows but none dumped, or has more live rows than dumped beyond 50 rows or 1%
+  (whichever is larger) is recorded as a problem.
 - `FINGERPRINT.tsv`: `database/foundation/fingerprint.sql` run read-only on
   production, comparable with `fingerprint.json` `productionCheck`.
 - `MANIFEST.txt`: dump start and end times, CLI and psql versions, the commit,
@@ -984,8 +987,10 @@ Each encrypted archive holds:
   file. The queries are in `.github/backup/backup-manifest.sql`; the job log
   shows only totals, sizes and the fingerprint hashes.
 
-If the platform schemas, row counts or fingerprint cannot be captured, the run
-still stores the main backup and then fails, so the failure alert fires.
+If the platform schemas, row counts or fingerprint cannot be captured (each is
+capped by a timeout: 5 minutes per platform dump, 7 minutes for the counts), or
+the plaintext cannot be shredded, the run still stores the main backup and then
+fails, so the failure alert fires.
 
 - **Secret:** `SUPABASE_BACKUP_DB_PASSWORD` (the database password from
   Supabase > Project Settings > Database). Reset it there if a run reports an
@@ -999,14 +1004,14 @@ still stores the main backup and then fails, so the failure alert fires.
   `.github/workflows/backup-freshness.yml` runs every 6 hours and fails (opening
   the same issue) when the newest object under `database/` in the bucket is 27
   hours old or older (two runs in a row stored nothing; one missed run leaves at
-  most about 26.5 hours) or dated in the future, or when the latest commit is 45
-  days old or older. It lists the bucket with the backup job's own R2 key
-  (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`); a separate R2 API token that
-  can only list and read `verifymzansi-backups` is preferred, and the owner may
-  create one later and switch the freshness check to it. GitHub pauses schedules
-  in public repositories after 60 days without commits, the freshness check
-  included; merge a change before then, or re-enable the workflows if that
-  happens. A paused run sends no email, so the optional
+  most about 26.5 hours) or dated more than 5 minutes in the future, or when the
+  latest commit is 45 days old or older. It lists the bucket with the backup
+  job's own R2 key (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`); a separate R2
+  API token that can only list and read `verifymzansi-backups` is preferred, and
+  the owner may create one later and switch the freshness check to it. GitHub
+  pauses schedules in public repositories after 60 days without commits, the
+  freshness check included; merge a change before then, or re-enable the
+  workflows if that happens. A paused run sends no email, so the optional
   `HEARTBEAT_URL_DATABASE_BACKUP` heartbeat (see
   [Monitoring and Alerts](#monitoring-and-alerts)) is what catches backups that
   silently stop once schedules are paused.

@@ -346,6 +346,32 @@ describe("scheduled monitoring reports what it checked", () => {
       (candidate) => candidate.name === "Record row counts and the schema fingerprint"
     )!;
     expect(countsStep.env?.PGSSLMODE).toBe("require");
+    expect(countsStep.env?.PGCONNECT_TIMEOUT).toBe("15");
+    // The extras are capped so they cannot use up the job before the upload.
+    expect(countsStep.run).toContain("timeout 420 psql");
+    expect(platform.match(/timeout 300 supabase db dump/g)).toHaveLength(2);
+
+    // The connection string never enters GITHUB_ENV, so the third-party CLI
+    // installer and the heartbeat cannot see it; only three steps read it.
+    const steps = job.steps as (Step & { uses?: string })[];
+    const build = steps.findIndex((each) => each.name === "Build the database connection string");
+    const installer = steps.findIndex((each) =>
+      (each.uses ?? "").startsWith("supabase/setup-cli@")
+    );
+    expect(installer).toBeLessThan(build);
+    expect(steps[build].run).not.toContain("GITHUB_ENV");
+    expect(
+      steps
+        .filter((each) => (each.run ?? "").includes('"$RUNNER_TEMP/db-url"'))
+        .map((each) => each.name)
+    ).toEqual([
+      "Build the database connection string",
+      "Dump roles, schema and data",
+      "Dump the Supabase platform schemas",
+      "Record row counts and the schema fingerprint",
+      "Forget the connection string",
+    ]);
+    expect(JSON.stringify(steps)).not.toMatch(/DB_URL=[^$]*GITHUB_ENV|\$\{\{ env\.DB_URL/);
     const counts = countsStep.run!;
     expect(counts).toContain('"$tools/backup-manifest.sql"');
     expect(counts).toContain('"$tools/dump-row-counts.awk"');
@@ -387,7 +413,10 @@ describe("scheduled monitoring reports what it checked", () => {
     const check = stored.steps[0];
     expect(check.run).toContain("list-objects-v2");
     expect(check.run).toContain('[ "$age_seconds" -ge "$((MAX_AGE_HOURS * 3600))" ]');
-    expect(check.run).toContain('[ "$age_seconds" -lt 0 ]');
+    expect(check.run).toContain('[ "$age_seconds" -lt "$((-MAX_FUTURE_SECONDS))" ]');
+    // The newest object is chosen over every page's lines, not per page.
+    expect(check.run).toContain("--output text");
+    expect(check.run).toContain("| sort | tail -n 1");
     // Lists only: no download, copy or delete.
     expect(check.run).not.toMatch(/get-object|s3 cp|s3 rm|delete-object/);
     const pause = freshness.jobs["schedule-pause"];
@@ -475,40 +504,74 @@ describe("backup scripts, run for real on sample inputs", () => {
       );
     }));
 
+  const merge = (dir: string, dump: string, live: string) => {
+    writeFileSync(path.join(dir, "dump.tsv"), dump);
+    writeFileSync(path.join(dir, "live.tsv"), live);
+    const result = sh(
+      dir,
+      `awk -v app_schemas=api,private,internal,public -v gaps_file=gaps.txt -f "${awkFile("merge-row-counts.awk")}" dump.tsv live.tsv > ROW-COUNTS.tsv`
+    );
+    return {
+      ...result,
+      rows: readFileSync(path.join(dir, "ROW-COUNTS.tsv"), "utf8"),
+      gaps: readFileSync(path.join(dir, "gaps.txt"), "utf8").trim(),
+    };
+  };
+
   it("merges live and dump counts and counts only application-schema gaps", () =>
     withDir((dir) => {
-      writeFileSync(
-        path.join(dir, "dump.tsv"),
-        "private\tposts\t7\nprivate\tlocked\t0\nsupabase_migrations\tschema_migrations\t2\n"
-      );
-      writeFileSync(
-        path.join(dir, "live.tsv"),
+      const result = merge(
+        dir,
+        [
+          "private\tposts\t7",
+          "private\tlocked\t0",
+          "private\temptied\t0",
+          "private\tshort\t1000",
+          "private\tgrowing\t1000",
+          "private\tshrinking\t10",
+          "api\tbig\t100000",
+          "supabase_migrations\tschema_migrations\t2",
+          "",
+        ].join("\n"),
         [
           "auth\tschema_migrations\t7", // left out by the CLI: not an application gap
           "private\tlocked\tno_access", // unreadable: a gap
           "private\tmissing\t3", // not in the dump: a gap
           "private\tposts\t7",
-          "supabase_migrations\tschema_migrations\t3", // written during the dump
+          "private\temptied\t4", // rows live, none dumped: a gap
+          "private\tshort\t1100", // 100 more than dumped, above max(50, 1%): a gap
+          "private\tgrowing\t1040", // 40 written during the dump: within tolerance
+          "private\tshrinking\t8", // fewer live than dumped (deletes): never a gap
+          "api\tbig\t100900", // 900 more, within 1% of 100,900
+          "supabase_migrations\tschema_migrations\t3", // not an application schema
           "",
         ].join("\n")
       );
-      const result = sh(
-        dir,
-        `awk -v app_schemas=api,private,internal,public -v gaps_file=gaps.txt -f "${awkFile("merge-row-counts.awk")}" dump.tsv live.tsv > ROW-COUNTS.tsv`
-      );
       expect(result.status, result.log).toBe(0);
-      expect(readFileSync(path.join(dir, "ROW-COUNTS.tsv"), "utf8")).toBe(
+      expect(result.rows).toBe(
         [
           "schema\ttable\tlive_rows\tdump_rows",
           "auth\tschema_migrations\t7\tnot_in_dump",
           "private\tlocked\tno_access\t0",
           "private\tmissing\t3\tnot_in_dump",
           "private\tposts\t7\t7",
+          "private\temptied\t4\t0",
+          "private\tshort\t1100\t1000",
+          "private\tgrowing\t1040\t1000",
+          "private\tshrinking\t8\t10",
+          "api\tbig\t100900\t100000",
           "supabase_migrations\tschema_migrations\t3\t2",
           "",
         ].join("\n")
       );
-      expect(readFileSync(path.join(dir, "gaps.txt"), "utf8").trim()).toBe("2");
+      expect(result.gaps).toBe("4");
+    }));
+
+  it("finds no gaps in an empty live file (the step treats that as a problem)", () =>
+    withDir((dir) => {
+      const result = merge(dir, "private\tposts\t1\n", "");
+      expect(result.status, result.log).toBe(0);
+      expect([result.rows, result.gaps]).toEqual(["", "0"]);
     }));
 
   describe("the row-count step records every failure and never stops the backup", () => {
@@ -517,27 +580,31 @@ describe("backup scripts, run for real on sample inputs", () => {
     const dataSql =
       'COPY "private"."posts" ("id") FROM stdin;\n1\n\\.\nCOPY "private"."profiles" ("id") FROM stdin;\n\\.\n';
 
-    function runStep(options: { live?: string; fingerprint?: boolean; workspace?: string }) {
+    function runStep(options: { live?: string | null; fingerprint?: boolean; workspace?: string }) {
       return withDir((dir) => {
         const backup = path.join(dir, "backup");
         mkdirSync(backup);
         writeFileSync(path.join(backup, "data.sql"), dataSql);
-        // A stand-in psql: writes what backup-manifest.sql would.
-        const fakePsql = [
-          "psql() {",
-          `  printf '%s' '${options.live ?? live}' > row-counts-live.tsv`,
-          options.fingerprint === false
-            ? "  :"
-            : "  printf 'columns\\t4\\tabc\\n' > fingerprint.tsv",
-          "}",
-        ].join("\n");
-        const result = sh(dir, `${fakePsql}\n${step}`, {
+        writeFileSync(path.join(dir, "db-url"), "postgresql://unused");
+        // A stand-in psql executable (the step runs it through `timeout`):
+        // writes what backup-manifest.sql would.
+        const bin = path.join(dir, "bin");
+        mkdirSync(bin);
+        const lines = ["#!/bin/bash"];
+        if (options.live !== null) {
+          writeFileSync(path.join(dir, "live-source.tsv"), options.live ?? live);
+          lines.push(`cp "${posix(path.join(dir, "live-source.tsv"))}" row-counts-live.tsv`);
+        }
+        if (options.fingerprint !== false)
+          lines.push("printf 'columns\\t4\\tabc\\n' > fingerprint.tsv");
+        writeFileSync(path.join(bin, "psql"), `${lines.join("\n")}\n`, { mode: 0o755 });
+        // PATH entries cannot hold a drive letter's colon, so use $PWD.
+        const result = sh(dir, `export PATH="$PWD/bin:$PATH"\n${step}`, {
           RUNNER_TEMP: posix(dir),
           GITHUB_ENV: posix(path.join(dir, "env")),
           GITHUB_WORKSPACE: options.workspace ?? posix("."),
           BACKUP_SCHEMAS: "api,private,internal,public,auth,extensions",
           APP_SCHEMAS: "api,private,internal,public",
-          DB_URL: "postgresql://unused",
         });
         const read = (name: string) =>
           existsSync(path.join(backup, name))
@@ -572,22 +639,77 @@ describe("backup scripts, run for real on sample inputs", () => {
       expect(result.rowCounts).toContain("private\tsecret_table\t5\tnot_in_dump");
     });
 
+    it("records a table with live rows but none dumped", () => {
+      const result = runStep({ live: "private\tposts\t1\nprivate\tprofiles\t3\n" });
+      expect(result.status, result.log).toBe(0);
+      expect(result.problems).toContain("1 table(s) in api,private,internal,public missing");
+    });
+
+    it("records an empty or missing live-count file as a problem", () => {
+      for (const missing of ["", null]) {
+        const result = runStep({ live: missing });
+        expect(result.status, result.log).toBe(0);
+        expect(result.problems).toContain("no live row counts were returned");
+        expect(result.rowCounts).toBeNull();
+        expect(result.leftovers).toEqual([]);
+      }
+    });
+
     it("records a failed awk and keeps going", () => {
       const result = runStep({ workspace: posix(path.join(tmpdir(), "vm-backup-no-such-dir")) });
       expect(result.status, result.log).toBe(0);
-      expect(result.problems).toContain("summary failed");
+      expect(result.problems).toContain("the dump could not be counted");
       expect(result.rowCounts).toBeNull();
       expect(result.leftovers).toEqual([]);
     });
 
-    it("records a failed mv and keeps going", () => {
+    it("records a missing fingerprint and keeps going", () => {
       const result = runStep({ fingerprint: false });
       expect(result.status, result.log).toBe(0);
-      expect(result.problems).toContain("summary failed");
+      expect(result.problems).toContain("no fingerprint was returned");
       expect(result.rowCounts).toBeNull();
       expect(result.fingerprint).toBeNull();
     });
   });
+
+  it("stores the encrypted file even when shredding the plaintext fails", () =>
+    withDir((dir) => {
+      const backup = path.join(dir, "backup");
+      mkdirSync(backup);
+      for (const name of ["MANIFEST.txt", "roles.sql", "schema.sql", "data.sql"])
+        writeFileSync(path.join(backup, name), `${name}\n`);
+      writeFileSync(
+        path.join(backup, "archive-files.txt"),
+        "MANIFEST.txt\nroles.sql\nschema.sql\ndata.sql\n"
+      );
+      const bin = path.join(dir, "bin");
+      mkdirSync(bin);
+      writeFileSync(path.join(bin, "shred"), "#!/bin/bash\nexit 1\n", { mode: 0o755 });
+      const gnupg = path.join(dir, "gnupg");
+      mkdirSync(gnupg, { mode: 0o700 });
+      const result = sh(
+        dir,
+        `export PATH="$PWD/bin:$PATH" GNUPGHOME="$PWD/gnupg"\n${runOf(backupWorkflow.jobs.backup, "Encrypt the backup")}`,
+        {
+          RUNNER_TEMP: posix(dir),
+          GITHUB_ENV: posix(path.join(dir, "env")),
+          GITHUB_WORKSPACE: posix("."),
+        }
+      );
+      expect(result.status, result.log).toBe(0);
+      expect(readFileSync(path.join(dir, "env"), "utf8")).toMatch(
+        /^BACKUP_FILE=.+\.tar\.gz\.gpg$/m
+      );
+      expect(readFileSync(path.join(backup, "problems.txt"), "utf8")).toContain(
+        "plaintext files could not be shredded"
+      );
+      // The plaintext is deleted instead; only the encrypted copy remains.
+      expect(
+        readdirSync(backup)
+          .filter((name) => /\.(sql|txt)$/.test(name))
+          .sort()
+      ).toEqual(["archive-files.txt", "problems.txt"]);
+    }));
 
   describe("the freshness check's age arithmetic", () => {
     const iso = (offsetMinutes: number) =>
@@ -597,6 +719,7 @@ describe("backup scripts, run for real on sample inputs", () => {
       withDir((dir) =>
         sh(dir, `aws() { printf '%s\\n' '${newest}'; }\n${runOf(stored)}`, {
           ...stored.env,
+          MAX_FUTURE_SECONDS: stored.steps[0].env!.MAX_FUTURE_SECONDS,
           R2_ACCOUNT_ID: "synthetic",
         })
       );
@@ -613,10 +736,20 @@ describe("backup scripts, run for real on sample inputs", () => {
       expect(result.log).toContain("Database backups stopped");
     });
 
-    it("fails a timestamp in the future", () => {
-      const result = check(`${iso(120)}\t1234`);
+    it("allows 5 minutes of clock skew, then fails a timestamp in the future", () => {
+      expect(check(`${iso(2)}\t1234`).status).toBe(0);
+      const result = check(`${iso(10)}\t1234`);
       expect(result.status).toBe(1);
       expect(result.log).toContain("Backup date in the future");
+    });
+
+    it("picks the newest object across all pages, not the last line of a page", () => {
+      const newest = iso(-60);
+      // Pages as the CLI prints them: newest on the first page, an empty page.
+      const pages = [`${newest}\t300`, `${iso(-30 * 60)}\t100`, "None", `${iso(-20 * 60)}\t200`];
+      const result = check(pages.join("\n"));
+      expect(result.status, result.log).toBe(0);
+      expect(result.log).toContain(`Newest backup stored ${newest} (1 hours ago, 300 bytes)`);
     });
 
     it("fails an empty bucket and an empty object", () => {

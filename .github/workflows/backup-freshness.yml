@@ -5,8 +5,9 @@ name: Backup freshness
 # scheduled failure.
 #
 # 1. The newest encrypted backup in the private R2 bucket must be under 27
-#    hours old, and not dated in the future. Backups run twice a day and
-#    start 3 to 5.5 hours late, so stored copies are normally 12 to 14.5 hours
+#    hours old, and not dated more than 5 minutes in the future (clock
+#    skew). Backups run twice a day and start 3 to 5.5 hours late, so
+#    stored copies are normally 12 to 14.5 hours
 #    apart and one missed run leaves at most about 26.5 hours: this fails
 #    only after two runs in a row stored nothing, long before R2's 35-day
 #    lifecycle can delete the last good copy.
@@ -43,14 +44,19 @@ jobs:
           AWS_DEFAULT_REGION: auto
           AWS_REQUEST_CHECKSUM_CALCULATION: when_required
           AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
-          # JMESPath: date and size of the newest object, or None when empty.
-          NEWEST_OBJECT_QUERY: "sort_by(Contents || `[]`, &LastModified)[-1].[LastModified, Size]"
+          # Clock difference tolerated between R2 and the runner.
+          MAX_FUTURE_SECONDS: "300"
         run: |
           endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          # One "date<TAB>size" line per object. The CLI fetches every page
+          # (1,000 objects each) and, with text output, prints each page as it
+          # arrives, so the newest object is picked by sorting all lines here,
+          # never inside a per-page query. An empty page prints "None".
           newest=$(aws s3api list-objects-v2 --bucket "$BACKUP_BUCKET" --prefix database/ \
-            --endpoint-url "$endpoint" --query "$NEWEST_OBJECT_QUERY" --output text)
+              --endpoint-url "$endpoint" --query "Contents[].[LastModified, Size]" --output text \
+            | awk '$1 != "None" && NF >= 2' | sort | tail -n 1)
           read -r modified size <<< "$newest"
-          if [ -z "$modified" ] || [ "$modified" = "None" ]; then
+          if [ -z "$modified" ]; then
             echo "::error title=No database backup stored::The backup bucket has no database backup. Run the Database Backup workflow and check its log."
             exit 1
           fi
@@ -58,7 +64,7 @@ jobs:
           stored=$(date -u -d "$modified" +%s)
           age_seconds=$((now - stored))
           echo "Newest backup stored ${modified} ($((age_seconds / 3600)) hours ago, ${size} bytes)."
-          if [ "$age_seconds" -lt 0 ]; then
+          if [ "$age_seconds" -lt "$((-MAX_FUTURE_SECONDS))" ]; then
             echo "::error title=Backup date in the future::The newest backup is dated ${modified}, after the current time. Check the runner and bucket clocks."
             exit 1
           fi

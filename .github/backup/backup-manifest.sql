@@ -16,7 +16,10 @@
 begin transaction isolation level repeatable read read only;
 -- Error out instead of silently counting only the rows a policy shows.
 set local row_security = off;
-set local statement_timeout = '10min';
+-- Bounded so a slow or blocked count can never hold up the backup upload: a
+-- DDL lock (a migration being applied) fails fast instead of queueing.
+set local statement_timeout = '3min';
+set local lock_timeout = '10s';
 
 -- Exact row count of every ordinary table (and leaf partition) in the schemas
 -- whose data the backup dumps: schema, table, rows. A table the backup role
