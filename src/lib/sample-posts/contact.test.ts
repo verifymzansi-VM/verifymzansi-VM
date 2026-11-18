@@ -47,8 +47,7 @@ describe("wrangler.toml", () => {
     ).toEqual({ phone: "+27717484185", whatsapp: "+27717484185" });
   });
 
-  it("switches samples on for production only (default and staging stay off)", () => {
-    // Order in the file: [vars], [env.production.vars], [env.staging.vars].
-    expect(values("SAMPLE_POSTS_ENABLED")).toEqual(["false", "true", "false"]);
+  it("keeps samples switched off everywhere", () => {
+    expect(values("SAMPLE_POSTS_ENABLED")).toEqual(["false", "false", "false"]);
   });
 });

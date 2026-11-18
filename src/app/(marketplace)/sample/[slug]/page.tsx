@@ -78,9 +78,8 @@ export default async function SamplePostPage({ params }: SamplePostPageProps) {
             </li>
             <li className="flex items-center gap-2">
               <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {/* A sample placed only by its province or region names it once. */}
               <span>
-                {post.city.includes(post.province) ? post.city : `${post.city}, ${post.province}`}
+                {post.city}, {post.province}
               </span>
             </li>
             {eventDate ? (

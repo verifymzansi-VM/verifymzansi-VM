@@ -61,18 +61,6 @@ describe("sample post page", () => {
     );
   });
 
-  it("names a sample placed only by its province or region once", async () => {
-    mockFind.mockResolvedValue({ ...post, city: "KwaZulu-Natal" });
-    const province = render(await SamplePostPage(params(post.slug)));
-    expect(screen.getByText("KwaZulu-Natal")).toBeInTheDocument();
-    expect(province.container.textContent).not.toContain("KwaZulu-Natal, KwaZulu-Natal");
-    province.unmount();
-
-    mockFind.mockResolvedValue({ ...post, province: "Western Cape", city: "Western Cape coast" });
-    render(await SamplePostPage(params(post.slug)));
-    expect(screen.getByText("Western Cape coast")).toBeInTheDocument();
-  });
-
   it("shows an event date until the day has passed, then hides only the date", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-12-10T08:00:00Z"));

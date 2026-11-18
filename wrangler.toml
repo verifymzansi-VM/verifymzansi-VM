@@ -299,10 +299,7 @@ FOUNDATION_RECOVERY_ENABLED = "true"
 FOUNDATION_PHONE_VERIFICATION_ENABLED = "true"
 ADDON_SALES_ENABLED = "false"
 OZOW_API_REFUNDS_ENABLED = "false"
-# Display-only sample posts are on for the live site. Before this reaches
-# production: the hide-list update (20261117144001) is applied and every
-# sample's media pair is in the public bucket under media/samples/.
-SAMPLE_POSTS_ENABLED = "true"
+SAMPLE_POSTS_ENABLED = "false"
 SAMPLE_CONTACT_PHONE = "+27717484185"
 SAMPLE_CONTACT_WHATSAPP = "+27717484185"
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
