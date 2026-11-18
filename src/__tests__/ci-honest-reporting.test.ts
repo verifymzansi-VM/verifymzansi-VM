@@ -294,6 +294,13 @@ describe("scheduled monitoring reports what it checked", () => {
     // Every earlier step must be able to stop the run before the heartbeat.
     expect(job.if).toBeUndefined();
     for (const step of steps.slice(0, -1)) {
+      // Only the cleanup that deletes the connection string runs regardless;
+      // it cannot fail, and the heartbeat still needs every step to succeed.
+      if (step.name === "Forget the connection string") {
+        expect(step.if).toBe("always()");
+        expect(step.run).toBe('rm -f "$RUNNER_TEMP/db-url"');
+        continue;
+      }
       expect(step.if).toBeUndefined();
       expect(step["continue-on-error"]).toBeUndefined();
       expect(step.run ?? "").not.toMatch(/\|\| true/);
@@ -348,8 +355,8 @@ describe("scheduled monitoring reports what it checked", () => {
     expect(countsStep.env?.PGSSLMODE).toBe("require");
     expect(countsStep.env?.PGCONNECT_TIMEOUT).toBe("15");
     // The extras are capped so they cannot use up the job before the upload.
-    expect(countsStep.run).toContain("timeout 420 psql");
-    expect(platform.match(/timeout 300 supabase db dump/g)).toHaveLength(2);
+    expect(countsStep.run).toContain("timeout -k 30 420 psql");
+    expect(platform.match(/timeout -k 30 300 supabase db dump/g)).toHaveLength(2);
 
     // The connection string never enters GITHUB_ENV, so the third-party CLI
     // installer and the heartbeat cannot see it; only three steps read it.
@@ -416,7 +423,7 @@ describe("scheduled monitoring reports what it checked", () => {
     expect(check.run).toContain('[ "$age_seconds" -lt "$((-MAX_FUTURE_SECONDS))" ]');
     // The newest object is chosen over every page's lines, not per page.
     expect(check.run).toContain("--output text");
-    expect(check.run).toContain("| sort | tail -n 1");
+    expect(check.run).toContain("| LC_ALL=C sort | tail -n 1");
     // Lists only: no download, copy or delete.
     expect(check.run).not.toMatch(/get-object|s3 cp|s3 rm|delete-object/);
     const pause = freshness.jobs["schedule-pause"];
@@ -525,6 +532,7 @@ describe("backup scripts, run for real on sample inputs", () => {
         [
           "private\tposts\t7",
           "private\tlocked\t0",
+          "private\toutbox\t0",
           "private\temptied\t0",
           "private\tshort\t1000",
           "private\tgrowing\t1000",
@@ -538,7 +546,8 @@ describe("backup scripts, run for real on sample inputs", () => {
           "private\tlocked\tno_access", // unreadable: a gap
           "private\tmissing\t3", // not in the dump: a gap
           "private\tposts\t7",
-          "private\temptied\t4", // rows live, none dumped: a gap
+          "private\toutbox\t4", // filled after the snapshot: within tolerance
+          "private\temptied\t60", // none dumped, 60 live: above tolerance, a gap
           "private\tshort\t1100", // 100 more than dumped, above max(50, 1%): a gap
           "private\tgrowing\t1040", // 40 written during the dump: within tolerance
           "private\tshrinking\t8", // fewer live than dumped (deletes): never a gap
@@ -555,7 +564,8 @@ describe("backup scripts, run for real on sample inputs", () => {
           "private\tlocked\tno_access\t0",
           "private\tmissing\t3\tnot_in_dump",
           "private\tposts\t7\t7",
-          "private\temptied\t4\t0",
+          "private\toutbox\t4\t0",
+          "private\temptied\t60\t0",
           "private\tshort\t1100\t1000",
           "private\tgrowing\t1040\t1000",
           "private\tshrinking\t8\t10",
@@ -639,8 +649,8 @@ describe("backup scripts, run for real on sample inputs", () => {
       expect(result.rowCounts).toContain("private\tsecret_table\t5\tnot_in_dump");
     });
 
-    it("records a table with live rows but none dumped", () => {
-      const result = runStep({ live: "private\tposts\t1\nprivate\tprofiles\t3\n" });
+    it("records a table with more live rows than the tolerance but none dumped", () => {
+      const result = runStep({ live: "private\tposts\t1\nprivate\tprofiles\t60\n" });
       expect(result.status, result.log).toBe(0);
       expect(result.problems).toContain("1 table(s) in api,private,internal,public missing");
     });

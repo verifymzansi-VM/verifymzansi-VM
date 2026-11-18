@@ -6,9 +6,10 @@
 #
 # -v app_schemas=api,private,... names the schemas whose tables must be fully
 # in the dump. A table there is a gap when it is unreadable, has no data
-# section, has rows live but none in the dump, or has more live rows than
-# dumped rows beyond the tolerance. The number of gaps is written to the file
-# named by -v gaps_file, so the job can fail visibly.
+# section, or has more live rows than dumped rows beyond the tolerance (an
+# empty dump included, so a queue that fills after the snapshot is not a
+# false alarm). The number of gaps is written to the file named by
+# -v gaps_file, so the job can fail visibly.
 #
 # Tolerance: the live count is read a few seconds to minutes after the dump's
 # snapshot, so rows written in between can make it higher (never the dump).
@@ -39,6 +40,6 @@ FNR == 1 { print "schema", "table", "live_rows", "dump_rows" }
   rows = dumped + 0
   allowed = live * 0.01
   if (allowed < 50) allowed = 50
-  if ((live > 0 && rows == 0) || live - rows > allowed) gaps++
+  if (live - rows > allowed) gaps++
 }
 END { print gaps > gaps_file }

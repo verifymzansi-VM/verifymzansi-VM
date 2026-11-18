@@ -103,11 +103,11 @@ jobs:
           DB_URL=$(cat "$RUNNER_TEMP/db-url")
           cd "$RUNNER_TEMP/backup"
           status=complete
-          if ! timeout 300 supabase db dump --db-url "$DB_URL" --schema "$PLATFORM_SCHEMAS" -f platform-schema.sql; then
+          if ! timeout -k 30 300 supabase db dump --db-url "$DB_URL" --schema "$PLATFORM_SCHEMAS" -f platform-schema.sql; then
             status="platform schema dump failed or timed out"
           elif ! grep -Eq '^CREATE POLICY "owner_inbox_receive" ON "realtime"\."messages" ' platform-schema.sql; then
             status="platform-schema.sql is missing the owner_inbox_receive policy"
-          elif ! timeout 300 supabase db dump --db-url "$DB_URL" --schema supabase_migrations -f platform-data.sql --use-copy --data-only; then
+          elif ! timeout -k 30 300 supabase db dump --db-url "$DB_URL" --schema supabase_migrations -f platform-data.sql --use-copy --data-only; then
             status="migration ledger dump failed or timed out"
           elif ! grep -Eq '^COPY "supabase_migrations"\."schema_migrations" ' platform-data.sql; then
             status="platform-data.sql has no migration ledger"
@@ -176,7 +176,7 @@ jobs:
             problem "row counts and fingerprint not recorded (no psql on the runner)"
             exit 0
           fi
-          if ! timeout 420 psql "$DB_URL" --no-psqlrc --quiet -v schemas="${BACKUP_SCHEMAS},supabase_migrations" \
+          if ! timeout -k 30 420 psql "$DB_URL" --no-psqlrc --quiet -v schemas="${BACKUP_SCHEMAS},supabase_migrations" \
               -f "$tools/backup-manifest.sql"; then
             problem "row counts and fingerprint not recorded (query failed or timed out)"
             rm -f row-counts-live.tsv fingerprint.tsv
@@ -218,6 +218,7 @@ jobs:
 
       # Nothing after this point connects to the database.
       - name: Forget the connection string
+        if: always()
         run: rm -f "$RUNNER_TEMP/db-url"
 
       - name: Write the manifest

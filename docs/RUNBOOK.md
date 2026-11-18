@@ -977,9 +977,10 @@ Each encrypted archive holds:
   after the dump (`live_rows`) and counted from the dump itself (`dump_rows`).
   They can differ by rows written during the dump; `not_in_dump` marks tables
   the CLI leaves out (such as `auth.schema_migrations`). In `api`, `private`,
-  `internal` and `public`, a table that is unreadable, not in the dump, has live
-  rows but none dumped, or has more live rows than dumped beyond 50 rows or 1%
-  (whichever is larger) is recorded as a problem.
+  `internal` and `public`, a table that is unreadable, not in the dump, or has
+  more live rows than dumped (an empty dump included) beyond 50 rows or 1%
+  (whichever is larger) is recorded as a problem, so a queue that fills just
+  after the snapshot is not a false alarm.
 - `FINGERPRINT.tsv`: `database/foundation/fingerprint.sql` run read-only on
   production, comparable with `fingerprint.json` `productionCheck`.
 - `MANIFEST.txt`: dump start and end times, CLI and psql versions, the commit,
