@@ -96,18 +96,14 @@ const ALLOWED_VIEWS = new Map([
   ["governor:get_frontend_staff_audit_page:privacyRequestId", "audit:view, the event's id only"],
   ["admin:get_frontend_staff_audit_page:privacyRequestId", "audit:view, the event's id only"],
   // The seen-check case summary (queue:view, no claim or recent MFA needed)
-  // names the business and shows the owner's display name, which equals the
-  // full legal name once an ID review is accepted. Kept visible here as a
-  // reported data-minimisation finding awaiting the owner's decision; the
-  // visit address and legal name fields stay behind a claim with evidence:view.
-  ...["moderator", "governor", "admin"].flatMap((role) =>
-    ["surname", "businessDraftId"].map((value) => [
-      `${role}:get_frontend_seen_case:${value}`,
-      value === "surname"
-        ? "reported finding: display name is the full legal name"
-        : "queue:view, the checked business",
-    ])
-  ),
+  // names the business. Since 20261118072601_staff_data_minimisation.sql
+  // (pull request #264) it shows the owner's public short name, not the
+  // surname; the visit address and legal name stay behind a claim with
+  // evidence:view.
+  ...["moderator", "governor", "admin"].map((role) => [
+    `${role}:get_frontend_seen_case:businessDraftId`,
+    "queue:view, the checked business",
+  ]),
 ]);
 // Reviewed exceptions: who may change which of owner A's rows, and through
 // which command (principal:command:table). Staff may change A's rows only
@@ -137,6 +133,17 @@ const ALLOWED_CHANGES = new Map([
     `admin:org_decide_application:${table}`,
     "organisation:manage via internal.organisation_actor decides A's application",
   ]),
+  // Revealing the business contact of A's pending application writes one
+  // audit row (who, when, which application) to the organisation's event log
+  // (20261118072601_staff_data_minimisation.sql); A's own rows are untouched.
+  [
+    "orgAdmin:reveal_organisation_applicant_contact:organisation_events",
+    "the reveal of A's pending application contact is logged",
+  ],
+  [
+    "admin:reveal_organisation_applicant_contact:organisation_events",
+    "organisation:manage via internal.organisation_actor; the reveal is logged",
+  ],
 ]);
 // Staff roles that hold only some of a command's own capabilities yet may
 // succeed, because the command checks the others on one branch only

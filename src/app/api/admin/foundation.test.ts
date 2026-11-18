@@ -146,4 +146,20 @@ describe("back-office routes on foundation", () => {
     ).rejects.toMatchObject({ status: 503 });
     await expect(options.command(api, { submissionId: id, status: "resolved" })).rejects.toThrow();
   });
+
+  it("names the refusal to change a request resolved more than 12 months ago", async () => {
+    expect(await supportUpdate(post("support/update"))).toBe(answer);
+    const options = vi.mocked(handleFoundationOwnerRoute).mock.calls[0][0] as OwnerRouteOptions;
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "PT409", details: "support_ticket_archived", message: "archived" },
+    });
+    const api = { rpc } as unknown as Parameters<OwnerRouteOptions["command"]>[0];
+    await expect(
+      options.command(api, { submissionId: id, status: "in_progress", revision: 4 })
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "This request was resolved more than 12 months ago and can no longer be changed.",
+    });
+  });
 });

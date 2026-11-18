@@ -77,6 +77,101 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Staff and organisation screens show less personal data, 18 November 2026
+
+`20261118072601_staff_data_minimisation.sql` is pending (see the applied
+register). It narrows what staff and organisation administrators see, and tells
+the person behind a data request when it moves on:
+
+- **Short names in review queues.** The business review queue, the 'seen in
+  person' queue and case, the CIPC case and both ID check queue reads name a
+  member by their public short name ('Thando D.', the public seller card's rule)
+  instead of the full name, which for a verified member is the full legal name.
+  The full legal name is shown only where it already was: a case the staff
+  member holds (claim, assignment or decision) with `evidence:view` (a second
+  factor from the last 15 minutes, recorded in the evidence access log) and the
+  identity context of a claimed ID check. Members see their own name as before.
+- **Data requests.** Who may do each step is unchanged: one staff member with
+  `dsar:manage` (a second factor from the last 15 minutes) records, checks,
+  approves, exports and completes, and every step stays in the request's event
+  log. New: when a request is approved and when its export is first made, the
+  requester is emailed through the existing privacy notice jobs (kinds
+  `approved` and `exported`) and an account named by the request gets a bell
+  notice (`privacy_request_approved`, `privacy_export_made`), once each. A
+  request staff record by hand is linked to its account at the identity check;
+  if it was approved before that, the account gets the approval notice then.
+  Export already needs a verified identity, so its notice always finds the
+  account.
+- **Support inbox.** It lists tickets received in the last 12 months, and older
+  ones only while still open (new or in progress). Resolved tickets older than
+  that are no longer listed (they are not deleted). Who may read it, and the
+  counts of new tickets, are unchanged. Such a ticket can no longer be reopened
+  or changed (`support_ticket_archived`, PT409), so its sender is not shown
+  again.
+- **Organisation dashboard.** It no longer carries applicants' business contacts
+  (`public_contacts` leaves its result) and names co-administrators by their
+  public short name (the viewer's own name as before). The new
+  `api.reveal_organisation_applicant_contact(p_application)` gives the public
+  business contact of one pending application (submitted, or more information
+  requested) at a time; nothing for decided or withdrawn applications. Every
+  reveal, by an organisation administrator or by staff, is recorded in the
+  organisation's append-only event log (`private.organisation_events`: who,
+  when, which application), which the staff audit trail lists as
+  `organisation:applicant_contact_revealed`.
+
+The staff invoice, bank transfer and payment lists are unchanged: the staff rule
+(an authenticator code within 12 hours) applies to them as to every staff read.
+
+Expand only: one new command; no command, argument, grant or return type is
+removed or changed. A later code-only change can stop reading `public_contacts`.
+
+**Order: expand website first, then this pull request and this update.**
+
+1. Pull request #265 ("Website reads the staff data minimisation shapes before
+   the database has them") is merged and deployed. It teaches the live website
+   the two new requester email kinds, the two new bell notice kinds and a
+   dashboard result without `public_contacts`.
+2. This pull request is merged and the update is applied (preflight, update,
+   preflight, fingerprint, below) before its release is deployed, as usual.
+   Check the deployed release first: nothing in the database refuses the update
+   while the website predates step 1, and that website's privacy notice job
+   refuses (and retries) the new email kinds and its strict dashboard reader
+   refuses the new shape.
+3. This pull request's release is deployed.
+
+Every state in between is safe. The expand release with the update applied shows
+no applicant contacts on the organisation dashboard until step 3. This pull
+request's release with the database before the update behaves as today: the
+dashboard shows the contacts it still receives (pending applications only) and
+offers 'Show contact' only when the result has no `public_contacts`. If the
+expand release is ever reverted, run the rollback first.
+
+**Applying.** After step 1 is live and this pull request is merged:
+
+1. Run `../preflight/20261118072601_staff_data_minimisation.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff data minimisation: update not applied; ...". It
+   also counts resolved support tickets older than 12 months (no longer listed).
+2. Run the update. It locks the privacy notice and notification tables without
+   waiting and stops without changing anything if either is busy; run it again.
+   Run the preflight again: it must read "staff data minimisation: already
+   applied; ...".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261118072601_staff_data_minimisation.down.sql` (only with the
+owner's decision; prefer a forward fix). It restores the earlier bodies and
+lists, drops the new command, and deletes the bell notices and requester emails
+of the new kinds to do so; the organisation event log keeps its reveal records.
+`node --import tsx scripts/test-foundation-staff-data-minimisation.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drift and a premature rollback are
+refused; apply, rollback and re-apply return the same fingerprints; and each
+rule above through the production API commands.
+
 ## Account events reach the notification bell, 17 November 2026
 
 `20261117140533_member_notices_in_app.sql` was applied on 18 November 2026 at
@@ -4895,5 +4990,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   days or more: 0; expired: 0" (no problem rows); production fingerprint after
   it (fingerprint.sql at 93e69753) matched the full replay (except the known
   schema grant difference)
+- `20261118072601_staff_data_minimisation.sql`: pending
 
 <!-- applied-register:end -->

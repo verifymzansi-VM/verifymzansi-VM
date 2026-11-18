@@ -870,7 +870,10 @@
     },
     {
       "name": "get_frontend_organisation_dashboard",
-      "updates": ["updates/20261105153628_restored_affiliation_workspace.sql"],
+      "updates": [
+        "updates/20261105153628_restored_affiliation_workspace.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_slug",
@@ -885,7 +888,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Live organisation administrator membership and native organisation authority; only scoped totals, administrator roster and currently public business contacts."
+      "authority": "Live organisation administrator membership and native organisation authority; only scoped totals and the administrator roster (co-administrators by public short name). No applicant contacts."
     },
     {
       "name": "reserve_frontend_cipc_document",
@@ -1429,7 +1432,10 @@
     },
     {
       "name": "get_frontend_business_review_queue",
-      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "updates": [
+        "updates/20261105150107_restored_cipc_review.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_tab",
@@ -1444,11 +1450,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current queue staff; bounded canonical registration and Seen summaries with exact queue counts."
+      "authority": "Current queue staff; bounded canonical registration and Seen summaries with exact queue counts. Members are named by their public short name."
     },
     {
       "name": "get_frontend_cipc_case",
-      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "updates": [
+        "updates/20261105150107_restored_cipc_review.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_case",
@@ -1463,7 +1472,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current queue staff; private documents, notes and callback facts require a live claim or prior reviewer relation and fresh TOTP; evidence access is recorded."
+      "authority": "Current queue staff; private documents, notes and callback facts require a live claim or prior reviewer relation and fresh TOTP; evidence access is recorded. Members are named by their public short name."
     },
     {
       "name": "get_public_frontend_business_cipc",
@@ -1602,7 +1611,10 @@
     },
     {
       "name": "get_frontend_seen_queue",
-      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "updates": [
+        "updates/20261105094316_restored_business_seen_requests.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_tab",
@@ -1617,11 +1629,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current queue staff; bounded visit queue summaries and counts with no visit address or photo content."
+      "authority": "Current queue staff; bounded visit queue summaries and counts with no visit address or photo content. Members are named by their public short name."
     },
     {
       "name": "get_frontend_seen_case",
-      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "updates": [
+        "updates/20261105094316_restored_business_seen_requests.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_case",
@@ -1636,7 +1651,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current staff; sensitive details require fresh TOTP and a current claim or assigned reviewer relationship, with an evidence access log."
+      "authority": "Current staff; sensitive details require fresh TOTP and a current claim or assigned reviewer relationship, with an evidence access log. Members are named by their public short name."
     },
     {
       "name": "reserve_frontend_seen_photo",
@@ -2181,7 +2196,10 @@
     },
     {
       "name": "get_frontend_support_inbox",
-      "updates": ["updates/20261105091725_restored_support_inbox.sql"],
+      "updates": [
+        "updates/20261105091725_restored_support_inbox.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_page",
@@ -2201,11 +2219,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current support staff, bounded paged request and mail activity projection with database-authorized edit hint."
+      "authority": "Current support staff, bounded paged requests received in the last 12 months (older ones only while still open) and their mail activity, with a database-authorized edit hint."
     },
     {
       "name": "update_frontend_support_status",
-      "updates": ["updates/20261105091725_restored_support_inbox.sql"],
+      "updates": [
+        "updates/20261105091725_restored_support_inbox.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_ticket",
@@ -2230,7 +2251,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current support moderator or admin, represented revision; status and audit event commit together."
+      "authority": "Current support moderator or admin, represented revision; status and audit event commit together. A ticket resolved more than 12 months ago is not changed (PT409 support_ticket_archived)."
     },
     {
       "name": "record_frontend_privacy_request",
@@ -2346,7 +2367,10 @@
     },
     {
       "name": "process_frontend_privacy_request",
-      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
+      "updates": [
+        "updates/20261105085900_restored_privacy_requests.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_case",
@@ -2386,11 +2410,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current privacy reviewer and fresh TOTP. Subject conflicts and stale revisions are denied; completion requires verified identity and deletion attestation where applicable."
+      "authority": "Current privacy reviewer and fresh TOTP. Subject conflicts and stale revisions are denied; completion requires verified identity and deletion attestation where applicable. An approval emails the requester and notifies the account the request names."
     },
     {
       "name": "export_frontend_privacy_request",
-      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
+      "updates": [
+        "updates/20261105085900_restored_privacy_requests.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_case",
@@ -2410,7 +2437,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current privacy reviewer with fresh TOTP; only the represented verified access request and fixed subject-scoped datasets. Oversized exports are refused in full."
+      "authority": "Current privacy reviewer with fresh TOTP; only the represented verified access request and fixed subject-scoped datasets. Oversized exports are refused in full. The first export emails the requester and notifies the account the request names."
     },
     {
       "name": "claim_frontend_privacy_notice",
@@ -3124,7 +3151,10 @@
     },
     {
       "name": "get_frontend_staff_verification_queue",
-      "updates": ["updates/20261104162910_preserved_identity_review_workflow.sql"],
+      "updates": [
+        "updates/20261104162910_preserved_identity_review_workflow.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_limit",
@@ -3144,7 +3174,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current evidence reviewer and independent subjects; bounded waiting summaries/counts. Exact current claim tuple only for its holder; no document bytes, number or storage keys."
+      "authority": "Current evidence reviewer and independent subjects; bounded waiting summaries/counts. Exact current claim tuple only for its holder; no document bytes, number or storage keys. Members are named by their public short name."
     },
     {
       "name": "get_my_frontend_identity_state",
@@ -4939,6 +4969,25 @@
         "service_role": false
       },
       "authority": "Current transfer confirmation capability (admin) and recent authenticator proof; the staff member's own current accepted ID review, never the customer or a partner who referred the customer: records once, with an audited reason, that an expired bank transfer (marked, or waiting 14 days or more, which is marked first) was followed up outside VerifyMzansi: the money was returned ('returned') or never arrived ('never_arrived'). Nothing is paid, started or deleted; the staff audit trail names the staff member. The same request again returns the result; a different one is refused (PT409 transfer_resolved), as is a transfer that has not expired (PT409 transfer_not_expired)."
+    },
+    {
+      "name": "reveal_organisation_applicant_contact",
+      "updates": ["updates/20261118072601_staff_data_minimisation.sql"],
+      "arguments": [
+        {
+          "name": "p_application",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Administrator of the application's organisation with a current verified identity (or staff organisation:manage): the public business contact (phone, email, website) of one pending application (submitted or more information requested) whose business is live; nothing for decided or withdrawn applications. Each reveal is recorded in the organisation's append-only event log (actor, time, application)."
     }
   ]
 }

@@ -110,6 +110,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 44. Phone pages widened by the nav strip     | awaiting owner                                                                                | Phones: dialogs and toasts on member dashboard pages sit on the screen again; the section strip looks and scrolls the same                                                                                                                                                                                                                                                                               |
 | 46. Opening the ID check page only reads     | awaiting owner (with the page-view part of 2 rows in groups 2 and 5)                          | Nothing visible: opening /verification only reads the saved status; it no longer starts a verification case in the background before the member does anything                                                                                                                                                                                                                                            |
 | 45. Bank transfers expire after 14 days | awaiting owner (no file rows: the expiry part of 4 rows in groups 24 and 31) | Staff: an 'Expired' list ('Not confirmed within 14 days') in 'Record a bank transfer', kept until each is followed up, with 'Money returned' and 'Never arrived' buttons. Members: on an invoice whose bank transfer expired, a note that it expired and the invoice is unpaid again, with Pay now back |
+| 47. Less personal data on staff and organisation screens | awaiting owner (with the group 47 part of 1 row in group 27) | Staff review queues name members 'Thandeka D.'; members are told in the bell and by email when their data request is approved and when their data is exported; the support inbox lists 12 months (older only while open); organisation dashboards show a pending applicant's contact only on 'Show contact' and co-admins by short name |
 | 48. Refund follow-ups, read before the database update | awaiting owner (no file rows: the refund follow-ups part of 3 existing rows) | Nothing visible today. Staff only, once the refund follow-ups database update is live: a refund carrying the reason 'Cancelled before the renewal started' shows that label, a refund through Ozow that was too late shows 'too late for a refund through Ozow: pay it back by bank transfer and record the bank reference', and three new refusals are worded |
 
 Questions for the owner:
@@ -1381,7 +1382,7 @@ menu (`src/lib/admin/nav.ts`) and the routes `/api/admin/trials`,
 | `src/components/admin/home/attention.test.ts`      | test              | The staff home's urgent list leaves out items that link to the hidden 'Operations health' page.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Nothing (not part of a page)                                                                                                                                                                                                                                                                                                                      | keep     | awaiting owner                                                                                                                                                                                                          | 2026-11-14 | 1a0ba800b04f |
 | `src/app/admin/intelligence/marketplace/page.tsx`  | wording-behaviour | `&amp;` entity only. Group 27: hidden until it works (owner rule 2). The page counts rows in tables the live backend does not have, so it showed an error.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | The 'Marketplace health' page no longer opens: its address leads to the staff home, and the Intelligence menu section is gone (with the five pages below).                                                                                                                                                                                        | keep     | awaiting owner (earlier changes keep their decisions: awaiting owner)                                                                                                                                                   | 2026-11-14 | 273ffe048ad6 |
 | `src/app/admin/organisations/[id]/page.tsx`        | wording-behaviour | Native organisation workspace; admin rows show display name. Retired-backend branch removed. Group 27: the 'Offer a pilot extension' link led to the hidden 'Free posts & trials' page.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Staff only: on a founding-pilot organisation, the 'Offer a pilot extension' line under the programme status is gone; the rest of the page is unchanged.                                                                                                                                                                                           | keep     | awaiting owner (earlier changes keep their decisions: awaiting owner)                                                                                                                                                   | 2026-11-14 | a8d5fb8ee743 |
-| `src/app/dashboard/organisation/[slug]/page.tsx`   | wording-behaviour | Native workspace; performance report and offer are null in foundation; a failed offer read is now logged (M5.1). Native workspace; performance report and offer are null in foundation; a failed offer read was logged (M5.1). Retired-backend removal: retired-backend branch removed, and with it the offer read and its log line (the foundation path never read an offer). Group 27: hidden until it works (owner rule 2). The live backend has no programme report, so the 'Performance' tab held only its two CSV links, and both downloads failed. The trial extension offer card, which never showed, is behind its own switch. Group 40: the sponsor offer is on hold; its Advertise section is hidden, so the link to it is hidden (owner rule 2). | Organisation admins: the 'Performance' tab and its 'Download report (CSV)' and 'Last 30 days (CSV)' links are gone; the Applications, Businesses and Profile & admins tabs are unchanged. Group 40: when a founding pilot has ended, no 'See programme prices' button (it led to the hidden sponsor section); 'Request a custom quotation' stays. | keep     | awaiting owner (earlier changes keep their decisions: awaiting owner (earlier change); M5.1 part approved by owner 2026-11-12; retired-backend removal part awaiting owner); group 40 part approved by owner 2026-11-17 | 2026-11-17 | 2a0708ed7767 |
+| `src/app/dashboard/organisation/[slug]/page.tsx`   | wording-behaviour | Native workspace; performance report and offer are null in foundation; a failed offer read is now logged (M5.1). Native workspace; performance report and offer are null in foundation; a failed offer read was logged (M5.1). Retired-backend removal: retired-backend branch removed, and with it the offer read and its log line (the foundation path never read an offer). Group 27: hidden until it works (owner rule 2). The live backend has no programme report, so the 'Performance' tab held only its two CSV links, and both downloads failed. The trial extension offer card, which never showed, is behind its own switch. Group 40: the sponsor offer is on hold; its Advertise section is hidden, so the link to it is hidden (owner rule 2). Data minimisation: group 47 (applicant contacts on request). | Organisation admins: the 'Performance' tab and its 'Download report (CSV)' and 'Last 30 days (CSV)' links are gone; the Applications, Businesses and Profile & admins tabs are unchanged. Group 40: when a founding pilot has ended, no 'See programme prices' button (it led to the hidden sponsor section); 'Request a custom quotation' stays. | keep     | awaiting owner (earlier changes keep their decisions: awaiting owner (earlier change); M5.1 part approved by owner 2026-11-12; retired-backend removal part awaiting owner); group 40 part approved by owner 2026-11-17 | 2026-11-17 | 6c1bd096d90b |
 
 ### 28. Staff refunds through Ozow
 
@@ -1911,6 +1912,54 @@ the bank transfer card in P2b, the invoice page and the payment panel in group
 and their earlier decisions stand for their earlier changes. Tests:
 `bank-transfer-form.test.tsx` and `invoice-pay-panel.test.tsx`. Proposed: keep.
 Decision: awaiting owner.
+
+### 47. Less personal data on staff and organisation screens
+
+Data minimisation after an access review (database update
+`20261118072601_staff_data_minimisation.sql`, owner decisions of 18 November
+2026). The look of every screen is kept. What each person now sees:
+
+- **Staff, review queues** (ID checks, business verification, 'seen in person'
+  and CIPC cases): a member is named by their public short name ('Thandeka
+  D.', as on the public seller card) instead of their full legal name. The
+  full legal name still shows where it did: inside a case the staff member
+  holds (claim, assignment or decision) after verifying their authenticator in
+  the last 15 minutes, recorded in the case's access log. No page file
+  changes for this; the names come from the server.
+- **Staff, data requests** (`/admin/dsar`): nothing changes on the page. One
+  staff member still records, checks, approves, exports and completes a
+  request.
+- **Staff, support inbox** (`/admin/support`): requests received in the last
+  12 months are listed, and older ones only while still New or In progress.
+  A request resolved more than 12 months ago cannot be reopened: changing its
+  status shows 'This request was resolved more than 12 months ago and can no
+  longer be changed.' Nothing else changes on the page.
+- **Staff, payments and invoices**: unchanged.
+- **Members with a data request**: the bell shows 'Your data request was
+  approved' when staff approve it and 'Your data export was made' when staff
+  first export their data (both link to /dsar); the requester also gets two
+  new emails, 'Data request approved' ('Your VerifyMzansi data request has
+  been approved') and 'Your data request reply was prepared'. Each comes once.
+  A request staff recorded by hand gets the approval notice in the bell when
+  the identity check links it to the account.
+- **Organisation administrators** (`/dashboard/organisation/<slug>`):
+  co-administrators are listed by their short name (the viewer's own name as
+  before). On the Applications tab, a pending application (Pending or More
+  information) shows 'Business contact: Show contact'; tapping it shows the
+  business's public phone, email and website for that application only, and
+  the reveal is recorded in the organisation's audit log. Approved, declined
+  and withdrawn applications show 'Business contact: —'. Until the database
+  update is applied, a pending application shows its contact inline as today.
+  The staff organisation page (`/admin/organisations/<id>`) is unchanged.
+
+The dashboard page keeps its row in group 27, which says 'Data minimisation:
+group 47'; its earlier decision stands for its earlier change. The one new row
+below is the Applications list, which matched `0b562f42` until now. Proposed:
+keep. Decision: awaiting owner.
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/components/organisations/organisation-management.tsx` | wording-behaviour | Group 47: an organisation's administrators see an applicant's business contact only while the application is pending, and only on request (owner decision, 18 November 2026). | Organisation dashboard, Applications: a pending row shows 'Business contact: Show contact' (a text button) until tapped, then the phone, email and website; other rows show '—'. The staff organisation page still shows contacts inline. | keep | awaiting owner | 2026-11-18 | 2eff1c8a9149 |
 
 ### 48. Refund follow-ups, read before the database update
 

@@ -43,10 +43,18 @@ begin
     update private.privacy_requests set identity_verified=true,verified_at=now_at,verified_by=actor,
       subject_user_id=verified_subject,processed_by=actor,revision=revision+1 where id=r.id;
     answer:='identity_verified';
+    -- A request recorded by staff is linked to its account only here. If it
+    -- was approved already, that account now gets the approval bell notice,
+    -- once.
+    if r.status='in_progress' and r.subject_user_id is null and verified_subject is not null
+      and not exists(select 1 from private.notifications n where n.subject_id=r.id and n.kind='privacy_request_approved') then
+      perform internal.notify_account(verified_subject,'privacy_request_approved',r.id,null,null);
+    end if;
   elsif p_action in('approve','reject') then
     if r.status not in('submitted','identity_pending') then raise exception 'privacy request already decided' using errcode='PT409';end if;
     answer:=case p_action when 'approve' then 'in_progress' else 'rejected' end;
-    if answer='rejected' then delivery:=answer;end if;
+    -- The requester is emailed on approval too (privacy notice kind 'approved').
+    delivery:=case answer when 'rejected' then 'rejected' else 'approved' end;
     update private.privacy_requests set status=answer,response_summary=note,processed_by=actor,revision=revision+1 where id=r.id;
     -- A rejected deletion request never lets its account be erased later on
     -- its own: the rejection is recorded and a legal hold placed (20261116175757_close_and_erase_account.sql).
@@ -68,6 +76,10 @@ begin
   insert into private.privacy_request_events(request_id,actor_id,action,represented_revision)
     values(r.id,actor,case answer when 'in_progress' then 'started' else answer end,p_revision);
   if delivery is not null then insert into private.privacy_notice_jobs(request_id,kind) values(r.id,delivery);end if;
+  -- The account named by the request also sees the approval in its bell.
+  if delivery='approved' and r.subject_user_id is not null then
+    perform internal.notify_account(r.subject_user_id,'privacy_request_approved',r.id,null,null);
+  end if;
   perform internal.staff_actor('dsar:manage');
   return jsonb_build_object('id',r.id,'status',answer,'due',case when answer='extended' then r.extended_due_at end);
 end$function$;
