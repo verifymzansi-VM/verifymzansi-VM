@@ -310,7 +310,8 @@ export function assertDriftRefused(kit, { label, signatures, rows: expected }) {
     assert.equal(rows.length, expected, JSON.stringify(rows));
     assert.ok(rows[0][1].startsWith(`${label}: unexpected state;`), rows[0][1]);
     assert.ok(rows[1][1].startsWith(`${signature} is neither the reviewed body`), rows[1][1]);
-    assert.match(fails(kit.step.sql, "55000"), new RegExp(`${label} precondition`));
+    const refusal = fails(kit.step.sql, "55000");
+    assert.ok(refusal.includes(`${label} precondition`), refusal);
     q(`${live};`);
   }
   assert.equal(fingerprint(), before);
