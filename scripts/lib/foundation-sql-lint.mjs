@@ -62,7 +62,8 @@ export async function pullLintImage({
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   log = console.log,
 } = {}) {
-  // Worst case, both registries hanging: 4 x 120 s + 2 x 15 s, well inside the 15-minute job.
+  // Worst case, both registries hanging: 4 x 120 s + 2 x 15 s (8.5 minutes); the
+  // 30-minute job leaves about 20 minutes for the lint and the behaviour suites.
   const tries = 2;
   for (const image of [LINT_IMAGE, LINT_IMAGE_FALLBACK]) {
     for (let attempt = 1; attempt <= tries; attempt += 1) {
