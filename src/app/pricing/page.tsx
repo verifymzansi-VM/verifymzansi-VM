@@ -8,7 +8,7 @@ import { Footer } from "@/components/layout/footer";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { BrandSurface } from "@/components/brand";
 import { Reveal } from "@/components/marketing/reveal";
-import { RetailPricing } from "@/components/billing/retail-pricing";
+import { PricingOffers } from "@/components/billing/pricing-offers";
 import { EnterprisePricing } from "@/components/billing/enterprise-pricing";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { getCommercialSettings } from "@/lib/commercial/settings";
@@ -115,15 +115,15 @@ export default async function PricingPage() {
         >
           <div className="mx-auto mb-7 max-w-2xl text-center">
             <h2 id="plans-title" className="section-title">
-              Plans
+              Posting slots
             </h2>
-            <p className="section-lede mx-auto">One posting slot, paid once.</p>
+            <p className="section-lede mx-auto">A slot keeps one of your posts live.</p>
           </div>
           <Reveal>
-            <RetailPricing
+            <PricingOffers
               offers={catalog.retail}
               onSale={catalog.onSale}
-              trialDays={settings?.trials}
+              showMultiListing={PACKAGES_ON_SALE}
             />
           </Reveal>
         </section>
