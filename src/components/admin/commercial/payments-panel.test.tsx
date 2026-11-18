@@ -227,14 +227,20 @@ describe("staff payments panel", () => {
         payments={[{ ...base, created_at: "2026-11-05T08:00:00Z", lines: [line(1), line(2)] }]}
       />
     );
-    expect(screen.queryByRole("button", { name: "Record refund" })).toBeNull();
+    // The device clock is only a hint: it words the line, the database decides.
+    expect(
+      screen.getByText(
+        /Ozow's 13 days for a refund ended 18 Nov 2026: pay it back by bank transfer/
+      )
+    ).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Slot paid back by bank transfer" })).toHaveLength(
       2
     );
     fireEvent.click(screen.getByRole("button", { name: "Paid back by bank transfer" }));
     const form = screen.getByRole("form", { name: "Refund of the whole order" });
+    // Said before the money is paid: the window and the renewal-first rule.
     expect(form).toHaveTextContent(
-      "The 13 days for a refund through Ozow have passed: pay it back by bank transfer first, then record the bank reference."
+      "Before you pay: Ozow refunds this payment until 18 Nov 2026; pay it back by bank transfer only after that (before then, refund it through Ozow). If a renewal of this slot is waiting, refund the renewal first: this refund is refused while one waits."
     );
     fireEvent.change(within(form).getByLabelText("Reason"), {
       target: { value: "s14_cancellation" },

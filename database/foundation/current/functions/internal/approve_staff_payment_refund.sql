@@ -49,6 +49,11 @@ begin
     raise exception 'the payment changed since this refund was recorded; decline it and record it again'
       using errcode='PT409', detail='refund_payment_changed';
   end if;
+  -- The reason holds only while the renewal's days have not started.
+  if request.reason_code = 'renewal_cancelled_before_start'
+      and not internal.refund_renewal_not_started(pay.id, request.payment_line_id) then
+    raise exception 'the renewal has started; decline this refund and record it with another reason' using errcode='PT409', detail='renewal_already_started';
+  end if;
   -- A renewal of the slot bought while the refund waited: refund the renewal
   -- first (decline this one and record it again afterwards).
   if request.kind = 'refunded' and internal.refund_renewal_waiting(pay.id, request.payment_line_id) then

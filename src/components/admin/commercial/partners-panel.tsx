@@ -311,8 +311,9 @@ export function PaymentsPanel({
   const { run, busy, message } = useCommercialAction();
   const [form, setForm] = useState<RefundTarget | null>(null);
   const [ozowForm, setOzowForm] = useState<OzowRefundTarget | null>(null);
-  // When the page was opened: past a payment's 13 days, Ozow no longer
-  // refunds it (the database decides; this only chooses the form).
+  // When the page was opened, by this device's clock: only a hint for the
+  // line that says until when Ozow refunds a payment. Every refund way stays
+  // offered; the database decides and its refusal says what to do instead.
   const [openedAt] = useState(() => Date.now());
   return (
     <AdminCard
@@ -343,14 +344,54 @@ export function PaymentsPanel({
           // money is paid back by bank transfer and recorded with the bank
           // reference (refunds only; chargebacks keep Ozow's reference).
           const ozowWindowEnds = ozowRefundWindowEnds(p.created_at);
-          const ozowLate = !p.bank_transfer && openedAt >= ozowWindowEnds.getTime();
-          const sendThroughOzow = throughOzow && ozow?.api === true && !ozowLate;
-          const method = p.bank_transfer ? "invoice" : ozowLate ? "bank" : "ozow";
+          const ozowWindowDate = date.format(ozowWindowEnds);
+          const ozowLate = openedAt >= ozowWindowEnds.getTime();
+          const sendThroughOzow = throughOzow && ozow?.api === true;
           const renewal = isRenewalPayment(p.description);
-          const kinds =
-            throughOzow && !ozowLate
-              ? (["chargeback"] as const)
-              : (["refunded", "chargeback"] as const);
+          const choices: {
+            kind: "refunded" | "chargeback";
+            method: "ozow" | "invoice" | "bank";
+            label: string;
+            slotLabel: string;
+          }[] = p.bank_transfer
+            ? [
+                {
+                  kind: "refunded",
+                  method: "invoice",
+                  label: "Record refund",
+                  slotLabel: "Refund this slot",
+                },
+                {
+                  kind: "chargeback",
+                  method: "invoice",
+                  label: "Record chargeback",
+                  slotLabel: "Slot chargeback",
+                },
+              ]
+            : [
+                ...(throughOzow
+                  ? []
+                  : [
+                      {
+                        kind: "refunded" as const,
+                        method: "ozow" as const,
+                        label: "Record refund",
+                        slotLabel: "Refund this slot",
+                      },
+                    ]),
+                {
+                  kind: "refunded",
+                  method: "bank",
+                  label: "Paid back by bank transfer",
+                  slotLabel: "Slot paid back by bank transfer",
+                },
+                {
+                  kind: "chargeback",
+                  method: "ozow",
+                  label: "Record chargeback",
+                  slotLabel: "Slot chargeback",
+                },
+              ];
           const inFlight = ozowRecords.some((r) => r.status === "approved" || r.status === "sent");
           const ozowRequest = request ? ozowRecords.find((r) => r.id === request.id) : undefined;
           const canReverse = canRefund && p.status === "complete" && !request && !inFlight;
@@ -395,8 +436,10 @@ export function PaymentsPanel({
                 {p.activated_at
                   ? ` · Activated by staff ${date.format(new Date(p.activated_at))}`
                   : ""}
-                {sendThroughOzow && canReverse
-                  ? ` · Ozow refund possible until ${date.format(ozowWindowEnds)}`
+                {!p.bank_transfer && canReverse
+                  ? ozowLate
+                    ? ` · Ozow's 13 days for a refund ended ${ozowWindowDate}: pay it back by bank transfer`
+                    : ` · Ozow refund possible until ${ozowWindowDate}`
                   : ""}
               </span>
               {canRefund && paidNotDelivered && !request ? (
@@ -464,9 +507,9 @@ export function PaymentsPanel({
                       </Button>
                     </>
                   ) : null}
-                  {kinds.map((kind) => (
+                  {choices.map((choice) => (
                     <Button
-                      key={kind}
+                      key={choice.label}
                       size="sm"
                       variant="outline"
                       className="h-10"
@@ -475,21 +518,18 @@ export function PaymentsPanel({
                         setForm({
                           scope: "payment",
                           id: p.id,
-                          kind,
+                          kind: choice.kind,
                           amountCents: p.amount_cents,
                           priorCents,
                           label: lines.length > 1 ? `the whole order` : "this payment",
                           accountId: p.user_id,
-                          method,
+                          method: choice.method,
+                          ozowRefundUntil: ozowWindowDate,
                           renewal,
                         })
                       }
                     >
-                      {kind === "chargeback"
-                        ? "Record chargeback"
-                        : method === "bank"
-                          ? "Paid back by bank transfer"
-                          : "Record refund"}
+                      {choice.label}
                     </Button>
                   ))}
                 </span>
@@ -544,9 +584,9 @@ export function PaymentsPanel({
                               </Button>
                             </>
                           ) : null}
-                          {kinds.map((kind) => (
+                          {choices.map((choice) => (
                             <Button
-                              key={kind}
+                              key={choice.slotLabel}
                               size="sm"
                               variant="outline"
                               className="h-10"
@@ -555,21 +595,18 @@ export function PaymentsPanel({
                                 setForm({
                                   scope: "slot",
                                   id: line.id,
-                                  kind,
+                                  kind: choice.kind,
                                   amountCents: line.amount_cents,
                                   priorCents,
                                   label: `slot ${line.line_number}`,
                                   accountId: p.user_id,
-                                  method,
+                                  method: choice.method,
+                                  ozowRefundUntil: ozowWindowDate,
                                   renewal,
                                 })
                               }
                             >
-                              {kind === "chargeback"
-                                ? "Slot chargeback"
-                                : method === "bank"
-                                  ? "Slot paid back by bank transfer"
-                                  : "Refund this slot"}
+                              {choice.slotLabel}
                             </Button>
                           ))}
                         </span>

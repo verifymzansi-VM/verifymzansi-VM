@@ -143,17 +143,23 @@ describe("refunds through Ozow", () => {
     expect(screen.getByRole("button", { name: "Record chargeback" })).toBeInTheDocument();
   });
 
-  it("shows until when Ozow refunds a payment; after that, the bank transfer form", () => {
+  it("says until when Ozow refunds a payment; the clock words it, never hides a way", () => {
     const view = { api: true, retired: true, refundable: [payment.id], records: [] };
     const first = render(<PaymentsPanel canRefund payments={[payment]} ozow={view} />);
     // Paid 13 Nov 08:00 UTC: 13 days later is 26 Nov (South African time).
     expect(screen.getByText(/Ozow refund possible until 26 Nov 2026/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refund through Ozow" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Paid back by bank transfer" })).toBeInTheDocument();
     first.unmount();
     vi.setSystemTime(new Date("2026-11-26T08:00:00Z"));
     render(<PaymentsPanel canRefund payments={[payment]} ozow={view} />);
-    expect(screen.queryByText(/Ozow refund possible until/)).toBeNull();
-    expect(screen.queryByRole("button", { name: "Refund through Ozow" })).toBeNull();
+    expect(
+      screen.getByText(
+        /Ozow's 13 days for a refund ended 26 Nov 2026: pay it back by bank transfer/
+      )
+    ).toBeInTheDocument();
+    // The database decides (outside_refund_window), so both ways stay offered.
+    expect(screen.getByRole("button", { name: "Refund through Ozow" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Paid back by bank transfer" })).toBeInTheDocument();
     // A refund already made in the Ozow dashboard is still recorded.
     expect(

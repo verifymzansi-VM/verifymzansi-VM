@@ -46,9 +46,12 @@ export type RefundTarget = {
   /** Null once the paying account was erased. */
   accountId: string | null;
   /** How the money goes back: an Ozow refund; a bank transfer back for a bank
-   * transfer ("invoice"); or a bank transfer back for an Ozow payment whose
-   * 13 days for a refund through Ozow have passed ("bank", refunds only). */
+   * transfer ("invoice"); or a bank transfer back for an Ozow payment once
+   * Ozow's 13 days for a refund have passed ("bank", refunds only; the
+   * database decides when they have). */
   method?: "ozow" | "invoice" | "bank";
+  /** For "bank": the date until which Ozow refunds the payment (a hint). */
+  ozowRefundUntil?: string;
   /** A renewal payment: "Cancelled before the renewal started" is offered. */
   renewal?: boolean;
 };
@@ -112,11 +115,18 @@ export function RefundForm({
           {needsApproval
             ? ". Above R1 000 returned on this payment: another staff member must approve it."
             : "."}
-          {target.method === "bank" && refund
-            ? " The 13 days for a refund through Ozow have passed: pay it back by bank transfer first, then record the bank reference."
-            : ""}
         </span>
       </p>
+      {bank && refund ? (
+        <p className="text-sm font-medium">
+          Before you pay:{" "}
+          {target.method === "bank"
+            ? `Ozow refunds this payment until ${target.ozowRefundUntil ?? "13 days after it"}; pay it back by bank transfer only after that (before then, refund it through Ozow). `
+            : ""}
+          If a renewal of this slot is waiting, refund the renewal first: this refund is refused
+          while one waits.
+        </p>
+      ) : null}
       <label className="block text-sm">
         <span className="font-medium">Reason</span>
         <select

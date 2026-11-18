@@ -19,6 +19,8 @@
 --    slots are all renewals whose days have not started
 --    (internal.refund_renewal_not_started; the whole payment of a renewal, or
 --    one renewed slot of it); otherwise PT409 renewal_already_started.
+--    Approving a waiting refund with it checks it again, and so does the
+--    server before it sends one through Ozow (it fails as 'payment_changed').
 -- 2. Renewal first: a refund that would end a period whose slot has a renewal
 --    bought and not started (internal.refund_renewal_waiting) is refused with
 --    PT409 renewal_queued, in every channel (a reference, through Ozow, the
@@ -32,7 +34,10 @@
 -- 3. A declined refund record took no effect, so its reference is free again:
 --    the unique index payment_refund_requests_reference_idx leaves declined
 --    records out (as payment_refund_requests_ozow_key_idx already does), and
---    internal.staff_refund_repeat ignores them.
+--    internal.staff_refund_repeat ignores them. The same reference recorded
+--    at the same moment for another payment is refused in the reference's
+--    words (ozow_reference_used or refund_reference_used), not as a raw
+--    unique violation.
 -- 4. Ozow's refund window: internal.ozow_refund_window() is 13 days (Ozow
 --    says 14; one day less for time zones and Ozow's clock), counted from the
 --    payment's created_at (internal.ozow_refund_window_open). A refund through
@@ -48,7 +53,10 @@
 --    (the bank rule of internal.staff_refund_reference(uuid,text,text):
 --    spaces allowed, at least four letters or digits, refusals
 --    refund_reference_*), also once refunds through Ozow have been used
---    (ozow_reference_retired no longer applies to it). No new command. The
+--    (ozow_reference_retired no longer applies to it). A refund recorded
+--    with a reference is refused while a refund through Ozow of the same
+--    payment is approved or sent (PT409 refund_in_flight): Ozow may still
+--    pay that one. No new command. The
 --    two-argument internal.staff_refund_reference stays, unused; a later
 --    update may drop it.
 --
@@ -103,15 +111,15 @@ begin
         'internal.payment_refund_request_guard() 08e1cff16910b59c8d305a1eae7f7b56',
         'internal.payment_refund_request_guard() 11b86b7a627aad245c84433118601705',
         'internal.record_staff_payment_refund(uuid,text,text,text,text) 2ba50b5b15c6259c1b2c6369d3473e90',
-        'internal.record_staff_payment_refund(uuid,text,text,text,text) 2c834ca09f144562cefe482972614952',
+        'internal.record_staff_payment_refund(uuid,text,text,text,text) c71a8c2d3db386d46c39aa1fbe9f1729',
         'internal.record_staff_slot_refund(uuid,text,text,text,text) 193a2b3abdbc83b0b16d81d759dc168e',
-        'internal.record_staff_slot_refund(uuid,text,text,text,text) 2113693e91e3fd2ecab28d36dc9f8df5',
+        'internal.record_staff_slot_refund(uuid,text,text,text,text) 127eb069abea6bc0159a8206e17f0863',
         'internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid,jsonb) b47de2156d93ce9ee6a48bcb6d206adc',
         'internal.record_staff_ozow_refund(text,uuid,uuid,text,text,uuid,jsonb) f5bc560c0a12f637532ebf6492843ee6',
         'internal.approve_staff_payment_refund(uuid) 6c7090e7cb1fee5fffd3c3495e76e2ab',
-        'internal.approve_staff_payment_refund(uuid) 3bc44d6401afec9505b821cdd12f6ce5',
+        'internal.approve_staff_payment_refund(uuid) 189b3f24e9b847bf75760eeaae9b2686',
         'internal.claim_ozow_refund_send(uuid) 0b9666cbe9d56092d32b11e326c1fb90',
-        'internal.claim_ozow_refund_send(uuid) b16795912c3e917a1fa96b06239504b8',
+        'internal.claim_ozow_refund_send(uuid) c16477b6080ff5e7075f63936cd5383b',
         'internal.ozow_refund_window() absent',
         'internal.ozow_refund_window() 87040940d4cf4f969d15867cc1100ca6',
         'internal.ozow_refund_window_open(uuid) absent',
@@ -491,6 +499,11 @@ begin
   if exists(select 1 from private.payment_lines l where l.payment_id = pay.id and l.status = 'reversed') then
     raise exception 'a slot of this payment was already reversed; refund its other slots one by one' using errcode='PT409', detail='payment_slot_reversed';
   end if;
+  -- Not while a refund through Ozow is on its way: Ozow may still pay it.
+  if p_kind = 'refunded' and exists(select 1 from private.payment_refund_requests r
+      where r.payment_id = pay.id and r.channel = 'api' and r.status in ('approved', 'sent')) then
+    raise exception 'a refund of this payment is on its way through Ozow' using errcode='PT409', detail='refund_in_flight';
+  end if;
   if p_reason_code = 'renewal_cancelled_before_start' and not internal.refund_renewal_not_started(pay.id, null) then
     raise exception 'this reason is only for a renewal whose days have not started' using errcode='PT409', detail='renewal_already_started';
   end if;
@@ -507,13 +520,27 @@ begin
   end if;
   perform internal.staff_actor('payments:refund');
   perform internal.assert_staff_payment_actor(actor, buyer);
-  insert into private.payment_refund_requests (payment_id, account_id, kind, reason_code, reason, ozow_reference,
-      amount_cents, recorded_before_cents, needs_approval, status, requested_by, applied_at, released_activations)
-    values (pay.id, pay.owner_id, p_kind, p_reason_code, btrim(p_reason), reference, pay.amount_cents, refunded_before,
-      approval, case when approval then 'awaiting_approval' else 'applied' end, actor,
-      case when approval then null else statement_timestamp() end,
-      case when approval then null else (result->>'released_activations')::integer end)
-    returning * into request;
+  -- The same reference recorded at the same moment for another payment: the
+  -- unique index decides; say so in the reference's words.
+  declare violated text;
+  begin
+    insert into private.payment_refund_requests (payment_id, account_id, kind, reason_code, reason, ozow_reference,
+        amount_cents, recorded_before_cents, needs_approval, status, requested_by, applied_at, released_activations)
+      values (pay.id, pay.owner_id, p_kind, p_reason_code, btrim(p_reason), reference, pay.amount_cents, refunded_before,
+        approval, case when approval then 'awaiting_approval' else 'applied' end, actor,
+        case when approval then null else statement_timestamp() end,
+        case when approval then null else (result->>'released_activations')::integer end)
+      returning * into request;
+  exception when unique_violation then
+    get stacked diagnostics violated = constraint_name;
+    if violated in ('payment_refund_requests_reference_idx', 'payment_refund_requests_ozow_key_idx') then
+      if internal.refund_by_bank_transfer(pay.id, p_kind) then
+        raise exception 'this refund reference was already recorded' using errcode='PT409', detail='refund_reference_used';
+      end if;
+      raise exception 'this Ozow reference was already recorded' using errcode='PT409', detail='ozow_reference_used';
+    end if;
+    raise;
+  end;
   return jsonb_build_object('request_id', request.id, 'status', request.status, 'kind', p_kind,
     'released_activations', request.released_activations,
     'payment_status', case when approval then pay.status else p_kind end, 'repeated', false);
@@ -558,6 +585,11 @@ begin
   if exists(select 1 from private.payment_refund_requests r where r.payment_id = pay.id and r.status = 'awaiting_approval') then
     raise exception 'a refund of this payment is waiting for approval' using errcode='PT409', detail='refund_awaiting_approval';
   end if;
+  -- Not while a refund through Ozow is on its way: Ozow may still pay it.
+  if p_kind = 'refunded' and exists(select 1 from private.payment_refund_requests r
+      where r.payment_id = pay.id and r.channel = 'api' and r.status in ('approved', 'sent')) then
+    raise exception 'a refund of this payment is on its way through Ozow' using errcode='PT409', detail='refund_in_flight';
+  end if;
   if p_reason_code = 'renewal_cancelled_before_start' and not internal.refund_renewal_not_started(pay.id, line.id) then
     raise exception 'this reason is only for a renewal whose days have not started' using errcode='PT409', detail='renewal_already_started';
   end if;
@@ -572,13 +604,27 @@ begin
   end if;
   perform internal.staff_actor('payments:refund');
   perform internal.assert_staff_payment_actor(actor, buyer);
-  insert into private.payment_refund_requests (payment_id, payment_line_id, account_id, kind, reason_code, reason,
-      ozow_reference, amount_cents, recorded_before_cents, needs_approval, status, requested_by, applied_at, released_activations)
-    values (pay.id, line.id, pay.owner_id, p_kind, p_reason_code, btrim(p_reason), reference,
-      line.amount_cents, refunded_before, approval, case when approval then 'awaiting_approval' else 'applied' end, actor,
-      case when approval then null else statement_timestamp() end,
-      case when approval then null else (result->>'released_activations')::integer end)
-    returning * into request;
+  -- The same reference recorded at the same moment for another payment: the
+  -- unique index decides; say so in the reference's words.
+  declare violated text;
+  begin
+    insert into private.payment_refund_requests (payment_id, payment_line_id, account_id, kind, reason_code, reason,
+        ozow_reference, amount_cents, recorded_before_cents, needs_approval, status, requested_by, applied_at, released_activations)
+      values (pay.id, line.id, pay.owner_id, p_kind, p_reason_code, btrim(p_reason), reference,
+        line.amount_cents, refunded_before, approval, case when approval then 'awaiting_approval' else 'applied' end, actor,
+        case when approval then null else statement_timestamp() end,
+        case when approval then null else (result->>'released_activations')::integer end)
+      returning * into request;
+  exception when unique_violation then
+    get stacked diagnostics violated = constraint_name;
+    if violated in ('payment_refund_requests_reference_idx', 'payment_refund_requests_ozow_key_idx') then
+      if internal.refund_by_bank_transfer(pay.id, p_kind) then
+        raise exception 'this refund reference was already recorded' using errcode='PT409', detail='refund_reference_used';
+      end if;
+      raise exception 'this Ozow reference was already recorded' using errcode='PT409', detail='ozow_reference_used';
+    end if;
+    raise;
+  end;
   return jsonb_build_object('request_id', request.id, 'status', request.status, 'kind', p_kind, 'line_id', line.id,
     'released_activations', request.released_activations,
     'payment_status', coalesce(result->>'payment_status', pay.status), 'repeated', false);
@@ -790,6 +836,11 @@ begin
     raise exception 'the payment changed since this refund was recorded; decline it and record it again'
       using errcode='PT409', detail='refund_payment_changed';
   end if;
+  -- The reason holds only while the renewal's days have not started.
+  if request.reason_code = 'renewal_cancelled_before_start'
+      and not internal.refund_renewal_not_started(pay.id, request.payment_line_id) then
+    raise exception 'the renewal has started; decline this refund and record it with another reason' using errcode='PT409', detail='renewal_already_started';
+  end if;
   -- A renewal of the slot bought while the refund waited: refund the renewal
   -- first (decline this one and record it again afterwards).
   if request.kind = 'refunded' and internal.refund_renewal_waiting(pay.id, request.payment_line_id) then
@@ -864,7 +915,9 @@ begin
           where l.payment_id = request.payment_id and l.status = 'reversed'))
         or (request.payment_line_id is not null and not exists(select 1 from private.payment_lines l
           where l.id = request.payment_line_id and l.status = 'open'))
-        or internal.refund_renewal_waiting(request.payment_id, request.payment_line_id) then
+        or internal.refund_renewal_waiting(request.payment_id, request.payment_line_id)
+        or (request.reason_code = 'renewal_cancelled_before_start'
+          and not internal.refund_renewal_not_started(request.payment_id, request.payment_line_id)) then
       update private.payment_refund_requests set status = 'failed', failed_at = statement_timestamp(),
         failure_reason = 'payment_changed' where id = request.id returning * into request;
       perform internal.ozow_refund_problem(request.payment_id, 'refund_failed', 'refund_send', request.id::text);

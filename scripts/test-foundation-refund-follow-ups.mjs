@@ -46,6 +46,7 @@ import {
   functionBodyMd5,
   P180,
   P30,
+  psqlSessions,
   sqlValue,
   twoAdmins,
   updateCheckKit,
@@ -114,12 +115,13 @@ try {
   const endsSoon = (grant) =>
     replica(`update private.entitlements set starts_at=now()-interval '20 days',
       ends_at=now()+interval '10 days' where id='${grant}';`);
-  /** Renews the slot through the renewal checkout; Ozow settles it. Returns the renewal payment. */
+  /** Renews the slot (or slots) through the renewal checkout; Ozow settles it. Returns the renewal payment. */
   const renew = (owner, grant, plan = P30) => {
+    const grants = [grant].flat();
     const quoted = json(
       member(
         owner,
-        `select api.start_slot_renewal_checkout(array['${grant}']::uuid[],'${plan.id}',${plan.cents},true);`
+        `select api.start_slot_renewal_checkout(array[${grants.map((g) => `'${g}'`).join(",")}]::uuid[],'${plan.id}',${plan.cents * grants.length},true);`
       )
     );
     const id = quoted.payment_id;
@@ -137,7 +139,7 @@ try {
       provider_request_id: `req-${id}`,
       provider_transaction_id: randomUUID(),
       status: "complete",
-      amount_cents: plan.cents,
+      amount_cents: plan.cents * grants.length,
       currency: "ZAR",
     };
     assert.equal(
@@ -481,6 +483,80 @@ try {
     const dash = json(dashboardSql(admin, late));
     assert.equal(dash.status, "applied");
   });
+
+  await check("a reference record is refused while a refund through Ozow is on its way", () => {
+    const owner = verified("refund-nomsa");
+    const pay = buy(owner);
+    paidAgo(pay, "12 days");
+    const approved = json(ozowSql(admin, pay));
+    assert.equal(approved.status, "approved");
+    // Ozow's window passes before the server sends it: still on its way.
+    paidAgo(pay, "14 days");
+    for (const sql of [
+      refundSql(admin, pay, "FNB INFLIGHT 0001", { reason: "Paid back by bank transfer" }),
+      slotRefundSql(admin, lineOf(pay), "FNB INFLIGHT 0002"),
+    ])
+      fails(sql, "PT409", /refund_in_flight/);
+    assert.equal(record(approved.request_id).status, "approved");
+    // Once it failed unsent, the bank pay-back is recorded.
+    assert.equal(claim(approved.request_id).status, "failed");
+    assert.equal(
+      json(refundSql(admin, pay, "FNB INFLIGHT 0003", { reason: "Paid back by bank transfer" }))
+        .status,
+      "applied"
+    );
+  });
+  await check("approving and sending check 'cancelled before the renewal started' again", () => {
+    const owner = verified("refund-ayanda");
+    const big = buy(owner, P180, 3);
+    const grants = [1, 2, 3].map((n) => grantOf(big, n));
+    grants.forEach(endsSoon);
+    const renewal = renew(owner, grants, P180);
+    const waiting = json(ozowSql(admin, renewal, null, "renewal_cancelled_before_start"));
+    assert.equal(waiting.status, "awaiting_approval");
+    replica(
+      `update private.entitlements set starts_at=now()-interval '1 hour' where id='${grantOf(renewal, 2)}';`
+    );
+    fails(approveSql(admin2, waiting.request_id), "PT409", /renewal_already_started/);
+    assert.equal(record(waiting.request_id).status, "awaiting_approval");
+    q(declineSql(admin2, waiting.request_id));
+
+    const single = buy(owner);
+    endsSoon(grantOf(single));
+    const renewal2 = renew(owner, grantOf(single));
+    const approved = json(ozowSql(admin, renewal2, null, "renewal_cancelled_before_start"));
+    assert.equal(approved.status, "approved");
+    replica(
+      `update private.entitlements set starts_at=now()-interval '1 hour' where id='${grantOf(renewal2)}';`
+    );
+    const claimed = claim(approved.request_id);
+    assert.deepEqual([claimed.claimed, claimed.status], [false, "failed"]);
+    assert.equal(record(approved.request_id).failure_reason, "payment_changed");
+  });
+  await check(
+    "the same reference recorded at the same moment is refused in plain words",
+    async () => {
+      const { session, sessionAfter } = psqlSessions(database);
+      const one = buy(verified("refund-race-1"));
+      const two = buy(verified("refund-race-2"));
+      paidAgo(one, "20 days");
+      paidAgo(two, "20 days");
+      const first = session(
+        `begin;\n${refundSql(admin, one, "FNB RACE 0001", { reason: "Paid back by bank transfer" })}\nselect pg_sleep(2);\ncommit;`
+      );
+      const second = sessionAfter(
+        700,
+        refundSql(admin2, two, "FNB RACE 0001", { reason: "Paid back by bank transfer" })
+      );
+      const [a, b] = await Promise.all([first, second]);
+      assert.equal(a.status, 0, a.stderr);
+      assert.notEqual(b.status, 0);
+      assert.match(b.stderr, /ERROR:\s+PT409:/, b.stderr);
+      assert.match(b.stderr, /refund_reference_used/, b.stderr);
+      assert.equal(payStatus(one), "refunded");
+      assert.equal(payStatus(two), "complete");
+    }
+  );
 
   await check("no grant changed; the helpers are internal", () => {
     const grants = executeGrants(json, [...STAFF_COMMANDS, ...ADDED]);

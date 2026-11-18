@@ -86,7 +86,9 @@ see nothing new:
 - **New reason "Cancelled before the renewal started"**
   (`renewal_cancelled_before_start`). It fits only a refund whose slots are all
   renewals whose days have not started: the whole payment of a renewal, or one
-  renewed slot of it. Otherwise PT409 `renewal_already_started`.
+  renewed slot of it. Otherwise PT409 `renewal_already_started`, also when a
+  waiting refund with it is approved after the renewal started, and the server
+  does not send such a refund through Ozow then (it fails as `payment_changed`).
 - **The renewal is refunded first.** A refund that would end a period whose slot
   has a renewal bought and not started is refused (PT409 `renewal_queued`),
   whether recorded with a reference, sent through Ozow or recorded from the Ozow
@@ -94,7 +96,9 @@ see nothing new:
   before it sends a refund through Ozow (that refund then fails as
   `payment_changed`). Chargebacks are not refused.
 - **A declined record's reference is free again.** The unique reference index
-  and the repeat lookup leave declined records out.
+  and the repeat lookup leave declined records out. The same reference recorded
+  at the same moment for another payment is refused as `ozow_reference_used` or
+  `refund_reference_used`, not as a raw unique violation.
 - **Ozow refunds only within 13 days of the payment** (Ozow says 14; one day
   less for time zones and Ozow's clock), counted from the payment's `created_at`
   (`internal.ozow_refund_window()`, the one setting). Asking for or approving a
@@ -106,7 +110,9 @@ see nothing new:
 - **After the 13 days, the money is paid back by bank transfer** and recorded
   with the existing reference commands and the bank reference (spaces allowed,
   at least four letters or digits; refusals `refund_reference_*`), also once
-  refunds through Ozow have been used. No new command.
+  refunds through Ozow have been used. No new command. A refund recorded with a
+  reference is refused while a refund through Ozow of the same payment is
+  approved or sent (PT409 `refund_in_flight`): Ozow may still pay that one.
 
 Expand only: no API command, argument, grant, return type or result field is
 added, removed or changed; no row is written. Records already waiting or
@@ -123,15 +129,16 @@ release.**
    preflight, fingerprint, below) before its release is deployed, as usual.
    Check first that the deployed release contains #267.
 3. This pull request's release is deployed. It offers the new reason on renewal
-   payments, shows "Ozow refund possible until <date>", and after the 13 days
-   offers "Paid back by bank transfer" instead of "Refund through Ozow".
+   payments, shows until when Ozow refunds a payment, and offers "Paid back by
+   bank transfer" next to "Refund through Ozow" (the database decides which is
+   possible; the form says before the money is paid when it is).
 
 Every state in between is safe: with the update applied and the #267 release,
 staff see the new refusals in plain words but are not yet offered the new reason
 or the bank transfer form. This pull request's release with the database before
 the update would offer the new reason (refused there with "Choose why the money
-is returned") and the bank transfer form for an Ozow payment past 13 days
-(refused there when refunds through Ozow were used), so do not deploy it first.
+is returned") and the bank transfer form (refused there for an Ozow payment once
+refunds through Ozow were used), so do not deploy it first.
 
 **Applying.** After this pull request is merged:
 
