@@ -284,9 +284,11 @@ export function validateLaunchConfiguration(
 ): LaunchValidationSummary {
   const mode = options.mode ?? resolveLaunchValidationMode(env);
   const checks: LaunchValidationCheck[] = [];
+  // Only a key that is not set at all counts as held in Cloudflare. A value
+  // that is present, even empty or blank, must pass every check below.
   const heldInCloudflare = new Set<string>(
     options.runtimeSecretsInCloudflare
-      ? CLOUDFLARE_RUNTIME_ONLY_SECRETS.filter((key) => !hasValue(env[key]))
+      ? CLOUDFLARE_RUNTIME_ONLY_SECRETS.filter((key) => env[key] === undefined)
       : []
   );
   const requiredKeys = getRequiredLaunchEnvKeys(mode, env);

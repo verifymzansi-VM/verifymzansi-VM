@@ -4,43 +4,32 @@
 // never needed to compile it; CI already builds the same artifact with
 // synthetic private values (scripts/prepare-cloudflare-runtime-check.mjs).
 //
-// The build sees the real public settings (NEXT_PUBLIC_* already exported by
-// the workflow, and the non-secret settings in wrangler.toml) and synthetic,
-// random private values that exist only in this process's memory. It refuses
-// to run if a real private or release credential is present, so a workflow
-// change cannot quietly hand secrets to the build and its dependencies again.
+// The build runs with an environment built from an allowlist
+// (scripts/lib/release-build-env.mjs): runner basics, the committed public and
+// non-secret settings in wrangler.toml, and synthetic, random private values
+// that exist only in this process's memory. Nothing else from the step's
+// environment is passed on. It refuses to run if a real credential is in the
+// step, if a public setting holds a server key, or if the step's public
+// settings differ from wrangler.toml.
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { parse } from "smol-toml";
 import { createCloudflareStartupFixture } from "./lib/cloudflare-startup-fixture.mjs";
-import {
-  RELEASE_ONLY_CREDENTIALS,
-  privateBuildNames,
-  productionWorkerVars,
-} from "./lib/release-build-env.mjs";
+import { productionWorkerVars, releaseBuildEnvironment } from "./lib/release-build-env.mjs";
 
 if (process.argv.length > 2) throw new Error("Release build accepts no arguments");
 if (process.env.GITHUB_ACTIONS !== "true") {
   throw new Error("The release build runs only in GitHub Actions");
 }
-const productionVars = productionWorkerVars(parse(readFileSync("wrangler.toml", "utf8")));
-const fixture = createCloudflareStartupFixture({
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-});
-const privateNames = privateBuildNames(fixture, productionVars);
-const leaked = [...privateNames, ...RELEASE_ONLY_CREDENTIALS].filter(
-  (name) => (process.env[name] ?? "") !== ""
+const { problems, environment } = releaseBuildEnvironment(
+  process.env,
+  productionWorkerVars(parse(readFileSync("wrangler.toml", "utf8"))),
+  createCloudflareStartupFixture
 );
-if (leaked.length > 0) {
-  console.error(`::error::Private credentials must not reach the build step: ${leaked.join(", ")}`);
+if (problems.length > 0) {
+  for (const problem of problems) console.error(`::error::${problem}`);
   process.exit(1);
 }
-const environment = { ...process.env };
-// Non-secret runtime settings come from the production Worker's own bindings.
-for (const [name, value] of Object.entries(productionVars)) {
-  if ((environment[name] ?? "") === "") environment[name] = value;
-}
-for (const name of privateNames) environment[name] = fixture[name];
 const result = spawnSync("pnpm", ["run", "build:cloudflare"], {
   stdio: "inherit",
   env: environment,

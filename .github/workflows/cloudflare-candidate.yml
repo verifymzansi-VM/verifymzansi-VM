@@ -59,6 +59,7 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile --prod=false
       - name: Match all public build settings to production bindings
+        id: public-settings
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
@@ -70,6 +71,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: pnpm exec tsx scripts/check-deployment-ci.ts
       - name: Verify hosted connection and candidate contracts
+        id: candidate-contracts
         env:
           FOUNDATION_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
           FOUNDATION_PROJECT_REF: ${{ secrets.FOUNDATION_PROJECT_REF }}
@@ -78,6 +80,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
         run: pnpm exec tsx scripts/check-foundation-candidate.ts
       - name: Validate production configuration
+        id: validate-launch-env
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
           FOUNDATION_PHONE_OTP_KEY: ${{ secrets.FOUNDATION_PHONE_OTP_KEY }}
@@ -112,6 +115,7 @@ jobs:
           git rev-parse HEAD > tmp/cloudflare-runtime/source-commit.txt
           printf '%s\n' "$GITHUB_SHA" > tmp/cloudflare-runtime/workflow-commit.txt
       - name: Prepare additive scoped bindings
+        id: prepare-bindings
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
           FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
@@ -126,6 +130,7 @@ jobs:
       # Upload only: no deploy, route, trigger or traffic-allocation command.
       # Existing provider, encryption, HMAC and R2 keys are inherited.
       - name: Upload inactive production candidate
+        id: upload-candidate
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

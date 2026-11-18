@@ -1330,8 +1330,8 @@ describe("workflow hygiene", () => {
   });
 
   it("keeps the checkout token out of the workspace unless the job pushes", () => {
-    // deploy.yml is covered by its own change; update-visual-baselines pushes a branch.
-    const allowed = new Set(["deploy.yml", "update-visual-baselines.yml"]);
+    // update-visual-baselines pushes a branch.
+    const allowed = new Set(["update-visual-baselines.yml"]);
     for (const file of files.filter((name) => !allowed.has(name))) {
       for (const step of steps(file).filter((item) => item.uses?.startsWith("actions/checkout@")))
         expect(step.with?.["persist-credentials"], file).toBe(false);

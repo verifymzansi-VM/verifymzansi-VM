@@ -67,6 +67,7 @@ jobs:
       # steps needing it read, not into GITHUB_ENV (which every later step,
       # the heartbeat included, would inherit); it is deleted after the last.
       - name: Build the database connection string
+        id: db-url
         env:
           DB_PASSWORD: ${{ secrets.SUPABASE_BACKUP_DB_PASSWORD }}
         run: |
@@ -276,6 +277,7 @@ jobs:
           fi
 
       - name: Upload to the private R2 bucket
+        id: upload
         env:
           BACKUP_R2_ACCESS_KEY_ID: ${{ secrets.BACKUP_R2_ACCESS_KEY_ID }}
           BACKUP_R2_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_R2_SECRET_ACCESS_KEY }}
@@ -332,6 +334,7 @@ jobs:
       # monitor alerts when backups stop. Unset = nothing is sent. The ping can
       # never fail the backup and its URL is never printed.
       - name: Report the stored backup to the heartbeat monitor
+        id: heartbeat
         continue-on-error: true
         env:
           HEARTBEAT_URL: ${{ secrets.HEARTBEAT_URL_DATABASE_BACKUP }}

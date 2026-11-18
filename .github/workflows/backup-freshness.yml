@@ -38,6 +38,7 @@ jobs:
       MAX_AGE_HOURS: "27"
     steps:
       - name: Check the newest object in the backup bucket
+        id: newest-backup
         env:
           BACKUP_R2_ACCESS_KEY_ID: ${{ secrets.BACKUP_R2_ACCESS_KEY_ID }}
           BACKUP_R2_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_R2_SECRET_ACCESS_KEY }}

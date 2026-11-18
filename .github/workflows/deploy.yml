@@ -152,6 +152,7 @@ jobs:
           fi
           echo "The staging gateway answers."
       - name: Confirm the staging secret key belongs to the staging project
+        id: staging-key-probe
         if: steps.decide.outputs.configured == 'true'
         env:
           STAGING_FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_FOUNDATION_SUPABASE_SECRET_KEY }}
@@ -221,6 +222,7 @@ jobs:
       - name: Refuse any staging setting that names production (as wrangler resolves it)
         run: pnpm cloudflare:staging:isolation -- --require-staging
       - name: Check every staging Worker secret and prepare them outside the checkout
+        id: staging-secrets
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           STAGING_FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_FOUNDATION_SUPABASE_SECRET_KEY }}
@@ -241,16 +243,19 @@ jobs:
       - name: Use the staging copy's public build settings
         run: node scripts/export-cloudflare-public-env.mjs --env=staging
       - name: Build for Cloudflare (staging settings)
+        id: staging-build
         env:
           # The build only checks that a server key exists; it is not bundled.
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_FOUNDATION_SUPABASE_SECRET_KEY }}
         run: pnpm run build:cloudflare
       - name: Deploy staging Offload Worker
+        id: staging-offload
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.offload.toml --env staging --tag "$DEPLOY_TARGET_SHA"
       - name: Deploy staging website
+        id: staging-website
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -259,11 +264,13 @@ jobs:
           --secrets-file "$RUNNER_TEMP/staging-worker-secrets.json"
           --tag "$DEPLOY_TARGET_SHA" --message verified-main-staging
       - name: Deploy staging Rate Limiter Worker
+        id: staging-limiter
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.rate-limiter.toml --env staging --tag "$DEPLOY_TARGET_SHA" --secrets-file "$RUNNER_TEMP/staging-limiter-secrets.json"
       - name: Confirm the staging Worker serves this commit
+        id: staging-version
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -358,6 +365,9 @@ jobs:
         with:
           ref: ${{ env.DEPLOY_TARGET_SHA }}
           fetch-depth: 0
+          # The repository is public: the later `git fetch` steps need no
+          # token, so none is left in .git/config for installed code to read.
+          persist-credentials: false
       - name: Reject stale deployment sources before using provider credentials
         run: |
           [[ "$DEPLOY_TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]
@@ -378,6 +388,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: pnpm exec tsx scripts/check-deployment-ci.ts
       - name: Normalize deploy env aliases
+        id: normalize-env
         env:
           RAW_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
           RAW_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL || secrets.APP_URL || secrets.PRODUCTION_APP_URL }}
@@ -425,6 +436,7 @@ jobs:
           echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=$RAW_TURNSTILE_SITE_KEY" >> "$GITHUB_ENV"
           echo "KYC_PROVIDER=$NORMALIZED_KYC_PROVIDER" >> "$GITHUB_ENV"
       - name: Verify London release and API contracts
+        id: preflight
         env:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
           FOUNDATION_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
@@ -434,6 +446,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
         run: pnpm run preflight:foundation -- --provisioned-runtime
       - name: Match public build settings to production bindings
+        id: public-settings
         env:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
         run: node scripts/export-cloudflare-public-env.mjs
@@ -446,6 +459,7 @@ jobs:
       # Reads the provider settings it validates, and the job secrets whose
       # values it compares with the known test-suite secrets.
       - name: Validate production launch env
+        id: validate-launch-env
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
           FOUNDATION_PHONE_OTP_KEY: ${{ secrets.FOUNDATION_PHONE_OTP_KEY }}
@@ -469,6 +483,7 @@ jobs:
           RATE_LIMITER_API_KEY: ${{ secrets.RATE_LIMITER_API_KEY }}
         run: pnpm exec tsx scripts/validate-launch-env.ts --mode=production --runtime-secrets-in-cloudflare
       - name: Enforce production Ozow mode
+        id: ozow-mode
         env:
           OZOW_ENV: ${{ secrets.OZOW_ENV }}
         run: |
@@ -509,12 +524,14 @@ jobs:
           echo "::notice::Treat new warning patterns outside those classes as actionable."
 
       - name: Validate Cloudflare deploy credentials
+        id: cloudflare-credentials
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/validate-cloudflare-deploy-credentials.mjs
 
       - name: Verify Cloudflare Worker secrets before deploy
+        id: worker-secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -548,12 +565,14 @@ jobs:
       # and link-preview cards, M9.9), so it must exist before the website
       # deploys. No routes, secrets or storage.
       - name: Deploy Offload Worker
+        id: deploy-offload
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.offload.toml --env="" --tag "$DEPLOY_TARGET_SHA"
 
       - name: Deploy to Cloudflare
+        id: deploy-website
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -563,12 +582,14 @@ jobs:
           --tag "$DEPLOY_TARGET_SHA" --message verified-main-deployment
 
       - name: Deploy Rate Limiter Worker
+        id: deploy-limiter
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.rate-limiter.toml --env="" --tag "$DEPLOY_TARGET_SHA" --secrets-file "$RUNNER_TEMP/cloudflare-limiter-secrets.json"
 
       - name: Deploy Retention Cleanup Worker
+        id: deploy-retention
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -577,6 +598,7 @@ jobs:
       # Expires abandoned checkouts. It was missing here, so production kept
       # running a build from before the payment fulfillment hardening.
       - name: Deploy Payment Cleanup Worker
+        id: deploy-payment-cleanup
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -586,6 +608,7 @@ jobs:
       # minute. Needs OPS_JOBS_SECRET set on this worker and on the app; until
       # then the app's endpoint refuses its calls and jobs wait in the queue.
       - name: Deploy Ops Jobs Worker
+        id: deploy-ops-jobs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -647,6 +670,7 @@ jobs:
       # the browser install, so a failed install cannot skip it. A network error
       # is retried and then reported as inconclusive, never as exposure.
       - name: Recheck live project security settings
+        id: security-settings
         timeout-minutes: 3
         env:
           FOUNDATION_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}

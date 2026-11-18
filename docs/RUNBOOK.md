@@ -215,29 +215,69 @@ Production is the `verifymzansi` Cloudflare Worker on `verifymzansi.com` (see
   runtime-only keys `KYC_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEY`, `HMAC_SECRET` and
   `IP_HASH_SECRET` live **only** here; no workflow reads them. Release
   validation (`validate-launch-env.ts --runtime-secrets-in-cloudflare`) accepts
-  their absence, and `pnpm cloudflare:secrets:check` (run by every deploy)
-  confirms they exist on the Worker by name.
+  their absence (a value that is present, even blank, must still pass every
+  check). Before every production deploy, `pnpm cloudflare:secrets:check`
+  confirms they exist on the Worker by name; the Cloudflare Candidate upload
+  does not run that check (its inactive version inherits the Worker's secrets).
 - **GitHub environment `production`** (deployment branch: `main` only) holds the
-  values the Deploy and Cloudflare Candidate workflows read. Only those jobs can
-  read them, and each step receives only the values its scripts read
-  (`src/__tests__/workflow-secret-scope.test.ts` lists the steps allowed any).
+  values only the Deploy and Cloudflare Candidate workflows read. Each step
+  receives only the values its scripts read
+  (`src/__tests__/workflow-secret-scope.test.ts` pins every step's exact list).
   Dependency installation, the build (`scripts/build-cloudflare-release.mjs`,
-  which uses synthetic private values and refuses to run beside a real one),
+  which builds with an allowlisted environment and synthetic private values),
   browser installation and upload steps receive none, and the deploy deletes its
   temporary secret files right after the last deploy step. Code installed
   earlier in the same job still runs later beside secrets, so dependency review
   remains a control.
-- **GitHub environment `backup`** (deployment branch: `main` only) holds the
-  backup job's database password (`SUPABASE_BACKUP_DB_PASSWORD`), its storage
-  token limited to the backup bucket (`BACKUP_R2_ACCESS_KEY_ID`,
-  `BACKUP_R2_SECRET_ACCESS_KEY`) and `R2_ACCOUNT_ID`. The backup and backup
-  freshness jobs read it; the deploy jobs cannot.
-- **GitHub environment `staging`** holds the `STAGING_*` values (see "Staging
-  copy").
-- **Repository-level secrets** hold only what pull-request CI and scheduled
-  monitoring need (for example `DOCKERHUB_TOKEN`, `SITE_MONITOR_API_KEY`,
-  `PRODUCTION_APP_URL`, the heartbeat URLs). Any workflow on any branch can read
-  them, so never keep a production credential there once the environments exist.
+
+  <!-- secrets:production -->
+  - Supabase: `FOUNDATION_SUPABASE_URL`, `FOUNDATION_PROJECT_REF`,
+    `FOUNDATION_SUPABASE_PUBLISHABLE_KEY`, `FOUNDATION_SUPABASE_SECRET_KEY`,
+    `FOUNDATION_PHONE_OTP_KEY`
+  - Site and public settings: `APP_URL`, `NEXT_PUBLIC_APP_URL` (if set),
+    `TURNSTILE_SITE_KEY`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (if set),
+    `KYC_PROVIDER`
+  - Providers: `AFRICASTALKING_API_KEY`, `AFRICASTALKING_USERNAME`,
+    `AFRICASTALKING_SENDER_ID`, `OZOW_ENV`, `OZOW_CLIENT_ID`,
+    `OZOW_CLIENT_SECRET`, `OZOW_SITE_CODE`, `OZOW_PAYMENT_OAUTH_SCOPE`,
+    `OZOW_WEBHOOK_SECRET`, `KYC_WEBHOOK_SECRET`, `RESEND_API_KEY`,
+    `TURNSTILE_SECRET_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
+  - Workers and release: `INTERNAL_JOBS_SECRET`, `OPS_JOBS_SECRET`,
+    `HEALTH_DIAGNOSTIC_TOKEN`, `RATE_LIMITER_API_KEY`, `CLOUDFLARE_API_TOKEN`,
+    `DEPLOY_HEALTHCHECK_URL`
+
+  <!-- /secrets:production -->
+
+- **GitHub environment `backup`** (deployment branch: `main` only) holds what
+  only the backup and backup freshness jobs read; the deploy jobs cannot.
+
+  <!-- secrets:backup -->
+  - `SUPABASE_BACKUP_DB_PASSWORD`, `BACKUP_R2_ACCESS_KEY_ID`,
+    `BACKUP_R2_SECRET_ACCESS_KEY`, `HEARTBEAT_URL_DATABASE_BACKUP`
+
+  <!-- /secrets:backup -->
+
+- **GitHub environment `staging`** holds the `STAGING_*` values the staging jobs
+  read (see "Staging copy").
+- **Repository level** keeps every value read by a job outside these
+  environments, or by jobs in more than one of them. Any workflow on any branch
+  can read these, so no production credential belongs here. Do **not** delete
+  them when moving the others:
+
+  <!-- secrets:repository -->
+  - Account identifiers (not credentials): `CLOUDFLARE_ACCOUNT_ID` (production
+    and staging deploys) and `R2_ACCOUNT_ID` (production validation and
+    backups).
+  - Scheduled monitoring (`synthetic-monitoring.yml`) and the deploy:
+    `SITE_MONITOR_API_KEY`, `PRODUCTION_APP_URL`.
+  - Pull-request CI (`ci.yml`): `FOUNDATION_STAGING_SUPABASE_URL`,
+    `FOUNDATION_STAGING_PROJECT_REF`,
+    `FOUNDATION_STAGING_SUPABASE_PUBLISHABLE_KEY`, `STAGING_APP_URL`.
+
+  <!-- /secrets:repository -->
+
+  The test above fails when a workflow change moves a value between these lists
+  without updating them.
 
 How GitHub resolves a name: a job that names an environment reads that
 environment's secret first and falls back to the repository-level secret of the
@@ -245,8 +285,10 @@ same name when the environment has none. A job that names an environment that
 does not exist yet makes GitHub create it, empty and with no protection rules,
 so until the owner configures `production` and `backup` the workflows keep
 reading the repository-level copies exactly as before. Protection starts only
-once the environment is limited to `main` and the copies are moved into it and
-deleted from the repository level.
+once the environment is limited to `main` and its listed values are moved into
+it and deleted from the repository level. Move the backup values (and create the
+bucket token) before `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`: until then
+the backup jobs fall back to them at repository level.
 
 Keep the canonical copy of each value in the owner's password manager. GitHub
 secrets cannot be read back; moving one means entering it again.
@@ -1044,7 +1086,7 @@ fails, so the failure alert fires.
     with Object Read & Write limited to the `verifymzansi-backups` bucket, so a
     leaked backup token cannot touch member media or ID evidence. The backup and
     the freshness check both use it.
-  - `R2_ACCOUNT_ID`.
+  - `R2_ACCOUNT_ID` (repository level, shared with production validation).
   - Transitional only: until the bucket token exists, both jobs use the app's
     storage key (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`, repository level)
     and warn on every run. Create the bucket token before moving the app's

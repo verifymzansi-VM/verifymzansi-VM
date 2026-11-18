@@ -342,6 +342,34 @@ describe("launch validation", () => {
       expect(names).toContain("IP hash secret");
     });
 
+    it.each([
+      ["empty", ""],
+      ["blank", " ".repeat(64)],
+    ])("treats an %s runtime-only secret as present and refuses it", (_label, value) => {
+      for (const key of CLOUDFLARE_RUNTIME_ONLY_SECRETS) {
+        const summary = validateLaunchConfiguration(
+          { ...withoutRuntimeOnly, [key]: value },
+          { mode: "production", runtimeSecretsInCloudflare: true }
+        );
+        expect(summary.isValid, key).toBe(false);
+        expect(
+          summary.checks.find((check) => check.name === "Runtime-only secrets")?.detail ?? "",
+          key
+        ).not.toContain(key);
+      }
+    });
+
+    it("refuses a placeholder runtime-only secret that is present", () => {
+      const placeholder = "cafebabe".repeat(8);
+      for (const key of CLOUDFLARE_RUNTIME_ONLY_SECRETS) {
+        const summary = validateLaunchConfiguration(
+          { ...withoutRuntimeOnly, [key]: placeholder },
+          { mode: "production", runtimeSecretsInCloudflare: true }
+        );
+        expect(summary.isValid, key).toBe(false);
+      }
+    });
+
     it("never excuses other production secrets", () => {
       const { SUPABASE_SERVICE_ROLE_KEY: _omitted, ...rest } = withoutRuntimeOnly;
       void _omitted;

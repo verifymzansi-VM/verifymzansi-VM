@@ -52,10 +52,13 @@ if (current && existsSync(workerBundle) && existsSync(assetsDir)) {
 }
 
 // Release workflows build once, without credentials, before any step that holds
-// Cloudflare credentials runs Wrangler. There the hook may only verify.
-if (process.env.CLOUDFLARE_BUILD_HOOK === "verify-only") {
+// Cloudflare credentials runs Wrangler, and set CLOUDFLARE_BUILD_HOOK=verify-only.
+// Fail closed: once the variable is set at all, only the explicit value
+// "rebuild" allows a rebuild; anything else (empty, misspelt) only verifies.
+const buildHook = process.env.CLOUDFLARE_BUILD_HOOK;
+if (buildHook !== undefined && buildHook !== "rebuild") {
   console.error(
-    "Worker output is missing or does not match this source and public configuration; refusing to rebuild during a release step (CLOUDFLARE_BUILD_HOOK=verify-only)."
+    "Worker output is missing or does not match this source and public configuration; refusing to rebuild during a release step (CLOUDFLARE_BUILD_HOOK is set)."
   );
   process.exit(1);
 }
