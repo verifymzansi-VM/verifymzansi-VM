@@ -13,12 +13,14 @@
 //   reviewed manifests, nothing is SECURITY DEFINER, browsers have no table,
 //   column, sequence or private-schema access, every application table has row
 //   level security and only the Auth sign-up hook has a policy;
-// - checks that every private table holding account data is in owner A's row
-//   fingerprint (OWNER_TABLES) or reviewed as holding none (NOT_DIGESTED);
+// - checks that every application table holding account data is in owner A's
+//   row fingerprint (OWNER_TABLES, which includes A's Auth rows) or reviewed
+//   as holding none (NOT_DIGESTED);
 // - builds owner A's private world through the production commands (legal
 //   name, an accepted identity review, a verified phone, a live event with an
-//   enquiry, a business draft, an organisation application, a payment, a saved
-//   form draft, a privacy request, a support message);
+//   enquiry and another member's report, a business draft with a seen check,
+//   an organisation application, a paid and a pending payment, a saved form
+//   draft, a privacy request, a support message);
 // - calls every api.* command as a signed-out visitor, a member with no rights
 //   (unverified), another verified member, an organisation administrator and
 //   each staff role, with A's real identifiers and current revisions, and as
@@ -44,7 +46,7 @@
 // do; everything else goes through the production API commands.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { replaySteps } from "./lib/foundation-replay.mjs";
 import { createChecks, sqlHelpers } from "./lib/foundation-sql-checks.mjs";
@@ -93,12 +95,25 @@ const ALLOWED_VIEWS = new Map([
   // The staff audit page (audit:view) lists the request's events by id only.
   ["governor:get_frontend_staff_audit_page:privacyRequestId", "audit:view, the event's id only"],
   ["admin:get_frontend_staff_audit_page:privacyRequestId", "audit:view, the event's id only"],
+  // The seen-check case summary (queue:view, no claim or recent MFA needed)
+  // names the business and shows the owner's display name, which equals the
+  // full legal name once an ID review is accepted. Kept visible here as a
+  // reported data-minimisation finding awaiting the owner's decision; the
+  // visit address and legal name fields stay behind a claim with evidence:view.
+  ...["moderator", "governor", "admin"].flatMap((role) =>
+    ["surname", "businessDraftId"].map((value) => [
+      `${role}:get_frontend_seen_case:${value}`,
+      value === "surname"
+        ? "reported finding: display name is the full legal name"
+        : "queue:view, the checked business",
+    ])
+  ),
 ]);
 // Reviewed exceptions: who may change which of owner A's rows, and through
 // which command (principal:command:table). Staff may change A's rows only
-// through a command whose own capability check (its api body or the internal
-// function of the same name) names a capability their role holds, not one it
-// merely reaches through a helper; anything else
+// through a command whose own capability checks (its api body or the internal
+// function of the same name) all name capabilities their role holds, not ones
+// it merely reaches through a helper; anything else
 // changed by a non-owner fails.
 const ALLOWED_CHANGES = new Map([
   // The organisation administrator decides A's consented application, and A
@@ -106,14 +121,27 @@ const ALLOWED_CHANGES = new Map([
   ["orgAdmin:org_decide_application:organisation_applications", "decides A's application"],
   ["orgAdmin:org_decide_application:notifications", "A is told of the decision"],
   ["orgAdmin:org_decide_application:organisation_affiliations", "approval affiliates A's business"],
+  [
+    "orgAdmin:org_decide_application:organisation_events",
+    "the decision is logged against A's application",
+  ],
   // Staff holding organisation:manage (recent MFA) decide for any
   // organisation; the command reaches that check through
   // internal.organisation_actor, not directly.
-  ...["organisation_applications", "notifications", "organisation_affiliations"].map((table) => [
+  ...[
+    "organisation_applications",
+    "notifications",
+    "organisation_affiliations",
+    "organisation_events",
+  ].map((table) => [
     `admin:org_decide_application:${table}`,
     "organisation:manage via internal.organisation_actor decides A's application",
   ]),
 ]);
+// Staff roles that hold only some of a command's own capabilities yet may
+// succeed, because the command checks the others on one branch only
+// (role:command: reason).
+const PARTIAL_CAPABILITY_BRANCHES = new Map([]);
 // Commands that check a staff capability on one branch only and serve every
 // member otherwise (command:reason).
 const MEMBER_WITH_STAFF_BRANCH = new Map([
@@ -247,7 +275,16 @@ const OWNER_TABLES = [
   ],
   ["organisation_admins", "account_id=$1"],
   ["organisation_affiliations", ownPosts],
-  ["organisation_events", "subject_id=$1"],
+  // An event's subject is an account, application, affiliation, sponsorship,
+  // invitation, programme or logo; match every one that belongs to A.
+  [
+    "organisation_events",
+    "subject_id=$1 or subject_id in (select id from private.organisation_applications where applicant_id=$1" +
+      ` union select id from private.organisation_affiliations where ${ownPosts}` +
+      " union select id from private.organisation_sponsorships where owner_id=$1" +
+      ` union select id from private.organisation_invites where ${ownEmail}` +
+      " union select id from private.media_objects where owner_id=$1)",
+  ],
   ["organisation_invites", ownEmail],
   ["outbox_events", "owner_id=$1"],
   ["owner_admin_invitations", ownEmail],
@@ -280,8 +317,8 @@ const OWNER_TABLES = [
     "request_id in (select id from private.privacy_requests where subject_user_id=$1)",
   ],
   ["provider_events", ownPayments],
-  ["queue_claims", ownPosts],
-  ["queue_claim_events", ownPosts],
+  ["queue_claims", `${ownPosts} or ${ownReports}`],
+  ["queue_claim_events", `${ownPosts} or ${ownReports}`],
   ["reports", "reporter_id=$1 or subject_account_id=$1"],
   ["signup_terms_acceptances", "account_id=$1"],
   ["slot_packages", "owner_id=$1"],
@@ -299,6 +336,10 @@ const OWNER_TABLES = [
   ["verification_current_submissions", ownCases],
   ["verification_phone_challenges", "owner_id=$1"],
   ["verification_return_requests", ownCases],
+  // A's Auth rows (sign-in identity, sessions, authenticator apps).
+  ["auth.users", "id=$1"],
+  ["auth.sessions", "user_id=$1"],
+  ["auth.mfa_factors", "user_id=$1"],
 ];
 // Private tables that reference an account, a post, a case, a notification or
 // one of the tables above, or carry an account or contact column, yet hold no
@@ -326,6 +367,8 @@ const NOT_DIGESTED = new Map([
     "category_fields",
     "posting-form field catalogue; its jsonb holds validation rules, no member data",
   ],
+  ["posting_terms_versions", "published posting terms; the hash is the document's, no member data"],
+  ["reference_catalog_versions", "taxonomy catalogue versions; the hash is the catalogue's"],
 ]);
 // What makes a private table hold account data, for the coverage check.
 const ACCOUNT_ANCHORS = [
@@ -334,12 +377,25 @@ const ACCOUNT_ANCHORS = [
   "private.evidence_cases",
   "private.notifications",
 ];
+// Column names (matched case-insensitively) that hold or point at personal
+// data: accounts, contacts, names, identity documents, addresses, network
+// addresses, bank details, secrets and hashes, stored object keys.
 const CONTACT_COLUMN =
-  "(^|_)(email|phone|phone_number|phone_e164|msisdn|whatsapp|full_name|id_number|" +
+  "(^|_)(email|email_address|phone|phone_number|phone_e164|msisdn|mobile|cell|whatsapp|" +
+  "address|dob|birth|birth_date|date_of_birth|passport|passport_number|national_id|" +
+  "id_number|account_number|iban|token|secret|last_four|object_key|full_name|" +
   "owner_id|account_id|user_id|subject_id|subject_user_id|applicant_id|appellant_id|" +
-  "member_id|target_id|author_id|created_by|actor_id)$|_name$|^ip|_ip(_|$)|_hmac$|whatsapp|msisdn";
-// Any jsonb column is flagged too: free-form documents may hold personal data
-// or ids, so their table must be digested or reviewed.
+  "member_id|target_id|author_id|created_by|actor_id)(_|$)|_name$|^ip|_ip(_|$)|_hmac$|" +
+  "_hash$|whatsapp|msisdn|mobile|birth|passport|address|secret|token";
+// uuid columns that name an account even without a foreign key.
+const ACCOUNT_UUID_COLUMN =
+  "_by$|(^|_)(reviewer|requester|sender|recipient|staff|verifier|proposer|approver|" +
+  "assignee|claimant|reporter|buyer|seller|customer|user|account|member|owner|actor|" +
+  "author|subject|target|applicant|appellant|partner|referrer|referred_account|invited|" +
+  "inviter|creator|editor|holder)_id$";
+// Column types that hold free-form documents or network addresses: their
+// table must be digested or reviewed whatever the column is called.
+const FREE_FORM_TYPES = ["json", "jsonb", "json[]", "jsonb[]", "inet", "cidr"];
 
 const { check, current, passed } = createChecks();
 const started = Date.now();
@@ -484,10 +540,13 @@ try {
 
   // A new table holding account data must join the owner digest (so a
   // non-owner changing A's rows in it is caught) or be reviewed as holding
-  // none of A's data. A table holds account data when it references an
-  // account, a post, a case, a notification or a digested table, or has an
-  // account or contact column.
-  await check("coverage: every private table holding account data is in the owner digest", () => {
+  // none of A's data. A table, in any schema the application stores data in,
+  // holds account data when it references an account, a post, a case, a
+  // notification or a digested table, or has an account, contact, identity or
+  // secret column, an account-like uuid column or a free-form column. Tables
+  // outside private are named schema.table.
+  const relation = (table) => (table.includes(".") ? table : `private.${table}`);
+  await check("coverage: every table holding account data is in the owner digest", () => {
     const digested = OWNER_TABLES.map(([table]) => table);
     assert.equal(new Set(digested).size, digested.length, "a table is digested twice");
     assert.deepEqual(
@@ -495,39 +554,71 @@ try {
       [],
       "digested and reviewed as not digested"
     );
-    const anchors = [...ACCOUNT_ANCHORS, ...digested.map((table) => `private.${table}`)].map(
+    const anchors = [...ACCOUNT_ANCHORS, ...digested.map(relation)].map(
       (name) => `'${name}'::regclass`
     );
+    const schemas = APPLICATION_SCHEMAS.map((schema) => `'${schema}'`).join(",");
+    const types = FREE_FORM_TYPES.map((type) => `'${type}'::regtype`).join(",");
     const linkedTables = () =>
-      json(`select coalesce(json_agg(c.relname order by c.relname),'[]') from pg_class c
+      json(`select coalesce(json_agg(case when n.nspname='private' then c.relname::text
+          else n.nspname||'.'||c.relname end order by n.nspname,c.relname),'[]') from pg_class c
       join pg_namespace n on n.oid=c.relnamespace
-      where n.nspname='private' and c.relkind in ('r','p') and (
+      where n.nspname in (${schemas}) and c.relkind in ('r','p') and (
         exists(select 1 from pg_constraint k where k.conrelid=c.oid and k.contype='f'
           and k.confrelid in (${anchors.join(",")}))
         or exists(select 1 from pg_attribute a where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped
-          and (a.attname ~ '${CONTACT_COLUMN}' or a.atttypid='jsonb'::regtype)));`);
-    // The rule finds a table that references a post, and one for each kind
-    // of account, contact, identity or free-form column; a table with none of
-    // them is not flagged.
+          and (a.attname ~* '${CONTACT_COLUMN}' or a.atttypid in (${types})
+            or (a.atttypid='uuid'::regtype and a.attname ~* '${ACCOUNT_UUID_COLUMN}'))));`);
+    // The rule finds a table that references a post, one for each kind of
+    // flagged column (whatever its letter case), and one outside private; a
+    // table with none of them is not flagged.
     const probe = "zz_coverage_guard_" + randomBytes(4).toString("hex");
     const probes = {
       ref: "post_id uuid references private.posts(id)",
       contact: "buyer_phone text",
+      emailaddress: "email_address text",
       msisdn: "msisdn text",
+      mobile: "mobile_number text",
+      cell: "cell text",
       whatsapp: "whatsapp_number text",
       e164: "phone_e164 text",
+      address: "home_address text",
+      dob: "dob date",
+      birth: "birth_date date",
+      passport: "passport_number text",
+      national: "national_id text",
+      idnumber: "id_number text",
+      bank: "account_number text",
+      iban: "iban text",
+      token: "reset_token text",
+      secret: "client_secret text",
+      hash: "document_hash text",
+      lastfour: "card_last_four text",
+      objectkey: "avatar_object_key text",
       name: "holder_name text",
       full: "full_name text",
-      ip: "ip_address inet",
+      upper: '"Buyer_Email" text',
+      ip: "ip_address text",
       sourceip: "source_ip text",
-      idnumber: "id_number text",
       hmac: "device_hmac text",
       author: "author_id uuid",
       creator: "created_by uuid",
       actor: "actor_id uuid",
+      reviewer: "reviewer_id uuid",
+      requested: "requested_by uuid",
+      sender: "sender_id uuid",
       document: "payload jsonb",
+      json: "payload json",
+      documents: "payloads jsonb[]",
+      network: "origin inet",
     };
     const plain = `${probe}_plain`;
+    const outside = `public.${probe}_outside`;
+    const probeTables = [
+      ...Object.keys(probes).map((kind) => `private.${probe}_${kind}`),
+      `private.${plain}`,
+      outside,
+    ];
     try {
       sql(
         Object.entries(probes)
@@ -536,26 +627,24 @@ try {
               `create table private.${probe}_${kind}(id integer primary key, ${column});`
           )
           .join("") +
-          `create table private.${plain}(id integer primary key, label text, amount integer);`
+          `create table private.${plain}(id integer primary key, label text, amount integer, ` +
+          `post_ref uuid, created_at timestamptz);` +
+          `create table ${outside}(id integer primary key, owner_id uuid);`
       );
       const found = linkedTables();
       for (const kind of Object.keys(probes))
         assert.ok(found.includes(`${probe}_${kind}`), `coverage rule misses ${probe}_${kind}`);
+      assert.ok(found.includes(outside), "coverage rule misses a table outside private");
       assert.ok(!found.includes(plain), "coverage rule flags a table with no account data");
     } finally {
-      sql(
-        `drop table if exists ${[...Object.keys(probes).map((kind) => `${probe}_${kind}`), plain]
-          .map((table) => `private.${table}`)
-          .join(", ")};`
-      );
+      sql(`drop table if exists ${probeTables.join(", ")};`);
     }
     const linked = linkedTables();
-    const tables = sql(
-      "select string_agg(relname,',' order by relname) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='private' and c.relkind in ('r','p');"
-    ).split(",");
     // Every listed table exists; every reviewed one still matches the rule.
     assert.deepEqual(
-      digested.filter((table) => !tables.includes(table)),
+      digested.filter(
+        (table) => sql(`select to_regclass('${relation(table)}') is not null;`) !== "t"
+      ),
       [],
       "digested table no longer exists"
     );
@@ -567,7 +656,7 @@ try {
     assert.deepEqual(
       linked.filter((table) => !digested.includes(table) && !NOT_DIGESTED.has(table)),
       [],
-      "private table holding account data is neither digested nor reviewed"
+      "table holding account data is neither digested nor reviewed"
     );
   });
 
@@ -579,7 +668,7 @@ try {
   // One jsonb_build_object per table (a function takes at most 100 arguments).
   const ownerDigest = OWNER_TABLES.map(
     ([table, where]) =>
-      `jsonb_build_object('${table}',(select md5(coalesce(string_agg(to_jsonb(t)::text,'|' order by to_jsonb(t)::text),'')) from private.${table} t where ${where.replaceAll("$1", "p_owner")}))`
+      `jsonb_build_object('${table}',(select md5(coalesce(string_agg(to_jsonb(t)::text,'|' order by to_jsonb(t)::text),'')) from ${relation(table)} t where ${where.replaceAll("$1", "p_owner")}))`
   ).join("||");
   sql(`create schema vmtest;
     create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
@@ -790,6 +879,7 @@ try {
   // request and a message to support (through the server's own commands).
   const extra = {
     draftNote: "Synthetic draft note " + syntheticLetters(),
+    visitAddress: "Synthetic visit address " + syntheticLetters(),
     privacyName: "Requester " + syntheticLetters(),
     privacyDetails: "Synthetic privacy detail " + syntheticLetters(),
     supportName: "Supporter " + syntheticLetters(),
@@ -830,6 +920,84 @@ try {
     world.ids.supportTicketId = ticket.id;
     for (const name of ["privacyRequestId", "supportTicketId"])
       assert.match(world.ids[name] ?? "", /^[a-f0-9-]{36}$/, name);
+  });
+
+  // Rows staff act on: a settled payment (so A holds an entitlement), a
+  // business check with A's visit address, and another member's report about
+  // A's live event.
+  await check("world: owner A's paid slot, seen check and a report on A's post", async () => {
+    const paid = await startPayment(owner);
+    const lease = await call(
+      "claim_checkout_request",
+      { p_payment_id: paid, p_owner_id: owner.id },
+      null,
+      true
+    );
+    if (!lease.checkout_url)
+      await call(
+        "complete_checkout_request",
+        {
+          p_payment_id: paid,
+          p_owner_id: owner.id,
+          p_claim_token: lease.claim_token,
+          p_request_id: `req-${paid}`,
+          p_checkout_url: `https://one.ozow.com/checkout/req-${paid}`,
+        },
+        null,
+        true
+      );
+    const row = json(
+      `select jsonb_build_object('ref',merchant_reference,'amount',amount_cents) from private.payments where id='${paid}';`
+    );
+    const settled = await call(
+      "apply_provider_event",
+      {
+        p_event: {
+          payload_sha256: createHash("sha256").update(`event-${paid}-complete`).digest("hex"),
+          merchant_reference: row.ref,
+          provider_request_id: `req-${paid}`,
+          provider_transaction_id: `tx-${paid}`,
+          status: "complete",
+          amount_cents: Number(row.amount),
+          currency: "ZAR",
+        },
+      },
+      null,
+      true
+    );
+    assert.equal(settled.outcome, "completed");
+    world.ids.paidPaymentId = paid;
+    // Starting that checkout closed the earlier one; open a new pending
+    // payment so the checkout commands still have one to act on.
+    world.ids.paymentId = await startPayment(owner);
+    const seen = await call("request_frontend_business_seen", {
+      p_business: world.business.id,
+      p_method: "visit",
+      p_slots: ["Monday morning"],
+      p_consent: true,
+      p_address: extra.visitAddress,
+    });
+    world.seenCaseId = seen.caseId;
+    const report = await call(
+      "submit_frontend_report",
+      {
+        p_post_id: world.live.id,
+        p_kind: "promotion",
+        p_reason: "misleading",
+        p_description: "Synthetic report about the event's details.",
+        p_reporter_ip_hmac: randomBytes(32).toString("base64url"),
+        p_reporter_id: other.id,
+      },
+      null,
+      true
+    );
+    world.reportId = report.id;
+    assert.ok(
+      Number(sql(`select count(*) from private.entitlements where owner_id='${owner.id}';`)) > 0,
+      "the settled payment grants an entitlement"
+    );
+    for (const value of [world.ids.paidPaymentId, world.seenCaseId, world.reportId])
+      assert.match(value ?? "", /^[a-f0-9-]{36}$/);
   });
 
   // Another member's invoice whose bank transfer expired
@@ -922,7 +1090,7 @@ try {
     const counts = json(
       `select ${OWNER_TABLES.map(
         ([table, where]) =>
-          `jsonb_build_object('${table}',(select count(*) from private.${table} t where ${where.replaceAll("$1", `'${owner.id}'`)}))`
+          `jsonb_build_object('${table}',(select count(*) from ${relation(table)} t where ${where.replaceAll("$1", `'${owner.id}'`)}))`
       ).join("||")};`
     );
     nonEmptyOwnerTables = OWNER_TABLES.map(([table]) => table).filter((table) => counts[table] > 0);
@@ -968,7 +1136,9 @@ try {
       p_post_b: [business.id],
       p_target_post: [live.id],
       p_business: [business.id],
-      p_case: [ids.caseId, ids.privacyRequestId],
+      p_case: [ids.caseId, ids.privacyRequestId, world.seenCaseId],
+      p_report: [world.reportId],
+      p_report_id: [world.reportId],
       p_ticket: [ids.supportTicketId],
       p_case_id: [ids.caseId],
       p_submission: [ids.submissionId],
@@ -989,7 +1159,7 @@ try {
       p_application: [ids.applicationId],
       p_org: [org.id],
       p_programme: [programme.id],
-      p_payment_id: [ids.paymentId],
+      p_payment_id: [ids.paymentId, ids.paidPaymentId],
       p_object_id: mediaIds.slice(0, 2),
       p_fact: [ids.factId],
       p_challenge: [randomUUID()],
@@ -1178,16 +1348,26 @@ try {
       if (!fn.authenticated || !caps) continue;
       for (const role of STAFF_ROLES) {
         const results = outcomes.get(`${role}:${fn.name}`);
+        const held = (direct ?? []).filter((cap) => granted[role].includes(cap));
         if (caps.every((cap) => granted[role].includes(cap)))
           assert.ok(!results.some(capabilityRefusal), `${role} refused ${fn.name}`);
-        else if (direct?.length === 1 && !granted[role].includes(direct[0]))
-          assert.ok(results.every(capabilityRefusal), `${role} lacks ${direct[0]} for ${fn.name}`);
+        // A role holding none of the command's own capabilities is refused
+        // every call by the capability check.
+        else if (direct?.length && !held.length)
+          assert.ok(results.every(capabilityRefusal), `${role} lacks ${direct} for ${fn.name}`);
+        // A role holding only some of them never succeeds, unless the command
+        // checks the others on a reviewed branch only.
+        else if (direct?.length && !PARTIAL_CAPABILITY_BRANCHES.has(`${role}:${fn.name}`))
+          assert.ok(
+            results.every((r) => !r.ok),
+            `${role} succeeded at ${fn.name} holding only ${held} of ${direct}`
+          );
         else continue;
         capabilityChecks++;
       }
       // Members are never let through a staff check.
       for (const label of ["unverified", "other", "orgAdmin", "owner"])
-        if (direct?.length === 1 && !MEMBER_WITH_STAFF_BRANCH.has(fn.name))
+        if (direct?.length && !MEMBER_WITH_STAFF_BRANCH.has(fn.name))
           assert.ok(
             outcomes.get(`${label}:${fn.name}`).every((r) => !r.ok),
             `${label} passed the staff check of ${fn.name}`
@@ -1210,10 +1390,12 @@ try {
         const [label, name] = entry.split(":");
         if (!STAFF_ROLES.includes(label)) return true;
         const direct = directCapabilities[name] ?? [];
-        return !direct.some((cap) => granted[label].includes(cap));
+        return !direct.length || !direct.every((cap) => granted[label].includes(cap));
       })
       .sort();
     assert.deepEqual(unexpected, []);
+    for (const entry of ALLOWED_CHANGES.keys())
+      assert.ok(changes.includes(entry), `reviewed change no longer observed: ${entry}`);
   });
 
   let intendedOk = 0;

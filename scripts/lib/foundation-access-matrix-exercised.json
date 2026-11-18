@@ -1,5 +1,6 @@
 {
   "commands": [
+    "activate_post",
     "add_organisation_note",
     "approve_due_commissions",
     "attach_provider_request",
@@ -22,6 +23,7 @@
     "delete_post",
     "dismiss_my_notifications",
     "expire_stale_checkouts",
+    "expire_waiting_bank_transfers",
     "frontend_seen_file_object",
     "get_core_draft",
     "get_core_listing_draft",
@@ -83,6 +85,8 @@
     "get_public_post",
     "get_slot_package_offer",
     "get_staff_dashboard",
+    "get_staff_expired_invoice_transfers",
+    "get_staff_invoice",
     "get_staff_invoice_customer",
     "get_staff_invoice_payments",
     "get_staff_invoice_transfers",
@@ -137,7 +141,8 @@
     "staff_list_programme_showcases",
     "staff_verification_queue",
     "sweep_sponsorships",
-    "update_my_application"
+    "update_my_application",
+    "withdraw_frontend_business_check"
   ],
   "nonEmptyOwnerTables": [
     "profiles",
@@ -155,12 +160,15 @@
     "verification_phone_proofs",
     "verification_localities",
     "payments",
+    "entitlements",
     "organisation_applications",
     "business_details",
     "event_details",
     "event_submissions",
+    "frontend_business_checks",
     "frontend_form_drafts",
     "frontend_post_approval_snapshots",
+    "invoices",
     "moderation_log",
     "outbox_events",
     "payment_lines",
@@ -169,9 +177,13 @@
     "privacy_requests",
     "privacy_request_events",
     "privacy_notice_jobs",
+    "provider_events",
     "queue_claims",
+    "reports",
     "support_tickets",
     "verification_current_submissions",
-    "verification_phone_challenges"
+    "verification_phone_challenges",
+    "auth.users",
+    "auth.sessions"
   ]
 }
