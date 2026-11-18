@@ -1066,8 +1066,26 @@ until the owner does those steps.
 
 ### What the code does
 
-- **Synthetic Monitoring** (`.github/workflows/synthetic-monitoring.yml`, every
-  30 minutes) checks the public homepage and the authenticated site monitor. A
+- **Failure alert** (`.github/workflows/failure-alert.yml`) opens one issue
+  titled "Automated alert: a main or scheduled workflow run failed", or comments
+  on it while it is open, when a run on main or a scheduled run fails, times out
+  or cannot start, when a scheduled run is cancelled, and when a Deploy is
+  cancelled after its last "main has not moved" check (production may then be
+  half old and half new). The issue is assigned to the repository owner, so
+  GitHub emails each comment to them as a "participating" notification (in
+  GitHub > Settings > Notifications > Participating, keep Email ticked); if the
+  assignment fails, the alert run itself fails. Each workflow comments at most
+  every 6 hours. Close the issue once the cause is fixed.
+- **Main deployed** (`.github/workflows/main-deployed.yml`, hourly) fails when
+  the newest commit on main has not been deployed for 3 hours (CI plus Deploy
+  normally take under an hour). A deploy that stops at "Reject stale deployment
+  sources" or "Recheck main immediately before production changes" because main
+  moved on raises no alert of its own, nor does one cancelled before that check,
+  since the deploy of the newer main follows; this check is the safety net if it
+  does not. A cancelled Deploy run never counts as live.
+- **Synthetic Monitoring** (`.github/workflows/synthetic-monitoring.yml`, asked
+  for twice an hour; GitHub actually starts it about 4 times a day, sometimes 9
+  hours apart) checks the public homepage and the authenticated site monitor. A
   missing setting fails the run; there are no skip-and-pass steps. A Cloudflare
   challenge on the public check is reported as inconclusive, not as a pass.
   Cloudflare's error page on a 503 counts as a failure. Inconclusive runs send

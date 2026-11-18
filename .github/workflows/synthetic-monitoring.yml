@@ -2,7 +2,11 @@ name: Synthetic Monitoring
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    # GitHub starts scheduled runs late or drops them when busy: at "*/30" it
+    # ran about 4 times a day, up to 9 hours apart. Minutes away from the top
+    # of the hour are dropped less often, but an outside uptime monitor is
+    # still needed for prompt outage alerts (docs/RUNBOOK.md).
+    - cron: "13,43 * * * *"
   workflow_dispatch:
 
 # Read-only by default; jobs that need more ask for it themselves.
@@ -16,6 +20,9 @@ permissions:
 jobs:
   production-smoke:
     runs-on: ubuntu-latest
+    # A hung check must fail (and alert) instead of holding the run for the
+    # default 6 hours. A normal run takes about one minute.
+    timeout-minutes: 15
     steps:
       - name: Check production URL is configured
         run: |
