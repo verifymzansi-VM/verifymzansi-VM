@@ -1849,6 +1849,11 @@ own action: uploading the ID document opens it on the server, as before.
   that reason), a 'Session expired' toast (never sent by the live backend), and
   the 'Verification temporarily unavailable' notice, which now shows when the
   status read itself finds no verification service.
+- In the same PR, a bare page load of the error page (`/error` with no reason,
+  or an unknown one) answers a real HTTP 404 instead of 200, with the same
+  'Something went wrong' page as before (the proxy decides before the page
+  streams; no page file changes). The site's own redirects to
+  `/error?reason=forbidden` and `/error?reason=unavailable` still answer 200.
 
 The changed files, `src/app/verification/page.tsx` and its test, already have
 rows in groups 2 and 5, so this group has no file rows (Files 0); those rows say
