@@ -532,10 +532,8 @@ export default function VerificationPage() {
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
 
-  // Session-driven state
-  const [_sessionId, setSessionId] = useState<string | null>(null);
+  // Status-driven state
   const [_sessionLoading, setSessionLoading] = useState(true);
-  const [_useV2Flow, setUseV2Flow] = useState(false);
   const [serverSteps, setServerSteps] = useState<StepStatusEntry[]>([]);
   const [accountVerificationStatus, setAccountVerificationStatus] =
     useState<AccountVerificationStatus | null>(null);
@@ -669,8 +667,11 @@ export default function VerificationPage() {
       const res = await fetch("/api/verification/status", { cache: "no-store" });
       if (!res.ok) {
         if (res.status === 404) {
+          // No verification service answers here: say so and keep the steps
+          // closed (the notice the former session-start 404 showed).
           setServerSteps([]);
           setAccountVerificationStatus("incomplete");
+          setVerificationUnavailable(true);
           return null;
         }
         throw new Error("Failed to load verification status");
@@ -759,103 +760,36 @@ export default function VerificationPage() {
     }
   }, []);
 
-  // Try to start a v2 session on mount
+  // Load the saved verification status on mount. Viewing the page only reads:
+  // nothing is opened or started until the member acts (sending a code,
+  // uploading a document or saving a location starts what that step needs).
   useEffect(() => {
     let cancelled = false;
-    async function initSession() {
-      let sessionData: {
-        completedSteps?: VerificationStepType[];
-        pendingSteps?: VerificationStepType[];
-        requiredSteps?: VerificationStepType[];
-        finalizedAt?: string | null;
-        locationSubmittedAt?: string | null;
-        phoneVerifiedAt?: string | null;
-      } | null = null;
-
-      try {
-        const res = await fetch("/api/verification/session/start", {
-          method: "POST",
-          headers: withCsrfHeaders(),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          sessionData = data;
-          if (!cancelled) {
-            setSessionId(data.sessionId);
-            setUseV2Flow(true);
-            // Restore completed steps from server
-            if (data.completedSteps?.length > 0) {
-              setCompletedSteps(data.completedSteps);
-            }
-            if (
-              data.phoneVerifiedAt ||
-              data.completedSteps?.includes("phone") ||
-              data.pendingSteps?.includes("phone")
-            ) {
-              setPhoneVerified(true);
-            }
-          }
-        } else if (res.status === 403) {
-          const data = (await res.json().catch(() => ({}))) as VerificationApiResponse;
-          if (!cancelled) {
-            applyEmailConfirmationBlocker(data);
-          }
-        } else if (res.status === 410) {
-          // Session expired — toast and fall back to legacy
-          if (!cancelled) {
-            toast({
-              title: "Session expired",
-              description: "Your previous session expired. Starting fresh.",
-              variant: "destructive",
-            });
-          }
-        } else if (res.status === 404) {
-          if (!cancelled) {
-            setVerificationUnavailable(true);
-          }
-        }
-      } catch (err) {
-        // Session start failed — fall back to legacy
-        console.warn("[Verification] v2 session init failed", err);
-      } finally {
-        const statusSnapshot = await syncVerificationStatus();
-
-        if (!cancelled) {
-          const phoneDone =
-            Boolean(sessionData?.phoneVerifiedAt) ||
-            sessionData?.completedSteps?.includes("phone") ||
-            sessionData?.pendingSteps?.includes("phone") ||
-            Boolean(
-              statusSnapshot?.steps.some(
-                (entry) =>
-                  entry.step_type === "phone" &&
-                  (entry.status === "approved" || entry.status === "pending")
-              )
-            );
-          const allSubmitted =
-            Boolean(sessionData?.finalizedAt) &&
-            ((sessionData?.completedSteps?.length ?? 0) +
-              (sessionData?.pendingSteps?.length ?? 0) >=
-              (sessionData?.requiredSteps?.length ?? 4) ||
-              Boolean(sessionData?.locationSubmittedAt));
-
-          setStep(
-            getInitialWizardStep({
-              statusSteps: statusSnapshot?.steps ?? [],
-              phoneDone,
-              allSubmitted,
-              accountVerificationStatus: statusSnapshot?.accountStatus ?? null,
-            })
-          );
-        }
-        if (!cancelled) setSessionLoading(false);
-      }
+    async function loadStatus() {
+      const statusSnapshot = await syncVerificationStatus();
+      if (cancelled) return;
+      const phoneDone = Boolean(
+        statusSnapshot?.steps.some(
+          (entry) =>
+            entry.step_type === "phone" &&
+            (entry.status === "approved" || entry.status === "pending")
+        )
+      );
+      setStep(
+        getInitialWizardStep({
+          statusSteps: statusSnapshot?.steps ?? [],
+          phoneDone,
+          allSubmitted: statusSnapshot?.accountStatus === "verified",
+          accountVerificationStatus: statusSnapshot?.accountStatus ?? null,
+        })
+      );
+      setSessionLoading(false);
     }
-    initSession();
+    void loadStatus();
     return () => {
       cancelled = true;
     };
-  }, [applyEmailConfirmationBlocker, syncVerificationStatus, toast]);
+  }, [syncVerificationStatus]);
 
   // SA ID number validation effect
   useEffect(() => {
