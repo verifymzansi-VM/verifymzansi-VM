@@ -63,25 +63,90 @@ function isSeparatorRow(cells) {
   return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
 }
 
+// A group heading between the markers: "### 12. Content-first home ...".
+const GROUP_HEADING = /^###\s+(\d+)\.\s+(.+)$/;
+const SUMMARY_HEADING = "## Summary for the owner";
+
+/**
+ * Reads the owner's summary table (outside the markers). It holds one row per
+ * group and no counts: counts would be edited by every pull request and so
+ * make every pair of open pull requests conflict. The check computes and
+ * prints them instead, and refuses a stored Total row or Files column so they
+ * do not come back through a merge.
+ * @param {string[]} lines
+ * @param {string[]} errors
+ */
+function parseSummary(lines, errors) {
+  const summary = [];
+  const start = lines.findIndex((line) => line.trim() === SUMMARY_HEADING);
+  if (start === -1) return summary;
+  const seen = new Map();
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (/^##?\s/.test(line) || line === LEDGER_START) break;
+    if (!line.startsWith("|")) continue;
+    const cells = splitRow(line);
+    const lineNumber = index + 1;
+    if (isSeparatorRow(cells)) continue;
+    if (cells.some((cell) => /^\**files\**$/i.test(cell))) {
+      errors.push(
+        `line ${lineNumber}: the summary table has no Files column; pnpm check:frontend-freeze prints each group's file count`
+      );
+    }
+    if (/^\**total\**$/i.test(cells[0] ?? "")) {
+      errors.push(
+        `line ${lineNumber}: remove the Total row; pnpm check:frontend-freeze prints the total`
+      );
+    }
+    const match = /^(\d+)\.\s/.exec(cells[0] ?? "");
+    if (!match) continue;
+    const number = Number(match[1]);
+    if (seen.has(number)) {
+      errors.push(
+        `line ${lineNumber}: group ${number} already has a summary row (line ${seen.get(number)}); give the newer group the next unused number`
+      );
+    } else seen.set(number, lineNumber);
+    summary.push({ number, line: lineNumber });
+  }
+  return summary;
+}
+
 /**
  * Reads the active rows between the ledger markers. Rows outside the markers
  * (for example the history of files that were put back) are not checked.
+ * Each row belongs to the group heading above it ("### N. Title"), if any.
  * @param {string} text
  */
 export function parseLedger(text) {
   const lines = text.split(/\r?\n/);
   const errors = [];
   const rows = [];
+  const groups = [];
+  const summary = parseSummary(lines, errors);
   const start = lines.findIndex((line) => line.trim() === LEDGER_START);
   const end = lines.findIndex((line) => line.trim() === LEDGER_END);
   if (start === -1 || end === -1 || end < start) {
     errors.push(
       `${LEDGER_FILE} needs the markers ${LEDGER_START} and ${LEDGER_END}, in that order`
     );
-    return { rows, errors };
+    return { rows, errors, groups, summary };
   }
+  let group = null;
   for (let index = start + 1; index < end; index += 1) {
     const line = lines[index].trim();
+    const heading = GROUP_HEADING.exec(line);
+    if (heading) {
+      const number = Number(heading[1]);
+      const earlier = groups.find((item) => item.number === number);
+      if (earlier) {
+        errors.push(
+          `line ${index + 1}: group ${number} is already used (line ${earlier.line}); give the newer group the next unused number`
+        );
+      }
+      group = { number, title: heading[2].trim(), line: index + 1 };
+      groups.push(group);
+      continue;
+    }
     if (!line.startsWith("|")) continue;
     const cells = splitRow(line);
     if (isSeparatorRow(cells)) continue;
@@ -112,6 +177,7 @@ export function parseLedger(text) {
       date,
       version,
       line: lineNumber,
+      group: group ? group.number : null,
     };
     if (!KINDS.includes(kind)) {
       errors.push(`line ${lineNumber}: kind "${kind}" is not one of ${KINDS.join(", ")}`);
@@ -136,7 +202,49 @@ export function parseLedger(text) {
     }
     rows.push(row);
   }
-  return { rows, errors };
+  // Every group has exactly one summary row and every summary row a group, so
+  // the owner's overview cannot silently miss or invent a group. Checked only
+  // when the ledger has a summary section.
+  if (lines.some((line) => line.trim() === SUMMARY_HEADING)) {
+    const listed = new Set(summary.map((item) => item.number));
+    const headed = new Set(groups.map((item) => item.number));
+    for (const item of groups) {
+      if (!listed.has(item.number)) {
+        errors.push(
+          `line ${item.line}: group ${item.number} has no row in the summary table ("${SUMMARY_HEADING}")`
+        );
+      }
+    }
+    for (const item of summary) {
+      if (!headed.has(item.number)) {
+        errors.push(
+          `line ${item.line}: summary row for group ${item.number} has no "### ${item.number}. ..." section between the markers`
+        );
+      }
+    }
+  }
+  return { rows, errors, groups, summary };
+}
+
+/**
+ * The counts the ledger does not store: rows per group (in ledger order), the
+ * total, and the next unused group number.
+ * @param {{rows: Array<{group: number | null}>, groups: Array<{number: number, title: string}>, summary?: Array<{number: number}>}} parsed
+ */
+export function ledgerCounts({ rows, groups, summary = [] }) {
+  const perGroup = groups.map((item) => ({
+    number: item.number,
+    title: item.title,
+    files: rows.filter((row) => row.group === item.number).length,
+  }));
+  const ungrouped = rows.filter((row) => row.group === null).length;
+  const used = [...groups, ...summary].map((item) => item.number);
+  return {
+    perGroup,
+    ungrouped,
+    total: rows.length,
+    nextGroup: used.length > 0 ? Math.max(...used) + 1 : 1,
+  };
 }
 
 /**
