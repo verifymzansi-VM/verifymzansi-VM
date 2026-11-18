@@ -15,16 +15,30 @@ begin
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('frontend-payment-reversal:'||payment::text, 0));
   select * into request from private.payment_refund_requests r where r.id = p_request_id for update;
   if request.status = 'approved' then
+    -- The refunded period's grants: a renewal bought at the same moment waits for
+    -- this, so the renewal rules below see it.
+    perform 1 from private.entitlements e where e.payment_id = request.payment_id order by e.id for update;
     if (select p.status from private.payments p where p.id = request.payment_id) is distinct from 'complete'
         or internal.ozow_refund_transaction(request.payment_id) is distinct from request.ozow_transaction_id
         or exists(select 1 from private.frontend_payment_reversals v where v.payment_id = request.payment_id)
         or (request.payment_line_id is null and exists(select 1 from private.payment_lines l
           where l.payment_id = request.payment_id and l.status = 'reversed'))
         or (request.payment_line_id is not null and not exists(select 1 from private.payment_lines l
-          where l.id = request.payment_line_id and l.status = 'open')) then
+          where l.id = request.payment_line_id and l.status = 'open'))
+        or internal.refund_renewal_waiting(request.payment_id, request.payment_line_id)
+        or (request.reason_code = 'renewal_cancelled_before_start'
+          and not internal.refund_renewal_not_started(request.payment_id, request.payment_line_id)) then
       update private.payment_refund_requests set status = 'failed', failed_at = statement_timestamp(),
         failure_reason = 'payment_changed' where id = request.id returning * into request;
       perform internal.ozow_refund_problem(request.payment_id, 'refund_failed', 'refund_send', request.id::text);
+      return jsonb_build_object('request_id', request.id, 'claimed', false, 'status', request.status);
+    end if;
+    -- Ozow's refund window passed before it was sent: nothing goes to Ozow and
+    -- staff pay it back by bank transfer (it is listed under 'Refunds that need
+    -- staff'). Expected, so it raises no payment problem alert.
+    if not internal.ozow_refund_window_open(request.payment_id) then
+      update private.payment_refund_requests set status = 'failed', failed_at = statement_timestamp(),
+        failure_reason = 'outside_refund_window' where id = request.id returning * into request;
       return jsonb_build_object('request_id', request.id, 'claimed', false, 'status', request.status);
     end if;
     update private.payment_refund_requests set status = 'sent', sent_at = statement_timestamp(), send_attempts = 1,
