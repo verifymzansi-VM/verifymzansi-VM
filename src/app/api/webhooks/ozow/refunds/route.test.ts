@@ -80,12 +80,36 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("Ozow refund notices", () => {
-  it("are refused while refunds through Ozow are off or without the secret", async () => {
-    mocks.enabled.mockReturnValue(false);
-    expect((await POST(notice(thin()))).status).toBe(503);
-    mocks.enabled.mockReturnValue(true);
+  it("are refused without the secret, since none can be authenticated", async () => {
     mocks.secret.mockReturnValue(null);
-    expect((await POST(notice(thin()))).status).toBe(503);
+    for (const enabled of [true, false]) {
+      mocks.enabled.mockReturnValue(enabled);
+      expect((await POST(notice(thin()))).status).toBe(503);
+    }
+    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.apply).not.toHaveBeenCalled();
+  });
+
+  it("are acknowledged without acting when signed while refunds through Ozow are off", async () => {
+    mocks.enabled.mockReturnValue(false);
+    for (const body of [thin(), { type: "transaction.complete", data: { id: TX } }]) {
+      const response = await POST(notice(body));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.json()).toEqual({ success: true, ignored: "refunds_off" });
+    }
+    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.apply).not.toHaveBeenCalled();
+    expect(mocks.security).not.toHaveBeenCalled();
+  });
+
+  it("refuse unsigned or wrongly signed notices while refunds through Ozow are off", async () => {
+    mocks.enabled.mockReturnValue(false);
+    const wrong = `whsec_${randomBytes(24).toString("base64")}`;
+    for (const request of [notice(thin(), { sign: false }), notice(thin(), { secret: wrong })]) {
+      expect((await POST(request)).status).toBe(401);
+    }
+    expect(mocks.security).toHaveBeenCalledTimes(2);
     expect(mocks.get).not.toHaveBeenCalled();
     expect(mocks.apply).not.toHaveBeenCalled();
   });

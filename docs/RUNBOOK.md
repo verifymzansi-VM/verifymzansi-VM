@@ -49,7 +49,7 @@ VS Code.
 
 This keeps Cloudflare MCP aligned with the repo's actual production footprint:
 R2 storage, OTP rate limiting in KV, OpenNext cache Durable Objects, and the
-main Workers/Pages deployment.
+main Workers deployment.
 
 ### Cloudflare MCP Token Policy
 
@@ -57,8 +57,8 @@ Use least-privilege Cloudflare credentials for MCP access.
 
 - Start with read-only access for inspection tasks.
 - Scope access to the resources this repo actually uses: the `verifymzansi`
-  Workers/Pages deployment, the `verifymzansi-public` and `verifymzansi-private`
-  R2 buckets, and the KV namespace bound as `OTP_RATE_LIMITS`.
+  Worker deployment, the `verifymzansi-public` and `verifymzansi-private` R2
+  buckets, and the KV namespace bound as `OTP_RATE_LIMITS`.
 - Add broader permissions only for approved workflows such as observability,
   build inspection, or intentional operational changes.
 - If MCP starts on one machine but not another, compare local Cloudflare or
@@ -68,10 +68,10 @@ Use least-privilege Cloudflare credentials for MCP access.
 
 Use separate tokens by workflow instead of one catch-all token.
 
-- Baseline read-only token: Worker or Pages read access for `verifymzansi`, R2
-  read access for `verifymzansi-public` and `verifymzansi-private`, KV read
-  access for `OTP_RATE_LIMITS`, and read access for Worker binding or Durable
-  Object inspection.
+- Baseline read-only token: Worker read access for `verifymzansi`, R2 read
+  access for `verifymzansi-public` and `verifymzansi-private`, KV read access
+  for `OTP_RATE_LIMITS`, and read access for Worker binding or Durable Object
+  inspection.
 - Optional observability token: Additional read access for logs, analytics, or
   Workers build inspection when needed for troubleshooting.
 - Separate write-capable token: Created only for reviewed maintenance workflows
@@ -193,12 +193,20 @@ Prefer this pattern instead:
 
 ## Secret Rotation
 
+Production is the `verifymzansi` Cloudflare Worker on `verifymzansi.com` (see
+`wrangler.toml`). Most app secrets are GitHub repository secrets that the Deploy
+workflow (`.github/workflows/deploy.yml`) installs into the Worker on every
+release; the optional ones listed in `wrangler.toml` are set directly with
+`pnpm wrangler secret put <NAME>`. "Redeploy" below means a new release through
+the Deploy workflow.
+
 ### Supabase Keys
 
 1. Go to Supabase Dashboard → Settings → API
 2. Rotate the `service_role` key
-3. Update in Cloudflare Pages environment variables:
-   - `SUPABASE_SERVICE_ROLE_KEY`
+3. Update the production secret (the Deploy workflow passes the repository
+   secret `FOUNDATION_SUPABASE_SECRET_KEY` to the Worker as
+   `SUPABASE_SERVICE_ROLE_KEY` and `FOUNDATION_SUPABASE_SECRET_KEY`)
 4. Redeploy the application
 5. Verify `/api/health` returns 200
 
@@ -211,7 +219,7 @@ Prefer this pattern instead:
 
 1. Log in to the Ozow merchant or developer portal
 2. Rotate the OAuth client credentials
-3. Update in Cloudflare Pages:
+3. Update the production secrets:
    - `OZOW_CLIENT_ID`
    - `OZOW_CLIENT_SECRET`
    - `OZOW_SITE_CODE`
@@ -234,10 +242,8 @@ The webhook endpoint uses Svix-style signature verification (`svix-id`,
 2. Rotate (or regenerate) the webhook signing secret for the VerifyMzansi
    endpoint — Ozow may expose this via `GET /v1/webhooks/{id}/secret`
 3. Copy the new secret (base64-encoded Svix signing key)
-4. Update `OZOW_WEBHOOK_SECRET` in Cloudflare Pages environment variables:
-   ```bash
-   npx wrangler pages secret put OZOW_WEBHOOK_SECRET --project-name verifymzansi
-   ```
+4. Update the `OZOW_WEBHOOK_SECRET` repository secret (the Deploy workflow
+   installs it into the `verifymzansi` Worker)
 5. Redeploy the application
 6. Send a test webhook from the Ozow dashboard or trigger a small test payment
 7. Verify the webhook is accepted (HTTP 200) — check application logs for
@@ -254,7 +260,7 @@ The webhook endpoint uses Svix-style signature verification (`svix-id`,
 To register or update the VerifyMzansi webhook endpoint with Ozow:
 
 1. **Endpoint URL:** `https://<DOMAIN>/api/webhooks/ozow`
-   - Production: `https://verifymzansi.co.za/api/webhooks/ozow`
+   - Production: `https://verifymzansi.com/api/webhooks/ozow`
 2. **Method:** POST
 3. **Events to subscribe:** `transaction.complete` (covers successful and failed
    transactions)
@@ -263,8 +269,8 @@ To register or update the VerifyMzansi webhook endpoint with Ozow:
 5. **Setup steps:** a. Log in to the Ozow portal → Webhooks section b. Create
    (or update) a webhook subscription pointing to the endpoint URL c. Select the
    `transaction.complete` event type d. Copy the signing secret provided by Ozow
-   e. Store the secret as `OZOW_WEBHOOK_SECRET` in Cloudflare Pages secrets f.
-   Deploy and verify using the test webhook feature in the portal
+   e. Store the secret as the `OZOW_WEBHOOK_SECRET` production secret f. Deploy
+   and verify using the test webhook feature in the portal
 6. **Verification checklist:**
    - [ ] Webhook returns HTTP 200 for valid signatures
    - [ ] Webhook returns HTTP 403 for missing or invalid signatures
@@ -292,7 +298,7 @@ history against pending verification cases and retry affected events through the
 provider after deployment. Keep manual review active during reconciliation.
 
 1. Rotate the KYC provider webhook signing secret in the provider dashboard.
-2. Update `KYC_WEBHOOK_SECRET` in Cloudflare Pages or Worker secrets.
+2. Update the `KYC_WEBHOOK_SECRET` production secret.
 3. Run `pnpm validate:launch-env` and `pnpm preflight:prod` before deploy.
 4. Redeploy and verify `/api/webhooks/kyc/provider` rejects unsigned or
    invalidly signed requests.
@@ -301,7 +307,7 @@ provider after deployment. Keep manual review active during reconciliation.
 
 1. Go to Cloudflare Dashboard → R2 → Manage R2 API Tokens
 2. Create a new token with the same permissions
-3. Update in Cloudflare Pages:
+3. Update the production secrets:
    - `R2_ACCESS_KEY_ID`
    - `R2_SECRET_ACCESS_KEY`
 4. Redeploy and verify file upload works
@@ -331,7 +337,7 @@ provider after deployment. Keep manual review active during reconciliation.
 
 1. Go to Resend Dashboard → API Keys
 2. Create a new key with the same permissions
-3. Update `RESEND_API_KEY` in Cloudflare Pages
+3. Update the `RESEND_API_KEY` production secret
 4. Redeploy and send a test email
 5. Revoke the old key
 
@@ -339,7 +345,7 @@ provider after deployment. Keep manual review active during reconciliation.
 
 1. Go to Africa's Talking Dashboard → Settings → API Key
 2. Generate a new key
-3. Update `AFRICASTALKING_API_KEY` in Cloudflare Pages
+3. Update the `AFRICASTALKING_API_KEY` production secret
 4. Redeploy and test OTP sending
 5. Deactivate the old key
 
@@ -347,7 +353,7 @@ provider after deployment. Keep manual review active during reconciliation.
 
 1. Go to Cloudflare Dashboard → Turnstile
 2. Rotate the secret key for your site
-3. Update in Cloudflare Pages:
+3. Update the production secrets:
    - `TURNSTILE_SECRET_KEY`
    - `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (if site key changed)
 4. Redeploy and verify CAPTCHA works on login/register pages
@@ -381,13 +387,13 @@ curl -X POST https://verifymzansi.com/api/admin/feature-flags/toggle \
 
 ```bash
 # Enable for 10% of users
-curl -X POST https://verifymzansi.pages.dev/api/admin/feature-flags/toggle \
+curl -X POST https://verifymzansi.com/api/admin/feature-flags/toggle \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{"key": "new_checkout", "mode": "percent", "percent": 10, "reason": "Gradual rollout"}'
 
 # Enable for specific roles only
-curl -X POST https://verifymzansi.pages.dev/api/admin/feature-flags/toggle \
+curl -X POST https://verifymzansi.com/api/admin/feature-flags/toggle \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{"key": "admin_v2", "mode": "allowlist", "allowlist_roles": ["admin", "moderator"], "reason": "Staff testing"}'
@@ -1274,7 +1280,7 @@ decision.
    ```
 
 3. Set `KYC_PROVIDER=<new-provider>` in environment variables
-4. Add provider API keys to Cloudflare Pages secrets
+4. Add provider API keys as production secrets (see Secret Rotation)
 5. Update the KYC engine to handle automated results alongside manual review
 6. Test thoroughly in staging before enabling in production
 
