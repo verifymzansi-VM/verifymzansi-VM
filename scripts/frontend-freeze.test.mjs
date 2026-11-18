@@ -15,6 +15,7 @@ import {
   currentVersions,
   differingPaths,
   ensureBaseline,
+  ledgerCounts,
   parseLedger,
   refreshVersions,
 } from "./lib/frontend-freeze.mjs";
@@ -148,6 +149,72 @@ test("refreshes versions of listed rows without adding or removing rows", () => 
   assert.equal(rows.length, 2);
 });
 
+const grouped = (summaryRows, sections) =>
+  `# Ledger\n\n## Summary for the owner\n\n| Group | Proposed | What visitors notice |\n| --- | --- | --- |\n${summaryRows.join("\n")}\n\nQuestions for the owner:\n\n1. **A question (group 2).**\n\n## How to change\n\n| Not | the summary |\n| --- | --- |\n| **Total** | 3 |\n\n${LEDGER_START}\n\n## Differences\n\n${sections.join("\n\n")}\n\n${LEDGER_END}\n`;
+const section = (number, title, ...rows) =>
+  `### ${number}. ${title}\n\nIntro.\n\n${rows.length ? `${header}\n${rows.join("\n")}` : "None."}`;
+
+test("assigns rows to their group and computes the counts the ledger does not store", () => {
+  const parsed = parseLedger(
+    grouped(
+      [
+        "| 1. First | keep | Nothing |",
+        "| 2. Second | keep | Nothing |",
+        "| 7. No rows | keep | - |",
+      ],
+      [
+        section(1, "First (visual)", row("src/components/a.tsx"), row("src/components/b.tsx")),
+        section(2, "Second", row("src/components/c.tsx")),
+        section(5, "Gaps are fine"),
+      ]
+    )
+  );
+  assert.deepEqual(parsed.errors, []);
+  assert.deepEqual(
+    parsed.rows.map((item) => item.group),
+    [1, 1, 2]
+  );
+  assert.deepEqual(ledgerCounts(parsed), {
+    perGroup: [
+      { number: 1, title: "First (visual)", files: 2 },
+      { number: 2, title: "Second", files: 1 },
+      { number: 5, title: "Gaps are fine", files: 0 },
+    ],
+    ungrouped: 0,
+    total: 3,
+    nextGroup: 8,
+  });
+  const plain = parseLedger(ledger(row("src/components/a.tsx")));
+  assert.equal(plain.rows[0].group, null);
+  assert.deepEqual(ledgerCounts(plain), { perGroup: [], ungrouped: 1, total: 1, nextGroup: 1 });
+});
+
+test("refuses a group number used twice", () => {
+  const { errors } = parseLedger(
+    grouped(
+      ["| 3. One | keep | - |", "| 3. Other | keep | - |"],
+      [section(3, "One", row("src/components/a.tsx")), section(3, "Other")]
+    )
+  );
+  assert.equal(errors.length, 2, errors.join("\n"));
+  assert.match(errors[0], /group 3 already has a summary row/);
+  assert.match(errors[1], /group 3 is already used/);
+});
+
+test("refuses stored counts in the summary table", () => {
+  const withCounts = grouped(
+    ["| 1. First | 2 | keep | Nothing |", "| **Total** | **2** | | |"],
+    [section(1, "First", row("src/components/a.tsx"))]
+  ).replace(
+    "| Group | Proposed | What visitors notice |\n| --- | --- | --- |",
+    "| Group | Files | Proposed | What visitors notice |\n| --- | ---: | --- | --- |"
+  );
+  const { errors } = parseLedger(withCounts);
+  assert.equal(errors.length, 2, errors.join("\n"));
+  assert.match(errors[0], /no Files column/);
+  assert.match(errors[1], /remove the Total row/);
+});
+
 function makeRepo() {
   const dir = mkdtempSync(path.join(tmpdir(), "frontend-freeze-"));
   const git = (...args) =>
@@ -250,8 +317,22 @@ test("does not fetch when the baseline is present and refuses when fetching is o
 });
 
 test("the committed ledger is well formed", () => {
-  const { rows, errors } = parseLedger(readFileSync(LEDGER_FILE, "utf8"));
+  const parsed = parseLedger(readFileSync(LEDGER_FILE, "utf8"));
+  const { rows, errors, groups, summary } = parsed;
   assert.deepEqual(errors, []);
   assert(rows.length > 0);
   assert.equal(new Set(rows.map((item) => item.path)).size, rows.length);
+  assert(groups.length > 0 && summary.length > 0);
+  const counts = ledgerCounts(parsed);
+  assert.equal(counts.ungrouped, 0, "every active row sits under a numbered group");
+  assert.equal(
+    counts.perGroup.reduce((sum, item) => sum + item.files, 0),
+    counts.total
+  );
+});
+
+test("the ledger is left to the freeze check, not prettier", () => {
+  const ignored = readFileSync(".prettierignore", "utf8").split(/\r?\n/);
+  assert(ignored.includes(LEDGER_FILE));
+  assert.match(readFileSync("scripts/check-quality.ts", "utf8"), /file !== "FRONTEND-CHANGES\.md"/);
 });

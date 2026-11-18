@@ -9,7 +9,9 @@
 //   - a row names a file that no longer differs (stale row: move it to the
 //     history section, otherwise its old approval would silently cover a
 //     different future change to the same file);
-//   - a row is malformed or listed twice.
+//   - a row is malformed or listed twice;
+//   - two groups share a number, or the summary table stores counts (a Files
+//     column or a Total row): the check prints those counts instead.
 //
 //   pnpm check:frontend-freeze                     check
 //   pnpm check:frontend-freeze --update-versions   refresh the Version cells
@@ -27,6 +29,7 @@ import {
   currentVersions,
   differingPaths,
   ensureBaseline,
+  ledgerCounts,
   parseLedger,
   refreshVersions,
 } from "./lib/frontend-freeze.mjs";
@@ -62,9 +65,19 @@ function main(argv) {
     }
   }
 
-  const { rows, errors } = parseLedger(text);
+  const parsed = parseLedger(text);
+  const { rows, errors } = parsed;
   const { missing, stale, changed, duplicates } = compareLedger(differing, rows);
   const awaiting = rows.filter((row) => /^awaiting owner/i.test(row.decision)).length;
+  const counts = ledgerCounts(parsed);
+  process.stdout.write(`Files per group (counted from the rows; the ledger stores no counts):\n`);
+  for (const item of counts.perGroup) {
+    process.stdout.write(`  ${item.number}. ${item.title}: ${item.files}\n`);
+  }
+  if (counts.ungrouped > 0) process.stdout.write(`  (no group): ${counts.ungrouped}\n`);
+  process.stdout.write(
+    `Total: ${counts.total} file(s). Next unused group number: ${counts.nextGroup}.\n`
+  );
   process.stdout.write(
     `${differing.size} frontend file(s) differ from ${SHORT}; ${rows.length} ledger row(s), ${awaiting} awaiting the owner's decision.\n`
   );
