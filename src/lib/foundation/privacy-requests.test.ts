@@ -3,7 +3,11 @@
 // that change a request are covered in src/app/api/admin/dsar/foundation-routes.test.ts.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
-import { privacyRevision, readFrontendPrivacyQueue } from "./privacy-requests";
+import {
+  privacyRevision,
+  processFrontendPrivacyRequest,
+  readFrontendPrivacyQueue,
+} from "./privacy-requests";
 
 const staff = "11111111-1111-4111-8111-111111111111";
 const rpc = vi.fn();
@@ -100,6 +104,28 @@ describe("readFrontendPrivacyQueue", () => {
     }
   });
 
+  it("accepts the two-person approval fields, and rows without them", async () => {
+    const id = "22222222-2222-4222-8222-000000000001";
+    rpc.mockResolvedValueOnce({
+      data: queue(
+        [
+          item(1, { approved_at: null, may_approve: false }),
+          item(2, { approved_at: "2026-11-18T08:00:00Z", may_approve: false }),
+        ],
+        2
+      ),
+      error: null,
+    });
+    const result = await readFrontendPrivacyQueue(api, staff, "open", 1);
+    expect(result.items.map((r) => [r.id, r.approved_at, r.may_approve])).toEqual([
+      [id, null, false],
+      ["22222222-2222-4222-8222-000000000002", "2026-11-18T08:00:00Z", false],
+    ]);
+    rpc.mockResolvedValueOnce({ data: queue([item(1)], 1), error: null });
+    const older = await readFrontendPrivacyQueue(api, staff, "open", 1);
+    expect(older.items[0]!.approved_at).toBeUndefined();
+  });
+
   it("requires all four deadline rules", async () => {
     rpc.mockResolvedValue({ data: queue([], 0, { rules: rules.slice(0, 3) }), error: null });
     await expect(readFrontendPrivacyQueue(api, staff, "open", 1)).rejects.toMatchObject({
@@ -125,5 +151,51 @@ describe("privacyRevision", () => {
     expect(privacyRevision.safeParse(2147483646).success).toBe(true);
     for (const bad of [0, -1, 1.5, 2147483647, "1"])
       expect(privacyRevision.safeParse(bad).success).toBe(false);
+  });
+});
+
+describe("processFrontendPrivacyRequest", () => {
+  const requestId = "22222222-2222-4222-8222-000000000009";
+  it("names the two-person refusals", async () => {
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "42501",
+        details: "second_person_required",
+        message: "a second staff member must approve this request",
+      },
+    });
+    await expect(
+      processFrontendPrivacyRequest(api, { requestId, revision: 2, action: "approve" })
+    ).rejects.toMatchObject({
+      status: 403,
+      mfaRequired: false,
+      message: expect.stringMatching(/second staff member/),
+    });
+    // Before the update's reason is in the shared list, a refusal of an
+    // unapproved completion reads as the generic conflict.
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "PT409", details: "approval_required", message: "not approved" },
+    });
+    await expect(
+      processFrontendPrivacyRequest(api, { requestId, revision: 3, action: "complete" })
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("accepts the second approval of a request started or completed earlier", async () => {
+    for (const status of ["in_progress", "completed"]) {
+      rpc.mockResolvedValueOnce({ data: { id: requestId, status, due: null }, error: null });
+      await expect(
+        processFrontendPrivacyRequest(api, { requestId, revision: 4, action: "approve" })
+      ).resolves.toEqual({ status });
+    }
+    rpc.mockResolvedValueOnce({
+      data: { id: requestId, status: "completed", due: null },
+      error: null,
+    });
+    await expect(
+      processFrontendPrivacyRequest(api, { requestId, revision: 4, action: "reject" })
+    ).rejects.toMatchObject({ status: 503 });
   });
 });

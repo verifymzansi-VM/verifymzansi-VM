@@ -2,9 +2,15 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { FoundationServiceApi } from "./service-api";
 import { runFoundationPrivacyNotice } from "./privacy-notice-job";
-import { sendDsarCompletedEmail } from "../services/email";
+import {
+  sendDsarApprovedEmail,
+  sendDsarCompletedEmail,
+  sendDsarExportedEmail,
+} from "../services/email";
 vi.mock("server-only", () => ({}));
 vi.mock("../services/email", () => ({
+  sendDsarApprovedEmail: vi.fn(async () => ({ success: true })),
+  sendDsarExportedEmail: vi.fn(async () => ({ success: true })),
   sendDsarCompletedEmail: vi.fn(async () => ({ success: true })),
   sendDsarExtensionEmail: vi.fn(),
   sendDsarRejectedEmail: vi.fn(),
@@ -96,4 +102,26 @@ it("reports an outcome that could not be recorded", async () => {
 it("keeps working without run limits", async () => {
   expect(await runFoundationPrivacyNotice(service)).toBe("succeeded");
   expect(signals).toEqual([]);
+});
+
+it("sends the approval and export notices of the two-person rule", async () => {
+  for (const [kind, send] of [
+    ["approved", sendDsarApprovedEmail],
+    ["exported", sendDsarExportedEmail],
+  ] as const) {
+    rpc.mockImplementation((name: string) => {
+      const result: Promise<Answer> = Promise.resolve({
+        data: name === "claim_frontend_privacy_notice" ? { ...notice, kind } : true,
+        error: null,
+      });
+      return Object.assign(result, { abortSignal: () => result });
+    });
+    expect(await runFoundationPrivacyNotice(service)).toBe("succeeded");
+    expect(send).toHaveBeenCalledWith(
+      notice.recipient,
+      "DSAR-00000000",
+      `foundation-privacy/${notice.id}`
+    );
+  }
+  expect(sendDsarCompletedEmail).not.toHaveBeenCalled();
 });
