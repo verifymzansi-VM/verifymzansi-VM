@@ -13,9 +13,14 @@
 //   reviewed manifests, nothing is SECURITY DEFINER, browsers have no table,
 //   column, sequence or private-schema access, every application table has row
 //   level security and only the Auth sign-up hook has a policy;
+// - checks that every application table holding account data is in owner A's
+//   row fingerprint (OWNER_TABLES, which includes A's Auth rows) or reviewed
+//   as holding none (NOT_DIGESTED);
 // - builds owner A's private world through the production commands (legal
 //   name, an accepted identity review, a verified phone, a live event with an
-//   enquiry, a business draft, an organisation application, a payment);
+//   enquiry and another member's report, a business draft with a seen check,
+//   an organisation application, a paid and a pending payment, a saved form
+//   draft, a privacy request, a support message);
 // - calls every api.* command as a signed-out visitor, a member with no rights
 //   (unverified), another verified member, an organisation administrator and
 //   each staff role, with A's real identifiers and current revisions, and as
@@ -31,7 +36,7 @@
 // the short reviewed lists below; or when the intended principal is refused by
 // a grant or a staff check. The synthetic arguments cannot satisfy every
 // command's input and state rules, so the intended principal is required to
-// succeed outright only for a floor number of commands.
+// succeed outright only for the commands in EXERCISED_FILE.
 //
 //   node --import tsx scripts/test-foundation-access-matrix.mjs
 //
@@ -41,8 +46,8 @@
 // do; everything else goes through the production API commands.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { randomBytes, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
 import { replaySteps } from "./lib/foundation-replay.mjs";
 import { createChecks, sqlHelpers } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
@@ -71,17 +76,72 @@ const ALLOWED_VIEWS = new Map([
   // minimal application list.
   ["admin:org_list_applications:applicationId", "organisation:manage, same minimal list"],
   ["admin:org_list_applications:businessDraftId", "organisation:manage, same minimal list"],
+  // Every staff role answers the support inbox (support:view), which shows
+  // the sender's name, address and message.
+  ...["moderator", "governor", "admin"].flatMap((role) =>
+    ["supportName", "ownerEmail", "supportMessage"].map((value) => [
+      `${role}:get_frontend_support_inbox:${value}`,
+      "support:view answers A's message",
+    ])
+  ),
+  // Staff with dsar:manage handle A's privacy request; the queue shows the
+  // requester's address and request text.
+  ...["governor", "admin"].flatMap((role) =>
+    ["privacyName", "privacyDetails", "ownerEmail", "privacyRequestId"].map((value) => [
+      `${role}:get_frontend_privacy_queue:${value}`,
+      "dsar:manage handles A's request",
+    ])
+  ),
+  // The staff audit page (audit:view) lists the request's events by id only.
+  ["governor:get_frontend_staff_audit_page:privacyRequestId", "audit:view, the event's id only"],
+  ["admin:get_frontend_staff_audit_page:privacyRequestId", "audit:view, the event's id only"],
+  // The seen-check case summary (queue:view, no claim or recent MFA needed)
+  // names the business and shows the owner's display name, which equals the
+  // full legal name once an ID review is accepted. Kept visible here as a
+  // reported data-minimisation finding awaiting the owner's decision; the
+  // visit address and legal name fields stay behind a claim with evidence:view.
+  ...["moderator", "governor", "admin"].flatMap((role) =>
+    ["surname", "businessDraftId"].map((value) => [
+      `${role}:get_frontend_seen_case:${value}`,
+      value === "surname"
+        ? "reported finding: display name is the full legal name"
+        : "queue:view, the checked business",
+    ])
+  ),
 ]);
 // Reviewed exceptions: who may change which of owner A's rows, and through
 // which command (principal:command:table). Staff may change A's rows only
-// through a command gated by a capability their role holds; anything else
+// through a command whose own capability checks (its api body or the internal
+// function of the same name) all name capabilities their role holds, not ones
+// it merely reaches through a helper; anything else
 // changed by a non-owner fails.
 const ALLOWED_CHANGES = new Map([
   // The organisation administrator decides A's consented application, and A
   // is notified of the decision (as on the prototype fixture).
   ["orgAdmin:org_decide_application:organisation_applications", "decides A's application"],
   ["orgAdmin:org_decide_application:notifications", "A is told of the decision"],
+  ["orgAdmin:org_decide_application:organisation_affiliations", "approval affiliates A's business"],
+  [
+    "orgAdmin:org_decide_application:organisation_events",
+    "the decision is logged against A's application",
+  ],
+  // Staff holding organisation:manage (recent MFA) decide for any
+  // organisation; the command reaches that check through
+  // internal.organisation_actor, not directly.
+  ...[
+    "organisation_applications",
+    "notifications",
+    "organisation_affiliations",
+    "organisation_events",
+  ].map((table) => [
+    `admin:org_decide_application:${table}`,
+    "organisation:manage via internal.organisation_actor decides A's application",
+  ]),
 ]);
+// Staff roles that hold only some of a command's own capabilities yet may
+// succeed, because the command checks the others on one branch only
+// (role:command: reason).
+const PARTIAL_CAPABILITY_BRANCHES = new Map([]);
 // Commands that check a staff capability on one branch only and serve every
 // member otherwise (command:reason).
 const MEMBER_WITH_STAFF_BRANCH = new Map([
@@ -98,20 +158,35 @@ const STAFF_SESSION_REFUSALS = [
   "verified authenticator app required",
   "account suspended",
 ];
-// The intended principal's synthetic arguments reach a successful answer for
-// at least this many commands; the rest stop at input or state validation
-// (an unknown id, a missing claim), never at a grant or a staff check.
-const INTENDED_SUCCESS_FLOOR = 130;
+// The commands whose intended principal reaches a successful answer with the
+// synthetic arguments (so the sweep exercises them past their input and state
+// rules). Each listed command must keep succeeding; the rest stop at input or
+// state validation (an unknown id, a missing claim), never at a grant or a
+// staff check. Rewrite the list with --write-exercised after reviewing a
+// change in it.
+const EXERCISED_FILE = "scripts/lib/foundation-access-matrix-exercised.json";
 
 const APPLICATION_SCHEMAS = ["public", "api", "private", "internal"];
+// Owner A's rows, fingerprinted before and after every call ($1 is A's
+// account id). The coverage check below requires every private table that
+// holds account data to be listed here or in NOT_DIGESTED.
+const ownPosts = "post_id in (select id from private.posts where owner_id=$1)";
+const ownCases = "case_id in (select id from private.evidence_cases where subject_id=$1)";
+const ownPayments = "payment_id in (select id from private.payments where owner_id=$1)";
+const ownChecks = "check_id in (select id from private.frontend_business_checks where owner_id=$1)";
+const ownEmail = "lower(email)=(select lower(email) from auth.users where id=$1)";
+const ownDecisions = `decision_id in (select id from private.decisions where ${ownCases})`;
+const ownFacts = "fact_id in (select id from private.accepted_identity_facts where owner_id=$1)";
+const ownReports =
+  "report_id in (select id from private.reports where reporter_id=$1 or subject_account_id=$1)";
 const OWNER_TABLES = [
   ["profiles", "account_id=$1"],
   ["identity_submission_names", "owner_id=$1"],
   ["posts", "owner_id=$1"],
-  ["post_contacts", "post_id in (select id from private.posts where owner_id=$1)"],
-  ["post_media", "post_id in (select id from private.posts where owner_id=$1)"],
+  ["post_contacts", ownPosts],
+  ["post_media", ownPosts],
   ["media_objects", "owner_id=$1"],
-  ["enquiries", "owner_id=$1"],
+  ["enquiries", "owner_id=$1 or sender_account_id=$1"],
   ["notifications", "account_id=$1"],
   ["evidence_cases", "subject_id=$1"],
   ["evidence_artifacts", "owner_id=$1"],
@@ -127,7 +202,200 @@ const OWNER_TABLES = [
   ["account_acquisitions", "account_id=$1"],
   ["partners", "account_id=$1"],
   ["partner_commissions", "referred_account_id=$1"],
+  // Tables the updates added, and the rest of A's account, posts, cases,
+  // payments and requests.
+  ["account_closures", "user_id=$1"],
+  ["account_erasures", "user_id=$1"],
+  ["account_erasure_requests", "user_id=$1"],
+  ["banned_identities", ownDecisions],
+  [
+    "banned_phone_numbers",
+    `identity_hmac in (select identity_hmac from private.identity_ban_bindings where ${ownFacts})`,
+  ],
+  ["business_details", ownPosts],
+  ["communication_choice_events", "account_id=$1"],
+  ["customer_invoices", "account_id=$1"],
+  ["customer_invoice_payments", ownPayments],
+  ["decisions", ownCases],
+  ["entitlement_members", "member_id=$1"],
+  ["event_details", ownPosts],
+  ["event_submissions", "owner_id=$1"],
+  ["evidence_access_log", ownCases],
+  ["evidence_fraud_holds", ownCases],
+  ["frontend_account_restrictions", "account_id=$1"],
+  ["frontend_account_warnings", "account_id=$1"],
+  ["frontend_appeals", "appellant_id=$1"],
+  ["frontend_business_checks", "owner_id=$1"],
+  ["frontend_business_check_messages", ownChecks],
+  ["frontend_business_reply_files", ownChecks],
+  ["frontend_business_seen_photos", ownChecks],
+  ["frontend_cipc_documents", ownChecks],
+  ["frontend_cipc_email_codes", ownChecks],
+  ["frontend_cipc_exceptions", ownChecks],
+  ["frontend_cipc_reviews", ownChecks],
+  ["frontend_content_holds", "account_id=$1"],
+  [
+    "frontend_content_hold_media",
+    "hold_id in (select id from private.frontend_content_holds where account_id=$1)",
+  ],
+  ["frontend_evidence_claim_events", ownCases],
+  ["frontend_form_drafts", "owner_id=$1"],
+  ["frontend_governance_events", ownDecisions],
+  ["frontend_identity_step_approvals", ownCases],
+  ["frontend_offline_post_reviews", ownPosts],
+  ["frontend_partner_notes", "partner_id in (select id from private.partners where account_id=$1)"],
+  ["frontend_payment_reversals", ownPayments],
+  ["frontend_post_action_receipts", "owner_id=$1"],
+  ["frontend_post_approval_snapshots", ownPosts],
+  ["frontend_post_commands", "owner_id=$1"],
+  ["frontend_post_hold_state", ownPosts],
+  ["frontend_report_action_receipts", ownReports],
+  [
+    "frontend_report_proposals",
+    `receipt_id in (select id from private.frontend_report_action_receipts where ${ownReports})`,
+  ],
+  ["frontend_staff_role_changes", "target_id=$1"],
+  ["frontend_verification_uploads", "owner_id=$1"],
+  ["identity_ban_bindings", ownFacts],
+  ["identity_ban_proposal_requests", "owner_id=$1"],
+  [
+    "identity_review_proposals",
+    "submission_id in (select id from private.verification_identity_submissions where owner_id=$1)",
+  ],
+  ["individual_slot_limits", "account_id=$1"],
+  ["intro_trial_requests", "owner_id=$1"],
+  ["invoice_transfers", "account_id=$1"],
+  ["invoices", ownPayments],
+  ["listing_details", ownPosts],
+  ["listing_price_drafts", "owner_id=$1"],
+  ["moderation_log", ownPosts],
+  [
+    "notification_dismissals",
+    "notification_id in (select id from private.notifications where account_id=$1)",
+  ],
+  ["organisation_admins", "account_id=$1"],
+  ["organisation_affiliations", ownPosts],
+  // An event's subject is an account, application, affiliation, sponsorship,
+  // invitation, programme or logo; match every one that belongs to A.
+  [
+    "organisation_events",
+    "subject_id=$1 or subject_id in (select id from private.organisation_applications where applicant_id=$1" +
+      ` union select id from private.organisation_affiliations where ${ownPosts}` +
+      " union select id from private.organisation_sponsorships where owner_id=$1" +
+      ` union select id from private.organisation_invites where ${ownEmail}` +
+      " union select id from private.media_objects where owner_id=$1)",
+  ],
+  ["organisation_invites", ownEmail],
+  ["outbox_events", "owner_id=$1"],
+  ["owner_admin_invitations", ownEmail],
+  ["partner_events", "partner_id in (select id from private.partners where account_id=$1)"],
+  ["payment_activations", ownPayments],
+  ["payment_lines", ownPayments],
+  ["payment_problems", ownPayments],
+  // The daily payment-problem summary lists payment ids in its jsonb.
+  [
+    "payment_problem_digests",
+    "exists(select 1 from private.payments p where p.owner_id=$1 and t.content::text like '%'||p.id::text||'%')",
+  ],
+  ["payment_refund_requests", "account_id=$1"],
+  ["post_activations", "owner_id=$1"],
+  ["post_addon_windows", `${ownPosts} or ${ownPayments}`],
+  ["post_deletion_extensions", ownPosts],
+  ["post_presentations", ownPosts],
+  ["post_presentation_media", ownPosts],
+  ["post_search_documents", ownPosts],
+  ["post_slugs", ownPosts],
+  ["post_trial_claims", "owner_id=$1"],
+  ["posting_terms_acceptances", "owner_id=$1"],
+  ["privacy_requests", "subject_user_id=$1"],
+  [
+    "privacy_request_events",
+    "request_id in (select id from private.privacy_requests where subject_user_id=$1)",
+  ],
+  [
+    "privacy_notice_jobs",
+    "request_id in (select id from private.privacy_requests where subject_user_id=$1)",
+  ],
+  ["provider_events", ownPayments],
+  ["queue_claims", `${ownPosts} or ${ownReports}`],
+  ["queue_claim_events", `${ownPosts} or ${ownReports}`],
+  ["reports", "reporter_id=$1 or subject_account_id=$1"],
+  ["signup_terms_acceptances", "account_id=$1"],
+  ["slot_packages", "owner_id=$1"],
+  ["staff_roles", "user_id=$1"],
+  ["support_tickets", ownEmail],
+  [
+    "support_ticket_events",
+    `ticket_id in (select id from private.support_tickets where ${ownEmail})`,
+  ],
+  [
+    "support_ticket_mail",
+    `ticket_id in (select id from private.support_tickets where ${ownEmail})`,
+  ],
+  ["trial_identities", "owner_id=$1"],
+  ["verification_current_submissions", ownCases],
+  ["verification_phone_challenges", "owner_id=$1"],
+  ["verification_return_requests", ownCases],
+  // A's Auth rows (sign-in identity, sessions, authenticator apps).
+  ["auth.users", "id=$1"],
+  ["auth.sessions", "user_id=$1"],
+  ["auth.mfa_factors", "user_id=$1"],
 ];
+// Private tables that reference an account, a post, a case, a notification or
+// one of the tables above, or carry an account or contact column, yet hold no
+// data of owner A (table: reason). Reviewed; add a table here only with a
+// reason, never to make the coverage check pass.
+const NOT_DIGESTED = new Map([
+  ["cost_alarms", "platform cost alarms; the only account column is the acknowledging staff"],
+  ["frontend_feature_flags", "runtime switches; the only account column is the staff editor"],
+  ["frontend_feature_flag_events", "switch history; the only account column is the staff editor"],
+  [
+    "organisations",
+    "an organisation's own record, edited only by staff with organisation:manage or its " +
+      "administrators; its contacts are the organisation's (shown only once is_public is " +
+      "set) and its account columns (created_by, logo_permission_by) name staff",
+  ],
+  [
+    "organisation_notes",
+    "staff notes on an organisation; the only account column is the staff author",
+  ],
+  [
+    "programme_showcases",
+    "staff-curated showcase settings of a programme; the only account column is the staff editor",
+  ],
+  [
+    "category_fields",
+    "posting-form field catalogue; its jsonb holds validation rules, no member data",
+  ],
+  ["posting_terms_versions", "published posting terms; the hash is the document's, no member data"],
+  ["reference_catalog_versions", "taxonomy catalogue versions; the hash is the catalogue's"],
+]);
+// What makes a private table hold account data, for the coverage check.
+const ACCOUNT_ANCHORS = [
+  "auth.users",
+  "private.posts",
+  "private.evidence_cases",
+  "private.notifications",
+];
+// Column names (matched case-insensitively) that hold or point at personal
+// data: accounts, contacts, names, identity documents, addresses, network
+// addresses, bank details, secrets and hashes, stored object keys.
+const CONTACT_COLUMN =
+  "(^|_)(email|email_address|phone|phone_number|phone_e164|msisdn|mobile|cell|whatsapp|" +
+  "address|dob|birth|birth_date|date_of_birth|passport|passport_number|national_id|" +
+  "id_number|account_number|iban|token|secret|last_four|object_key|full_name|" +
+  "owner_id|account_id|user_id|subject_id|subject_user_id|applicant_id|appellant_id|" +
+  "member_id|target_id|author_id|created_by|actor_id)(_|$)|_name$|^ip|_ip(_|$)|_hmac$|" +
+  "_hash$|whatsapp|msisdn|mobile|birth|passport|address|secret|token";
+// uuid columns that name an account even without a foreign key.
+const ACCOUNT_UUID_COLUMN =
+  "_by$|(^|_)(reviewer|requester|sender|recipient|staff|verifier|proposer|approver|" +
+  "assignee|claimant|reporter|buyer|seller|customer|user|account|member|owner|actor|" +
+  "author|subject|target|applicant|appellant|partner|referrer|referred_account|invited|" +
+  "inviter|creator|editor|holder)_id$";
+// Column types that hold free-form documents or network addresses: their
+// table must be digested or reviewed whatever the column is called.
+const FREE_FORM_TYPES = ["json", "jsonb", "json[]", "jsonb[]", "inet", "cidr"];
 
 const { check, current, passed } = createChecks();
 const started = Date.now();
@@ -270,15 +538,138 @@ try {
     }
   });
 
+  // A new table holding account data must join the owner digest (so a
+  // non-owner changing A's rows in it is caught) or be reviewed as holding
+  // none of A's data. A table, in any schema the application stores data in,
+  // holds account data when it references an account, a post, a case, a
+  // notification or a digested table, or has an account, contact, identity or
+  // secret column, an account-like uuid column or a free-form column. Tables
+  // outside private are named schema.table.
+  const relation = (table) => (table.includes(".") ? table : `private.${table}`);
+  await check("coverage: every table holding account data is in the owner digest", () => {
+    const digested = OWNER_TABLES.map(([table]) => table);
+    assert.equal(new Set(digested).size, digested.length, "a table is digested twice");
+    assert.deepEqual(
+      digested.filter((table) => NOT_DIGESTED.has(table)),
+      [],
+      "digested and reviewed as not digested"
+    );
+    const anchors = [...ACCOUNT_ANCHORS, ...digested.map(relation)].map(
+      (name) => `'${name}'::regclass`
+    );
+    const schemas = APPLICATION_SCHEMAS.map((schema) => `'${schema}'`).join(",");
+    const types = FREE_FORM_TYPES.map((type) => `'${type}'::regtype`).join(",");
+    const linkedTables = () =>
+      json(`select coalesce(json_agg(case when n.nspname='private' then c.relname::text
+          else n.nspname||'.'||c.relname end order by n.nspname,c.relname),'[]') from pg_class c
+      join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname in (${schemas}) and c.relkind in ('r','p') and (
+        exists(select 1 from pg_constraint k where k.conrelid=c.oid and k.contype='f'
+          and k.confrelid in (${anchors.join(",")}))
+        or exists(select 1 from pg_attribute a where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped
+          and (a.attname ~* '${CONTACT_COLUMN}' or a.atttypid in (${types})
+            or (a.atttypid='uuid'::regtype and a.attname ~* '${ACCOUNT_UUID_COLUMN}'))));`);
+    // The rule finds a table that references a post, one for each kind of
+    // flagged column (whatever its letter case), and one outside private; a
+    // table with none of them is not flagged.
+    const probe = "zz_coverage_guard_" + randomBytes(4).toString("hex");
+    const probes = {
+      ref: "post_id uuid references private.posts(id)",
+      contact: "buyer_phone text",
+      emailaddress: "email_address text",
+      msisdn: "msisdn text",
+      mobile: "mobile_number text",
+      cell: "cell text",
+      whatsapp: "whatsapp_number text",
+      e164: "phone_e164 text",
+      address: "home_address text",
+      dob: "dob date",
+      birth: "birth_date date",
+      passport: "passport_number text",
+      national: "national_id text",
+      idnumber: "id_number text",
+      bank: "account_number text",
+      iban: "iban text",
+      token: "reset_token text",
+      secret: "client_secret text",
+      hash: "document_hash text",
+      lastfour: "card_last_four text",
+      objectkey: "avatar_object_key text",
+      name: "holder_name text",
+      full: "full_name text",
+      upper: '"Buyer_Email" text',
+      ip: "ip_address text",
+      sourceip: "source_ip text",
+      hmac: "device_hmac text",
+      author: "author_id uuid",
+      creator: "created_by uuid",
+      actor: "actor_id uuid",
+      reviewer: "reviewer_id uuid",
+      requested: "requested_by uuid",
+      sender: "sender_id uuid",
+      document: "payload jsonb",
+      json: "payload json",
+      documents: "payloads jsonb[]",
+      network: "origin inet",
+    };
+    const plain = `${probe}_plain`;
+    const outside = `public.${probe}_outside`;
+    const probeTables = [
+      ...Object.keys(probes).map((kind) => `private.${probe}_${kind}`),
+      `private.${plain}`,
+      outside,
+    ];
+    try {
+      sql(
+        Object.entries(probes)
+          .map(
+            ([kind, column]) =>
+              `create table private.${probe}_${kind}(id integer primary key, ${column});`
+          )
+          .join("") +
+          `create table private.${plain}(id integer primary key, label text, amount integer, ` +
+          `post_ref uuid, created_at timestamptz);` +
+          `create table ${outside}(id integer primary key, owner_id uuid);`
+      );
+      const found = linkedTables();
+      for (const kind of Object.keys(probes))
+        assert.ok(found.includes(`${probe}_${kind}`), `coverage rule misses ${probe}_${kind}`);
+      assert.ok(found.includes(outside), "coverage rule misses a table outside private");
+      assert.ok(!found.includes(plain), "coverage rule flags a table with no account data");
+    } finally {
+      sql(`drop table if exists ${probeTables.join(", ")};`);
+    }
+    const linked = linkedTables();
+    // Every listed table exists; every reviewed one still matches the rule.
+    assert.deepEqual(
+      digested.filter(
+        (table) => sql(`select to_regclass('${relation(table)}') is not null;`) !== "t"
+      ),
+      [],
+      "digested table no longer exists"
+    );
+    assert.deepEqual(
+      [...NOT_DIGESTED.keys()].filter((table) => !linked.includes(table)),
+      [],
+      "reviewed table no longer holds account data; remove it from NOT_DIGESTED"
+    );
+    assert.deepEqual(
+      linked.filter((table) => !digested.includes(table) && !NOT_DIGESTED.has(table)),
+      [],
+      "table holding account data is neither digested nor reviewed"
+    );
+  });
+
   // ------------------------------------------------------ calling commands
   // One psql session for every call. vmtest.try runs one command as the given
   // role and JWT claims inside a subtransaction, catches its error, and (for
   // the sweep) fingerprints owner A's rows before and after it and rolls it
   // back, so every call sees the same world.
+  // One jsonb_build_object per table (a function takes at most 100 arguments).
   const ownerDigest = OWNER_TABLES.map(
     ([table, where]) =>
-      `'${table}',(select md5(coalesce(string_agg(to_jsonb(t)::text,'|' order by to_jsonb(t)::text),'')) from private.${table} t where ${where.replaceAll("$1", "p_owner")})`
-  ).join(",");
+      `jsonb_build_object('${table}',(select md5(coalesce(string_agg(to_jsonb(t)::text,'|' order by to_jsonb(t)::text),'')) from ${relation(table)} t where ${where.replaceAll("$1", "p_owner")}))`
+  ).join("||");
   sql(`create schema vmtest;
     create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
     declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); mail text:=p_label||'-'||uid||'@example.invalid'; begin
@@ -294,8 +685,9 @@ try {
       insert into private.staff_roles(user_id,role) values((m->>'id')::uuid,p_role);
       return m;
     end$$;
-    create function vmtest.digest(p_owner uuid) returns jsonb language sql as $$
-      select jsonb_build_object(${ownerDigest}) $$;
+    -- plpgsql keeps the plan of the digest query for the session.
+    create function vmtest.digest(p_owner uuid) returns jsonb language plpgsql as $$
+      begin return ${ownerDigest}; end $$;
     create function vmtest.try(p_role text,p_claims jsonb,p_call text,p_owner uuid) returns jsonb
     language plpgsql as $$
     declare v_data jsonb; v_ok boolean:=false; v_state text; v_message text; v_detail text; v_hint text;
@@ -483,6 +875,131 @@ try {
     world = { ids, live, business, org, orgSlug, programme, tokenHash, buyer, verified };
   });
 
+  // Personal data A gives the updates' flows: a saved form draft, a privacy
+  // request and a message to support (through the server's own commands).
+  const extra = {
+    draftNote: "Synthetic draft note " + syntheticLetters(),
+    visitAddress: "Synthetic visit address " + syntheticLetters(),
+    privacyName: "Requester " + syntheticLetters(),
+    privacyDetails: "Synthetic privacy detail " + syntheticLetters(),
+    supportName: "Supporter " + syntheticLetters(),
+    supportMessage: "Synthetic support message " + syntheticLetters(),
+  };
+  await check("world: owner A's form draft, privacy request and support message", async () => {
+    await call("frontend_form_draft", {
+      p_flow: "listing",
+      p_action: "save",
+      p_step: 1,
+      p_data: { note: extra.draftNote },
+    });
+    const request = await call(
+      "record_frontend_privacy_request",
+      {
+        p_account: owner.id,
+        p_session: owner.session,
+        p_type: "access",
+        p_name: extra.privacyName,
+        p_last_four: null,
+        p_details: extra.privacyDetails,
+      },
+      null,
+      true
+    );
+    const ticket = await call(
+      "submit_frontend_support",
+      {
+        p_name: extra.supportName,
+        p_email: owner.email,
+        p_category: "general_support",
+        p_message: extra.supportMessage,
+      },
+      null,
+      true
+    );
+    world.ids.privacyRequestId = request.id;
+    world.ids.supportTicketId = ticket.id;
+    for (const name of ["privacyRequestId", "supportTicketId"])
+      assert.match(world.ids[name] ?? "", /^[a-f0-9-]{36}$/, name);
+  });
+
+  // Rows staff act on: a settled payment (so A holds an entitlement), a
+  // business check with A's visit address, and another member's report about
+  // A's live event.
+  await check("world: owner A's paid slot, seen check and a report on A's post", async () => {
+    const paid = await startPayment(owner);
+    const lease = await call(
+      "claim_checkout_request",
+      { p_payment_id: paid, p_owner_id: owner.id },
+      null,
+      true
+    );
+    if (!lease.checkout_url)
+      await call(
+        "complete_checkout_request",
+        {
+          p_payment_id: paid,
+          p_owner_id: owner.id,
+          p_claim_token: lease.claim_token,
+          p_request_id: `req-${paid}`,
+          p_checkout_url: `https://one.ozow.com/checkout/req-${paid}`,
+        },
+        null,
+        true
+      );
+    const row = json(
+      `select jsonb_build_object('ref',merchant_reference,'amount',amount_cents) from private.payments where id='${paid}';`
+    );
+    const settled = await call(
+      "apply_provider_event",
+      {
+        p_event: {
+          payload_sha256: createHash("sha256").update(`event-${paid}-complete`).digest("hex"),
+          merchant_reference: row.ref,
+          provider_request_id: `req-${paid}`,
+          provider_transaction_id: `tx-${paid}`,
+          status: "complete",
+          amount_cents: Number(row.amount),
+          currency: "ZAR",
+        },
+      },
+      null,
+      true
+    );
+    assert.equal(settled.outcome, "completed");
+    world.ids.paidPaymentId = paid;
+    // Starting that checkout closed the earlier one; open a new pending
+    // payment so the checkout commands still have one to act on.
+    world.ids.paymentId = await startPayment(owner);
+    const seen = await call("request_frontend_business_seen", {
+      p_business: world.business.id,
+      p_method: "visit",
+      p_slots: ["Monday morning"],
+      p_consent: true,
+      p_address: extra.visitAddress,
+    });
+    world.seenCaseId = seen.caseId;
+    const report = await call(
+      "submit_frontend_report",
+      {
+        p_post_id: world.live.id,
+        p_kind: "promotion",
+        p_reason: "misleading",
+        p_description: "Synthetic report about the event's details.",
+        p_reporter_ip_hmac: randomBytes(32).toString("base64url"),
+        p_reporter_id: other.id,
+      },
+      null,
+      true
+    );
+    world.reportId = report.id;
+    assert.ok(
+      Number(sql(`select count(*) from private.entitlements where owner_id='${owner.id}';`)) > 0,
+      "the settled payment grants an entitlement"
+    );
+    for (const value of [world.ids.paidPaymentId, world.seenCaseId, world.reportId])
+      assert.match(value ?? "", /^[a-f0-9-]{36}$/);
+  });
+
   // Another member's invoice whose bank transfer expired
   // (20261118044440_bank_transfer_expiry.sql). It belongs to `other`, not to
   // owner A, so the sweep's invoice commands show that only its own member
@@ -525,6 +1042,7 @@ try {
   // Owner A's private values. Phone numbers are matched on their last nine
   // digits so a reformatted number is still caught.
   const canaries = {
+    ...extra,
     ...world.ids,
     surname,
     ownerEmail: owner.email,
@@ -546,10 +1064,12 @@ try {
       await call("list_my_notifications", {}),
       await call("get_owner_post_contacts", { p_post_id: world.live.id }),
       await call("get_owner_verification_readiness", {}),
+      await call("frontend_form_draft", { p_flow: "listing", p_action: "read" }),
     ]
       .map((value) => JSON.stringify(value))
       .join("");
     for (const name of [
+      "draftNote",
       "surname",
       "buyerEmail",
       "buyerPhone",
@@ -560,12 +1080,39 @@ try {
       assert.ok(leaks(ownView, "").includes(name), "owner view lacks " + name);
   });
 
+  // The fingerprint tables that hold rows of owner A once the world is built.
+  // Each recorded one must keep at least one row, so a filter that stops
+  // matching A cannot leave its table fingerprinted as empty.
+  const recorded = JSON.parse(readFileSync(EXERCISED_FILE, "utf8"));
+  const writeRecord = process.argv.includes("--write-exercised");
+  let nonEmptyOwnerTables = [];
+  await check("world: the recorded fingerprint tables hold rows of owner A", () => {
+    const counts = json(
+      `select ${OWNER_TABLES.map(
+        ([table, where]) =>
+          `jsonb_build_object('${table}',(select count(*) from ${relation(table)} t where ${where.replaceAll("$1", `'${owner.id}'`)}))`
+      ).join("||")};`
+    );
+    nonEmptyOwnerTables = OWNER_TABLES.map(([table]) => table).filter((table) => counts[table] > 0);
+    if (writeRecord) return;
+    assert.deepEqual(
+      recorded.nonEmptyOwnerTables.filter((table) => !nonEmptyOwnerTables.includes(table)),
+      [],
+      "fingerprint tables with no rows of owner A"
+    );
+    const added = nonEmptyOwnerTables.filter(
+      (table) => !recorded.nonEmptyOwnerTables.includes(table)
+    );
+    if (added.length) console.log(`Also non-empty now (add with --write-exercised): ${added}`);
+  });
+
   // ------------------------------------------------------------ arguments
   const { ids, live, business, org, orgSlug, programme, tokenHash } = world;
   const revisionOf = (id) =>
     Number(
       sql(
-        `select coalesce((select revision from private.posts where id='${id}'),(select revision from private.organisations where id='${id}'),1);`
+        `select coalesce((select revision from private.posts where id='${id}'),(select revision from private.organisations where id='${id}'),` +
+          `(select revision from private.privacy_requests where id='${id}'),(select revision from private.support_tickets where id='${id}'),1);`
       )
     );
   const caseVersion = () =>
@@ -589,7 +1136,10 @@ try {
       p_post_b: [business.id],
       p_target_post: [live.id],
       p_business: [business.id],
-      p_case: [ids.caseId],
+      p_case: [ids.caseId, ids.privacyRequestId, world.seenCaseId],
+      p_report: [world.reportId],
+      p_report_id: [world.reportId],
+      p_ticket: [ids.supportTicketId],
       p_case_id: [ids.caseId],
       p_submission: [ids.submissionId],
       p_artifact: [ids.artifactId0],
@@ -609,7 +1159,7 @@ try {
       p_application: [ids.applicationId],
       p_org: [org.id],
       p_programme: [programme.id],
-      p_payment_id: [ids.paymentId],
+      p_payment_id: [ids.paymentId, ids.paidPaymentId],
       p_object_id: mediaIds.slice(0, 2),
       p_fact: [ids.factId],
       p_challenge: [randomUUID()],
@@ -632,6 +1182,8 @@ try {
       p_kind: "listing",
       p_queue: "posts",
       p_outcome: "dismissed",
+      p_view: "open",
+      p_tab: "review",
       p_category: "other",
       p_email: owner.email,
       p_account_email: owner.email,
@@ -652,7 +1204,15 @@ try {
         sweepInteger(name, body, {
           caseVersion,
           revisionOf,
-          revisionTarget: (target) => target.p_post_id ?? target.p_id ?? target.p_post ?? live.id,
+          // Privacy requests (p_case) and support tickets carry their own
+          // revision; an evidence case has none, so it falls back to 1.
+          revisionTarget: (target) =>
+            target.p_post_id ??
+            target.p_id ??
+            target.p_post ??
+            target.p_ticket ??
+            target.p_case ??
+            live.id,
           fixed: { p_offset: 0 },
         }),
       typed: (arg) =>
@@ -788,16 +1348,26 @@ try {
       if (!fn.authenticated || !caps) continue;
       for (const role of STAFF_ROLES) {
         const results = outcomes.get(`${role}:${fn.name}`);
+        const held = (direct ?? []).filter((cap) => granted[role].includes(cap));
         if (caps.every((cap) => granted[role].includes(cap)))
           assert.ok(!results.some(capabilityRefusal), `${role} refused ${fn.name}`);
-        else if (direct?.length === 1 && !granted[role].includes(direct[0]))
-          assert.ok(results.every(capabilityRefusal), `${role} lacks ${direct[0]} for ${fn.name}`);
+        // A role holding none of the command's own capabilities is refused
+        // every call by the capability check.
+        else if (direct?.length && !held.length)
+          assert.ok(results.every(capabilityRefusal), `${role} lacks ${direct} for ${fn.name}`);
+        // A role holding only some of them never succeeds, unless the command
+        // checks the others on a reviewed branch only.
+        else if (direct?.length && !PARTIAL_CAPABILITY_BRANCHES.has(`${role}:${fn.name}`))
+          assert.ok(
+            results.every((r) => !r.ok),
+            `${role} succeeded at ${fn.name} holding only ${held} of ${direct}`
+          );
         else continue;
         capabilityChecks++;
       }
       // Members are never let through a staff check.
       for (const label of ["unverified", "other", "orgAdmin", "owner"])
-        if (direct?.length === 1 && !MEMBER_WITH_STAFF_BRANCH.has(fn.name))
+        if (direct?.length && !MEMBER_WITH_STAFF_BRANCH.has(fn.name))
           assert.ok(
             outcomes.get(`${label}:${fn.name}`).every((r) => !r.ok),
             `${label} passed the staff check of ${fn.name}`
@@ -819,14 +1389,17 @@ try {
       .filter((entry) => {
         const [label, name] = entry.split(":");
         if (!STAFF_ROLES.includes(label)) return true;
-        const caps = capabilities[name] ?? [];
-        return !caps.some((cap) => granted[label].includes(cap));
+        const direct = directCapabilities[name] ?? [];
+        return !direct.length || !direct.every((cap) => granted[label].includes(cap));
       })
       .sort();
     assert.deepEqual(unexpected, []);
+    for (const entry of ALLOWED_CHANGES.keys())
+      assert.ok(changes.includes(entry), `reviewed change no longer observed: ${entry}`);
   });
 
   let intendedOk = 0;
+  const exercised = [];
   await check("intended principal: never refused by a grant or a staff check", () => {
     for (const fn of catalogue) {
       const caps = capabilities[fn.name];
@@ -839,7 +1412,7 @@ try {
               "admin")
             : "owner";
       const results = outcomes.get(`${label}:${fn.name}`);
-      if (results.some((r) => r.ok)) intendedOk++;
+      if (results.some((r) => r.ok)) exercised.push(fn.name);
       assert.ok(
         !results.some(
           (r) => grantRefusal(r) || (!r.ok && STAFF_SESSION_REFUSALS.includes(r.message))
@@ -847,7 +1420,20 @@ try {
         `${label} refused ${fn.name}`
       );
     }
-    assert.ok(intendedOk >= INTENDED_SUCCESS_FLOOR, `only ${intendedOk} commands succeeded`);
+    intendedOk = exercised.length;
+    if (writeRecord)
+      writeFileSync(
+        EXERCISED_FILE,
+        `${JSON.stringify({ commands: exercised, nonEmptyOwnerTables }, null, 2)}\n`
+      );
+    const listed = writeRecord ? exercised : recorded.commands;
+    assert.deepEqual(
+      listed.filter((name) => !exercised.includes(name)),
+      [],
+      "commands the sweep no longer exercises"
+    );
+    const added = exercised.filter((name) => !listed.includes(name));
+    if (added.length) console.log(`Also exercised now (add with --write-exercised): ${added}`);
   });
 
   console.log(
