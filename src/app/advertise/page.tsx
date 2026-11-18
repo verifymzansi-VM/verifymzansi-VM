@@ -705,18 +705,7 @@ export default async function AdvertisePage() {
 
         {/* 4 ── The three packages in full ──────────────────── */}
         {packages.map((pkg, index) => (
-          <PackageSection key={pkg.id} pkg={pkg} sheet={sheets[pkg.id]} shaded={index % 2 === 1}>
-            {pkg.id === "programmes" ? (
-              <div className="rounded-2xl border border-brand-gold/40 bg-brand-gold/10 p-4 text-sm">
-                <p className="font-semibold text-foreground">Founding pilots</p>
-                <p className="mt-1 text-muted-foreground">
-                  3 programmes in the City of uMhlathuze, up to 25 businesses each, free for 90
-                  days. Invitations close on 31 December 2026. Nothing renews or charges
-                  automatically.
-                </p>
-              </div>
-            ) : null}
-          </PackageSection>
+          <PackageSection key={pkg.id} pkg={pkg} sheet={sheets[pkg.id]} shaded={index % 2 === 1} />
         ))}
 
         {/* 5 ── Where your post appears ─────────────────────── */}
