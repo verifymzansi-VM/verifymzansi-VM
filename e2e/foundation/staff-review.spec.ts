@@ -257,8 +257,11 @@ async function staffCommandOutcome(copy: TestCopy, name: string, body: unknown, 
 
 /** A member's identity case card in the staff identity queue. */
 function identityCard(page: Page, member: VerifiedMember) {
+  // The queue names a member by their public short name ('Naledi R.'), not
+  // their full name (20261118072601_staff_data_minimisation.sql).
   const displayName = queryTestCopy(
-    `select display_name from private.profiles where account_id = '${member.id}';`
+    "select internal.profile_public_name(display_name) from private.profiles " +
+      `where account_id = '${member.id}';`
   );
   expect(displayName.length).toBeGreaterThan(1);
   // The nearest block around the member's name that holds the review buttons.
