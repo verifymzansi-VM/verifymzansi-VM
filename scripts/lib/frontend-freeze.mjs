@@ -65,7 +65,7 @@ function isSeparatorRow(cells) {
 
 // A group heading between the markers: "### 12. Content-first home ...".
 const GROUP_HEADING = /^###\s+(\d+)\.\s+(.+)$/;
-export const SUMMARY_HEADING = "## Summary for the owner";
+const SUMMARY_HEADING = "## Summary for the owner";
 
 /**
  * Reads the owner's summary table (outside the markers). It holds one row per
