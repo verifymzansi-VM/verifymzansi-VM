@@ -198,24 +198,108 @@ Production is the `verifymzansi` Cloudflare Worker on `verifymzansi.com` (see
 
 - The Deploy workflow (`.github/workflows/deploy.yml`) installs only the names
   listed in `scripts/prepare-cloudflare-candidate-secrets.mjs` (passed with
-  `--secrets-file`); that script is the source of truth. Update those as GitHub
-  repository secrets, then redeploy.
+  `--secrets-file`); that script is the source of truth. Update those in the
+  GitHub `production` environment (see "Where secrets live"), then redeploy.
 - Every other secret is inherited from the current Worker version and is never
   set by a deploy. Rotate it with `pnpm wrangler secret put <NAME>`. That
   includes the Ozow secrets (`OZOW_CLIENT_*`, `OZOW_SITE_CODE`,
   `OZOW_WEBHOOK_SECRET`, the refund keys), `RESEND_API_KEY`,
-  `AFRICASTALKING_API_KEY` and the `R2_*` keys. Changing only the GitHub
-  repository secret of such a name changes nothing in production.
+  `AFRICASTALKING_API_KEY` and the `R2_*` keys. Changing only the GitHub secret
+  of such a name changes nothing in production.
 
 "Redeploy" below means a new release through the Deploy workflow.
+
+### Where secrets live
+
+- **Cloudflare (Worker secrets)** hold every value the running site needs. The
+  runtime-only keys `KYC_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEY`, `HMAC_SECRET` and
+  `IP_HASH_SECRET` live **only** here; no workflow reads them. Release
+  validation (`validate-launch-env.ts --runtime-secrets-in-cloudflare`) accepts
+  their absence (a value that is present, even blank, must still pass every
+  check). Before every production deploy, `pnpm cloudflare:secrets:check`
+  confirms they exist on the Worker by name; the Cloudflare Candidate upload
+  does not run that check (its inactive version inherits the Worker's secrets).
+- **GitHub environment `production`** (deployment branch: `main` only) holds the
+  values only the Deploy and Cloudflare Candidate workflows read. Each step
+  receives only the values its scripts read
+  (`src/__tests__/workflow-secret-scope.test.ts` pins every step's exact list).
+  Dependency installation, the build (`scripts/build-cloudflare-release.mjs`,
+  which builds with an allowlisted environment and synthetic private values),
+  browser installation and upload steps receive none, and the deploy deletes its
+  temporary secret files right after the last deploy step. Code installed
+  earlier in the same job still runs later beside secrets, so dependency review
+  remains a control.
+
+  <!-- secrets:production -->
+  - Supabase: `FOUNDATION_SUPABASE_URL`, `FOUNDATION_PROJECT_REF`,
+    `FOUNDATION_SUPABASE_PUBLISHABLE_KEY`, `FOUNDATION_SUPABASE_SECRET_KEY`,
+    `FOUNDATION_PHONE_OTP_KEY`
+  - Site and public settings: `APP_URL`, `NEXT_PUBLIC_APP_URL` (if set),
+    `TURNSTILE_SITE_KEY`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (if set),
+    `KYC_PROVIDER`
+  - Providers: `AFRICASTALKING_API_KEY`, `AFRICASTALKING_USERNAME`,
+    `AFRICASTALKING_SENDER_ID`, `OZOW_ENV`, `OZOW_CLIENT_ID`,
+    `OZOW_CLIENT_SECRET`, `OZOW_SITE_CODE`, `OZOW_PAYMENT_OAUTH_SCOPE`,
+    `OZOW_WEBHOOK_SECRET`, `KYC_WEBHOOK_SECRET`, `RESEND_API_KEY`,
+    `TURNSTILE_SECRET_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
+  - Workers and release: `INTERNAL_JOBS_SECRET`, `OPS_JOBS_SECRET`,
+    `HEALTH_DIAGNOSTIC_TOKEN`, `RATE_LIMITER_API_KEY`, `CLOUDFLARE_API_TOKEN`,
+    `DEPLOY_HEALTHCHECK_URL`
+
+  <!-- /secrets:production -->
+
+- **GitHub environment `backup`** (deployment branch: `main` only) holds what
+  only the backup and backup freshness jobs read; the deploy jobs cannot.
+
+  <!-- secrets:backup -->
+  - `SUPABASE_BACKUP_DB_PASSWORD`, `BACKUP_R2_ACCESS_KEY_ID`,
+    `BACKUP_R2_SECRET_ACCESS_KEY`, `HEARTBEAT_URL_DATABASE_BACKUP`
+
+  <!-- /secrets:backup -->
+
+- **GitHub environment `staging`** holds the `STAGING_*` values the staging jobs
+  read (see "Staging copy").
+- **Repository level** keeps every value read by a job outside these
+  environments, or by jobs in more than one of them. Any workflow on any branch
+  can read these, so no production credential belongs here. Do **not** delete
+  them when moving the others:
+
+  <!-- secrets:repository -->
+  - Account identifiers (not credentials): `CLOUDFLARE_ACCOUNT_ID` (production
+    and staging deploys) and `R2_ACCOUNT_ID` (production validation and
+    backups).
+  - Scheduled monitoring (`synthetic-monitoring.yml`) and the deploy:
+    `SITE_MONITOR_API_KEY`, `PRODUCTION_APP_URL`.
+  - Pull-request CI (`ci.yml`): `FOUNDATION_STAGING_SUPABASE_URL`,
+    `FOUNDATION_STAGING_PROJECT_REF`,
+    `FOUNDATION_STAGING_SUPABASE_PUBLISHABLE_KEY`, `STAGING_APP_URL`.
+
+  <!-- /secrets:repository -->
+
+  The test above fails when a workflow change moves a value between these lists
+  without updating them.
+
+How GitHub resolves a name: a job that names an environment reads that
+environment's secret first and falls back to the repository-level secret of the
+same name when the environment has none. A job that names an environment that
+does not exist yet makes GitHub create it, empty and with no protection rules,
+so until the owner configures `production` and `backup` the workflows keep
+reading the repository-level copies exactly as before. Protection starts only
+once the environment is limited to `main` and its listed values are moved into
+it and deleted from the repository level. Move the backup values (and create the
+bucket token) before `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`: until then
+the backup jobs fall back to them at repository level.
+
+Keep the canonical copy of each value in the owner's password manager. GitHub
+secrets cannot be read back; moving one means entering it again.
 
 ### Supabase Keys
 
 1. Go to Supabase Dashboard → Settings → API
 2. Rotate the `service_role` key
-3. Update the production secret (the Deploy workflow passes the repository
-   secret `FOUNDATION_SUPABASE_SECRET_KEY` to the Worker as
-   `SUPABASE_SERVICE_ROLE_KEY` and `FOUNDATION_SUPABASE_SECRET_KEY`)
+3. Set the new secret key as `FOUNDATION_SUPABASE_SECRET_KEY` in the GitHub
+   `production` environment. The next deploy installs it on the Worker under
+   both `SUPABASE_SERVICE_ROLE_KEY` and `FOUNDATION_SUPABASE_SECRET_KEY`.
 4. Redeploy the application
 5. Verify `/api/health` returns 200
 
@@ -993,9 +1077,20 @@ capped by a timeout: 5 minutes per platform dump, 7 minutes for the counts), or
 the plaintext cannot be shredded, the run still stores the main backup and then
 fails, so the failure alert fires.
 
-- **Secret:** `SUPABASE_BACKUP_DB_PASSWORD` (the database password from
-  Supabase > Project Settings > Database). Reset it there if a run reports an
-  authentication failure, then update the secret.
+- **Credentials** (GitHub environment `backup`, deployment branch `main`):
+  - `SUPABASE_BACKUP_DB_PASSWORD`: the database password (Supabase > Project
+    Settings > Database). Reset it there if a run reports an authentication
+    failure, then update the secret. The connection string is built from it in
+    one step and kept in a private file that only the dump and count steps read.
+  - `BACKUP_R2_ACCESS_KEY_ID` and `BACKUP_R2_SECRET_ACCESS_KEY`: an R2 API token
+    with Object Read & Write limited to the `verifymzansi-backups` bucket, so a
+    leaked backup token cannot touch member media or ID evidence. The backup and
+    the freshness check both use it.
+  - `R2_ACCOUNT_ID` (repository level, shared with production validation).
+  - Transitional only: until the bucket token exists, both jobs use the app's
+    storage key (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`, repository level)
+    and warn on every run. Create the bucket token before moving the app's
+    storage key into the `production` environment, which these jobs cannot read.
 - **Decryption key:** only the owner holds the private key, offline (key
   fingerprint `CBADD845A4EEE95E8ADD376D8DD25F76A198D659`). Without it no backup
   can be restored. Never commit it or store it in GitHub, Cloudflare or
@@ -1007,13 +1102,10 @@ fails, so the failure alert fires.
   hours old or older (two runs in a row stored nothing; one missed run leaves at
   most about 26.5 hours) or dated more than 5 minutes in the future, or when the
   latest commit is 45 days old or older. It lists the bucket with the backup
-  job's own R2 key (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`); a separate R2
-  API token that can only list and read `verifymzansi-backups` is preferred, and
-  the owner may create one later and switch the freshness check to it. GitHub
-  pauses schedules in public repositories after 60 days without commits, the
-  freshness check included; merge a change before then, or re-enable the
-  workflows if that happens. A paused run sends no email, so the optional
-  `HEARTBEAT_URL_DATABASE_BACKUP` heartbeat (see
+  job's credentials (above). GitHub pauses schedules in public repositories
+  after 60 days without commits, the freshness check included; merge a change
+  before then, or re-enable the workflows if that happens. A paused run sends no
+  email, so the optional `HEARTBEAT_URL_DATABASE_BACKUP` heartbeat (see
   [Monitoring and Alerts](#monitoring-and-alerts)) is what catches backups that
   silently stop once schedules are paused.
 
