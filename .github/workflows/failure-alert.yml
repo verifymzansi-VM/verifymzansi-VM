@@ -16,6 +16,7 @@ on:
       - Synthetic Monitoring
       - Security Scan
       - Database Backup
+      - Backup freshness
       - CodeQL Security Analysis
       - OpenSSF Scorecard
       - Staging keep-alive
