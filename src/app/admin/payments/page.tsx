@@ -16,6 +16,9 @@ import { PageHeader } from "@/components/layout/page-header";
 import { readStaffOzowRefunds } from "@/lib/foundation/ozow-refunds";
 import { ozowApiRefundsEnabled } from "@/lib/payments/ozow-refunds";
 import { createLogger } from "@/lib/utils/logger";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
+import { redirect } from "next/navigation";
 
 const log = createLogger("AdminPayments");
 
@@ -75,8 +78,12 @@ export default async function PaymentsAdminPage({
     // transfers waiting for a second staff member are listed; the payments
     // list still loads if these reads fail, with a warning.
     let unavailable = false;
+    // Invoices and bank transfers carry customer emails, billing details and
+    // bank references: they need a second factor from the last 15 minutes.
+    let verifyAgain = false;
     const missing = (error: unknown) => {
-      log.warn("Bank transfer details unavailable", { error });
+      if (error instanceof FoundationStaffCommandError && error.mfaRequired) verifyAgain = true;
+      else log.warn("Bank transfer details unavailable", { error });
       unavailable = true;
     };
     const [details, waitingTransfers, invoiceList] = await Promise.all([
@@ -95,10 +102,17 @@ export default async function PaymentsAdminPage({
         }),
       // Customer invoices (P2b): the payments list still loads without them.
       readStaffInvoices(api).catch((error: unknown) => {
-        log.warn("Invoices unavailable", { error });
+        if (error instanceof FoundationStaffCommandError && error.mfaRequired) verifyAgain = true;
+        else log.warn("Invoices unavailable", { error });
         return null;
       }),
     ]);
+    if (verifyAgain) {
+      const back = new URLSearchParams();
+      if (status) back.set("status", status);
+      if (page > 1) back.set("page", String(page));
+      redirect(staffVerifyHref("/staff/two-step", `/admin/payments${back.size ? `?${back}` : ""}`));
+    }
     const transfers = new Map(details.map((transfer) => [transfer.payment_id, transfer]));
     return {
       transfersUnavailable: unavailable,

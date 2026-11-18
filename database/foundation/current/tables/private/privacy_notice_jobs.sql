@@ -13,7 +13,7 @@ create table private.privacy_notice_jobs (
   locked_until timestamp with time zone,
   constraint privacy_notice_jobs_attempts_check CHECK (attempts >= 0 AND attempts <= 10),
   constraint privacy_notice_jobs_check CHECK ((claim_token IS NULL) = (locked_until IS NULL)),
-  constraint privacy_notice_jobs_kind_check CHECK (kind = ANY (ARRAY['submitted'::text, 'extended'::text, 'rejected'::text, 'completed'::text])),
+  constraint privacy_notice_jobs_kind_check CHECK (kind = ANY (ARRAY['submitted'::text, 'extended'::text, 'rejected'::text, 'completed'::text, 'approved'::text, 'exported'::text])),
   constraint privacy_notice_jobs_pkey PRIMARY KEY (id),
   constraint privacy_notice_jobs_request_id_fkey FOREIGN KEY (request_id) REFERENCES private.privacy_requests(id) ON DELETE CASCADE,
   constraint privacy_notice_jobs_request_id_kind_key UNIQUE (request_id, kind)

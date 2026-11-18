@@ -6,6 +6,9 @@ CREATE OR REPLACE FUNCTION api.get_staff_invoice_payments(p_payment_ids uuid[])
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
+  -- Customer emails, billing details and bank references: a second factor
+  -- from the last 15 minutes.
+  select internal.staff_actor_recent('payments:view');
   select internal.get_staff_invoice_payments(p_payment_ids);
 $function$;
 alter function api.get_staff_invoice_payments(uuid[]) owner to postgres;

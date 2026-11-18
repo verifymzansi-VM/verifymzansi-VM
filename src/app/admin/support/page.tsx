@@ -8,6 +8,9 @@ import { uuidSchema } from "@/lib/validations/shared";
 import { createLogger } from "@/lib/utils/logger";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFrontendSupportInbox } from "@/lib/foundation/support-inbox";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
+import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "Support inbox — Admin",
@@ -45,7 +48,17 @@ export default async function AdminSupportPage({
     count = result.total;
     canRespond = result.can_update;
     activityUnavailable = false;
-  } catch {
+  } catch (error) {
+    // The inbox needs a second factor from the last 15 minutes.
+    if (error instanceof FoundationStaffCommandError && error.mfaRequired)
+      redirect(
+        staffVerifyHref(
+          "/staff/two-step",
+          selected.success
+            ? `/admin/support?submission=${selected.data}`
+            : `/admin/support?page=${page}`
+        )
+      );
     createLogger("SupportInbox").error("Support inbox read failed");
     return (
       <p role="alert">

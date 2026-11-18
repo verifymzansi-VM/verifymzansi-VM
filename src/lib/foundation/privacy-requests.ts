@@ -3,7 +3,12 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { handleFoundationOwnerRoute } from "./owner-route";
-import { settleStaffCommand, staffCommandRefusal } from "./staff-command";
+import {
+  FoundationStaffCommandError,
+  settleStaffCommand,
+  staffCommandRefusal,
+} from "./staff-command";
+import { lookupDatabaseReason, type FoundationErrorReason } from "./error-reasons";
 import type { Logger } from "../utils/logger";
 
 const instant = z.iso.datetime({ offset: true });
@@ -31,6 +36,11 @@ const privacyRequest = z.strictObject({
   response_summary: z.string().max(4200).nullable(),
   completed_at: instant.nullable(),
   may_process: z.boolean(),
+  // Database update 20261118072601_staff_data_minimisation.sql: when a second
+  // staff member approved the request, and whether the viewer may approve it.
+  // Absent before that update is applied.
+  approved_at: instant.nullable().optional(),
+  may_approve: z.boolean().optional(),
 });
 export async function readFrontendPrivacyQueue(
   api: FoundationAuthenticatedApi,
@@ -61,6 +71,17 @@ export async function readFrontendPrivacyQueue(
   );
 }
 export const privacyRevision = z.number().int().min(1).max(2147483646);
+/** Two-person refusals (20261118072601_staff_data_minimisation.sql). */
+export const PRIVACY_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new Map([
+  [
+    "second_person_required",
+    [
+      403,
+      "A second staff member must do this. Whoever recorded the request or checked the identity cannot approve it, and whoever approved it cannot check the identity.",
+    ],
+  ],
+  ["approval_required", [409, "A second staff member must approve this request first."]],
+]);
 type Action = "assign" | "extend" | "verify_identity" | "approve" | "reject" | "complete";
 export async function processFrontendPrivacyRequest(
   api: FoundationAuthenticatedApi,
@@ -82,23 +103,29 @@ export async function processFrontendPrivacyRequest(
     complete: "completed",
   } as const;
   const status = statuses[input.action];
+  const rpc = await api.rpc(
+    "process_frontend_privacy_request",
+    {
+      p_case: input.requestId,
+      p_revision: input.revision,
+      p_action: input.action,
+      ...(input.note ? { p_note: input.note } : {}),
+      ...(input.assigneeId ? { p_assignee: input.assigneeId } : {}),
+      ...(input.attestation ? { p_attestation: input.attestation } : {}),
+    },
+    { get: false }
+  );
+  const refusal = lookupDatabaseReason(PRIVACY_REFUSALS, rpc.error);
+  if (refusal) throw new FoundationStaffCommandError(refusal[0], refusal[1]);
   const result = await settleStaffCommand(
-    api.rpc(
-      "process_frontend_privacy_request",
-      {
-        p_case: input.requestId,
-        p_revision: input.revision,
-        p_action: input.action,
-        ...(input.note ? { p_note: input.note } : {}),
-        ...(input.assigneeId ? { p_assignee: input.assigneeId } : {}),
-        ...(input.attestation ? { p_attestation: input.attestation } : {}),
-      },
-      { get: false }
-    ),
+    Promise.resolve(rpc),
     z
       .strictObject({
         id: z.literal(input.requestId),
-        status: z.literal(status),
+        // Approving a request started before two-person approval keeps its
+        // state (in progress or completed).
+        status:
+          input.action === "approve" ? z.enum(["in_progress", "completed"]) : z.literal(status),
         due: instant.nullable(),
       })
       .refine((v) => (v.status === "extended") === (v.due !== null))

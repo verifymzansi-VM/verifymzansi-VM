@@ -913,7 +913,7 @@ test.describe("staff review with an authenticator", () => {
     expectNoOutboundSince(mark);
   });
 
-  test("an admin verifies, approves and completes a member's privacy request", async ({
+  test("an admin verifies and completes a member's privacy request a second staff member approved", async ({
     browser,
   }) => {
     test.setTimeout(150_000);
@@ -947,7 +947,7 @@ test.describe("staff review with an authenticator", () => {
         .filter({ hasText: `DSAR-${requestId.slice(0, 8).toUpperCase()}` })
         .filter({
           has: admin.page.getByRole("button", {
-            name: /^(Verify identity|Approve request|Complete request)$/,
+            name: /^(Verify identity|Approve request|Reject request|Complete request)$/,
           }),
         })
         .last();
@@ -957,8 +957,24 @@ test.describe("staff review with an authenticator", () => {
         .getByRole("button", { name: "I have verified the requester's identity" })
         .click();
       await expect.poll(() => admin.reply("/api/admin/dsar/decide").length).toBe(1);
-      await card.getByRole("button", { name: "Approve request" }).click();
-      await expect.poll(() => admin.reply("/api/admin/dsar/decide").length).toBe(2);
+      // Whoever checked the identity never approves the request
+      // (20261118072601_staff_data_minimisation.sql): the card waits for a
+      // second staff member.
+      await expect(card.getByText("Waiting for a second staff member to approve.")).toBeVisible();
+      await expect(card.getByRole("button", { name: "Approve request" })).toHaveCount(0);
+      // The copy has one privacy reviewer, so the second staff member's
+      // approval is a labelled trusted local SQL step (the two-person rule
+      // itself is proven by scripts/test-foundation-staff-data-minimisation.mjs).
+      const second = queryTestCopy(
+        "select id from auth.users where email = 'moderator@verifymzansi.test';"
+      );
+      expect(second).toMatch(UUID);
+      queryTestCopy(
+        "update private.privacy_requests set status = 'in_progress', processed_by = " +
+          `'${second}', approved_by = '${second}', approved_at = now(), revision = revision + 1 ` +
+          `where id = '${requestId}' and status = 'submitted';`
+      );
+      await admin.page.reload();
       await card.getByRole("button", { name: "Complete request" }).click();
       const complete = admin.page.getByRole("dialog", { name: "Complete Data Request" });
       await complete
@@ -970,7 +986,7 @@ test.describe("staff review with an authenticator", () => {
         [...admin.reply("/api/admin/dsar/decide"), ...admin.reply("/api/admin/dsar/complete")].map(
           (entry) => entry.status
         )
-      ).toEqual([200, 200, 200]);
+      ).toEqual([200, 200]);
       expect(admin.failures).toEqual([]);
       expect(admin.outside).toEqual([]);
     } finally {

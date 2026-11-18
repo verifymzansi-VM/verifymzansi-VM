@@ -72,7 +72,8 @@ async function readNativeDashboard(slug: string) {
   const { applications, members, sponsorships } = await readFoundationOrganisationManagementData(
     api,
     native.id,
-    native.public_contacts
+    native.public_contacts ?? [],
+    { pendingOnly: true }
   );
   const summary: Summary = {
     ...native.applications,
@@ -284,7 +285,7 @@ export default async function OrganisationDashboardPage({
           </TabsList>
         </div>
         <TabsContent value="applications" className="mt-4">
-          <ApplicationsReview organisationId={org.id} applications={applications} />
+          <ApplicationsReview organisationId={org.id} applications={applications} revealContacts />
         </TabsContent>
         <TabsContent value="members" className="mt-4">
           <MembersManager

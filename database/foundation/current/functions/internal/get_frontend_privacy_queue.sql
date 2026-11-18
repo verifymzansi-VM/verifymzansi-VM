@@ -29,7 +29,9 @@ begin
       'requester_email',v.requester_email,'identity_check',v.identity_check,'identity_verified',v.identity_verified,'revision',v.revision,
       'created_at',v.created_at,'received_at',v.received_at,'due_by',v.due_by,'extended_due_at',v.extended_due_at,'effective_due_at',v.effective_due_at,
       'legal_basis',v.legal_basis,'extension_reason',v.extension_reason,'extension_notified_at',v.extension_notified_at,'assigned_to',v.assigned_to,'assignee_name',p.display_name,
-      'response_summary',v.response_summary,'completed_at',v.completed_at,
+      'response_summary',v.response_summary,'completed_at',v.completed_at,'approved_at',v.approved_at,
+      'may_approve',v.approved_at is null and v.intake_by is distinct from actor and v.verified_by is distinct from actor
+        and not exists(select 1 from private.privacy_request_events e where e.request_id=v.id and e.actor_id=actor and e.action='started'),
       'may_process',coalesce(v.subject_user_id<>actor,true) and not exists(select 1 from auth.users u where u.id=actor and lower(u.email)=lower(v.requester_email)))
       order by v.sort_key,v.id) from visible v left join private.profiles p on p.account_id=v.assigned_to),'[]'::jsonb)
   ) into result;

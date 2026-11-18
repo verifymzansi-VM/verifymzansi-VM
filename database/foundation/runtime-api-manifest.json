@@ -604,7 +604,10 @@
     },
     {
       "name": "get_staff_invoice_transfers",
-      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
+      "updates": [
+        "updates/20261113162457_staff_invoice_payments.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
@@ -613,7 +616,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment view capability and recent authenticator proof: the recorded bank transfers waiting for confirmation (up to 50, oldest first, with their count): customer account id, account email (to match the bank statement) and public name, term, slots, amount, bank reference, date cleared, reason, recorded time, the recorder's public name, whether the caller's identity recorded it and how many other waiting or confirmed records name the same customer, amount and date. No phone, legal name or identity details."
+      "authority": "Current payment view capability and a second factor from the last 15 minutes: the recorded bank transfers waiting for confirmation (up to 50, oldest first, with their count): customer account id, account email (to match the bank statement) and public name, term, slots, amount, bank reference, date cleared, reason, recorded time, the recorder's public name, whether the caller's identity recorded it and how many other waiting or confirmed records name the same customer, amount and date. No phone, legal name or identity details."
     },
     {
       "name": "get_staff_invoice_customer",
@@ -636,7 +639,10 @@
     },
     {
       "name": "get_staff_invoice_payments",
-      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
+      "updates": [
+        "updates/20261113162457_staff_invoice_payments.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_payment_ids",
@@ -651,7 +657,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment view capability and recent authenticator proof: the bank transfer details (reference, date cleared, amount, reason, recorded time and whether the caller's identity recorded or confirmed it) of up to 50 listed payments confirmed from a recorded bank transfer."
+      "authority": "Current payment view capability and a second factor from the last 15 minutes: the bank transfer details (reference, date cleared, amount, reason, recorded time and whether the caller's identity recorded or confirmed it) of up to 50 listed payments confirmed from a recorded bank transfer."
     },
     {
       "name": "get_my_communication_choices",
@@ -858,7 +864,10 @@
     },
     {
       "name": "get_frontend_organisation_dashboard",
-      "updates": ["updates/20261105153628_restored_affiliation_workspace.sql"],
+      "updates": [
+        "updates/20261105153628_restored_affiliation_workspace.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_slug",
@@ -873,7 +882,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Live organisation administrator membership and native organisation authority; only scoped totals, administrator roster and currently public business contacts."
+      "authority": "Live organisation administrator membership and native organisation authority; only scoped totals and the administrator roster (co-administrators by public short name). No applicant contacts."
     },
     {
       "name": "reserve_frontend_cipc_document",
@@ -1417,7 +1426,10 @@
     },
     {
       "name": "get_frontend_business_review_queue",
-      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "updates": [
+        "updates/20261105150107_restored_cipc_review.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_tab",
@@ -1432,11 +1444,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current queue staff; bounded canonical registration and Seen summaries with exact queue counts."
+      "authority": "Current queue staff; bounded canonical registration and Seen summaries with exact queue counts. Members are named by their public short name."
     },
     {
       "name": "get_frontend_cipc_case",
-      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "updates": [
+        "updates/20261105150107_restored_cipc_review.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_case",
@@ -1451,7 +1466,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current queue staff; private documents, notes and callback facts require a live claim or prior reviewer relation and fresh TOTP; evidence access is recorded."
+      "authority": "Current queue staff; private documents, notes and callback facts require a live claim or prior reviewer relation and fresh TOTP; evidence access is recorded. Members are named by their public short name."
     },
     {
       "name": "get_public_frontend_business_cipc",
@@ -1590,7 +1605,10 @@
     },
     {
       "name": "get_frontend_seen_queue",
-      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "updates": [
+        "updates/20261105094316_restored_business_seen_requests.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_tab",
@@ -1605,11 +1623,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current queue staff; bounded visit queue summaries and counts with no visit address or photo content."
+      "authority": "Current queue staff; bounded visit queue summaries and counts with no visit address or photo content. Members are named by their public short name."
     },
     {
       "name": "get_frontend_seen_case",
-      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "updates": [
+        "updates/20261105094316_restored_business_seen_requests.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_case",
@@ -1624,7 +1645,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current staff; sensitive details require fresh TOTP and a current claim or assigned reviewer relationship, with an evidence access log."
+      "authority": "Current staff; sensitive details require fresh TOTP and a current claim or assigned reviewer relationship, with an evidence access log. Members are named by their public short name."
     },
     {
       "name": "reserve_frontend_seen_photo",
@@ -2169,7 +2190,10 @@
     },
     {
       "name": "get_frontend_support_inbox",
-      "updates": ["updates/20261105091725_restored_support_inbox.sql"],
+      "updates": [
+        "updates/20261105091725_restored_support_inbox.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_page",
@@ -2189,7 +2213,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current support staff, bounded paged request and mail activity projection with database-authorized edit hint."
+      "authority": "Current support staff with a second factor from the last 15 minutes; bounded paged requests received in the last 12 months (older ones only while still open) and their mail activity, with a database-authorized edit hint."
     },
     {
       "name": "update_frontend_support_status",
@@ -2310,7 +2334,10 @@
     },
     {
       "name": "get_frontend_privacy_queue",
-      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
+      "updates": [
+        "updates/20261105085900_restored_privacy_requests.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_view",
@@ -2330,11 +2357,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current privacy reviewer and fresh TOTP. Bounded numbered pages, exact counts and represented revision."
+      "authority": "Current privacy reviewer and fresh TOTP. Bounded numbered pages, exact counts, represented revision, approval time and whether the viewer may approve."
     },
     {
       "name": "process_frontend_privacy_request",
-      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
+      "updates": [
+        "updates/20261105085900_restored_privacy_requests.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_case",
@@ -2374,11 +2404,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current privacy reviewer and fresh TOTP. Subject conflicts and stale revisions are denied; completion requires verified identity and deletion attestation where applicable."
+      "authority": "Current privacy reviewer and fresh TOTP. Subject conflicts and stale revisions are denied; the approver never recorded the intake, checked the identity or started the request (and the approver never checks the identity); completion requires that approval, verified identity and deletion attestation where applicable. Approval emails the requester and notifies the named account."
     },
     {
       "name": "export_frontend_privacy_request",
-      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
+      "updates": [
+        "updates/20261105085900_restored_privacy_requests.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_case",
@@ -2398,7 +2431,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current privacy reviewer with fresh TOTP; only the represented verified access request and fixed subject-scoped datasets. Oversized exports are refused in full."
+      "authority": "Current privacy reviewer with fresh TOTP; only the represented verified access request approved by a second staff member, and fixed subject-scoped datasets. Oversized exports are refused in full. The first export emails the requester and notifies the named account."
     },
     {
       "name": "claim_frontend_privacy_notice",
@@ -3112,7 +3145,10 @@
     },
     {
       "name": "get_frontend_staff_verification_queue",
-      "updates": ["updates/20261104162910_preserved_identity_review_workflow.sql"],
+      "updates": [
+        "updates/20261104162910_preserved_identity_review_workflow.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_limit",
@@ -3132,7 +3168,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current evidence reviewer and independent subjects; bounded waiting summaries/counts. Exact current claim tuple only for its holder; no document bytes, number or storage keys."
+      "authority": "Current evidence reviewer and independent subjects; bounded waiting summaries/counts. Exact current claim tuple only for its holder; no document bytes, number or storage keys. Members are named by their public short name."
     },
     {
       "name": "get_my_frontend_identity_state",
@@ -4456,7 +4492,10 @@
     },
     {
       "name": "get_staff_invoices",
-      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "updates": [
+        "updates/20261114041000_customer_invoice_pay_now.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
@@ -4465,11 +4504,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment view capability and recent authenticator proof: the latest 50 invoices (customer email and name, who issued them and why, status, latest payment attempt) and the number unpaid."
+      "authority": "Current payment view capability and a second factor from the last 15 minutes: the latest 50 invoices (customer email and name, who issued them and why, status, latest payment attempt) and the number unpaid."
     },
     {
       "name": "get_staff_invoice",
-      "updates": ["updates/20261114041000_customer_invoice_pay_now.sql"],
+      "updates": [
+        "updates/20261114041000_customer_invoice_pay_now.sql",
+        "updates/20261118072601_staff_data_minimisation.sql"
+      ],
       "arguments": [
         {
           "name": "p_invoice_number",
@@ -4484,7 +4526,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment view capability and recent authenticator proof: one invoice by number, as staff see it."
+      "authority": "Current payment view capability and a second factor from the last 15 minutes: one invoice by number, as staff see it."
     },
     {
       "name": "get_my_invoices",
@@ -4828,6 +4870,25 @@
         "service_role": false
       },
       "authority": "Public, like the price catalogue (anon and authenticated): the most one online (Ozow) payment may be, in cents (online_max_cents, internal.online_payment_max_cents()); no account data."
+    },
+    {
+      "name": "reveal_organisation_applicant_contact",
+      "updates": ["updates/20261118072601_staff_data_minimisation.sql"],
+      "arguments": [
+        {
+          "name": "p_application",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Administrator of the application's organisation with a current verified identity (or staff organisation:manage): the public business contact (phone, email, website) of one pending application (submitted or more information requested) whose business is live; nothing for decided or withdrawn applications."
     }
   ]
 }

@@ -159,6 +159,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       };
       get_staff_invoices: { Args: Record<never, never>; Returns: Json };
       get_staff_invoice: { Args: { p_invoice_number: string }; Returns: Json };
+      reveal_organisation_applicant_contact: { Args: { p_application: string }; Returns: Json };
       get_my_invoices: { Args: Record<never, never>; Returns: Json };
       get_my_invoice: { Args: { p_invoice_number: string }; Returns: Json };
       save_my_invoice_billing: {

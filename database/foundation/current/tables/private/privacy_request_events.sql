@@ -8,7 +8,7 @@ create table private.privacy_request_events (
   action text not null,
   represented_revision integer not null,
   occurred_at timestamp with time zone default clock_timestamp() not null,
-  constraint privacy_request_events_action_check CHECK (action = ANY (ARRAY['submitted'::text, 'recorded'::text, 'assigned'::text, 'unassigned'::text, 'extended'::text, 'identity_verified'::text, 'started'::text, 'rejected'::text, 'completed'::text, 'exported'::text, 'erasure_ordered'::text])),
+  constraint privacy_request_events_action_check CHECK (action = ANY (ARRAY['submitted'::text, 'recorded'::text, 'assigned'::text, 'unassigned'::text, 'extended'::text, 'identity_verified'::text, 'started'::text, 'rejected'::text, 'completed'::text, 'exported'::text, 'erasure_ordered'::text, 'approved'::text])),
   constraint privacy_request_events_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES auth.users(id) ON DELETE SET NULL,
   constraint privacy_request_events_pkey PRIMARY KEY (id),
   constraint privacy_request_events_represented_revision_check CHECK (represented_revision > 0),

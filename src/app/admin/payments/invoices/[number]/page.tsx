@@ -1,4 +1,6 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { PageHeader } from "@/components/layout/page-header";
 import { InvoiceDocument } from "@/components/billing/invoice-document";
@@ -27,7 +29,14 @@ export default async function StaffInvoicePage({
   const canRecord = staff.assignedCapabilities?.includes("payments:refund") === true;
   const { number } = await params;
   const { api } = await readFoundationServerSession();
-  const invoice = await readStaffInvoice(api, number);
+  // Customer email and billing details: a second factor from the last 15 minutes.
+  const invoice = await readStaffInvoice(api, number).catch((error: unknown) => {
+    if (error instanceof FoundationStaffCommandError && error.mfaRequired)
+      redirect(
+        staffVerifyHref("/staff/two-step", `/admin/payments/invoices/${encodeURIComponent(number)}`)
+      );
+    throw error;
+  });
   // Above Ozow's maximum the printed invoice offers bank transfer only, as the
   // customer's does; unknown, it shows both ways to pay.
   const onlineMaxCents = invoice?.status === "issued" ? await readOnlinePaymentMaxCents() : null;

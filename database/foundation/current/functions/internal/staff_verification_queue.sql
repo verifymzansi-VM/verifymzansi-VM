@@ -11,7 +11,7 @@ declare actor uuid:=internal.staff_actor('case:claim'); rows jsonb;
 begin
   if p_limit is null or p_limit not between 1 and 100 then raise exception 'limit 1 to 100' using errcode='22023'; end if;
   select coalesce(jsonb_agg(row),'[]'::jsonb) into rows from(
-    select jsonb_build_object('case_id',c.id,'version',c.version,'display_name',p.display_name,
+    select jsonb_build_object('case_id',c.id,'version',c.version,'display_name',internal.profile_public_name(p.display_name),
       'submitted_at',s.created_at,'risk_score',s.risk_score,'decision_id',d.id,'proposed_by',d.proposed_by) as row
     from private.evidence_cases c join private.verification_current_submissions v on v.case_id=c.id
     join private.verification_identity_submissions s on s.id=v.submission_id and s.case_version=c.version

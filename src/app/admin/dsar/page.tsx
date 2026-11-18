@@ -238,6 +238,10 @@ export default async function AdminDSARPage({
                             requestType={req.type}
                             identityVerified={req.identity_verified}
                             revision={req.revision}
+                            approved={
+                              req.approved_at === undefined ? undefined : req.approved_at !== null
+                            }
+                            mayApprove={req.may_approve}
                           />
                         )}
                       {req.may_process && (
@@ -250,12 +254,14 @@ export default async function AdminDSARPage({
                           extensionDays={rule?.extension_days ?? 0}
                           isOpen={isOpen}
                           revision={req.revision}
+                          awaitingApproval={req.approved_at === null}
                           canExport={
                             req.revision === undefined
                               ? req.identity_verified
                               : req.identity_verified &&
                                 req.type === "access" &&
-                                ["in_progress", "completed"].includes(req.status)
+                                ["in_progress", "completed"].includes(req.status) &&
+                                req.approved_at !== null
                           }
                         />
                       )}

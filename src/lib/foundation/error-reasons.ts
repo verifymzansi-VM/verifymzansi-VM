@@ -30,6 +30,7 @@ export const FOUNDATION_ERROR_REASONS = {
   application_state: ["PT409"],
   application_unavailable: ["PT404"],
   applications_closed: ["PT409"],
+  approval_required: ["PT409"],
   avatar_unavailable: ["22023"],
   bank_reference_invalid: ["22023"],
   bank_reference_required: ["22023"],

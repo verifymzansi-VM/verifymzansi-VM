@@ -77,6 +77,88 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Staff and organisation screens show less personal data, 18 November 2026
+
+`20261118072601_staff_data_minimisation.sql` is pending (see the applied
+register). It narrows what staff and organisation administrators see:
+
+- **Short names in review queues.** The business review queue, the 'seen in
+  person' queue and case, the CIPC case and both ID check queue reads name a
+  member by their public short name ('Thando D.', the public seller card's rule)
+  instead of the full name, which for a verified member is the full legal name.
+  The full legal name is shown only where it already was: a case the staff
+  member holds (claim, assignment or decision) with `evidence:view` (a second
+  factor from the last 15 minutes, recorded in the evidence access log) and the
+  identity context of a claimed ID check. Members see their own name as before.
+- **Privacy requests need two staff members.** The staff member who approves a
+  request never recorded its intake or checked the requester's identity, in
+  either order, and nobody approves a request of their own (as before). Export
+  and completion need the approval (`approval_required`, PT409); a refused
+  second person is `second_person_required` (42501). A request in progress or
+  completed before the update is approved by a second staff member who did not
+  start it (audit action `approved`); its state does not change. When a request
+  is approved and when its export is first made, the requester is emailed
+  through the existing privacy notice jobs (kinds `approved` and `exported`) and
+  an account named by the request gets a bell notice
+  (`privacy_request_approved`, `privacy_export_made`). The privacy queue gains
+  `approved_at` and `may_approve`.
+- **Support inbox.** It needs a second factor from the last 15 minutes and lists
+  tickets received in the last 12 months; older ones only while still open (new
+  or in progress). Resolved tickets older than that are no longer listed (they
+  are not deleted). The counts of new tickets are unchanged.
+- **Staff invoice and bank transfer reads** (`get_staff_invoices`,
+  `get_staff_invoice`, `get_staff_invoice_transfers`,
+  `get_staff_invoice_payments`) need a second factor from the last 15 minutes.
+  The check is in the four API commands (through the new
+  `internal.staff_actor_recent`), so their internal bodies are unchanged.
+- **Organisation dashboard.** It no longer carries applicants' business contacts
+  (`public_contacts` leaves its result) and names co-administrators by their
+  public short name (the viewer's own name as before). The new
+  `api.reveal_organisation_applicant_contact(p_application)` gives the public
+  business contact of one pending application (submitted, or more information
+  requested) at a time; nothing for decided or withdrawn applications.
+
+Expand only: one new command; no command, argument, grant or return type is
+removed or changed. The website release of the same pull request accepts both
+dashboard and privacy queue shapes; a later code-only change can stop reading
+`public_contacts`.
+
+**Order: deploy first, then apply.** The website before this pull request's
+release cannot send the two new requester email kinds (its privacy notice job
+refuses an unknown kind and would retry it) and reads the dashboard's contacts
+only from the old shape. If that release is ever reverted, run the rollback
+first.
+
+**Applying.** After the pull request is merged and its website release is
+deployed:
+
+1. Run `../preflight/20261118072601_staff_data_minimisation.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff data minimisation: update not applied; ...". It
+   also counts privacy requests in progress or completed without a second
+   approval (each needs one before it can be exported or completed) and resolved
+   support tickets older than 12 months (no longer listed).
+2. Run the update. It locks the privacy request, privacy event, privacy notice
+   and notification tables without waiting and stops without changing anything
+   if any is busy; run it again. Run the preflight again: it must read "staff
+   data minimisation: already applied; ...".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261118072601_staff_data_minimisation.down.sql` (only with the
+owner's decision; prefer a forward fix). It restores the earlier bodies and
+lists, drops the approval columns and the new functions, and deletes the bell
+notices and requester emails of the new kinds to do so. It refuses while a
+second approval of an earlier request is recorded.
+`node --import tsx scripts/test-foundation-staff-data-minimisation.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drift and a premature rollback are
+refused; apply, rollback and re-apply return the same fingerprints; and each
+rule above through the production API commands.
+
 ## Account events reach the notification bell, 17 November 2026
 
 `20261117140533_member_notices_in_app.sql` was applied on 18 November 2026 at
@@ -4741,5 +4823,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   sample post hide list: already applied" (no problem rows); production
   fingerprint after it matched the full replay (except the known schema grant
   difference)
+- `20261118072601_staff_data_minimisation.sql`: pending
 
 <!-- applied-register:end -->
