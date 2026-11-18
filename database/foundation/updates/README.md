@@ -108,29 +108,51 @@ register). It narrows what staff and organisation administrators see:
   are not deleted). The counts of new tickets are unchanged.
 - **Staff invoice and bank transfer reads** (`get_staff_invoices`,
   `get_staff_invoice`, `get_staff_invoice_transfers`,
-  `get_staff_invoice_payments`) need a second factor from the last 15 minutes.
-  The check is in the four API commands (through the new
+  `get_staff_invoice_payments` and the expired transfers list
+  `get_staff_expired_invoice_transfers` of
+  `20261118044440_bank_transfer_expiry.sql`) need a second factor from the last
+  15 minutes. The check is in the five API commands (through the new
   `internal.staff_actor_recent`), so their internal bodies are unchanged.
 - **Organisation dashboard.** It no longer carries applicants' business contacts
   (`public_contacts` leaves its result) and names co-administrators by their
   public short name (the viewer's own name as before). The new
   `api.reveal_organisation_applicant_contact(p_application)` gives the public
   business contact of one pending application (submitted, or more information
-  requested) at a time; nothing for decided or withdrawn applications.
+  requested) at a time; nothing for decided or withdrawn applications. Every
+  reveal, by an organisation administrator or by staff, is recorded in the
+  organisation's append-only event log (`private.organisation_events`: who,
+  when, which application), which the staff audit trail lists as
+  `organisation:applicant_contact_revealed`.
 
 Expand only: one new command; no command, argument, grant or return type is
-removed or changed. The website release of the same pull request accepts both
-dashboard and privacy queue shapes; a later code-only change can stop reading
-`public_contacts`.
+removed or changed. A later code-only change can stop reading `public_contacts`.
 
-**Order: deploy first, then apply.** The website before this pull request's
-release cannot send the two new requester email kinds (its privacy notice job
-refuses an unknown kind and would retry it) and reads the dashboard's contacts
-only from the old shape. If that release is ever reverted, run the rollback
-first.
+**Order: expand website first, then this update, then this pull request.**
 
-**Applying.** After the pull request is merged and its website release is
-deployed:
+1. The website-only expand pull request ("Website reads the staff data
+   minimisation shapes before the database has them") is merged and deployed. It
+   teaches the live website the two new requester email kinds, the two new bell
+   notice kinds, the privacy queue's optional fields, an approval answering
+   `completed`, and a dashboard result without `public_contacts`.
+2. The update is applied (preflight, update, preflight, fingerprint, below),
+   after this pull request is merged and before its release is deployed, as
+   usual. Applying it before step 1 is live is refused by nothing in the
+   database, so check the deployed release first: the website before step 1
+   would refuse the new email kinds (its privacy notice job retries them) and
+   its strict readers would refuse the privacy queue and dashboard shapes.
+3. This pull request's release is deployed.
+
+Every state in between is safe. The expand release with the update applied shows
+fewer things (no applicant contacts on the dashboard until step 3, a generic
+message for an export refused before approval, no redirect to verify again on
+the support inbox and payments pages, only an error line). This pull request's
+release with the database before the update behaves as today: the dashboard
+shows the contacts it still receives (pending applications only) and offers
+'Show contact' only when the result has no `public_contacts`; the data request
+page shows the approval controls only when the queue carries `approved_at`. If
+the expand release is ever reverted, run the rollback first.
+
+**Applying.** After step 1 is live and this pull request is merged:
 
 1. Run `../preflight/20261118072601_staff_data_minimisation.check.sql` unchanged
    in the SQL editor. It is read only. Continue only if its result is the single

@@ -328,3 +328,36 @@ it("rejects ambiguous showroom locations and translates the represented province
     })
   );
 });
+
+it("reads an organisation dashboard with or without applicant contacts", async () => {
+  // 20261118072601_staff_data_minimisation.sql leaves 'public_contacts' out.
+  const dashboard = {
+    account_id: id,
+    id,
+    slug: profile.slug,
+    name: profile.name,
+    viewer_role: "owner",
+    programme_status: "founding_trial",
+    starts_at: null,
+    ends_at: null,
+    sponsored_capacity: 10,
+    admin_limit: 3,
+    is_public: true,
+    affiliation_wording: "Programme Participant",
+    applications: { pending: 1, moreInfo: 0, approved: 0, declined: 0 },
+    affiliated: 0,
+    admins: [{ user_id: id, role: "owner", display_name: "Busisiwe Mokoena" }],
+  };
+  const contact = { application_id: other, phone: "+27820000201", email: null, website: null };
+  const { rpc, api } = fixture(null);
+  // Absent (the update is applied): the page reveals a pending applicant's
+  // contact on request instead.
+  rpc.mockResolvedValueOnce(ok(dashboard));
+  const without = await readAffiliationOrganisationDashboard(api, profile.slug);
+  expect(without).not.toBeNull();
+  expect(without!.public_contacts).toBeUndefined();
+  rpc.mockResolvedValueOnce(ok({ ...dashboard, public_contacts: [contact] }));
+  await expect(readAffiliationOrganisationDashboard(api, profile.slug)).resolves.toMatchObject({
+    public_contacts: [contact],
+  });
+});

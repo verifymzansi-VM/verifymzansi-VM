@@ -80,6 +80,73 @@ describe("DsarActionButtons", () => {
     });
   });
 
+  it("waits for a second staff member when the viewer may not approve", () => {
+    render(
+      <DsarActionButtons
+        requestId={requestId}
+        status="submitted"
+        requestType="access"
+        identityVerified
+        approved={false}
+        mayApprove={false}
+      />
+    );
+    expect(screen.queryByRole("button", { name: /approve request/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /reject request/i })).toBeInTheDocument();
+    expect(screen.getByText("Waiting for a second staff member to approve.")).toBeInTheDocument();
+  });
+
+  it("lets a second staff member approve an earlier request, and blocks completion until then", async () => {
+    const { rerender } = render(
+      <DsarActionButtons
+        requestId={requestId}
+        status="in_progress"
+        requestType="access"
+        identityVerified
+        revision={4}
+        approved={false}
+        mayApprove
+      />
+    );
+    expect(screen.getByRole("button", { name: /complete request/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /approve request/i }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0]![1]!.body as string)).toEqual({
+      requestId,
+      decision: "approve",
+      revision: 4,
+    });
+    rerender(
+      <DsarActionButtons
+        requestId={requestId}
+        status="in_progress"
+        requestType="access"
+        identityVerified
+        revision={5}
+        approved
+        mayApprove={false}
+      />
+    );
+    expect(screen.queryByRole("button", { name: /approve request/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /complete request/i })).toBeEnabled();
+  });
+
+  it("offers only Approve for a request completed before two-person approval", () => {
+    render(
+      <DsarActionButtons
+        requestId={requestId}
+        status="completed"
+        requestType="access"
+        identityVerified
+        approved={false}
+        mayApprove
+      />
+    );
+    expect(screen.getByRole("button", { name: /approve request/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reject request/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /complete request/i })).toBeNull();
+  });
+
   it("keeps approve/reject actions for submitted requests", () => {
     render(
       <DsarActionButtons

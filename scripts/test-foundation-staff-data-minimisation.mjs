@@ -369,6 +369,34 @@ try {
     // The rollback keeps a recorded second approval.
     assert.match(fails(ROLLBACK, "55000"), /second approval recorded/);
   });
+  await check(
+    "privacy: a request completed before the update is approved again before a new export",
+    () => {
+      const requester = named("palesa", "Palesa", "Radebe");
+      const id = record(requester);
+      q(act(admin, id, "verify_identity"));
+      // As the update finds it: completed (started by governor) without approval.
+      q(`set session_replication_role=replica;
+      update private.privacy_requests set status='completed',completed_at=now(),processed_by='${governor.id}',
+        revision=revision+1 where id='${id}';
+      insert into private.privacy_request_events(request_id,actor_id,action,represented_revision)
+        values('${id}','${governor.id}','started',2);`);
+      fails(exportAs(admin2, id), "PT409", /approve this request first/);
+      const item = json(
+        staff(admin2, "select api.get_frontend_privacy_queue('closed',1);")
+      ).items.find((r) => r.id === id);
+      assert.deepEqual(
+        [item.status, item.approved_at, item.may_approve],
+        ["completed", null, true]
+      );
+      fails(act(governor, id, "approve"), "42501", SECOND_PERSON);
+      assert.equal(json(act(admin2, id, "approve")).status, "completed");
+      assert.equal(privacy(id).status, "completed");
+      assert.equal(json(exportAs(admin, id)).request_id, id);
+      assert.equal(jobs(id), "submitted,approved,exported");
+      assert.equal(notices(requester, "privacy_export_made"), 1);
+    }
+  );
 
   // ---------------------------------------------------- 3. support inbox
   await check("support inbox: a recent second factor and 12 months", () => {
@@ -404,6 +432,8 @@ try {
       "select api.get_staff_invoice('VM-2026-999999');",
       "select api.get_staff_invoice_transfers();",
       "select api.get_staff_invoice_payments(array[]::uuid[]);",
+      // 20261118044440_bank_transfer_expiry.sql: the expired transfers list.
+      "select api.get_staff_expired_invoice_transfers();",
     ];
     for (const sql of reads) {
       fails(staff(admin, sql, stale()), "42501", RECENT);
@@ -414,6 +444,7 @@ try {
     fails(staff(admin, reads[1]), "PT404");
     assert.equal(json(staff(admin, reads[2])).waiting, 0);
     json(staff(admin, reads[3]));
+    assert.equal(json(staff(admin, reads[4])).items.length, 0);
   });
 
   // ------------------------------------------- 5. organisation dashboard
@@ -483,6 +514,10 @@ try {
 
     const reveal = (who, id) =>
       member(who, `select api.reveal_organisation_applicant_contact('${id}');`);
+    const revealed = () =>
+      json(`select coalesce(jsonb_agg(jsonb_build_object('actor',actor_id,'application',subject_id,'org',organisation_id)
+          order by created_at,id),'[]') from private.organisation_events where action='applicant_contact_revealed'
+          and organisation_id='${org}';`);
     const shown = json(reveal(owner, pending));
     assert.equal(shown.application_id, pending);
     assert.equal(shown.phone, "+27820000201");
@@ -497,6 +532,18 @@ try {
     assert.equal(
       json(staff(admin, `select api.reveal_organisation_applicant_contact('${pending}');`)).phone,
       "+27820000201"
+    );
+    // Every reveal is in the organisation's event log (who, when, which
+    // application), and so in the staff audit trail; refused ones are not.
+    assert.deepEqual(revealed(), [
+      { actor: owner.id, application: pending, org },
+      { actor: coAdmin.id, application: moreInfo, org },
+      { actor: admin.id, application: pending, org },
+    ]);
+    assert.equal(
+      count(`private.frontend_staff_audit_events where action='organisation:applicant_contact_revealed'
+        and target_id='${org}'`),
+      3
     );
   });
 

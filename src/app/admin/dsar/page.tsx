@@ -231,7 +231,11 @@ export default async function AdminDSARPage({
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       {req.may_process &&
-                        (req.status === "submitted" || req.status === "in_progress") && (
+                        (req.status === "submitted" ||
+                          req.status === "in_progress" ||
+                          // Completed before two-person approval: a second
+                          // staff member approves it before a new export.
+                          (req.status === "completed" && req.approved_at === null)) && (
                           <DsarActionButtons
                             requestId={req.id}
                             status={req.status}

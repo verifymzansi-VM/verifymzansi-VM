@@ -95,6 +95,10 @@ async function readNativeDashboard(slug: string) {
     members,
     admins: native.admins,
     isOwner: native.viewer_role === "owner",
+    // Without applicant contacts in the page's data (database update
+    // 20261118072601_staff_data_minimisation.sql), a pending applicant's
+    // contact is shown on request; before it, inline as before.
+    revealContacts: native.public_contacts === undefined,
     canSponsor: native.programme_status === "active_paid",
     settings: DEFAULT_COMMERCIAL_SETTINGS,
     report: null,
@@ -116,6 +120,7 @@ export default async function OrganisationDashboardPage({
     members,
     admins,
     isOwner,
+    revealContacts,
     canSponsor,
     settings,
     report,
@@ -285,7 +290,11 @@ export default async function OrganisationDashboardPage({
           </TabsList>
         </div>
         <TabsContent value="applications" className="mt-4">
-          <ApplicationsReview organisationId={org.id} applications={applications} revealContacts />
+          <ApplicationsReview
+            organisationId={org.id}
+            applications={applications}
+            revealContacts={revealContacts}
+          />
         </TabsContent>
         <TabsContent value="members" className="mt-4">
           <MembersManager

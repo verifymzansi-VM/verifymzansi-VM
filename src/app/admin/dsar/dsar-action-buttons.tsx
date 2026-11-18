@@ -20,7 +20,7 @@ import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 interface DsarActionButtonsProps {
   requestId: string;
-  status: "submitted" | "in_progress";
+  status: "submitted" | "in_progress" | "completed";
   requestType: DsarCase["type"];
   identityVerified: boolean;
   revision?: number;
@@ -149,7 +149,7 @@ export function DsarActionButtons({
             <CheckCircle className="h-4 w-4" />
           </Button>
         )}
-        {status === "submitted" ? (
+        {status === "completed" ? null : status === "submitted" ? (
           <>
             <Button
               size="icon"

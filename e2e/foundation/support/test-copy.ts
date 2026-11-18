@@ -24,7 +24,7 @@ import {
 import { nativeTotp } from "../../../scripts/lib/foundation-native-totp.mjs";
 import { IDEMPOTENCY_HEADER } from "../../../scripts/lib/foundation-e2e-mail-relay.mjs";
 
-export type PersonKey = "invitedMember" | "verifiedMember" | "moderator" | "admin";
+export type PersonKey = "invitedMember" | "verifiedMember" | "moderator" | "governor" | "admin";
 /** A fixture person, or a person a spec registered during its own run. */
 export type Person = PersonKey | { email: string; password: string };
 
