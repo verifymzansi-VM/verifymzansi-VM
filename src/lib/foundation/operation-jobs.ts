@@ -117,7 +117,7 @@ const SWEEPS = [
   ["approve_due_commissions", { p_limit: 20 }],
   // Records the expiry (status, time, audit row) of bank transfers that have
   // waited 14 days; the database treats them as expired already
-  // (20261118032610_bank_transfer_expiry.sql).
+  // (20261118044440_bank_transfer_expiry.sql).
   // At most 50 rows a run: each is its own subtransaction in the database.
   ["expire_waiting_bank_transfers", { p_limit: 50 }],
 ] as const;

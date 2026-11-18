@@ -2703,10 +2703,63 @@ When another update merges first, regenerate this pull request's
 `fingerprint.json`, the applied register, the manifests, `error-reasons.ts` and
 `package.json`.
 
+## Sample post hide-list removed, 18 November 2026
+
+`20261118033538_remove_sample_post_hide_list.sql` is not applied yet. It is the
+contract step of `20261117144001_sample_post_hide_list.sql` (applied 18 November
+2026, pull request 105), recorded in `../contract-steps.json`. The display-only
+sample posts were removed from the website in the same pull request (catalogue,
+`/sample/<slug>` pages, the staff page and the showroom cards), so no release
+calls the hide-list any more.
+
+- **Removed.** `api.set_sample_post_hidden(p_slug, p_hidden)`,
+  `api.get_hidden_sample_posts()`, the internal functions behind them and the
+  table `private.hidden_sample_posts` with any rows it holds (catalogue slugs
+  staff had removed; nothing else refers to them). No other object changes.
+- **Refusal.** It refuses (55000) when only part of the hide-list exists.
+  Running it again once everything is gone changes nothing.
+
+**Order: merge, then apply.** The release from this pull request no longer lists
+the two commands in its runtime manifest. The deploy preflight probes only the
+commands a release lists and its update-order report only warns, so the release
+deploys while production still has them (reported as "database behind by 1").
+Applied before the merge, the deploy preflight of any other release in between
+would find `api.get_hidden_sample_posts` missing and fail.
+
+**Applying.** After the pull request is merged and its website release is
+deployed:
+
+1. Run `../preflight/20261118033538_remove_sample_post_hide_list.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "remove sample post hide list: update not
+   applied; hidden samples: N".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "remove sample post hide list: already applied".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261118033538_remove_sample_post_hide_list.down.sql` (only with
+the owner's decision; prefer a forward fix). It puts back the empty hide-list
+and both commands exactly as the earlier update created them; the deleted rows
+are not restored.
+
+`node --import tsx scripts/test-foundation-remove-sample-post-hide-list.mjs`
+(part of `pnpm db:foundation:lifecycle-test`) proves on the throwaway database:
+the preflight before and after, read only; a partial state and a premature
+rollback are refused, changing nothing; apply, rollback and re-apply return the
+same fingerprints; and afterwards signed-out visitors and members cannot call
+either command.
+
 ## Staff remove and restore display-only sample posts, 17 November 2026
 
 `20261117144001_sample_post_hide_list.sql` was applied on 18 November 2026 at
-00:47 UTC (production Postgres log; see the applied register).
+00:47 UTC (production Postgres log; see the applied register). The website
+feature it served was removed later, and its contract step
+`20261118033538_remove_sample_post_hide_list.sql` removes it (section above).
+The files named below that belonged to the website, and its behaviour test, are
+no longer in the repository; the update, preflight and rollback stay as history.
 
 The website can show a few display-only sample posts (labelled "Sample post ·
 for display only") after the real posts in the showrooms, while
@@ -2835,7 +2888,7 @@ nothing, and the grants, owners and settings are unchanged.
 
 ## Waiting bank transfers expire after 14 days, 17 November 2026
 
-`20261118032610_bank_transfer_expiry.sql` is pending.
+`20261118044440_bank_transfer_expiry.sql` is pending.
 
 Owner's decision of 16 November 2026: a bank transfer staff recorded (slice P2b,
 with or without a customer invoice) that is still waiting for a second staff
@@ -2930,7 +2983,7 @@ and reads (no expiry shown) until the update is applied.
 **Applying.** From the moment the update is applied, a transfer that has waited
 14 days or more can never be confirmed. Confirm the genuine ones first.
 
-1. Run `../preflight/20261118032610_bank_transfer_expiry.check.sql` unchanged in
+1. Run `../preflight/20261118044440_bank_transfer_expiry.check.sql` unchanged in
    the SQL editor. It is read only. Its summary reads "bank transfer expiry:
    update not applied; waiting: N; waiting 14 days or more: M; expired: 0", and
    it adds one "problem" row for each of the M transfers ("bank transfer <id>
@@ -2948,7 +3001,7 @@ and reads (no expiry shown) until the update is applied.
    above.
 
 The reviewed rollback is
-`../rollback/20261118032610_bank_transfer_expiry.down.sql` (only with the
+`../rollback/20261118044440_bank_transfer_expiry.down.sql` (only with the
 owner's decision; prefer a forward fix). It refuses once any transfer has been
 marked expired (the earlier schema cannot hold that state) and unless the
 thirteen functions have this update's bodies; otherwise it drops the sweep, the
@@ -4818,6 +4871,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   both commands exist) and recorded from the Claude Code session on 2026-11-18;
   production fingerprint after both updates matched the full replay (except the
   known schema grant difference)
-- `20261118032610_bank_transfer_expiry.sql`: pending
+- `20261118033538_remove_sample_post_hide_list.sql`: pending
+- `20261118044440_bank_transfer_expiry.sql`: pending
 
 <!-- applied-register:end -->

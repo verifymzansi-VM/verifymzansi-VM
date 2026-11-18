@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261118032610_bank_transfer_expiry.sql: a recorded bank
+// Behaviour checks for 20261118044440_bank_transfer_expiry.sql: a recorded bank
 // transfer still waiting for a second staff member 14 days after it was
 // recorded has expired (owner's decision of 16 November 2026).
 //
@@ -44,7 +44,7 @@ import {
   updateCheckKit,
 } from "./lib/foundation-staff-payment-world.mjs";
 
-const UPDATE = "20261118032610_bank_transfer_expiry.sql";
+const UPDATE = "20261118044440_bank_transfer_expiry.sql";
 const REVIEWED = {
   "internal.invoice_transfer_guard()": "494dcdb720573571dd36edf97b055332",
   "internal.confirm_staff_invoice_payment(uuid)": "e0c308df14f38f1de76bdced4e8683f2",

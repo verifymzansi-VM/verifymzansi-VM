@@ -6,9 +6,8 @@ const publicBusinessProjections = new Set([
   "get_public_frontend_business_cipc",
   "get_public_frontend_business_affiliations",
 ]);
-// Reviewed public settings (20261117082020_online_payment_limit.sql,
-// 20261117144001_sample_post_hide_list.sql): no arguments, no account data,
-// readable by visitors like the price catalogue.
+// Reviewed public settings (20261117082020_online_payment_limit.sql): no
+// arguments, no account data, readable by visitors like the price catalogue.
 const publicSettingReads = new Map([
   [
     "get_payment_limits",
@@ -19,19 +18,6 @@ const publicSettingReads = new Map([
       Object.keys(data).join() === "online_max_cents" &&
       Number.isSafeInteger(data.online_max_cents) &&
       data.online_max_cents > 0,
-  ],
-  [
-    "get_hidden_sample_posts",
-    (data) =>
-      data !== null &&
-      typeof data === "object" &&
-      !Array.isArray(data) &&
-      Object.keys(data).join() === "slugs" &&
-      Array.isArray(data.slugs) &&
-      data.slugs.length <= 500 &&
-      data.slugs.every(
-        (slug) => typeof slug === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)
-      ),
   ],
 ]);
 function validateRuntimeAudience(fn) {

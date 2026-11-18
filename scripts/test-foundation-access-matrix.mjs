@@ -484,7 +484,7 @@ try {
   });
 
   // Another member's invoice whose bank transfer expired
-  // (20261118032610_bank_transfer_expiry.sql). It belongs to `other`, not to
+  // (20261118044440_bank_transfer_expiry.sql). It belongs to `other`, not to
   // owner A, so the sweep's invoice commands show that only its own member
   // reads it, without adding A's details to staff payment lists.
   await check("world: another member's invoice with an expired bank transfer", async () => {
@@ -703,7 +703,7 @@ try {
   const grantRefusal = (r) =>
     !r.ok && r.code === "42501" && /permission denied for function/.test(r.message);
 
-  // 20261118032610_bank_transfer_expiry.sql: the sweep is the service role's
+  // 20261118044440_bank_transfer_expiry.sql: the sweep is the service role's
   // only; the member read answers only the invoice's own member; the staff
   // list needs payments:view (checked with every capability below).
   await check("bank transfer expiry: the sweep and the member read are scoped", () => {

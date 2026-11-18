@@ -589,7 +589,7 @@ const staffExpiredTransfer = staffTransferRecord.extend({
 export type StaffExpiredTransfer = z.infer<typeof staffExpiredTransfer>;
 
 /** The recorded bank transfers nobody confirmed within 14 days of being
- * recorded (20261118032610_bank_transfer_expiry.sql) that still need a
+ * recorded (20261118044440_bank_transfer_expiry.sql) that still need a
  * follow-up: not recorded again and not naming an invoice since paid or
  * voided. Oldest first, at most 200, with the full count. Against a database
  * without that update there are none. */

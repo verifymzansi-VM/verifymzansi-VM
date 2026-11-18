@@ -57,7 +57,7 @@ begin
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, inv.account_id);
   perform internal.assert_staff_not_referrer(actor, inv.account_id);
-  -- 20261118032610_bank_transfer_expiry.sql: a waiting record of this bank
+  -- 20261118044440_bank_transfer_expiry.sql: a waiting record of this bank
   -- credit or of this invoice that has waited 14 days is marked expired first, so it
   -- no longer holds them; the unique indexes still allow one open record. A
   -- credit that cleared more than 90 days ago is accepted only to record again
