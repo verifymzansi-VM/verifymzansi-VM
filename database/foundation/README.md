@@ -94,12 +94,19 @@ prototype fixture, so it covers every API command an update adds. It checks that
 each command's execute grants equal the manifests and that browsers have no
 table access, builds one member's private data through the production commands
 (identity review, phone, an event with an enquiry, a business, an organisation
-application, a payment), then calls every `api` command as a signed-out visitor,
-a member with no rights, another member, an organisation administrator, each
-staff role, that member, and the service role, each call in a subtransaction
-that is rolled back. It fails when a grant or a staff capability is bypassed or
-wrongly refused, or when anyone else sees one of the member's private values or
-changes their rows outside the reviewed lists at the top of the script.
+application, a payment, a saved form draft, a privacy request and a support
+message), then calls every `api` command as a signed-out visitor, a member with
+no rights, another member, an organisation administrator, each staff role, that
+member, and the service role, each call in a subtransaction that is rolled back.
+It fails when a grant or a staff capability is bypassed or wrongly refused, or
+when anyone else sees one of the member's private values or changes their rows
+outside the reviewed lists at the top of the script. It also fails when a
+private table that references an account, a post, a case or a notification (or
+carries an account or contact column) is missing from the member's row
+fingerprint without a reviewed reason, and when a command listed in
+`scripts/lib/foundation-access-matrix-exercised.json` no longer reaches a
+successful answer for its intended caller (rewrite that list with
+`--write-exercised` after reviewing the change).
 
 An update that backfills existing rows or is hard to undo can come with two
 reviewed companions named after it, which the replay never applies:
