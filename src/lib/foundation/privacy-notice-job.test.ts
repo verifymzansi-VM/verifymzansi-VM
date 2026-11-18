@@ -104,7 +104,7 @@ it("keeps working without run limits", async () => {
   expect(signals).toEqual([]);
 });
 
-it("sends the approval and export notices of the two-person rule", async () => {
+it("sends the approval and export notices", async () => {
   for (const [kind, send] of [
     ["approved", sendDsarApprovedEmail],
     ["exported", sendDsarExportedEmail],

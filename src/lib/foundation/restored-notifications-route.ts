@@ -144,7 +144,7 @@ function presentedNotification(n: z.infer<typeof row>) {
     ],
     privacy_request_approved: [
       "Your data request was approved",
-      "A second staff member approved your data request. We will email you at the address on the request.",
+      "Your request has been approved. We will email you at the address on the request.",
       "/dsar",
       "info",
     ],

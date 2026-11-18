@@ -775,7 +775,7 @@ export async function sendDsarRejectedEmail(
   return sendEmail({ to: email, subject, html, text, idempotencyKey });
 }
 
-/** A second staff member approved the data request (two-person rule). */
+/** Staff approved the data request. */
 export async function sendDsarApprovedEmail(
   email: string,
   reference: string,
@@ -790,7 +790,7 @@ export async function sendDsarApprovedEmail(
     intro: "This email lets you know your VerifyMzansi data request was approved.",
     bodyHtml: `
       ${paragraph("Hi,")}
-      ${paragraph("Your VerifyMzansi data request was approved by a second member of our team. We are now processing it.")}
+      ${paragraph("Your VerifyMzansi data request has been approved. We are now processing it.")}
       ${detailList([["Reference", reference]])}
       ${paragraph("We will email you at this address when it is done. If you did not make this request, please contact support.")}
     `,
@@ -798,27 +798,27 @@ export async function sendDsarApprovedEmail(
     reason: "A data request connected to this email address was approved by VerifyMzansi.",
   });
 
-  const text = `Hi,\n\nYour VerifyMzansi data request was approved by a second member of our team. We are now processing it.\n\nReference: ${reference}\n\nWe will email you at this address when it is done. If you did not make this request, please contact support.\n\nMore information: ${appUrl}/dsar`;
+  const text = `Hi,\n\nYour VerifyMzansi data request has been approved. We are now processing it.\n\nReference: ${reference}\n\nWe will email you at this address when it is done. If you did not make this request, please contact support.\n\nMore information: ${appUrl}/dsar`;
 
   return sendEmail({ to: email, subject, html, text, idempotencyKey });
 }
 
-/** The copy of the requester's data was prepared (sent to them separately). */
+/** The reply to the data request (with any data held) was prepared; staff send it separately. */
 export async function sendDsarExportedEmail(
   email: string,
   reference: string,
   idempotencyKey?: string
 ): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  const subject = `VerifyMzansi data export prepared (${reference})`;
+  const subject = `VerifyMzansi data request reply prepared (${reference})`;
   const html = brandedEmail({
     tone: "neutral",
     eyebrow: "Data request",
-    title: "Your data export was prepared",
-    intro: "This email lets you know a copy of your data was prepared for your data request.",
+    title: "Your data request reply was prepared",
+    intro: "This email lets you know the reply to your data request was prepared.",
     bodyHtml: `
       ${paragraph("Hi,")}
-      ${paragraph("A copy of the data we hold for your account was prepared for your VerifyMzansi data request. Our team sends it to this email address.")}
+      ${paragraph("We prepared our reply to your VerifyMzansi data request, with a copy of any personal data we hold about you. Our team sends it to this email address.")}
       ${detailList([["Reference", reference]])}
       ${paragraph("If you did not make this request, please contact support straight away.")}
     `,
@@ -826,7 +826,7 @@ export async function sendDsarExportedEmail(
     reason: "A data export was prepared for a data request connected to this email address.",
   });
 
-  const text = `Hi,\n\nA copy of the data we hold for your account was prepared for your VerifyMzansi data request. Our team sends it to this email address.\n\nReference: ${reference}\n\nIf you did not make this request, please contact support straight away.\n\nMore information: ${appUrl}/dsar`;
+  const text = `Hi,\n\nWe prepared our reply to your VerifyMzansi data request, with a copy of any personal data we hold about you. Our team sends it to this email address.\n\nReference: ${reference}\n\nIf you did not make this request, please contact support straight away.\n\nMore information: ${appUrl}/dsar`;
 
   return sendEmail({ to: email, subject, html, text, idempotencyKey });
 }
