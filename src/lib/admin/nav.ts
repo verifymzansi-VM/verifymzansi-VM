@@ -191,14 +191,6 @@ export const ADMIN_NAV: readonly NavItem[] = [
     capability: "queue:view",
     nativeCapability: "queue:claim",
   },
-  {
-    href: "/admin/sample-posts",
-    label: "Sample posts",
-    icon: "eye",
-    section: "areas",
-    capability: "queue:view",
-    nativeCapability: "post:moderate",
-  },
 
   {
     href: "/admin/governance/escalations",

@@ -72,15 +72,6 @@ ADDON_SALES_ENABLED = "false"
 # the Ozow refund key (OZOW_REFUND_CLIENT_ID/_SECRET, refunds scope) and the
 # refund webhook secret. Only "true" turns them on (src/lib/payments/ozow-refunds.ts).
 OZOW_API_REFUNDS_ENABLED = "false"
-# Display-only sample posts in the showrooms (src/lib/sample-posts/catalogue.ts).
-# Only "true" shows them; staff remove single samples at /admin/sample-posts.
-# Apply database/foundation/updates/20261117144001_sample_post_hide_list.sql first.
-SAMPLE_POSTS_ENABLED = "false"
-# VerifyMzansi's own Call and WhatsApp number on every sample page (not
-# secret; the owner's number for the samples, shown only after a click).
-# Kept the same in every environment's vars. Unset or invalid: no contact area.
-SAMPLE_CONTACT_PHONE = "+27717484185"
-SAMPLE_CONTACT_WHATSAPP = "+27717484185"
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
 # Not image resizing: the zone has no Cloudflare Image Resizing and nothing
 # resizes images on the fly (src/lib/image-loader.ts). "true" only makes the
@@ -299,9 +290,6 @@ FOUNDATION_RECOVERY_ENABLED = "true"
 FOUNDATION_PHONE_VERIFICATION_ENABLED = "true"
 ADDON_SALES_ENABLED = "false"
 OZOW_API_REFUNDS_ENABLED = "false"
-SAMPLE_POSTS_ENABLED = "false"
-SAMPLE_CONTACT_PHONE = "+27717484185"
-SAMPLE_CONTACT_WHATSAPP = "+27717484185"
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
 NEXT_PUBLIC_CF_IMAGE_RESIZING = "true"
 OTP_RATE_LIMITER_URL = "https://verifymzansi-rate-limiter.verifymzansi.workers.dev"
@@ -387,9 +375,6 @@ FOUNDATION_PHONE_VERIFICATION_ENABLED = "false"
 AFRICASTALKING_USERNAME = "sandbox"
 ADDON_SALES_ENABLED = "false"
 OZOW_API_REFUNDS_ENABLED = "false"
-SAMPLE_POSTS_ENABLED = "false"
-SAMPLE_CONTACT_PHONE = "+27717484185"
-SAMPLE_CONTACT_WHATSAPP = "+27717484185"
 # Cloudflare's published Turnstile test site key (always passes); the matching
 # published test secret is set as the staging TURNSTILE_SECRET_KEY.
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA"

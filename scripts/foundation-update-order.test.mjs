@@ -47,13 +47,6 @@ const manifests = (...functions) => [{ functions }];
 const register = (lines) =>
   `<!-- applied-register:start -->\n${lines.join("\n")}\n<!-- applied-register:end -->\n`;
 
-/** What a reviewed public read answers to the anonymous probe. */
-const publicSettingAnswer = (name) =>
-  ({
-    get_payment_limits: { online_max_cents: 130000 },
-    get_hidden_sample_posts: { slugs: [] },
-  })[name] ?? [];
-
 test("the committed register lists every update, applied with a time or pending as fingerprint.json says", () => {
   const { rows, errors } = parseUpdateRegister(readme);
   assert.deepEqual(errors, []);
@@ -388,7 +381,8 @@ test("the live comparison sends only the publishable key and reports a missing c
       const name = url.split("/rpc/")[1];
       const fnSpec = runtime.functions.find((item) => item.name === name);
       if (name === target.name) return Response.json({ code: "PGRST202" }, { status: 404 });
-      if (fnSpec.execute.anon) return Response.json(publicSettingAnswer(name));
+      if (fnSpec.execute.anon)
+        return Response.json(name === "get_payment_limits" ? { online_max_cents: 130000 } : []);
       return Response.json({ code: "42501" }, { status: 401 });
     },
   });
@@ -819,7 +813,7 @@ test("staging comparison: unreachable or paused is inconclusive, a missing comma
       const name = url.split("/rpc/")[1];
       if (name === missing) return Response.json({ code: "PGRST202" }, { status: 404 });
       return runtime.functions.find((item) => item.name === name).execute.anon
-        ? Response.json(publicSettingAnswer(name))
+        ? Response.json(name === "get_payment_limits" ? { online_max_cents: 130000 } : [])
         : Response.json({ code: "42501" }, { status: 401 });
     };
     const offline = async () => {
