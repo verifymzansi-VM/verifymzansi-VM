@@ -36,6 +36,7 @@ import {
   LINT_IMAGE,
   applySteps,
   assertLocalDocker,
+  lintImageRef,
   startLintDatabase,
 } from "./lib/foundation-sql-lint.mjs";
 
@@ -189,7 +190,7 @@ async function startHostedLikeDatabase() {
     "/var/lib/postgresql/data",
     "--env",
     `POSTGRES_PASSWORD=${randomBytes(18).toString("base64url")}`,
-    LINT_IMAGE,
+    lintImageRef(),
     "postgres",
     "-D",
     "/etc/postgresql",

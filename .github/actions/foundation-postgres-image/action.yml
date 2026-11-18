@@ -1,0 +1,123 @@
+name: Load the pinned Supabase Postgres image
+description: >-
+  Puts LINT_IMAGE (scripts/lib/foundation-sql-lint.mjs) on the runner under its
+  tag, from the Actions cache when it holds this digest, otherwise pulled from
+  ECR Public with retries and then from mirrors that serve the same digest.
+  Whatever the source, the image is used only when its ID is one of the pinned
+  content digests (LINT_IMAGE_IDS). Needs `pnpm install` first.
+# ECR Public caps anonymous downloads per IP, and GitHub's shared runner IPs
+# reach the cap ("Data limit exceeded"), which failed main CI. Signing in to
+# ECR would need an AWS account; the cache and the mirrors need nothing.
+runs:
+  using: composite
+  steps:
+    - name: Name the image and its cache entry
+      id: image
+      shell: bash
+      run: |
+        node --input-type=module -e "
+          const m = await import('./scripts/lib/foundation-sql-lint.mjs');
+          console.log('image=' + m.LINT_IMAGE);
+          console.log('ids=' + m.LINT_IMAGE_IDS.join(' '));
+          console.log('mirrors=' + m.LINT_IMAGE_MIRRORS.join(' '));
+          console.log('digest=' + m.LINT_IMAGE.split('@')[1].replace('sha256:', ''));
+        " >> "$GITHUB_OUTPUT"
+        echo "tarball=$RUNNER_TEMP/foundation-postgres-image.tar" >> "$GITHUB_OUTPUT"
+    # Cache entries are keyed by the exact digest. Pull requests read main's
+    # entries but write only their own, and a restored copy still has to
+    # match the pinned IDs below.
+    - name: Restore the image from the Actions cache
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.image.outputs.tarball }}
+        key: docker-image-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.image.outputs.digest }}
+    - name: Load or pull the image, then check its ID
+      id: load
+      shell: bash
+      env:
+        IMAGE: ${{ steps.image.outputs.image }}
+        IDS: ${{ steps.image.outputs.ids }}
+        MIRRORS: ${{ steps.image.outputs.mirrors }}
+        TARBALL: ${{ steps.image.outputs.tarball }}
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+      run: |
+        set -euo pipefail
+        if ! [[ "$IMAGE" =~ ^([a-z0-9./_-]+):([A-Za-z0-9._-]+)@(sha256:[0-9a-f]{64})$ ]]; then
+          echo "::error::Unexpected image reference: $IMAGE"
+          exit 1
+        fi
+        repo="${BASH_REMATCH[1]}"
+        tagged="$repo:${BASH_REMATCH[2]}"
+        digest="${BASH_REMATCH[3]}"
+
+        pinned() {
+          local id allowed
+          id="$(docker image inspect --format '{{.Id}}' "$tagged" 2> /dev/null)" || return 1
+          for allowed in $IDS; do
+            if [ "$id" = "$allowed" ]; then
+              return 0
+            fi
+          done
+          echo "::warning::$tagged has image ID $id, which is not a pinned ID."
+          return 1
+        }
+
+        if [ "$CACHE_HIT" = "true" ]; then
+          if docker load --quiet --input "$TARBALL" && pinned; then
+            rm -f "$TARBALL"
+            echo "Loaded $tagged from the Actions cache."
+            exit 0
+          fi
+          echo "::warning::The cached copy of $tagged was rejected; pulling it instead."
+          docker image rm --force "$tagged" > /dev/null 2>&1 || true
+        fi
+
+        # Pulling by digest makes Docker check the content, whichever registry serves it.
+        pull() {
+          local ref="$1" attempts="$2" attempt=1
+          until timeout 600 docker pull --quiet "$ref"; do
+            if [ "$attempt" -ge "$attempts" ]; then
+              return 1
+            fi
+            echo "Pull $attempt of $attempts of $ref failed; retrying in $((attempt * 20)) s."
+            sleep "$((attempt * 20))"
+            attempt=$((attempt + 1))
+          done
+        }
+        source=""
+        for candidate in "$repo" $MIRRORS; do
+          if [ "$candidate" != "$repo" ]; then
+            echo "::warning::$repo refused the pull; trying $candidate (same digest)."
+          fi
+          if pull "$candidate@$digest" 3; then
+            source="$candidate@$digest"
+            break
+          fi
+        done
+        if [ -z "$source" ]; then
+          echo "::error::Could not pull $IMAGE from $repo or its mirrors ($MIRRORS)."
+          exit 1
+        fi
+        docker tag "$source" "$tagged"
+        if ! pinned; then
+          echo "::error::$source does not have a pinned image ID."
+          exit 1
+        fi
+        echo "Pulled $tagged from $source."
+        if [ "$CACHE_HIT" != "true" ]; then
+          docker save --output "$TARBALL" "$tagged"
+          echo "save=true" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Keep the checked image in the Actions cache
+      if: steps.load.outputs.save == 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.image.outputs.tarball }}
+        key: docker-image-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.image.outputs.digest }}
+    - name: Free the disk space of the saved copy
+      if: steps.load.outputs.save == 'true'
+      shell: bash
+      env:
+        TARBALL: ${{ steps.image.outputs.tarball }}
+      run: rm -f "$TARBALL"

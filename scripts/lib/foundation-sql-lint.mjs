@@ -14,6 +14,19 @@ import { FOUNDATION_DIR } from "./foundation-replay.mjs";
 /** Same Postgres major and plpgsql_check as Supabase production (CLI 2.120.0 local image). */
 export const LINT_IMAGE =
   "public.ecr.aws/supabase/postgres:17.11.0.004@sha256:b15d862126dd2dac02da524696ccfde2dcce2ceaee0a58973b2727befe492706"; // secret-scan: allow public image digest
+/**
+ * The local image IDs only LINT_IMAGE can have. Both are content digests: the
+ * multi-platform index (its ID in Docker's containerd image store) and its
+ * linux/amd64 image config (its ID in the classic store, which GitHub's
+ * runners use). Docker checks every layer against the config when it loads
+ * an image, so a matching ID pins the whole image.
+ */
+export const LINT_IMAGE_IDS = [
+  LINT_IMAGE.slice(LINT_IMAGE.indexOf("@") + 1),
+  "sha256:c4be96218454e68421a29c712e1a83c7a9fe186208c725d8bb2ebb474e2042f2", // secret-scan: allow public image digest
+];
+/** Registries that serve the same index digest; CI pulls from them when ECR refuses. */
+export const LINT_IMAGE_MIRRORS = ["ghcr.io/supabase/postgres"];
 export const LINT_BASELINE_FILE = `${FOUNDATION_DIR}/lint-baseline.json`;
 export const LINT_STUBS_FILE = `${FOUNDATION_DIR}/replay/lint-platform-stubs.sql`;
 const CONTAINER_LABEL = "verifymzansi.foundation-sql-lint=1";
@@ -42,13 +55,34 @@ function docker(args, { input, allowFailure = false, timeout = 600_000 } = {}) {
   return result;
 }
 
+function localImageId(ref) {
+  const result = spawnSync("docker", ["image", "inspect", "--format", "{{.Id}}", ref], {
+    encoding: "utf8",
+    timeout: 60_000,
+    windowsHide: true,
+  });
+  return result.status === 0 ? result.stdout.trim() : "";
+}
+
+/**
+ * The image reference `docker run` should use. CI loads the image from its
+ * cache or pulls it from a mirror; Docker's classic store then knows it by
+ * its tag and ID but not by the ECR digest, so `docker run LINT_IMAGE` would
+ * download it again. The tagged copy is used, by ID, only when that ID is one
+ * of LINT_IMAGE_IDS; otherwise LINT_IMAGE (Docker pulls it and checks the digest).
+ */
+export function lintImageRef(imageId = localImageId) {
+  const id = imageId(LINT_IMAGE.slice(0, LINT_IMAGE.indexOf("@")));
+  return LINT_IMAGE_IDS.includes(id) ? id : LINT_IMAGE;
+}
+
 /**
  * `docker run` arguments for the lint database: no network (not even a
  * published port), data and init folders in memory, Supabase's own init
  * scripts and the supautils hook disabled (the replay prelude provides the
  * platform roles), and durability off because the database is thrown away.
  */
-export function lintContainerArgs(name, password) {
+export function lintContainerArgs(name, password, image = LINT_IMAGE) {
   return [
     "run",
     "--detach",
@@ -67,7 +101,7 @@ export function lintContainerArgs(name, password) {
     "POSTGRES_USER=postgres",
     "--env",
     `POSTGRES_PASSWORD=${password}`,
-    LINT_IMAGE,
+    image,
     "postgres",
     "-D",
     "/etc/postgresql",
@@ -92,7 +126,9 @@ export async function startLintDatabase({ log = () => {} } = {}) {
   assertLocalDocker();
   const name = `vm-foundation-sql-lint-${randomBytes(4).toString("hex")}`;
   log(`Starting ${name} from ${LINT_IMAGE.split("@")[0]} ...`);
-  docker(lintContainerArgs(name, randomBytes(18).toString("base64url")), { timeout: 900_000 });
+  docker(lintContainerArgs(name, randomBytes(18).toString("base64url"), lintImageRef()), {
+    timeout: 900_000,
+  });
   const stop = () => docker(["rm", "--force", name], { allowFailure: true, timeout: 60_000 });
   try {
     // The entrypoint's temporary init server listens only on its socket, so a

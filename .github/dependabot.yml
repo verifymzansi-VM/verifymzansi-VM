@@ -65,7 +65,10 @@ updates:
   # GitHub Actions versions: one grouped pull request a month at most, so
   # pinned actions do not age silently (owner decision, 11 November 2026).
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # The workflows and the local composite actions they use.
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 1

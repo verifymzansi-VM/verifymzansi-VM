@@ -3,10 +3,13 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   LINT_IMAGE,
+  LINT_IMAGE_IDS,
+  LINT_IMAGE_MIRRORS,
   assertLocalDocker,
   collapseFindings,
   compareLint,
   lintContainerArgs,
+  lintImageRef,
   nextLintBaseline,
   readLintBaseline,
 } from "./lib/foundation-sql-lint.mjs";
@@ -54,6 +57,35 @@ test("the lint database only runs on a local Docker daemon, without any network"
     LINT_IMAGE,
     /^public\.ecr\.aws\/supabase\/postgres:17\.[0-9.]+@sha256:[0-9a-f]{64}$/
   );
+});
+
+test("a loaded or mirrored copy runs by ID only when the ID is pinned", () => {
+  const tagged = LINT_IMAGE.slice(0, LINT_IMAGE.indexOf("@"));
+  assert.equal(LINT_IMAGE_IDS[0], LINT_IMAGE.slice(LINT_IMAGE.indexOf("@") + 1));
+  for (const id of LINT_IMAGE_IDS) assert.match(id, /^sha256:[0-9a-f]{64}$/);
+  for (const mirror of LINT_IMAGE_MIRRORS) assert.match(mirror, /^[a-z0-9.-]+\/[a-z0-9/_-]+$/);
+  const asked = [];
+  for (const id of LINT_IMAGE_IDS) {
+    assert.equal(
+      lintImageRef((ref) => {
+        asked.push(ref);
+        return id;
+      }),
+      id
+    );
+  }
+  assert.deepEqual(new Set(asked), new Set([tagged]));
+  // Another image under the same tag, or no local copy: Docker pulls the pinned digest.
+  assert.equal(
+    lintImageRef(() => `sha256:${"0".repeat(64)}`),
+    LINT_IMAGE
+  );
+  assert.equal(
+    lintImageRef(() => ""),
+    LINT_IMAGE
+  );
+  const args = lintContainerArgs("vm-foundation-sql-lint-test", "pw", LINT_IMAGE_IDS[1]);
+  assert.ok(args.includes(LINT_IMAGE_IDS[1]) && !args.includes(LINT_IMAGE));
 });
 
 test("a trigger finding counts only when every attached table reports it", () => {

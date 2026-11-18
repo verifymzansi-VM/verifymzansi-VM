@@ -159,8 +159,10 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - name: Pull the pinned Postgres image
-        run: docker pull "$(node -e "import('./scripts/lib/foundation-sql-lint.mjs').then((m) => console.log(m.LINT_IMAGE))")"
+      # From the Actions cache, or ECR Public with retries and a same-digest
+      # mirror: ECR's anonymous limit on shared runner IPs failed this job.
+      - name: Load the pinned Postgres image
+        uses: ./.github/actions/foundation-postgres-image
       - name: Lint the replayed foundation SQL with plpgsql_check
         run: pnpm db:foundation:lint
       - name: Post lifecycle and staff rule behaviour on the replayed schema
