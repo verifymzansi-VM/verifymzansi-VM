@@ -16,8 +16,9 @@ inside the required `lint-type-security` job and fails when:
 - a row names a file that matches `0b562f42` again (move that row to "Put
   back");
 - a row is malformed or listed twice;
-- two groups share a number, or the summary table stores counts (a Files column
-  or a Total row).
+- two groups share a number, a group heading and the summary table's rows do
+  not match one to one, or the summary table stores counts (a Files column or
+  a Total row).
 
 ## Owner's standing rules for the frontend
 
@@ -39,17 +40,22 @@ inside the required `lint-type-security` job and fails when:
 4. To put a file back: `git checkout 0b562f42 -- <file>`, then move its row to
    "Put back" below.
 
-So that open pull requests do not clash in this file:
+To keep clashes between open pull requests in this file small:
 
 - Store no counts. The check prints each group's file count, the total and the
-  next unused group number; the summary table has one row per group and no
-  Files column or Total row.
-- A new group takes the next unused number (gaps are fine). If main gains a
-  group with the same number before yours merges, the check fails: renumber
-  yours (heading, summary row and any "group N" mentions). Never renumber
-  existing groups.
-- Add a new group's section just above `<!-- frontend-ledger:end -->` and its
-  summary row at the end of the summary table.
+  next unused group number; the summary table has no Files column or Total row.
+- Every group has one `### N. Title` section between the markers and exactly
+  one summary row starting `N.`; the check fails otherwise. A group without
+  file rows says so in its summary row, for example "(no file rows: email
+  only)".
+- A new group takes the next unused number (gaps are fine). Add its section
+  just above `<!-- frontend-ledger:end -->` and its summary row at the end of
+  the summary table. Never renumber existing groups.
+- Two pull requests that each add a new group still touch the same two spots
+  (the end of the summary table and the line above the end marker), so git
+  reports a conflict there. Keep both sides; if the check then says a number is
+  already used, renumber the newer group (heading, summary row and any "group
+  N" mentions).
 - Prettier does not format this file (`.prettierignore`), so tables are never
   re-padded. Write new rows as `| a | b |` without lining up the columns; edit
   existing rows in place.
@@ -61,7 +67,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 
 | Group                                        | Proposed                                                                                      | What visitors notice                                                                                                                                                                                                                                                                                                                                                                                     |
 | -------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Phone and tablet filter                   | put back (owner, 2026-11-09)                                                                  | The right-edge Filters tab is back on phones and tablets                                                                                                                                                                                                                                                                                                                                                 |
+| 1. Phone and tablet filter (no file rows: 3 put back) | put back (owner, 2026-11-09)                                                                  | The right-edge Filters tab is back on phones and tablets                                                                                                                                                                                                                                                                                                                                                 |
 | 2. Member and public wording or behaviour    | keep (owner, 2026-11-09; M2.3 rows 2026-11-10; M2.7, M9.2, M9.4 and M10.1 rows 2026-11-12)    | Billing, contact, dashboard, privacy, help and email-change texts; posts deleted 3 days after they end or are sold, events at their end; the dashboard trial card shows the free week's end date                                                                                                                                                                                                         |
 | 3. Staff screens only                        | keep                                                                                          | Nothing; staff screens follow the new backend's review rules                                                                                                                                                                                                                                                                                                                                             |
 | 4. Rewiring only                             | keep                                                                                          | Nothing new; the same pages read from the new backend (event pages show their host business card again, as in the chosen version)                                                                                                                                                                                                                                                                        |
@@ -81,7 +87,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 18. R69 slots (Pricing v2 P2)                | keep (owner, 2026-11-12 and 2026-11-13)                                                       | Paid slots are on sale at R69 per 30 days: the checkout offers 30, 90 or 180 days, the number of slots and the cooling-off box; a new 'My slots' page in the dashboard                                                                                                                                                                                                                                   |
 | 19. One tap opens any post (M10.5)           | keep (owner, 2026-11-13, with the M10.5 part of 2 rows elsewhere)                             | Phones and tablets: one tap on a video card opens the post, like a photo card; a small 'Preview' button plays the video in place; with data saver on, nothing plays by itself                                                                                                                                                                                                                            |
 | 20. Staff fix paid but not delivered (M3.4)  | keep (owner, 2026-11-13)                                                                      | Staff only: delivery status on Payments & Refunds, a 'needs attention' list, 'Activate what was paid for', refunds with Ozow's reference and a reason, one slot refunded alone, a second approver above R1 000                                                                                                                                                                                           |
-| 21. Payment receipt email (M3.7)             | keep (owner, 2026-11-13)                                                                      | Members who pay: the 'Payment received' email lists the invoice number, date paid, item, amount in rands and bank reference, and links to 'My slots' (add-ons: the dashboard) instead of Billing                                                                                                                                                                                                         |
+| 21. Payment receipt email (M3.7) (no file rows: email only) | keep (owner, 2026-11-13)                                                                      | Members who pay: the 'Payment received' email lists the invoice number, date paid, item, amount in rands and bank reference, and links to 'My slots' (add-ons: the dashboard) instead of Billing                                                                                                                                                                                                         |
 | 22. Hidden until it works, part 2 (M6.2)     | keep (owner, 2026-11-13)                                                                      | No 'Performance' page or menu entry and no 'Detect province and city' button; a search lists tourism businesses under Businesses again                                                                                                                                                                                                                                                                   |
 | 23. Phone-sized photos (M4.3)                | keep (owner, 2026-11-13)                                                                      | Nothing on screen: the same photos, but a phone downloads a 400, 800 or 1 600 px copy of each new photo instead of the full-size original                                                                                                                                                                                                                                                                |
 | 24. Staff record a bank transfer (P2b)       | keep (owner, 2026-11-13, with the P2b part of 4 rows elsewhere)                               | Staff only: 'Record a bank transfer' on Payments & Refunds; a second staff member confirms it before the slots start; a confirmed transfer shows its bank reference, and its refund form asks for the bank reference of the transfer back                                                                                                                                                                |
@@ -94,6 +100,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 31. Customer invoices with Pay now (P2b)     | approved by owner 2026-11-14 (with the invoice part of 2 rows elsewhere)                      | Members with an invoice: an 'Invoices' page and the invoice itself ('Invoice', VerifyMzansi is not registered for VAT), with their billing details, the cooling-off box, 'Pay now' (Ozow) and 'Print or save as PDF'. Staff: an 'Invoices' card on Payments & Refunds to issue, list and void invoices, and an invoice page with the customer's link and a form to record a bank transfer to the invoice |
 | 32. Renew early (P3)                         | awaiting owner (with the renew-early part of 5 rows elsewhere)                                | Members: 'Renew' on each Individual slot from 14 days before it ends and 'Renew all' on My slots; the checkout renews the chosen slots, each from its own end date, with the renewal's own box; a reminder email 3 days before a slot ends with a renew link                                                                                                                                             |
 | 33. Multi-listing packages (P4a)             | approved by owner 2026-11-16 (with the P4a part of 7 rows elsewhere)                          | Nothing while packages are not on sale (the owner's switch). Then: 'Choose your package' (a typed number of slots from 5 at R100 per slot per 30 days, 30, 90 or 180 days, the 'My slots start now' tick; above R10,000 by invoice), the package on My slots, the Multi-listing page's new words and prices, and a message when Individual slots or invoices are refused while a package runs            |
+| 34. Erased accounts in staff payment screens (no file rows: all in groups 20, 24 and 28) | approved by owner 2026-11-16 (owner decision 7 on the erasure pull request) | Nothing today (no account has been erased); for an erased account, the staff payment screens leave its account id empty instead of failing |
 | 35. Live-test fixes (17 November)            | awaiting owner (with the live-test part of 10 rows elsewhere)                                 | Dashboard: 'Three steps to your first post' ticks the verification step only once the ID is accepted ('Verification in review' keeps its number 1). Nothing else on screen: missing posts answer a real 404 with the same page, pages name their canonical address, the error page is kept out of search results, and the bell checks for news once a minute with one request                            |
 | 36. Invoice choice and Ozow's maximum        | approved by owner 2026-11-17 (owner question 29)                                              | Checkout: 'Need an invoice before you pay? Get an invoice' at every amount; above Ozow's maximum (R1 300 today) the invoice only; invoices above it by bank transfer; packages above it by invoice; new Terms                                                                                                                                                                                            |
 | 37. Hidden until it works, part 4            | hidden until it works (owner decision 2026-11-16)                                             | Notifications page, Preferences tab: no 'Analytics' or 'Third-party sharing' switch; the two marketing switches stay                                                                                                                                                                                                                                                                                     |
@@ -1798,6 +1805,15 @@ whose files are unchanged).
 | File                                                 | Kind | Reason                                                                                            | What changes on screen       | Proposed | Owner decision               | Date       | Version      |
 | ---------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------- | ---------------------------- | -------- | ---------------------------- | ---------- | ------------ |
 | `src/components/posting/package-rules-note.test.tsx` | test | Group 40: expects the edit rule 'up to 2, 6 or 12 approved edits for a 30-, 90- or 180-day slot'. | Nothing (not part of a page) | keep     | approved by owner 2026-11-17 | 2026-11-17 | 81f2cab508ed |
+
+### 41. Account events in the bell
+
+No file in the checked scope changes, so this group has no file rows (Files 0).
+The new notices come from database update
+`20261117140533_member_notices_in_app.sql`; the bell itself
+(`src/components/notification-bell.tsx`, its row in group 2) is unchanged by
+this group. The notices and their wording are owner question 31. Decision:
+awaiting owner.
 
 ### 44. Phone dashboard pages widened by the strip
 

@@ -202,6 +202,27 @@ export function parseLedger(text) {
     }
     rows.push(row);
   }
+  // Every group has exactly one summary row and every summary row a group, so
+  // the owner's overview cannot silently miss or invent a group. Checked only
+  // when the ledger has a summary section.
+  if (lines.some((line) => line.trim() === SUMMARY_HEADING)) {
+    const listed = new Set(summary.map((item) => item.number));
+    const headed = new Set(groups.map((item) => item.number));
+    for (const item of groups) {
+      if (!listed.has(item.number)) {
+        errors.push(
+          `line ${item.line}: group ${item.number} has no row in the summary table ("${SUMMARY_HEADING}")`
+        );
+      }
+    }
+    for (const item of summary) {
+      if (!headed.has(item.number)) {
+        errors.push(
+          `line ${item.line}: summary row for group ${item.number} has no "### ${item.number}. ..." section between the markers`
+        );
+      }
+    }
+  }
   return { rows, errors, groups, summary };
 }
 

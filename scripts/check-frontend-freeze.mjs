@@ -10,7 +10,8 @@
 //     history section, otherwise its old approval would silently cover a
 //     different future change to the same file);
 //   - a row is malformed or listed twice;
-//   - two groups share a number, or the summary table stores counts (a Files
+//   - two groups share a number, a group section and the summary table's rows
+//     do not match one to one, or the summary table stores counts (a Files
 //     column or a Total row): the check prints those counts instead.
 //
 //   pnpm check:frontend-freeze                     check

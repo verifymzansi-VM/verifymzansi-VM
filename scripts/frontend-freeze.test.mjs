@@ -160,7 +160,7 @@ test("assigns rows to their group and computes the counts the ledger does not st
       [
         "| 1. First | keep | Nothing |",
         "| 2. Second | keep | Nothing |",
-        "| 7. No rows | keep | - |",
+        "| 5. Gaps are fine (no file rows) | keep | - |",
       ],
       [
         section(1, "First (visual)", row("src/components/a.tsx"), row("src/components/b.tsx")),
@@ -182,11 +182,26 @@ test("assigns rows to their group and computes the counts the ledger does not st
     ],
     ungrouped: 0,
     total: 3,
-    nextGroup: 8,
+    nextGroup: 6,
   });
   const plain = parseLedger(ledger(row("src/components/a.tsx")));
   assert.equal(plain.rows[0].group, null);
   assert.deepEqual(ledgerCounts(plain), { perGroup: [], ungrouped: 1, total: 1, nextGroup: 1 });
+});
+
+test("requires exactly one summary row per group section", () => {
+  const { errors } = parseLedger(
+    grouped(
+      ["| 1. First | keep | - |", "| 9. Only in the summary | keep | - |"],
+      [section(1, "First", row("src/components/a.tsx")), section(2, "Only a section")]
+    )
+  );
+  assert.equal(errors.length, 2, errors.join("\n"));
+  assert.match(errors[0], /group 2 has no row in the summary table/);
+  assert.match(errors[1], /summary row for group 9 has no "### 9\. \.\.\." section/);
+  // A ledger without a summary section (the minimal fixtures above) is not
+  // held to this rule.
+  assert.deepEqual(parseLedger(ledger(row("src/components/a.tsx"))).errors, []);
 });
 
 test("refuses a group number used twice", () => {
@@ -333,6 +348,7 @@ test("the committed ledger is well formed", () => {
 
 test("the ledger is left to the freeze check, not prettier", () => {
   const ignored = readFileSync(".prettierignore", "utf8").split(/\r?\n/);
-  assert(ignored.includes(LEDGER_FILE));
+  // Anchored to the repository root, so no other file of that name is ignored.
+  assert(ignored.includes(`/${LEDGER_FILE}`));
   assert.match(readFileSync("scripts/check-quality.ts", "utf8"), /file !== "FRONTEND-CHANGES\.md"/);
 });

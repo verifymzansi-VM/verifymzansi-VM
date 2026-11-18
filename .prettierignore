@@ -35,4 +35,4 @@ src/lib/domains/taxonomy/reference.json
 # The frontend change ledger: re-padding its wide tables rewrote unrelated rows
 # and made every pair of open pull requests conflict. Checked by
 # scripts/check-frontend-freeze.mjs instead.
-FRONTEND-CHANGES.md
+/FRONTEND-CHANGES.md
