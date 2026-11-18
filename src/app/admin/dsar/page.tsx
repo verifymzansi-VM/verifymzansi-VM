@@ -231,21 +231,13 @@ export default async function AdminDSARPage({
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       {req.may_process &&
-                        (req.status === "submitted" ||
-                          req.status === "in_progress" ||
-                          // Completed before two-person approval: a second
-                          // staff member approves it before a new export.
-                          (req.status === "completed" && req.approved_at === null)) && (
+                        (req.status === "submitted" || req.status === "in_progress") && (
                           <DsarActionButtons
                             requestId={req.id}
                             status={req.status}
                             requestType={req.type}
                             identityVerified={req.identity_verified}
                             revision={req.revision}
-                            approved={
-                              req.approved_at === undefined ? undefined : req.approved_at !== null
-                            }
-                            mayApprove={req.may_approve}
                           />
                         )}
                       {req.may_process && (
@@ -258,14 +250,12 @@ export default async function AdminDSARPage({
                           extensionDays={rule?.extension_days ?? 0}
                           isOpen={isOpen}
                           revision={req.revision}
-                          awaitingApproval={req.approved_at === null}
                           canExport={
                             req.revision === undefined
                               ? req.identity_verified
                               : req.identity_verified &&
                                 req.type === "access" &&
-                                ["in_progress", "completed"].includes(req.status) &&
-                                req.approved_at !== null
+                                ["in_progress", "completed"].includes(req.status)
                           }
                         />
                       )}

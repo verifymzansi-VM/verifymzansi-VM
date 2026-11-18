@@ -8,15 +8,13 @@ CREATE OR REPLACE FUNCTION internal.process_frontend_privacy_request(p_case uuid
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid:=internal.staff_actor('dsar:manage');r private.privacy_requests;rule private.privacy_request_rules;now_at timestamptz;
-  answer text;delivery text;event_action text;note text;verified_subject uuid;matches integer;
+  answer text;delivery text;note text;verified_subject uuid;matches integer;
 begin
   if p_action is null or p_action not in('assign','extend','verify_identity','approve','reject','complete')
     or p_revision is null or p_revision not between 1 and 2147483646 then raise exception 'represented privacy request required' using errcode='22023';end if;
   if p_note is not null then note:=internal.privacy_text(p_note,1,2000);end if;
   select * into r from private.privacy_requests where id=p_case for update;
-  if not found or r.revision<>p_revision or (r.status not in('submitted','identity_pending','in_progress')
-      and not (p_action='approve' and r.status='completed' and r.approved_at is null)) then
-    raise exception 'privacy request changed' using errcode='PT409';end if;
+  if not found or r.revision<>p_revision or r.status not in('submitted','identity_pending','in_progress') then raise exception 'privacy request changed' using errcode='PT409';end if;
   actor:=internal.staff_actor('dsar:manage');now_at:=clock_timestamp();
   if actor=r.subject_user_id or exists(select 1 from auth.users u where u.id=actor and lower(u.email)=lower(r.requester_email))
     then raise exception 'another staff member must process your request' using errcode='42501';end if;
@@ -37,11 +35,6 @@ begin
     answer:='extended';delivery:=answer;
   elsif p_action='verify_identity' then
     if r.identity_verified then raise exception 'identity was already reviewed' using errcode='PT409';end if;
-    -- The staff member who approved the request does not also check the
-    -- requester's identity.
-    if actor is not distinct from r.approved_by then
-      raise exception 'a second staff member checks the identity of a request you approved'
-        using errcode='42501',detail='second_person_required';end if;
     if r.identity_check='manual' then
       select count(*),(array_agg(u.id order by u.id))[1] into matches,verified_subject from auth.users u
         where lower(u.email)=lower(r.requester_email) and u.email_confirmed_at is not null and u.deleted_at is null and not u.is_anonymous;
@@ -51,33 +44,16 @@ begin
       subject_user_id=verified_subject,processed_by=actor,revision=revision+1 where id=r.id;
     answer:='identity_verified';
   elsif p_action in('approve','reject') then
-    -- The approver did not record the request's intake, check the requester's
-    -- identity or start a request approved before this rule.
-    if p_action='approve' and (actor is not distinct from r.intake_by or actor is not distinct from r.verified_by
-        or exists(select 1 from private.privacy_request_events e where e.request_id=r.id and e.actor_id=actor and e.action='started')) then
-      raise exception 'a second staff member must approve this request' using errcode='42501',detail='second_person_required';
-    end if;
-    if p_action='approve' and r.status in('in_progress','completed') then
-      -- Started before two-person approval: a second staff member approves it
-      -- now; its state is unchanged.
-      if r.approved_at is not null then raise exception 'privacy request already approved' using errcode='PT409';end if;
-      update private.privacy_requests set approved_by=actor,approved_at=now_at,revision=revision+1 where id=r.id;
-      answer:=r.status;event_action:='approved';delivery:='approved';
-    else
-      if r.status not in('submitted','identity_pending') then raise exception 'privacy request already decided' using errcode='PT409';end if;
-      answer:=case p_action when 'approve' then 'in_progress' else 'rejected' end;
-      delivery:=case answer when 'rejected' then 'rejected' else 'approved' end;
-      update private.privacy_requests set status=answer,response_summary=note,processed_by=actor,revision=revision+1,
-        approved_by=case when answer='in_progress' then actor end,approved_at=case when answer='in_progress' then now_at end
-        where id=r.id;
-      -- A rejected deletion request never lets its account be erased later on
-      -- its own: the rejection is recorded and a legal hold placed (20261116175757_close_and_erase_account.sql).
-      if answer='rejected' and r.type='deletion' then perform internal.reject_account_erasure(r.id,actor);end if;
-    end if;
+    if r.status not in('submitted','identity_pending') then raise exception 'privacy request already decided' using errcode='PT409';end if;
+    answer:=case p_action when 'approve' then 'in_progress' else 'rejected' end;
+    -- The requester is emailed on approval too (privacy notice kind 'approved').
+    delivery:=case answer when 'rejected' then 'rejected' else 'approved' end;
+    update private.privacy_requests set status=answer,response_summary=note,processed_by=actor,revision=revision+1 where id=r.id;
+    -- A rejected deletion request never lets its account be erased later on
+    -- its own: the rejection is recorded and a legal hold placed (20261116175757_close_and_erase_account.sql).
+    if answer='rejected' and r.type='deletion' then perform internal.reject_account_erasure(r.id,actor);end if;
   else
     if r.status<>'in_progress' or not r.identity_verified then raise exception 'verified in-progress privacy request required' using errcode='PT409';end if;
-    if r.approved_at is null then
-      raise exception 'a second staff member must approve this request first' using errcode='PT409',detail='approval_required';end if;
     if r.type='deletion' then
       -- An account named by the request is erased first (20261116175757_close_and_erase_account.sql).
       if exists(select 1 from private.account_erasure_requests l join private.account_erasures e on e.user_id=l.user_id
@@ -91,11 +67,9 @@ begin
     answer:='completed';delivery:=answer;
   end if;
   insert into private.privacy_request_events(request_id,actor_id,action,represented_revision)
-    values(r.id,actor,coalesce(event_action,case answer when 'in_progress' then 'started' else answer end),p_revision);
-  if delivery is not null then
-    insert into private.privacy_notice_jobs(request_id,kind) values(r.id,delivery) on conflict(request_id,kind) do nothing;
-  end if;
-  -- The account named by the request sees the approval in its bell.
+    values(r.id,actor,case answer when 'in_progress' then 'started' else answer end,p_revision);
+  if delivery is not null then insert into private.privacy_notice_jobs(request_id,kind) values(r.id,delivery);end if;
+  -- The account named by the request also sees the approval in its bell.
   if delivery='approved' and r.subject_user_id is not null then
     perform internal.notify_account(r.subject_user_id,'privacy_request_approved',r.id,null,null);
   end if;

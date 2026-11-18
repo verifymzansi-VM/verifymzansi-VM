@@ -49,32 +49,32 @@
       "fingerprint": "11724f805587a82326eae936e0200f0c"
     },
     "columns": {
-      "items": 1299,
-      "fingerprint": "7884969403b9474a2467db8aecfd96ca"
+      "items": 1297,
+      "fingerprint": "0288e2e74a2096cfb4ff17f11069ca32"
     },
     "constraints": {
-      "items": 1156,
-      "fingerprint": "adef0ac2f9cdc8178c2000e508b87605"
+      "items": 1154,
+      "fingerprint": "9c8655bb1c1ba0128a9bd7105e45f8ef"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 989,
-      "fingerprint": "ca2f7cb68d6ba3147dee1800814d24fc"
+      "items": 988,
+      "fingerprint": "ed03d9ce3b491d2267ce461b758c941d"
     },
     "function_grants": {
-      "items": 726,
-      "fingerprint": "fddc45cb1856a596017e22cfec0a9c11"
+      "items": 725,
+      "fingerprint": "d751c69a268173eb80adebf824d19837"
     },
     "function_metadata": {
-      "items": 989,
-      "fingerprint": "9f67bceffc8a7440e7800a1ad1605c77"
+      "items": 988,
+      "fingerprint": "cd564f09377db31fb23aeb7c8fba6ac2"
     },
     "indexes": {
-      "items": 521,
-      "fingerprint": "37f5593cf20be97ac60d38ca621aa503"
+      "items": 520,
+      "fingerprint": "ce7a122be9d78286fdf7f9f40b8ce454"
     },
     "policies": {
       "items": 1,

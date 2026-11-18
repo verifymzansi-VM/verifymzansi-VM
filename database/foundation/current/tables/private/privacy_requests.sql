@@ -28,10 +28,6 @@ create table private.privacy_requests (
   created_at timestamp with time zone default clock_timestamp() not null,
   revision integer default 1 not null,
   minimised_at timestamp with time zone,
-  approved_by uuid,
-  approved_at timestamp with time zone,
-  constraint privacy_requests_approval_check CHECK (approved_by IS NULL OR approved_at IS NOT NULL),
-  constraint privacy_requests_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES auth.users(id) ON DELETE SET NULL,
   constraint privacy_requests_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES auth.users(id) ON DELETE SET NULL,
   constraint privacy_requests_check CHECK (due_by > received_at),
   constraint privacy_requests_check1 CHECK (extended_due_at > due_by),
@@ -55,7 +51,6 @@ create table private.privacy_requests (
 );
 alter table private.privacy_requests owner to postgres;
 alter table private.privacy_requests enable row level security;
-CREATE INDEX privacy_requests_approver_idx ON private.privacy_requests USING btree (approved_by);
 CREATE INDEX privacy_requests_assignee_idx ON private.privacy_requests USING btree (assigned_to);
 CREATE INDEX privacy_requests_closed_idx ON private.privacy_requests USING btree (created_at DESC, id) WHERE (status = ANY (ARRAY['completed'::text, 'rejected'::text]));
 CREATE INDEX privacy_requests_intake_idx ON private.privacy_requests USING btree (intake_by);

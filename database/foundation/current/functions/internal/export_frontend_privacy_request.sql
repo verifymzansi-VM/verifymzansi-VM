@@ -15,9 +15,6 @@ begin
   actor:=internal.staff_actor('dsar:manage');
   if actor=r.subject_user_id or exists(select 1 from auth.users u where u.id=actor and lower(u.email)=lower(r.requester_email))
     then raise exception 'another staff member must export your request' using errcode='42501';end if;
-  -- Nothing leaves before a second staff member approved the request.
-  if r.approved_at is null then
-    raise exception 'a second staff member must approve this request first' using errcode='PT409',detail='approval_required';end if;
   result:=jsonb_build_object('request_id',r.id,'reference','DSAR-'||upper(left(r.id::text,8)),
     'generated_at',clock_timestamp(),'request_type',r.type,'received_at',r.received_at,'due_by',r.effective_due_at,
     'account_found',r.subject_user_id is not null,

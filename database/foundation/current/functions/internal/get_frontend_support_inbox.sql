@@ -9,7 +9,6 @@ CREATE OR REPLACE FUNCTION internal.get_frontend_support_inbox(p_page integer DE
 AS $function$
 declare actor uuid:=internal.staff_actor('support:view');answer jsonb;can_update boolean;
 begin
-  perform internal.staff_actor_recent('support:view');
   if p_page is null or p_page not between 1 and 100000 then raise exception 'valid support page required' using errcode='22023';end if;
   can_update:=exists(select 1 from private.staff_roles s join private.staff_capabilities c on c.role=s.role and c.capability='support:update'
     where s.user_id=actor and s.revoked_at is null);
@@ -28,7 +27,7 @@ begin
       'emailActivity',coalesce((select jsonb_agg(jsonb_build_object('template',m.template,'accepted',m.accepted,'created_at',m.created_at)
         order by m.created_at,m.template) from private.support_ticket_mail m where m.ticket_id=t.id),'[]'::jsonb))
       order by t.created_at desc,t.id desc) from rows t),'[]'::jsonb)) into answer;
-  perform internal.staff_actor_recent('support:view');return answer;
+  perform internal.staff_actor('support:view');return answer;
 end$function$;
 alter function internal.get_frontend_support_inbox(integer,uuid) owner to postgres;
 revoke all on function internal.get_frontend_support_inbox(integer,uuid) from public;

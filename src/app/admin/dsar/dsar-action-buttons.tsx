@@ -20,16 +20,10 @@ import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 interface DsarActionButtonsProps {
   requestId: string;
-  status: "submitted" | "in_progress" | "completed";
+  status: "submitted" | "in_progress";
   requestType: DsarCase["type"];
   identityVerified: boolean;
   revision?: number;
-  /** False while no second staff member has approved the request; undefined
-   * when the server does not say (before the two-person rule). */
-  approved?: boolean;
-  /** False when the viewer recorded the request, checked the identity or
-   * started it, so a second staff member must approve it. */
-  mayApprove?: boolean;
 }
 
 export function DsarActionButtons({
@@ -38,8 +32,6 @@ export function DsarActionButtons({
   requestType,
   identityVerified,
   revision,
-  approved,
-  mayApprove,
 }: DsarActionButtonsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -51,8 +43,6 @@ export function DsarActionButtons({
   const [deletionAttestation, setDeletionAttestation] = useState("");
   const busy = isPending || submitting;
   const isDeletion = requestType === "deletion";
-  const awaitingApproval = approved === false;
-  const canApprove = mayApprove !== false;
 
   async function checkResponse(res: Response) {
     if (res.ok) return true;
@@ -136,21 +126,19 @@ export function DsarActionButtons({
             Verify identity
           </Button>
         )}
-        {(status === "submitted" || awaitingApproval) && canApprove && (
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 text-brand-green"
-            onClick={() => handleDecision("approve")}
-            title="Approve and begin processing"
-            aria-label="Approve request"
-            disabled={busy}
-          >
-            <CheckCircle className="h-4 w-4" />
-          </Button>
-        )}
-        {status === "completed" ? null : status === "submitted" ? (
+        {status === "submitted" ? (
           <>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 text-brand-green"
+              onClick={() => handleDecision("approve")}
+              title="Approve and begin processing"
+              aria-label="Approve request"
+              disabled={busy}
+            >
+              <CheckCircle className="h-4 w-4" />
+            </Button>
             <Button
               size="icon"
               variant="ghost"
@@ -174,7 +162,7 @@ export function DsarActionButtons({
             }}
             title="Mark request completed"
             aria-label="Complete request"
-            disabled={busy || !identityVerified || awaitingApproval}
+            disabled={busy || !identityVerified}
           >
             <Check className="h-4 w-4" />
           </Button>
@@ -183,11 +171,6 @@ export function DsarActionButtons({
       {!identityVerified && status === "in_progress" && (
         <p className="text-xs text-muted-foreground">
           Verify identity before completing this request.
-        </p>
-      )}
-      {(status === "submitted" || awaitingApproval) && !canApprove && (
-        <p className="text-xs text-muted-foreground">
-          Waiting for a second staff member to approve.
         </p>
       )}
       {error && !showCompleteDialog && !showIdentityDialog && (

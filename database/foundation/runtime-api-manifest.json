@@ -615,8 +615,7 @@
       "name": "get_staff_invoice_transfers",
       "updates": [
         "updates/20261113162457_staff_invoice_payments.sql",
-        "updates/20261118044440_bank_transfer_expiry.sql",
-        "updates/20261118072601_staff_data_minimisation.sql"
+        "updates/20261118044440_bank_transfer_expiry.sql"
       ],
       "arguments": [],
       "returns": "jsonb",
@@ -626,7 +625,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment view capability and a second factor from the last 15 minutes: the recorded bank transfers waiting for confirmation (less than 14 days old) (up to 50, oldest first, with their count): customer account id, account email (to match the bank statement) and public name, term, slots, amount, bank reference, date cleared, reason, recorded time, the recorder's public name, whether the caller's identity recorded it and how many other waiting or confirmed records (not declined or expired) name the same customer, amount and date. No phone, legal name or identity details."
+      "authority": "Current payment view capability and recent authenticator proof: the recorded bank transfers waiting for confirmation (less than 14 days old) (up to 50, oldest first, with their count): customer account id, account email (to match the bank statement) and public name, term, slots, amount, bank reference, date cleared, reason, recorded time, the recorder's public name, whether the caller's identity recorded it and how many other waiting or confirmed records (not declined or expired) name the same customer, amount and date. No phone, legal name or identity details."
     },
     {
       "name": "get_staff_invoice_customer",
@@ -649,10 +648,7 @@
     },
     {
       "name": "get_staff_invoice_payments",
-      "updates": [
-        "updates/20261113162457_staff_invoice_payments.sql",
-        "updates/20261118072601_staff_data_minimisation.sql"
-      ],
+      "updates": ["updates/20261113162457_staff_invoice_payments.sql"],
       "arguments": [
         {
           "name": "p_payment_ids",
@@ -667,7 +663,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment view capability and a second factor from the last 15 minutes: the bank transfer details (reference, date cleared, amount, reason, recorded time and whether the caller's identity recorded or confirmed it) of up to 50 listed payments confirmed from a recorded bank transfer."
+      "authority": "Current payment view capability and recent authenticator proof: the bank transfer details (reference, date cleared, amount, reason, recorded time and whether the caller's identity recorded or confirmed it) of up to 50 listed payments confirmed from a recorded bank transfer."
     },
     {
       "name": "get_my_communication_choices",
@@ -2223,7 +2219,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current support staff with a second factor from the last 15 minutes; bounded paged requests received in the last 12 months (older ones only while still open) and their mail activity, with a database-authorized edit hint."
+      "authority": "Current support staff, bounded paged requests received in the last 12 months (older ones only while still open) and their mail activity, with a database-authorized edit hint."
     },
     {
       "name": "update_frontend_support_status",
@@ -2344,10 +2340,7 @@
     },
     {
       "name": "get_frontend_privacy_queue",
-      "updates": [
-        "updates/20261105085900_restored_privacy_requests.sql",
-        "updates/20261118072601_staff_data_minimisation.sql"
-      ],
+      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
       "arguments": [
         {
           "name": "p_view",
@@ -2367,7 +2360,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current privacy reviewer and fresh TOTP. Bounded numbered pages, exact counts, represented revision, approval time and whether the viewer may approve."
+      "authority": "Current privacy reviewer and fresh TOTP. Bounded numbered pages, exact counts and represented revision."
     },
     {
       "name": "process_frontend_privacy_request",
@@ -2414,7 +2407,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current privacy reviewer and fresh TOTP. Subject conflicts and stale revisions are denied; the approver never recorded the intake, checked the identity or started the request (and the approver never checks the identity); completion requires that approval, verified identity and deletion attestation where applicable. Approval emails the requester and notifies the named account."
+      "authority": "Current privacy reviewer and fresh TOTP. Subject conflicts and stale revisions are denied; completion requires verified identity and deletion attestation where applicable. An approval emails the requester and notifies the account the request names."
     },
     {
       "name": "export_frontend_privacy_request",
@@ -2441,7 +2434,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current privacy reviewer with fresh TOTP; only the represented verified access request approved by a second staff member, and fixed subject-scoped datasets. Oversized exports are refused in full. The first export emails the requester and notifies the named account."
+      "authority": "Current privacy reviewer with fresh TOTP; only the represented verified access request and fixed subject-scoped datasets. Oversized exports are refused in full. The first export emails the requester and notifies the account the request names."
     },
     {
       "name": "claim_frontend_privacy_notice",
@@ -4507,8 +4500,7 @@
       "name": "get_staff_invoices",
       "updates": [
         "updates/20261114041000_customer_invoice_pay_now.sql",
-        "updates/20261118044440_bank_transfer_expiry.sql",
-        "updates/20261118072601_staff_data_minimisation.sql"
+        "updates/20261118044440_bank_transfer_expiry.sql"
       ],
       "arguments": [],
       "returns": "jsonb",
@@ -4518,14 +4510,13 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment view capability and a second factor from the last 15 minutes: the latest 50 invoices (customer email and name, who issued them and why, status, latest payment attempt) and the number unpaid."
+      "authority": "Current payment view capability and recent authenticator proof: the latest 50 invoices (customer email and name, who issued them and why, status, latest payment attempt) and the number unpaid."
     },
     {
       "name": "get_staff_invoice",
       "updates": [
         "updates/20261114041000_customer_invoice_pay_now.sql",
-        "updates/20261118044440_bank_transfer_expiry.sql",
-        "updates/20261118072601_staff_data_minimisation.sql"
+        "updates/20261118044440_bank_transfer_expiry.sql"
       ],
       "arguments": [
         {
@@ -4541,7 +4532,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment view capability and a second factor from the last 15 minutes: one invoice by number, as staff see it."
+      "authority": "Current payment view capability and recent authenticator proof: one invoice by number, as staff see it."
     },
     {
       "name": "get_my_invoices",
@@ -4917,10 +4908,7 @@
     },
     {
       "name": "get_staff_expired_invoice_transfers",
-      "updates": [
-        "updates/20261118044440_bank_transfer_expiry.sql",
-        "updates/20261118072601_staff_data_minimisation.sql"
-      ],
+      "updates": ["updates/20261118044440_bank_transfer_expiry.sql"],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
@@ -4929,7 +4917,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payment view capability and a second factor from the last 15 minutes: every expired bank transfer (marked, or waiting 14 days or more) still to be followed up, that is neither resolved by staff (api.resolve_expired_invoice_transfer) nor followed by a confirmed record of the same money (bank reference, amount, date cleared); oldest expiry first, at most 200, with the full count. Each with the same fields as the waiting list (status 'expired') plus when it expired and the number of the invoice it named. No phone, legal name or identity details."
+      "authority": "Current payment view capability and recent authenticator proof: every expired bank transfer (marked, or waiting 14 days or more) still to be followed up, that is neither resolved by staff (api.resolve_expired_invoice_transfer) nor followed by a confirmed record of the same money (bank reference, amount, date cleared); oldest expiry first, at most 200, with the full count. Each with the same fields as the waiting list (status 'expired') plus when it expired and the number of the invoice it named. No phone, legal name or identity details."
     },
     {
       "name": "get_my_invoice_transfer_expiry",

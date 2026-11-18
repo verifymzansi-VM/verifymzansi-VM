@@ -4,8 +4,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 import { uuidSchema } from "@/lib/validations/shared";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
-import { PRIVACY_REFUSALS, privacyRevision } from "@/lib/foundation/privacy-requests";
-import { lookupDatabaseReason } from "@/lib/foundation/error-reasons";
+import { privacyRevision } from "@/lib/foundation/privacy-requests";
 import {
   FoundationStaffCommandError,
   settleStaffCommand,
@@ -24,8 +23,8 @@ const FOUNDATION_EXPORT_DATASET_COUNT = 33;
  * POST /api/admin/dsar/export  { requestId }
  *
  * Build the complete export of a data subject's records as a download.
- * Needs dsar:manage, a second factor verified in the last 15 minutes, a
- * verified requester identity and a second staff member's approval. Nothing is stored: the file goes straight to
+ * Needs dsar:manage, a second factor verified in the last 15 minutes, and a
+ * verified requester identity. Nothing is stored: the file goes straight to
  * the staff member, who sends it to the requester.
  */
 export async function POST(request: NextRequest) {
@@ -64,8 +63,6 @@ export async function POST(request: NextRequest) {
           413,
           "The export is too large for a direct download. Nothing was exported."
         );
-      const refusal = lookupDatabaseReason(PRIVACY_REFUSALS, rpc.error);
-      if (refusal) throw new FoundationStaffCommandError(refusal[0], refusal[1]);
       const date = z.iso.datetime({ offset: true });
       const result = await settleStaffCommand(
         Promise.resolve(rpc),

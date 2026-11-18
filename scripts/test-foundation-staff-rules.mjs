@@ -551,13 +551,10 @@ try {
       /represented verified access request required/
     );
     assert.equal(privacy(id).status, "in_progress");
-    // The approver never also checks the identity
-    // (20261118072601_staff_data_minimisation.sql): a second staff member does.
-    fails(processAs(admin, id, 3, "verify_identity"), "42501", /second staff member/);
-    assert.equal(json(processAs(admin2, id, 3, "verify_identity")).status, "identity_verified");
+    assert.equal(json(processAs(admin, id, 3, "verify_identity")).status, "identity_verified");
     const verified = privacy(id);
     assert.equal(verified.identity_verified, true);
-    assert.equal(verified.verified_by, admin2.id);
+    assert.equal(verified.verified_by, admin.id);
     const exported = json(staff(admin, `select api.export_frontend_privacy_request('${id}',4);`));
     assert.equal(exported.request_id, id);
     assert.equal(exported.account_found, true);
@@ -571,6 +568,8 @@ try {
       scalar(
         `select string_agg(kind,',' order by created_at,kind) from private.privacy_notice_jobs where request_id='${id}';`
       ).split(","),
+      // The approval and the first export email the requester too
+      // (20261118072601_staff_data_minimisation.sql).
       ["submitted", "extended", "approved", "exported", "completed"]
     );
     assert.equal(
@@ -598,7 +597,7 @@ try {
     );
     assert.equal(privacy(own).status, "submitted");
     q(processAs(admin, own, 1, "approve"));
-    q(processAs(admin2, own, 2, "verify_identity"));
+    q(processAs(admin, own, 2, "verify_identity"));
     fails(
       staff(governor, `select api.export_frontend_privacy_request('${own}',3);`),
       "42501",

@@ -913,7 +913,7 @@ test.describe("staff review with an authenticator", () => {
     expectNoOutboundSince(mark);
   });
 
-  test("an admin verifies, a governor approves and the admin completes a member's privacy request", async ({
+  test("an admin verifies, approves and completes a member's privacy request", async ({
     browser,
   }) => {
     test.setTimeout(150_000);
@@ -947,7 +947,7 @@ test.describe("staff review with an authenticator", () => {
         .filter({ hasText: `DSAR-${requestId.slice(0, 8).toUpperCase()}` })
         .filter({
           has: admin.page.getByRole("button", {
-            name: /^(Verify identity|Approve request|Reject request|Complete request)$/,
+            name: /^(Verify identity|Approve request|Complete request)$/,
           }),
         })
         .last();
@@ -957,30 +957,10 @@ test.describe("staff review with an authenticator", () => {
         .getByRole("button", { name: "I have verified the requester's identity" })
         .click();
       await expect.poll(() => admin.reply("/api/admin/dsar/decide").length).toBe(1);
-      // Whoever checked the identity never approves the request
-      // (20261118072601_staff_data_minimisation.sql): the card waits for a
-      // second staff member, the governor, who approves it on the same page.
-      await expect(card.getByText("Waiting for a second staff member to approve.")).toBeVisible();
-      await expect(card.getByRole("button", { name: "Approve request" })).toHaveCount(0);
-      const governor = await otherBrowser(browser, "governor");
-      try {
-        await governor.page.goto("/admin/dsar");
-        const governorCard = governor.page
-          .locator("div")
-          .filter({ hasText: `DSAR-${requestId.slice(0, 8).toUpperCase()}` })
-          .filter({ has: governor.page.getByRole("button", { name: "Approve request" }) })
-          .last();
-        await governorCard.getByRole("button", { name: "Approve request" }).click();
-        await expect.poll(() => governor.reply("/api/admin/dsar/decide").length).toBe(1);
-        expect(governor.reply("/api/admin/dsar/decide").map((entry) => entry.status)).toEqual([
-          200,
-        ]);
-        expect(governor.failures).toEqual([]);
-        expect(governor.outside).toEqual([]);
-      } finally {
-        await governor.context.close();
-      }
-      // The requester is told by email (queued) and in the bell.
+      await card.getByRole("button", { name: "Approve request" }).click();
+      await expect.poll(() => admin.reply("/api/admin/dsar/decide").length).toBe(2);
+      // The requester is told of the approval by email (queued, not sent here)
+      // and in the bell (20261118072601_staff_data_minimisation.sql).
       expect(
         queryTestCopy(
           "select count(*) from private.privacy_notice_jobs where kind = 'approved' " +
@@ -990,10 +970,9 @@ test.describe("staff review with an authenticator", () => {
       expect(
         queryTestCopy(
           "select count(*) from private.notifications where kind = 'privacy_request_approved' " +
-            `and subject_id = '${requestId}';`
+            `and subject_id = '${requestId}' and account_id = '${poster.id}';`
         )
       ).toBe("1");
-      await admin.page.reload();
       await card.getByRole("button", { name: "Complete request" }).click();
       const complete = admin.page.getByRole("dialog", { name: "Complete Data Request" });
       await complete
@@ -1005,7 +984,7 @@ test.describe("staff review with an authenticator", () => {
         [...admin.reply("/api/admin/dsar/decide"), ...admin.reply("/api/admin/dsar/complete")].map(
           (entry) => entry.status
         )
-      ).toEqual([200, 200]);
+      ).toEqual([200, 200, 200]);
       expect(admin.failures).toEqual([]);
       expect(admin.outside).toEqual([]);
     } finally {

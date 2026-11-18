@@ -1,54 +1,38 @@
 -- Reviewed rollback for updates/20261118072601_staff_data_minimisation.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so; prefer a forward fix. It restores the previous bodies
--- of the 16 replaced functions byte for byte, drops
--- internal.staff_actor_recent and both reveal_organisation_applicant_contact
--- commands, drops the approval columns of private.privacy_requests and restores
--- the three closed lists. To restore the lists it deletes the members' notices
--- of the two new kinds (and their dismissals) and the requester emails of the
--- two new kinds (sent or not). It refuses while any privacy request was
--- approved as a second approval of an earlier request (audit action
--- 'approved'): that record must not be lost. Who approved a request started
--- after the update stays in its 'started' audit event.
+-- of the 10 replaced functions byte for byte, drops both
+-- reveal_organisation_applicant_contact commands and restores the two closed
+-- lists. To restore the lists it deletes the members' notices of the two new
+-- kinds (and their dismissals) and the requester emails of the two new kinds
+-- (sent or not). The organisation event log keeps its reveal records.
 --
--- ORDER: run it before the website release of the same pull request is
--- reverted (that release works without the update).
+-- ORDER: run it before the expand website release is reverted (this pull
+-- request's release works without the update).
 begin;
 set local lock_timeout='5s';
 
 do $$begin
-  if (select count(*) from pg_attribute where attrelid='private.privacy_requests'::regclass and attname in('approved_by','approved_at') and not attisdropped)<>2
+  if false
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_business_review_queue(text)')) is distinct from '02eed4ae21b86c982feda572871add03'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_seen_queue(text)')) is distinct from '1739b49ce16a79538ed569b6668b5910'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_seen_case(uuid)')) is distinct from '1275da13ade5358710b03902b00e7248'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_cipc_case(uuid)')) is distinct from 'ed026d48191cac201053305cde485957'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_verification_queue(integer)')) is distinct from '8ecd9727c64d6c8dee4e4af2e8da4649'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_staff_verification_queue(integer,uuid[])')) is distinct from '9c87b1e5234ba46a5678cf6bb0b4d3c1'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_privacy_queue(text,integer)')) is distinct from '73c23d0393783b2a3760bdca0060923b'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from 'af1e804567d16989fe47019e6fcd33f7'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from '367f25173e66bb4fcf3d877c0fddff15'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from 'dd1dd2e21be1f6accde9652e10f7682b'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '934dfff07e993b1ca95f48b21b2e6435'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from '939737e433fcf800d5e98a3dd1569e5d'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from '5210ff93931941d85a1daae444a71669'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '50c7ba8869e2fc3f8cc5b68bb0e2f4ed'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoices()')) is distinct from '683c792ecb73a3c19eac080e23971cae'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice(text)')) is distinct from 'b048c33607a4a97a1027a74471aef453'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_transfers()')) is distinct from '6fb783a08c583150f0f2a2d34d3e7245'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_payments(uuid[])')) is distinct from 'b6e790c043538085d440789f3b7b22b8'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_expired_invoice_transfers()')) is distinct from '81dbcf858648a1b88bdc721f234e9018'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_actor_recent(text)')) is distinct from 'e44bafe2778bca781b2a7ffcfe7f3f5f'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)')) is distinct from '67dc202cf393e44675ea7af95b1bf672'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.reveal_organisation_applicant_contact(uuid)')) is distinct from 'f6b2088f77d110d2b5be6683f8d6cb9a'
     or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.notifications'::regclass and c.conname='notifications_kind_check') is distinct from array['account_banned','account_suspended','account_warning','appeal_decided','business_check_update','content_hidden','content_restored','draft_deletion_warning','enquiry_received','identity_accepted','invoice_issued','organisation_affiliation_ended','organisation_application_decided','organisation_application_received','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','payment_completed','payment_reconciliation_required','payment_reversed','post_approved','post_changes_approved','post_changes_rejected','post_deleted','post_expired','post_kept','post_rejected','post_sold','privacy_export_made','privacy_request_approved','slot_renewal_reminder','trial_started','verification_phone_confirmed','verification_returned']::text[]
-    or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.privacy_notice_jobs'::regclass and c.conname='privacy_notice_jobs_kind_check') is distinct from array['approved','completed','exported','extended','rejected','submitted']::text[]
-    or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.privacy_request_events'::regclass and c.conname='privacy_request_events_action_check') is distinct from array['approved','assigned','completed','erasure_ordered','exported','extended','identity_verified','recorded','rejected','started','submitted','unassigned']::text[] then
+    or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.privacy_notice_jobs'::regclass and c.conname='privacy_notice_jobs_kind_check') is distinct from array['approved','completed','exported','extended','rejected','submitted']::text[] then
     raise exception 'rollback precondition: the staff data minimisation update is not applied' using errcode='55000';
-  end if;
-  if exists(select 1 from private.privacy_request_events where action='approved') then
-    raise exception 'rollback precondition: a privacy request has a second approval recorded; keep the update' using errcode='55000';
   end if;
 end$$;
 
-lock table private.privacy_requests,private.privacy_request_events,private.privacy_notice_jobs,private.notifications
-  in access exclusive mode nowait;
+lock table private.privacy_notice_jobs,private.notifications in access exclusive mode nowait;
 
 drop function api.reveal_organisation_applicant_contact(uuid);
 drop function internal.reveal_organisation_applicant_contact(uuid);
@@ -340,44 +324,6 @@ alter function internal.get_frontend_staff_verification_queue(integer,uuid[]) ow
 revoke all on function internal.get_frontend_staff_verification_queue(integer,uuid[]) from public;
 grant execute on function internal.get_frontend_staff_verification_queue(integer,uuid[]) to authenticated;
 
-CREATE OR REPLACE FUNCTION internal.get_frontend_privacy_queue(p_view text DEFAULT 'open'::text, p_page integer DEFAULT 1)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'pg_catalog'
-AS $function$
-declare actor uuid:=internal.staff_actor('dsar:manage');now_at timestamptz:=clock_timestamp();result jsonb;
-begin
-  if p_view is null or p_view not in('open','due_soon','overdue','mine','closed') or p_page is null or p_page not between 1 and 100000
-    then raise exception 'valid privacy queue filters required' using errcode='22023';end if;
-  with filtered as (
-    select x.*,case when p_view='closed' then -extract(epoch from x.created_at) else extract(epoch from x.effective_due_at) end sort_key
-      from private.privacy_requests x
-      where case when p_view='closed' then x.status in('completed','rejected') else x.status in('submitted','identity_pending','in_progress') end
-        and (p_view<>'mine' or x.assigned_to=actor)
-        and (p_view<>'overdue' or x.effective_due_at<now_at)
-        and (p_view<>'due_soon' or x.effective_due_at>=now_at and x.effective_due_at<now_at+interval '7 days')
-  ), visible as (
-    select x.* from filtered x order by sort_key,id limit 25 offset (p_page-1)*25
-  )
-  select jsonb_build_object('actor_id',actor,'total',(select count(*) from filtered),
-    'overdue',(select count(*) from private.privacy_requests where status in('submitted','identity_pending','in_progress') and effective_due_at<now_at),
-    'due_soon',(select count(*) from private.privacy_requests where status in('submitted','identity_pending','in_progress') and effective_due_at>=now_at and effective_due_at<now_at+interval '7 days'),
-    'rules',(select jsonb_agg(jsonb_build_object('request_type',r.request_type,'extension_days',r.extension_days,'statutory',r.statutory) order by r.request_type) from private.privacy_request_rules r),
-    'items',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'type',v.type,'description',v.description,'status',v.status,
-      'requester_email',v.requester_email,'identity_check',v.identity_check,'identity_verified',v.identity_verified,'revision',v.revision,
-      'created_at',v.created_at,'received_at',v.received_at,'due_by',v.due_by,'extended_due_at',v.extended_due_at,'effective_due_at',v.effective_due_at,
-      'legal_basis',v.legal_basis,'extension_reason',v.extension_reason,'extension_notified_at',v.extension_notified_at,'assigned_to',v.assigned_to,'assignee_name',p.display_name,
-      'response_summary',v.response_summary,'completed_at',v.completed_at,
-      'may_process',coalesce(v.subject_user_id<>actor,true) and not exists(select 1 from auth.users u where u.id=actor and lower(u.email)=lower(v.requester_email)))
-      order by v.sort_key,v.id) from visible v left join private.profiles p on p.account_id=v.assigned_to),'[]'::jsonb)
-  ) into result;
-  perform internal.staff_actor('dsar:manage');return result;
-end$function$;
-alter function internal.get_frontend_privacy_queue(text,integer) owner to postgres;
-revoke all on function internal.get_frontend_privacy_queue(text,integer) from public;
-grant execute on function internal.get_frontend_privacy_queue(text,integer) to authenticated;
-
 CREATE OR REPLACE FUNCTION internal.process_frontend_privacy_request(p_case uuid, p_revision integer, p_action text, p_note text DEFAULT NULL::text, p_assignee uuid DEFAULT NULL::uuid, p_attestation text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -553,62 +499,6 @@ alter function internal.get_frontend_organisation_dashboard(text) owner to postg
 revoke all on function internal.get_frontend_organisation_dashboard(text) from public;
 grant execute on function internal.get_frontend_organisation_dashboard(text) to authenticated;
 
-CREATE OR REPLACE FUNCTION api.get_staff_invoices()
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  select internal.get_staff_invoices();
-$function$;
-alter function api.get_staff_invoices() owner to postgres;
-revoke all on function api.get_staff_invoices() from public;
-grant execute on function api.get_staff_invoices() to authenticated;
-
-CREATE OR REPLACE FUNCTION api.get_staff_invoice(p_invoice_number text)
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  select internal.get_staff_invoice(p_invoice_number);
-$function$;
-alter function api.get_staff_invoice(text) owner to postgres;
-revoke all on function api.get_staff_invoice(text) from public;
-grant execute on function api.get_staff_invoice(text) to authenticated;
-
-CREATE OR REPLACE FUNCTION api.get_staff_invoice_transfers()
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  select internal.get_staff_invoice_transfers();
-$function$;
-alter function api.get_staff_invoice_transfers() owner to postgres;
-revoke all on function api.get_staff_invoice_transfers() from public;
-grant execute on function api.get_staff_invoice_transfers() to authenticated;
-
-CREATE OR REPLACE FUNCTION api.get_staff_invoice_payments(p_payment_ids uuid[])
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  select internal.get_staff_invoice_payments(p_payment_ids);
-$function$;
-alter function api.get_staff_invoice_payments(uuid[]) owner to postgres;
-revoke all on function api.get_staff_invoice_payments(uuid[]) from public;
-grant execute on function api.get_staff_invoice_payments(uuid[]) to authenticated;
-
-CREATE OR REPLACE FUNCTION api.get_staff_expired_invoice_transfers()
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  select internal.get_staff_expired_invoice_transfers();
-$function$;
-alter function api.get_staff_expired_invoice_transfers() owner to postgres;
-revoke all on function api.get_staff_expired_invoice_transfers() from public;
-grant execute on function api.get_staff_expired_invoice_transfers() to authenticated;
-
-drop function internal.staff_actor_recent(text);
 
 delete from private.notification_dismissals d using private.notifications n
   where d.notification_id=n.id and n.kind in('privacy_request_approved','privacy_export_made');
@@ -618,37 +508,23 @@ alter table private.notifications drop constraint notifications_kind_check,
   add constraint notifications_kind_check check (kind = any (array['enquiry_received','organisation_application_received','organisation_application_decided','organisation_affiliation_ended','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','verification_returned','identity_accepted','verification_phone_confirmed','payment_completed','payment_reversed','payment_reconciliation_required','trial_started','post_expired','draft_deletion_warning','post_deleted','post_sold','post_kept','slot_renewal_reminder','post_approved','post_rejected','post_changes_approved','post_changes_rejected','invoice_issued','content_restored']));
 alter table private.privacy_notice_jobs drop constraint privacy_notice_jobs_kind_check,
   add constraint privacy_notice_jobs_kind_check check (kind = any (array['submitted','extended','rejected','completed']));
-alter table private.privacy_request_events drop constraint privacy_request_events_action_check,
-  add constraint privacy_request_events_action_check check (action = any (array['submitted','recorded','assigned','unassigned','extended','identity_verified','started','rejected','completed','exported','erasure_ordered']));
-
-drop index private.privacy_requests_approver_idx;
-alter table private.privacy_requests drop constraint privacy_requests_approval_check,
-  drop constraint privacy_requests_approved_by_fkey, drop column approved_by, drop column approved_at;
 
 do $$begin
-  if (select count(*) from pg_attribute where attrelid='private.privacy_requests'::regclass and attname in('approved_by','approved_at') and not attisdropped)<>0
+  if false
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_business_review_queue(text)')) is distinct from 'afa2682424091858300bd050cd6d5703'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_seen_queue(text)')) is distinct from '81c4f1cdd36754f5faf365abab0cb136'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_seen_case(uuid)')) is distinct from '2c8bbc78d69a047bb8dbc5b645c82d03'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_cipc_case(uuid)')) is distinct from '53c819e3ac10ef4cdb5727c2e2222b9c'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_verification_queue(integer)')) is distinct from '9ec9ce3e17e200f53b4fdeb0da922901'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_staff_verification_queue(integer,uuid[])')) is distinct from '6443fe7d593913d62aef9b868453fe18'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_privacy_queue(text,integer)')) is distinct from 'ffc1120344cf8eabd09d740521ced350'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '989e334ff4fecc3ce76132277e2ea13c'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from 'e055b06c73169fd22e15fef574c0497b'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from '607e36e4c31fd96147b4b8d1d5155095'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '8823a5e28eac986cbc4df251b0c47183'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoices()')) is distinct from 'b76ac3d2c2e5fcdbbb12d5a1ec233c26'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice(text)')) is distinct from 'd05ae31e4d2aa228d99f8c88b28d16c0'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_transfers()')) is distinct from 'cfc5c52c20818b63133e796f75600c0f'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_payments(uuid[])')) is distinct from '526991f8c1f78cacddb8558606f31c2c'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_expired_invoice_transfers()')) is distinct from 'e8f0b8bc6e8a57ad769fb3bbbea7e1eb'
-    or to_regprocedure('internal.staff_actor_recent(text)') is not null
     or to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)') is not null
     or to_regprocedure('api.reveal_organisation_applicant_contact(uuid)') is not null
     or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.notifications'::regclass and c.conname='notifications_kind_check') is distinct from array['account_banned','account_suspended','account_warning','appeal_decided','business_check_update','content_hidden','content_restored','draft_deletion_warning','enquiry_received','identity_accepted','invoice_issued','organisation_affiliation_ended','organisation_application_decided','organisation_application_received','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','payment_completed','payment_reconciliation_required','payment_reversed','post_approved','post_changes_approved','post_changes_rejected','post_deleted','post_expired','post_kept','post_rejected','post_sold','slot_renewal_reminder','trial_started','verification_phone_confirmed','verification_returned']::text[]
-    or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.privacy_notice_jobs'::regclass and c.conname='privacy_notice_jobs_kind_check') is distinct from array['completed','extended','rejected','submitted']::text[]
-    or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.privacy_request_events'::regclass and c.conname='privacy_request_events_action_check') is distinct from array['assigned','completed','erasure_ordered','exported','extended','identity_verified','recorded','rejected','started','submitted','unassigned']::text[] then
+    or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.privacy_notice_jobs'::regclass and c.conname='privacy_notice_jobs_kind_check') is distinct from array['completed','extended','rejected','submitted']::text[] then
     raise exception 'staff data minimisation rollback incomplete';
   end if;
 end$$;

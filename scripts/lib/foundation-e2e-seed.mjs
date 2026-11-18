@@ -385,9 +385,9 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
     throw new Error(
       "The test copy holds data from an earlier or failed seed; run `node --import tsx scripts/foundation-e2e.mjs reset`"
     );
-  const accounts = ["invitedMember", "verifiedMember", "moderator", "governor", "admin"];
+  const accounts = ["invitedMember", "verifiedMember", "moderator", "admin"];
 
-  log("Trusted step: sign-up invitations for the five test accounts.");
+  log("Trusted step: sign-up invitations for the four test accounts.");
   sql(
     `insert into private.owner_admin_invitations(email) values ${accounts
       .map((key) => `(${quote(people[key].email.toLowerCase())})`)
@@ -443,16 +443,6 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
   session.moderator = {
     ...session.moderator,
     ...(await signIn(api, people.moderator, factors.moderator)),
-  };
-
-  log("Trusted step: the admin grants the governor role; the governor adds an authenticator.");
-  sql(
-    `insert into private.staff_roles(user_id,role,granted_by) values(${quote(session.governor.id)},'governor',${quote(session.admin.id)});`
-  );
-  factors.governor = await enrolTotp(api, session.governor.token, "governor");
-  session.governor = {
-    ...session.governor,
-    ...(await signIn(api, people.governor, factors.governor)),
   };
 
   log("Verified member: legal name, identity review by the admin, phone and area.");

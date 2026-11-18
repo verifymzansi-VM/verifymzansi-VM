@@ -24,13 +24,6 @@
     "firstName": "Sipho",
     "lastName": "Fixture"
   },
-  "governor": {
-    "description": "Staff role governor (data requests: dsar:manage), granted by the admin through a trusted local SQL step, with an authenticator app. The second staff member who approves a data request.",
-    "email": "governor@verifymzansi.test",
-    "password": "Local-fixture-governor-5",
-    "firstName": "Lerato",
-    "lastName": "Fixture"
-  },
   "admin": {
     "description": "Owner-setup invitation claimed by verifying an authenticator app, exactly as production's first administrators were set up. Reviews identity.",
     "email": "admin@verifymzansi.test",

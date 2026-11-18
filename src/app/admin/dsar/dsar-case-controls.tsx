@@ -28,8 +28,6 @@ interface DsarCaseControlsProps {
   isOpen: boolean;
   revision?: number;
   canExport?: boolean;
-  /** A second staff member has not approved the request yet. */
-  awaitingApproval?: boolean;
 }
 
 type ErrorBody = { error?: string; code?: string; verifyUrl?: string };
@@ -54,7 +52,6 @@ export function DsarCaseControls({
   isOpen,
   revision,
   canExport = identityVerified,
-  awaitingApproval = false,
 }: DsarCaseControlsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -191,11 +188,9 @@ export function DsarCaseControls({
           title={
             canExport
               ? undefined
-              : !identityVerified
-                ? "Verify the requester's identity first"
-                : awaitingApproval
-                  ? "A second staff member must approve this request first"
-                  : "Start a verified access request before exporting"
+              : identityVerified
+                ? "Start a verified access request before exporting"
+                : "Verify the requester's identity first"
           }
           onClick={handleExport}
         >

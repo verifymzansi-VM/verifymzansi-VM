@@ -1,4 +1,5 @@
--- Staff and organisation screens show less personal data (data minimisation).
+-- Staff and organisation screens show less personal data (data minimisation),
+-- and the person behind a data request is told when it moves on.
 --
 -- 1. Review queues and case summaries name a member by their public short
 --    name, the rule of the public seller card ("Thando D."), instead of the
@@ -9,29 +10,17 @@
 --    evidence:view, which needs a second factor from the last 15 minutes and
 --    is recorded in the evidence access log, and the identity context of a
 --    claimed ID check. What members see of their own name is unchanged.
--- 2. Privacy (data) requests need two staff members. The one who approves a
---    request never recorded its intake or checked the requester's identity
---    (in either order), and nobody approves a request of their own (as
---    before). Export and completion need the approval. A request in progress
---    or completed before this update gets that approval from a second staff
---    member who did not start it (audit action 'approved'); its state does
---    not change. The requester is emailed through the existing privacy notice
---    jobs (new kinds 'approved' and 'exported') and an account named by the
---    request gets a notice in the bell (new kinds 'privacy_request_approved'
---    and 'privacy_export_made') when the request is approved and when its
---    export is made, once each. The privacy queue gains 'approved_at' and
---    'may_approve'.
--- 3. The support inbox needs a second factor from the last 15 minutes (a new
---    helper, internal.staff_actor_recent, with internal.staff_actor's refusal)
---    and lists tickets received in the last 12 months, and older ones only
---    while they are still open (new or in progress).
--- 4. Staff invoice and bank transfer reads that return customer emails,
---    billing names, addresses, registration numbers or bank references
---    (api.get_staff_invoices, api.get_staff_invoice,
---    api.get_staff_invoice_transfers, api.get_staff_invoice_payments,
---    api.get_staff_expired_invoice_transfers) need a second factor from the
---    last 15 minutes. The check is in these five API commands, so their
---    internal bodies are unchanged.
+-- 2. Privacy (data) requests: who may do each step is unchanged (one staff
+--    member with dsar:manage, a second factor from the last 15 minutes, every
+--    step in the request's event log). When a request is approved and when its
+--    export is first made, the requester is emailed through the existing
+--    privacy notice jobs (new kinds 'approved' and 'exported') and an account
+--    named by the request gets a notice in the bell (new kinds
+--    'privacy_request_approved' and 'privacy_export_made'), once each.
+-- 3. The support inbox lists tickets received in the last 12 months, and older
+--    ones only while they are still open (new or in progress). Who may read it
+--    is unchanged.
+-- 4. (No change to the staff invoice and bank transfer lists.)
 -- 5. The organisation dashboard (members who administer an organisation) no
 --    longer carries applicants' business contacts ('public_contacts' leaves
 --    its result) and names co-administrators by their public short name. A
@@ -44,25 +33,24 @@
 --    audit trail).
 --
 -- Expand only: one new API command; no command, argument, grant or return
--- type is removed or changed. Two result fields change by hand-reviewed
--- jsonb: the privacy queue gains two fields and the organisation dashboard
--- loses 'public_contacts'.
+-- type is removed or changed. One result field changes by hand-reviewed
+-- jsonb: the organisation dashboard loses 'public_contacts'.
 --
 -- ORDER (safe in every state): first the website-only expand release (pull
--- request "Website reads the staff data minimisation shapes") is merged and
--- deployed: it knows the two new email kinds and notice kinds and accepts
--- both result shapes. Then this update is applied (after this pull request
--- is merged, before its release is deployed, as usual). The expand release
--- runs against this update with only lesser screens (no applicant contacts on
--- the dashboard, a generic refusal for an export before approval); this pull
--- request's release runs against the database before this update exactly as
--- today (it shows the reveal and the approval controls only when the result
--- says the update is applied). Do not apply this update while the live
--- website predates the expand release: its privacy notice job refuses an
--- unknown email kind and its strict readers refuse the new shapes. If the
--- expand release is ever reverted, run the rollback first. The precondition
--- accepts the reviewed bodies or this update's own, so a repeated run changes
--- nothing.
+-- request #265, "Website reads the staff data minimisation shapes before the
+-- database has them") is merged and deployed: it knows the two new email
+-- kinds and notice kinds and reads a dashboard result without
+-- 'public_contacts'. Then this pull request is merged and this update is
+-- applied before its release is deployed, as usual. The expand release runs
+-- against this update with one lesser screen (no applicant contacts on the
+-- dashboard until this pull request's release); this pull request's release
+-- runs against the database before this update exactly as today (it offers
+-- 'Show contact' only when the result has no 'public_contacts'). Do not apply
+-- this update while the live website predates the expand release: its
+-- privacy notice job refuses an unknown email kind and its strict dashboard
+-- reader refuses the new shape. If the expand release is ever reverted, run
+-- the rollback first. The precondition accepts the reviewed bodies or this
+-- update's own, so a repeated run changes nothing.
 -- Read-only preflight: ../preflight/20261118072601_staff_data_minimisation.check.sql.
 -- Rollback: ../rollback/20261118072601_staff_data_minimisation.down.sql.
 begin;
@@ -70,8 +58,8 @@ begin;
 set local lock_timeout='5s';
 
 -- Preconditions: every body replaced below is the reviewed one (or already
--- this update's), the three closed lists are the reviewed ones (or already
--- this update's), and the new pieces exist all or not at all.
+-- this update's), the two closed lists are the reviewed ones (or already
+-- this update's), and the new commands exist both or not at all.
 do $$
 declare present integer;
 begin
@@ -99,45 +87,21 @@ begin
       and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_staff_verification_queue(integer,uuid[])')) is distinct from '9c87b1e5234ba46a5678cf6bb0b4d3c1' then
     raise exception 'staff data minimisation drift: internal.get_frontend_staff_verification_queue(integer,uuid[]) is not the reviewed body' using errcode='55000';
   end if;
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_privacy_queue(text,integer)')) is distinct from 'ffc1120344cf8eabd09d740521ced350'
-      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_privacy_queue(text,integer)')) is distinct from '73c23d0393783b2a3760bdca0060923b' then
-    raise exception 'staff data minimisation drift: internal.get_frontend_privacy_queue(text,integer) is not the reviewed body' using errcode='55000';
-  end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '989e334ff4fecc3ce76132277e2ea13c'
-      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from 'af1e804567d16989fe47019e6fcd33f7' then
+      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '934dfff07e993b1ca95f48b21b2e6435' then
     raise exception 'staff data minimisation drift: internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text) is not the reviewed body' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from 'e055b06c73169fd22e15fef574c0497b'
-      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from '367f25173e66bb4fcf3d877c0fddff15' then
+      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from '939737e433fcf800d5e98a3dd1569e5d' then
     raise exception 'staff data minimisation drift: internal.export_frontend_privacy_request(uuid,integer) is not the reviewed body' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from '607e36e4c31fd96147b4b8d1d5155095'
-      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from 'dd1dd2e21be1f6accde9652e10f7682b' then
+      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from '5210ff93931941d85a1daae444a71669' then
     raise exception 'staff data minimisation drift: internal.get_frontend_support_inbox(integer,uuid) is not the reviewed body' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '8823a5e28eac986cbc4df251b0c47183'
       and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '50c7ba8869e2fc3f8cc5b68bb0e2f4ed' then
     raise exception 'staff data minimisation drift: internal.get_frontend_organisation_dashboard(text) is not the reviewed body' using errcode='55000';
-  end if;
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoices()')) is distinct from 'b76ac3d2c2e5fcdbbb12d5a1ec233c26'
-      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoices()')) is distinct from '683c792ecb73a3c19eac080e23971cae' then
-    raise exception 'staff data minimisation drift: api.get_staff_invoices() is not the reviewed body' using errcode='55000';
-  end if;
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice(text)')) is distinct from 'd05ae31e4d2aa228d99f8c88b28d16c0'
-      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice(text)')) is distinct from 'b048c33607a4a97a1027a74471aef453' then
-    raise exception 'staff data minimisation drift: api.get_staff_invoice(text) is not the reviewed body' using errcode='55000';
-  end if;
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_transfers()')) is distinct from 'cfc5c52c20818b63133e796f75600c0f'
-      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_transfers()')) is distinct from '6fb783a08c583150f0f2a2d34d3e7245' then
-    raise exception 'staff data minimisation drift: api.get_staff_invoice_transfers() is not the reviewed body' using errcode='55000';
-  end if;
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_payments(uuid[])')) is distinct from '526991f8c1f78cacddb8558606f31c2c'
-      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_payments(uuid[])')) is distinct from 'b6e790c043538085d440789f3b7b22b8' then
-    raise exception 'staff data minimisation drift: api.get_staff_invoice_payments(uuid[]) is not the reviewed body' using errcode='55000';
-  end if;
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_expired_invoice_transfers()')) is distinct from 'e8f0b8bc6e8a57ad769fb3bbbea7e1eb'
-      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_expired_invoice_transfers()')) is distinct from '81dbcf858648a1b88bdc721f234e9018' then
-    raise exception 'staff data minimisation drift: api.get_staff_expired_invoice_transfers() is not the reviewed body' using errcode='55000';
   end if;
   if (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.notifications'::regclass and c.conname='notifications_kind_check')
       not in(array['account_banned','account_suspended','account_warning','appeal_decided','business_check_update','content_hidden','content_restored','draft_deletion_warning','enquiry_received','identity_accepted','invoice_issued','organisation_affiliation_ended','organisation_application_decided','organisation_application_received','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','payment_completed','payment_reconciliation_required','payment_reversed','post_approved','post_changes_approved','post_changes_rejected','post_deleted','post_expired','post_kept','post_rejected','post_sold','slot_renewal_reminder','trial_started','verification_phone_confirmed','verification_returned']::text[],array['account_banned','account_suspended','account_warning','appeal_decided','business_check_update','content_hidden','content_restored','draft_deletion_warning','enquiry_received','identity_accepted','invoice_issued','organisation_affiliation_ended','organisation_application_decided','organisation_application_received','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','payment_completed','payment_reconciliation_required','payment_reversed','post_approved','post_changes_approved','post_changes_rejected','post_deleted','post_expired','post_kept','post_rejected','post_sold','privacy_export_made','privacy_request_approved','slot_renewal_reminder','trial_started','verification_phone_confirmed','verification_returned']::text[]) then
@@ -147,63 +111,21 @@ begin
       not in(array['completed','extended','rejected','submitted']::text[],array['approved','completed','exported','extended','rejected','submitted']::text[]) then
     raise exception 'staff data minimisation drift: privacy_notice_jobs_kind_check is not the reviewed list' using errcode='55000';
   end if;
-  if (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.privacy_request_events'::regclass and c.conname='privacy_request_events_action_check')
-      not in(array['assigned','completed','erasure_ordered','exported','extended','identity_verified','recorded','rejected','started','submitted','unassigned']::text[],array['approved','assigned','completed','erasure_ordered','exported','extended','identity_verified','recorded','rejected','started','submitted','unassigned']::text[]) then
-    raise exception 'staff data minimisation drift: privacy_request_events_action_check is not the reviewed list' using errcode='55000';
-  end if;
-  select (select count(*) from pg_attribute where attrelid='private.privacy_requests'::regclass and attname in('approved_by','approved_at') and not attisdropped)
-    +(to_regprocedure('internal.staff_actor_recent(text)') is not null)::integer
-    +(to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)') is not null)::integer
+  select (to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)') is not null)::integer
     +(to_regprocedure('api.reveal_organisation_applicant_contact(uuid)') is not null)::integer into present;
-  if present not in(0,5) then
-    raise exception 'staff data minimisation precondition: % of 5 new pieces exist', present using errcode='55000';
+  if present not in(0,2) then
+    raise exception 'staff data minimisation precondition: % of 2 new commands exist', present using errcode='55000';
   end if;
 end$$;
 
-lock table private.privacy_requests,private.privacy_request_events,private.privacy_notice_jobs,private.notifications
-  in access exclusive mode nowait;
+lock table private.privacy_notice_jobs,private.notifications in access exclusive mode nowait;
 
--- 2. Who approved a privacy request, and when.
-alter table private.privacy_requests add column if not exists approved_by uuid,
-  add column if not exists approved_at timestamp with time zone;
-alter table private.privacy_requests drop constraint if exists privacy_requests_approved_by_fkey,
-  add constraint privacy_requests_approved_by_fkey foreign key (approved_by) references auth.users(id) on delete set null;
-alter table private.privacy_requests drop constraint if exists privacy_requests_approval_check,
-  add constraint privacy_requests_approval_check check (approved_by is null or approved_at is not null);
-create index if not exists privacy_requests_approver_idx on private.privacy_requests using btree (approved_by);
-
--- 2. The approval notices: two member notice kinds, two requester email kinds
--- and the audit action of a second approval of an earlier request.
+-- 2. The approval and export notices: two member notice kinds and two
+-- requester email kinds.
 alter table private.notifications drop constraint notifications_kind_check,
   add constraint notifications_kind_check check (kind = any (array['enquiry_received','organisation_application_received','organisation_application_decided','organisation_affiliation_ended','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','verification_returned','identity_accepted','verification_phone_confirmed','payment_completed','payment_reversed','payment_reconciliation_required','trial_started','post_expired','draft_deletion_warning','post_deleted','post_sold','post_kept','slot_renewal_reminder','post_approved','post_rejected','post_changes_approved','post_changes_rejected','invoice_issued','content_restored','privacy_request_approved','privacy_export_made']));
 alter table private.privacy_notice_jobs drop constraint privacy_notice_jobs_kind_check,
   add constraint privacy_notice_jobs_kind_check check (kind = any (array['submitted','extended','rejected','completed','approved','exported']));
-alter table private.privacy_request_events drop constraint privacy_request_events_action_check,
-  add constraint privacy_request_events_action_check check (action = any (array['submitted','recorded','assigned','unassigned','extended','identity_verified','started','rejected','completed','exported','erasure_ordered','approved']));
-
--- Staff reads that need a second factor from the last 15 minutes: the same
--- rule as a capability marked requires_recent_mfa, for reads whose capability
--- is otherwise used without one. Same refusal as internal.staff_actor, so the
--- website sends the staff member to verify their authenticator again.
-CREATE OR REPLACE FUNCTION internal.staff_actor_recent(p_capability text)
- RETURNS uuid
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'pg_catalog'
-AS $function$
-declare actor uuid:=internal.staff_actor(p_capability);claims jsonb:=auth.jwt();totp_at bigint;
-begin
-  select max((a->>'timestamp')::bigint) into totp_at
-  from jsonb_array_elements(case when jsonb_typeof(claims->'amr')='array' then claims->'amr' else '[]' end) a
-  where jsonb_typeof(a)='object' and a->>'method'='totp' and a->>'timestamp' ~ '^[0-9]{1,12}$';
-  if totp_at is null or totp_at<extract(epoch from clock_timestamp()-interval '15 minutes') then
-    raise exception 'recent second-factor verification required' using errcode='42501';
-  end if;
-  return actor;
-end$function$;
-alter function internal.staff_actor_recent(text) owner to postgres;
-revoke all on function internal.staff_actor_recent(text) from public, anon, authenticated, service_role;
-grant execute on function internal.staff_actor_recent(text) to authenticated;
 
 -- 5. The business contact of one pending applicant (submitted, or asked for
 -- more information), one application at a time, for that organisation's
@@ -544,51 +466,9 @@ alter function internal.get_frontend_staff_verification_queue(integer,uuid[]) ow
 revoke all on function internal.get_frontend_staff_verification_queue(integer,uuid[]) from public;
 grant execute on function internal.get_frontend_staff_verification_queue(integer,uuid[]) to authenticated;
 
--- 2. Privacy request queue: when a request was approved, and whether the
--- viewer may approve it (not its intake, identity check or start).
-CREATE OR REPLACE FUNCTION internal.get_frontend_privacy_queue(p_view text DEFAULT 'open'::text, p_page integer DEFAULT 1)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'pg_catalog'
-AS $function$
-declare actor uuid:=internal.staff_actor('dsar:manage');now_at timestamptz:=clock_timestamp();result jsonb;
-begin
-  if p_view is null or p_view not in('open','due_soon','overdue','mine','closed') or p_page is null or p_page not between 1 and 100000
-    then raise exception 'valid privacy queue filters required' using errcode='22023';end if;
-  with filtered as (
-    select x.*,case when p_view='closed' then -extract(epoch from x.created_at) else extract(epoch from x.effective_due_at) end sort_key
-      from private.privacy_requests x
-      where case when p_view='closed' then x.status in('completed','rejected') else x.status in('submitted','identity_pending','in_progress') end
-        and (p_view<>'mine' or x.assigned_to=actor)
-        and (p_view<>'overdue' or x.effective_due_at<now_at)
-        and (p_view<>'due_soon' or x.effective_due_at>=now_at and x.effective_due_at<now_at+interval '7 days')
-  ), visible as (
-    select x.* from filtered x order by sort_key,id limit 25 offset (p_page-1)*25
-  )
-  select jsonb_build_object('actor_id',actor,'total',(select count(*) from filtered),
-    'overdue',(select count(*) from private.privacy_requests where status in('submitted','identity_pending','in_progress') and effective_due_at<now_at),
-    'due_soon',(select count(*) from private.privacy_requests where status in('submitted','identity_pending','in_progress') and effective_due_at>=now_at and effective_due_at<now_at+interval '7 days'),
-    'rules',(select jsonb_agg(jsonb_build_object('request_type',r.request_type,'extension_days',r.extension_days,'statutory',r.statutory) order by r.request_type) from private.privacy_request_rules r),
-    'items',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'type',v.type,'description',v.description,'status',v.status,
-      'requester_email',v.requester_email,'identity_check',v.identity_check,'identity_verified',v.identity_verified,'revision',v.revision,
-      'created_at',v.created_at,'received_at',v.received_at,'due_by',v.due_by,'extended_due_at',v.extended_due_at,'effective_due_at',v.effective_due_at,
-      'legal_basis',v.legal_basis,'extension_reason',v.extension_reason,'extension_notified_at',v.extension_notified_at,'assigned_to',v.assigned_to,'assignee_name',p.display_name,
-      'response_summary',v.response_summary,'completed_at',v.completed_at,'approved_at',v.approved_at,
-      'may_approve',v.approved_at is null and v.intake_by is distinct from actor and v.verified_by is distinct from actor
-        and not exists(select 1 from private.privacy_request_events e where e.request_id=v.id and e.actor_id=actor and e.action='started'),
-      'may_process',coalesce(v.subject_user_id<>actor,true) and not exists(select 1 from auth.users u where u.id=actor and lower(u.email)=lower(v.requester_email)))
-      order by v.sort_key,v.id) from visible v left join private.profiles p on p.account_id=v.assigned_to),'[]'::jsonb)
-  ) into result;
-  perform internal.staff_actor('dsar:manage');return result;
-end$function$;
-alter function internal.get_frontend_privacy_queue(text,integer) owner to postgres;
-revoke all on function internal.get_frontend_privacy_queue(text,integer) from public;
-grant execute on function internal.get_frontend_privacy_queue(text,integer) to authenticated;
-
--- 3. Support inbox: a second factor from the last 15 minutes; tickets
--- received in the last 12 months, and older ones only while still open (new
--- or in progress). The counts of new tickets are unchanged.
+-- 3. Support inbox: tickets received in the last 12 months, and older ones
+-- only while still open (new or in progress). The counts of new tickets are
+-- unchanged.
 CREATE OR REPLACE FUNCTION internal.get_frontend_support_inbox(p_page integer DEFAULT 1, p_ticket uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -597,7 +477,6 @@ CREATE OR REPLACE FUNCTION internal.get_frontend_support_inbox(p_page integer DE
 AS $function$
 declare actor uuid:=internal.staff_actor('support:view');answer jsonb;can_update boolean;
 begin
-  perform internal.staff_actor_recent('support:view');
   if p_page is null or p_page not between 1 and 100000 then raise exception 'valid support page required' using errcode='22023';end if;
   can_update:=exists(select 1 from private.staff_roles s join private.staff_capabilities c on c.role=s.role and c.capability='support:update'
     where s.user_id=actor and s.revoked_at is null);
@@ -616,7 +495,7 @@ begin
       'emailActivity',coalesce((select jsonb_agg(jsonb_build_object('template',m.template,'accepted',m.accepted,'created_at',m.created_at)
         order by m.created_at,m.template) from private.support_ticket_mail m where m.ticket_id=t.id),'[]'::jsonb))
       order by t.created_at desc,t.id desc) from rows t),'[]'::jsonb)) into answer;
-  perform internal.staff_actor_recent('support:view');return answer;
+  perform internal.staff_actor('support:view');return answer;
 end$function$;
 alter function internal.get_frontend_support_inbox(integer,uuid) owner to postgres;
 revoke all on function internal.get_frontend_support_inbox(integer,uuid) from public;
@@ -664,86 +543,10 @@ alter function internal.get_frontend_organisation_dashboard(text) owner to postg
 revoke all on function internal.get_frontend_organisation_dashboard(text) from public;
 grant execute on function internal.get_frontend_organisation_dashboard(text) to authenticated;
 
-CREATE OR REPLACE FUNCTION api.get_staff_invoices()
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  -- Customer emails, billing details and bank references: a second factor
-  -- from the last 15 minutes.
-  select internal.staff_actor_recent('payments:view');
-  select internal.get_staff_invoices();
-$function$;
-alter function api.get_staff_invoices() owner to postgres;
-revoke all on function api.get_staff_invoices() from public;
-grant execute on function api.get_staff_invoices() to authenticated;
-
-CREATE OR REPLACE FUNCTION api.get_staff_invoice(p_invoice_number text)
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  -- Customer emails, billing details and bank references: a second factor
-  -- from the last 15 minutes.
-  select internal.staff_actor_recent('payments:view');
-  select internal.get_staff_invoice(p_invoice_number);
-$function$;
-alter function api.get_staff_invoice(text) owner to postgres;
-revoke all on function api.get_staff_invoice(text) from public;
-grant execute on function api.get_staff_invoice(text) to authenticated;
-
-CREATE OR REPLACE FUNCTION api.get_staff_invoice_transfers()
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  -- Customer emails, billing details and bank references: a second factor
-  -- from the last 15 minutes.
-  select internal.staff_actor_recent('payments:view');
-  select internal.get_staff_invoice_transfers();
-$function$;
-alter function api.get_staff_invoice_transfers() owner to postgres;
-revoke all on function api.get_staff_invoice_transfers() from public;
-grant execute on function api.get_staff_invoice_transfers() to authenticated;
-
-CREATE OR REPLACE FUNCTION api.get_staff_invoice_payments(p_payment_ids uuid[])
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  -- Customer emails, billing details and bank references: a second factor
-  -- from the last 15 minutes.
-  select internal.staff_actor_recent('payments:view');
-  select internal.get_staff_invoice_payments(p_payment_ids);
-$function$;
-alter function api.get_staff_invoice_payments(uuid[]) owner to postgres;
-revoke all on function api.get_staff_invoice_payments(uuid[]) from public;
-grant execute on function api.get_staff_invoice_payments(uuid[]) to authenticated;
-
-CREATE OR REPLACE FUNCTION api.get_staff_expired_invoice_transfers()
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  -- Customer emails, billing details and bank references: a second factor
-  -- from the last 15 minutes.
-  select internal.staff_actor_recent('payments:view');
-  select internal.get_staff_expired_invoice_transfers();
-$function$;
-alter function api.get_staff_expired_invoice_transfers() owner to postgres;
-revoke all on function api.get_staff_expired_invoice_transfers() from public;
-grant execute on function api.get_staff_expired_invoice_transfers() to authenticated;
-
--- Privacy (data) requests: two staff members and the data subject is told.
--- The staff member who approves a request is never the one who recorded its
--- intake or checked the requester's identity (in either order), and nobody
--- approves a request of their own (as before). Export and completion need that
--- approval. A request started before this update (in progress or completed
--- without a recorded approval) is approved now by a second staff member, who
--- also did not start it; its state does not change. The requester is emailed
--- through the existing privacy notice jobs, and an account named by the request
--- gets a notice in the bell, when the request is approved and when its export
--- is made (once each).
+-- 2. Privacy (data) requests: the requester is emailed through the existing
+-- privacy notice jobs, and an account named by the request gets a notice in
+-- the bell, when the request is approved and when its export is first made.
+-- Who may do each step is unchanged.
 CREATE OR REPLACE FUNCTION internal.process_frontend_privacy_request(p_case uuid, p_revision integer, p_action text, p_note text DEFAULT NULL::text, p_assignee uuid DEFAULT NULL::uuid, p_attestation text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -751,15 +554,13 @@ CREATE OR REPLACE FUNCTION internal.process_frontend_privacy_request(p_case uuid
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid:=internal.staff_actor('dsar:manage');r private.privacy_requests;rule private.privacy_request_rules;now_at timestamptz;
-  answer text;delivery text;event_action text;note text;verified_subject uuid;matches integer;
+  answer text;delivery text;note text;verified_subject uuid;matches integer;
 begin
   if p_action is null or p_action not in('assign','extend','verify_identity','approve','reject','complete')
     or p_revision is null or p_revision not between 1 and 2147483646 then raise exception 'represented privacy request required' using errcode='22023';end if;
   if p_note is not null then note:=internal.privacy_text(p_note,1,2000);end if;
   select * into r from private.privacy_requests where id=p_case for update;
-  if not found or r.revision<>p_revision or (r.status not in('submitted','identity_pending','in_progress')
-      and not (p_action='approve' and r.status='completed' and r.approved_at is null)) then
-    raise exception 'privacy request changed' using errcode='PT409';end if;
+  if not found or r.revision<>p_revision or r.status not in('submitted','identity_pending','in_progress') then raise exception 'privacy request changed' using errcode='PT409';end if;
   actor:=internal.staff_actor('dsar:manage');now_at:=clock_timestamp();
   if actor=r.subject_user_id or exists(select 1 from auth.users u where u.id=actor and lower(u.email)=lower(r.requester_email))
     then raise exception 'another staff member must process your request' using errcode='42501';end if;
@@ -780,11 +581,6 @@ begin
     answer:='extended';delivery:=answer;
   elsif p_action='verify_identity' then
     if r.identity_verified then raise exception 'identity was already reviewed' using errcode='PT409';end if;
-    -- The staff member who approved the request does not also check the
-    -- requester's identity.
-    if actor is not distinct from r.approved_by then
-      raise exception 'a second staff member checks the identity of a request you approved'
-        using errcode='42501',detail='second_person_required';end if;
     if r.identity_check='manual' then
       select count(*),(array_agg(u.id order by u.id))[1] into matches,verified_subject from auth.users u
         where lower(u.email)=lower(r.requester_email) and u.email_confirmed_at is not null and u.deleted_at is null and not u.is_anonymous;
@@ -794,33 +590,16 @@ begin
       subject_user_id=verified_subject,processed_by=actor,revision=revision+1 where id=r.id;
     answer:='identity_verified';
   elsif p_action in('approve','reject') then
-    -- The approver did not record the request's intake, check the requester's
-    -- identity or start a request approved before this rule.
-    if p_action='approve' and (actor is not distinct from r.intake_by or actor is not distinct from r.verified_by
-        or exists(select 1 from private.privacy_request_events e where e.request_id=r.id and e.actor_id=actor and e.action='started')) then
-      raise exception 'a second staff member must approve this request' using errcode='42501',detail='second_person_required';
-    end if;
-    if p_action='approve' and r.status in('in_progress','completed') then
-      -- Started before two-person approval: a second staff member approves it
-      -- now; its state is unchanged.
-      if r.approved_at is not null then raise exception 'privacy request already approved' using errcode='PT409';end if;
-      update private.privacy_requests set approved_by=actor,approved_at=now_at,revision=revision+1 where id=r.id;
-      answer:=r.status;event_action:='approved';delivery:='approved';
-    else
-      if r.status not in('submitted','identity_pending') then raise exception 'privacy request already decided' using errcode='PT409';end if;
-      answer:=case p_action when 'approve' then 'in_progress' else 'rejected' end;
-      delivery:=case answer when 'rejected' then 'rejected' else 'approved' end;
-      update private.privacy_requests set status=answer,response_summary=note,processed_by=actor,revision=revision+1,
-        approved_by=case when answer='in_progress' then actor end,approved_at=case when answer='in_progress' then now_at end
-        where id=r.id;
-      -- A rejected deletion request never lets its account be erased later on
-      -- its own: the rejection is recorded and a legal hold placed (20261116175757_close_and_erase_account.sql).
-      if answer='rejected' and r.type='deletion' then perform internal.reject_account_erasure(r.id,actor);end if;
-    end if;
+    if r.status not in('submitted','identity_pending') then raise exception 'privacy request already decided' using errcode='PT409';end if;
+    answer:=case p_action when 'approve' then 'in_progress' else 'rejected' end;
+    -- The requester is emailed on approval too (privacy notice kind 'approved').
+    delivery:=case answer when 'rejected' then 'rejected' else 'approved' end;
+    update private.privacy_requests set status=answer,response_summary=note,processed_by=actor,revision=revision+1 where id=r.id;
+    -- A rejected deletion request never lets its account be erased later on
+    -- its own: the rejection is recorded and a legal hold placed (20261116175757_close_and_erase_account.sql).
+    if answer='rejected' and r.type='deletion' then perform internal.reject_account_erasure(r.id,actor);end if;
   else
     if r.status<>'in_progress' or not r.identity_verified then raise exception 'verified in-progress privacy request required' using errcode='PT409';end if;
-    if r.approved_at is null then
-      raise exception 'a second staff member must approve this request first' using errcode='PT409',detail='approval_required';end if;
     if r.type='deletion' then
       -- An account named by the request is erased first (20261116175757_close_and_erase_account.sql).
       if exists(select 1 from private.account_erasure_requests l join private.account_erasures e on e.user_id=l.user_id
@@ -834,11 +613,9 @@ begin
     answer:='completed';delivery:=answer;
   end if;
   insert into private.privacy_request_events(request_id,actor_id,action,represented_revision)
-    values(r.id,actor,coalesce(event_action,case answer when 'in_progress' then 'started' else answer end),p_revision);
-  if delivery is not null then
-    insert into private.privacy_notice_jobs(request_id,kind) values(r.id,delivery) on conflict(request_id,kind) do nothing;
-  end if;
-  -- The account named by the request sees the approval in its bell.
+    values(r.id,actor,case answer when 'in_progress' then 'started' else answer end,p_revision);
+  if delivery is not null then insert into private.privacy_notice_jobs(request_id,kind) values(r.id,delivery);end if;
+  -- The account named by the request also sees the approval in its bell.
   if delivery='approved' and r.subject_user_id is not null then
     perform internal.notify_account(r.subject_user_id,'privacy_request_approved',r.id,null,null);
   end if;
@@ -863,9 +640,6 @@ begin
   actor:=internal.staff_actor('dsar:manage');
   if actor=r.subject_user_id or exists(select 1 from auth.users u where u.id=actor and lower(u.email)=lower(r.requester_email))
     then raise exception 'another staff member must export your request' using errcode='42501';end if;
-  -- Nothing leaves before a second staff member approved the request.
-  if r.approved_at is null then
-    raise exception 'a second staff member must approve this request first' using errcode='PT409',detail='approval_required';end if;
   result:=jsonb_build_object('request_id',r.id,'reference','DSAR-'||upper(left(r.id::text,8)),
     'generated_at',clock_timestamp(),'request_type',r.type,'received_at',r.received_at,'due_by',r.effective_due_at,
     'account_found',r.subject_user_id is not null,
@@ -886,29 +660,21 @@ grant execute on function internal.export_frontend_privacy_request(uuid,integer)
 
 -- The update is applied completely.
 do $$begin
-  if (select count(*) from pg_attribute where attrelid='private.privacy_requests'::regclass and attname in('approved_by','approved_at') and not attisdropped)<>2
+  if false
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_business_review_queue(text)')) is distinct from '02eed4ae21b86c982feda572871add03'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_seen_queue(text)')) is distinct from '1739b49ce16a79538ed569b6668b5910'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_seen_case(uuid)')) is distinct from '1275da13ade5358710b03902b00e7248'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_cipc_case(uuid)')) is distinct from 'ed026d48191cac201053305cde485957'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_verification_queue(integer)')) is distinct from '8ecd9727c64d6c8dee4e4af2e8da4649'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_staff_verification_queue(integer,uuid[])')) is distinct from '9c87b1e5234ba46a5678cf6bb0b4d3c1'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_privacy_queue(text,integer)')) is distinct from '73c23d0393783b2a3760bdca0060923b'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from 'af1e804567d16989fe47019e6fcd33f7'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from '367f25173e66bb4fcf3d877c0fddff15'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from 'dd1dd2e21be1f6accde9652e10f7682b'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '934dfff07e993b1ca95f48b21b2e6435'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from '939737e433fcf800d5e98a3dd1569e5d'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from '5210ff93931941d85a1daae444a71669'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '50c7ba8869e2fc3f8cc5b68bb0e2f4ed'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoices()')) is distinct from '683c792ecb73a3c19eac080e23971cae'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice(text)')) is distinct from 'b048c33607a4a97a1027a74471aef453'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_transfers()')) is distinct from '6fb783a08c583150f0f2a2d34d3e7245'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_payments(uuid[])')) is distinct from 'b6e790c043538085d440789f3b7b22b8'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_expired_invoice_transfers()')) is distinct from '81dbcf858648a1b88bdc721f234e9018'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_actor_recent(text)')) is distinct from 'e44bafe2778bca781b2a7ffcfe7f3f5f'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)')) is distinct from '67dc202cf393e44675ea7af95b1bf672'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.reveal_organisation_applicant_contact(uuid)')) is distinct from 'f6b2088f77d110d2b5be6683f8d6cb9a'
     or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.notifications'::regclass and c.conname='notifications_kind_check') is distinct from array['account_banned','account_suspended','account_warning','appeal_decided','business_check_update','content_hidden','content_restored','draft_deletion_warning','enquiry_received','identity_accepted','invoice_issued','organisation_affiliation_ended','organisation_application_decided','organisation_application_received','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','payment_completed','payment_reconciliation_required','payment_reversed','post_approved','post_changes_approved','post_changes_rejected','post_deleted','post_expired','post_kept','post_rejected','post_sold','privacy_export_made','privacy_request_approved','slot_renewal_reminder','trial_started','verification_phone_confirmed','verification_returned']::text[]
-    or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.privacy_notice_jobs'::regclass and c.conname='privacy_notice_jobs_kind_check') is distinct from array['approved','completed','exported','extended','rejected','submitted']::text[]
-    or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.privacy_request_events'::regclass and c.conname='privacy_request_events_action_check') is distinct from array['approved','assigned','completed','erasure_ordered','exported','extended','identity_verified','recorded','rejected','started','submitted','unassigned']::text[] then
+    or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.privacy_notice_jobs'::regclass and c.conname='privacy_notice_jobs_kind_check') is distinct from array['approved','completed','exported','extended','rejected','submitted']::text[] then
     raise exception 'staff data minimisation was not applied';
   end if;
 end$$;

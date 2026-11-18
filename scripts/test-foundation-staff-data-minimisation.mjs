@@ -5,17 +5,16 @@
 //    name; the full legal name only on the claimed, evidence:view (second
 //    factor from the last 15 minutes), access-logged path; members see their
 //    own name unchanged;
-// 2. privacy (data) requests need two staff members (whoever recorded the
-//    intake or checked the identity never approves, whoever approved never
-//    checks the identity), export and completion need the approval, a request
-//    started before the update is approved by a second staff member, and the
-//    data subject is emailed and notified on approval and on the first export;
-// 3. the support inbox needs a recent second factor and lists 12 months (older
-//    tickets only while open);
-// 4. the staff invoice and bank transfer reads need a recent second factor;
+// 2. privacy (data) requests: one staff member with dsar:manage still does
+//    every step, each recorded in the request's event log; the data subject
+//    is emailed and notified on approval and on the first export, once each;
+// 3. the support inbox lists 12 months (older tickets only while open);
+// 4. the staff invoice and bank transfer lists keep the 12-hour staff rule
+//    (no new recent second factor);
 // 5. the organisation dashboard carries no applicant contacts and names
 //    co-administrators by their short name; one pending applicant's contact is
-//    revealed on request, never a decided or withdrawn one.
+//    revealed on request (and recorded in the organisation's event log), never
+//    a decided or withdrawn one.
 //
 // Replays database/foundation (prelude, candidate.sql, every update before this
 // one) into the throwaway, network-less Postgres 17 container of the SQL lint
@@ -50,7 +49,6 @@ const [PREFLIGHT, ROLLBACK] = [
 );
 const SUPPORT_INBOX = "internal.get_frontend_support_inbox(integer,uuid)";
 const RECENT = /recent second-factor verification required/;
-const SECOND_PERSON = /second staff member/;
 
 const {
   started,
@@ -159,7 +157,7 @@ try {
     );
     assert.equal(
       rows[0][1],
-      "staff data minimisation: update not applied; privacy requests in progress or completed without a second approval: 0; resolved support tickets older than 12 months: 0"
+      "staff data minimisation: update not applied; resolved support tickets older than 12 months: 0"
     );
     assertReadOnlyPreflight(database, PREFLIGHT);
   });
@@ -188,7 +186,7 @@ try {
     fingerprint,
     preflightRows: preflight,
     appliedSummary:
-      /^staff data minimisation: already applied; privacy requests in progress or completed without a second approval: 0; resolved support tickets older than 12 months: 0$/,
+      /^staff data minimisation: already applied; resolved support tickets older than 12 months: 0$/,
   });
 
   // ---------------------------------------------------------- 1. names
@@ -269,8 +267,12 @@ try {
       `select api.process_frontend_privacy_request('${id}',${privacy(id).revision},'${action}');`,
       totpAt
     );
-  const exportAs = (who, id) =>
-    staff(who, `select api.export_frontend_privacy_request('${id}',${privacy(id).revision});`);
+  const exportAs = (who, id, totpAt) =>
+    staff(
+      who,
+      `select api.export_frontend_privacy_request('${id}',${privacy(id).revision});`,
+      totpAt
+    );
   const jobs = (id) =>
     q(
       `select coalesce(string_agg(kind,',' order by created_at,kind),'') from private.privacy_notice_jobs where request_id='${id}';`
@@ -278,128 +280,68 @@ try {
   const notices = (who, kind) =>
     count(`private.notifications where account_id='${who.id}' and kind='${kind}'`);
 
-  await check("privacy: one staff member cannot approve and export alone", () => {
+  await check("privacy: one staff member still does every step, each in the event log", () => {
     const requester = named("lerato", "Lerato", "Mokoena");
-    // Verified first: the verifier cannot approve.
-    const first = record(requester);
-    q(act(admin, first, "verify_identity"));
-    fails(act(admin, first, "approve"), "42501", SECOND_PERSON);
-    assert.equal(privacy(first).status, "submitted");
-    fails(exportAs(admin, first), "PT409", /represented verified access request required/);
-    // Approved first: the approver cannot check the identity.
-    const second = record(requester);
-    q(act(admin, second, "approve"));
-    fails(act(admin, second, "verify_identity"), "42501", SECOND_PERSON);
-    assert.equal(privacy(second).identity_verified, false);
-    fails(exportAs(admin, second), "PT409", /represented verified access request required/);
-    // Recorded by staff: whoever recorded the intake cannot approve.
-    const email = q(`select email from auth.users where id='${requester.id}';`);
-    const intake = json(
-      staff(
-        admin,
-        `select api.record_frontend_privacy_intake('access','${email}',null,'Emailed access request','Recorded from the privacy mailbox');`
-      )
-    ).id;
-    fails(act(admin, intake, "approve"), "42501", SECOND_PERSON);
-    // The approval needs a second factor from the last 15 minutes (dsar:manage).
-    fails(act(admin2, first, "approve", stale()), "42501", RECENT);
-  });
-  await check("privacy: a second staff member approves; the subject is told once each", () => {
-    const requester = named("sizwe", "Sizwe", "Khumalo");
     const id = record(requester);
     q(act(admin, id, "verify_identity"));
-    assert.equal(json(act(admin2, id, "approve")).status, "in_progress");
-    const approved = privacy(id);
-    assert.equal(approved.approved_by, admin2.id);
-    assert.ok(approved.approved_at);
-    assert.equal(jobs(id), "submitted,approved");
-    assert.equal(notices(requester, "privacy_request_approved"), 1);
-    // The queue says who may approve (nobody now) and when it was approved.
-    const item = json(staff(admin, "select api.get_frontend_privacy_queue('open',1);")).items.find(
-      (r) => r.id === id
-    );
-    assert.equal(item.may_approve, false);
-    assert.ok(item.approved_at);
-    // Either of the two exports; the subject is told of the first export only.
-    const exported = json(exportAs(admin, id));
-    assert.equal(exported.request_id, id);
-    json(exportAs(admin2, id));
-    assert.equal(jobs(id), "submitted,approved,exported");
-    assert.equal(notices(requester, "privacy_export_made"), 1);
-    const bell = json(member(requester, "select api.list_my_frontend_notices(50,false,null);"));
-    const kinds = bell.items.map((n) => n.kind);
-    assert.ok(kinds.includes("privacy_request_approved"), JSON.stringify(kinds));
-    assert.ok(kinds.includes("privacy_export_made"), JSON.stringify(kinds));
-    assert.equal(json(act(governor, id, "complete")).status, "completed");
+    assert.equal(json(act(admin, id, "approve")).status, "in_progress");
+    assert.equal(json(exportAs(admin, id)).request_id, id);
+    assert.equal(json(act(admin, id, "complete")).status, "completed");
     assert.equal(
       q(
-        `select string_agg(action,',' order by occurred_at,action) from private.privacy_request_events where request_id='${id}';`
+        `select string_agg(action||':'||(actor_id='${admin.id}'),',' order by occurred_at,action) from private.privacy_request_events where request_id='${id}' and action<>'submitted';`
       ),
-      "submitted,identity_verified,started,exported,exported,completed"
+      "identity_verified:true,started:true,exported:true,completed:true"
     );
-    // The requester's email job carries the new kind as the website reads it.
-    const claimed = json(service("select api.claim_frontend_privacy_notice();"));
-    assert.ok(["submitted", "approved", "exported", "completed"].includes(claimed.kind));
-  });
-  await check("privacy: a request started before the update needs a second approval", () => {
-    const requester = named("ayanda", "Ayanda", "Zulu");
-    const id = record(requester);
-    q(act(admin, id, "verify_identity"));
-    // As the update finds it: started (by governor) and not approved.
-    q(`set session_replication_role=replica;
-      update private.privacy_requests set status='in_progress',processed_by='${governor.id}',revision=revision+1 where id='${id}';
-      insert into private.privacy_request_events(request_id,actor_id,action,represented_revision)
-        values('${id}','${governor.id}','started',2);`);
-    const rows = preflight();
-    assert.match(rows[0][1], /without a second approval: 1;/);
-    fails(exportAs(admin, id), "PT409", /approve this request first/);
-    fails(act(admin2, id, "complete"), "PT409", /approve this request first/);
-    fails(act(governor, id, "approve"), "42501", SECOND_PERSON);
-    fails(act(admin, id, "approve"), "42501", SECOND_PERSON);
-    assert.equal(json(act(admin2, id, "approve")).status, "in_progress");
-    assert.equal(privacy(id).status, "in_progress");
-    fails(act(admin2, id, "approve"), "PT409", /already approved/);
-    assert.equal(
-      count(`private.privacy_request_events where request_id='${id}' and action='approved'`),
-      1
-    );
-    assert.equal(notices(requester, "privacy_request_approved"), 1);
-    json(exportAs(governor, id));
-    assert.equal(jobs(id), "submitted,approved,exported");
-    // The rollback keeps a recorded second approval.
-    assert.match(fails(ROLLBACK, "55000"), /second approval recorded/);
+    // Approving in either order still needs dsar:manage and a second factor
+    // from the last 15 minutes (as before), and never the requester.
+    const second = record(requester);
+    fails(act(admin, second, "approve", stale()), "42501", RECENT);
+    fails(act(moderator, second, "approve"), "42501", /capability not granted/);
+    assert.equal(json(act(governor, second, "approve")).status, "in_progress");
+    q(act(governor, second, "verify_identity"));
+    fails(exportAs(governor, second, stale()), "42501", RECENT);
   });
   await check(
-    "privacy: a request completed before the update is approved again before a new export",
+    "privacy: the subject is told of the approval and the first export, once each",
     () => {
-      const requester = named("palesa", "Palesa", "Radebe");
+      const requester = named("sizwe", "Sizwe", "Khumalo");
       const id = record(requester);
       q(act(admin, id, "verify_identity"));
-      // As the update finds it: completed (started by governor) without approval.
-      q(`set session_replication_role=replica;
-      update private.privacy_requests set status='completed',completed_at=now(),processed_by='${governor.id}',
-        revision=revision+1 where id='${id}';
-      insert into private.privacy_request_events(request_id,actor_id,action,represented_revision)
-        values('${id}','${governor.id}','started',2);`);
-      fails(exportAs(admin2, id), "PT409", /approve this request first/);
-      const item = json(
-        staff(admin2, "select api.get_frontend_privacy_queue('closed',1);")
-      ).items.find((r) => r.id === id);
-      assert.deepEqual(
-        [item.status, item.approved_at, item.may_approve],
-        ["completed", null, true]
-      );
-      fails(act(governor, id, "approve"), "42501", SECOND_PERSON);
-      assert.equal(json(act(admin2, id, "approve")).status, "completed");
-      assert.equal(privacy(id).status, "completed");
-      assert.equal(json(exportAs(admin, id)).request_id, id);
+      q(act(admin, id, "approve"));
+      assert.equal(jobs(id), "submitted,approved");
+      assert.equal(notices(requester, "privacy_request_approved"), 1);
+      json(exportAs(admin, id));
+      json(exportAs(governor, id));
       assert.equal(jobs(id), "submitted,approved,exported");
       assert.equal(notices(requester, "privacy_export_made"), 1);
+      const bell = json(member(requester, "select api.list_my_frontend_notices(50,false,null);"));
+      const kinds = bell.items.map((n) => n.kind);
+      assert.ok(kinds.includes("privacy_request_approved"), JSON.stringify(kinds));
+      assert.ok(kinds.includes("privacy_export_made"), JSON.stringify(kinds));
+      assert.equal(json(act(admin, id, "complete")).status, "completed");
+      assert.equal(jobs(id), "submitted,approved,exported,completed");
+      // A rejection is emailed as before; no bell notice for it.
+      const rejected = record(requester);
+      q(act(admin, rejected, "reject"));
+      assert.equal(jobs(rejected), "submitted,rejected");
+      assert.equal(notices(requester, "privacy_request_approved"), 1);
+      // A request recorded by staff for an address without an account: email
+      // only (no bell).
+      const intake = json(
+        staff(
+          admin,
+          "select api.record_frontend_privacy_intake('access','nobody-'||gen_random_uuid()||'@example.invalid',null,'Emailed access request','Recorded from the privacy mailbox');"
+        )
+      ).id;
+      q(act(admin, intake, "approve"));
+      assert.equal(jobs(intake), "submitted,approved");
+      assert.equal(count(`private.notifications where subject_id='${intake}'`), 0);
     }
   );
 
   // ---------------------------------------------------- 3. support inbox
-  await check("support inbox: a recent second factor and 12 months", () => {
+  await check("support inbox: 12 months, and older tickets only while open", () => {
     const ticket = (status, age) =>
       q(`insert into private.support_tickets(name,email,category,message,status,created_at)
         values('Fixture Person','person@example.invalid','general_support','A synthetic support message.','${status}',now()-interval '${age}')
@@ -408,9 +350,14 @@ try {
     const oldOpen = ticket("in_progress", "14 months");
     const oldNew = ticket("new", "15 months");
     const oldResolved = ticket("resolved", "13 months");
-    for (const who of [moderator, governor, admin])
-      fails(staff(who, "select api.get_frontend_support_inbox(1,null);", stale()), "42501", RECENT);
-    const page = json(staff(moderator, "select api.get_frontend_support_inbox(1,null);"));
+    // The 12-hour staff rule is enough to read the inbox (a factor 20 minutes
+    // old reads it); a staff session without a recent enough factor does not.
+    const page = json(staff(moderator, "select api.get_frontend_support_inbox(1,null);", stale()));
+    fails(
+      staff(moderator, "select api.get_frontend_support_inbox(1,null);", stale() - 13 * 3600),
+      "42501",
+      /staff second-factor verification expired/
+    );
     const ids = page.items.map((r) => r.id);
     for (const id of [recent, oldOpen, oldNew]) assert.ok(ids.includes(id), id);
     assert.equal(ids.includes(oldResolved), false);
@@ -426,25 +373,18 @@ try {
   });
 
   // ----------------------------------------------------------- 4. invoices
-  await check("staff invoice and transfer reads need a recent second factor", () => {
+  await check("staff invoice and transfer lists keep the 12-hour staff rule", () => {
     const reads = [
       "select api.get_staff_invoices();",
-      "select api.get_staff_invoice('VM-2026-999999');",
       "select api.get_staff_invoice_transfers();",
       "select api.get_staff_invoice_payments(array[]::uuid[]);",
-      // 20261118044440_bank_transfer_expiry.sql: the expired transfers list.
       "select api.get_staff_expired_invoice_transfers();",
     ];
     for (const sql of reads) {
-      fails(staff(admin, sql, stale()), "42501", RECENT);
+      json(staff(admin, sql, stale()));
       fails(staff(moderator, sql), "42501", /capability not granted/);
       fails(member(thandeka, sql), "42501");
     }
-    assert.equal(json(staff(admin, reads[0])).items.length, 0);
-    fails(staff(admin, reads[1]), "PT404");
-    assert.equal(json(staff(admin, reads[2])).waiting, 0);
-    json(staff(admin, reads[3]));
-    assert.equal(json(staff(admin, reads[4])).items.length, 0);
   });
 
   // ------------------------------------------- 5. organisation dashboard
@@ -550,10 +490,9 @@ try {
   const later = steps.slice(index + 1);
   if (later.length) {
     applySteps(database, later);
-    await check("later updates keep the short names and the recent second factor", () => {
+    await check("later updates keep the short names", () => {
       const row = queueOf(moderator).groups.find((g) => g.case_id === kyc);
       assert.equal(row.display_name, "Thandeka D.");
-      fails(staff(admin, "select api.get_staff_invoice_transfers();", stale()), "42501", RECENT);
     });
   }
 } catch (error) {
