@@ -11,6 +11,7 @@ import { logRequestFailure } from "@/lib/utils/request-failure";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isAutomatedUserAgent } from "@/lib/analytics/automated-agent";
 import { detailPageKeyIsMalformed, matchDetailPage } from "@/lib/routing/detail-pages";
+import { isPublishedSampleSlug } from "@/lib/sample-posts/catalogue";
 import {
   dropIncomingFoundationPageSession,
   forwardFoundationPageSession,
@@ -165,6 +166,23 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   // including the links earlier posting forms showed, lead there for good.
   if (matchesPrefix(pathname, "/terms/versions")) {
     return NextResponse.redirect(new URL("/terms", request.url), 308);
+  }
+
+  // Display-only sample posts: only a committed entry, with the switch on and
+  // not removed by staff, is served; everything else gets a real 404 before
+  // streaming starts. When the hide-list cannot be read, every sample is a
+  // 404 (fail closed). The development server also serves git-ignored local
+  // preview entries, so there the page decides with notFound() instead.
+  if (
+    matchesPrefix(pathname, "/sample") &&
+    process.env.NODE_ENV !== "development" &&
+    !request.headers.has(REWRITTEN_REQUEST_HEADER)
+  ) {
+    const slug = pathname.slice("/sample/".length).replace(/\/$/, "");
+    if (!isPublishedSampleSlug(slug)) return notFoundPage(request);
+    const { loadHiddenSampleSlugs } = await import("@/lib/sample-posts/hidden");
+    const hidden = await loadHiddenSampleSlugs().catch(() => null);
+    if (!hidden || hidden.has(slug)) return notFoundPage(request);
   }
 
   // Local design previews. The pages call notFound() themselves, but streaming

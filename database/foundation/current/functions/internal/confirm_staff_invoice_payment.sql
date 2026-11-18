@@ -20,7 +20,7 @@ begin
     raise exception 'this bank transfer was already %; it cannot be confirmed', t.status
       using errcode='PT409', detail='transfer_not_waiting';
   end if;
-  -- One rule (20261117141803_bank_transfer_expiry.sql): a transfer that has
+  -- One rule (20261118032610_bank_transfer_expiry.sql): a transfer that has
   -- waited 14 days has expired, whether or not the sweep has marked it.
   if internal.invoice_transfer_expired(t) then
     raise exception 'this bank transfer waited 14 days without confirmation and expired; it cannot be confirmed'

@@ -509,7 +509,7 @@
       "name": "record_staff_invoice_payment",
       "updates": [
         "updates/20261113162457_staff_invoice_payments.sql",
-        "updates/20261117141803_bank_transfer_expiry.sql"
+        "updates/20261118032610_bank_transfer_expiry.sql"
       ],
       "arguments": [
         {
@@ -566,7 +566,7 @@
       "name": "confirm_staff_invoice_payment",
       "updates": [
         "updates/20261113162457_staff_invoice_payments.sql",
-        "updates/20261117141803_bank_transfer_expiry.sql"
+        "updates/20261118032610_bank_transfer_expiry.sql"
       ],
       "arguments": [
         {
@@ -588,7 +588,7 @@
       "name": "decline_staff_invoice_payment",
       "updates": [
         "updates/20261113162457_staff_invoice_payments.sql",
-        "updates/20261117141803_bank_transfer_expiry.sql"
+        "updates/20261118032610_bank_transfer_expiry.sql"
       ],
       "arguments": [
         {
@@ -615,7 +615,7 @@
       "name": "get_staff_invoice_transfers",
       "updates": [
         "updates/20261113162457_staff_invoice_payments.sql",
-        "updates/20261117141803_bank_transfer_expiry.sql"
+        "updates/20261118032610_bank_transfer_expiry.sql"
       ],
       "arguments": [],
       "returns": "jsonb",
@@ -4446,7 +4446,7 @@
       "name": "void_staff_invoice",
       "updates": [
         "updates/20261114041000_customer_invoice_pay_now.sql",
-        "updates/20261117141803_bank_transfer_expiry.sql"
+        "updates/20261118032610_bank_transfer_expiry.sql"
       ],
       "arguments": [
         {
@@ -4473,7 +4473,7 @@
       "name": "get_staff_invoices",
       "updates": [
         "updates/20261114041000_customer_invoice_pay_now.sql",
-        "updates/20261117141803_bank_transfer_expiry.sql"
+        "updates/20261118032610_bank_transfer_expiry.sql"
       ],
       "arguments": [],
       "returns": "jsonb",
@@ -4489,7 +4489,7 @@
       "name": "get_staff_invoice",
       "updates": [
         "updates/20261114041000_customer_invoice_pay_now.sql",
-        "updates/20261117141803_bank_transfer_expiry.sql"
+        "updates/20261118032610_bank_transfer_expiry.sql"
       ],
       "arguments": [
         {
@@ -4511,7 +4511,7 @@
       "name": "get_my_invoices",
       "updates": [
         "updates/20261114041000_customer_invoice_pay_now.sql",
-        "updates/20261117141803_bank_transfer_expiry.sql"
+        "updates/20261118032610_bank_transfer_expiry.sql"
       ],
       "arguments": [],
       "returns": "jsonb",
@@ -4527,7 +4527,7 @@
       "name": "get_my_invoice",
       "updates": [
         "updates/20261114041000_customer_invoice_pay_now.sql",
-        "updates/20261117141803_bank_transfer_expiry.sql"
+        "updates/20261118032610_bank_transfer_expiry.sql"
       ],
       "arguments": [
         {
@@ -4589,7 +4589,7 @@
       "updates": [
         "updates/20261114041000_customer_invoice_pay_now.sql",
         "updates/20261117082020_online_payment_limit.sql",
-        "updates/20261117141803_bank_transfer_expiry.sql"
+        "updates/20261118032610_bank_transfer_expiry.sql"
       ],
       "arguments": [
         {
@@ -4621,7 +4621,7 @@
       "name": "record_staff_invoice_transfer",
       "updates": [
         "updates/20261114041000_customer_invoice_pay_now.sql",
-        "updates/20261117141803_bank_transfer_expiry.sql"
+        "updates/20261118032610_bank_transfer_expiry.sql"
       ],
       "arguments": [
         {
@@ -4861,8 +4861,45 @@
       "authority": "Public, like the price catalogue (anon and authenticated): the most one online (Ozow) payment may be, in cents (online_max_cents, internal.online_payment_max_cents()); no account data."
     },
     {
+      "name": "set_sample_post_hidden",
+      "updates": ["updates/20261117144001_sample_post_hide_list.sql"],
+      "arguments": [
+        {
+          "name": "p_slug",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_hidden",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Staff with post:moderate and a recent authenticator code (internal.staff_actor): removes (p_hidden true) or restores (false) one display-only sample post by its catalogue slug in the private hide-list, recording who removed it and when; idempotent; at most 500 hidden slugs. The sample's text and media stay in the website's catalogue."
+    },
+    {
+      "name": "get_hidden_sample_posts",
+      "updates": ["updates/20261117144001_sample_post_hide_list.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public, like the price catalogue (anon and authenticated): the slugs of the display-only sample posts staff removed, sorted; never who removed them or when; no account data."
+    },
+    {
       "name": "expire_waiting_bank_transfers",
-      "updates": ["updates/20261117141803_bank_transfer_expiry.sql"],
+      "updates": ["updates/20261118032610_bank_transfer_expiry.sql"],
       "arguments": [
         {
           "name": "p_limit",
@@ -4881,7 +4918,7 @@
     },
     {
       "name": "get_staff_expired_invoice_transfers",
-      "updates": ["updates/20261117141803_bank_transfer_expiry.sql"],
+      "updates": ["updates/20261118032610_bank_transfer_expiry.sql"],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
@@ -4894,7 +4931,7 @@
     },
     {
       "name": "get_my_invoice_transfer_expiry",
-      "updates": ["updates/20261117141803_bank_transfer_expiry.sql"],
+      "updates": ["updates/20261118032610_bank_transfer_expiry.sql"],
       "arguments": [
         {
           "name": "p_invoice_number",
@@ -4913,7 +4950,7 @@
     },
     {
       "name": "resolve_expired_invoice_transfer",
-      "updates": ["updates/20261117141803_bank_transfer_expiry.sql"],
+      "updates": ["updates/20261118032610_bank_transfer_expiry.sql"],
       "arguments": [
         {
           "name": "p_transfer_id",

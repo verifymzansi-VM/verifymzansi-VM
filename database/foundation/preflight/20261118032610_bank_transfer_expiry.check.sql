@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261117141803_bank_transfer_expiry.sql.
+-- Read-only preflight for updates/20261118032610_bank_transfer_expiry.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes
@@ -27,17 +27,17 @@ with bodies as (
     (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)) as body
   from (values
     ('internal.invoice_transfer_guard()',
-      '494dcdb720573571dd36edf97b055332', '40022dab9a8357b0b1ba4101c48f5196'),
+      '494dcdb720573571dd36edf97b055332', '5aa9c1934709c5adbc9fb5f70c0acbab'),
     ('internal.confirm_staff_invoice_payment(uuid)',
-      'e0c308df14f38f1de76bdced4e8683f2', '66e96f9682fbab67236ccf83142fbd05'),
+      'e0c308df14f38f1de76bdced4e8683f2', 'ca0da3a24aad8eb8724bfbdba1e8ab09'),
     ('internal.decline_staff_invoice_payment(uuid,text)',
-      'cc8641faee31c5a9a043e4c510d26302', '2812080d676629d5f74e4f4d0063c368'),
+      'cc8641faee31c5a9a043e4c510d26302', '3d27e8e4fa5cbfd4ba8db9970b1f5577'),
     ('internal.record_staff_invoice_payment(text,integer,integer,bigint,text,text,boolean,text)',
-      '594b47bc794e335a3f3be505a4b1637e', 'dbf38f038bee7e1cf43b91288dbdab94'),
+      '594b47bc794e335a3f3be505a4b1637e', 'a758f954a15e4181d7022d5284eb7584'),
     ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)',
-      '171c0ad6f18a7f5329ff00dcfff4608d', '4f74538d08ca0abdac2103d71e0fdd07'),
+      '171c0ad6f18a7f5329ff00dcfff4608d', '4c05ac5261f28c385ed9c0c9115fef45'),
     ('internal.invoice_transfer_dto(private.invoice_transfers,uuid)',
-      'b91dbdd96bec847ddb165d6a663cc7cb', '1817387f19f8a1fd9b278247f9e69c15'),
+      'b91dbdd96bec847ddb165d6a663cc7cb', 'be671aa855d1abf81569c665ac569f54'),
     ('internal.get_staff_invoice_transfers()',
       '37ec35ae8968df035025e3c69234f3be', '13f1c0cf67460052d334b32e70b1ebe8'),
     ('internal.customer_invoice_dto(private.customer_invoices,uuid)',
@@ -47,7 +47,7 @@ with bodies as (
     ('internal.void_staff_invoice(uuid,text)',
       '21763bcb62e398b6d1b8e8d64ef38ea5', '6c997c846aa9d114150e11d2591d5ad7'),
     ('internal.account_erasure_hold(uuid)',
-      '5bd01c33cf23f3e6516ceb96c3dc3236', '42edfda741d3096f7ea7a7b0cb897d49'),
+      '5bd01c33cf23f3e6516ceb96c3dc3236', '3c14899df9c76923cef8caff6a7d5291'),
     ('internal.retention_commerce(integer)',
       '422a63c6d6fd2be5a1556893a8975d3f', '55051470a07c224838cb58dc45d66406'),
     ('internal.frontend_privacy_export_data(uuid)',

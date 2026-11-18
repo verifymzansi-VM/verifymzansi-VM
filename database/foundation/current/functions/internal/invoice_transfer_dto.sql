@@ -11,7 +11,7 @@ AS $function$
     'customer_email', (select u.email from auth.users u where u.id = t.account_id),
     'similar_records', (select count(*) from private.invoice_transfers x where x.id <> t.id
       and x.status <> 'declined' and x.amount_received_cents = t.amount_received_cents
-      -- 20261117141803: an expired record counts only for the same money
+      -- 20261118032610: an expired record counts only for the same money
       -- (reference, amount, date cleared), so a record of it again is flagged.
       and ((not internal.invoice_transfer_expired(x)
           and (upper(regexp_replace(x.bank_reference, '[^A-Za-z0-9]', '', 'g'))

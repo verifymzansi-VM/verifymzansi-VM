@@ -1,6 +1,8 @@
-# Reviewed OSV-Scanner exceptions (CI and the weekly security scan). Each entry
-# needs a written reason and an expiry date, after which the scan fails again
-# until someone re-reviews it. Never ignore an advisory just to turn CI green.
+# Reviewed OSV-Scanner exceptions (CI and the weekly security scan). The deploy's
+# dependency audit (scripts/security-audit.ts) honours the same entries, except
+# braces, which only its verified backport clears. Each entry needs a written
+# reason and an expiry date, after which both scans fail again until someone
+# re-reviews it. Never ignore an advisory just to turn CI green.
 
 [[IgnoredVulns]]
 id = "GHSA-vfj7-8cjw-p6xm"

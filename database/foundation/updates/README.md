@@ -79,10 +79,9 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Account events reach the notification bell, 17 November 2026
 
-`20261117140533_member_notices_in_app.sql` is not applied yet. It adds no
-command and changes no API signature, so the website release that uses it also
-works with a database that does not have it: the bell then shows only the
-notices it showed before.
+`20261117140533_member_notices_in_app.sql` was applied on 18 November 2026 at
+02:40 UTC with the owner's approval, after the website release that knows the
+new kinds was deployed (see the applied register).
 
 Until now the bell listed only what was written to `private.notifications`. Many
 account events queued only an email: an accepted ID check (a member who was
@@ -2704,6 +2703,68 @@ When another update merges first, regenerate this pull request's
 `fingerprint.json`, the applied register, the manifests, `error-reasons.ts` and
 `package.json`.
 
+## Staff remove and restore display-only sample posts, 17 November 2026
+
+`20261117144001_sample_post_hide_list.sql` was applied on 18 November 2026 at
+00:47 UTC (production Postgres log; see the applied register).
+
+The website can show a few display-only sample posts (labelled "Sample post ·
+for display only") after the real posts in the showrooms, while
+`SAMPLE_POSTS_ENABLED` is on. Their text and media are a static catalogue in the
+website (`src/lib/sample-posts/catalogue.ts`), not database rows. This update
+lets staff remove one sample, and restore it, without a code change:
+
+- **Hide-list.** `private.hidden_sample_posts` holds one row per removed sample:
+  the catalogue slug, the staff account that removed it (set to null if that
+  account is ever deleted) and when. Row level security is on and no API role
+  has a grant; at most 500 rows.
+- **Staff command.** `api.set_sample_post_hidden(p_slug, p_hidden)`
+  (authenticated) runs `internal.staff_actor('post:moderate')`: the content
+  moderation capability (moderator, governor, admin) with its recent
+  authenticator code rule. `true` adds the slug (one already hidden keeps its
+  first who and when), `false` removes it; both are idempotent and return
+  `{"slug","hidden","hidden_at"}`. A malformed slug is refused with 22023, a
+  501st hidden slug with 54000.
+- **Public read.** `api.get_hidden_sample_posts()` (anon and authenticated, like
+  the price catalogue) returns `{"slugs":[...]}`, sorted: slugs only, never who
+  or when.
+
+Expand only: a new table and two new commands; nothing existing changes. The
+website release from the same pull request leaves out every hidden sample from
+the showrooms and answers `/sample/<slug>` for one with a real 404. When it
+cannot read the hide-list it shows no sample at all (fail closed), so apply this
+update before that release is deployed with samples switched on. With samples
+off (the default) the release never reads it.
+
+**Applying.** After the pull request is merged and before its website release is
+deployed:
+
+1. Run `../preflight/20261117144001_sample_post_hide_list.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "sample post hide list: update not applied".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "sample post hide list: already applied; hidden samples:
+   0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261117144001_sample_post_hide_list.down.sql` (only with the
+owner's decision; prefer a forward fix). Switch samples off first: it drops both
+commands and the hide-list, and the website then shows no sample.
+
+`node --import tsx scripts/test-foundation-sample-post-hide-list.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; a partial state and a premature rollback
+are refused, changing nothing; apply, rollback and re-apply return the same
+fingerprints; staff with `post:moderate` and a recent authenticator code hide
+and restore a slug, idempotently, keeping the first who and when; members,
+signed-out visitors, staff without a recent code and staff without the
+capability are refused, changing nothing; malformed slugs and a 501st slug are
+refused; the public read returns sorted slugs only, to signed-out visitors and
+members; and the grants, owners and settings are as listed.
+
 ## A skipped email is no longer listed as sent, 17 November 2026
 
 `20261117123240_skipped_email_status.sql` was applied on 17 November 2026 at
@@ -2774,7 +2835,7 @@ nothing, and the grants, owners and settings are unchanged.
 
 ## Waiting bank transfers expire after 14 days, 17 November 2026
 
-`20261117141803_bank_transfer_expiry.sql` is pending.
+`20261118032610_bank_transfer_expiry.sql` is pending.
 
 Owner's decision of 16 November 2026: a bank transfer staff recorded (slice P2b,
 with or without a customer invoice) that is still waiting for a second staff
@@ -2869,7 +2930,7 @@ and reads (no expiry shown) until the update is applied.
 **Applying.** From the moment the update is applied, a transfer that has waited
 14 days or more can never be confirmed. Confirm the genuine ones first.
 
-1. Run `../preflight/20261117141803_bank_transfer_expiry.check.sql` unchanged in
+1. Run `../preflight/20261118032610_bank_transfer_expiry.check.sql` unchanged in
    the SQL editor. It is read only. Its summary reads "bank transfer expiry:
    update not applied; waiting: N; waiting 14 days or more: M; expired: 0", and
    it adds one "problem" row for each of the M transfers ("bank transfer <id>
@@ -2887,7 +2948,7 @@ and reads (no expiry shown) until the update is applied.
    above.
 
 The reviewed rollback is
-`../rollback/20261117141803_bank_transfer_expiry.down.sql` (only with the
+`../rollback/20261118032610_bank_transfer_expiry.down.sql` (only with the
 owner's decision; prefer a forward fix). It refuses once any transfer has been
 marked expired (the earlier schema cannot hold that state) and unless the
 thirteen functions have this update's bodies; otherwise it drops the sweep, the
@@ -4739,7 +4800,24 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   applied; finished emails: 2; marked skipped: 0", after "already applied;
   finished emails: 2; marked skipped: 0"; production fingerprint after it
   matched the full replay (except the known schema grant difference)
-- `20261117140533_member_notices_in_app.sql`: pending
-- `20261117141803_bank_transfer_expiry.sql`: pending
+- `20261117140533_member_notices_in_app.sql`: applied 2026-11-18 02:40 UTC;
+  owner-approved in the Claude Code session that wrote it (the owner chose to
+  apply it from that session, overriding the AGENTS.md rule for this update
+  only), Supabase connector (`execute_sql`), preflight + fingerprint checked;
+  the update's statement is in the production Postgres log at 02:40:27 UTC; from
+  the reviewed file on `main` (sha256 starting 9618f8c4d8772ea7) after the
+  website release of pull requests #249 and #252 was deployed (d87bed25, then
+  41148cc8); preflight before "member notices in app: update not applied
+  (reviewed bodies; ...); new-kind notices: 0" (1 row, no problem rows), after
+  "already applied; new-kind notices: 0", all four triggers enabled
+- `20261117144001_sample_post_hide_list.sql`: applied 2026-11-18 00:47 UTC; the
+  update's statement is in the production Postgres log at 00:47:48 UTC, before
+  pull request #105 was merged (00:48:09 UTC, 41148cc8); how it was applied was
+  not recorded; the deploy of 41148cc8 (01:27 UTC) reported only
+  20261117140533_member_notices_in_app.sql missing; found applied (its table and
+  both commands exist) and recorded from the Claude Code session on 2026-11-18;
+  production fingerprint after both updates matched the full replay (except the
+  known schema grant difference)
+- `20261118032610_bank_transfer_expiry.sql`: pending
 
 <!-- applied-register:end -->

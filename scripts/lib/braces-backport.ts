@@ -114,14 +114,25 @@ export async function verifyBracesBackport(root = process.cwd()) {
 }
 /** Preserve the raw report. An effective count is adjusted only for this exact
  * advisory/version and a separately verified installed fix; all others block. */
+/** A reviewed, dated exception for one advisory (from osv-scanner.toml). */
+export type AuditException = { id: string; until: Date; reason: string };
+
+/**
+ * The audit after the reviewed mitigations: the hash-verified braces backport,
+ * and reviewed exceptions that have not expired. `pnpm audit` counts one
+ * finding per vulnerable version, so each advisory accounts for its findings;
+ * a report whose counts do not add up is INVALID (fail closed).
+ */
 export function assessPatchedAudit(
   status: number | null,
   report: unknown,
-  proof: { verified: boolean }
+  proof: { verified: boolean },
+  exceptions: readonly AuditException[] = [],
+  now: Date = new Date()
 ) {
   const raw = dependencyAuditVerdict(status, report);
-  if (raw === "INVALID" || proof.verified !== true)
-    return { assessment: raw, mitigated: [] as string[] };
+  if (raw === "INVALID")
+    return { assessment: raw, mitigated: [] as string[], excepted: [] as string[] };
   const data = report as {
     advisories?: Record<
       string,
@@ -136,39 +147,59 @@ export function assessPatchedAudit(
   };
   const counts = { ...data.metadata.vulnerabilities };
   const mitigated: string[] = [];
-  if (data.advisories === undefined) return { assessment: raw, mitigated };
+  const excepted: string[] = [];
+  if (data.advisories === undefined) return { assessment: raw, mitigated, excepted };
   if (!data.advisories || typeof data.advisories !== "object" || Array.isArray(data.advisories))
-    return { assessment: "INVALID", mitigated };
+    return { assessment: "INVALID", mitigated, excepted };
   const observed: Record<string, number> = { info: 0, low: 0, moderate: 0, high: 0, critical: 0 };
   for (const row of Object.values(data.advisories)) {
-    if (!row || typeof row.severity !== "string" || !Object.hasOwn(observed, row.severity))
-      return { assessment: "INVALID", mitigated };
-    observed[row.severity]++;
+    if (
+      !row ||
+      typeof row.severity !== "string" ||
+      !Object.hasOwn(observed, row.severity) ||
+      !Array.isArray(row.findings) ||
+      !row.findings.length
+    )
+      return { assessment: "INVALID", mitigated, excepted };
+    observed[row.severity] += row.findings.length;
   }
   if (Object.entries(observed).some(([key, count]) => counts[key] !== count))
-    return { assessment: "INVALID", mitigated };
-  for (const advisory of Object.values(data.advisories ?? {})) {
+    return { assessment: "INVALID", mitigated, excepted };
+  // braces is cleared only by its verified backport, never by an exception.
+  const active = new Set(
+    exceptions
+      .filter(
+        (e) => e.id !== BRACES_ADVISORY && e.reason.trim() && e.until.getTime() > now.getTime()
+      )
+      .map((e) => e.id)
+  );
+  for (const advisory of Object.values(data.advisories)) {
+    const findings = advisory.findings!.length;
+    const severity = advisory.severity!;
     if (
-      advisory?.github_advisory_id !== BRACES_ADVISORY ||
-      advisory.module_name !== "braces" ||
-      advisory.severity !== "high" ||
-      !Array.isArray(advisory.findings) ||
-      !advisory.findings.length ||
-      advisory.findings.some((finding) => finding?.version !== "3.0.3")
-    )
-      continue;
-    if (!Number.isSafeInteger(counts.high) || counts.high < 1)
-      return { assessment: "INVALID", mitigated: [] };
-    counts.high--;
-    mitigated.push(BRACES_ADVISORY);
+      proof.verified === true &&
+      advisory.github_advisory_id === BRACES_ADVISORY &&
+      advisory.module_name === "braces" &&
+      severity === "high" &&
+      advisory.findings!.every((finding) => finding?.version === "3.0.3")
+    ) {
+      counts.high -= findings;
+      mitigated.push(BRACES_ADVISORY);
+    } else if (advisory.github_advisory_id && active.has(advisory.github_advisory_id)) {
+      counts[severity] -= findings;
+      excepted.push(advisory.github_advisory_id);
+    }
   }
+  if (Object.values(counts).some((count) => !Number.isSafeInteger(count) || count < 0))
+    return { assessment: "INVALID", mitigated: [], excepted: [] };
   const effective = dependencyAuditVerdict(status, {
     ...data,
     metadata: { ...data.metadata, vulnerabilities: counts },
   });
   return {
-    assessment: effective === "PASS" && mitigated.length ? "WARN" : effective,
+    assessment: effective === "PASS" && (mitigated.length || excepted.length) ? "WARN" : effective,
     mitigated,
+    excepted,
     effectiveVulnerabilityCounts: counts,
   };
 }

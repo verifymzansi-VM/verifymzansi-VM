@@ -3,6 +3,7 @@ import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import { searchFoundationCards, foundationMediaUrl } from "@/lib/foundation/public-cards";
 import type { CarouselItem } from "@/components/showrooms/showroom-card-carousel";
 import { createLogger } from "@/lib/utils/logger";
+import { loadSampleCarouselItems } from "@/lib/sample-posts/load";
 
 const log = createLogger("ShowroomFeed");
 
@@ -17,10 +18,27 @@ const SHOWROOM_LIMITS: Record<ShowroomSurface, number> = {
 };
 
 /**
- * Showroom cards for a page, from the foundation's public post cards.
- * Never throws: on any failure the showroom shows no cards.
+ * Showroom cards for a page: the foundation's public post cards, then any
+ * display-only sample posts for this showroom (only while
+ * SAMPLE_POSTS_ENABLED is on, and never one staff removed). Real posts always
+ * come first. Never throws: a part that fails shows no cards.
  */
 export async function loadShowroomItems(surface: ShowroomSurface): Promise<CarouselItem[]> {
+  const [real, samples] = await Promise.all([
+    loadRealShowroomItems(surface),
+    loadSampleCarouselItems(surface).catch((error: unknown) => {
+      log.warn("Sample posts unavailable", {
+        surface,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      return [] as CarouselItem[];
+    }),
+  ]);
+  return samples.length > 0 ? [...real, ...samples] : real;
+}
+
+/** The foundation's public post cards; no cards on any failure. */
+async function loadRealShowroomItems(surface: ShowroomSurface): Promise<CarouselItem[]> {
   try {
     const page = await searchFoundationCards(foundationServerPublicApi(), {
       limit: SHOWROOM_LIMITS[surface],

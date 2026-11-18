@@ -18,7 +18,7 @@ begin
   -- A recorded bank transfer is an audit record: never removed; recorded as
   -- waiting; changed only once, from waiting to confirmed (naming its invoice
   -- payment: that account, amount and plan), to declined, or (from
-  -- 20261117141803_bank_transfer_expiry.sql) to expired once it has waited 14
+  -- 20261118032610_bank_transfer_expiry.sql) to expired once it has waited 14
   -- days, with nothing else changed.
   if tg_op = 'DELETE' then
     -- Only the retention job removes a record, five tax years on.

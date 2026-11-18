@@ -269,7 +269,7 @@ export async function readMyInvoice(
 /**
  * When the latest bank transfer recorded to the member's own unpaid invoice
  * expired (nobody confirmed it within 14 days), or null. The invoice can then
- * be paid again (20261117141803_bank_transfer_expiry.sql); against a database
+ * be paid again (20261118032610_bank_transfer_expiry.sql); against a database
  * without that update, null.
  */
 export async function readMyInvoiceTransferExpiry(
