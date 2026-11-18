@@ -33,6 +33,11 @@ export const REFUND_REASON_CODES = [
   "our_failure_after_fix_offered",
   "s14_cancellation",
   "breach_credit",
+  // From <ts>_refund_follow_ups.sql (plan B, approved 18 Nov 2026): a renewal
+  // refunded before its days started. Read here before that update is
+  // applied; staff are not offered it until the update is live (the current
+  // database refuses it with refund_reason_code_invalid).
+  "renewal_cancelled_before_start",
 ] as const;
 export type RefundReasonCode = (typeof REFUND_REASON_CODES)[number];
 export const refundReasonCode = z.enum(REFUND_REASON_CODES);
@@ -108,6 +113,36 @@ export function readStaffPaymentList(
     })
   );
 }
+
+/**
+ * Refusals of the refund follow-ups update (plan B), shared by the refund
+ * through Ozow (./ozow-refunds.ts) and the refunds recorded with a reference:
+ * a slot whose renewal is waiting is refunded renewal first, the "cancelled
+ * before the renewal started" reason fits only a renewal yet to start, and
+ * Ozow refunds only within its window.
+ */
+export const STAFF_REFUND_FOLLOW_UP_REFUSALS: ReadonlyArray<
+  [FoundationErrorReason, [number, string]]
+> = [
+  [
+    "renewal_queued",
+    [409, "This slot has a renewal waiting. Refund the renewal first, then this period."],
+  ],
+  [
+    "renewal_already_started",
+    [
+      409,
+      "'Cancelled before the renewal started' is only for a renewal whose days have not started. Choose another reason.",
+    ],
+  ],
+  [
+    "outside_refund_window",
+    [
+      409,
+      "Ozow only refunds within 14 days of the payment. Pay it back by bank transfer and record the bank reference.",
+    ],
+  ],
+];
 
 /** Refusals of the payment commands that staff can act on, in plain words. */
 const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new Map([
@@ -272,6 +307,8 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
     "invoice_payment_open",
     [409, "A payment of this invoice is still open at Ozow. Try again when it has closed."],
   ],
+  // Refund follow-ups (<ts>_refund_follow_ups.sql, not applied yet).
+  ...STAFF_REFUND_FOLLOW_UP_REFUSALS,
 ]);
 
 async function settlePaymentCommand<T>(

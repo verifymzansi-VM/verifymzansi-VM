@@ -265,7 +265,13 @@ function parseSharedList(source) {
   const staffSecondFactor = [...staffBlock[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(([, text]) =>
     JSON.parse(`"${text}"`)
   );
-  return { reasons, messages, staffSecondFactor };
+  // Reasons of a database update not applied yet (expand, then contract).
+  const upcomingBlock =
+    /export const FOUNDATION_UPCOMING_ERROR_REASONS = \{([\s\S]*?)\} as const/.exec(source);
+  const upcoming = upcomingBlock
+    ? [...upcomingBlock[1].matchAll(/^\s*([a-z][a-z0-9_]*): \[/gm)].map(([, reason]) => reason)
+    : [];
+  return { reasons, messages, staffSecondFactor, upcoming };
 }
 
 /**
@@ -297,6 +303,11 @@ function compareReasons(database, shared) {
     if (!database.reasons.has(reason))
       failures.push(
         `The shared list names '${reason}' but no current database function raises it (renamed or removed?)`
+      );
+  for (const reason of shared.upcoming ?? [])
+    if (database.reasons.has(reason) || listed.has(reason))
+      failures.push(
+        `FOUNDATION_UPCOMING_ERROR_REASONS names '${reason}', which the current database raises now: remove it there (the generated list holds it)`
       );
   for (const message of shared.staffSecondFactor ?? [])
     if (!database.allMessages.has(message))

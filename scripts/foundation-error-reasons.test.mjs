@@ -102,6 +102,34 @@ test("a changed code, a dropped message and a dynamic reason fail", (t) => {
   );
 });
 
+test("an upcoming reason must leave the upcoming list once the database raises it", (t) => {
+  const root = copyOfRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const list = readFileSync(path.join(root, SHARED), "utf8");
+  assert.match(list, /FOUNDATION_UPCOMING_ERROR_REASONS = \{[\s\S]*?\n {2}renewal_queued: \[/);
+  // Pending, the database does not raise it: nothing fails.
+  assert.deepEqual(runReasonCheck({ root }).failures, []);
+  // The update is applied and the snapshot raises it.
+  editFile(
+    root,
+    `${FUNCTIONS}/internal/assert_staff_refund_reason.sql`,
+    "detail='refund_reason_code_invalid';",
+    "detail='refund_reason_code_invalid';\n  raise exception 'renewal waiting' using errcode='PT409', detail='renewal_queued';"
+  );
+  const pending = (failures) =>
+    failures.filter((line) => line.includes("FOUNDATION_UPCOMING_ERROR_REASONS names"));
+  assert.ok(
+    runReasonCheck({ root }).failures.some((line) => line.includes("raises 'renewal_queued'"))
+  );
+  // Regenerating the list is not enough: the upcoming entry must go.
+  const after = runReasonCheck({ root, write: true }).failures;
+  assert.deepEqual(
+    pending(after).map((line) => line.split("'")[1]),
+    ["renewal_queued"]
+  );
+  assert.equal(after.length, 1);
+});
+
 test("website code may not match a reason by comparing details with a string", () => {
   const found = findRawReasonComparisons([
     ["a.ts", 'if (error.details === "slug_conflict") fail();'],

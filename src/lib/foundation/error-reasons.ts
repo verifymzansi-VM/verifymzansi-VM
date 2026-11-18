@@ -221,7 +221,26 @@ export const STAFF_SECOND_FACTOR_MESSAGES = [
   "verified authenticator app required",
 ] as const;
 
-export type FoundationErrorReason = keyof typeof FOUNDATION_ERROR_REASONS;
+/**
+ * Reasons a database update that is not applied yet will raise (expand, then
+ * contract): the website that understands them deploys first, so the live
+ * site never meets a reason it cannot word. They are matched like the
+ * generated list. Once the update is applied and the generated list is
+ * regenerated, the check fails until the reason is removed here, so each
+ * entry lives only as long as its update is pending.
+ */
+export const FOUNDATION_UPCOMING_ERROR_REASONS = {
+  // <ts>_refund_follow_ups.sql (refund follow-ups, plan B): a refund of a slot
+  // whose renewal is waiting, the new "cancelled before the renewal started"
+  // reason on a slot that is not a renewal yet to start, and a refund through
+  // Ozow after its window.
+  outside_refund_window: ["PT409"],
+  renewal_already_started: ["PT409"],
+  renewal_queued: ["PT409"],
+} as const satisfies Record<string, readonly string[]>;
+
+export type FoundationErrorReason =
+  keyof typeof FOUNDATION_ERROR_REASONS | keyof typeof FOUNDATION_UPCOMING_ERROR_REASONS;
 type DatabaseError =
   { code?: string | null; details?: string | null; message?: string | null } | null | undefined;
 
@@ -233,7 +252,9 @@ type DatabaseError =
  */
 function databaseReason(error: DatabaseError): FoundationErrorReason | null {
   const details = error?.details;
-  return typeof details === "string" && Object.hasOwn(FOUNDATION_ERROR_REASONS, details)
+  return typeof details === "string" &&
+    (Object.hasOwn(FOUNDATION_ERROR_REASONS, details) ||
+      Object.hasOwn(FOUNDATION_UPCOMING_ERROR_REASONS, details))
     ? (details as FoundationErrorReason)
     : null;
 }
