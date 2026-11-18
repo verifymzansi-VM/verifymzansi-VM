@@ -111,8 +111,7 @@ export function PrelaunchBanner() {
               We&apos;re launching <span className="gold-shine text-brand-gold-300">soon.</span>
             </DialogPrimitive.Title>
             <DialogPrimitive.Description className="mt-3 max-w-sm text-base leading-7 text-white/75">
-              You&apos;re viewing an early preview of VerifyMzansi. Everything already works, so
-              feel free to look around and join in.
+              You&apos;re viewing an early preview of VerifyMzansi. Feel free to look around.
             </DialogPrimitive.Description>
 
             <DialogPrimitive.Close asChild>
