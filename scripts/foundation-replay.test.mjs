@@ -18,15 +18,15 @@ test("the recorded fingerprint keeps the production-matched values", () => {
   // below. Reviewed updates after it are listed as pending until the owner has
   // applied them and production is captured again.
   const check = recorded.productionCheck;
-  assert.equal(check.matchedThroughUpdate, "20261118044440_bank_transfer_expiry.sql");
+  assert.equal(check.matchedThroughUpdate, "20261118072601_staff_data_minimisation.sql");
   assert.deepEqual(check.matchedFingerprints, {
     column_grants: "11724f805587a82326eae936e0200f0c",
     columns: "0288e2e74a2096cfb4ff17f11069ca32",
-    constraints: "6a7b6ee6d6a21e1d7cf21884e7f74c0d",
+    constraints: "9c8655bb1c1ba0128a9bd7105e45f8ef",
     event_triggers: "821f7d069c595c075754fad9309136ac",
-    function_bodies: "080b01a8663e83d966c765f2be3e8090",
-    function_grants: "c4492091e8681840a10ee738ff3fe957",
-    function_metadata: "5f43f85338dcec7d1c3ccc26ed829901",
+    function_bodies: "9dc971bf00287a637b63a2c05ca0f032",
+    function_grants: "d751c69a268173eb80adebf824d19837",
+    function_metadata: "cd564f09377db31fb23aeb7c8fba6ac2",
     indexes: "ce7a122be9d78286fdf7f9f40b8ce454",
     policies: "2c1b773d5ffe29f172271087b1f36e04",
     row_level_security: "64ad562a0bdcc3267c51bcc81bab0605",
