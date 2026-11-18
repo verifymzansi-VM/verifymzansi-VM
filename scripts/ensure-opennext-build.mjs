@@ -51,6 +51,15 @@ if (current && existsSync(workerBundle) && existsSync(assetsDir)) {
   process.exit(0);
 }
 
+// Release workflows build once, without credentials, before any step that holds
+// Cloudflare credentials runs Wrangler. There the hook may only verify.
+if (process.env.CLOUDFLARE_BUILD_HOOK === "verify-only") {
+  console.error(
+    "Worker output is missing or does not match this source and public configuration; refusing to rebuild during a release step (CLOUDFLARE_BUILD_HOOK=verify-only)."
+  );
+  process.exit(1);
+}
+
 console.log("Worker output is missing or stale; running build:cloudflare.");
 function runTask(task) {
   const result = spawnSync("pnpm", ["run", task], {

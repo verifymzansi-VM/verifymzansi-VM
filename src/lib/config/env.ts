@@ -129,6 +129,13 @@ export type Env = z.infer<typeof envSchema>;
 export interface ValidateEnvOptions {
   mode?: LaunchValidationMode;
   strict?: boolean;
+  /**
+   * Release validation only (`scripts/validate-launch-env.ts`): the runtime-only
+   * secrets in CLOUDFLARE_RUNTIME_ONLY_SECRETS may be absent because they live
+   * only on the Worker. Present values are still validated. The result is never
+   * cached, so runtime callers always get the full schema.
+   */
+  runtimeSecretsInCloudflare?: boolean;
 }
 
 let _cachedEnv: Env | null = null;
@@ -290,7 +297,11 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
     return _cachedEnv;
   }
 
-  const result = envSchema.safeParse(process.env);
+  const releaseOnly = options.runtimeSecretsInCloudflare === true;
+  const schema = releaseOnly
+    ? envSchema.partial({ KYC_ENCRYPTION_KEY: true, ID_ENCRYPTION_KEY: true, HMAC_SECRET: true })
+    : envSchema;
+  const result = schema.safeParse(process.env);
 
   if (!result.success) {
     const errors = result.error.issues
@@ -319,8 +330,9 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
     throw new Error(message);
   }
 
-  const launchSummary = validateLaunchConfiguration(toEnvSource(result.data), {
+  const launchSummary = validateLaunchConfiguration(toEnvSource(result.data as Env), {
     mode: validationMode,
+    runtimeSecretsInCloudflare: releaseOnly,
   });
 
   if (!launchSummary.isValid) {
@@ -335,7 +347,7 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
     console.error(`[ENV] Launch validation failed (non-fatal):\n${msg}`);
   }
 
-  validateRateLimiterConfig(result.data);
+  validateRateLimiterConfig(result.data as Env);
 
   // Hard guard: reject cafebabe placeholder encryption keys in production.
   // These are safe build-phase fallbacks that must never reach a live worker.
@@ -347,8 +359,11 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
       ["ID_ENCRYPTION_KEY", "ID_ENCRYPTION_KEY"],
       ["HMAC_SECRET", "HMAC_SECRET"],
     ];
+    const data = result.data as Env;
     const insecure = placeholderKeys.filter(
-      ([k]) => result.data[k] === CAFEBABE || String(result.data[k]).startsWith(INVALID_PREFIX)
+      ([k]) =>
+        !(releaseOnly && data[k] === undefined) &&
+        (data[k] === CAFEBABE || String(data[k]).startsWith(INVALID_PREFIX))
     );
     if (insecure.length > 0) {
       const names = insecure.map(([, label]) => label).join(", ");
@@ -372,7 +387,7 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
     }
   }
 
-  if (result.data.NODE_ENV === "production" && !result.data.IP_HASH_SECRET) {
+  if (result.data.NODE_ENV === "production" && !result.data.IP_HASH_SECRET && !releaseOnly) {
     throw new Error(
       [
         "",
@@ -412,7 +427,8 @@ export function validateEnv(options: ValidateEnvOptions = {}): Env {
     console.warn(`${prefix}: ${warning.name}: ${warning.detail}`);
   }
 
-  _cachedEnv = result.data;
+  if (releaseOnly) return result.data as Env;
+  _cachedEnv = result.data as Env;
   return _cachedEnv;
 }
 

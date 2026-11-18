@@ -21,12 +21,22 @@ function parseModeArg(argv: string[]): LaunchValidationMode | undefined {
   throw new Error(`Unsupported validation mode: ${rawValue}`);
 }
 
+const RUNTIME_SECRETS_FLAG = "--runtime-secrets-in-cloudflare";
+
 async function main(): Promise<void> {
-  const mode = parseModeArg(process.argv.slice(2)) ?? resolveLaunchValidationMode(process.env);
+  const args = process.argv.slice(2);
+  const unknown = args.filter((arg) => !arg.startsWith("--mode=") && arg !== RUNTIME_SECRETS_FLAG);
+  if (unknown.length > 0) throw new Error(`Unsupported argument: ${unknown.join(" ")}`);
+  const mode = parseModeArg(args) ?? resolveLaunchValidationMode(process.env);
+  // Release deploys keep runtime-only keys (CLOUDFLARE_RUNTIME_ONLY_SECRETS) out
+  // of GitHub; the deploy checks that the Worker holds them by name.
+  const runtimeSecretsInCloudflare = args.includes(RUNTIME_SECRETS_FLAG);
+  if (runtimeSecretsInCloudflare && mode !== "production")
+    throw new Error(`${RUNTIME_SECRETS_FLAG} applies only to --mode=production`);
   process.env.VERIFYMZANSI_RUNTIME_MODE = mode;
   process.env.VERIFYMZANSI_VALIDATION_MODE = mode;
 
-  const summary = validateLaunchConfiguration(process.env, { mode });
+  const summary = validateLaunchConfiguration(process.env, { mode, runtimeSecretsInCloudflare });
 
   console.log("");
   console.log(`VerifyMzansi launch env validation (${mode})`);
@@ -40,7 +50,7 @@ async function main(): Promise<void> {
   let schemaError: string | null = null;
   try {
     _resetEnvCacheForTesting();
-    validateEnv({ mode, strict: true });
+    validateEnv({ mode, strict: true, runtimeSecretsInCloudflare });
   } catch (error) {
     schemaError = error instanceof Error ? error.message : "Unknown env validation error";
   }

@@ -31,14 +31,21 @@ jobs:
     name: Newest backup is under 27 hours old
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    # Reads the backup bucket with the backup job's credentials (database-backup.yml).
+    environment: backup
     env:
       BACKUP_BUCKET: verifymzansi-backups
       MAX_AGE_HOURS: "27"
     steps:
       - name: Check the newest object in the backup bucket
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          BACKUP_R2_ACCESS_KEY_ID: ${{ secrets.BACKUP_R2_ACCESS_KEY_ID }}
+          BACKUP_R2_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_R2_SECRET_ACCESS_KEY }}
+          # Transitional: the app's storage key, used only until the backup
+          # bucket's own token exists. It is never placed in the backup
+          # environment, so it stops resolving once removed from the repository.
+          LEGACY_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          LEGACY_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           AWS_DEFAULT_REGION: auto
           AWS_REQUEST_CHECKSUM_CALCULATION: when_required
@@ -46,6 +53,22 @@ jobs:
           # Clock difference tolerated between R2 and the runner.
           MAX_FUTURE_SECONDS: "300"
         run: |
+          # The bucket-scoped token when set; until then the app's storage key
+          # (repository-level only, so it stops resolving once moved), with a
+          # warning on every run.
+          if [ -n "$BACKUP_R2_ACCESS_KEY_ID" ] || [ -n "$BACKUP_R2_SECRET_ACCESS_KEY" ]; then
+            if [ -z "$BACKUP_R2_ACCESS_KEY_ID" ] || [ -z "$BACKUP_R2_SECRET_ACCESS_KEY" ]; then
+              echo "::error::Set both BACKUP_R2_ACCESS_KEY_ID and BACKUP_R2_SECRET_ACCESS_KEY in the backup environment."
+              exit 1
+            fi
+            export AWS_ACCESS_KEY_ID="$BACKUP_R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$BACKUP_R2_SECRET_ACCESS_KEY"
+          elif [ -n "$LEGACY_R2_ACCESS_KEY_ID" ] && [ -n "$LEGACY_R2_SECRET_ACCESS_KEY" ]; then
+            export AWS_ACCESS_KEY_ID="$LEGACY_R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$LEGACY_R2_SECRET_ACCESS_KEY"
+            echo "::warning::Backups still use the app's storage key. Create a token limited to the ${BACKUP_BUCKET} bucket and set BACKUP_R2_ACCESS_KEY_ID and BACKUP_R2_SECRET_ACCESS_KEY in the backup environment."
+          else
+            echo "::error::Set BACKUP_R2_ACCESS_KEY_ID and BACKUP_R2_SECRET_ACCESS_KEY in the backup environment."
+            exit 1
+          fi
           endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
           # One "date<TAB>size" line per object. The CLI fetches every page
           # (1,000 objects each) and, with text output, prints each page as it

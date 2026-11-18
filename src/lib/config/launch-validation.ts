@@ -121,6 +121,28 @@ const PRODUCTION_SECRET_KEYS = [
   "TURNSTILE_SECRET_KEY",
 ] as const;
 
+/**
+ * Secrets only the running Worker needs. They are set directly in Cloudflare and
+ * need not exist in GitHub: release validation may opt in to leaving them there,
+ * because the deploy separately confirms they exist on the Worker
+ * (`pnpm cloudflare:secrets:check`). Runtime validation never uses this option.
+ */
+export const CLOUDFLARE_RUNTIME_ONLY_SECRETS = [
+  "KYC_ENCRYPTION_KEY",
+  "ID_ENCRYPTION_KEY",
+  "HMAC_SECRET",
+  "IP_HASH_SECRET",
+] as const;
+
+export interface LaunchValidationOptions {
+  mode?: LaunchValidationMode;
+  /**
+   * Release-time only: an absent runtime-only secret counts as held in
+   * Cloudflare instead of missing. A value that is present is still validated.
+   */
+  runtimeSecretsInCloudflare?: boolean;
+}
+
 const DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE = "payments";
 
 function normalizeMode(value?: string): LaunchValidationMode | null {
@@ -258,12 +280,27 @@ export function resolveLaunchValidationMode(env: EnvSource = process.env): Launc
 
 export function validateLaunchConfiguration(
   env: EnvSource = process.env,
-  options: { mode?: LaunchValidationMode } = {}
+  options: LaunchValidationOptions = {}
 ): LaunchValidationSummary {
   const mode = options.mode ?? resolveLaunchValidationMode(env);
   const checks: LaunchValidationCheck[] = [];
+  const heldInCloudflare = new Set<string>(
+    options.runtimeSecretsInCloudflare
+      ? CLOUDFLARE_RUNTIME_ONLY_SECRETS.filter((key) => !hasValue(env[key]))
+      : []
+  );
   const requiredKeys = getRequiredLaunchEnvKeys(mode, env);
-  const missingRequired = requiredKeys.filter((key) => !hasValue(env[key]));
+  const missingRequired = requiredKeys.filter(
+    (key) => !hasValue(env[key]) && !heldInCloudflare.has(key)
+  );
+  if (heldInCloudflare.size > 0) {
+    addCheck(
+      checks,
+      "Runtime-only secrets",
+      "pass",
+      `${[...heldInCloudflare].join(", ")} not held here; their presence on the Worker is checked by cloudflare:secrets:check`
+    );
+  }
 
   if (missingRequired.length === 0) {
     addCheck(
@@ -558,11 +595,10 @@ export function validateLaunchConfiguration(
     );
   }
 
-  if (
-    isHexKey(env.KYC_ENCRYPTION_KEY) &&
-    isHexKey(env.ID_ENCRYPTION_KEY) &&
-    isHexKey(env.HMAC_SECRET)
-  ) {
+  const encryptionKeys = ["KYC_ENCRYPTION_KEY", "ID_ENCRYPTION_KEY", "HMAC_SECRET"] as const;
+  if (encryptionKeys.every((key) => heldInCloudflare.has(key))) {
+    addCheck(checks, "Encryption keys", "pass", "KYC/ID/HMAC keys are held only in Cloudflare");
+  } else if (encryptionKeys.every((key) => heldInCloudflare.has(key) || isHexKey(env[key]))) {
     addCheck(checks, "Encryption keys", "pass", "KYC/ID/HMAC keys are 64-char hex values");
   } else {
     addCheck(
@@ -574,7 +610,9 @@ export function validateLaunchConfiguration(
   }
 
   const ipHashSecret = env.IP_HASH_SECRET;
-  if (mode === "production" || mode === "e2e") {
+  if (heldInCloudflare.has("IP_HASH_SECRET")) {
+    addCheck(checks, "IP hash secret", "pass", "IP_HASH_SECRET is held only in Cloudflare");
+  } else if (mode === "production" || mode === "e2e") {
     if (!hasValue(ipHashSecret)) {
       addCheck(checks, "IP hash secret", "fail", "IP_HASH_SECRET is required for launch paths");
     } else if (ipHashSecret.length < 32) {
@@ -642,7 +680,9 @@ export function validateLaunchConfiguration(
     const secretKeys = kycWebhookSecretRequired
       ? ([...PRODUCTION_SECRET_KEYS, "KYC_WEBHOOK_SECRET"] as const)
       : PRODUCTION_SECRET_KEYS;
-    const placeholderSecrets = secretKeys.filter((key) => isPlaceholderValue(env[key]));
+    const placeholderSecrets = secretKeys.filter(
+      (key) => !heldInCloudflare.has(key) && isPlaceholderValue(env[key])
+    );
     if (placeholderSecrets.length > 0) {
       addCheck(
         checks,
