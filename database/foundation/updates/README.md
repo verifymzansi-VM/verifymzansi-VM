@@ -2704,6 +2704,67 @@ When another update merges first, regenerate this pull request's
 `fingerprint.json`, the applied register, the manifests, `error-reasons.ts` and
 `package.json`.
 
+## Staff remove and restore display-only sample posts, 17 November 2026
+
+`20261117144001_sample_post_hide_list.sql` is pending.
+
+The website can show a few display-only sample posts (labelled "Sample post ·
+for display only") after the real posts in the showrooms, while
+`SAMPLE_POSTS_ENABLED` is on. Their text and media are a static catalogue in the
+website (`src/lib/sample-posts/catalogue.ts`), not database rows. This update
+lets staff remove one sample, and restore it, without a code change:
+
+- **Hide-list.** `private.hidden_sample_posts` holds one row per removed sample:
+  the catalogue slug, the staff account that removed it (set to null if that
+  account is ever deleted) and when. Row level security is on and no API role
+  has a grant; at most 500 rows.
+- **Staff command.** `api.set_sample_post_hidden(p_slug, p_hidden)`
+  (authenticated) runs `internal.staff_actor('post:moderate')`: the content
+  moderation capability (moderator, governor, admin) with its recent
+  authenticator code rule. `true` adds the slug (one already hidden keeps its
+  first who and when), `false` removes it; both are idempotent and return
+  `{"slug","hidden","hidden_at"}`. A malformed slug is refused with 22023, a
+  501st hidden slug with 54000.
+- **Public read.** `api.get_hidden_sample_posts()` (anon and authenticated, like
+  the price catalogue) returns `{"slugs":[...]}`, sorted: slugs only, never who
+  or when.
+
+Expand only: a new table and two new commands; nothing existing changes. The
+website release from the same pull request leaves out every hidden sample from
+the showrooms and answers `/sample/<slug>` for one with a real 404. When it
+cannot read the hide-list it shows no sample at all (fail closed), so apply this
+update before that release is deployed with samples switched on. With samples
+off (the default) the release never reads it.
+
+**Applying.** After the pull request is merged and before its website release is
+deployed:
+
+1. Run `../preflight/20261117144001_sample_post_hide_list.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "sample post hide list: update not applied".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "sample post hide list: already applied; hidden samples:
+   0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261117144001_sample_post_hide_list.down.sql` (only with the
+owner's decision; prefer a forward fix). Switch samples off first: it drops both
+commands and the hide-list, and the website then shows no sample.
+
+`node --import tsx scripts/test-foundation-sample-post-hide-list.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; a partial state and a premature rollback
+are refused, changing nothing; apply, rollback and re-apply return the same
+fingerprints; staff with `post:moderate` and a recent authenticator code hide
+and restore a slug, idempotently, keeping the first who and when; members,
+signed-out visitors, staff without a recent code and staff without the
+capability are refused, changing nothing; malformed slugs and a 501st slug are
+refused; the public read returns sorted slugs only, to signed-out visitors and
+members; and the grants, owners and settings are as listed.
+
 ## A skipped email is no longer listed as sent, 17 November 2026
 
 `20261117123240_skipped_email_status.sql` was applied on 17 November 2026 at
@@ -4598,5 +4659,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   finished emails: 2; marked skipped: 0"; production fingerprint after it
   matched the full replay (except the known schema grant difference)
 - `20261117140533_member_notices_in_app.sql`: pending
+- `20261117144001_sample_post_hide_list.sql`: pending
 
 <!-- applied-register:end -->
