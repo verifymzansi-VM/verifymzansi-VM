@@ -225,6 +225,9 @@ it("presents every account event kind the database adds", async () => {
     "draft_deletion_warning",
     "post_deleted",
     "slot_renewal_reminder",
+    // 20261118072601_staff_data_minimisation.sql
+    "privacy_request_approved",
+    "privacy_export_made",
   ];
   rpc.mockResolvedValueOnce({
     data: {

@@ -2,7 +2,9 @@ import "server-only";
 import { z } from "zod";
 import type { FoundationServiceApi } from "./service-api";
 import {
+  sendDsarApprovedEmail,
   sendDsarCompletedEmail,
+  sendDsarExportedEmail,
   sendDsarExtensionEmail,
   sendDsarRejectedEmail,
   sendDsarSubmissionEmail,
@@ -13,7 +15,8 @@ const jobSchema = z
   .strictObject({
     id: z.uuid(),
     request_id: z.uuid(),
-    kind: z.enum(["submitted", "extended", "completed", "rejected"]),
+    // "approved" and "exported" since 20261118072601_staff_data_minimisation.sql.
+    kind: z.enum(["submitted", "extended", "completed", "rejected", "approved", "exported"]),
     recipient: z.email(),
     claim_token: z.uuid(),
     locked_until: date,
@@ -64,6 +67,10 @@ export async function runFoundationPrivacyNotice(
           return sendDsarCompletedEmail(job.recipient, reference, undefined, key);
         case "rejected":
           return sendDsarRejectedEmail(job.recipient, reference, undefined, key);
+        case "approved":
+          return sendDsarApprovedEmail(job.recipient, reference, key);
+        case "exported":
+          return sendDsarExportedEmail(job.recipient, reference, key);
       }
     });
     delivered = result.success;
