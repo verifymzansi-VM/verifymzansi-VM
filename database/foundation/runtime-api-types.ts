@@ -13,7 +13,6 @@ export type FoundationRuntimePublicDatabase = {
       get_public_frontend_business_affiliations: { Args: { p_post_ids: string[] }; Returns: Json };
       get_public_frontend_business_cipc: { Args: { p_post_ids: string[] }; Returns: Json };
       get_payment_limits: { Args: Record<never, never>; Returns: Json };
-      get_hidden_sample_posts: { Args: Record<never, never>; Returns: Json };
     };
   };
 };
@@ -68,8 +67,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       };
       get_my_slot_package: { Args: Record<never, never>; Returns: Json };
       get_payment_limits: { Args: Record<never, never>; Returns: Json };
-      get_hidden_sample_posts: { Args: Record<never, never>; Returns: Json };
-      set_sample_post_hidden: { Args: { p_slug: string; p_hidden: boolean }; Returns: Json };
       get_my_communication_choices: { Args: Record<never, never>; Returns: Json };
       save_my_communication_choices: {
         Args: {
