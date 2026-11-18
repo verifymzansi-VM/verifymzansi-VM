@@ -33,7 +33,10 @@ export function DashboardMobileNav({ badges = {} }: { badges?: DashboardSidebarB
       aria-label="Dashboard sections"
       className="border-b border-border/60 bg-background/95 md:hidden"
     >
-      <ul className="flex gap-1.5 overflow-x-auto px-4 py-2 scrollbar-hide">
+      {/* contain:paint keeps the strip's hidden width out of the page width:
+          without it Chrome on phones widened the page to fit it, which put
+          dialogs, toasts and other fixed elements partly off-screen. */}
+      <ul className="flex gap-1.5 overflow-x-auto px-4 py-2 scrollbar-hide [contain:paint]">
         {items.map((item) => {
           const isActive = isDashboardNavItemActive(item, pathname);
           const Icon = item.icon;

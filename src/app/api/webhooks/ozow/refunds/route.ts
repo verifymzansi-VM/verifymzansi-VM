@@ -19,11 +19,19 @@ const noStore = { "Cache-Control": "no-store" };
 /**
  * POST /api/webhooks/ozow/refunds — Ozow's signed `refund.complete` notices.
  *
- * - Only while API refunds are on (OZOW_API_REFUNDS_ENABLED) and the refund
- *   webhook's own secret is set (OZOW_REFUND_WEBHOOK_SECRET); otherwise 503.
+ * - Without the refund webhook's own secret (OZOW_REFUND_WEBHOOK_SECRET) no
+ *   notice can be authenticated, so every notice is refused with 503. Create
+ *   the webhook at Ozow only after its secret is stored.
  * - The Svix signature (svix-id, svix-timestamp within five minutes,
  *   svix-signature) is checked over the raw body before anything is read; an
- *   unsigned or wrongly signed notice is refused with 401 and logged.
+ *   unsigned or wrongly signed notice is refused with 401 and logged, whether
+ *   API refunds are on or off.
+ * - While API refunds are off (OZOW_API_REFUNDS_ENABLED), a correctly signed
+ *   notice is acknowledged with 200 and logged, and nothing else happens: no
+ *   Ozow lookup, no database change. Svix treats any other answer as a
+ *   failure, retries for about a day and can disable the endpoint after five
+ *   days of failures, which would also stop notices once refunds are on. The
+ *   daily refund check compares Ozow's refund list with our records.
  * - The notice only names a refund. Its transaction, amount and status are
  *   read back from Ozow (GET /v1/refunds/{id}) and that answer is applied, so
  *   a replayed or altered notice can never set a status Ozow does not report.
@@ -44,7 +52,7 @@ const refundId = z
 
 export async function POST(request: NextRequest) {
   const secret = ozowRefundWebhookSecret();
-  if (!ozowApiRefundsEnabled() || !secret)
+  if (!secret)
     return NextResponse.json(
       { error: "Ozow refund notices are not enabled" },
       { status: 503, headers: noStore }
@@ -90,6 +98,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, rejected: "invalid_json" }, { headers: noStore });
     }
     const type = (parsed.type ?? parsed.event_type ?? parsed.eventType ?? "").toLowerCase();
+    if (!ozowApiRefundsEnabled()) {
+      // Authenticated, but refunds through Ozow are off: acknowledged so Svix
+      // does not retry or disable the endpoint, and never acted on.
+      // Only a refund notice names a refund; other events' ids are not logged.
+      const named =
+        type === "refund.complete"
+          ? refundId.safeParse(parsed.data?.id ?? parsed.data?.RefundId)
+          : null;
+      log.warn("Signed Ozow refund notice ignored: refunds through Ozow are off", {
+        type: type.slice(0, 40) || "unknown",
+        refundId: named?.success ? named.data : null,
+      });
+      return NextResponse.json({ success: true, ignored: "refunds_off" }, { headers: noStore });
+    }
     if (type !== "refund.complete")
       return NextResponse.json({ success: true, ignored: true }, { headers: noStore });
     const id = refundId.safeParse(parsed.data?.id ?? parsed.data?.RefundId);

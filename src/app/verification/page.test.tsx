@@ -127,7 +127,6 @@ async function openCameraAndUseFileFallback(file: File) {
 }
 
 describe("VerificationPage", () => {
-  let sessionResponse: ReturnType<typeof jsonResponse>;
   let statusResponse: ReturnType<typeof jsonResponse>;
   let otpSendResponse: ReturnType<typeof jsonResponse>;
   let otpVerifyResponse: ReturnType<typeof jsonResponse>;
@@ -160,17 +159,6 @@ describe("VerificationPage", () => {
       configurable: true,
       value: undefined,
     });
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: [],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: null,
-      },
-      200
-    );
     statusResponse = jsonResponse(buildStatusPayload({}), 200);
     otpSendResponse = jsonResponse({ success: true }, 200);
     otpVerifyResponse = jsonResponse({ success: true, verified: true }, 200);
@@ -182,9 +170,6 @@ describe("VerificationPage", () => {
 
     global.fetch = vi.fn((input: string | URL) => {
       const url = String(input);
-      if (url.includes("/api/verification/session/start")) {
-        return Promise.resolve(sessionResponse);
-      }
       if (url.includes("/api/verification/status")) {
         return Promise.resolve(statusResponse);
       }
@@ -212,17 +197,6 @@ describe("VerificationPage", () => {
       new URLSearchParams("returnUrl=%2Fpost%2Fcreate-business")
     );
 
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone"],
-        pendingSteps: ["id_doc", "selfie", "location"],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: "2026-03-08T12:00:00.000Z",
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         accountVerificationStatus: "pending_review",
@@ -254,17 +228,6 @@ describe("VerificationPage", () => {
   });
 
   it("shows per-step approval decisions on the submitted summary", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-partial-admin-decisions",
-        completedSteps: ["phone", "id_doc", "selfie", "location"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: "2026-05-23T12:00:00.000Z",
-        phoneVerifiedAt: "2026-05-23T11:00:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         accountVerificationStatus: "pending_review",
@@ -322,9 +285,6 @@ describe("VerificationPage", () => {
     const slowStatus = deferred<ReturnType<typeof jsonResponse>>();
     global.fetch = vi.fn((input: string | URL) => {
       const url = String(input);
-      if (url.includes("/api/verification/session/start")) {
-        return Promise.resolve(sessionResponse);
-      }
       if (url.includes("/api/verification/status")) {
         return slowStatus.promise;
       }
@@ -351,22 +311,41 @@ describe("VerificationPage", () => {
     });
   });
 
-  it("keeps a verified phone approved on the completion card when status rows omit phone", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-sparse-phone-status",
-        completedSteps: ["phone"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: "2026-04-21T12:00:00.000Z",
-        phoneVerifiedAt: "2026-04-21T11:50:00.000Z",
-      },
-      200
+  it("only reads the saved status on page view; nothing is started until the member acts", async () => {
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/SA mobile number/i)).toBeInTheDocument();
+    });
+
+    const calls = fetchCalls();
+    expect(calls.map(([input]) => String(input))).toEqual(["/api/verification/status"]);
+    for (const [, init] of calls) {
+      expect((init as RequestInit | undefined)?.method ?? "GET").toBe("GET");
+    }
+    expect(calls.some(([input]) => String(input).includes("/api/verification/session/start"))).toBe(
+      false
     );
+
+    // The member's own click is what reaches the server with a change.
+    fireEvent.change(screen.getByLabelText(/SA mobile number/i), {
+      target: { value: "0712345678" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Send code/i }));
+    await waitFor(() => {
+      expect(fetchCalls().some(([input]) => String(input).includes("/api/otp/send"))).toBe(true);
+    });
+    expect(
+      fetchCalls().some(([input]) => String(input).includes("/api/verification/session/start"))
+    ).toBe(false);
+  });
+
+  it("shows a verified phone as approved on the completion card", async () => {
     statusResponse = jsonResponse(
       buildStatusPayload({
-        accountVerificationStatus: "incomplete",
+        accountVerificationStatus: "pending_review",
         steps: [
+          { step_type: "phone", status: "approved" },
           { step_type: "id_doc", status: "pending" },
           { step_type: "selfie", status: "pending" },
           { step_type: "location", status: "approved" },
@@ -391,18 +370,7 @@ describe("VerificationPage", () => {
     expect(phoneRows.some((row) => within(row).queryByText(/^Approved$/i) !== null)).toBe(true);
   });
 
-  it("keeps the completed state on revisit when the session is finalized after location submission", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-finalized",
-        completedSteps: ["phone", "location"],
-        pendingSteps: ["id_doc", "selfie"],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: "2026-04-21T12:00:00.000Z",
-        phoneVerifiedAt: "2026-04-21T11:50:00.000Z",
-      },
-      200
-    );
+  it("keeps the completed state on revisit after location submission", async () => {
     statusResponse = jsonResponse(
       buildStatusPayload({
         accountVerificationStatus: "incomplete",
@@ -431,26 +399,14 @@ describe("VerificationPage", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("does not reopen the location form when a finalized session has already saved location", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-finalized-sparse",
-        completedSteps: ["phone", "id_doc", "selfie"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: "2026-04-21T12:00:00.000Z",
-        locationSubmittedAt: "2026-04-21T11:59:00.000Z",
-        phoneVerifiedAt: "2026-04-21T11:50:00.000Z",
-      },
-      200
-    );
+  it("does not reopen the location form once the identity is accepted", async () => {
     statusResponse = jsonResponse(
       buildStatusPayload({
-        accountVerificationStatus: "incomplete",
+        accountVerificationStatus: "verified",
         steps: [
           { step_type: "phone", status: "approved" },
-          { step_type: "id_doc", status: "pending" },
-          { step_type: "selfie", status: "pending" },
+          { step_type: "id_doc", status: "approved" },
+          { step_type: "selfie", status: "approved" },
         ],
       }),
       200
@@ -460,7 +416,7 @@ describe("VerificationPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
+        screen.getAllByRole("heading", { name: /Verification Approved/i }).length
       ).toBeGreaterThan(0);
     });
 
@@ -472,17 +428,6 @@ describe("VerificationPage", () => {
   });
 
   it("does not let duplicate approved step rows hide a resubmission state", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-duplicate-steps",
-        completedSteps: ["phone", "id_doc", "selfie", "location"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: "2026-04-21T12:00:00.000Z",
-        phoneVerifiedAt: "2026-04-21T11:50:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         accountVerificationStatus: "verified",
@@ -520,17 +465,6 @@ describe("VerificationPage", () => {
   });
 
   it("opens approved accounts on the completion view even when old step records are incomplete", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-verified-legacy",
-        completedSteps: ["phone"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-04-21T11:50:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         accountVerificationStatus: "verified",
@@ -558,17 +492,6 @@ describe("VerificationPage", () => {
   });
 
   it("surfaces resubmission reasons on the affected step", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-2",
-        completedSteps: ["phone"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         accountVerificationStatus: "rejected",
@@ -597,17 +520,6 @@ describe("VerificationPage", () => {
   });
 
   it("shows rejected selfie guidance without hiding an approved location", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-selfie-rejected-location-approved",
-        completedSteps: ["phone", "id_doc", "location"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: "2026-05-23T12:00:00.000Z",
-        phoneVerifiedAt: "2026-05-23T11:50:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         accountVerificationStatus: "rejected",
@@ -634,17 +546,6 @@ describe("VerificationPage", () => {
   });
 
   it("returns to pending status after resubmitting selfie when location is already approved", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-selfie-resubmit-location-approved",
-        completedSteps: ["phone", "id_doc", "location"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: "2026-05-23T12:00:00.000Z",
-        phoneVerifiedAt: "2026-05-23T11:50:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         accountVerificationStatus: "rejected",
@@ -694,17 +595,6 @@ describe("VerificationPage", () => {
   });
 
   it("returns to location confirmation after selfie resubmission when legacy location is pending", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-selfie-resubmit-location-approved",
-        completedSteps: ["phone", "id_doc", "location"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: "2026-05-23T12:00:00.000Z",
-        phoneVerifiedAt: "2026-05-23T11:50:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         accountVerificationStatus: "rejected",
@@ -903,17 +793,6 @@ describe("VerificationPage", () => {
   });
 
   it("falls back to /dashboard when no returnUrl is provided", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone"],
-        pendingSteps: ["id_doc", "selfie", "location"],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: "2026-03-08T12:00:00.000Z",
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         accountVerificationStatus: "pending_review",
@@ -937,32 +816,7 @@ describe("VerificationPage", () => {
     });
   });
 
-  it("renders the email-confirmation blocker when session start is blocked", async () => {
-    sessionResponse = jsonResponse(
-      {
-        error: VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE,
-        code: VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE,
-      },
-      403
-    );
-    statusResponse = jsonResponse(
-      buildStatusPayload({
-        steps: [{ step_type: "phone", status: "approved" }],
-      }),
-      200
-    );
-
-    render(<VerificationPage />);
-
-    expect(
-      await screen.findByText(VERIFICATION_EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION)
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeDisabled();
-    expect(screen.getByRole("button", { name: /^Continue$/i })).toBeDisabled();
-  });
-
-  it("blocks the verification flow when session start reports v2 is unavailable", async () => {
-    sessionResponse = jsonResponse({ error: "New verification flow is not yet enabled" }, 404);
+  it("blocks the verification flow when no verification service answers", async () => {
     statusResponse = jsonResponse({ error: "Account profile not found" }, 404);
 
     render(<VerificationPage />);
@@ -975,17 +829,6 @@ describe("VerificationPage", () => {
   });
 
   it("shows the explicit email-confirmation blocker when upload is rejected", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         steps: [{ step_type: "phone", status: "approved" }],
@@ -1036,17 +879,6 @@ describe("VerificationPage", () => {
   });
 
   it("shows the shared temporary-unavailable message when KYC storage is unavailable", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         steps: [{ step_type: "phone", status: "approved" }],
@@ -1100,17 +932,6 @@ describe("VerificationPage", () => {
   });
 
   it("supports file fallback on the selfie step after ID document submission", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         steps: [{ step_type: "phone", status: "approved" }],
@@ -1161,17 +982,6 @@ describe("VerificationPage", () => {
   });
 
   it("treats duplicate pending ID uploads as already submitted and advances to the selfie step", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         steps: [{ step_type: "phone", status: "approved" }],
@@ -1220,17 +1030,6 @@ describe("VerificationPage", () => {
   });
 
   it("shows the explicit email-confirmation blocker when manual location is rejected", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone", "id_doc", "selfie"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         steps: [
@@ -1276,17 +1075,6 @@ describe("VerificationPage", () => {
   });
 
   it("finishes verification when the address is saved", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone", "id_doc", "selfie"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         steps: [
@@ -1323,12 +1111,6 @@ describe("VerificationPage", () => {
   });
 
   async function openLocationStep() {
-    sessionResponse = jsonResponse({
-      sessionId: "session-1",
-      completedSteps: ["phone", "id_doc", "selfie"],
-      requiredSteps: ["phone", "id_doc", "selfie", "location"],
-      phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-    });
     statusResponse = jsonResponse(
       buildStatusPayload({
         steps: [
@@ -1396,13 +1178,6 @@ describe("VerificationPage", () => {
   });
 
   it("reopens legacy pending location for self-service approval", async () => {
-    sessionResponse = jsonResponse({
-      sessionId: "legacy",
-      finalizedAt: "2026-09-01",
-      phoneVerifiedAt: "2026-09-01",
-      completedSteps: ["phone"],
-      pendingSteps: ["id_doc", "selfie", "location"],
-    });
     statusResponse = jsonResponse(
       buildStatusPayload({
         accountVerificationStatus: "pending_review",
@@ -1428,20 +1203,10 @@ describe("VerificationPage", () => {
   });
 
   it("stays on completion after saving location when prior document steps are already persisted", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-ready-for-location",
-        completedSteps: ["phone", "id_doc", "selfie"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
     statusResponse = jsonResponse(
       buildStatusPayload({
         steps: [
+          { step_type: "phone", status: "approved" },
           { step_type: "id_doc", status: "pending", submitted_at: "2026-03-08T11:05:00.000Z" },
           { step_type: "selfie", status: "pending", submitted_at: "2026-03-08T11:06:00.000Z" },
         ],
