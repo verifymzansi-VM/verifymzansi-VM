@@ -85,9 +85,11 @@ try {
   world.review(admin, admin2, "expiry-admin");
   world.review(admin2, admin, "expiry-admin2");
   const verified = (label) => world.verified(label, admin);
-  const today = q("select to_char((now() at time zone 'Africa/Johannesburg')::date,'YYYY-MM-DD');");
-  const daysAgo = (n) =>
-    q(`select to_char((now() at time zone 'Africa/Johannesburg')::date - ${n},'YYYY-MM-DD');`);
+  // The South African date, as the commands count it. The database session
+  // runs in UTC, so its current_date is a day behind from 22:00 to 24:00 UTC.
+  const SA_TODAY = "(now() at time zone 'Africa/Johannesburg')::date";
+  const today = q(`select to_char(${SA_TODAY},'YYYY-MM-DD');`);
+  const daysAgo = (n) => q(`select to_char(${SA_TODAY} - ${n},'YYYY-MM-DD');`);
   const transfers = bankTransferCommands(kit, today);
   const bodyMd5 = (signature) => functionBodyMd5(kit, signature);
   /** Moves a transfer's recorded time back by `interval` (triggers off). */
@@ -421,7 +423,7 @@ try {
     // The money cleared 100 days ago and the record has waited 20 days; the
     // sweep has not marked it: recording the credit again marks it first.
     q(`set session_replication_role=replica;
-      update private.invoice_transfers set cleared_on=current_date-100,recorded_at=now()-interval '20 days'
+      update private.invoice_transfers set cleared_on=${SA_TODAY}-100,recorded_at=now()-interval '20 days'
         where id='${first.transfer_id}';
       set session_replication_role=origin;`);
     const cleared = q(
@@ -547,7 +549,7 @@ try {
       save(late, lateInvoice.invoice_number);
       const first = json(transferToInvoiceSql(lateInvoice.invoice_number, "FNB LATEINV 0001"));
       q(`set session_replication_role=replica;
-      update private.invoice_transfers set cleared_on=current_date-120,recorded_at=now()-interval '15 days'
+      update private.invoice_transfers set cleared_on=${SA_TODAY}-120,recorded_at=now()-interval '15 days'
         where id='${first.transfer_id}';
       set session_replication_role=origin;`);
       const cleared = q(
@@ -672,7 +674,7 @@ try {
       const thembi = verified("expiry-thembi");
       const first = recordDirect(thembi, "FNB GONE 0001", daysAgo(80));
       q(`set session_replication_role=replica;
-      update private.invoice_transfers set cleared_on=current_date-100,recorded_at=now()-interval '20 days'
+      update private.invoice_transfers set cleared_on=${SA_TODAY}-100,recorded_at=now()-interval '20 days'
         where id='${first.transfer_id}';
       set session_replication_role=origin;`);
       const cleared = q(
