@@ -177,6 +177,7 @@ export const FOUNDATION_ERROR_REASONS = {
   staff_review_required: ["42501"],
   staff_same_identity: ["42501"],
   staff_visibility_hold: ["PT423"],
+  support_ticket_archived: ["PT409"],
   transfer_confirmer_same: ["42501"],
   transfer_not_expired: ["PT409"],
   transfer_not_waiting: ["PT409"],

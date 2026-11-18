@@ -361,3 +361,67 @@ it("reads an organisation dashboard with or without applicant contacts", async (
     public_contacts: [contact],
   });
 });
+
+it("attaches applicant contacts to pending applications only for the organisation dashboard", async () => {
+  // The database before 20261118072601_staff_data_minimisation.sql still sends
+  // contacts for every application; the dashboard keeps only pending ones.
+  const application = (rowId: string, status: string) => ({
+    id: rowId,
+    status,
+    post_id: other,
+    business_name: "Business",
+    category: "retail",
+    province: null,
+    city: null,
+    identity_verified: true,
+    representative_name: null,
+    programme_name: null,
+    reason: null,
+    member_reference: null,
+    info_request: null,
+    info_response: null,
+    submitted_at: date,
+    decision_at: null,
+    decision_note: null,
+  });
+  const ids = {
+    submitted: "33333333-3333-4333-8333-000000000001",
+    more_info_required: "33333333-3333-4333-8333-000000000002",
+    approved: "33333333-3333-4333-8333-000000000003",
+    declined: "33333333-3333-4333-8333-000000000004",
+  };
+  const contacts = Object.values(ids).map((rowId, i) => ({
+    application_id: rowId,
+    phone: `+2782000020${i}`,
+    email: `applicant-${i}@example.invalid`,
+    website: null,
+  }));
+  const read = async (pendingOnly: boolean) => {
+    const { rpc, api } = fixture(null);
+    rpc
+      .mockResolvedValueOnce(
+        ok(Object.entries(ids).map(([status, rowId]) => application(rowId, status)))
+      )
+      .mockResolvedValueOnce(ok([]))
+      .mockResolvedValueOnce(
+        ok({ capacity: 1, active: 0, waitlisted: 0, programme_status: "active_paid", items: [] })
+      );
+    const data = await readFoundationOrganisationManagementData(api, id, contacts, {
+      pendingOnly,
+    });
+    return Object.fromEntries(data.applications.map((row) => [row.status, row.business_phone]));
+  };
+  expect(await read(true)).toEqual({
+    submitted: "+27820000200",
+    more_info_required: "+27820000201",
+    approved: null,
+    declined: null,
+  });
+  // The staff organisation page keeps every contact it receives.
+  expect(await read(false)).toEqual({
+    submitted: "+27820000200",
+    more_info_required: "+27820000201",
+    approved: "+27820000202",
+    declined: "+27820000203",
+  });
+});

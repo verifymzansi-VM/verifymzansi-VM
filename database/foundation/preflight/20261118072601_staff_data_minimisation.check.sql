@@ -6,7 +6,7 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row.
 --
--- The summary says whether the 10 functions the update replaces are the
+-- The summary says whether the 11 functions the update replaces are the
 -- reviewed bodies (the update replaces them) or already the updated ones, and
 -- counts support tickets the inbox no longer lists (resolved, received more
 -- than 12 months ago).
@@ -23,9 +23,10 @@ with bodies as (
     ('internal.get_frontend_cipc_case(uuid)', '53c819e3ac10ef4cdb5727c2e2222b9c', 'ed026d48191cac201053305cde485957'),
     ('internal.staff_verification_queue(integer)', '9ec9ce3e17e200f53b4fdeb0da922901', '8ecd9727c64d6c8dee4e4af2e8da4649'),
     ('internal.get_frontend_staff_verification_queue(integer,uuid[])', '6443fe7d593913d62aef9b868453fe18', '9c87b1e5234ba46a5678cf6bb0b4d3c1'),
-    ('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)', '989e334ff4fecc3ce76132277e2ea13c', '934dfff07e993b1ca95f48b21b2e6435'),
+    ('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)', '989e334ff4fecc3ce76132277e2ea13c', '5768350a58e5996003bed441166eb0af'),
     ('internal.export_frontend_privacy_request(uuid,integer)', 'e055b06c73169fd22e15fef574c0497b', '939737e433fcf800d5e98a3dd1569e5d'),
     ('internal.get_frontend_support_inbox(integer,uuid)', '607e36e4c31fd96147b4b8d1d5155095', '5210ff93931941d85a1daae444a71669'),
+    ('internal.update_frontend_support_status(uuid,integer,text)', '89d6adc83f1de67f3a83d4ce36c3dc8c', '971bd084fe730b88764527997096d087'),
     ('internal.get_frontend_organisation_dashboard(text)', '8823a5e28eac986cbc4df251b0c47183', '50c7ba8869e2fc3f8cc5b68bb0e2f4ed'),
     -- Added by the update: absent before it.
     ('internal.reveal_organisation_applicant_contact(uuid)', null, '67dc202cf393e44675ea7af95b1bf672'),

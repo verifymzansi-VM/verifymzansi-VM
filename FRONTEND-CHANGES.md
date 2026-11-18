@@ -1930,13 +1930,17 @@ Data minimisation after an access review (database update
   request.
 - **Staff, support inbox** (`/admin/support`): requests received in the last
   12 months are listed, and older ones only while still New or In progress.
-  Nothing else changes on the page.
+  A request resolved more than 12 months ago cannot be reopened: changing its
+  status shows 'This request was resolved more than 12 months ago and can no
+  longer be changed.' Nothing else changes on the page.
 - **Staff, payments and invoices**: unchanged.
 - **Members with a data request**: the bell shows 'Your data request was
   approved' when staff approve it and 'Your data export was made' when staff
   first export their data (both link to /dsar); the requester also gets two
-  new emails, 'Data request approved' and 'Your data export was prepared'.
-  Each comes once.
+  new emails, 'Data request approved' ('Your VerifyMzansi data request has
+  been approved') and 'Your data request reply was prepared'. Each comes once.
+  A request staff recorded by hand gets the approval notice in the bell when
+  the identity check links it to the account.
 - **Organisation administrators** (`/dashboard/organisation/<slug>`):
   co-administrators are listed by their short name (the viewer's own name as
   before). On the Applications tab, a pending application (Pending or More

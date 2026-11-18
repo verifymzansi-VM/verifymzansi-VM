@@ -97,11 +97,17 @@ the person behind a data request when it moves on:
   log. New: when a request is approved and when its export is first made, the
   requester is emailed through the existing privacy notice jobs (kinds
   `approved` and `exported`) and an account named by the request gets a bell
-  notice (`privacy_request_approved`, `privacy_export_made`), once each.
+  notice (`privacy_request_approved`, `privacy_export_made`), once each. A
+  request staff record by hand is linked to its account at the identity check;
+  if it was approved before that, the account gets the approval notice then.
+  Export already needs a verified identity, so its notice always finds the
+  account.
 - **Support inbox.** It lists tickets received in the last 12 months, and older
   ones only while still open (new or in progress). Resolved tickets older than
   that are no longer listed (they are not deleted). Who may read it, and the
-  counts of new tickets, are unchanged.
+  counts of new tickets, are unchanged. Such a ticket can no longer be reopened
+  or changed (`support_ticket_archived`, PT409), so its sender is not shown
+  again.
 - **Organisation dashboard.** It no longer carries applicants' business contacts
   (`public_contacts` leaves its result) and names co-administrators by their
   public short name (the viewer's own name as before). The new

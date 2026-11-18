@@ -1,7 +1,7 @@
 -- Reviewed rollback for updates/20261118072601_staff_data_minimisation.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so; prefer a forward fix. It restores the previous bodies
--- of the 10 replaced functions byte for byte, drops both
+-- of the 11 replaced functions byte for byte, drops both
 -- reveal_organisation_applicant_contact commands and restores the two closed
 -- lists. To restore the lists it deletes the members' notices of the two new
 -- kinds (and their dismissals) and the requester emails of the two new kinds
@@ -20,9 +20,10 @@ do $$begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_cipc_case(uuid)')) is distinct from 'ed026d48191cac201053305cde485957'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_verification_queue(integer)')) is distinct from '8ecd9727c64d6c8dee4e4af2e8da4649'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_staff_verification_queue(integer,uuid[])')) is distinct from '9c87b1e5234ba46a5678cf6bb0b4d3c1'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '934dfff07e993b1ca95f48b21b2e6435'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '5768350a58e5996003bed441166eb0af'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from '939737e433fcf800d5e98a3dd1569e5d'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from '5210ff93931941d85a1daae444a71669'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.update_frontend_support_status(uuid,integer,text)')) is distinct from '971bd084fe730b88764527997096d087'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '50c7ba8869e2fc3f8cc5b68bb0e2f4ed'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)')) is distinct from '67dc202cf393e44675ea7af95b1bf672'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.reveal_organisation_applicant_contact(uuid)')) is distinct from 'f6b2088f77d110d2b5be6683f8d6cb9a'
@@ -454,6 +455,30 @@ alter function internal.get_frontend_support_inbox(integer,uuid) owner to postgr
 revoke all on function internal.get_frontend_support_inbox(integer,uuid) from public;
 grant execute on function internal.get_frontend_support_inbox(integer,uuid) to authenticated;
 
+CREATE OR REPLACE FUNCTION internal.update_frontend_support_status(p_ticket uuid, p_revision integer, p_status text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid:=internal.staff_actor('support:update');x private.support_tickets;
+begin
+  if p_revision is null or p_revision not between 1 and 2147483646 or p_status is null or p_status not in('new','in_progress','resolved')
+    then raise exception 'represented support status required' using errcode='22023';end if;
+  select * into x from private.support_tickets where id=p_ticket for update;
+  actor:=internal.staff_actor('support:update');
+  if not found or x.revision<>p_revision then raise exception 'support ticket changed' using errcode='PT409';end if;
+  if x.status<>p_status then
+    update private.support_tickets set status=p_status,revision=revision+1 where id=x.id returning * into x;
+    insert into private.support_ticket_events(ticket_id,revision,actor_id,status) values(x.id,x.revision,actor,x.status);
+  end if;
+  perform internal.staff_actor('support:update');
+  return jsonb_build_object('id',x.id,'status',x.status,'revision',x.revision);
+end$function$;
+alter function internal.update_frontend_support_status(uuid,integer,text) owner to postgres;
+revoke all on function internal.update_frontend_support_status(uuid,integer,text) from public;
+grant execute on function internal.update_frontend_support_status(uuid,integer,text) to authenticated;
+
 CREATE OR REPLACE FUNCTION internal.get_frontend_organisation_dashboard(p_slug text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -520,6 +545,7 @@ do $$begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '989e334ff4fecc3ce76132277e2ea13c'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from 'e055b06c73169fd22e15fef574c0497b'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from '607e36e4c31fd96147b4b8d1d5155095'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.update_frontend_support_status(uuid,integer,text)')) is distinct from '89d6adc83f1de67f3a83d4ce36c3dc8c'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '8823a5e28eac986cbc4df251b0c47183'
     or to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)') is not null
     or to_regprocedure('api.reveal_organisation_applicant_contact(uuid)') is not null

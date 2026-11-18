@@ -16,10 +16,15 @@
 --    export is first made, the requester is emailed through the existing
 --    privacy notice jobs (new kinds 'approved' and 'exported') and an account
 --    named by the request gets a notice in the bell (new kinds
---    'privacy_request_approved' and 'privacy_export_made'), once each.
+--    'privacy_request_approved' and 'privacy_export_made'), once each. A
+--    request staff recorded by hand is linked to its account at the identity
+--    check; if it was approved before that, the account gets the approval
+--    notice then (export already needs a verified identity).
 -- 3. The support inbox lists tickets received in the last 12 months, and older
 --    ones only while they are still open (new or in progress). Who may read it
---    is unchanged.
+--    is unchanged. A ticket resolved more than 12 months ago can no longer be
+--    reopened or changed (PT409 support_ticket_archived), so its sender is not
+--    shown again.
 -- 4. (No change to the staff invoice and bank transfer lists.)
 -- 5. The organisation dashboard (members who administer an organisation) no
 --    longer carries applicants' business contacts ('public_contacts' leaves
@@ -88,7 +93,7 @@ begin
     raise exception 'staff data minimisation drift: internal.get_frontend_staff_verification_queue(integer,uuid[]) is not the reviewed body' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '989e334ff4fecc3ce76132277e2ea13c'
-      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '934dfff07e993b1ca95f48b21b2e6435' then
+      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '5768350a58e5996003bed441166eb0af' then
     raise exception 'staff data minimisation drift: internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text) is not the reviewed body' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from 'e055b06c73169fd22e15fef574c0497b'
@@ -98,6 +103,10 @@ begin
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from '607e36e4c31fd96147b4b8d1d5155095'
       and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from '5210ff93931941d85a1daae444a71669' then
     raise exception 'staff data minimisation drift: internal.get_frontend_support_inbox(integer,uuid) is not the reviewed body' using errcode='55000';
+  end if;
+  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.update_frontend_support_status(uuid,integer,text)')) is distinct from '89d6adc83f1de67f3a83d4ce36c3dc8c'
+      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.update_frontend_support_status(uuid,integer,text)')) is distinct from '971bd084fe730b88764527997096d087' then
+    raise exception 'staff data minimisation drift: internal.update_frontend_support_status(uuid,integer,text) is not the reviewed body' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '8823a5e28eac986cbc4df251b0c47183'
       and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '50c7ba8869e2fc3f8cc5b68bb0e2f4ed' then
@@ -501,6 +510,37 @@ alter function internal.get_frontend_support_inbox(integer,uuid) owner to postgr
 revoke all on function internal.get_frontend_support_inbox(integer,uuid) from public;
 grant execute on function internal.get_frontend_support_inbox(integer,uuid) to authenticated;
 
+-- 3. Support status: a ticket resolved more than 12 months ago (no longer in
+-- the inbox) cannot be reopened or changed.
+CREATE OR REPLACE FUNCTION internal.update_frontend_support_status(p_ticket uuid, p_revision integer, p_status text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid:=internal.staff_actor('support:update');x private.support_tickets;
+begin
+  if p_revision is null or p_revision not between 1 and 2147483646 or p_status is null or p_status not in('new','in_progress','resolved')
+    then raise exception 'represented support status required' using errcode='22023';end if;
+  select * into x from private.support_tickets where id=p_ticket for update;
+  actor:=internal.staff_actor('support:update');
+  if not found or x.revision<>p_revision then raise exception 'support ticket changed' using errcode='PT409';end if;
+  -- A ticket resolved and received more than 12 months ago is out of the
+  -- inbox; it is not reopened or changed (so its sender is not shown again).
+  if x.status='resolved' and x.created_at<clock_timestamp()-interval '12 months' then
+    raise exception 'support tickets resolved more than 12 months ago cannot be changed'
+      using errcode='PT409',detail='support_ticket_archived';end if;
+  if x.status<>p_status then
+    update private.support_tickets set status=p_status,revision=revision+1 where id=x.id returning * into x;
+    insert into private.support_ticket_events(ticket_id,revision,actor_id,status) values(x.id,x.revision,actor,x.status);
+  end if;
+  perform internal.staff_actor('support:update');
+  return jsonb_build_object('id',x.id,'status',x.status,'revision',x.revision);
+end$function$;
+alter function internal.update_frontend_support_status(uuid,integer,text) owner to postgres;
+revoke all on function internal.update_frontend_support_status(uuid,integer,text) from public;
+grant execute on function internal.update_frontend_support_status(uuid,integer,text) to authenticated;
+
 -- 5. Organisation dashboard: no applicant contacts in the page's data (the
 -- administrator reveals a pending applicant's business contact one at a time
 -- with api.reveal_organisation_applicant_contact); co-administrators by their
@@ -589,6 +629,13 @@ begin
     update private.privacy_requests set identity_verified=true,verified_at=now_at,verified_by=actor,
       subject_user_id=verified_subject,processed_by=actor,revision=revision+1 where id=r.id;
     answer:='identity_verified';
+    -- A request recorded by staff is linked to its account only here. If it
+    -- was approved already, that account now gets the approval bell notice,
+    -- once.
+    if r.status='in_progress' and r.subject_user_id is null and verified_subject is not null
+      and not exists(select 1 from private.notifications n where n.subject_id=r.id and n.kind='privacy_request_approved') then
+      perform internal.notify_account(verified_subject,'privacy_request_approved',r.id,null,null);
+    end if;
   elsif p_action in('approve','reject') then
     if r.status not in('submitted','identity_pending') then raise exception 'privacy request already decided' using errcode='PT409';end if;
     answer:=case p_action when 'approve' then 'in_progress' else 'rejected' end;
@@ -667,9 +714,10 @@ do $$begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_cipc_case(uuid)')) is distinct from 'ed026d48191cac201053305cde485957'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_verification_queue(integer)')) is distinct from '8ecd9727c64d6c8dee4e4af2e8da4649'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_staff_verification_queue(integer,uuid[])')) is distinct from '9c87b1e5234ba46a5678cf6bb0b4d3c1'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '934dfff07e993b1ca95f48b21b2e6435'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.process_frontend_privacy_request(uuid,integer,text,text,uuid,text)')) is distinct from '5768350a58e5996003bed441166eb0af'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)')) is distinct from '939737e433fcf800d5e98a3dd1569e5d'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_support_inbox(integer,uuid)')) is distinct from '5210ff93931941d85a1daae444a71669'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.update_frontend_support_status(uuid,integer,text)')) is distinct from '971bd084fe730b88764527997096d087'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.get_frontend_organisation_dashboard(text)')) is distinct from '50c7ba8869e2fc3f8cc5b68bb0e2f4ed'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)')) is distinct from '67dc202cf393e44675ea7af95b1bf672'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.reveal_organisation_applicant_contact(uuid)')) is distinct from 'f6b2088f77d110d2b5be6683f8d6cb9a'

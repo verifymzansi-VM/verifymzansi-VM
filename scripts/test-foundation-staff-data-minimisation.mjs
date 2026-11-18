@@ -338,6 +338,46 @@ try {
       assert.equal(count(`private.notifications where subject_id='${intake}'`), 0);
     }
   );
+  await check(
+    "privacy: a hand-recorded request approved before the identity check notifies the account once it is linked",
+    () => {
+      const requester = named("ayanda", "Ayanda", "Zulu");
+      const email = q(`select email from auth.users where id='${requester.id}';`);
+      const id = json(
+        staff(
+          admin,
+          `select api.record_frontend_privacy_intake('access','${email}',null,'Emailed access request','Recorded from the privacy mailbox');`
+        )
+      ).id;
+      assert.equal(privacy(id).subject_user_id, null);
+      q(act(admin, id, "approve"));
+      assert.equal(jobs(id), "approved");
+      assert.equal(count(`private.notifications where subject_id='${id}'`), 0);
+      q(act(admin, id, "verify_identity"));
+      assert.equal(privacy(id).subject_user_id, requester.id);
+      assert.equal(notices(requester, "privacy_request_approved"), 1);
+      assert.equal(
+        count(`private.notifications where subject_id='${id}' and kind='privacy_request_approved'`),
+        1
+      );
+      // The export (which needs that verified identity) notifies it once too.
+      json(exportAs(admin, id));
+      json(exportAs(admin, id));
+      assert.equal(notices(requester, "privacy_export_made"), 1);
+      assert.equal(jobs(id), "approved,exported");
+      // Verified before approval: the approval itself notifies, once.
+      const other = json(
+        staff(
+          admin,
+          `select api.record_frontend_privacy_intake('access','${email}',null,'Second emailed request','Recorded from the privacy mailbox');`
+        )
+      ).id;
+      q(act(admin, other, "verify_identity"));
+      assert.equal(count(`private.notifications where subject_id='${other}'`), 0);
+      q(act(admin, other, "approve"));
+      assert.equal(count(`private.notifications where subject_id='${other}'`), 1);
+    }
+  );
 
   // ---------------------------------------------------- 3. support inbox
   await check("support inbox: 12 months, and older tickets only while open", () => {
@@ -364,6 +404,41 @@ try {
     const one = json(staff(governor, `select api.get_frontend_support_inbox(1,'${oldResolved}');`));
     assert.deepEqual([one.total, one.items.length], [0, 0]);
     assert.match(preflight()[0][1], /resolved support tickets older than 12 months: 1$/);
+    // A ticket resolved more than 12 months ago cannot be reopened or changed
+    // (so its sender is not shown again); a recent one can.
+    const revisionOf = (ticket) =>
+      q(`select revision from private.support_tickets where id='${ticket}';`);
+    for (const status of ["in_progress", "new", "resolved"])
+      fails(
+        staff(
+          admin,
+          `select api.update_frontend_support_status('${oldResolved}',${revisionOf(oldResolved)},'${status}');`
+        ),
+        "PT409",
+        /resolved more than 12 months ago cannot be changed/
+      );
+    assert.equal(
+      q(`select status from private.support_tickets where id='${oldResolved}';`),
+      "resolved"
+    );
+    assert.equal(
+      json(
+        staff(
+          admin,
+          `select api.update_frontend_support_status('${recent}',${revisionOf(recent)},'in_progress');`
+        )
+      ).status,
+      "in_progress"
+    );
+    assert.equal(
+      json(
+        staff(
+          moderator,
+          `select api.update_frontend_support_status('${oldOpen}',${revisionOf(oldOpen)},'resolved');`
+        )
+      ).status,
+      "resolved"
+    );
     // The metrics (counts of new tickets) need no recent second factor.
     assert.equal(
       json(staff(moderator, "select api.get_frontend_support_metrics();", stale())).new,
