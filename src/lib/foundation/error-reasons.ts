@@ -227,17 +227,19 @@ export const STAFF_SECOND_FACTOR_MESSAGES = [
  * site never meets a reason it cannot word. They are matched like the
  * generated list. Once the update is applied and the generated list is
  * regenerated, the check fails until the reason is removed here, so each
- * entry lives only as long as its update is pending.
+ * entry lives only as long as its update is pending. `added` is the date the
+ * entry was written (YYYY-MM-DD): 30 days later, if the database still does
+ * not raise it, the check fails too (remove the entry or ship the update).
  */
 export const FOUNDATION_UPCOMING_ERROR_REASONS = {
   // <ts>_refund_follow_ups.sql (refund follow-ups, plan B): a refund of a slot
   // whose renewal is waiting, the new "cancelled before the renewal started"
   // reason on a slot that is not a renewal yet to start, and a refund through
   // Ozow after its window.
-  outside_refund_window: ["PT409"],
-  renewal_already_started: ["PT409"],
-  renewal_queued: ["PT409"],
-} as const satisfies Record<string, readonly string[]>;
+  outside_refund_window: { codes: ["PT409"], added: "2026-11-18" },
+  renewal_already_started: { codes: ["PT409"], added: "2026-11-18" },
+  renewal_queued: { codes: ["PT409"], added: "2026-11-18" },
+} as const satisfies Record<string, { codes: readonly string[]; added: string }>;
 
 export type FoundationErrorReason =
   keyof typeof FOUNDATION_ERROR_REASONS | keyof typeof FOUNDATION_UPCOMING_ERROR_REASONS;

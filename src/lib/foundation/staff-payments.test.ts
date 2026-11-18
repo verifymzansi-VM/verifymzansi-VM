@@ -267,7 +267,7 @@ describe("staff payment adapters", () => {
       ],
       [
         "outside_refund_window",
-        "Ozow only refunds within 14 days of the payment. Pay it back by bank transfer and record the bank reference.",
+        "Ozow refunds are possible only up to 13 days after the payment. Pay it back by bank transfer and record the bank reference instead.",
       ],
     ];
     for (const [details, message] of cases) {

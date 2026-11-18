@@ -175,6 +175,9 @@ const factForDatabase = (fact: OzowRefundFact) => ({
   completed_at: fact.completedAt,
 });
 
+// get_staff_refund_context: strict: adding a field here breaks refund approval
+// until the website reads it. Later updates add no fields to it (the 13-day
+// Ozow window is worked out from the payment's created_at in the commands).
 const paymentContext = z
   .strictObject({ ozow_transaction_id: z.uuid().nullable(), amount_cents: cents })
   .nullable();

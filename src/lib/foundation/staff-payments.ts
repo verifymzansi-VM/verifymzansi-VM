@@ -139,7 +139,7 @@ export const STAFF_REFUND_FOLLOW_UP_REFUSALS: ReadonlyArray<
     "outside_refund_window",
     [
       409,
-      "Ozow only refunds within 14 days of the payment. Pay it back by bank transfer and record the bank reference.",
+      "Ozow refunds are possible only up to 13 days after the payment. Pay it back by bank transfer and record the bank reference instead.",
     ],
   ],
 ];

@@ -1937,8 +1937,9 @@ changes on screen today:
   scope, `src/lib/foundation/staff-payments.ts`): 'This slot has a renewal
   waiting. Refund the renewal first, then this period.', ''Cancelled before
   the renewal started' is only for a renewal whose days have not started.
-  Choose another reason.' and 'Ozow only refunds within 14 days of the
-  payment. Pay it back by bank transfer and record the bank reference.'
+  Choose another reason.' and 'Ozow refunds are possible only up to 13 days
+  after the payment. Pay it back by bank transfer and record the bank
+  reference instead.'
 
 Every changed file already has a row (`payment-actions.tsx` in M3.4,
 `ozow-refund-actions.tsx` in group 28 and the test
