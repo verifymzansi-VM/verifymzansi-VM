@@ -1,0 +1,91 @@
+name: Main deployed
+
+# Fails when the newest commit on main has not reached the live site for more
+# than GRACE_HOURS, so a release that never happened is not missed. A failed
+# run opens the "Failure alert" issue like any other scheduled failure.
+#
+# This is the safety net for deploys that stop on purpose because main moved
+# on while they waited (the failure alert stays quiet about those, since the
+# deploy of the newer main follows), and for releases that were cancelled or
+# whose CI failed. CI plus Deploy normally take under an hour.
+#
+# "Live" means the newest Deploy run that was not cancelled and whose "Deploy
+# to Cloudflare" step succeeded. It reads run metadata only; no code is
+# checked out or run.
+on:
+  schedule:
+    - cron: "41 * * * *" # Hourly, off the top of the hour
+  workflow_dispatch:
+
+permissions: {}
+
+# No concurrency group: the check only reads, so overlapping runs are harmless,
+# and a run cancelled by a newer one would raise a failure alert for nothing.
+
+jobs:
+  main-deployed:
+    name: Newest main commit is live
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    env:
+      GRACE_HOURS: "3"
+    steps:
+      - name: Compare the newest main commit with the last deployed one
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          read -r main main_date <<< "$(gh api "repos/${GH_REPO}/commits/main" \
+            --jq '"\(.sha) \(.commit.committer.date)"')"
+          # An empty date would read as midnight and give a misleading answer.
+          [ -n "$main" ] || { echo "::error::Could not read the newest main commit."; exit 1; }
+          [ -n "$main_date" ] || { echo "::error::Could not read the date of the newest main commit."; exit 1; }
+          # Newest first. A cancelled run may have stopped between Workers, so
+          # it never counts as live (the failure alert reports a deploy
+          # cancelled after production changes began). A run whose production
+          # deploy step succeeded but a later check failed does count: the
+          # code is live and that failure raises its own alert.
+          live=""
+          for run in $(gh api "repos/${GH_REPO}/actions/workflows/deploy.yml/runs?branch=main&status=completed&per_page=30" \
+              --jq '.workflow_runs[] | select(.conclusion != "cancelled") | "\(.id):\(.head_sha)"'); do
+            deployed=$(gh api "repos/${GH_REPO}/actions/runs/${run%%:*}/jobs?filter=latest&per_page=100" \
+              --jq '[.jobs[] | select(.name == "deploy") | .steps[]? | select(.name == "Deploy to Cloudflare" and .conclusion == "success")] | length')
+            if [ "$deployed" -gt 0 ]; then
+              live="${run#*:}"
+              break
+            fi
+          done
+          if [ "$live" = "$main" ]; then
+            echo "The live site runs the newest main commit ${main}."
+            exit 0
+          fi
+          # When main first moved past the live commit: the oldest CI push run
+          # on main created after the live commit's own CI run. Newest first.
+          pending=""
+          found=""
+          while read -r created sha || [ -n "$sha" ]; do
+            if [ -n "$live" ] && [ "$sha" = "$live" ]; then
+              found=yes
+              break
+            fi
+            pending="$created"
+          done < <(gh api "repos/${GH_REPO}/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=100" \
+            --jq '.workflow_runs[] | "\(.created_at) \(.head_sha)"')
+          if [ -z "$found" ]; then
+            echo "::error title=Main not deployed::Main is at ${main} but the newest production deploy (${live:-none found}) is not among the last 100 pushes to main. Check the CI and Deploy runs (docs/RUNBOOK.md)."
+            exit 1
+          fi
+          # Main moved on so recently that its CI run is not listed yet: the
+          # wait starts at the new main commit.
+          if [ -z "$pending" ]; then
+            pending="$main_date"
+          fi
+          waiting=$(( $(date -u +%s) - $(date -u -d "$pending" +%s) ))
+          echo "Main is at ${main}; the live site runs ${live}. Newer commits arrived $((waiting / 60)) minutes ago."
+          if [ "$waiting" -ge "$((GRACE_HOURS * 3600))" ]; then
+            echo "::error title=Main not deployed::Changes merged into main $((waiting / 3600)) hours ago are not live yet (live ${live}, main ${main}). Check the latest CI and Deploy runs; if both passed but nothing deployed, run Deploy by hand (docs/RUNBOOK.md)."
+            exit 1
+          fi

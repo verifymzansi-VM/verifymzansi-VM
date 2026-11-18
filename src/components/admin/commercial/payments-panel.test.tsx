@@ -167,6 +167,45 @@ describe("staff payments panel", () => {
     expect(screen.getAllByRole("button", { name: "Refund this slot" })).toHaveLength(1);
   });
 
+  it("does not offer 'Cancelled before the renewal started' yet, but names it on a record", () => {
+    const { rerender } = render(<PaymentsPanel canRefund payments={[base]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
+    const form = screen.getByRole("form", { name: "Refund of this payment" });
+    const offered = within(within(form).getByLabelText("Reason"))
+      .getAllByRole("option")
+      .map((option) => option.getAttribute("value"));
+    expect(offered).toEqual([
+      "",
+      "billing_error",
+      "duplicate",
+      "our_failure_after_fix_offered",
+      "s14_cancellation",
+      "breach_credit",
+    ]);
+    // A refund recorded once the database accepts the reason still reads.
+    rerender(
+      <PaymentsPanel
+        canRefund
+        payments={[
+          {
+            ...base,
+            refund_request: {
+              id: "44444444-4444-4444-8444-444444444444",
+              line_id: null,
+              kind: "refunded",
+              reason_code: "renewal_cancelled_before_start",
+              amount_cents: 165600,
+              ozow_reference: "OZ-BIG-1",
+              requested_at: "2026-11-13T09:00:00Z",
+              requested_by_me: false,
+            },
+          },
+        ]}
+      />
+    );
+    expect(screen.getByText(/Cancelled before the renewal started/)).toBeInTheDocument();
+  });
+
   it("lets another staff member approve a waiting refund, never its requester", async () => {
     const request = {
       id: "44444444-4444-4444-8444-444444444444",

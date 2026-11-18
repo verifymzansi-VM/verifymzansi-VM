@@ -13,9 +13,8 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: staging-keepalive
-  cancel-in-progress: true
+# No concurrency group: two overlapping reads are harmless, and a run cancelled
+# by a newer one would raise a failure alert for nothing.
 
 jobs:
   keepalive:

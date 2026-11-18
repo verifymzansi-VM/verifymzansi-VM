@@ -1,5 +1,6 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationServiceApi } from "./service-api";
 import type { OzowRefundClient } from "../payments/ozow-refunds";
 
@@ -9,8 +10,14 @@ vi.mock("../utils/logger", () => ({
 }));
 vi.mock("@/lib/config/env", () => ({ env: vi.fn(() => "") }));
 
-const { runOzowRefundJobs, runOzowRefundReconciliation, sendOzowRefund } =
-  await import("./ozow-refunds");
+const {
+  approveStaffRefund,
+  readStaffOzowRefunds,
+  requestStaffOzowRefund,
+  runOzowRefundJobs,
+  runOzowRefundReconciliation,
+  sendOzowRefund,
+} = await import("./ozow-refunds");
 const { OzowRefundNotFoundError, OzowRefundUnavailableError } =
   await import("../payments/ozow-refunds");
 
@@ -353,5 +360,116 @@ describe("the daily check", () => {
       listed: false,
     });
     expect(calls("reconcile_ozow_refunds")[0][1]).toEqual({ p_refunds: [] });
+  });
+});
+
+describe("refund follow-ups, read before the database update", () => {
+  const staffRpc = vi.fn();
+  const staffApi = { rpc: staffRpc } as unknown as FoundationAuthenticatedApi;
+  const PAYMENT = "33333333-2222-4333-8444-555555555555";
+  const record = (overrides: Record<string, unknown> = {}) => ({
+    id: REQUEST,
+    payment_id: PAYMENT,
+    line_id: null,
+    channel: "api",
+    status: "failed",
+    amount_cents: 6900,
+    reason_code: "s14_cancellation",
+    needs_approval: false,
+    requested_at: "2026-11-13T09:00:00.000Z",
+    approved_at: null,
+    sent_at: null,
+    applied_at: null,
+    failed_at: "2026-11-13T09:10:00.000Z",
+    returned_at: null,
+    failure_reason: "payment_changed",
+    ozow_refund_id: null,
+    ozow_status: null,
+    ozow_status_at: null,
+    send_outcome: null,
+    send_attempts: 0,
+    ozow_missing_at: null,
+    requested_by_me: false,
+    ...overrides,
+  });
+  const list = (records: unknown[]) => ({
+    data: {
+      typed_reference_retired: false,
+      payments: [{ payment_id: PAYMENT, ozow_refundable: true }],
+      records,
+      attention: [],
+    },
+    error: null,
+  });
+
+  it("reads records with the old and new reason codes and failure reasons", async () => {
+    staffRpc.mockResolvedValueOnce(
+      list([
+        record(),
+        record({ reason_code: "renewal_cancelled_before_start", failure_reason: null }),
+        record({ failure_reason: "outside_refund_window" }),
+      ])
+    );
+    const read = await readStaffOzowRefunds(staffApi, [PAYMENT]);
+    expect(read.records.map((r) => [r.reason_code, r.failure_reason])).toEqual([
+      ["s14_cancellation", "payment_changed"],
+      ["renewal_cancelled_before_start", null],
+      ["s14_cancellation", "outside_refund_window"],
+    ]);
+  });
+
+  it("still refuses a reason code or failure reason it does not know", async () => {
+    for (const overrides of [{ reason_code: "goodwill" }, { failure_reason: "ozow_late" }]) {
+      staffRpc.mockResolvedValueOnce(list([record(overrides)]));
+      await expect(readStaffOzowRefunds(staffApi, [PAYMENT])).rejects.toMatchObject({
+        status: 503,
+      });
+    }
+  });
+
+  it("claims a send with the new reason code", async () => {
+    answer({
+      claim_ozow_refund_send: { ...claimed, reason_code: "renewal_cancelled_before_start" },
+      record_ozow_refund_send: recorded(),
+    });
+    client.create.mockRejectedValue(new OzowRefundUnavailableError("down"));
+    await sendOzowRefund(service, client, REQUEST);
+    expect(client.create.mock.calls[0][0].reason).toBe(
+      "VerifyMzansi refund: renewal cancelled before start"
+    );
+  });
+
+  it("words the new refusals for staff", async () => {
+    const cases: [string, string][] = [
+      [
+        "renewal_queued",
+        "This slot has a renewal waiting. Refund the renewal first, then this period.",
+      ],
+      [
+        "renewal_already_started",
+        "'Cancelled before the renewal started' is only for a renewal whose days have not started. Choose another reason.",
+      ],
+      [
+        "outside_refund_window",
+        "Ozow refunds are possible only up to 13 days after the payment. Pay it back by bank transfer and record the bank reference instead.",
+      ],
+    ];
+    for (const [details, message] of cases) {
+      const error = { data: null, error: { code: "PT409", details, message: "refused" } };
+      staffRpc.mockResolvedValueOnce(error);
+      await expect(
+        requestStaffOzowRefund(staffApi, {
+          paymentId: PAYMENT,
+          lineId: null,
+          reasonCode: "s14_cancellation",
+          reason: "Cancelled within the cooling-off period",
+        })
+      ).rejects.toMatchObject({ status: 409, message });
+      staffRpc.mockResolvedValueOnce(error);
+      await expect(approveStaffRefund(staffApi, REQUEST)).rejects.toMatchObject({
+        status: 409,
+        message,
+      });
+    }
   });
 });

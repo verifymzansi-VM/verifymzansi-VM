@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { formatPlanPrice } from "@/lib/constants/pricing";
+import type { RefundReasonCode } from "@/lib/foundation/staff-payments";
 import { ReasonField, SubmitButton, readForm, type CommercialPayload } from "./commercial-action";
 
 /** Why money is returned (the owner's closed list), in staff words. */
@@ -11,7 +12,15 @@ export const REFUND_REASON_LABELS = {
   our_failure_after_fix_offered: "Our failure, after a fix was offered",
   s14_cancellation: "Cancellation (section 14)",
   breach_credit: "Credit for our breach",
-} as const;
+  renewal_cancelled_before_start: "Cancelled before the renewal started",
+} as const satisfies Record<RefundReasonCode, string>;
+
+/** The reasons staff can choose. "Cancelled before the renewal started" is
+ * named on records only until the refund follow-ups database update, which
+ * accepts it, is live (the current database refuses it). */
+export const REFUND_REASON_OPTIONS = Object.entries(REFUND_REASON_LABELS).filter(
+  ([code]) => code !== "renewal_cancelled_before_start"
+);
 
 /** Above R1 000 returned on one payment (refunds and chargebacks together,
  * this one included), a second staff member must approve. The database
@@ -105,7 +114,7 @@ export function RefundForm({
           <option value="" disabled>
             Choose a reason
           </option>
-          {Object.entries(REFUND_REASON_LABELS).map(([code, label]) => (
+          {REFUND_REASON_OPTIONS.map(([code, label]) => (
             <option key={code} value={code}>
               {label}
             </option>

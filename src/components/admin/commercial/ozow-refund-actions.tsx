@@ -8,7 +8,7 @@ import { formatPlanPrice } from "@/lib/constants/pricing";
 import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { ActionMessage, AdminCard, ReasonField, SubmitButton, readForm } from "./commercial-action";
-import { REFUND_REASON_LABELS } from "./payment-actions";
+import { REFUND_REASON_LABELS, REFUND_REASON_OPTIONS } from "./payment-actions";
 
 /**
  * Refunds through Ozow (shown only while OZOW_API_REFUNDS_ENABLED is on):
@@ -88,6 +88,8 @@ const FAILURE_WORDS: Record<string, string> = {
   ozow_invalid: "Ozow found it invalid",
   payment_changed: "the payment changed before it was sent",
   closed_by_staff: "closed by staff: it never reached Ozow",
+  outside_refund_window:
+    "too late for a refund through Ozow: pay it back by bank transfer and record the bank reference",
 };
 
 type RefundReply = {
@@ -164,11 +166,9 @@ function outcomeText(status: string, answered: boolean) {
   return "Refund approved. It is sent to Ozow within 10 minutes.";
 }
 
-const REASON_OPTIONS = Object.entries(REFUND_REASON_LABELS);
-
 /** The closed list of reasons (the same labels as the reference form). */
 function ReasonCodeField() {
-  const options = REASON_OPTIONS.map(([code, label]) => (
+  const options = REFUND_REASON_OPTIONS.map(([code, label]) => (
     <option value={code} key={code}>
       {label}
     </option>
