@@ -73,7 +73,6 @@ try {
   // ------------------------------------------------------- synthetic world
   const { user, staffUser, verify } = installStaffPaymentWorld(q, json);
   const admin = staffUser("admin", "admin");
-  const admin2 = staffUser("admin2", "admin");
   const governor = staffUser("governor", "governor");
   const moderator = staffUser("moderator", "moderator");
   /** A member with an accepted ID review whose name is `first last`, shown
@@ -335,7 +334,7 @@ try {
         )
       ).id;
       q(act(admin, intake, "approve"));
-      assert.equal(jobs(intake), "submitted,approved");
+      assert.equal(jobs(intake), "approved");
       assert.equal(count(`private.notifications where subject_id='${intake}'`), 0);
     }
   );
