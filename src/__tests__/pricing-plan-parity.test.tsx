@@ -93,10 +93,11 @@ describe("Active-area pricing parity", () => {
   // plans are paused): the R69 prices show, nothing links to checkout.
   it("pricing page shows the R69 / R207 / R414 slot prices as opening soon, and free events", async () => {
     render(await PricingPage());
-    const radios = screen
-      .getAllByRole("radio")
-      .map((radio) => radio.textContent?.replace(/\s+/g, " ").trim());
-    expect(radios).toHaveLength(3);
+    // One Individual slot works in every section: no section picker, and no
+    // tab row while Individual slots are the only offer on sale.
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.getByText("Market, Business or Tourism")).toBeInTheDocument();
     expect(screen.getByTestId("retail-offer-month")).toHaveTextContent("R69");
     expect(screen.getByTestId("retail-offer-quarter")).toHaveTextContent("R207");
     expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("R414");
@@ -104,7 +105,7 @@ describe("Active-area pricing parity", () => {
     expect(screen.queryByText(/Popular|Best value|Save R/)).not.toBeInTheDocument();
     expect(screen.queryByTestId("retail-offer-year")).not.toBeInTheDocument();
     expect(screen.queryByText(/12 months|R450/i)).not.toBeInTheDocument();
-    expect(screen.getAllByText("Free").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("free-events")).toHaveTextContent("Events are free");
     expect(screen.getAllByRole("button", { name: "Opens soon" })).toHaveLength(3);
     expect(screen.getByText(/Paid slots open soon/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /^Choose /i })).not.toBeInTheDocument();
