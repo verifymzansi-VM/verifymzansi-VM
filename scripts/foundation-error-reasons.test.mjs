@@ -102,6 +102,60 @@ test("a changed code, a dropped message and a dynamic reason fail", (t) => {
   );
 });
 
+test("an upcoming reason must leave the upcoming list once the database raises it", (t) => {
+  const root = copyOfRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const today = new Date("2026-11-18T00:00:00Z");
+  const list = readFileSync(path.join(root, SHARED), "utf8");
+  assert.match(list, /FOUNDATION_UPCOMING_ERROR_REASONS = \{[\s\S]*?\n {2}renewal_queued: \{/);
+  // Pending, the database does not raise it: nothing fails.
+  assert.deepEqual(runReasonCheck({ root, today }).failures, []);
+  // The update is applied and the snapshot raises it.
+  editFile(
+    root,
+    `${FUNCTIONS}/internal/assert_staff_refund_reason.sql`,
+    "detail='refund_reason_code_invalid';",
+    "detail='refund_reason_code_invalid';\n  raise exception 'renewal waiting' using errcode='PT409', detail='renewal_queued';"
+  );
+  const pending = (failures) =>
+    failures.filter((line) => line.includes("FOUNDATION_UPCOMING_ERROR_REASONS names"));
+  assert.ok(
+    runReasonCheck({ root, today }).failures.some((line) =>
+      line.includes("raises 'renewal_queued'")
+    )
+  );
+  // Regenerating the list is not enough: the upcoming entry must go.
+  const after = runReasonCheck({ root, write: true, today }).failures;
+  assert.deepEqual(
+    pending(after).map((line) => line.split("'")[1]),
+    ["renewal_queued"]
+  );
+  assert.equal(after.length, 1);
+});
+
+test("an upcoming reason expires 30 days after it was added", (t) => {
+  const root = copyOfRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  editFile(
+    root,
+    SHARED,
+    'renewal_queued: { codes: ["PT409"], added: "2026-11-18" }',
+    'renewal_queued: { codes: ["PT409"], added: "2026-10-01" }'
+  );
+  const expired = (today) =>
+    runReasonCheck({ root, today: new Date(today) }).failures.filter((line) =>
+      line.includes("has waited for")
+    );
+  assert.deepEqual(expired("2026-10-31T00:00:00Z"), []);
+  const [failure, ...rest] = expired("2026-10-31T00:00:01Z");
+  assert.deepEqual(rest, []);
+  assert.match(failure, /'renewal_queued' since 2026-10-01/);
+  assert.match(failure, /remove the entry, or ship the database update/);
+  // An entry without a readable date is refused outright.
+  editFile(root, SHARED, 'added: "2026-10-01"', 'added: "soon"');
+  assert.throws(() => runReasonCheck({ root }), /Unreadable FOUNDATION_UPCOMING_ERROR_REASONS/);
+});
+
 test("website code may not match a reason by comparing details with a string", () => {
   const found = findRawReasonComparisons([
     ["a.ts", 'if (error.details === "slug_conflict") fail();'],

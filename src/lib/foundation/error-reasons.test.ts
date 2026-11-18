@@ -5,6 +5,8 @@ import {
   readDatabaseReasons,
 } from "../../../scripts/lib/foundation-error-reasons.mjs";
 import {
+  FOUNDATION_ERROR_REASONS,
+  FOUNDATION_UPCOMING_ERROR_REASONS,
   STAFF_SECOND_FACTOR_MESSAGES,
   STAFF_SECOND_FACTOR_PATTERN,
   hasDatabaseMessage,
@@ -37,6 +39,18 @@ it("looks reasons up in a map keyed by listed reasons", () => {
   expect(lookupDatabaseReason(map, { details: "legal_name_locked" })).toBeUndefined();
   expect(lookupDatabaseReason(map, { details: "constructor" })).toBeUndefined();
   expect(lookupDatabaseReason(map, { details: null })).toBeUndefined();
+});
+
+it("matches the reasons of a pending database update like listed ones", () => {
+  // Pending or applied, these reasons of the refund follow-ups update match.
+  for (const reason of Object.keys(FOUNDATION_UPCOMING_ERROR_REASONS))
+    expect(Object.hasOwn(FOUNDATION_ERROR_REASONS, reason)).toBe(false);
+  const error = { code: "PT409", details: "renewal_queued", message: "x" };
+  expect(hasDatabaseReason(error, "renewal_queued")).toBe(true);
+  expect(hasDatabaseReason(error, "outside_refund_window")).toBe(false);
+  const map = new Map<FoundationErrorReason, string>([["outside_refund_window", "too late"]]);
+  expect(lookupDatabaseReason(map, { details: "outside_refund_window" })).toBe("too late");
+  expect(lookupDatabaseReason(map, { details: "renewal_queued" })).toBeUndefined();
 });
 
 it("recognises listed messages and the staff second-factor refusals", () => {
