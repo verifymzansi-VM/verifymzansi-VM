@@ -266,6 +266,8 @@ function secretScopeProblems(file: string, workflow: Workflow, allowed: Allow): 
       problems.push(`${where}: environment is not ${rule.environment}`);
     for (const [key, value] of Object.entries(jobRest))
       if (readsSecrets(value, key)) problems.push(`${where}: secrets at job level (${key})`);
+    // `secrets: inherit` (or a secrets map) hands values to a called workflow.
+    if ("secrets" in jobRest) problems.push(`${where}: passes secrets to a reusable workflow`);
     const ids = steps.flatMap((step) => (step.id ? [step.id] : []));
     const names = steps.flatMap((step) => (step.name ? [step.name] : []));
     for (const [kind, list] of [
@@ -476,6 +478,76 @@ describe("production secrets reach only the steps that use them", () => {
       expect(storage.env?.AWS_ACCESS_KEY_ID, file).toBeUndefined();
       expect(storage.env?.LEGACY_R2_ACCESS_KEY_ID, file).toBe("${{ secrets.R2_ACCESS_KEY_ID }}");
       expect(storage.run, file).toContain("::warning::Backups still use the app's storage key");
+    }
+  });
+});
+
+// Every workflow file: only the reviewed jobs may name the protected
+// environments, and no job may hand secrets to a called workflow.
+const PROTECTED_ENVIRONMENTS = new Set(["production", "backup"]);
+function protectedEnvironmentProblems(files: Record<string, Workflow>): string[] {
+  const problems: string[] = [];
+  for (const [file, workflow] of Object.entries(files))
+    for (const [jobId, job] of Object.entries(workflow.jobs ?? {})) {
+      const where = `${file} ${jobId}`;
+      if ("secrets" in job) problems.push(`${where}: passes secrets to a reusable workflow`);
+      const name = environmentName(job.environment);
+      if (name === null) continue;
+      // GitHub compares environment names without case; an expression could name any.
+      if (name.includes("${{")) problems.push(`${where}: environment chosen by an expression`);
+      const reviewed = ALLOWED[file]?.[jobId]?.environment;
+      if (PROTECTED_ENVIRONMENTS.has(name.trim().toLowerCase()) && reviewed !== name)
+        problems.push(`${where}: names the protected environment ${name}`);
+    }
+  return problems;
+}
+const allWorkflows = () =>
+  Object.fromEntries(readdirSync(WORKFLOWS).map((file) => [file, load(file)])) as Record<
+    string,
+    Workflow
+  >;
+
+describe("protected environments across every workflow", () => {
+  it("only the reviewed jobs name production or backup, and none passes secrets on", () => {
+    expect(protectedEnvironmentProblems(allWorkflows())).toEqual([]);
+  });
+
+  it("catches a new job, in any workflow, that names a protected environment", () => {
+    for (const environment of [
+      "production",
+      "Production",
+      { name: "backup", url: "https://example.invalid" },
+      "${{ 'production' }}",
+    ]) {
+      const files = allWorkflows();
+      files["ci.yml"].jobs.sneaky = { "runs-on": "ubuntu-latest", environment, steps: [] };
+      expect(protectedEnvironmentProblems(files).join("\n"), JSON.stringify(environment)).toMatch(
+        /ci\.yml sneaky: (names the protected environment|environment chosen by an expression)/
+      );
+    }
+  });
+
+  it("catches a job that calls another workflow with inherited or mapped secrets", () => {
+    for (const secrets of ["inherit", { TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}" }]) {
+      const files = allWorkflows();
+      files["deploy.yml"].jobs.deploy = {
+        uses: "./.github/workflows/x.yml",
+        secrets,
+      } as unknown as Job;
+      expect(protectedEnvironmentProblems(files)).toContain(
+        "deploy.yml deploy: passes secrets to a reusable workflow"
+      );
+      expect(
+        secretScopeProblems("deploy.yml", files["deploy.yml"], ALLOWED["deploy.yml"])
+      ).toContain("deploy.yml deploy: passes secrets to a reusable workflow");
+      const elsewhere = allWorkflows();
+      elsewhere["ci.yml"].jobs.called = {
+        uses: "./.github/workflows/x.yml",
+        secrets,
+      } as unknown as Job;
+      expect(protectedEnvironmentProblems(elsewhere)).toContain(
+        "ci.yml called: passes secrets to a reusable workflow"
+      );
     }
   });
 });
