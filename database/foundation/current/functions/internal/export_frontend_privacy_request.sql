@@ -21,6 +21,12 @@ begin
     'datasets',case when r.subject_user_id is null then '{}'::jsonb else internal.frontend_privacy_export_data(r.subject_user_id) end);
   perform internal.staff_actor('dsar:manage');
   insert into private.privacy_request_events(request_id,actor_id,action,represented_revision) values(r.id,actor,'exported',r.revision);
+  -- The requester is told once that the export was made (email), and the
+  -- account named by the request in its bell.
+  insert into private.privacy_notice_jobs(request_id,kind) values(r.id,'exported') on conflict(request_id,kind) do nothing;
+  if found and r.subject_user_id is not null then
+    perform internal.notify_account(r.subject_user_id,'privacy_export_made',r.id,null,null);
+  end if;
   return result;
 end$function$;
 alter function internal.export_frontend_privacy_request(uuid,integer) owner to postgres;

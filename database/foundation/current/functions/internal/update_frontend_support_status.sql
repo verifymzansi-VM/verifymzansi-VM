@@ -14,6 +14,11 @@ begin
   select * into x from private.support_tickets where id=p_ticket for update;
   actor:=internal.staff_actor('support:update');
   if not found or x.revision<>p_revision then raise exception 'support ticket changed' using errcode='PT409';end if;
+  -- A ticket resolved and received more than 12 months ago is out of the
+  -- inbox; it is not reopened or changed (so its sender is not shown again).
+  if x.status='resolved' and x.created_at<clock_timestamp()-interval '12 months' then
+    raise exception 'support tickets resolved more than 12 months ago cannot be changed'
+      using errcode='PT409',detail='support_ticket_archived';end if;
   if x.status<>p_status then
     update private.support_tickets set status=p_status,revision=revision+1 where id=x.id returning * into x;
     insert into private.support_ticket_events(ticket_id,revision,actor_id,status) values(x.id,x.revision,actor,x.status);

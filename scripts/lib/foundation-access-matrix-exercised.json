@@ -123,6 +123,7 @@
     "read_listing_price_draft",
     "reconcile_intro_trials",
     "reference_catalog",
+    "reveal_organisation_applicant_contact",
     "run_post_lifecycle",
     "run_retention",
     "run_slot_renewals",

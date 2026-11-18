@@ -43,6 +43,14 @@ vi.mock("@/components/service-worker-registrar", () => ({
   ServiceWorkerRegistrar: () => <div data-testid="service-worker-registrar" />,
 }));
 
+// The "Launching soon" pop-up's switch, turned on and off per test.
+const prelaunch = vi.hoisted(() => ({ enabled: true }));
+vi.mock("@/lib/prelaunch-banner", () => ({
+  get PRELAUNCH_BANNER_ENABLED() {
+    return prelaunch.enabled;
+  },
+}));
+
 import RootLayout from "./layout";
 import { headers } from "next/headers";
 
@@ -104,7 +112,7 @@ describe("RootLayout", () => {
     expect(markup).toContain("Marketplace");
   });
 
-  it("opens straight on the page: no 'launching soon' pop-up in the app shell", async () => {
+  const shellComponentNames = async () => {
     const tree = await RootLayout({ children: <div id="page-content">Marketplace</div> });
     const names: string[] = [];
     const visit = (node: ReactNode): void => {
@@ -115,12 +123,40 @@ describe("RootLayout", () => {
       visit((node.props as { children?: ReactNode }).children);
     };
     visit(tree);
+    return names;
+  };
+
+  it("adds the 'launching soon' pop-up to the app shell while its switch is on", async () => {
+    prelaunch.enabled = true;
+    const names = await shellComponentNames();
 
     expect(names).toContain("MobileNav");
-    expect(names.filter((name) => /prelaunch|launch|banner/i.test(name))).toEqual([]);
-    const markup = renderToStaticMarkup(tree);
-    expect(markup).not.toMatch(/launching soon|early preview/i);
-    expect(markup).not.toContain("data-full-screen-popup");
+    expect(names).toContain("PrelaunchBanner");
+  });
+
+  it("opens straight on the page with no pop-up when the switch is off", async () => {
+    prelaunch.enabled = false;
+    try {
+      const tree = await RootLayout({ children: <div id="page-content">Marketplace</div> });
+      const names = await shellComponentNames();
+
+      expect(names).toContain("MobileNav");
+      expect(names.filter((name) => /prelaunch|launch|banner/i.test(name))).toEqual([]);
+      const markup = renderToStaticMarkup(tree);
+      expect(markup).not.toMatch(/launching soon|early preview/i);
+      expect(markup).not.toContain("data-full-screen-popup");
+    } finally {
+      prelaunch.enabled = true;
+    }
+  });
+
+  it("leaves the pop-up out of Playwright runs", async () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_MODE", "1");
+    try {
+      expect(await shellComponentNames()).not.toContain("PrelaunchBanner");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("injects auth cache recovery before the app shell on auth pages", async () => {
