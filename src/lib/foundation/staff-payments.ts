@@ -185,7 +185,10 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   [
     "cleared_date_invalid",
-    [422, "Enter the date the money cleared: today or in the last 90 days."],
+    [
+      422,
+      "Enter the date the money cleared: today or in the last 90 days, or an earlier date only to record again the money of an expired transfer (same reference, amount and date).",
+    ],
   ],
   [
     "cooling_off_waiver_required",
@@ -227,7 +230,19 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   [
     "transfer_not_waiting",
-    [409, "This bank transfer is no longer waiting for confirmation. Reload the page."],
+    [
+      409,
+      "This bank transfer is no longer waiting for confirmation: it was confirmed or declined, or nobody confirmed it within 14 days and it expired. Reload the page.",
+    ],
+  ],
+  ["transfer_resolved", [409, "This expired bank transfer was already resolved. Reload the page."]],
+  [
+    "transfer_resolver_same",
+    [403, "Another staff member must resolve this bank transfer: you recorded it."],
+  ],
+  [
+    "transfer_not_expired",
+    [409, "Only an expired bank transfer is resolved here. Confirm or decline a waiting one."],
   ],
   [
     "invoice_amount_mismatch",
@@ -558,6 +573,66 @@ export function readStaffBankTransfersWaiting(api: FoundationAuthenticatedApi) {
       items: z
         .array(staffTransferRecord.extend({ status: z.literal("awaiting_confirmation") }))
         .max(50),
+    })
+  );
+}
+
+const staffExpiredTransfer = staffTransferRecord.extend({
+  status: z.literal("expired"),
+  expired_at: z.iso.datetime({ offset: true }),
+  /** The invoice the transfer was recorded to, if any. */
+  invoice_number: z
+    .string()
+    .regex(/^VM-\d{4}-\d{6}$/)
+    .nullable(),
+});
+export type StaffExpiredTransfer = z.infer<typeof staffExpiredTransfer>;
+
+/** The recorded bank transfers nobody confirmed within 14 days of being
+ * recorded (20261118044440_bank_transfer_expiry.sql) that still need a
+ * follow-up: not recorded again and not naming an invoice since paid or
+ * voided. Oldest first, at most 200, with the full count. Against a database
+ * without that update there are none. */
+export async function readStaffBankTransfersExpired(
+  api: FoundationAuthenticatedApi
+): Promise<{ unresolved: number; items: StaffExpiredTransfer[] }> {
+  const result = await api.rpc("get_staff_expired_invoice_transfers", {}, { get: false });
+  if (result.error?.code === "PGRST202" || result.error?.code === "42883")
+    return { unresolved: 0, items: [] };
+  return settleStaffCommand(
+    Promise.resolve(result),
+    z.strictObject({ unresolved: count, items: z.array(staffExpiredTransfer).max(200) })
+  );
+}
+
+/** How staff followed up an expired transfer that will not be recorded again. */
+export const EXPIRED_TRANSFER_RESOLUTIONS = ["returned", "never_arrived"] as const;
+export type ExpiredTransferResolution = (typeof EXPIRED_TRANSFER_RESOLUTIONS)[number];
+
+/** Records once (audited, with a reason) that the money of an expired
+ * transfer was returned outside VerifyMzansi or never arrived; it then leaves
+ * the follow-up list. Nothing is paid or started. */
+export function resolveStaffExpiredTransfer(
+  api: FoundationAuthenticatedApi,
+  transferId: string,
+  resolution: ExpiredTransferResolution,
+  reason: string
+) {
+  return settlePaymentCommand(
+    api.rpc(
+      "resolve_expired_invoice_transfer",
+      {
+        p_transfer_id: transferId,
+        p_resolution: z.enum(EXPIRED_TRANSFER_RESOLUTIONS).parse(resolution),
+        p_reason: staffReason.parse(reason),
+      },
+      { get: false }
+    ),
+    staffTransferRecord.extend({
+      transfer_id: z.literal(transferId),
+      status: z.literal("expired"),
+      resolution: z.literal(resolution),
+      repeated: z.boolean(),
     })
   );
 }

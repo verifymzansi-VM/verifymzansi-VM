@@ -21,7 +21,7 @@ AS $function$
     'payment_status', (select p.status from private.payments p where p.id = i.payment_id),
     'voided_at', i.voided_at,
     'transfer_waiting', exists(select 1 from private.invoice_transfers t
-      where t.customer_invoice_id = i.id and t.status = 'awaiting_confirmation'),
+      where t.customer_invoice_id = i.id and internal.invoice_transfer_waiting(t)),
     'latest_attempt', (select jsonb_build_object('payment_id', p.id, 'attempt', l.attempt, 'status', p.status,
         'checkout_open', p.status = 'pending' and p.checkout_url is not null
           and p.checkout_expires_at > pg_catalog.clock_timestamp())

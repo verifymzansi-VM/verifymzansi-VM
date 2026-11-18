@@ -266,6 +266,31 @@ export async function readMyInvoice(
   }
 }
 
+/**
+ * When the latest bank transfer recorded to the member's own unpaid invoice
+ * expired (nobody confirmed it within 14 days), or null. The invoice can then
+ * be paid again (20261118044440_bank_transfer_expiry.sql); against a database
+ * without that update, null.
+ */
+export async function readMyInvoiceTransferExpiry(
+  api: FoundationAuthenticatedApi,
+  number: string
+): Promise<string | null> {
+  const value = number.trim().toUpperCase();
+  if (!INVOICE_NUMBER_PATTERN.test(value)) return null;
+  const result = await api.rpc(
+    "get_my_invoice_transfer_expiry",
+    { p_invoice_number: value },
+    { get: false }
+  );
+  if (result.error?.code === "PGRST202" || result.error?.code === "42883") return null;
+  const read = await settleMemberCommand(
+    Promise.resolve(result),
+    z.strictObject({ invoice_number: z.literal(value), transfer_expired_at: instant.nullable() })
+  );
+  return read.transfer_expired_at;
+}
+
 export const invoiceBillingInput = z.strictObject({
   invoiceNumber: invoiceNumber,
   revision: z.number().int().positive(),
@@ -430,7 +455,10 @@ const STAFF_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new
   ],
   [
     "cleared_date_invalid",
-    [422, "Enter the date the money cleared: today or in the last 90 days."],
+    [
+      422,
+      "Enter the date the money cleared: today or in the last 90 days, or an earlier date only to record again the money of an expired transfer (same reference, amount and date).",
+    ],
   ],
   [
     "cooling_off_waiver_required",

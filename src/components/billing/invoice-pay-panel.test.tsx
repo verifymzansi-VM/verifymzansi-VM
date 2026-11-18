@@ -90,6 +90,19 @@ describe("paying an invoice", () => {
     expect(screen.queryByRole("button", { name: /Pay now|Continue payment/ })).toBeNull();
   });
 
+  it("says a bank transfer expired and offers payment again", () => {
+    const { unmount } = render(<InvoicePayPanel {...props} transferExpired />);
+    expect(screen.getByTestId("invoice-transfer-expired")).toHaveTextContent(
+      "Your bank transfer to this invoice was not confirmed within 14 days, so it expired and this invoice is unpaid again. If you already paid, email billing@verifymzansi.com"
+    );
+    expect(screen.getByRole("button", { name: "Pay now" })).toBeInTheDocument();
+    unmount();
+    // A newer transfer that waits replaces the notice.
+    render(<InvoicePayPanel {...props} transferExpired transferWaiting />);
+    expect(screen.queryByTestId("invoice-transfer-expired")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("You do not need to pay again");
+  });
+
   it("offers only a bank transfer above Ozow's maximum, and Pay now at it", () => {
     const { unmount } = render(
       <InvoicePayPanel {...props} totalCents={165600} onlineMaxCents={130000} />

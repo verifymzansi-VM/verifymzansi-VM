@@ -39,7 +39,7 @@ begin
       using errcode='PT409', detail='invoice_payment_open';
   end if;
   if exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = inv.id
-      and t.status = 'awaiting_confirmation') then
+      and internal.invoice_transfer_waiting(t)) then
     raise exception 'a bank transfer to this invoice waits for confirmation; confirm or decline it first'
       using errcode='PT409', detail='invoice_transfer_waiting';
   end if;

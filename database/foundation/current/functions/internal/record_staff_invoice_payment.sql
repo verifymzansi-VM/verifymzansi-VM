@@ -40,7 +40,9 @@ begin
   exception when others then
     raise exception 'date the money cleared required' using errcode='22023', detail='cleared_date_invalid';
   end;
-  if cleared > today or cleared < today - 90 then
+  -- More than 90 days ago only to record again exactly the bank credit of an
+  -- expired transfer (checked below, under the locks).
+  if cleared > today then
     raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
   end if;
   if p_cooling_off_waiver is distinct from true then
@@ -58,12 +60,27 @@ begin
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, buyer);
   perform internal.assert_staff_not_referrer(actor, buyer);
+  -- 20261118044440_bank_transfer_expiry.sql: a waiting record of this bank
+  -- credit that has waited 14 days is marked expired first, so it
+  -- no longer holds them; the unique indexes still allow one open record. A
+  -- credit that cleared more than 90 days ago is accepted only to record again
+  -- exactly the credit of an expired transfer of the same account (and of the
+  -- same invoice, when that transfer named one).
+  perform internal.expire_invoice_transfer(t.id) from private.invoice_transfers t
+    where t.status = 'awaiting_confirmation'
+      and (t.amount_received_cents = p_amount_cents and t.cleared_on = cleared
+        and upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key);
+  if cleared < today - 90 and not internal.invoice_transfer_credit_expired(reference_key, p_amount_cents, cleared,
+      buyer, null) then
+    raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
+  end if;
   -- The same bank credit (reference, amount, date cleared) waiting or
   -- confirmed: the same request again by the same staff member returns it;
-  -- anything else is refused. A declined record does not count.
+  -- anything else is refused. A declined or expired record does not count.
   select * into prior from private.invoice_transfers t
     where upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key
-      and t.amount_received_cents = p_amount_cents and t.cleared_on = cleared and t.status <> 'declined';
+      and t.amount_received_cents = p_amount_cents and t.cleared_on = cleared
+      and t.status not in ('declined', 'expired');
   if found then
     if prior.recorded_by = actor and prior.account_id = buyer and prior.reason = btrim(p_reason)
         and prior.slots = p_slots

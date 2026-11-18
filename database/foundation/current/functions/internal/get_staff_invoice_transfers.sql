@@ -10,10 +10,10 @@ AS $function$
 declare actor uuid; result jsonb;
 begin
   actor := internal.staff_actor('payments:view');
-  select jsonb_build_object('waiting', (select count(*) from private.invoice_transfers t where t.status = 'awaiting_confirmation'),
+  select jsonb_build_object('waiting', (select count(*) from private.invoice_transfers t where internal.invoice_transfer_waiting(t)),
       'items', coalesce(jsonb_agg(internal.invoice_transfer_dto(t, actor) order by t.recorded_at, t.id), '[]'::jsonb))
     into result
-  from (select * from private.invoice_transfers x where x.status = 'awaiting_confirmation'
+  from (select * from private.invoice_transfers x where internal.invoice_transfer_waiting(x)
     order by x.recorded_at, x.id limit 50) t;
   if internal.staff_actor('payments:view') is distinct from actor then
     raise exception 'staff actor changed' using errcode='42501';
