@@ -3,10 +3,13 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   LINT_IMAGE,
+  LINT_IMAGE_FALLBACK,
   assertLocalDocker,
   collapseFindings,
   compareLint,
   lintContainerArgs,
+  localLintImage,
+  pullLintImage,
   nextLintBaseline,
   readLintBaseline,
 } from "./lib/foundation-sql-lint.mjs";
@@ -50,10 +53,46 @@ test("the lint database only runs on a local Docker daemon, without any network"
     !args.some((arg) => ["-p", "--publish", "-P", "--publish-all", "--add-host"].includes(arg))
   );
   assert.ok(args.includes(LINT_IMAGE));
-  assert.match(
-    LINT_IMAGE,
-    /^public\.ecr\.aws\/supabase\/postgres:17\.[0-9.]+@sha256:[0-9a-f]{64}$/
+  assert.match(LINT_IMAGE, /^ghcr\.io\/supabase\/postgres:17\.[0-9.]+@sha256:[0-9a-f]{64}$/);
+  // The fallback is the same tag and digest on ECR Public.
+  assert.equal(LINT_IMAGE_FALLBACK, LINT_IMAGE.replace(/^ghcr\.io\//, "public.ecr.aws/"));
+});
+
+test("the image is pulled from GHCR with retries, then from ECR, always by digest", async () => {
+  const calls = [];
+  const quiet = { sleep: async () => {}, log: () => {} };
+  const pullAs = (failures) => (image) => {
+    calls.push(image);
+    return calls.length > failures;
+  };
+  assert.equal(await pullLintImage({ pull: pullAs(0), ...quiet }), LINT_IMAGE);
+  calls.length = 0;
+  assert.equal(await pullLintImage({ pull: pullAs(1), ...quiet }), LINT_IMAGE);
+  assert.deepEqual(calls, [LINT_IMAGE, LINT_IMAGE]);
+  calls.length = 0;
+  assert.equal(await pullLintImage({ pull: pullAs(2), ...quiet }), LINT_IMAGE_FALLBACK);
+  assert.deepEqual(calls, [LINT_IMAGE, LINT_IMAGE, LINT_IMAGE_FALLBACK]);
+  calls.length = 0;
+  await assert.rejects(pullLintImage({ pull: pullAs(4), ...quiet }), /Could not pull/);
+  assert.equal(calls.length, 4);
+  assert.ok(calls.every((image) => image.endsWith(LINT_IMAGE.slice(LINT_IMAGE.indexOf("@")))));
+});
+
+test("the lint runs the fallback copy only when the GHCR copy is absent", () => {
+  assert.equal(
+    localLintImage(() => true),
+    LINT_IMAGE
   );
+  assert.equal(
+    localLintImage(() => false),
+    LINT_IMAGE
+  );
+  assert.equal(
+    localLintImage((image) => image === LINT_IMAGE_FALLBACK),
+    LINT_IMAGE_FALLBACK
+  );
+  const args = lintContainerArgs("vm-foundation-sql-lint-test", "pw", LINT_IMAGE_FALLBACK);
+  assert.ok(args.includes(LINT_IMAGE_FALLBACK) && !args.includes(LINT_IMAGE));
 });
 
 test("a trigger finding counts only when every attached table reports it", () => {
