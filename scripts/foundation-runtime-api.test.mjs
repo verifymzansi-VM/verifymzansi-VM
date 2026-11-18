@@ -179,35 +179,6 @@ test("the reviewed public payment limit accepts only its one-number answer", asy
     })
   );
 });
-test("the reviewed public sample hide-list accepts only a list of slugs", async () => {
-  const input = {
-    ...manifest,
-    functions: [
-      {
-        name: "get_hidden_sample_posts",
-        arguments: [],
-        returns: "jsonb",
-        volatility: "s",
-        execute: { anon: true, authenticated: true, service_role: false },
-      },
-    ],
-  };
-  for (const answer of [{ slugs: [] }, { slugs: ["fish-braai", "guest-house"] }])
-    assert.equal(
-      await verifyFoundationRuntimeApi(connection, async () => Response.json(answer), input),
-      1
-    );
-  for (const answer of [
-    [],
-    { slugs: ["Not A Slug"] },
-    { slugs: [], hidden_by: ["someone"] },
-    { slugs: [{ slug: "fish-braai" }] },
-  ])
-    await assert.rejects(
-      verifyFoundationRuntimeApi(connection, async () => Response.json(answer), input),
-      /projection probe failed/
-    );
-});
 test("service-only extensions are probed anonymously with synthetic arguments and never a service key", async () => {
   let calls = 0;
   const input = {

@@ -25,6 +25,20 @@
       "expandPullRequest": 213,
       "replacement": "get_staff_payment_list",
       "reason": "Retired by 20261113085340_retire_old_staff_reversal_commands.sql. The staff payments list reads api.get_staff_payment_list (delivery status, slots, waiting refunds) since pull request 213; nothing in src/ or workers/ calls the earlier read."
+    },
+    {
+      "command": "set_sample_post_hidden",
+      "change": "remove",
+      "expandUpdate": "20261117144001_sample_post_hide_list.sql",
+      "expandPullRequest": 105,
+      "reason": "Removed by 20261118033538_remove_sample_post_hide_list.sql. The display-only sample posts and their staff page are removed from the website in the same pull request, so nothing in src/ or workers/ calls the command; no replacement."
+    },
+    {
+      "command": "get_hidden_sample_posts",
+      "change": "remove",
+      "expandUpdate": "20261117144001_sample_post_hide_list.sql",
+      "expandPullRequest": 105,
+      "reason": "Removed by 20261118033538_remove_sample_post_hide_list.sql. The showrooms and the sample pages that read the hide-list are removed from the website in the same pull request, so nothing in src/ or workers/ calls the read; no replacement."
     }
   ]
 }

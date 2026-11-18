@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/video-card-player";
 import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
 import { PosterCaption } from "@/components/listings/poster-caption";
-import { SamplePostChip } from "@/components/sample-posts/sample-post-chip";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { useState, type ReactNode } from "react";
@@ -102,11 +101,6 @@ interface PosterCardShellProps {
   viewTarget?: { type: ContentTargetType; id: string };
   /** Where the card is shown, for view reporting (e.g. "showroom:home"). */
   viewSurface?: string;
-  /**
-   * Display-only sample post: shows the "Sample post" chip (immersive cards
-   * too) in place of any status label, and never shows badges or affiliation.
-   */
-  sample?: boolean;
 }
 
 export function PosterCardShell({
@@ -149,7 +143,6 @@ export function PosterCardShell({
   cardVariant = "default",
   viewTarget,
   viewSurface,
-  sample = false,
   mediaControlVariant = "default",
   makeEntireCardClickable = false,
   disableNativeDrag: disableNativeDragProp = false,
@@ -157,9 +150,6 @@ export function PosterCardShell({
   deferVideoLoadUntilPlay = false,
 }: PosterCardShellProps) {
   const [mediaPlaying, setMediaPlaying] = useState(false);
-  // Nothing about a sample was checked, so it never carries trust badges.
-  const trustBadges = sample ? null : badges;
-  const affiliationLine = sample ? null : affiliation;
   const normalizedMediaUrl = mediaUrl ? normalizeMediaUrl(mediaUrl) : undefined;
   const normalizedPosterUrl = posterUrl ? normalizeMediaUrl(posterUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
@@ -326,8 +316,8 @@ export function PosterCardShell({
             ) : null}
           </p>
         ) : null}
-        {trustBadges && !isHeroVariant ? <div className="mt-1">{trustBadges}</div> : null}
-        {affiliationLine && !isHeroVariant ? affiliationLine : null}
+        {badges && !isHeroVariant ? <div className="mt-1">{badges}</div> : null}
+        {affiliation && !isHeroVariant ? affiliation : null}
       </div>
     </div>
   );
@@ -423,15 +413,8 @@ export function PosterCardShell({
           <div className="absolute inset-0">{mediaFallback}</div>
         )}
 
-        {/* Sample label — top-left, on every card variant (immersive too). */}
-        {sample ? (
-          <div className="pointer-events-none absolute left-2 right-2 top-2 z-[6]">
-            <SamplePostChip />
-          </div>
-        ) : null}
-
         {/* Status badge — top-left corner of thumbnail */}
-        {statusLabel && !immersive && !sample ? (
+        {statusLabel && !immersive ? (
           <div className="pointer-events-none absolute left-2 top-2 z-[6]">
             <span
               className={cn(
@@ -461,7 +444,7 @@ export function PosterCardShell({
               eyebrow={eyebrow}
               title={title}
               location={location}
-              badges={trustBadges}
+              badges={badges}
               size={isHeroVariant ? "hero" : "card"}
             />
             {normalizedLogoUrl ? (
