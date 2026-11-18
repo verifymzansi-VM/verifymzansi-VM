@@ -102,11 +102,14 @@ It fails when a grant or a staff capability is bypassed or wrongly refused, or
 when anyone else sees one of the member's private values or changes their rows
 outside the reviewed lists at the top of the script. It also fails when a
 private table that references an account, a post, a case or a notification (or
-carries an account or contact column) is missing from the member's row
-fingerprint without a reviewed reason, and when a command listed in
-`scripts/lib/foundation-access-matrix-exercised.json` no longer reaches a
-successful answer for its intended caller (rewrite that list with
-`--write-exercised` after reviewing the change).
+carries an account, contact, name, identity, IP, hash or jsonb column) is
+missing from the member's row fingerprint without a reviewed reason; when a
+command listed in `scripts/lib/foundation-access-matrix-exercised.json` no
+longer reaches a successful answer for its intended caller; and when a
+fingerprint table listed there no longer holds any of the member's rows (rewrite
+that file with `--write-exercised` after reviewing the change). Staff may change
+the member's rows only through a command whose own capability check names a
+capability their role holds.
 
 An update that backfills existing rows or is hard to undo can come with two
 reviewed companions named after it, which the replay never applies:

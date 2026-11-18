@@ -96,7 +96,9 @@ const ALLOWED_VIEWS = new Map([
 ]);
 // Reviewed exceptions: who may change which of owner A's rows, and through
 // which command (principal:command:table). Staff may change A's rows only
-// through a command gated by a capability their role holds; anything else
+// through a command whose own capability check (its api body or the internal
+// function of the same name) names a capability their role holds, not one it
+// merely reaches through a helper; anything else
 // changed by a non-owner fails.
 const ALLOWED_CHANGES = new Map([
   // The organisation administrator decides A's consented application, and A
@@ -104,6 +106,13 @@ const ALLOWED_CHANGES = new Map([
   ["orgAdmin:org_decide_application:organisation_applications", "decides A's application"],
   ["orgAdmin:org_decide_application:notifications", "A is told of the decision"],
   ["orgAdmin:org_decide_application:organisation_affiliations", "approval affiliates A's business"],
+  // Staff holding organisation:manage (recent MFA) decide for any
+  // organisation; the command reaches that check through
+  // internal.organisation_actor, not directly.
+  ...["organisation_applications", "notifications", "organisation_affiliations"].map((table) => [
+    `admin:org_decide_application:${table}`,
+    "organisation:manage via internal.organisation_actor decides A's application",
+  ]),
 ]);
 // Commands that check a staff capability on one branch only and serve every
 // member otherwise (command:reason).
@@ -246,6 +255,11 @@ const OWNER_TABLES = [
   ["payment_activations", ownPayments],
   ["payment_lines", ownPayments],
   ["payment_problems", ownPayments],
+  // The daily payment-problem summary lists payment ids in its jsonb.
+  [
+    "payment_problem_digests",
+    "exists(select 1 from private.payments p where p.owner_id=$1 and t.content::text like '%'||p.id::text||'%')",
+  ],
   ["payment_refund_requests", "account_id=$1"],
   ["post_activations", "owner_id=$1"],
   ["post_addon_windows", `${ownPosts} or ${ownPayments}`],
@@ -294,7 +308,24 @@ const NOT_DIGESTED = new Map([
   ["cost_alarms", "platform cost alarms; the only account column is the acknowledging staff"],
   ["frontend_feature_flags", "runtime switches; the only account column is the staff editor"],
   ["frontend_feature_flag_events", "switch history; the only account column is the staff editor"],
-  ["organisations", "the organisation's own public record and public contacts"],
+  [
+    "organisations",
+    "an organisation's own record, edited only by staff with organisation:manage or its " +
+      "administrators; its contacts are the organisation's (shown only once is_public is " +
+      "set) and its account columns (created_by, logo_permission_by) name staff",
+  ],
+  [
+    "organisation_notes",
+    "staff notes on an organisation; the only account column is the staff author",
+  ],
+  [
+    "programme_showcases",
+    "staff-curated showcase settings of a programme; the only account column is the staff editor",
+  ],
+  [
+    "category_fields",
+    "posting-form field catalogue; its jsonb holds validation rules, no member data",
+  ],
 ]);
 // What makes a private table hold account data, for the coverage check.
 const ACCOUNT_ANCHORS = [
@@ -304,7 +335,11 @@ const ACCOUNT_ANCHORS = [
   "private.notifications",
 ];
 const CONTACT_COLUMN =
-  "(^|_)(email|phone|owner_id|account_id|user_id|subject_id|subject_user_id|applicant_id|appellant_id|member_id|target_id)$";
+  "(^|_)(email|phone|phone_number|phone_e164|msisdn|whatsapp|full_name|id_number|" +
+  "owner_id|account_id|user_id|subject_id|subject_user_id|applicant_id|appellant_id|" +
+  "member_id|target_id|author_id|created_by|actor_id)$|_name$|^ip|_ip(_|$)|_hmac$|whatsapp|msisdn";
+// Any jsonb column is flagged too: free-form documents may hold personal data
+// or ids, so their table must be digested or reviewed.
 
 const { check, current, passed } = createChecks();
 const started = Date.now();
@@ -470,20 +505,49 @@ try {
         exists(select 1 from pg_constraint k where k.conrelid=c.oid and k.contype='f'
           and k.confrelid in (${anchors.join(",")}))
         or exists(select 1 from pg_attribute a where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped
-          and a.attname ~ '${CONTACT_COLUMN}'));`);
-    // The rule finds a table that references a post, and one with only a
-    // contact column.
+          and (a.attname ~ '${CONTACT_COLUMN}' or a.atttypid='jsonb'::regtype)));`);
+    // The rule finds a table that references a post, and one for each kind
+    // of account, contact, identity or free-form column; a table with none of
+    // them is not flagged.
     const probe = "zz_coverage_guard_" + randomBytes(4).toString("hex");
+    const probes = {
+      ref: "post_id uuid references private.posts(id)",
+      contact: "buyer_phone text",
+      msisdn: "msisdn text",
+      whatsapp: "whatsapp_number text",
+      e164: "phone_e164 text",
+      name: "holder_name text",
+      full: "full_name text",
+      ip: "ip_address inet",
+      sourceip: "source_ip text",
+      idnumber: "id_number text",
+      hmac: "device_hmac text",
+      author: "author_id uuid",
+      creator: "created_by uuid",
+      actor: "actor_id uuid",
+      document: "payload jsonb",
+    };
+    const plain = `${probe}_plain`;
     try {
       sql(
-        `create table private.${probe}_ref(id integer primary key, post_id uuid references private.posts(id));` +
-          `create table private.${probe}_contact(id integer primary key, buyer_phone text);`
+        Object.entries(probes)
+          .map(
+            ([kind, column]) =>
+              `create table private.${probe}_${kind}(id integer primary key, ${column});`
+          )
+          .join("") +
+          `create table private.${plain}(id integer primary key, label text, amount integer);`
       );
       const found = linkedTables();
-      for (const table of [`${probe}_ref`, `${probe}_contact`])
-        assert.ok(found.includes(table), `coverage rule misses ${table}`);
+      for (const kind of Object.keys(probes))
+        assert.ok(found.includes(`${probe}_${kind}`), `coverage rule misses ${probe}_${kind}`);
+      assert.ok(!found.includes(plain), "coverage rule flags a table with no account data");
     } finally {
-      sql(`drop table if exists private.${probe}_ref, private.${probe}_contact;`);
+      sql(
+        `drop table if exists ${[...Object.keys(probes).map((kind) => `${probe}_${kind}`), plain]
+          .map((table) => `private.${table}`)
+          .join(", ")};`
+      );
     }
     const linked = linkedTables();
     const tables = sql(
@@ -809,6 +873,32 @@ try {
       assert.ok(leaks(ownView, "").includes(name), "owner view lacks " + name);
   });
 
+  // The fingerprint tables that hold rows of owner A once the world is built.
+  // Each recorded one must keep at least one row, so a filter that stops
+  // matching A cannot leave its table fingerprinted as empty.
+  const recorded = JSON.parse(readFileSync(EXERCISED_FILE, "utf8"));
+  const writeRecord = process.argv.includes("--write-exercised");
+  let nonEmptyOwnerTables = [];
+  await check("world: the recorded fingerprint tables hold rows of owner A", () => {
+    const counts = json(
+      `select ${OWNER_TABLES.map(
+        ([table, where]) =>
+          `jsonb_build_object('${table}',(select count(*) from private.${table} t where ${where.replaceAll("$1", `'${owner.id}'`)}))`
+      ).join("||")};`
+    );
+    nonEmptyOwnerTables = OWNER_TABLES.map(([table]) => table).filter((table) => counts[table] > 0);
+    if (writeRecord) return;
+    assert.deepEqual(
+      recorded.nonEmptyOwnerTables.filter((table) => !nonEmptyOwnerTables.includes(table)),
+      [],
+      "fingerprint tables with no rows of owner A"
+    );
+    const added = nonEmptyOwnerTables.filter(
+      (table) => !recorded.nonEmptyOwnerTables.includes(table)
+    );
+    if (added.length) console.log(`Also non-empty now (add with --write-exercised): ${added}`);
+  });
+
   // ------------------------------------------------------------ arguments
   const { ids, live, business, org, orgSlug, programme, tokenHash } = world;
   const revisionOf = (id) =>
@@ -904,6 +994,8 @@ try {
         sweepInteger(name, body, {
           caseVersion,
           revisionOf,
+          // Privacy requests (p_case) and support tickets carry their own
+          // revision; an evidence case has none, so it falls back to 1.
           revisionTarget: (target) =>
             target.p_post_id ??
             target.p_id ??
@@ -1040,8 +1132,8 @@ try {
       .filter((entry) => {
         const [label, name] = entry.split(":");
         if (!STAFF_ROLES.includes(label)) return true;
-        const caps = capabilities[name] ?? [];
-        return !caps.some((cap) => granted[label].includes(cap));
+        const direct = directCapabilities[name] ?? [];
+        return !direct.some((cap) => granted[label].includes(cap));
       })
       .sort();
     assert.deepEqual(unexpected, []);
@@ -1070,9 +1162,12 @@ try {
       );
     }
     intendedOk = exercised.length;
-    if (process.argv.includes("--write-exercised"))
-      writeFileSync(EXERCISED_FILE, `${JSON.stringify({ commands: exercised }, null, 2)}\n`);
-    const listed = JSON.parse(readFileSync(EXERCISED_FILE, "utf8")).commands;
+    if (writeRecord)
+      writeFileSync(
+        EXERCISED_FILE,
+        `${JSON.stringify({ commands: exercised, nonEmptyOwnerTables }, null, 2)}\n`
+      );
+    const listed = writeRecord ? exercised : recorded.commands;
     assert.deepEqual(
       listed.filter((name) => !exercised.includes(name)),
       [],
