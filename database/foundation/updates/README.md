@@ -79,10 +79,9 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Account events reach the notification bell, 17 November 2026
 
-`20261117140533_member_notices_in_app.sql` is not applied yet. It adds no
-command and changes no API signature, so the website release that uses it also
-works with a database that does not have it: the bell then shows only the
-notices it showed before.
+`20261117140533_member_notices_in_app.sql` was applied on 18 November 2026 at
+about 02:38 UTC with the owner's approval, after the website release that knows
+the new kinds was deployed (see the applied register).
 
 Until now the bell listed only what was written to `private.notifications`. Many
 account events queued only an email: an accepted ID check (a member who was
@@ -4658,7 +4657,20 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   applied; finished emails: 2; marked skipped: 0", after "already applied;
   finished emails: 2; marked skipped: 0"; production fingerprint after it
   matched the full replay (except the known schema grant difference)
-- `20261117140533_member_notices_in_app.sql`: pending
+- `20261117140533_member_notices_in_app.sql`: applied 2026-11-18 02:38 UTC; time
+  approximate, owner-approved in the Claude Code session that wrote it (the
+  owner chose to apply it from that session, overriding the AGENTS.md rule for
+  this update only), Supabase connector (`execute_sql`), preflight + fingerprint
+  checked; from the reviewed file on `main` (sha256 starting 9618f8c4d8772ea7)
+  after the website release of pull requests #249 and #252 was deployed
+  (d87bed25, then 41148cc8); preflight before "member notices in app: update not
+  applied (reviewed bodies; ...); new-kind notices: 0" (1 row, no problem rows),
+  after "already applied; new-kind notices: 0", all four triggers enabled;
+  production fingerprint after it matched the full replay (except the known
+  schema grant difference). The same capture shows
+  `20261117144001_sample_post_hide_list.sql` already in production (its table
+  and both commands exist); its application time is not known here, so it stays
+  pending until the owner records it
 - `20261117144001_sample_post_hide_list.sql`: pending
 
 <!-- applied-register:end -->
