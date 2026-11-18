@@ -23,9 +23,8 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: backup-freshness
-  cancel-in-progress: true
+# No concurrency group: the checks only read, so overlapping runs are harmless,
+# and a run cancelled by a newer one would raise a failure alert for nothing.
 
 jobs:
   stored-backup:

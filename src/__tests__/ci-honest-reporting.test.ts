@@ -783,155 +783,263 @@ describe("backup and alert scripts, run for real on sample inputs", () => {
     });
   });
 
-  describe("the failure alert script", () => {
+  // `gh` here answers from JSON fixtures and runs the workflow's own --jq
+  // filter with jq (GitHub's runners have jq; gh itself embeds the same
+  // language). Issue writes are recorded in calls.txt instead.
+  const hasJq = spawnSync(bash, ["-c", "command -v jq"], { windowsHide: true }).status === 0;
+  const ghStub = `gh() {
+  local filter="" key="" i
+  local args=("$@")
+  for ((i = 0; i < \${#args[@]}; i++)); do
+    if [ "\${args[i]}" = "--jq" ]; then filter="\${args[i+1]}"; fi
+  done
+  case "$1 $2" in
+    "issue create") echo create >> calls.txt; echo "https://github.com/o/r/issues/300"; return ;;
+    "issue comment") echo "comment $3" >> calls.txt; return ;;
+    "issue list") key=issues ;;
+    "api -X") echo "assign $4 $6" >> calls.txt; key=assign ;;
+    "api "*) key=$(printf '%s' "$2" | sed -e 's/[?].*//' -e 's#^repos/o/r/##' -e 's#[^A-Za-z0-9]#_#g') ;;
+    *) echo "unexpected gh $*" >&2; return 1 ;;
+  esac
+  if [ ! -f "fixtures/$key.json" ]; then echo "no fixture $key" >&2; return 1; fi
+  jq -r "\${filter:-.}" "fixtures/$key.json"
+}
+`;
+  function withFixtures(
+    script: string,
+    fixtures: Record<string, unknown>,
+    env: Record<string, string>
+  ) {
+    return withDir((dir) => {
+      mkdirSync(path.join(dir, "fixtures"));
+      for (const [key, value] of Object.entries(fixtures))
+        if (value !== undefined)
+          writeFileSync(path.join(dir, "fixtures", `${key}.json`), JSON.stringify(value));
+      const result = sh(dir, ghStub + script, { GH_REPO: "o/r", ...env });
+      const calls = existsSync(path.join(dir, "calls.txt"))
+        ? readFileSync(path.join(dir, "calls.txt"), "utf8")
+        : "";
+      return { ...result, calls };
+    });
+  }
+  const sha = (letter: string) => letter.repeat(40);
+  const ago = (minutes: number) =>
+    new Date(Date.now() - minutes * 60_000).toISOString().replace(/\.\d{3}Z$/, "Z");
+  type StepResult = [name: string, conclusion: string | null];
+  const jobs = (...list: [name: string, conclusion: string, steps: StepResult[]][]) => ({
+    jobs: list.map(([name, conclusion, steps]) => ({
+      name,
+      conclusion,
+      steps: steps.map(([stepName, stepConclusion]) => ({
+        name: stepName,
+        conclusion: stepConclusion,
+      })),
+    })),
+  });
+
+  describe.skipIf(!hasJq)("the failure alert script", () => {
     const alert = parse(readFileSync(".github/workflows/failure-alert.yml", "utf8")) as {
       jobs: Record<string, Job>;
     };
-    // `gh` answers from the environment and records every issue change.
-    const stub = `gh() {
-  case "$1 $2" in
-    "api repos/o/r/actions/runs/"*) printf '%s' "$FAILED" ;;
-    "api repos/o/r/commits/main") echo "$MAIN" ;;
-    "api repos/o/r/actions/workflows/"*) echo "$PREVIOUS" ;;
-    "api repos/o/r/issues/"*) printf '%s' "$RECENT" ;;
-    "issue list") printf '%s' "$OPEN" ;;
-    "issue create") echo create >> calls.txt; echo "https://github.com/o/r/issues/300" ;;
-    "issue edit") echo "edit $*" >> calls.txt ;;
-    "issue comment") echo comment >> calls.txt ;;
-    *) echo "unexpected gh $*" >&2; return 1 ;;
-  esac
-}
-`;
-    const run = (env: Record<string, string>) =>
-      withDir((dir) => {
-        const result = sh(dir, stub + runOf(alert.jobs.alert), {
-          GH_REPO: "o/r",
+    const recheck = "Recheck main immediately before *** changes";
+    const deployJobs = (steps: StepResult[], conclusion = "failure") =>
+      jobs(["Staging configured", "success", []], ["deploy", conclusion, steps]);
+    const base = {
+      issues: [{ number: 157, title: "Automated alert: a main or scheduled workflow run failed" }],
+      issues_157_comments: [],
+      commits_main: { sha: sha("b") },
+      assign: { assignees: [{ login: "owner" }] },
+      actions_runs_500_attempts_1_jobs: deployJobs([
+        ["Reject stale deployment sources before using provider credentials", "success"],
+        [recheck, "failure"],
+        ["Deploy to Cloudflare", "skipped"],
+      ]),
+    };
+    const run = (fixtures: Record<string, unknown> = {}, env: Record<string, string> = {}) =>
+      withFixtures(
+        runOf(alert.jobs.alert),
+        { ...base, ...fixtures },
+        {
           OWNER: "owner",
           WORKFLOW: "Deploy",
-          WORKFLOW_ID: "1",
           EVENT: "workflow_run",
           CONCLUSION: "failure",
           RUN_ID: "500",
           RUN_URL: "https://example.invalid/run",
           RUN_ATTEMPT: "1",
-          HEAD_SHA: "a".repeat(40),
-          MAIN: "b".repeat(40),
-          FAILED: "Recheck main immediately before *** changes",
-          PREVIOUS: "failure",
-          RECENT: "",
-          OPEN: "157",
+          HEAD_SHA: sha("a"),
           ...env,
-        });
-        const calls = existsSync(path.join(dir, "calls.txt"))
-          ? readFileSync(path.join(dir, "calls.txt"), "utf8")
-          : "";
-        return { ...result, calls };
-      });
+        }
+      );
 
     it("stays quiet when a deploy stopped only because main moved on", () => {
-      for (const FAILED of [
-        "Recheck main immediately before *** changes",
-        "Reject stale deployment sources before using provider credentials",
-      ]) {
-        const result = run({ FAILED });
+      for (const steps of [
+        [[recheck, "failure"]],
+        [["Reject stale deployment sources before using provider credentials", "failure"]],
+      ] as StepResult[][]) {
+        const result = run({ actions_runs_500_attempts_1_jobs: deployJobs(steps) });
         expect(result.status, result.log).toBe(0);
         expect(result.log).toContain("No alert");
         expect(result.calls).toBe("");
       }
     });
 
-    it("still alerts for any other deploy failure", () => {
-      // Main did not move, another step failed too, or the steps were unreadable.
-      for (const env of [
-        { MAIN: "a".repeat(40) } as Record<string, string>,
-        { FAILED: "Recheck main immediately before *** changes\nBuild for Cloudflare" },
-        { FAILED: "" },
+    it("still alerts, and assigns the owner, for any other deploy failure", () => {
+      for (const fixtures of [
+        { commits_main: { sha: sha("a") } }, // main did not move
+        {
+          actions_runs_500_attempts_1_jobs: deployJobs([
+            [recheck, "failure"],
+            ["Build for Cloudflare", "failure"],
+          ]),
+        },
+        // A failed job with no failed step, beside a "main moved" step.
+        {
+          actions_runs_500_attempts_1_jobs: jobs(
+            ["deploy", "failure", [[recheck, "failure"]]],
+            ["Deploy staging and smoke-test it", "failure", []]
+          ),
+        },
+        { actions_runs_500_attempts_1_jobs: undefined }, // unreadable run
       ]) {
-        const result = run(env);
+        const result = run(fixtures);
         expect(result.status, result.log).toBe(0);
-        expect(result.calls).toContain("comment");
-        expect(result.calls).toContain("--add-assignee owner");
+        expect(result.calls).toBe(
+          "comment 157\nassign repos/o/r/issues/157/assignees assignees[]=owner\n"
+        );
       }
     });
 
-    it("opens and assigns a new issue when none is open", () => {
-      const result = run({ OPEN: "", FAILED: "Build for Cloudflare" });
-      expect(result.status, result.log).toBe(0);
-      expect(result.calls).toBe("create\nedit issue edit 300 --add-assignee owner\n");
+    it("alerts on a deploy cancelled after production changes began, not before", () => {
+      const cancelled = { CONCLUSION: "cancelled" };
+      const early = run(
+        { actions_runs_500_attempts_1_jobs: deployJobs([[recheck, null]], "cancelled") },
+        cancelled
+      );
+      expect(early.status, early.log).toBe(0);
+      expect(early.calls).toBe("");
+      // A run cancelled while it waited has no jobs at all.
+      expect(run({ actions_runs_500_attempts_1_jobs: { jobs: [] } }, cancelled).calls).toBe("");
+      const late = run(
+        {
+          actions_runs_500_attempts_1_jobs: deployJobs(
+            [
+              [recheck, "success"],
+              ["Deploy to Cloudflare", "cancelled"],
+            ],
+            "cancelled"
+          ),
+        },
+        cancelled
+      );
+      expect(late.calls).toContain("comment 157");
     });
 
-    it("reports a new failure at once but repeats an ongoing one only every 6 hours", () => {
+    it("opens and assigns a new issue when none is open", () => {
+      const result = run({ issues: [], commits_main: { sha: sha("a") } });
+      expect(result.status, result.log).toBe(0);
+      expect(result.calls).toBe(
+        "create\nassign repos/o/r/issues/300/assignees assignees[]=owner\n"
+      );
+    });
+
+    it("comments at most every 6 hours per workflow", () => {
       const env = { WORKFLOW: "Synthetic Monitoring", EVENT: "schedule" };
-      const recent = { RECENT: "Workflow: Synthetic Monitoring\nWhat it means: x" };
-      expect(run({ ...env, ...recent, PREVIOUS: "success" }).calls).toContain("comment");
-      const ongoing = run({ ...env, ...recent, PREVIOUS: "failure" });
-      expect(ongoing.calls).not.toContain("comment");
-      expect(ongoing.log).toContain("already has a recent alert");
-      expect(run({ ...env, PREVIOUS: "failure" }).calls).toContain("comment");
+      const recent = run(
+        { issues_157_comments: [{ body: "Workflow: Synthetic Monitoring\nWhat it means: x" }] },
+        env
+      );
+      expect(recent.calls).not.toContain("comment");
+      expect(recent.log).toContain("already has a recent alert");
+      const other = run({ issues_157_comments: [{ body: "Workflow: CI\nWhat it means: x" }] }, env);
+      expect(other.calls).toContain("comment 157");
+    });
+
+    it("fails visibly, after posting, when the owner cannot be assigned", () => {
+      const result = run({ assign: { assignees: [] }, commits_main: { sha: sha("a") } });
+      expect(result.status).toBe(1);
+      expect(result.calls).toContain("comment 157");
+      expect(result.log).toContain("Alert not assigned");
     });
   });
 
-  describe("the main-deployed check", () => {
+  describe.skipIf(!hasJq)("the main-deployed check", () => {
     const job = (
       parse(readFileSync(".github/workflows/main-deployed.yml", "utf8")) as {
         jobs: Record<string, Job & { env: Record<string, string> }>;
       }
     ).jobs["main-deployed"];
-    const ago = (minutes: number) =>
-      new Date(Date.now() - minutes * 60_000).toISOString().replace(/\.\d{3}Z$/, "Z");
-    const sha = (letter: string) => letter.repeat(40);
-    // Deploy runs are "id:sha" (newest first); DEPLOYED lists the run ids whose
-    // production deploy step succeeded; CI runs are "created sha".
-    const stub = `gh() {
-  case "$2" in
-    */commits/main) echo "$MAIN" ;;
-    */workflows/deploy.yml/runs*) printf '%s\\n' $DEPLOYS ;;
-    */runs/*/jobs*) id="\${2#*/runs/}"; id="\${id%%/*}"
-      case " $DEPLOYED " in *" $id "*) echo 1 ;; *) echo 0 ;; esac ;;
-    */workflows/ci.yml/runs*) printf '%s' "$CI" ;;
-    *) echo "unexpected gh $*" >&2; return 1 ;;
-  esac
-}
-`;
-    const check = (env: Record<string, string>) =>
-      withDir((dir) =>
-        sh(dir, stub + runOf(job), { ...job.env, GH_REPO: "o/r", DEPLOYED: "2", ...env })
-      );
-    const deploys = `3:${sha("c")} 2:${sha("b")} 1:${sha("a")}`;
+    const deployed = jobs(["deploy", "success", [["Deploy to Cloudflare", "success"]]]);
+    const notDeployed = jobs(["deploy", "failure", [["Deploy to Cloudflare", "skipped"]]]);
+    // Deploy runs newest first: 4 (d) cancelled after its deploy step, 3 (c)
+    // skipped (CI failed), 2 (b) deployed, 1 (a) deployed.
+    const fixtures = (main: string, mainAgo: number, ci: [number, string][]) => ({
+      commits_main: { sha: main, commit: { committer: { date: ago(mainAgo) } } },
+      actions_workflows_deploy_yml_runs: {
+        workflow_runs: [
+          { id: 4, head_sha: sha("d"), conclusion: "cancelled" },
+          { id: 3, head_sha: sha("c"), conclusion: "skipped" },
+          { id: 2, head_sha: sha("b"), conclusion: "success" },
+          { id: 1, head_sha: sha("a"), conclusion: "success" },
+        ],
+      },
+      actions_runs_4_jobs: deployed,
+      actions_runs_3_jobs: notDeployed,
+      actions_runs_2_jobs: deployed,
+      actions_runs_1_jobs: deployed,
+      actions_workflows_ci_yml_runs: {
+        workflow_runs: ci.map(([minutes, head]) => ({
+          created_at: ago(minutes),
+          head_sha: sha(head),
+        })),
+      },
+    });
+    const check = (value: Record<string, unknown>) =>
+      withFixtures(runOf(job), value, { ...job.env });
 
-    it("passes when the newest main commit is live", () => {
-      const result = check({ MAIN: sha("c"), DEPLOYS: deploys, DEPLOYED: "3 2" });
-      expect(result.status, result.log).toBe(0);
-      expect(result.log).toContain("runs the newest main commit");
+    it("passes when the newest main commit is live, never counting a cancelled deploy", () => {
+      const live = check(fixtures(sha("b"), 600, [[600, "b"]]));
+      expect(live.status, live.log).toBe(0);
+      expect(live.log).toContain("runs the newest main commit");
+      // d's run was cancelled, so b is live and d has waited 4 hours.
+      const cancelled = check(
+        fixtures(sha("d"), 240, [
+          [240, "d"],
+          [600, "b"],
+        ])
+      );
+      expect(cancelled.status).toBe(1);
+      expect(cancelled.log).toContain("live " + sha("b"));
     });
 
     it("gives a newer commit 3 hours to go live, counted from the first undeployed push", () => {
-      // Run 3 (for c) did not reach the deploy step, so b is live.
-      const ci = (first: number) =>
-        [`${ago(10)} ${sha("d")}`, `${ago(first)} ${sha("c")}`, `${ago(600)} ${sha("b")}`].join(
-          "\n"
-        );
-      const waiting = check({ MAIN: sha("d"), DEPLOYS: deploys, CI: ci(170) });
+      const ci = (first: number): [number, string][] => [
+        [10, "e"],
+        [first, "c"],
+        [600, "b"],
+      ];
+      const waiting = check(fixtures(sha("e"), 10, ci(170)));
       expect(waiting.status, waiting.log).toBe(0);
       expect(waiting.log).toContain("the live site runs " + sha("b"));
-      const late = check({ MAIN: sha("d"), DEPLOYS: deploys, CI: ci(190) });
+      const late = check(fixtures(sha("e"), 10, ci(190)));
       expect(late.status).toBe(1);
       expect(late.log).toContain("Main not deployed");
     });
 
-    it("fails when no production deploy is found", () => {
-      const result = check({
-        MAIN: sha("d"),
-        DEPLOYS: deploys,
-        DEPLOYED: "",
-        CI: `${ago(10)} ${sha("d")}`,
-      });
+    it("waits for a push whose CI run is not listed yet", () => {
+      const fresh = check(fixtures(sha("e"), 1, [[600, "b"]]));
+      expect(fresh.status, fresh.log).toBe(0);
+      expect(fresh.log).toContain("Newer commits arrived 1 minutes ago");
+      expect(check(fixtures(sha("e"), 200, [[600, "b"]])).status).toBe(1);
+    });
+
+    it("fails when the live commit is not among the recent pushes", () => {
+      const result = check(fixtures(sha("e"), 10, [[10, "e"]]));
       expect(result.status).toBe(1);
-      expect(result.log).toContain("none found");
+      expect(result.log).toContain("not among the last 100 pushes");
     });
   });
 });
-
 describe("production-matching suites on main and the failure alert", () => {
   type Workflow = {
     name: string;
