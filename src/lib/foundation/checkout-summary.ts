@@ -6,7 +6,7 @@ import {
   isIndividualSlotPlan,
   readFoundationBillingCatalogue,
 } from "./billing-catalogue";
-import { formatDurationDays, ENTERPRISE_ADMINS_INCLUDED } from "../constants/pricing";
+import { formatDurationDays } from "../constants/pricing";
 import { selectFoundationBillingPlan } from "./billing-plan-selection";
 
 const areas = {
@@ -39,7 +39,8 @@ export async function readFoundationCheckoutSummary(planId: string) {
     durationLabel: formatDurationDays(plan.duration_days),
     slotCapacity: plan.slot_capacity,
     monthlyActivationLimit: plan.activations_per_period,
-    administrators: plan.slot_capacity > 1 ? ENTERPRISE_ADMINS_INCLUDED : null,
+    // No named administrators: package teams are not built yet (roadmap P4c).
+    administrators: null,
     expiryNotice: individual
       ? "Its post is hidden. Buy a slot within 3 days to bring it back, or it is deleted with its media."
       : "Posts are hidden. Buy a plan within 3 days to reactivate them, or they are deleted with their media.",

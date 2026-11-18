@@ -178,7 +178,6 @@ export default async function PricingPage() {
           <div className="container-page pb-12 sm:pb-16">
             <Reveal>
               <EnterprisePricing
-                plans={catalog.enterprise}
                 checkoutEnabled={settings?.features.enterpriseCheckout ?? true}
                 onlineMaxCents={onlineMaxCents}
                 retailFromCents={

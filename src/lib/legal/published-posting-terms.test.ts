@@ -2,7 +2,8 @@ import { expect, it } from "vitest";
 import { getPublishedPostingTerms, assertPublishedPostingTerms } from "./published-posting-terms";
 import { buildTermsTextSections } from "./terms-text";
 import manifest from "./terms-documents/catalogue.json";
-import { ENTERPRISE_PLANS, PACKAGES_ON_SALE, RETAIL_OFFERS } from "@/lib/constants/pricing";
+import { PACKAGES_ON_SALE, RETAIL_OFFERS } from "@/lib/constants/pricing";
+import { PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS } from "@/lib/billing/slot-packages";
 import { buildCommercialCatalog, buildFoundationCommercialCatalog } from "@/lib/commercial/plans";
 import { POSTS_PER_SLOT_PER_30_DAYS } from "@/lib/billing/slot-checkout";
 import { readFileSync } from "node:fs";
@@ -76,16 +77,17 @@ it("keeps the site's price constants in step with the active Terms", () => {
   const wasPrices = RETAIL_OFFERS.filter((offer) => offer.compareAtCents !== undefined);
   for (const offer of wasPrices)
     expect(noDiscounts, `${rand(offer.compareAtCents!)} was-price`).toBe(false);
-  // Multi-listing and sponsor prices are shown only while they are on sale and
-  // the active Terms cover multi-listing plans or state each price.
+  // Multi-listing prices are shown only while packages are on sale and the
+  // active Terms cover multi-listing packages or state the package slot price.
   const multiListingCovered = content.includes(
     "Multi-listing plans bought online follow these Terms"
   );
-  for (const plan of ENTERPRISE_PLANS)
-    expect(
-      !PACKAGES_ON_SALE || multiListingCovered || content.includes(rand(plan.priceCents)),
-      `${plan.planCode} ${rand(plan.priceCents)}`
-    ).toBe(true);
+  expect(
+    !PACKAGES_ON_SALE ||
+      multiListingCovered ||
+      content.includes(`${rand(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot`),
+    `package slot price ${rand(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)}`
+  ).toBe(true);
   // With no plan on sale in the database, nothing links to checkout.
   expect(buildCommercialCatalog([]).onSale).toBe(false);
 });

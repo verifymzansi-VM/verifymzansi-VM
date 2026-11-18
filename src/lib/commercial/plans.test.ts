@@ -60,6 +60,6 @@ it("serves the Individual slot's one plan in every section, at the database's pr
       PROMOTIONS_EVENTS: ids[index],
     })
   );
-  // No multi-listing plan comes from an Individual slot.
-  expect(result.enterprise.every((plan) => plan.planId === null)).toBe(true);
+  // Multi-listing packages are not catalogue plans (their own checkout).
+  expect(result).not.toHaveProperty("enterprise");
 });
