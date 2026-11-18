@@ -133,6 +133,11 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_staff_invoice_transfers: { Args: Record<never, never>; Returns: Json };
+      get_staff_expired_invoice_transfers: { Args: Record<never, never>; Returns: Json };
+      resolve_expired_invoice_transfer: {
+        Args: { p_transfer_id: string; p_resolution: string; p_reason: string };
+        Returns: Json;
+      };
       get_staff_invoice_customer: { Args: { p_account_email: string }; Returns: Json };
       get_staff_invoice_payments: { Args: { p_payment_ids: string[] }; Returns: Json };
       issue_staff_invoice: {
@@ -162,6 +167,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       reveal_organisation_applicant_contact: { Args: { p_application: string }; Returns: Json };
       get_my_invoices: { Args: Record<never, never>; Returns: Json };
       get_my_invoice: { Args: { p_invoice_number: string }; Returns: Json };
+      get_my_invoice_transfer_expiry: { Args: { p_invoice_number: string }; Returns: Json };
       save_my_invoice_billing: {
         Args: {
           p_invoice_number: string;
@@ -663,6 +669,7 @@ export type FoundationRuntimeServiceDatabase = {
       get_payment_receipt: { Args: { p_payment_id: string }; Returns: Json };
       claim_ozow_refund_send: { Args: { p_request_id: string }; Returns: Json };
       run_slot_renewals: { Args: { p_limit: number }; Returns: Json };
+      expire_waiting_bank_transfers: { Args: { p_limit: number }; Returns: Json };
       get_slot_package_offer: { Args: Record<never, never>; Returns: Json };
       list_ozow_refund_sends_due: { Args: { p_limit: number }; Returns: Json };
       record_ozow_refund_send: { Args: { p_request_id: string; p_result: Json }; Returns: Json };

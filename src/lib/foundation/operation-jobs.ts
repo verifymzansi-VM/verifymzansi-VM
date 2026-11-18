@@ -115,7 +115,30 @@ const SWEEPS = [
   ["purge_expired_inbox", { p_limit: 100 }],
   ["reconcile_intro_trials", { p_limit: 20 }],
   ["approve_due_commissions", { p_limit: 20 }],
+  // Records the expiry (status, time, audit row) of bank transfers that have
+  // waited 14 days; the database treats them as expired already
+  // (20261118044440_bank_transfer_expiry.sql).
+  // At most 50 rows a run: each is its own subtransaction in the database.
+  ["expire_waiting_bank_transfers", { p_limit: 50 }],
 ] as const;
+// Sweeps an earlier database does not have yet: until their update is
+// applied, the missing command does not fail the run, but a warning is logged
+// (at most once an hour per sweep and worker instance) so it shows in the
+// Workers logs instead of passing silently.
+const LATER_SWEEPS: ReadonlySet<string> = new Set(["expire_waiting_bank_transfers"]);
+export const MISSING_SWEEP_WARNING_MS = 60 * 60 * 1000;
+const missingSweepWarnedAt = new Map<string, number>();
+const missingCommand = (error: { code?: string } | null) =>
+  error?.code === "PGRST202" || error?.code === "42883";
+// A sweep that reports rows it could not change (and, for the bank transfer
+// expiry, which rows with their SQLSTATE).
+const sweepFailures = z.object({
+  failed: z.number().int().min(0),
+  failures: z
+    .array(z.object({ transfer_id: z.uuid(), sqlstate: z.string().regex(/^[0-9A-Z]{5}$/) }))
+    .max(50)
+    .optional(),
+});
 
 const jobSchema = z
   .object({
@@ -243,7 +266,26 @@ export async function runFoundationOperationJobs(
   const sweeps = (async () => {
     for (const [name, args] of SWEEPS) {
       const result = await call(name, args);
-      if (result.error) fail(`sweep:${name}`);
+      if (result.error && LATER_SWEEPS.has(name) && missingCommand(result.error)) {
+        const at = now();
+        if (
+          at - (missingSweepWarnedAt.get(name) ?? Number.NEGATIVE_INFINITY) >=
+          MISSING_SWEEP_WARNING_MS
+        ) {
+          missingSweepWarnedAt.set(name, at);
+          log.warn("Sweep command missing: its database update is not applied", { sweep: name });
+        }
+      } else if (result.error) fail(`sweep:${name}`);
+      else {
+        // Rows a sweep could not change are retried next run; say so.
+        const failures = sweepFailures.safeParse(result.data);
+        if (failures.success && failures.data.failed > 0)
+          log.warn("Sweep left rows it could not change", {
+            sweep: name,
+            failed: failures.data.failed,
+            ...(failures.data.failures ? { rows: failures.data.failures } : {}),
+          });
+      }
     }
   })();
 

@@ -953,12 +953,45 @@ curl https://verifymzansi-payment-cleanup.verifymzansi.workers.dev/
 
 ## Database Backups
 
-`.github/workflows/database-backup.yml` runs every night at 01:30 SAST, and can
-be started by hand from the Actions tab. It dumps roles, schema and data with
-the Supabase CLI, checks the dump, encrypts it to
+`.github/workflows/database-backup.yml` runs twice a day (scheduled for 22:47
+and 10:47 SAST; GitHub usually starts it 3 to 5.5 hours later), and can be
+started by hand from the Actions tab. Two runs keep the gap between stored
+backups near 12 to 14.5 hours, inside the 24-hour recovery point; a single
+failed run leaves a gap of about 24 to 26.5 hours instead of two days. It dumps
+roles, schema and data with the Supabase CLI, checks the dump, encrypts it to
 `.github/backup/database-backup-public-key.asc` and stores it in the private R2
 bucket `verifymzansi-backups` under `database/YYYY/MM/DD/`. R2 deletes copies
 after 35 days.
+
+Each encrypted archive holds:
+
+- `roles.sql`, `schema.sql`, `data.sql`: the application schemas (`api`,
+  `private`, `internal`, `public`, `auth`, `extensions`).
+- `platform-schema.sql`: the Supabase-managed `realtime` and
+  `supabase_migrations` schemas, including the `owner_inbox_receive` policy on
+  `realtime.messages`. `platform-data.sql`: the hosted migration ledger
+  (`supabase_migrations.schema_migrations`). Realtime rows are transient and not
+  kept; `storage` and `vault` are not used by the app and not dumped.
+- `ROW-COUNTS.tsv`: the exact row count of every table whose data is dumped (the
+  schemas above plus `supabase_migrations`), read from the live database just
+  after the dump (`live_rows`) and counted from the dump itself (`dump_rows`).
+  They can differ by rows written during the dump; `not_in_dump` marks tables
+  the CLI leaves out (such as `auth.schema_migrations`). In `api`, `private`,
+  `internal` and `public`, a table that is unreadable, not in the dump, or has
+  more live rows than dumped (an empty dump included) beyond 50 rows or 1%
+  (whichever is larger) is recorded as a problem, so a queue that fills just
+  after the snapshot is not a false alarm.
+- `FINGERPRINT.tsv`: `database/foundation/fingerprint.sql` run read-only on
+  production, comparable with `fingerprint.json` `productionCheck`.
+- `MANIFEST.txt`: dump start and end times, CLI and psql versions, the commit,
+  any part that could not be captured (`problem:` lines) and the sha256 of every
+  file. The queries are in `.github/backup/backup-manifest.sql`; the job log
+  shows only totals, sizes and the fingerprint hashes.
+
+If the platform schemas, row counts or fingerprint cannot be captured (each is
+capped by a timeout: 5 minutes per platform dump, 7 minutes for the counts), or
+the plaintext cannot be shredded, the run still stores the main backup and then
+fails, so the failure alert fires.
 
 - **Secret:** `SUPABASE_BACKUP_DB_PASSWORD` (the database password from
   Supabase > Project Settings > Database). Reset it there if a run reports an
@@ -967,12 +1000,22 @@ after 35 days.
   fingerprint `CBADD845A4EEE95E8ADD376D8DD25F76A198D659`). Without it no backup
   can be restored. Never commit it or store it in GitHub, Cloudflare or
   Supabase.
-- **Failure alerts:** GitHub emails the owner when a scheduled run fails. GitHub
-  pauses schedules in public repositories after 60 days without commits;
-  re-enable the workflow if that happens. A paused or missing run sends no
-  email, so the optional `HEARTBEAT_URL_DATABASE_BACKUP` heartbeat (see
+- **Failure alerts:** GitHub emails the owner when a scheduled run fails, and
+  the Failure alert workflow opens an issue.
+  `.github/workflows/backup-freshness.yml` runs every 6 hours and fails (opening
+  the same issue) when the newest object under `database/` in the bucket is 27
+  hours old or older (two runs in a row stored nothing; one missed run leaves at
+  most about 26.5 hours) or dated more than 5 minutes in the future, or when the
+  latest commit is 45 days old or older. It lists the bucket with the backup
+  job's own R2 key (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`); a separate R2
+  API token that can only list and read `verifymzansi-backups` is preferred, and
+  the owner may create one later and switch the freshness check to it. GitHub
+  pauses schedules in public repositories after 60 days without commits, the
+  freshness check included; merge a change before then, or re-enable the
+  workflows if that happens. A paused run sends no email, so the optional
+  `HEARTBEAT_URL_DATABASE_BACKUP` heartbeat (see
   [Monitoring and Alerts](#monitoring-and-alerts)) is what catches backups that
-  silently stop.
+  silently stop once schedules are paused.
 
 ### Restoring
 
@@ -996,7 +1039,19 @@ after 35 days.
      --file data.sql --dbname "$TARGET_DB_URL"
    ```
 
-4. Point the app at the restored project only after checking accounts, posts and
+   The new project already has its own `realtime` and `supabase_migrations`
+   tables, so do not replay `platform-schema.sql` whole: run only its
+   `CREATE POLICY "owner_inbox_receive" ON "realtime"."messages"` statement
+   (after the foundation functions exist), and load `platform-data.sql` only if
+   the migration history should be carried over.
+
+4. Prove completeness: `select count(*)` on each table should equal the
+   `dump_rows` column of `ROW-COUNTS.tsv`, and
+   `database/foundation/fingerprint.sql`, run after
+   `set search_path to "$user", public;`, should return the rows in
+   `FINGERPRINT.tsv`.
+
+5. Point the app at the restored project only after checking accounts, posts and
    payments. Uploaded media and ID documents live in R2 and are not part of this
    backup.
 

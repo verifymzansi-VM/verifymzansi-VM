@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { formatPlanPrice } from "@/lib/constants/pricing";
-import { aboveOnlineLimit } from "@/lib/billing/slot-checkout";
+import { aboveOnlineLimit, BILLING_EMAIL } from "@/lib/billing/slot-checkout";
 import { PrintButton } from "./print-button";
 
 export interface InvoicePayPanelProps {
@@ -22,6 +22,9 @@ export interface InvoicePayPanelProps {
   checkoutOpen: boolean;
   /** A bank transfer to this invoice waits for staff to confirm it. */
   transferWaiting?: boolean;
+  /** The latest bank transfer to this unpaid invoice was not confirmed within
+   * 14 days and expired; the invoice can be paid again. */
+  transferExpired?: boolean;
   /** The most one online (Ozow) payment may be, in cents; null when unknown
    * (the database still refuses Pay now above it). */
   onlineMaxCents?: number | null;
@@ -54,6 +57,7 @@ export function InvoicePayPanel({
   consentWording,
   checkoutOpen,
   transferWaiting = false,
+  transferExpired = false,
   onlineMaxCents = null,
 }: InvoicePayPanelProps) {
   // Above the most Ozow accepts in one payment, only a bank transfer pays it.
@@ -228,6 +232,15 @@ export function InvoicePayPanel({
             <h2 id="invoice-pay" className="font-display text-lg font-semibold">
               Pay
             </h2>
+            {transferExpired && !transferWaiting ? (
+              <p
+                role="status"
+                data-testid="invoice-transfer-expired"
+                className="rounded-xl bg-muted/60 p-3 text-sm"
+              >
+                {`Your bank transfer to this invoice was not confirmed within 14 days, so it expired and this invoice is unpaid again. If you already paid, email ${BILLING_EMAIL} with your proof of payment and the invoice number before you pay again.`}
+              </p>
+            ) : null}
             {transferWaiting ? (
               <p role="status" className="rounded-xl bg-muted/60 p-3 text-sm">
                 Your bank transfer to this invoice is being checked. You do not need to pay again;

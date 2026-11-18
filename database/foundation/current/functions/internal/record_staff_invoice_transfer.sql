@@ -31,7 +31,9 @@ begin
   exception when others then
     raise exception 'date the money cleared required' using errcode='22023', detail='cleared_date_invalid';
   end;
-  if cleared > today or cleared < today - 90 then
+  -- More than 90 days ago only to record again exactly the bank credit of an
+  -- expired transfer (checked below, under the locks).
+  if cleared > today then
     raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
   end if;
   if p_cooling_off_waiver is distinct from true then
@@ -55,11 +57,27 @@ begin
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, inv.account_id);
   perform internal.assert_staff_not_referrer(actor, inv.account_id);
+  -- 20261118044440_bank_transfer_expiry.sql: a waiting record of this bank
+  -- credit or of this invoice that has waited 14 days is marked expired first, so it
+  -- no longer holds them; the unique indexes still allow one open record. A
+  -- credit that cleared more than 90 days ago is accepted only to record again
+  -- exactly the credit of an expired transfer of the same account (and of the
+  -- same invoice, when that transfer named one).
+  perform internal.expire_invoice_transfer(t.id) from private.invoice_transfers t
+    where t.status = 'awaiting_confirmation'
+      and (t.customer_invoice_id = inv.id or (t.amount_received_cents = inv.total_cents and t.cleared_on = cleared
+        and upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key));
+  if cleared < today - 90 and not internal.invoice_transfer_credit_expired(reference_key, inv.total_cents, cleared,
+      inv.account_id, inv.id) then
+    raise exception 'the money must have cleared today or in the last 90 days' using errcode='22023', detail='cleared_date_invalid';
+  end if;
   -- The same bank credit waiting or confirmed: the same request again by the
-  -- same staff member returns it; anything else is refused.
+  -- same staff member returns it; anything else is refused. A declined or
+  -- expired record does not count.
   select * into prior from private.invoice_transfers t
     where upper(regexp_replace(t.bank_reference, '[^A-Za-z0-9]', '', 'g')) = reference_key
-      and t.amount_received_cents = inv.total_cents and t.cleared_on = cleared and t.status <> 'declined';
+      and t.amount_received_cents = inv.total_cents and t.cleared_on = cleared
+      and t.status not in ('declined', 'expired');
   if found then
     if prior.recorded_by = actor and prior.customer_invoice_id = inv.id and prior.reason = audit_reason then
       return internal.invoice_transfer_dto(prior, actor)
@@ -74,7 +92,7 @@ begin
     raise exception 'this invoice was voided' using errcode='PT409', detail='invoice_void';
   end if;
   if exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = inv.id
-      and t.status = 'awaiting_confirmation') then
+      and internal.invoice_transfer_waiting(t)) then
     raise exception 'a bank transfer to this invoice already waits for confirmation'
       using errcode='PT409', detail='invoice_transfer_waiting';
   end if;

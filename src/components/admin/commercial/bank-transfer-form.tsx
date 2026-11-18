@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPlanPrice } from "@/lib/constants/pricing";
 import {
@@ -57,6 +58,14 @@ export type WaitingTransfer = {
   recorded_at: string;
   recorded_by_me: boolean;
   recorded_by_name: string | null;
+};
+
+/** A recorded bank transfer nobody confirmed within 14 days: the database
+ * marked it expired; nothing was paid or started and an invoice it named can
+ * be paid again. */
+export type ExpiredTransfer = Omit<WaitingTransfer, "similar_records"> & {
+  expired_at: string;
+  invoice_number: string | null;
 };
 
 const recordedDate = new Intl.DateTimeFormat("en-ZA", {
@@ -167,14 +176,112 @@ function WaitingTransfers({
   );
 }
 
+/** Recorded bank transfers nobody confirmed within 14 days, oldest first,
+ * listed until each is followed up: the same money recorded again and
+ * confirmed, or resolved by staff (money returned, or it never arrived). */
+function ExpiredTransfers({
+  expired,
+  count,
+  canResolve,
+}: {
+  expired: ExpiredTransfer[];
+  count: number;
+  canResolve: boolean;
+}) {
+  const { run, busy, message } = useCommercialAction();
+  // Resolving the last listed transfer empties the list on refresh: the
+  // outcome stays on screen.
+  if (expired.length === 0) return <ActionMessage message={message} />;
+  const resolve = (t: ExpiredTransfer, resolution: "returned" | "never_arrived") => {
+    const reason = window.prompt("Reason (audited, at least 5 characters):")?.trim();
+    if (reason && reason.length >= 5)
+      void run(
+        { action: "payment.transfer_resolve", transferId: t.transfer_id, resolution, reason },
+        "Expired bank transfer resolved."
+      );
+  };
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold">
+        Not confirmed within 14 days{count > expired.length ? ` · ${count}, oldest shown` : ""}
+      </h3>
+      <p className="text-xs text-muted-foreground">
+        Listed until the same money is recorded again and confirmed, or it is resolved below.
+      </p>
+      <ActionMessage message={message} />
+      <ul className="space-y-2" aria-label="Expired bank transfers">
+        {expired.map((t) => (
+          <li
+            key={t.transfer_id}
+            className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm"
+          >
+            <span className="font-semibold">
+              {`${formatPlanPrice(t.amount_received_cents)} from ${t.customer_name ?? "the customer"} for ${t.slots} × ${t.term_days}-day ${t.slots === 1 ? "slot" : "slots"}`}
+            </span>
+            <Badge variant="secondary">Expired</Badge>
+            <span className="w-full text-xs text-muted-foreground">
+              Bank transfer {t.bank_reference}, cleared {t.cleared_on}
+              {t.invoice_number ? ` · Invoice ${t.invoice_number}` : ""} ·{" "}
+              {t.customer_email ?? t.account_id} · Recorded{" "}
+              {recordedDate.format(new Date(t.recorded_at))}
+              {t.recorded_by_me
+                ? " by you"
+                : t.recorded_by_name
+                  ? ` by ${t.recorded_by_name}`
+                  : ""}{" "}
+              · Expired {recordedDate.format(new Date(t.expired_at))}
+            </span>
+            <span className="w-full text-xs text-muted-foreground">
+              Nothing was paid or started. If the money is in the bank account, record it again.
+            </span>
+            {canResolve ? (
+              <span className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-10"
+                  disabled={busy || t.recorded_by_me}
+                  onClick={() => resolve(t, "returned")}
+                >
+                  Money returned
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-10"
+                  disabled={busy || t.recorded_by_me}
+                  onClick={() => resolve(t, "never_arrived")}
+                >
+                  Never arrived
+                </Button>
+                {t.recorded_by_me ? (
+                  <span className="text-xs text-muted-foreground">
+                    You recorded it: another staff member must resolve it.
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function BankTransferPanel({
   canRecord,
   canConfirm,
   waiting,
+  expired = [],
+  expiredCount = expired.length,
 }: {
   canRecord: boolean;
   canConfirm: boolean;
   waiting: WaitingTransfer[];
+  /** Transfers nobody confirmed within 14 days, still to be followed up. */
+  expired?: ExpiredTransfer[];
+  /** How many there are in all (the list shows at most 200, oldest first). */
+  expiredCount?: number;
 }) {
   const { run, busy, message } = useCommercialAction();
   const { checking, check, checkCustomer } = useCustomerCheck("Nothing was recorded.");
@@ -196,6 +303,7 @@ export function BankTransferPanel({
         invoice.
       </p>
       <WaitingTransfers waiting={waiting} canConfirm={canConfirm} />
+      <ExpiredTransfers expired={expired} count={expiredCount} canResolve={canConfirm} />
       <ActionMessage message={check ? { tone: "error", text: check } : message} />
       {!canRecord ? null : !open ? (
         <Button type="button" variant="outline" className="h-11" onClick={() => setOpen(true)}>

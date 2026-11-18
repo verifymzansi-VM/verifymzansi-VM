@@ -28,30 +28,41 @@
 -- 4. Staff invoice and bank transfer reads that return customer emails,
 --    billing names, addresses, registration numbers or bank references
 --    (api.get_staff_invoices, api.get_staff_invoice,
---    api.get_staff_invoice_transfers, api.get_staff_invoice_payments) need a
---    second factor from the last 15 minutes. The check is in these four API
---    commands, so their internal bodies are unchanged.
+--    api.get_staff_invoice_transfers, api.get_staff_invoice_payments,
+--    api.get_staff_expired_invoice_transfers) need a second factor from the
+--    last 15 minutes. The check is in these five API commands, so their
+--    internal bodies are unchanged.
 -- 5. The organisation dashboard (members who administer an organisation) no
 --    longer carries applicants' business contacts ('public_contacts' leaves
 --    its result) and names co-administrators by their public short name. A
 --    new command, api.reveal_organisation_applicant_contact, gives the
 --    business contact of one pending application (submitted, or asked for more
 --    information) at a time, as on the applicant's live public profile;
---    nothing for decided or withdrawn applications.
+--    nothing for decided or withdrawn applications. Every reveal is recorded
+--    in the organisation's append-only event log (who, when, which
+--    application; 'organisation:applicant_contact_revealed' in the staff
+--    audit trail).
 --
 -- Expand only: one new API command; no command, argument, grant or return
 -- type is removed or changed. Two result fields change by hand-reviewed
 -- jsonb: the privacy queue gains two fields and the organisation dashboard
--- loses 'public_contacts'. The website release of the same pull request
--- accepts both shapes, sends staff to verify their authenticator again on the
--- new refusals and knows the new notice and email kinds.
+-- loses 'public_contacts'.
 --
--- ORDER: deploy first, then apply. Apply this update only once the website
--- release of the pull request that adds this file is live: the website before
--- it cannot send the new email kinds (its privacy notice job refuses an
--- unknown kind) and reads the old dashboard shape only. If that release is
--- ever reverted, run the rollback first. The precondition accepts the reviewed
--- bodies or this update's own, so a repeated run changes nothing.
+-- ORDER (safe in every state): first the website-only expand release (pull
+-- request "Website reads the staff data minimisation shapes") is merged and
+-- deployed: it knows the two new email kinds and notice kinds and accepts
+-- both result shapes. Then this update is applied (after this pull request
+-- is merged, before its release is deployed, as usual). The expand release
+-- runs against this update with only lesser screens (no applicant contacts on
+-- the dashboard, a generic refusal for an export before approval); this pull
+-- request's release runs against the database before this update exactly as
+-- today (it shows the reveal and the approval controls only when the result
+-- says the update is applied). Do not apply this update while the live
+-- website predates the expand release: its privacy notice job refuses an
+-- unknown email kind and its strict readers refuse the new shapes. If the
+-- expand release is ever reverted, run the rollback first. The precondition
+-- accepts the reviewed bodies or this update's own, so a repeated run changes
+-- nothing.
 -- Read-only preflight: ../preflight/20261118072601_staff_data_minimisation.check.sql.
 -- Rollback: ../rollback/20261118072601_staff_data_minimisation.down.sql.
 begin;
@@ -124,6 +135,10 @@ begin
       and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_payments(uuid[])')) is distinct from 'b6e790c043538085d440789f3b7b22b8' then
     raise exception 'staff data minimisation drift: api.get_staff_invoice_payments(uuid[]) is not the reviewed body' using errcode='55000';
   end if;
+  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_expired_invoice_transfers()')) is distinct from 'e8f0b8bc6e8a57ad769fb3bbbea7e1eb'
+      and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_expired_invoice_transfers()')) is distinct from '81dbcf858648a1b88bdc721f234e9018' then
+    raise exception 'staff data minimisation drift: api.get_staff_expired_invoice_transfers() is not the reviewed body' using errcode='55000';
+  end if;
   if (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.notifications'::regclass and c.conname='notifications_kind_check')
       not in(array['account_banned','account_suspended','account_warning','appeal_decided','business_check_update','content_hidden','content_restored','draft_deletion_warning','enquiry_received','identity_accepted','invoice_issued','organisation_affiliation_ended','organisation_application_decided','organisation_application_received','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','payment_completed','payment_reconciliation_required','payment_reversed','post_approved','post_changes_approved','post_changes_rejected','post_deleted','post_expired','post_kept','post_rejected','post_sold','slot_renewal_reminder','trial_started','verification_phone_confirmed','verification_returned']::text[],array['account_banned','account_suspended','account_warning','appeal_decided','business_check_update','content_hidden','content_restored','draft_deletion_warning','enquiry_received','identity_accepted','invoice_issued','organisation_affiliation_ended','organisation_application_decided','organisation_application_received','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','payment_completed','payment_reconciliation_required','payment_reversed','post_approved','post_changes_approved','post_changes_rejected','post_deleted','post_expired','post_kept','post_rejected','post_sold','privacy_export_made','privacy_request_approved','slot_renewal_reminder','trial_started','verification_phone_confirmed','verification_returned']::text[]) then
     raise exception 'staff data minimisation drift: notifications_kind_check is not the reviewed list' using errcode='55000';
@@ -194,21 +209,24 @@ grant execute on function internal.staff_actor_recent(text) to authenticated;
 -- more information), one application at a time, for that organisation's
 -- administrators (and staff with organisation:manage): what the applicant's
 -- live business profile shows the public. Nothing for decided or withdrawn
--- applications.
+-- applications. Every reveal is recorded in the organisation's append-only
+-- event log (who, when, which application), which the staff audit trail
+-- lists as 'organisation:applicant_contact_revealed'.
 CREATE OR REPLACE FUNCTION internal.reveal_organisation_applicant_contact(p_application uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare a private.organisation_applications;result jsonb;
+declare actor uuid;a private.organisation_applications;result jsonb;
 begin
   if p_application is null then raise exception 'application required' using errcode='22023',detail='application_invalid';end if;
   select * into a from private.organisation_applications where id=p_application;
   if not found then raise exception 'application unavailable' using errcode='PT404',detail='application_unavailable';end if;
-  perform internal.organisation_actor(a.organisation_id);
+  actor:=internal.organisation_actor(a.organisation_id);
   if a.status not in('submitted','more_info_required') then
     raise exception 'contact shown only while the application is pending' using errcode='PT409',detail='application_state';end if;
+  perform internal.record_organisation_event(a.organisation_id,actor,'applicant_contact_revealed',a.id,null);
   select jsonb_build_object('application_id',a.id,'phone',p.contacts->>'phone','email',p.data->>'email','website',p.data->>'website')
     into result from private.public_eligible_posts e join private.post_presentations p on p.post_id=e.id where e.id=a.post_id;
   return coalesce(result,jsonb_build_object('application_id',a.id,'phone',null,'email',null,'website',null));
@@ -702,6 +720,20 @@ alter function api.get_staff_invoice_payments(uuid[]) owner to postgres;
 revoke all on function api.get_staff_invoice_payments(uuid[]) from public;
 grant execute on function api.get_staff_invoice_payments(uuid[]) to authenticated;
 
+CREATE OR REPLACE FUNCTION api.get_staff_expired_invoice_transfers()
+ RETURNS jsonb
+ LANGUAGE sql
+ SET search_path TO 'pg_catalog'
+AS $function$
+  -- Customer emails, billing details and bank references: a second factor
+  -- from the last 15 minutes.
+  select internal.staff_actor_recent('payments:view');
+  select internal.get_staff_expired_invoice_transfers();
+$function$;
+alter function api.get_staff_expired_invoice_transfers() owner to postgres;
+revoke all on function api.get_staff_expired_invoice_transfers() from public;
+grant execute on function api.get_staff_expired_invoice_transfers() to authenticated;
+
 -- Privacy (data) requests: two staff members and the data subject is told.
 -- The staff member who approves a request is never the one who recorded its
 -- intake or checked the requester's identity (in either order), and nobody
@@ -870,8 +902,9 @@ do $$begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice(text)')) is distinct from 'b048c33607a4a97a1027a74471aef453'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_transfers()')) is distinct from '6fb783a08c583150f0f2a2d34d3e7245'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_payments(uuid[])')) is distinct from 'b6e790c043538085d440789f3b7b22b8'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_expired_invoice_transfers()')) is distinct from '81dbcf858648a1b88bdc721f234e9018'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_actor_recent(text)')) is distinct from 'e44bafe2778bca781b2a7ffcfe7f3f5f'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)')) is distinct from '173148aa3c716e3e43645e4d11edbdd3'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)')) is distinct from '67dc202cf393e44675ea7af95b1bf672'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.reveal_organisation_applicant_contact(uuid)')) is distinct from 'f6b2088f77d110d2b5be6683f8d6cb9a'
     or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.notifications'::regclass and c.conname='notifications_kind_check') is distinct from array['account_banned','account_suspended','account_warning','appeal_decided','business_check_update','content_hidden','content_restored','draft_deletion_warning','enquiry_received','identity_accepted','invoice_issued','organisation_affiliation_ended','organisation_application_decided','organisation_application_received','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','payment_completed','payment_reconciliation_required','payment_reversed','post_approved','post_changes_approved','post_changes_rejected','post_deleted','post_expired','post_kept','post_rejected','post_sold','privacy_export_made','privacy_request_approved','slot_renewal_reminder','trial_started','verification_phone_confirmed','verification_returned']::text[]
     or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.privacy_notice_jobs'::regclass and c.conname='privacy_notice_jobs_kind_check') is distinct from array['approved','completed','exported','extended','rejected','submitted']::text[]

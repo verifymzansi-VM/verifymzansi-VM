@@ -3,6 +3,7 @@ import Link from "next/link";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import {
   readStaffBankTransfers,
+  readStaffBankTransfersExpired,
   readStaffBankTransfersWaiting,
   readStaffPaymentList,
   staffPaymentListFilter,
@@ -47,6 +48,8 @@ export default async function PaymentsAdminPage({
     awaitingApproval,
     transfersUnavailable,
     waiting,
+    expired,
+    expiredCount,
     ozow,
     invoices,
   } = await (async () => {
@@ -86,7 +89,7 @@ export default async function PaymentsAdminPage({
       else log.warn("Bank transfer details unavailable", { error });
       unavailable = true;
     };
-    const [details, waitingTransfers, invoiceList] = await Promise.all([
+    const [details, waitingTransfers, expiredTransfers, invoiceList] = await Promise.all([
       readStaffBankTransfers(
         api,
         result.items.map((item) => item.id)
@@ -100,6 +103,11 @@ export default async function PaymentsAdminPage({
           missing(error);
           return [];
         }),
+      // Transfers nobody confirmed within 14 days, until each is followed up.
+      readStaffBankTransfersExpired(api).catch((error: unknown) => {
+        missing(error);
+        return { unresolved: 0, items: [] };
+      }),
       // Customer invoices (P2b): the payments list still loads without them.
       readStaffInvoices(api).catch((error: unknown) => {
         if (error instanceof FoundationStaffCommandError && error.mfaRequired) verifyAgain = true;
@@ -117,6 +125,8 @@ export default async function PaymentsAdminPage({
     return {
       transfersUnavailable: unavailable,
       waiting: waitingTransfers,
+      expired: expiredTransfers.items,
+      expiredCount: expiredTransfers.unresolved,
       rows: result.items.map((item) => {
         const transfer = transfers.get(item.id);
         return transfer
@@ -208,8 +218,14 @@ export default async function PaymentsAdminPage({
           Bank transfer details could not be loaded. Reload before refunding a payment.
         </p>
       ) : null}
-      {canRefund || canConfirm || waiting.length > 0 ? (
-        <BankTransferPanel canRecord={canRefund} canConfirm={canConfirm} waiting={waiting} />
+      {canRefund || canConfirm || waiting.length > 0 || expired.length > 0 ? (
+        <BankTransferPanel
+          canRecord={canRefund}
+          canConfirm={canConfirm}
+          waiting={waiting}
+          expired={expired}
+          expiredCount={expiredCount}
+        />
       ) : null}
       {invoices ? (
         <InvoicePanel canIssue={canRefund} invoices={invoices.items} unpaid={invoices.unpaid} />

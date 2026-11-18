@@ -1,7 +1,7 @@
 -- Reviewed rollback for updates/20261118072601_staff_data_minimisation.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so; prefer a forward fix. It restores the previous bodies
--- of the 15 replaced functions byte for byte, drops
+-- of the 16 replaced functions byte for byte, drops
 -- internal.staff_actor_recent and both reveal_organisation_applicant_contact
 -- commands, drops the approval columns of private.privacy_requests and restores
 -- the three closed lists. To restore the lists it deletes the members' notices
@@ -33,8 +33,9 @@ do $$begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice(text)')) is distinct from 'b048c33607a4a97a1027a74471aef453'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_transfers()')) is distinct from '6fb783a08c583150f0f2a2d34d3e7245'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_payments(uuid[])')) is distinct from 'b6e790c043538085d440789f3b7b22b8'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_expired_invoice_transfers()')) is distinct from '81dbcf858648a1b88bdc721f234e9018'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.staff_actor_recent(text)')) is distinct from 'e44bafe2778bca781b2a7ffcfe7f3f5f'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)')) is distinct from '173148aa3c716e3e43645e4d11edbdd3'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)')) is distinct from '67dc202cf393e44675ea7af95b1bf672'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.reveal_organisation_applicant_contact(uuid)')) is distinct from 'f6b2088f77d110d2b5be6683f8d6cb9a'
     or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.notifications'::regclass and c.conname='notifications_kind_check') is distinct from array['account_banned','account_suspended','account_warning','appeal_decided','business_check_update','content_hidden','content_restored','draft_deletion_warning','enquiry_received','identity_accepted','invoice_issued','organisation_affiliation_ended','organisation_application_decided','organisation_application_received','organisation_sponsorship_activated','organisation_sponsorship_ended','partner_commission_approved','partner_commission_reversed','payment_completed','payment_reconciliation_required','payment_reversed','post_approved','post_changes_approved','post_changes_rejected','post_deleted','post_expired','post_kept','post_rejected','post_sold','privacy_export_made','privacy_request_approved','slot_renewal_reminder','trial_started','verification_phone_confirmed','verification_returned']::text[]
     or (select array_agg(m[1] order by m[1])::text[] from pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m where c.conrelid='private.privacy_notice_jobs'::regclass and c.conname='privacy_notice_jobs_kind_check') is distinct from array['approved','completed','exported','extended','rejected','submitted']::text[]
@@ -596,6 +597,17 @@ alter function api.get_staff_invoice_payments(uuid[]) owner to postgres;
 revoke all on function api.get_staff_invoice_payments(uuid[]) from public;
 grant execute on function api.get_staff_invoice_payments(uuid[]) to authenticated;
 
+CREATE OR REPLACE FUNCTION api.get_staff_expired_invoice_transfers()
+ RETURNS jsonb
+ LANGUAGE sql
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select internal.get_staff_expired_invoice_transfers();
+$function$;
+alter function api.get_staff_expired_invoice_transfers() owner to postgres;
+revoke all on function api.get_staff_expired_invoice_transfers() from public;
+grant execute on function api.get_staff_expired_invoice_transfers() to authenticated;
+
 drop function internal.staff_actor_recent(text);
 
 delete from private.notification_dismissals d using private.notifications n
@@ -630,6 +642,7 @@ do $$begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice(text)')) is distinct from 'd05ae31e4d2aa228d99f8c88b28d16c0'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_transfers()')) is distinct from 'cfc5c52c20818b63133e796f75600c0f'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_invoice_payments(uuid[])')) is distinct from '526991f8c1f78cacddb8558606f31c2c'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.get_staff_expired_invoice_transfers()')) is distinct from 'e8f0b8bc6e8a57ad769fb3bbbea7e1eb'
     or to_regprocedure('internal.staff_actor_recent(text)') is not null
     or to_regprocedure('internal.reveal_organisation_applicant_contact(uuid)') is not null
     or to_regprocedure('api.reveal_organisation_applicant_contact(uuid)') is not null

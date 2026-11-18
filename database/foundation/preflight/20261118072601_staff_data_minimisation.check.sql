@@ -6,7 +6,7 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row.
 --
--- The summary says whether the 15 functions the update replaces are the
+-- The summary says whether the 16 functions the update replaces are the
 -- reviewed bodies (the update replaces them) or already the updated ones, and
 -- counts privacy requests started or completed before the update (they need a
 -- second staff member's approval before they can be exported or completed)
@@ -34,9 +34,10 @@ with bodies as (
     ('api.get_staff_invoice(text)', 'd05ae31e4d2aa228d99f8c88b28d16c0', 'b048c33607a4a97a1027a74471aef453'),
     ('api.get_staff_invoice_transfers()', 'cfc5c52c20818b63133e796f75600c0f', '6fb783a08c583150f0f2a2d34d3e7245'),
     ('api.get_staff_invoice_payments(uuid[])', '526991f8c1f78cacddb8558606f31c2c', 'b6e790c043538085d440789f3b7b22b8'),
+    ('api.get_staff_expired_invoice_transfers()', 'e8f0b8bc6e8a57ad769fb3bbbea7e1eb', '81dbcf858648a1b88bdc721f234e9018'),
     -- Added by the update: absent before it.
     ('internal.staff_actor_recent(text)', null, 'e44bafe2778bca781b2a7ffcfe7f3f5f'),
-    ('internal.reveal_organisation_applicant_contact(uuid)', null, '173148aa3c716e3e43645e4d11edbdd3'),
+    ('internal.reveal_organisation_applicant_contact(uuid)', null, '67dc202cf393e44675ea7af95b1bf672'),
     ('api.reveal_organisation_applicant_contact(uuid)', null, 'f6b2088f77d110d2b5be6683f8d6cb9a')
   ) v(sig, reviewed, updated)
 ),
