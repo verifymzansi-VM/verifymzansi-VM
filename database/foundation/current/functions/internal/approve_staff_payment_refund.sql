@@ -21,6 +21,9 @@ begin
   perform internal.lock_kept_record_subject(request.account_id, request.payment_id);
   select * into pay from private.payments p where p.id = request.payment_id for update;
   select * into request from private.payment_refund_requests r where r.id = p_request_id for update;
+  -- The refunded period's grants: a renewal bought at the same moment waits for
+  -- this, so the renewal rules below see it.
+  perform 1 from private.entitlements e where e.payment_id = pay.id order by e.id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, request.account_id);
   if internal.same_identity(actor, request.requested_by) then
@@ -45,6 +48,15 @@ begin
       and internal.ozow_refund_transaction(pay.id) is distinct from request.ozow_transaction_id) then
     raise exception 'the payment changed since this refund was recorded; decline it and record it again'
       using errcode='PT409', detail='refund_payment_changed';
+  end if;
+  -- A renewal of the slot bought while the refund waited: refund the renewal
+  -- first (decline this one and record it again afterwards).
+  if request.kind = 'refunded' and internal.refund_renewal_waiting(pay.id, request.payment_line_id) then
+    raise exception 'a renewal of this slot is waiting; refund the renewal first, then this period' using errcode='PT409', detail='renewal_queued';
+  end if;
+  if request.channel = 'api' and not internal.ozow_refund_window_open(pay.id) then
+    raise exception 'Ozow refunds only within 13 days of the payment; decline this refund, pay it back by bank transfer and record the bank reference'
+      using errcode='PT409', detail='outside_refund_window';
   end if;
   -- A dashboard refund Ozow does not have, or did not pay, never takes effect.
   if request.channel = 'dashboard' and (request.ozow_missing_at is not null

@@ -48,10 +48,12 @@ begin
     end if;
     -- Once the server has sent a refund to Ozow, a refund of an Ozow payment is
     -- made through Ozow (or recorded from the dashboard with Ozow's refund id),
-    -- never with a typed reference. Chargebacks and payments made outside Ozow
-    -- keep the reference.
+    -- never with a typed reference. Chargebacks, payments made outside Ozow
+    -- and Ozow payments whose refund window has passed (paid back by bank
+    -- transfer, internal.refund_by_bank_transfer) keep the reference.
     if new.channel = 'manual' and new.kind = 'refunded'
         and internal.ozow_refund_transaction(new.payment_id) is not null
+        and not internal.refund_by_bank_transfer(new.payment_id, new.kind)
         and exists(select 1 from private.payment_refund_requests r where r.channel = 'api' and r.send_attempts > 0) then
       raise exception 'refunds of Ozow payments go through Ozow now' using errcode='PT409', detail='ozow_reference_retired';
     end if;

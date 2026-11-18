@@ -77,6 +77,89 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Refund follow-ups and Ozow's refund window, 18 November 2026
+
+`20261118182332_refund_follow_ups.sql` is pending (see the applied register). It
+carries the owner's decisions of 18 November (plan B) for staff refunds; members
+see nothing new:
+
+- **New reason "Cancelled before the renewal started"**
+  (`renewal_cancelled_before_start`). It fits only a refund whose slots are all
+  renewals whose days have not started: the whole payment of a renewal, or one
+  renewed slot of it. Otherwise PT409 `renewal_already_started`.
+- **The renewal is refunded first.** A refund that would end a period whose slot
+  has a renewal bought and not started is refused (PT409 `renewal_queued`),
+  whether recorded with a reference, sent through Ozow or recorded from the Ozow
+  dashboard. Approving a waiting refund checks it again, and so does the server
+  before it sends a refund through Ozow (that refund then fails as
+  `payment_changed`). Chargebacks are not refused.
+- **A declined record's reference is free again.** The unique reference index
+  and the repeat lookup leave declined records out.
+- **Ozow refunds only within 13 days of the payment** (Ozow says 14; one day
+  less for time zones and Ozow's clock), counted from the payment's `created_at`
+  (`internal.ozow_refund_window()`, the one setting). Asking for or approving a
+  refund through Ozow after that is refused (PT409 `outside_refund_window`); one
+  approved in time but not yet sent fails before anything is sent
+  (`failure_reason` `outside_refund_window`, listed under 'Refunds that need
+  staff', no payment problem alert). Recording a refund already made in the Ozow
+  dashboard is unchanged.
+- **After the 13 days, the money is paid back by bank transfer** and recorded
+  with the existing reference commands and the bank reference (spaces allowed,
+  at least four letters or digits; refusals `refund_reference_*`), also once
+  refunds through Ozow have been used. No new command.
+
+Expand only: no API command, argument, grant, return type or result field is
+added, removed or changed; no row is written. Records already waiting or
+approved are judged by the new rules when they are approved or sent (the
+preflight counts them).
+
+**Order: expand website first (done), then this update, then this pull request's
+release.**
+
+1. Pull request #267 ("Website reads the refund follow-ups values before the
+   database has them") is merged and deployed. It reads the new reason and
+   failure reason and words the three new refusals.
+2. This pull request is merged and the update is applied (preflight, update,
+   preflight, fingerprint, below) before its release is deployed, as usual.
+   Check first that the deployed release contains #267.
+3. This pull request's release is deployed. It offers the new reason on renewal
+   payments, shows "Ozow refund possible until <date>", and after the 13 days
+   offers "Paid back by bank transfer" instead of "Refund through Ozow".
+
+Every state in between is safe: with the update applied and the #267 release,
+staff see the new refusals in plain words but are not yet offered the new reason
+or the bank transfer form. This pull request's release with the database before
+the update would offer the new reason (refused there with "Choose why the money
+is returned") and the bank transfer form for an Ozow payment past 13 days
+(refused there when refunds through Ozow were used), so do not deploy it first.
+
+**Applying.** After this pull request is merged:
+
+1. Run `../preflight/20261118182332_refund_follow_ups.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "refund follow-ups: update not applied; ...". Its
+   counts (waiting for approval, approved refunds through Ozow not sent, those
+   past Ozow's 13 days, those that would end a period while a renewal waits,
+   declined records) are for staff to look at; none stops the update.
+2. Run the update. It waits at most 5 seconds for a lock and stops without
+   changing anything if the refund table is busy; run it again. Run the
+   preflight again: it must read "refund follow-ups: already applied; ...".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is `../rollback/20261118182332_refund_follow_ups.down.sql`
+(only with the owner's decision; prefer a forward fix). It restores the earlier
+bodies, lists and unique index and drops the six new helpers; it refuses once a
+record names the new reason, a refund failed outside the window, or a declined
+reference was recorded again.
+`node --import tsx scripts/test-foundation-refund-follow-ups.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drift and a premature rollback are
+refused; apply, rollback and re-apply return the same fingerprints; and each
+rule above through the production API commands.
+
 ## Staff and organisation screens show less personal data, 18 November 2026
 
 `20261118072601_staff_data_minimisation.sql` is pending (see the applied
@@ -4991,5 +5074,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   it (fingerprint.sql at 93e69753) matched the full replay (except the known
   schema grant difference)
 - `20261118072601_staff_data_minimisation.sql`: pending
+- `20261118182332_refund_follow_ups.sql`: pending
 
 <!-- applied-register:end -->

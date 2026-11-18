@@ -274,3 +274,44 @@ function assertRollbackAndReapply(kit, database, { before, after, label, notAppl
   applySteps(database, [kit.step]);
   assert.equal(kit.fingerprint(), after, "a repeated run changes nothing");
 }
+
+/** Two admins, each with an ID review accepted by the other (`<label>-admin`, `<label>-admin2`). */
+export function twoAdmins(world, label) {
+  const admin = world.staffUser(`${label}-admin`, "admin");
+  const admin2 = world.staffUser(`${label}-admin2`, "admin");
+  world.review(admin, admin2, `${label}-admin`);
+  world.review(admin2, admin, `${label}-admin2`);
+  return { admin, admin2 };
+}
+
+/** The md5 of a function's body as the update preconditions compute it, or 'missing'. */
+export const functionBodyMd5 = ({ q }, signature) =>
+  q(
+    `select coalesce((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('${signature}')),'missing');`
+  );
+
+/**
+ * A premature rollback is refused, and so is the update while any of
+ * `signatures` has a drifted body: the preflight then reads "<label>:
+ * unexpected state" with `rows` rows, the second naming the function. Each
+ * body is put back; the schema fingerprint is unchanged.
+ */
+export function assertDriftRefused(kit, { label, signatures, rows: expected }) {
+  const { q, fails, fingerprint, preflight } = kit;
+  const before = fingerprint();
+  assert.match(fails(kit.rollbackSql, "55000"), /rollback precondition/);
+  assert.equal(fingerprint(), before);
+  for (const signature of signatures) {
+    const live = q(`select pg_get_functiondef('${signature}'::regprocedure);`);
+    q(
+      `do $$begin execute replace(pg_get_functiondef('${signature}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
+    );
+    const rows = preflight();
+    assert.equal(rows.length, expected, JSON.stringify(rows));
+    assert.ok(rows[0][1].startsWith(`${label}: unexpected state;`), rows[0][1]);
+    assert.ok(rows[1][1].startsWith(`${signature} is neither the reviewed body`), rows[1][1]);
+    assert.match(fails(kit.step.sql, "55000"), new RegExp(`${label} precondition`));
+    q(`${live};`);
+  }
+  assert.equal(fingerprint(), before);
+}

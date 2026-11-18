@@ -12,11 +12,17 @@ import {
   readForm,
   useCommercialAction,
 } from "./commercial-action";
-import { REFUND_REASON_LABELS, RefundForm, type RefundTarget } from "./payment-actions";
+import {
+  REFUND_REASON_LABELS,
+  RefundForm,
+  isRenewalPayment,
+  type RefundTarget,
+} from "./payment-actions";
 import {
   OzowApproveButton,
   OzowRefundForm,
   OzowRefundRecords,
+  ozowRefundWindowEnds,
   type OzowRefundTarget,
   type OzowRefundsView,
 } from "./ozow-refund-actions";
@@ -305,6 +311,9 @@ export function PaymentsPanel({
   const { run, busy, message } = useCommercialAction();
   const [form, setForm] = useState<RefundTarget | null>(null);
   const [ozowForm, setOzowForm] = useState<OzowRefundTarget | null>(null);
+  // When the page was opened: past a payment's 13 days, Ozow no longer
+  // refunds it (the database decides; this only chooses the form).
+  const [openedAt] = useState(() => Date.now());
   return (
     <AdminCard
       title="Recent payments"
@@ -330,7 +339,18 @@ export function PaymentsPanel({
           // switched on, or once typed references retired for them.
           const throughOzow =
             ozow !== undefined && (ozow.api || ozow.retired) && ozow.refundable.includes(p.id);
-          const sendThroughOzow = throughOzow && ozow?.api === true;
+          // Ozow refunds only within 13 days of the payment; after that the
+          // money is paid back by bank transfer and recorded with the bank
+          // reference (refunds only; chargebacks keep Ozow's reference).
+          const ozowWindowEnds = ozowRefundWindowEnds(p.created_at);
+          const ozowLate = !p.bank_transfer && openedAt >= ozowWindowEnds.getTime();
+          const sendThroughOzow = throughOzow && ozow?.api === true && !ozowLate;
+          const method = p.bank_transfer ? "invoice" : ozowLate ? "bank" : "ozow";
+          const renewal = isRenewalPayment(p.description);
+          const kinds =
+            throughOzow && !ozowLate
+              ? (["chargeback"] as const)
+              : (["refunded", "chargeback"] as const);
           const inFlight = ozowRecords.some((r) => r.status === "approved" || r.status === "sent");
           const ozowRequest = request ? ozowRecords.find((r) => r.id === request.id) : undefined;
           const canReverse = canRefund && p.status === "complete" && !request && !inFlight;
@@ -348,6 +368,7 @@ export function PaymentsPanel({
               priorCents,
               label,
               accountId: p.user_id,
+              renewal,
             });
           return (
             <li
@@ -373,6 +394,9 @@ export function PaymentsPanel({
                     : ""}
                 {p.activated_at
                   ? ` · Activated by staff ${date.format(new Date(p.activated_at))}`
+                  : ""}
+                {sendThroughOzow && canReverse
+                  ? ` · Ozow refund possible until ${date.format(ozowWindowEnds)}`
                   : ""}
               </span>
               {canRefund && paidNotDelivered && !request ? (
@@ -440,10 +464,7 @@ export function PaymentsPanel({
                       </Button>
                     </>
                   ) : null}
-                  {(throughOzow
-                    ? (["chargeback"] as const)
-                    : (["refunded", "chargeback"] as const)
-                  ).map((kind) => (
+                  {kinds.map((kind) => (
                     <Button
                       key={kind}
                       size="sm"
@@ -459,11 +480,16 @@ export function PaymentsPanel({
                           priorCents,
                           label: lines.length > 1 ? `the whole order` : "this payment",
                           accountId: p.user_id,
-                          method: p.bank_transfer ? "invoice" : "ozow",
+                          method,
+                          renewal,
                         })
                       }
                     >
-                      {kind === "refunded" ? "Record refund" : "Record chargeback"}
+                      {kind === "chargeback"
+                        ? "Record chargeback"
+                        : method === "bank"
+                          ? "Paid back by bank transfer"
+                          : "Record refund"}
                     </Button>
                   ))}
                 </span>
@@ -518,10 +544,7 @@ export function PaymentsPanel({
                               </Button>
                             </>
                           ) : null}
-                          {(throughOzow
-                            ? (["chargeback"] as const)
-                            : (["refunded", "chargeback"] as const)
-                          ).map((kind) => (
+                          {kinds.map((kind) => (
                             <Button
                               key={kind}
                               size="sm"
@@ -537,11 +560,16 @@ export function PaymentsPanel({
                                   priorCents,
                                   label: `slot ${line.line_number}`,
                                   accountId: p.user_id,
-                                  method: p.bank_transfer ? "invoice" : "ozow",
+                                  method,
+                                  renewal,
                                 })
                               }
                             >
-                              {kind === "refunded" ? "Refund this slot" : "Slot chargeback"}
+                              {kind === "chargeback"
+                                ? "Slot chargeback"
+                                : method === "bank"
+                                  ? "Slot paid back by bank transfer"
+                                  : "Refund this slot"}
                             </Button>
                           ))}
                         </span>

@@ -11,7 +11,7 @@ declare actor uuid; buyer uuid; pay private.payments; repeat jsonb; request priv
   result jsonb; approval boolean; refunded_before bigint; reference text;
 begin
   actor := internal.staff_actor('payments:refund');
-  reference := internal.staff_refund_reference(p_payment_id, p_ozow_reference);
+  reference := internal.staff_refund_reference(p_payment_id, p_ozow_reference, p_kind);
   perform internal.assert_staff_refund_reason(p_kind, p_reason_code, p_reason);
   if p_payment_id is null then raise exception 'payment required' using errcode='22023'; end if;
   select p.owner_id into buyer from private.payments p where p.id = p_payment_id;
@@ -20,6 +20,9 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('frontend-payment-reversal:'||p_payment_id::text, 0));
   perform internal.lock_kept_record_subject(buyer, p_payment_id);
   select * into pay from private.payments p where p.id = p_payment_id for update;
+  -- The refunded period's grants: a renewal bought at the same moment waits for
+  -- this, so the renewal rules below see it.
+  perform 1 from private.entitlements e where e.payment_id = pay.id order by e.id for update;
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, buyer);
   repeat := internal.staff_refund_repeat(actor, pay.id, null, p_kind, p_reason_code, p_reason, reference);
@@ -32,6 +35,12 @@ begin
   end if;
   if exists(select 1 from private.payment_lines l where l.payment_id = pay.id and l.status = 'reversed') then
     raise exception 'a slot of this payment was already reversed; refund its other slots one by one' using errcode='PT409', detail='payment_slot_reversed';
+  end if;
+  if p_reason_code = 'renewal_cancelled_before_start' and not internal.refund_renewal_not_started(pay.id, null) then
+    raise exception 'this reason is only for a renewal whose days have not started' using errcode='PT409', detail='renewal_already_started';
+  end if;
+  if p_kind = 'refunded' and internal.refund_renewal_waiting(pay.id, null) then
+    raise exception 'a renewal of this slot is waiting; refund the renewal first, then this period' using errcode='PT409', detail='renewal_queued';
   end if;
   refunded_before := internal.payment_refunded_before_cents(pay.id);
   -- A payment of an erased account: always a second staff member.

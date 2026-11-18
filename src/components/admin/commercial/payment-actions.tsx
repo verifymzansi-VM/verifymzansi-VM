@@ -16,11 +16,18 @@ export const REFUND_REASON_LABELS = {
 } as const satisfies Record<RefundReasonCode, string>;
 
 /** The reasons staff can choose. "Cancelled before the renewal started" is
- * named on records only until the refund follow-ups database update, which
- * accepts it, is live (the current database refuses it). */
-export const REFUND_REASON_OPTIONS = Object.entries(REFUND_REASON_LABELS).filter(
-  ([code]) => code !== "renewal_cancelled_before_start"
-);
+ * offered only on a renewal payment; the database accepts it only while the
+ * renewal's days have not started (renewal_already_started otherwise). */
+export function refundReasonOptions(renewal: boolean) {
+  return Object.entries(REFUND_REASON_LABELS).filter(
+    ([code]) => renewal || code !== "renewal_cancelled_before_start"
+  );
+}
+
+/** A payment of the renewal checkout (its description starts "Renewal: "). */
+export function isRenewalPayment(description: string) {
+  return description.startsWith("Renewal: ");
+}
 
 /** Above R1 000 returned on one payment (refunds and chargebacks together,
  * this one included), a second staff member must approve. The database
@@ -38,8 +45,12 @@ export type RefundTarget = {
   label: string;
   /** Null once the paying account was erased. */
   accountId: string | null;
-  /** How it was paid: an Ozow refund, or a bank transfer back for a bank transfer. */
-  method?: "ozow" | "invoice";
+  /** How the money goes back: an Ozow refund; a bank transfer back for a bank
+   * transfer ("invoice"); or a bank transfer back for an Ozow payment whose
+   * 13 days for a refund through Ozow have passed ("bank", refunds only). */
+  method?: "ozow" | "invoice" | "bank";
+  /** A renewal payment: "Cancelled before the renewal started" is offered. */
+  renewal?: boolean;
 };
 
 type Run = (payload: CommercialPayload, successText?: string) => Promise<unknown>;
@@ -59,7 +70,7 @@ export function RefundForm({
   const refund = target.kind === "refunded";
   const needsApproval = target.priorCents + target.amountCents > APPROVAL_ABOVE_CENTS;
   const what = refund ? "refund" : "chargeback";
-  const bank = target.method === "invoice";
+  const bank = target.method === "invoice" || (target.method === "bank" && refund);
   return (
     <form
       className="w-full space-y-3 rounded-lg border bg-muted/40 p-3"
@@ -101,6 +112,9 @@ export function RefundForm({
           {needsApproval
             ? ". Above R1 000 returned on this payment: another staff member must approve it."
             : "."}
+          {target.method === "bank" && refund
+            ? " The 13 days for a refund through Ozow have passed: pay it back by bank transfer first, then record the bank reference."
+            : ""}
         </span>
       </p>
       <label className="block text-sm">
@@ -114,7 +128,7 @@ export function RefundForm({
           <option value="" disabled>
             Choose a reason
           </option>
-          {REFUND_REASON_OPTIONS.map(([code, label]) => (
+          {refundReasonOptions(target.renewal === true).map(([code, label]) => (
             <option key={code} value={code}>
               {label}
             </option>

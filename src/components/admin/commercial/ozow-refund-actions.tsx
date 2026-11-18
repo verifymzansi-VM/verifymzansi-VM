@@ -8,7 +8,7 @@ import { formatPlanPrice } from "@/lib/constants/pricing";
 import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { ActionMessage, AdminCard, ReasonField, SubmitButton, readForm } from "./commercial-action";
-import { REFUND_REASON_LABELS, REFUND_REASON_OPTIONS } from "./payment-actions";
+import { REFUND_REASON_LABELS, refundReasonOptions } from "./payment-actions";
 
 /**
  * Refunds through Ozow (shown only while OZOW_API_REFUNDS_ENABLED is on):
@@ -61,9 +61,20 @@ export type OzowRefundTarget = {
   label: string;
   /** Null once the paying account was erased. */
   accountId: string | null;
+  /** A renewal payment: "Cancelled before the renewal started" is offered. */
+  renewal?: boolean;
 };
 
 const APPROVAL_ABOVE_CENTS = 100_000;
+/** Ozow refunds a payment only within 13 days of it (the database's
+ * internal.ozow_refund_window, counted from the payment's created_at); after
+ * that staff pay it back by bank transfer. */
+const OZOW_REFUND_WINDOW_MS = 13 * 24 * 60 * 60 * 1000;
+
+/** When the 13 days for a refund through Ozow end for a payment made at `createdAt`. */
+export function ozowRefundWindowEnds(createdAt: string) {
+  return new Date(Date.parse(createdAt) + OZOW_REFUND_WINDOW_MS);
+}
 const date = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "medium",
   timeStyle: "short",
@@ -95,7 +106,7 @@ const FAILURE_WORDS: Record<string, string> = {
 type RefundReply = {
   error?: string;
   code?: string;
-  data?: { status?: unknown; answered?: unknown };
+  data?: { status?: unknown; answered?: unknown; sent?: unknown };
 };
 
 /** One POST to the Ozow refunds route (same-origin, CSRF header). */
@@ -116,7 +127,7 @@ function useOzowRefundAction() {
   const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(null);
   async function run(
     payload: Record<string, unknown>,
-    success: (status: string, answered: boolean) => string
+    success: (status: string, answered: boolean, sent: boolean) => string
   ) {
     setBusy(true);
     setMessage(null);
@@ -136,7 +147,11 @@ function useOzowRefundAction() {
       }
       setMessage({
         tone: "success",
-        text: success(String(reply.data?.status ?? ""), reply.data?.answered === true),
+        text: success(
+          String(reply.data?.status ?? ""),
+          reply.data?.answered === true,
+          reply.data?.sent === true
+        ),
       });
       router.refresh();
       return true;
@@ -153,7 +168,7 @@ function useOzowRefundAction() {
   return { run, busy, message };
 }
 
-function outcomeText(status: string, answered: boolean) {
+function outcomeText(status: string, answered: boolean, sent: boolean) {
   if (status === "awaiting_approval")
     return "Refund recorded. It waits for another staff member's approval, then goes to Ozow.";
   if (status === "sent" && answered)
@@ -161,14 +176,16 @@ function outcomeText(status: string, answered: boolean) {
   if (status === "sent")
     return "Refund sent to Ozow, but Ozow's answer has not arrived yet. Do not refund it again: it is checked automatically and listed under 'Refunds that need staff' if Ozow does not have it.";
   if (status === "applied") return "Ozow confirmed the refund. The payment is refunded.";
-  if (status === "failed")
+  if (status === "failed" && sent)
     return "Ozow did not accept the refund. It is listed under 'Refunds that need staff'.";
+  if (status === "failed")
+    return "Nothing was sent to Ozow: the payment changed, or the 13 days for a refund through Ozow passed. It is listed under 'Refunds that need staff' with what to do.";
   return "Refund approved. It is sent to Ozow within 10 minutes.";
 }
 
 /** The closed list of reasons (the same labels as the reference form). */
-function ReasonCodeField() {
-  const options = REFUND_REASON_OPTIONS.map(([code, label]) => (
+function ReasonCodeField({ renewal }: { renewal: boolean }) {
+  const options = refundReasonOptions(renewal).map(([code, label]) => (
     <option value={code} key={code}>
       {label}
     </option>
@@ -256,7 +273,7 @@ export function OzowRefundForm({
             : " The server sends it to Ozow; Ozow pays it to the account or card the payment came from."}
         </span>
       </p>
-      <ReasonCodeField />
+      <ReasonCodeField renewal={target.renewal === true} />
       {dashboard ? (
         <label className="block text-sm">
           <span className="font-medium">Ozow refund id</span>
