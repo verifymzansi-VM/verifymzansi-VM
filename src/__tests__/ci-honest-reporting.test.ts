@@ -291,7 +291,13 @@ describe("scheduled monitoring reports what it checked", () => {
       "set -o pipefail"
     );
     const heartbeat = steps.at(-1)!;
-    expect(steps.at(-2)!.name).toBe("Upload to the private R2 bucket");
+    // A part that could not be captured fails the run after the upload, so
+    // the usable backup is stored and the heartbeat still stays silent.
+    expect(steps.at(-3)!.name).toBe("Upload to the private R2 bucket");
+    const missing = steps.at(-2)!;
+    expect(missing.name).toBe("Fail if part of the backup is missing");
+    expect(missing.run).toContain("problems.txt");
+    expect(missing.run).toContain("exit 1");
     // No `if:` means it runs only when every earlier step succeeded.
     expect(heartbeat.if).toBeUndefined();
     expect(heartbeat["continue-on-error"]).toBe(true);
@@ -304,6 +310,76 @@ describe("scheduled monitoring reports what it checked", () => {
     // The URL is the credential: it is passed to curl only, never echoed.
     expect(heartbeat.run).not.toMatch(/echo[^\n]*HEARTBEAT_URL/);
     expect(heartbeat.run).not.toMatch(/set -x|--verbose|-v /);
+  });
+
+  it("backs up the platform schemas and a count-only manifest inside the encrypted archive", () => {
+    const workflow = parse(readFileSync(".github/workflows/database-backup.yml", "utf8")) as {
+      on: { schedule: { cron: string }[] };
+      jobs: Record<string, Job & { env: Record<string, string> }>;
+    };
+    const job = workflow.jobs.backup;
+    const step = (name: string) => job.steps.find((candidate) => candidate.name === name)!.run!;
+    // The main files keep their schemas; the platform schemas get their own.
+    expect(job.env.BACKUP_SCHEMAS).toBe("api,private,internal,public,auth,extensions");
+    expect(job.env.PLATFORM_SCHEMAS).toBe("realtime,supabase_migrations");
+    const platform = step("Dump the Supabase platform schemas");
+    expect(platform).toContain('--schema "$PLATFORM_SCHEMAS" -f platform-schema.sql');
+    expect(platform).toContain('"owner_inbox_receive" ON "realtime"');
+    // Only the migration ledger's rows: realtime rows are transient.
+    expect(platform).toContain(
+      "--schema supabase_migrations -f platform-data.sql --use-copy --data-only"
+    );
+    expect(platform).toContain(">> problems.txt");
+
+    const counts = step("Record row counts and the schema fingerprint");
+    expect(counts).toContain(".github/backup/backup-manifest.sql");
+    // Counts and hashes only reach the log; the per-table file is archived.
+    expect(counts).not.toMatch(/cat (ROW-COUNTS|row-counts)/);
+    expect(counts).toContain("cat FINGERPRINT.tsv");
+    const manifest = readFileSync(".github/backup/backup-manifest.sql", "utf8");
+    expect(manifest).toContain("repeatable read read only");
+    expect(manifest).toContain("set local row_security = off");
+    expect(manifest).toContain("count(*)");
+    expect(manifest).toContain("\\ir ../../database/foundation/fingerprint.sql");
+    expect(manifest).toContain('set local search_path to "$user", public;');
+
+    expect(step("Write the manifest")).toContain("ROW-COUNTS.tsv FINGERPRINT.tsv");
+    const encrypt = step("Encrypt the backup");
+    expect(encrypt).toContain("--files-from archive-files.txt");
+    expect(encrypt).toContain("xargs shred -u < archive-files.txt");
+
+    // Two runs 12 hours apart, off the top of the hour.
+    expect(workflow.on.schedule.map((entry) => entry.cron)).toEqual(["47 20 * * *", "47 8 * * *"]);
+  });
+
+  it("alerts when the newest stored backup is too old or schedules are about to pause", () => {
+    const freshness = parse(readFileSync(".github/workflows/backup-freshness.yml", "utf8")) as {
+      on: Record<string, unknown>;
+      permissions: Record<string, string>;
+      jobs: Record<
+        string,
+        Job & { env: Record<string, string>; permissions?: Record<string, string> }
+      >;
+    };
+    expect(freshness.permissions).toEqual({});
+    expect("schedule" in freshness.on).toBe(true);
+    const stored = freshness.jobs["stored-backup"];
+    expect(stored.permissions).toBeUndefined();
+    expect(stored.env.MAX_AGE_HOURS).toBe("26");
+    const check = stored.steps[0];
+    expect(check.run).toContain("list-objects-v2");
+    expect(check.run).toContain('[ "$age_hours" -ge "$MAX_AGE_HOURS" ]');
+    // Lists only: no download, copy or delete.
+    expect(check.run).not.toMatch(/get-object|s3 cp|s3 rm|delete-object/);
+    const pause = freshness.jobs["schedule-pause"];
+    expect(pause.permissions).toEqual({ contents: "read" });
+    expect(pause.env.WARN_AFTER_DAYS).toBe("45");
+    for (const job of Object.values(freshness.jobs))
+      for (const each of job.steps) {
+        expect(each.if).toBeUndefined();
+        expect(each["continue-on-error"]).toBeUndefined();
+        expect(each.run ?? "").toContain("exit 1");
+      }
   });
 });
 

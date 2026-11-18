@@ -1,19 +1,26 @@
 name: Database Backup
 
-# Nightly encrypted backup of the production Supabase database (the Free plan
-# keeps no restorable backups). Each run dumps roles, schema and data with the
-# Supabase CLI, checks the dump, encrypts it to the public key in
+# Twice-daily encrypted backup of the production Supabase database (the Free
+# plan keeps no restorable backups). Each run dumps roles, schema and data with
+# the Supabase CLI, checks the dump, records per-table row counts and the
+# foundation schema fingerprint, encrypts everything to the public key in
 # .github/backup/ and uploads it to the private R2 bucket
 # `verifymzansi-backups`, which deletes copies after 35 days.
 #
 # Only the owner's offline private key can decrypt a backup. This repository
 # is public, so this job never prints, caches or uploads unencrypted data as
-# an artifact. Restore steps: docs/RUNBOOK.md, "Database backups".
+# an artifact; its log shows only sizes, counts, hashes and times. Restore
+# steps: docs/RUNBOOK.md, "Database backups". backup-freshness.yml alerts when
+# no new backup has been stored for 26 hours.
 
 on:
   schedule:
-    # 23:30 UTC = 01:30 in South Africa.
-    - cron: "30 23 * * *"
+    # Scheduled runs here start 3 to 5.5 hours after the cron time (GitHub
+    # queue delay). Two runs 12 hours apart keep the gap between stored backups
+    # near 12 to 14.5 hours, so one missed run still stays close to the 24-hour
+    # recovery point. Off-the-hour minutes avoid GitHub's top-of-hour peak.
+    - cron: "47 20 * * *" # 22:47 SAST; usually runs between 02:00 and 04:30 SAST
+    - cron: "47 8 * * *" # 10:47 SAST; usually runs between 14:00 and 16:30 SAST
   workflow_dispatch:
 
 permissions:
@@ -31,6 +38,9 @@ jobs:
       SUPABASE_PROJECT_REF: gntzjtuncsyefujajmjy
       SUPABASE_POOLER_HOST: aws-0-eu-west-2.pooler.supabase.com
       BACKUP_SCHEMAS: api,private,internal,public,auth,extensions
+      # Supabase-managed schemas the app depends on, kept in their own files
+      # (see "Dump the Supabase platform schemas").
+      PLATFORM_SCHEMAS: realtime,supabase_migrations
       BACKUP_BUCKET: verifymzansi-backups
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,9 +70,40 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/backup"
           cd "$RUNNER_TEMP/backup"
+          echo "DUMP_STARTED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
           supabase db dump --db-url "$DB_URL" -f roles.sql --role-only
           supabase db dump --db-url "$DB_URL" --schema "$BACKUP_SCHEMAS" -f schema.sql
           supabase db dump --db-url "$DB_URL" --schema "$BACKUP_SCHEMAS" -f data.sql --use-copy --data-only
+
+      # realtime holds the owner_inbox_receive policy on realtime.messages (the
+      # owner inbox's live updates); supabase_migrations holds the hosted
+      # migration ledger. Both are Supabase-managed, and a new project already
+      # has its own copies, so they stay out of schema.sql and data.sql (whose
+      # restore must not collide with them) and go into platform-*.sql for a
+      # selective restore. Realtime rows are transient broadcasts and session
+      # state that Supabase recreates, so only its schema is kept. storage and
+      # vault stay out: the app keeps files in R2 and stores no Vault secrets.
+      # A failure here is recorded and fails the run only after the main
+      # backup is stored ("Fail if part of the backup is missing").
+      - name: Dump the Supabase platform schemas
+        run: |
+          cd "$RUNNER_TEMP/backup"
+          status=complete
+          if ! supabase db dump --db-url "$DB_URL" --schema "$PLATFORM_SCHEMAS" -f platform-schema.sql; then
+            status="platform schema dump failed"
+          elif ! grep -Eq '^CREATE POLICY "owner_inbox_receive" ON "realtime"\."messages" ' platform-schema.sql; then
+            status="platform-schema.sql is missing the owner_inbox_receive policy"
+          elif ! supabase db dump --db-url "$DB_URL" --schema supabase_migrations -f platform-data.sql --use-copy --data-only; then
+            status="migration ledger dump failed"
+          elif ! grep -Eq '^COPY "supabase_migrations"\."schema_migrations" ' platform-data.sql; then
+            status="platform-data.sql has no migration ledger"
+          fi
+          if [ "$status" != complete ]; then
+            echo "::error::Platform schemas not fully backed up: ${status}. The main backup continues."
+            echo "$status" >> problems.txt
+          fi
+          echo "PLATFORM_DUMP=${status}" >> "$GITHUB_ENV"
+          echo "DUMP_FINISHED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Check the dump is complete
         run: |
@@ -85,16 +126,92 @@ jobs:
             || { echo "::error::schema.sql is missing private.profiles"; exit 1; }
           grep -Eq 'CREATE (OR REPLACE )?FUNCTION "?api"?\."?get_my_billing"?\(' schema.sql \
             || { echo "::error::schema.sql is missing the foundation runtime API"; exit 1; }
+          files=(roles.sql schema.sql data.sql)
+          for extra in platform-schema.sql platform-data.sql; do
+            if [ -f "$extra" ]; then files+=("$extra"); fi
+          done
+          ls -l "${files[@]}" | awk '{print $5, $9}'
+
+      # Proof of completeness for a restore drill, kept inside the encrypted
+      # archive: exact row counts per table, read from the live database just
+      # after the dump and counted again from the dump itself, plus the
+      # foundation schema fingerprint (database/foundation/fingerprint.sql, as
+      # compared in fingerprint.json productionCheck). One read-only
+      # transaction; only numbers and catalogue hashes, never row contents.
+      # Live and dump counts can differ by rows written during the dump.
+      - name: Record row counts and the schema fingerprint
+        run: |
+          cd "$RUNNER_TEMP/backup"
+          echo "COUNTS_CAPTURED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          if ! command -v psql > /dev/null; then
+            echo "::error::psql is not installed on the runner; no row counts or fingerprint recorded."
+            echo "row counts and fingerprint not recorded (no psql)" >> problems.txt
+            exit 0
+          fi
+          if ! psql "$DB_URL" --no-psqlrc --quiet -v schemas="${BACKUP_SCHEMAS},supabase_migrations" \
+              -f "$GITHUB_WORKSPACE/.github/backup/backup-manifest.sql"; then
+            echo "::error::Row counts and the schema fingerprint could not be read."
+            echo "row counts and fingerprint not recorded (query failed)" >> problems.txt
+            rm -f row-counts-live.tsv fingerprint.tsv
+            exit 0
+          fi
+          # Rows per COPY section of the dump: COPY text escapes newlines, so
+          # every line up to the closing \. is one row.
+          dumps=(data.sql)
+          if [ -f platform-data.sql ]; then dumps+=(platform-data.sql); fi
+          awk -v OFS='\t' '
+            /^COPY / { name = $2; gsub(/"/, "", name); rows = 0; inside = 1; next }
+            inside && $0 == "\\." {
+              schema = name; sub(/\..*$/, "", schema)
+              table = name; sub(/^[^.]*\./, "", table)
+              print schema, table, rows; inside = 0; next
+            }
+            inside { rows++ }' "${dumps[@]}" > row-counts-dump.tsv
+          awk -F'\t' -v OFS='\t' '
+            FILENAME == ARGV[1] { dump[$1 FS $2] = $3; next }
+            FNR == 1 { print "schema", "table", "live_rows", "dump_rows" }
+            {
+              key = $1 FS $2
+              dumped = "not_in_dump"
+              if (key in dump) dumped = dump[key]
+              print $1, $2, $3, dumped
+              tables++
+              if ($3 ~ /^[0-9]+$/) live += $3; else unreadable++
+              if (!(key in dump)) missing++
+              else if (dump[key] != $3) differing++
+            }
+            END {
+              printf "%d tables, %d live rows; %d not in the dump, %d with a different dump count, %d unreadable\n",
+                tables, live, missing, differing, unreadable > "/dev/stderr"
+            }' row-counts-dump.tsv row-counts-live.tsv > ROW-COUNTS.tsv
+          mv fingerprint.tsv FINGERPRINT.tsv
+          rm -f row-counts-live.tsv row-counts-dump.tsv
+          echo "Schema fingerprint (category, items, md5):"
+          cat FINGERPRINT.tsv
+
+      - name: Write the manifest
+        run: |
+          cd "$RUNNER_TEMP/backup"
+          files=(roles.sql schema.sql data.sql)
+          for extra in platform-schema.sql platform-data.sql ROW-COUNTS.tsv FINGERPRINT.tsv; do
+            if [ -f "$extra" ]; then files+=("$extra"); fi
+          done
           {
             echo "project: ${SUPABASE_PROJECT_REF}"
             echo "backend: foundation"
             echo "schemas: ${BACKUP_SCHEMAS}"
+            echo "platform_schemas: ${PLATFORM_SCHEMAS} (${PLATFORM_DUMP})"
+            echo "dump_started_utc: ${DUMP_STARTED_UTC}"
+            echo "dump_finished_utc: ${DUMP_FINISHED_UTC}"
+            echo "counts_captured_utc: ${COUNTS_CAPTURED_UTC}"
             echo "created_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "supabase_cli: $(supabase --version)"
+            echo "psql: $(psql --version 2>/dev/null || echo none)"
             echo "commit: ${GITHUB_SHA}"
-            sha256sum roles.sql schema.sql data.sql
+            if [ -s problems.txt ]; then sed 's/^/problem: /' problems.txt; fi
+            sha256sum "${files[@]}"
           } > MANIFEST.txt
-          ls -l roles.sql schema.sql data.sql | awk '{print $5, $9}'
+          printf '%s\n' MANIFEST.txt "${files[@]}" > archive-files.txt
 
       - name: Encrypt the backup
         run: |
@@ -103,11 +220,11 @@ jobs:
           cd "$RUNNER_TEMP/backup"
           stamp=$(date -u +%Y%m%dT%H%M%SZ)
           name="verifymzansi-db-${stamp}.tar.gz.gpg"
-          tar -czf - MANIFEST.txt roles.sql schema.sql data.sql \
+          tar -czf - --files-from archive-files.txt \
             | gpg --batch --quiet --trust-model always \
                 --recipient-file "$GITHUB_WORKSPACE/.github/backup/database-backup-public-key.asc" \
                 --output "$name" --encrypt
-          shred -u roles.sql schema.sql data.sql
+          xargs shred -u < archive-files.txt
           echo "BACKUP_FILE=$RUNNER_TEMP/backup/$name" >> "$GITHUB_ENV"
           echo "BACKUP_KEY=database/$(date -u +%Y/%m/%d)/$name" >> "$GITHUB_ENV"
 
@@ -131,6 +248,17 @@ jobs:
             exit 1
           fi
           echo "Stored ${BACKUP_KEY} (${local_size} bytes, encrypted)"
+
+      # The stored backup is usable, but a part the earlier steps could not
+      # capture must still turn the run red and reach the failure alert.
+      - name: Fail if part of the backup is missing
+        run: |
+          problems="$RUNNER_TEMP/backup/problems.txt"
+          if [ -s "$problems" ]; then
+            while IFS= read -r problem; do echo "::error::${problem}"; done < "$problems"
+            exit 1
+          fi
+          echo "Every part of the backup was stored."
 
       # Optional dead man's switch: only a fully stored backup pings, so the
       # monitor alerts when backups stop. Unset = nothing is sent. The ping can

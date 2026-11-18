@@ -1,0 +1,86 @@
+name: Backup freshness
+
+# Guards the twice-daily database backup (database-backup.yml) against stopping
+# quietly. A failed run here opens the "Failure alert" issue like any other
+# scheduled failure.
+#
+# 1. The newest encrypted backup in the private R2 bucket must be under 26
+#    hours old. Backups run twice a day, so this fails only after at least two
+#    runs in a row did not store a copy, before R2's 35-day lifecycle can
+#    delete the last good one.
+# 2. GitHub pauses every scheduled workflow in a public repository after 60
+#    days without a commit, this one and the backup included. From day 45 this
+#    fails daily so someone commits (or re-enables the workflows) in time.
+#
+# Lists object names, dates and sizes only; never downloads or decrypts.
+on:
+  schedule:
+    - cron: "23 */6 * * *" # Every 6 hours, off the top of the hour
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: backup-freshness
+  cancel-in-progress: true
+
+jobs:
+  stored-backup:
+    name: Newest backup is under 26 hours old
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      BACKUP_BUCKET: verifymzansi-backups
+      MAX_AGE_HOURS: "26"
+    steps:
+      - name: Check the newest object in the backup bucket
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          AWS_DEFAULT_REGION: auto
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          # JMESPath: date and size of the newest object, or None when empty.
+          NEWEST_OBJECT_QUERY: "sort_by(Contents || `[]`, &LastModified)[-1].[LastModified, Size]"
+        run: |
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          newest=$(aws s3api list-objects-v2 --bucket "$BACKUP_BUCKET" --prefix database/ \
+            --endpoint-url "$endpoint" --query "$NEWEST_OBJECT_QUERY" --output text)
+          read -r modified size <<< "$newest"
+          if [ -z "$modified" ] || [ "$modified" = "None" ]; then
+            echo "::error title=No database backup stored::The backup bucket has no database backup. Run the Database Backup workflow and check its log."
+            exit 1
+          fi
+          age_hours=$(( ($(date -u +%s) - $(date -u -d "$modified" +%s)) / 3600 ))
+          echo "Newest backup stored ${modified} (${age_hours} hours ago, ${size} bytes)."
+          if [ "$size" -le 0 ]; then
+            echo "::error title=Empty database backup::The newest backup object is empty."
+            exit 1
+          fi
+          if [ "$age_hours" -ge "$MAX_AGE_HOURS" ]; then
+            echo "::error title=Database backups stopped::No backup stored for ${age_hours} hours (limit ${MAX_AGE_HOURS}). Check the Database Backup runs, and re-enable the workflow if GitHub paused it (docs/RUNBOOK.md, 'Database Backups')."
+            exit 1
+          fi
+
+  schedule-pause:
+    name: Scheduled workflows are not about to pause
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    env:
+      WARN_AFTER_DAYS: "45"
+    steps:
+      - name: Check the date of the latest commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          last=$(gh api "repos/${GH_REPO}/commits?per_page=1" --jq '.[0].commit.committer.date')
+          idle_days=$(( ($(date -u +%s) - $(date -u -d "$last" +%s)) / 86400 ))
+          echo "Latest commit on the default branch: ${last} (${idle_days} days ago)."
+          if [ "$idle_days" -ge "$WARN_AFTER_DAYS" ]; then
+            echo "::error title=Scheduled workflows pause soon::No commit for ${idle_days} days. GitHub pauses scheduled workflows, including the database backup, after 60 days without one. Merge a change to keep them running (docs/RUNBOOK.md, 'Database Backups')."
+            exit 1
+          fi
