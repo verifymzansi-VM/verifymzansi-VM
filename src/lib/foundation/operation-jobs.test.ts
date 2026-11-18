@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FoundationServiceApi } from "./service-api";
 import {
+  MISSING_SWEEP_WARNING_MS,
   OperationJobsIncompleteError,
   OUTBOX_FINAL_ATTEMPT,
   OUTBOX_RUN_LIMIT,
@@ -34,6 +35,7 @@ const SWEEPS = [
   "purge_expired_inbox",
   "reconcile_intro_trials",
   "approve_due_commissions",
+  "expire_waiting_bank_transfers",
 ];
 const PAYMENT = ["payment_completed", "payment_reversed", "payment_reconciliation_required"];
 const job = (extra: Record<string, unknown> = {}) => ({
@@ -113,6 +115,80 @@ describe("independent steps", () => {
     for (const name of SWEEPS) expect(calls(name)).toHaveLength(1);
     expect(deliver).toHaveBeenCalledOnce();
     expect(privacy).toHaveBeenCalled();
+  });
+
+  it("expires waiting bank transfers on every run (the 14 days are decided in the database)", async () => {
+    await run();
+    expect(calls("expire_waiting_bank_transfers")).toEqual([
+      ["expire_waiting_bank_transfers", { p_limit: 50 }],
+    ]);
+  });
+
+  it("skips the bank transfer expiry against a database without it, and fails on other errors", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const missingWarnings = () =>
+      warn.mock.calls.filter(([line]) => String(line).includes("Sweep command missing")).length;
+    // A clock of its own, far from the other tests' runs.
+    const clock = { t: Date.now() + 400 * 86_400_000 };
+    for (const [code, advance, warned] of [
+      ["PGRST202", 0, 1],
+      ["42883", MISSING_SWEEP_WARNING_MS / 2, 1],
+      ["PGRST202", MISSING_SWEEP_WARNING_MS, 2],
+    ] as const) {
+      clock.t += advance;
+      queue(job());
+      const queued = rpc.getMockImplementation()!;
+      rpc.mockImplementation(async (name, args) =>
+        name === "expire_waiting_bank_transfers"
+          ? { data: null, error: { code, message: "not found" } }
+          : queued(name, args)
+      );
+      await expect(run({ now: () => clock.t })).resolves.toMatchObject({ failed: [] });
+      // Logged, at most once an hour.
+      expect(missingWarnings()).toBe(warned);
+    }
+    warn.mockRestore();
+    queue(job());
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "expire_waiting_bank_transfers"
+        ? { data: null, error: { code: "XX000" } }
+        : base(name, args)
+    );
+    const error = await run().catch((e) => e);
+    expect(error).toBeInstanceOf(OperationJobsIncompleteError);
+    expect(error.failed).toEqual(["sweep:expire_waiting_bank_transfers"]);
+    // Only the newest sweep may be missing: an older one missing still fails.
+    rpc.mockImplementation(async (name, args) =>
+      name === "run_slot_renewals" ? { data: null, error: { code: "PGRST202" } } : base(name, args)
+    );
+    expect((await run().catch((e) => e)).failed).toEqual(["sweep:run_slot_renewals"]);
+  });
+
+  it("warns when the expiry sweep left rows it could not change", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "expire_waiting_bank_transfers"
+        ? {
+            data: {
+              expired: 3,
+              with_invoice: 1,
+              failed: 1,
+              failures: [{ transfer_id: id, sqlstate: "P0001" }],
+            },
+            error: null,
+          }
+        : base(name, args)
+    );
+    await expect(run()).resolves.toMatchObject({ failed: [] });
+    const line = warn.mock.calls
+      .map(([text]) => String(text))
+      .find((text) => text.includes("Sweep left rows it could not change"));
+    // Each failed row is logged with its transfer id and SQLSTATE.
+    expect(line).toContain(id);
+    expect(line).toContain("P0001");
+    warn.mockRestore();
   });
 
   it("does not wait for a slow sweep before sending emails", async () => {

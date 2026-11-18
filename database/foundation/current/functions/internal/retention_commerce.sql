@@ -18,9 +18,9 @@ begin
     where internal.retention_tax_year_due(i.issued_at) order by i.issued_at limit p_limit);
   get diagnostics invoices=row_count;
   -- Recorded bank transfers: five tax years after they were confirmed,
-  -- declined or recorded, and always with the invoice they name.
+  -- declined, expired or recorded, and always with the invoice they name.
   delete from private.invoice_transfers where id in(select t.id from private.invoice_transfers t
-    where internal.retention_tax_year_due(coalesce(t.confirmed_at,t.declined_at,t.recorded_at))
+    where internal.retention_tax_year_due(coalesce(t.confirmed_at,t.declined_at,t.expired_at,t.recorded_at))
       or t.customer_invoice_id in(select i.id from private.customer_invoices i
         where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at)))
     order by t.recorded_at limit p_limit);

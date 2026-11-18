@@ -4,7 +4,9 @@ import {
   confirmStaffBankTransfer,
   declineStaffBankTransfer,
   normaliseBankReference,
+  readStaffBankTransfersExpired,
   readStaffBankTransfersWaiting,
+  resolveStaffExpiredTransfer,
   readStaffBankTransferCustomer,
   readStaffBankTransfers,
   recordStaffBankTransfer,
@@ -244,5 +246,67 @@ describe("bank transfer adapters", () => {
       { p_payment_ids: [id] },
       { get: false }
     );
+  });
+
+  it("reads the transfers that expired, and none from a database without the expiry", async () => {
+    const expired = {
+      ...record,
+      status: "expired",
+      expired_at: "2026-11-27T10:01:00.000+00:00",
+      invoice_number: "VM-2026-000012",
+    };
+    const items = [expired, { ...expired, invoice_number: null }];
+    const { rpc, api } = fixture({ unresolved: 240, items });
+    await expect(readStaffBankTransfersExpired(api)).resolves.toEqual({ unresolved: 240, items });
+    expect(rpc).toHaveBeenCalledWith("get_staff_expired_invoice_transfers", {}, { get: false });
+    for (const code of ["PGRST202", "42883"]) {
+      rpc.mockResolvedValueOnce(refused(code));
+      await expect(readStaffBankTransfersExpired(api)).resolves.toEqual({
+        unresolved: 0,
+        items: [],
+      });
+    }
+    // At most 200 listed; a waiting record is not an expired one; other
+    // refusals are reported.
+    rpc.mockResolvedValueOnce(ok({ unresolved: 201, items: Array(201).fill(expired) }));
+    await expect(readStaffBankTransfersExpired(api)).rejects.toMatchObject({ status: 503 });
+    rpc.mockResolvedValueOnce(ok({ unresolved: 1, items: [record] }));
+    await expect(readStaffBankTransfersExpired(api)).rejects.toMatchObject({ status: 503 });
+    rpc.mockResolvedValueOnce(refused("42501"));
+    await expect(readStaffBankTransfersExpired(api)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("resolves an expired transfer with a reason, and explains refusals", async () => {
+    const resolved = { ...record, status: "expired", resolution: "never_arrived", repeated: false };
+    const { rpc, api } = fixture(resolved);
+    await expect(
+      resolveStaffExpiredTransfer(api, other, "never_arrived", "No credit on the statement")
+    ).resolves.toMatchObject({ status: "expired", resolution: "never_arrived" });
+    expect(rpc).toHaveBeenCalledWith(
+      "resolve_expired_invoice_transfer",
+      {
+        p_transfer_id: other,
+        p_resolution: "never_arrived",
+        p_reason: "No credit on the statement",
+      },
+      { get: false }
+    );
+    rpc.mockResolvedValueOnce(refused("PT409", "transfer_resolved"));
+    await expect(
+      resolveStaffExpiredTransfer(api, other, "returned", "Refunded by EFT")
+    ).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/already resolved/) });
+    rpc.mockResolvedValueOnce(refused("42501", "transfer_resolver_same"));
+    await expect(
+      resolveStaffExpiredTransfer(api, other, "returned", "Refunded by EFT")
+    ).rejects.toMatchObject({ status: 403, message: expect.stringMatching(/you recorded it/) });
+    rpc.mockResolvedValueOnce(refused("PT409", "transfer_not_expired"));
+    await expect(
+      resolveStaffExpiredTransfer(api, other, "returned", "Refunded by EFT")
+    ).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/Only an expired/) });
+    // The answer must be the resolution asked for.
+    rpc.mockResolvedValueOnce(ok(resolved));
+    await expect(
+      resolveStaffExpiredTransfer(api, other, "returned", "Refunded by EFT")
+    ).rejects.toMatchObject({ status: 503 });
   });
 });

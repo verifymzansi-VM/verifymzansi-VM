@@ -8,7 +8,11 @@ import {
   FoundationServerSessionError,
   readFoundationServerSession,
 } from "@/lib/foundation/server-session";
-import { FoundationInvoiceError, readMyInvoice } from "@/lib/foundation/customer-invoices";
+import {
+  FoundationInvoiceError,
+  readMyInvoice,
+  readMyInvoiceTransferExpiry,
+} from "@/lib/foundation/customer-invoices";
 import { invoiceBankDetails, invoiceSellerAddress } from "@/lib/billing/invoice-settings";
 import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 
@@ -34,6 +38,15 @@ export default async function InvoicePage({ params }: { params: Promise<{ number
   const invoice = await loadInvoice(number);
   if (!invoice) notFound();
   const onlineMaxCents = invoice.status === "issued" ? await readOnlinePaymentMaxCents() : null;
+  // A bank transfer to this unpaid invoice that nobody confirmed within 14
+  // days; the invoice is payable again. The page still shows without it.
+  const transferExpiredAt =
+    invoice.status === "issued" && !invoice.transfer_waiting
+      ? await readMyInvoiceTransferExpiry(
+          (await readFoundationServerSession()).api,
+          invoice.invoice_number
+        ).catch(() => null)
+      : null;
   return (
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
@@ -62,6 +75,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ number
               consentWording={invoice.consent.wording}
               checkoutOpen={invoice.latest_attempt?.checkout_open === true}
               transferWaiting={invoice.transfer_waiting}
+              transferExpired={transferExpiredAt !== null}
               onlineMaxCents={onlineMaxCents}
             />
           </div>

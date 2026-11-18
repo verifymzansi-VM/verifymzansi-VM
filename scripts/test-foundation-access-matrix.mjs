@@ -832,6 +832,45 @@ try {
       assert.match(world.ids[name] ?? "", /^[a-f0-9-]{36}$/, name);
   });
 
+  // Another member's invoice whose bank transfer expired
+  // (20261118044440_bank_transfer_expiry.sql). It belongs to `other`, not to
+  // owner A, so the sweep's invoice commands show that only its own member
+  // reads it, without adding A's details to staff payment lists.
+  await check("world: another member's invoice with an expired bank transfer", async () => {
+    const invoice = await call(
+      "issue_staff_invoice",
+      {
+        p_account_email: other.email,
+        p_term_days: 30,
+        p_slots: 1,
+        p_due_days: 7,
+        p_reason: "Invoice requested by email",
+        p_request_id: randomUUID(),
+      },
+      staff.admin
+    );
+    const transfer = await call(
+      "record_staff_invoice_transfer",
+      {
+        p_invoice_number: invoice.invoice_number,
+        p_bank_reference: "FNB MATRIX 0001",
+        p_cleared_on: sql(
+          "select to_char((now() at time zone 'Africa/Johannesburg')::date,'YYYY-MM-DD');"
+        ),
+        p_cooling_off_waiver: true,
+        p_reason: "EFT cleared; written waiver on file",
+      },
+      staff.admin
+    );
+    sql(`set session_replication_role=replica;
+      update private.invoice_transfers set recorded_at=now()-interval '15 days' where id='${transfer.transfer_id}';
+      set session_replication_role=origin;`);
+    const swept = await call("expire_waiting_bank_transfers", { p_limit: 50 }, null, true);
+    assert.equal(swept.expired, 1);
+    world.otherInvoice = invoice.invoice_number;
+    world.otherTransfer = transfer.transfer_id;
+  });
+
   // Owner A's private values. Phone numbers are matched on their last nine
   // digits so a reformatted number is still caught.
   const canaries = {
@@ -979,6 +1018,7 @@ try {
       p_email: owner.email,
       p_account_email: owner.email,
       p_phone: world.verified.phone,
+      p_invoice_number: world.otherInvoice,
     })[name] ?? "Synthetic access sweep value";
   const bodies = (fn) =>
     sweepBodies(fn, {
@@ -1052,6 +1092,43 @@ try {
 
   const grantRefusal = (r) =>
     !r.ok && r.code === "42501" && /permission denied for function/.test(r.message);
+
+  // 20261118044440_bank_transfer_expiry.sql: the sweep is the service role's
+  // only; the member read answers only the invoice's own member; the staff
+  // list needs payments:view (checked with every capability below).
+  await check("bank transfer expiry: the sweep and the member read are scoped", () => {
+    for (const label of Object.keys(principals)) {
+      const sweep = outcomes.get(`${label}:expire_waiting_bank_transfers`);
+      if (label === "service")
+        assert.ok(
+          sweep.every((r) => r.ok),
+          "service sweep refused"
+        );
+      else assert.ok(sweep.every(grantRefusal), `${label} ran the sweep`);
+      const read = outcomes.get(`${label}:get_my_invoice_transfer_expiry`);
+      if (label === "anon" || label === "service")
+        assert.ok(read.every(grantRefusal), `${label} read an invoice`);
+      else if (label === "other") {
+        assert.ok(
+          read.every((r) => r.ok),
+          "the invoice's member was refused"
+        );
+        for (const r of read) {
+          assert.equal(r.data.invoice_number, world.otherInvoice);
+          assert.match(r.data.transfer_expired_at ?? "", /^\d{4}-\d{2}-\d{2}T/);
+        }
+      } else
+        assert.ok(
+          read.every((r) => !r.ok && r.code === "PT404"),
+          `${label} read another member's invoice`
+        );
+    }
+    const listed = outcomes.get("admin:get_staff_expired_invoice_transfers");
+    assert.ok(
+      listed.some((r) => r.ok && r.data.items.some((t) => t.transfer_id === world.otherTransfer)),
+      "staff list lacks the expired transfer"
+    );
+  });
   await check("grants: each principal is refused exactly the commands it cannot execute", () => {
     for (const fn of catalogue)
       for (const label of Object.keys(principals)) {
