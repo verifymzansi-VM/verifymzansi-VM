@@ -458,9 +458,10 @@ describe("production secrets reach only the steps that use them", () => {
 
   it("no workflow reads the production runtime-only keys", () => {
     for (const file of readdirSync(WORKFLOWS)) {
-      const text = readFileSync(path.join(WORKFLOWS, file), "utf8");
+      // Whole identifiers only, so STAGING_KYC_ENCRYPTION_KEY does not count.
+      const words = new Set(readFileSync(path.join(WORKFLOWS, file), "utf8").match(/\w+/g));
       for (const name of CLOUDFLARE_RUNTIME_ONLY_SECRETS)
-        expect(text, `${file} ${name}`).not.toMatch(new RegExp(`(^|[^A-Z0-9_])${name}\\b`));
+        expect(words.has(name), `${file} ${name}`).toBe(false);
     }
   });
 
@@ -503,11 +504,14 @@ describe("where each secret lives (docs/RUNBOOK.md, 'Where secrets live')", () =
   };
   const runbook = readFileSync("docs/RUNBOOK.md", "utf8");
   const listed = (place: string) => {
-    const block = new RegExp(
-      `<!-- secrets:${place} -->([\\s\\S]*?)<!-- /secrets:${place} -->`
-    ).exec(runbook);
-    expect(block, place).not.toBeNull();
-    return [...block![1].matchAll(/`([A-Z][A-Z0-9_]*)`/g)].map((match) => match[1]).sort();
+    const open = `<!-- secrets:${place} -->`;
+    const start = runbook.indexOf(open);
+    const end = runbook.indexOf(`<!-- /secrets:${place} -->`, start);
+    expect(start, place).toBeGreaterThanOrEqual(0);
+    expect(end, place).toBeGreaterThan(start);
+    return [...runbook.slice(start + open.length, end).matchAll(/`([A-Z][A-Z0-9_]*)`/g)]
+      .map((match) => match[1])
+      .sort();
   };
 
   for (const place of ["production", "backup", "repository"])

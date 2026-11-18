@@ -82,7 +82,11 @@ export function releaseBuildEnvironment(source, publicVars, createFixture) {
     problems.push(`Private credentials must not reach the build step: ${leaked.join(", ")}`);
   // A public value is bundled into every browser: never a server key.
   const unsafePublic = Object.entries(publicVars)
-    .filter(([name, value]) => /^NEXT_PUBLIC_|PUBLISHABLE/.test(name) && /sb_secret_/i.test(value))
+    .filter(
+      ([name, value]) =>
+        (name.startsWith("NEXT_PUBLIC_") || name.includes("PUBLISHABLE")) &&
+        /sb_secret_/i.test(value)
+    )
     .map(([name]) => name);
   if (unsafePublic.length > 0)
     problems.push(`Public settings hold a server key: ${unsafePublic.join(", ")}`);
