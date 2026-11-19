@@ -134,6 +134,28 @@ describe("communication choices", () => {
     });
   });
 
+  it("words the database's choice_unavailable refusal as an invalid change", async () => {
+    // The database also refuses turning a removed choice on
+    // (20261119065758_privacy_tightening_2); its message never reaches the member.
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "22023",
+        details: "choice_unavailable",
+        message: "this choice is not available",
+      },
+    });
+    const response = await savePreferences(preferences("PATCH", { marketing_email: true }));
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body).toMatchObject({ reason: "invalid" });
+    expect(JSON.stringify(body)).not.toContain("not available");
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("save_my_communication_choices", {
+      p_wording: COMMUNICATION_WORDING_VERSION,
+      p_marketing_email: true,
+    });
+  });
+
   it("passes several choices in one command, turning off as easily as on", async () => {
     await savePreferences(preferences("PATCH", { marketing_email: false, marketing_sms: true }));
     expect(rpc).toHaveBeenCalledExactlyOnceWith("save_my_communication_choices", {

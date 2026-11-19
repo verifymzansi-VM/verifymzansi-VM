@@ -10,7 +10,7 @@ import { SHOW_OWNER_METRICS, SHOW_PAID_ADDONS } from "@/lib/hidden-features";
 export const metadata: Metadata = {
   title: "How the showroom works",
   description:
-    "How VerifyMzansi decides which posts appear in the showroom, how local posts are shown first, and how views are counted.",
+    "How VerifyMzansi decides which posts appear in the showroom and how views are counted.",
 };
 
 const ORDER_RULES = [
@@ -65,7 +65,7 @@ export default function ShowroomHelpPage() {
       <main id="main-content" className="flex-1">
         <InfoHero
           title="How the showroom works"
-          description="Fair turns for every post, local posts first, and views counted honestly."
+          description="Fair turns for every post, and views counted honestly."
           breadcrumbs={[{ label: "Help" }, { label: "Showroom" }]}
           actions={
             // Hidden until it works (src/lib/hidden-features.ts).
@@ -101,30 +101,6 @@ export default function ShowroomHelpPage() {
                 </li>
               ))}
             </ul>
-          </section>
-
-          <section aria-labelledby="location-title">
-            <SectionHeading
-              id="location-title"
-              title="How we know your province"
-              lede="We estimate it from your internet connection, and you can always change it."
-            />
-            <div className="surface-card mt-6 space-y-3 p-5 text-sm leading-6 text-foreground/85">
-              <p>
-                Your connection usually tells us your province, but mobile networks and VPNs can get
-                it wrong. Use the <strong>Change</strong> button at the top of any showroom to pick
-                another province or all of South Africa. We remember your choice on this device
-                only.
-              </p>
-              <p>
-                We use your network address for this only while the page loads and never store it.
-                See our{" "}
-                <Link href="/privacy" className="font-medium underline underline-offset-2">
-                  privacy policy
-                </Link>
-                .
-              </p>
-            </div>
           </section>
 
           <section aria-labelledby="counting-title">
