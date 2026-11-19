@@ -244,6 +244,21 @@ test.describe("Video posts", () => {
       page.on("response", (response) => {
         if (new URL(response.url()).pathname === videoPath) mediaReplies.push(response);
       });
+      // Every reply fits its request: a part (206), or the whole file (200)
+      // only for a request that sent no Range header. Status 0 is a request
+      // the browser dropped itself. Chromium always asks in parts; WebKit on
+      // Linux (GStreamer, not Safari's own media stack) fetched this small
+      // file whole on the advisory runs. The route's range answers themselves
+      // (206, 416, Content-Range) are checked in the first step.
+      const expectRepliesFitRequests = async () => {
+        for (const reply of mediaReplies) {
+          const status = reply.status();
+          if (status === 0 || status === 206) continue;
+          const range = (await reply.request().allHeaders())["range"];
+          expect(range, `a ${status} reply to a request with Range: ${range}`).toBeUndefined();
+          expect(status, "a reply to a request without Range").toBe(200);
+        }
+      };
 
       // The grid's card (the showroom above it uses the "hero" variant).
       const card = page.locator('[data-card-variant="showcase"]').filter({ hasText: title });
@@ -274,17 +289,10 @@ test.describe("Video posts", () => {
         expect(await video.evaluate((element: HTMLVideoElement) => element.currentSrc)).toContain(
           videoPath
         );
-        // The media route answered every part the browser asked for with a part
-        // (206). Chromium always asks in parts; WebKit on Linux (GStreamer, not
-        // Safari's own media stack) may fetch this small file whole, answered
-        // 200. Range answers themselves are checked in the first step.
         await expect
           .poll(() => mediaReplies.filter((reply) => [200, 206].includes(reply.status())).length)
           .toBeGreaterThan(0);
-        for (const reply of mediaReplies.filter((answered) => answered.status() !== 0)) {
-          const range = await reply.request().headerValue("range");
-          if (range) expect(reply.status(), `reply to Range: ${range}`).toBe(206);
-        }
+        await expectRepliesFitRequests();
         if (test.info().project.name !== "mobile-safari")
           expect(mediaReplies.map((reply) => reply.status())).toContain(206);
       });
@@ -323,7 +331,7 @@ test.describe("Video posts", () => {
             timeout: 10_000,
           })
           .toBeGreaterThan(position);
-        expect(mediaReplies.every((reply) => reply.status() === 206)).toBe(true);
+        await expectRepliesFitRequests();
       });
       passed = true;
     } finally {

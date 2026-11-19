@@ -330,6 +330,12 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     await page.locator("#acceptTerms").check();
     await page.getByRole("button", { name: "Create account" }).click();
     await page.waitForURL(`${APP_ORIGIN}/login?registered=invite`);
+    // The URL changes before the sign-in page has finished loading. On WebKit
+    // the page was still navigating there when the test opened the
+    // confirmation link, which interrupted it. Wait for the page itself: its
+    // notice, then no network activity.
+    await expect(page.getByText(/we've sent it a confirmation link/)).toBeVisible();
+    await page.waitForLoadState("networkidle");
     expect(captchaTokens).toEqual(["dev-turnstile-bypass"]);
     await expect
       .poll(() => reply("/api/auth/register"))
