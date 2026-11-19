@@ -8,8 +8,8 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { applyStepsBefore, sqlHelpers } from "./foundation-sql-checks.mjs";
-import { applySteps } from "./foundation-sql-lint.mjs";
+import { applyStepsBefore, createChecks, sqlHelpers } from "./foundation-sql-checks.mjs";
+import { applySteps, startLintDatabase } from "./foundation-sql-lint.mjs";
 
 /** The Individual slots on sale since 20261113002421_individual_slots_r69.sql. */
 export const P30 = { id: "d6ca48e5-43be-40df-8d8c-72c98a6fda96", cents: 6900 };
@@ -282,6 +282,32 @@ export function twoAdmins(world, label) {
   world.review(admin, admin2, `${label}-admin`);
   world.review(admin2, admin, `${label}-admin2`);
   return { admin, admin2 };
+}
+
+/**
+ * Runs the behaviour checks of `update` in a fresh lint container: replays
+ * every update before it, creates the payment world and two admins (see
+ * twoAdmins), and awaits `body` with { database, check, current, kit, world,
+ * admin, admin2 }. On a failure it prints "FAIL <check>" and rethrows; the
+ * container is always stopped. On success it prints "<title> checks passed: n
+ * in s s.".
+ */
+export async function runTwoAdminUpdateCheck({ update, label, title }, body) {
+  const started = Date.now();
+  const { check, current, passed } = createChecks();
+  const database = await startLintDatabase({ log: (line) => console.log(line) });
+  try {
+    const kit = updateCheckKit(database, update, current);
+    const world = createPaymentWorld(kit);
+    await body({ database, check, current, kit, world, ...twoAdmins(world, label) });
+  } catch (error) {
+    console.error(`FAIL ${current()}`);
+    throw error;
+  } finally {
+    database.stop();
+  }
+  const seconds = Math.round((Date.now() - started) / 1000);
+  console.log(`${title} checks passed: ${passed.length} in ${seconds} s.`);
 }
 
 /** The md5 of a function's body as the update preconditions compute it, or 'missing'. */

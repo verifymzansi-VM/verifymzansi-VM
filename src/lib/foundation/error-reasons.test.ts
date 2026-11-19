@@ -65,3 +65,17 @@ it("recognises listed messages and the staff second-factor refusals", () => {
   expect(isStaffSecondFactorRefusal({ message: "staff capability required" })).toBe(false);
   expect(isStaffSecondFactorRefusal(null)).toBe(false);
 });
+
+it("leaves an owner-run command's refusals about another account's authenticator alone", () => {
+  const { allMessages } = readDatabaseReasons(currentFunctionFiles(process.cwd()));
+  const houseSlots = [...allMessages].filter((message: string) =>
+    message.startsWith("house slots: ")
+  );
+  expect(houseSlots).toEqual(
+    expect.arrayContaining([
+      "house slots: the recipient needs a verified authenticator app",
+      "house slots: the approver must be an active administrator with a verified authenticator app",
+    ])
+  );
+  for (const message of houseSlots) expect(isStaffSecondFactorRefusal({ message })).toBe(false);
+});

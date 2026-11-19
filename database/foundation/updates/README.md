@@ -80,19 +80,102 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## House slots for administrators, 19 November 2026
+
+`20261119082834_house_slots.sql` is pending (see the applied register). **Order:
+apply-first** (the default): nothing in the website uses it. It adds no API
+command, argument, grant or result field; the only existing functions it changes
+are the privacy export and the lifecycle job. It refuses (55000) unless the
+three functions it adds are absent (or this update's), the two it replaces have
+their reviewed bodies (or this update's) and its table is absent or has the
+update's shape.
+
+- **What a house slot is.** A `staff_grant` slot with exactly the shape of a
+  paid Individual slot: any posting area, 1 live post, 4 posts going live per 30
+  days, 10 photos and 1 video, no add-ons. `granted_by` is the approving
+  administrator. It has no payment, so it never appears in revenue, commission,
+  refunds or invoices; it is not one of the 4 paid Individual slots
+  (`internal.individual_slots_counted` counts paid slots only); it does not use
+  the free first post. Posts in it follow every normal rule:
+  `internal.submit_post`, `internal.activate_post` and moderation are unchanged.
+  "My slots" already lists it as "Slot from VerifyMzansi", with no checkout or
+  renewal.
+- **Granting (database owner only).**
+  `internal.grant_house_slots(p_recipient_email, p_slots, p_days, p_reason, p_approved_by_email)`
+  is executable by no API role (like `internal.bootstrap_first_administrator`);
+  the owner runs it in the Supabase SQL editor. It makes the recipient hold
+  `p_slots` (1 to 15) house slots, each running until `p_days` (7 to 180) days
+  from now: current house slots that end earlier are extended to that date
+  (never shortened; their posts' search end follows,
+  `internal.refresh_slot_chain_documents`), and new ones are added up to
+  `p_slots`. Nothing renews by itself. Refusals: 22023
+  `house_slots_count_invalid` (a count outside 1 to 15, or below the house slots
+  already held), `house_slots_term_invalid`, `house_slots_reason_required` (5 to
+  500 characters of plain text); 42501 `house_slots_recipient_invalid`,
+  `house_slots_not_admin`, `house_slots_recipient_inactive`,
+  `house_slots_identity_required` (accepted ID review),
+  `house_slots_mfa_required` (verified authenticator app),
+  `house_slots_self_approval` (the approver must be a different account) and
+  `house_slots_approver_invalid` (the approver must be a confirmed, active
+  account with an active admin role and a verified authenticator app); 55000
+  `house_slots_isolation` outside a read committed transaction (the SQL editor's
+  default), so two grants at once never exceed 15.
+- **Approval needs a second ID-verified person.** The approver's accepted ID
+  review must belong to a different person than the recipient's (42501
+  `house_slots_approver_identity_required` when the approver has none,
+  `house_slots_same_person` when it is the recipient's identity); an identity is
+  active on one account only, so two accounts of one person cannot approve each
+  other.
+- **The record.** New append-only table `private.house_slot_events`: one row per
+  slot granted, extended or ended, with the slot's end after it, the approving
+  administrator (none for an end) and the written reason. Row level security on,
+  no API role has access; updates, deletes and truncation are refused
+  (`internal.append_only_guard`), except the retention job's removal of a slot,
+  which takes its events with it.
+- **Ending.** Trigger `staff_roles_end_house_slots` on `private.staff_roles`
+  (after a role is revoked, changed or deleted) runs
+  `internal.house_slots_on_staff_role_change`: when the account no longer holds
+  an active admin role, `internal.end_house_slot` revokes each current house
+  slot (`revoked_reason` `house_slot_ended`), expires its posts (status reason
+  "Slot ended"), takes them out of search and records the end ("Admin role
+  removed"). Removing a role never fails or waits because of a post: the slot is
+  revoked first (the only row waited for, never held for long), which at once
+  stops activations and takes its posts out of public view
+  (`private.public_eligible_posts` needs an active slot). Slots are revoked in
+  the order `internal.activate_post` locks them (end date, then id), so a
+  removal and an activation never deadlock. Its posts are then released with FOR
+  NO KEY UPDATE SKIP LOCKED (a key-share lock from a row referring to the post
+  does not stop it). A post in use at that moment keeps its activation on the
+  revoked slot, out of public view, until the next run of the lifecycle job:
+  `internal.run_post_lifecycle` has a new first step that runs
+  `internal.end_house_slot` again for ended house slots that still have an open
+  activation (at most `p_limit` slots per run, counted in `expired`; read
+  through the new partial index `entitlements_house_slot_ended_idx`). A slot
+  also ends at its end date, as any slot does. Account erasure revokes it like
+  any other slot.
+- **Privacy export.** `internal.frontend_privacy_export_data` gains the dataset
+  `house_slot_events` (slot, action, end date, time; never the approving
+  administrator or the reason).
+
+Preflight `../preflight/20261119082834_house_slots.check.sql` (summary "house
+slots: update not applied; admins: N; ready to receive: N; staff-granted slots:
+0; house slots: none (table absent)"); rollback
+`../rollback/20261119082834_house_slots.down.sql` (refuses once a house slot
+event is recorded). Behaviour test `scripts/test-foundation-house-slots.mjs`.
+
 ## Privacy tightening 2, 19 November 2026
 
-`20261119065758_privacy_tightening_2.sql` is pending (see the applied register).
-**Order: website-first**: the website release from the same pull request is
-merged and deployed first, then the update is applied. It refuses (55000) unless
-the thirteen functions it replaces have their reviewed bodies (or this
-update's), its helper is absent (or this update's) and no partner's rate is
-above 20%. No API command, argument, grant or return type changes and no field
-is added to an existing result; the staff organisation detail loses
-`public_contacts` (hand-reviewed jsonb). **Revert:** the website before this
-pull request requires `public_contacts`, so its staff organisation page fails
-once the update is applied: if the website is reverted after apply, run the
-rollback SQL first.
+`20261119065758_privacy_tightening_2.sql` was applied on 19 November 2026 at
+10:48 UTC (see the applied register). **Order: website-first**: the website
+release from the same pull request is merged and deployed first, then the update
+is applied. It refuses (55000) unless the thirteen functions it replaces have
+their reviewed bodies (or this update's), its helper is absent (or this
+update's) and no partner's rate is above 20%. No API command, argument, grant or
+return type changes and no field is added to an existing result; the staff
+organisation detail loses `public_contacts` (hand-reviewed jsonb). **Revert:**
+the website before this pull request requires `public_contacts`, so its staff
+organisation page fails once the update is applied: if the website is reverted
+after apply, run the rollback SQL first.
 
 - **Communication choices.** `internal.save_my_communication_choices` refuses to
   turn analytics or third-party sharing on (22023 `choice_unavailable`). Turning
@@ -5345,6 +5428,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   0; package bank transfers: 0"; production fingerprint after it
   (fingerprint.sql at ca11da3a, captured about 06:45 UTC) matched the full
   replay (except the known schema grant difference)
-- `20261119065758_privacy_tightening_2.sql`: pending
+- `20261119065758_privacy_tightening_2.sql`: applied 2026-11-19 10:48 UTC;
+  owner-approved, website-first (after the website release of pull request #282,
+  merged as d24f1d65); preflight after "privacy tightening 2: already applied;
+  analytics on: 0; third-party sharing on: 0; partners above 20%: 0; open ID
+  checks with nothing to review: 0"; production fingerprint after it (captured
+  about 10:50 UTC) matched the full replay at 772f770e (except the known schema
+  grant difference)
+- `20261119082834_house_slots.sql`: pending
 
 <!-- applied-register:end -->

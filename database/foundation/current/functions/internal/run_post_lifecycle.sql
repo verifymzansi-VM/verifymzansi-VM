@@ -13,6 +13,16 @@ begin
   if p_limit is null or p_limit not between 1 and 5000 then
     raise exception 'limit 1 to 5000' using errcode='22023';
   end if;
+  -- 0. House slots that ended while one of their posts was in use
+  -- (20261119082834_house_slots.sql): release those posts now.
+  for r in
+    select e.id from private.entitlements e
+    where e.source='staff_grant' and e.status='revoked' and e.revoked_reason='house_slot_ended'
+      and exists(select 1 from private.post_activations a where a.entitlement_id=e.id and a.released_at is null)
+    order by e.id limit p_limit
+  loop
+    n_expired:=n_expired+internal.end_house_slot(r.id,'Admin role removed');
+  end loop;
   -- 1. Expiry. A Market or Business post whose paid run has ended expires,
   -- whether live or paused while it still holds its slot. Events are not
   -- expired: they are deleted when they end (step 3). A post under a staff

@@ -61,6 +61,7 @@ alter table private.entitlements owner to postgres;
 alter table private.entitlements enable row level security;
 CREATE INDEX entitlements_active_ends_idx ON private.entitlements USING btree (ends_at) WHERE (status = 'active'::text);
 CREATE INDEX entitlements_granted_by_idx ON private.entitlements USING btree (granted_by) WHERE (granted_by IS NOT NULL);
+CREATE INDEX entitlements_house_slot_ended_idx ON private.entitlements USING btree (id) WHERE ((source = 'staff_grant'::text) AND (status = 'revoked'::text) AND (revoked_reason = 'house_slot_ended'::text));
 CREATE INDEX entitlements_owner_id_idx ON private.entitlements USING btree (owner_id);
 CREATE INDEX entitlements_owner_usable_idx ON private.entitlements USING btree (owner_id, ends_at) WHERE (status = 'active'::text);
 CREATE INDEX entitlements_package_ends_idx ON private.entitlements USING btree (ends_at) WHERE (package_id IS NOT NULL);

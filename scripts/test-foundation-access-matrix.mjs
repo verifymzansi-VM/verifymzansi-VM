@@ -263,6 +263,11 @@ const OWNER_TABLES = [
   ],
   ["frontend_staff_role_changes", "target_id=$1"],
   ["frontend_verification_uploads", "owner_id=$1"],
+  // House slots (20261119082834): A's own slots, or a grant A approved.
+  [
+    "house_slot_events",
+    "entitlement_id in (select id from private.entitlements where owner_id=$1) or approved_by=$1",
+  ],
   ["identity_ban_bindings", ownFacts],
   ["identity_ban_proposal_requests", "owner_id=$1"],
   [

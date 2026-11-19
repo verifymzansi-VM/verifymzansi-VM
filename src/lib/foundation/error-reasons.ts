@@ -59,6 +59,19 @@ export const FOUNDATION_ERROR_REASONS = {
   erasure_pending: ["PT409"],
   erasure_required: ["PT409"],
   event_pair_changed: ["PT409"],
+  house_slots_approver_identity_required: ["42501"],
+  house_slots_approver_invalid: ["42501"],
+  house_slots_count_invalid: ["22023"],
+  house_slots_identity_required: ["42501"],
+  house_slots_isolation: ["55000"],
+  house_slots_mfa_required: ["42501"],
+  house_slots_not_admin: ["42501"],
+  house_slots_reason_required: ["22023"],
+  house_slots_recipient_inactive: ["42501"],
+  house_slots_recipient_invalid: ["42501"],
+  house_slots_same_person: ["42501"],
+  house_slots_self_approval: ["42501"],
+  house_slots_term_invalid: ["22023"],
   inbox_page_invalid: ["22023"],
   invite_email_mismatch: ["42501"],
   invite_invalid: ["22023", "PT409"],
@@ -222,9 +235,13 @@ export const FOUNDATION_ERROR_MESSAGES = {
  * recognised by this pattern. error-reasons.test.ts fails unless the database
  * messages the pattern matches are exactly STAFF_SECOND_FACTOR_MESSAGES, and
  * the check fails when a listed one is no longer raised, so rewording one of
- * them (or adding a new one) cannot silently change the redirect.
+ * them (or adding a new one) cannot silently change the redirect. A message
+ * that starts with a command's name ("house slots: ...", raised only by
+ * internal.grant_house_slots, which the database owner runs) is about another
+ * account's setup, not the staff session, so the words must come before any
+ * colon.
  */
-export const STAFF_SECOND_FACTOR_PATTERN = /second.factor|authenticator app/;
+export const STAFF_SECOND_FACTOR_PATTERN = /^[^:]*(?:second.factor|authenticator app)/;
 export const STAFF_SECOND_FACTOR_MESSAGES = [
   "recent second-factor verification required",
   "second-factor verification required after role assignment",
