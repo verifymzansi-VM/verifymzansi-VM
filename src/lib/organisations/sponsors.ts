@@ -80,7 +80,7 @@ export function organisationTypeLabel(type: string): string {
   return ORGANISATION_TYPE_LABELS[type] ?? "Organisation";
 }
 
-/** Short area line, e.g. "City of uMhlathuze, KwaZulu-Natal". */
+/** Short area line, e.g. "Example District, KwaZulu-Natal". */
 export function sponsorArea(sponsor: Pick<PublicSponsor, "service_area" | "province">): string {
   return [sponsor.service_area, sponsor.province].filter(Boolean).join(", ");
 }

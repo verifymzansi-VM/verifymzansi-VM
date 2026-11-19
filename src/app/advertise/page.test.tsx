@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ENTERPRISE_PLANS, RETAIL_OFFERS } from "@/lib/constants/pricing";
+import { RETAIL_OFFERS } from "@/lib/constants/pricing";
 import AdvertisePage from "./page";
 
 vi.mock("next/link", () => ({
@@ -32,7 +32,7 @@ vi.mock("@/components/brand", async (importOriginal) => ({
   VerificationEmblem: () => null,
 }));
 
-const catalog = vi.hoisted(() => ({ retail: [] as unknown[], enterprise: [] as unknown[] }));
+const catalog = vi.hoisted(() => ({ retail: [] as unknown[] }));
 vi.mock("@/lib/commercial/plans", () => ({
   getCommercialCatalog: async () => ({ ...catalog, source: "database", onSale: false }),
 }));
@@ -40,7 +40,6 @@ vi.mock("@/lib/commercial/plans", () => ({
 describe("AdvertisePage", () => {
   beforeEach(() => {
     catalog.retail = RETAIL_OFFERS.map((offer) => ({ ...offer, planIds: {} }));
-    catalog.enterprise = ENTERPRISE_PLANS.map((plan) => ({ ...plan, planId: null }));
   });
 
   it("explains the Individual package only, with no chooser for a single choice", async () => {

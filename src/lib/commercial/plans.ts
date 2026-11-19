@@ -7,13 +7,7 @@ import {
 } from "@/lib/foundation/billing-catalogue";
 
 import { getStablePlanId } from "@/lib/constants/plan-ids";
-import {
-  ACTIVE_MARKETPLACE_AREAS,
-  ENTERPRISE_PLANS,
-  RETAIL_OFFERS,
-  type EnterprisePlanDefinition,
-  type RetailOffer,
-} from "@/lib/constants/pricing";
+import { ACTIVE_MARKETPLACE_AREAS, RETAIL_OFFERS, type RetailOffer } from "@/lib/constants/pricing";
 import { createLogger } from "@/lib/utils/logger";
 import type { MarketplaceArea } from "@/types/enums";
 
@@ -24,13 +18,8 @@ export interface RetailCatalogOffer extends RetailOffer {
   planIds: Record<MarketplaceArea, string>;
 }
 
-export interface EnterpriseCatalogPlan extends EnterprisePlanDefinition {
-  planId: string | null;
-}
-
 export interface CommercialCatalog {
   retail: RetailCatalogOffer[];
-  enterprise: EnterpriseCatalogPlan[];
   source: "database" | "defaults";
   /** Whether a retail plan can be bought: only plans the database lists as on
    * sale. Without one (paid slots paused, or the catalogue unreadable) the
@@ -63,7 +52,6 @@ function defaultCatalog(): CommercialCatalog {
         ACTIVE_MARKETPLACE_AREAS.map((area) => [area, getStablePlanId(area, offer.tier)])
       ) as Record<MarketplaceArea, string>,
     })),
-    enterprise: ENTERPRISE_PLANS.map((plan) => ({ ...plan, planId: null })),
     onSale: false,
   };
 }
@@ -92,26 +80,9 @@ export function buildCommercialCatalog(rows: readonly PlanRow[]): CommercialCata
     };
   });
 
-  const enterprise = sellable
-    .filter((row) => row.tier === "enterprise" && row.plan_code)
-    .map((row) => {
-      const known = ENTERPRISE_PLANS.find((plan) => plan.planCode === row.plan_code);
-      return {
-        planCode: row.plan_code as string,
-        slots: row.slot_capacity ?? known?.slots ?? 0,
-        durationDays: row.duration_days ?? known?.durationDays ?? 90,
-        label: known?.label ?? `${row.duration_days ?? 90} days`,
-        priceCents: row.price_cents,
-        monthlyActivations: row.monthly_activation_limit ?? known?.monthlyActivations ?? 0,
-        planId: row.id,
-      };
-    })
-    .sort((a, b) => a.slots - b.slots || a.durationDays - b.durationDays);
-
   return {
     source: "database",
     retail,
-    enterprise: enterprise.length > 0 ? enterprise : fallback.enterprise,
     onSale: retailOnSale,
   };
 }
@@ -151,24 +122,21 @@ export function buildFoundationCommercialCatalog(
         plan.slot_capacity === 1 &&
         plan.area &&
         RETAIL_OFFERS.find((offer) => offer.durationDays === plan.duration_days);
-      const enterprise =
-        plan.slot_capacity > 1 &&
-        ENTERPRISE_PLANS.find(
-          (offer) => offer.slots === plan.slot_capacity && offer.durationDays === plan.duration_days
-        );
-      if (!retail && !enterprise) return [];
+      // Multi-listing packages are not catalogue plans: they are bought on
+      // their own checkout (src/lib/billing/slot-packages.ts).
+      if (!retail) return [];
       return [
         {
           id: plan.id,
           area: plan.area ? areas[plan.area] : null,
-          tier: retail ? retail.tier : "enterprise",
+          tier: retail.tier,
           name: plan.label,
           price_cents: Number(plan.price_cents),
-          plan_code: enterprise ? enterprise.planCode : retail ? retail.planCode : null,
+          plan_code: retail.planCode,
           duration_days: plan.duration_days,
           slot_capacity: plan.slot_capacity,
           monthly_activation_limit: plan.activations_per_period ?? null,
-          promo_label: retail ? retail.promoLabel : null,
+          promo_label: retail.promoLabel,
           compare_at_cents: null,
           public: true,
           active: true,

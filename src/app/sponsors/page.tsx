@@ -76,8 +76,7 @@ export default async function SponsorsPage() {
                     Our first Business Sponsors are joining
                   </p>
                   <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                    Founding programmes open in the City of uMhlathuze. Their businesses appear here
-                    as they go live.
+                    Their businesses appear here as they go live.
                   </p>
                 </>
               ) : (
