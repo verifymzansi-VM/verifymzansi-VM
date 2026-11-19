@@ -7,7 +7,7 @@ import {
 
 const ID = "00000000-0000-4000-8000-000000000123";
 const challenge = vi.hoisted(() => vi.fn(async () => true));
-vi.mock("./viewer-challenge", () => ({ obtainViewerIdentifier: challenge }));
+vi.mock("@/components/engagement/viewer-challenge", () => ({ obtainViewerIdentifier: challenge }));
 
 describe("trackContentView", () => {
   const fetchMock = vi.fn();

@@ -318,7 +318,7 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 15, ttl: 3600 },
   ],
   // Post views and likes (src/app/api/engagement/*), keyed by IPv4 address or
-  // IPv6 /64 network. A view request counts at most 3 posts, each once its
+  // IPv6 /48 network. A view request counts at most 3 posts, each once its
   // page has been on screen for 2 seconds; the database dedupes per browser.
   // At these limits one address can add at most 9,000 view marks a day.
   "engagement:view": [
@@ -329,16 +329,12 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   // Per address and post: counted views of one post from one address a day.
   "engagement:view:post": [{ limit: 50, ttl: 86400 }],
   // New signed browser identifiers (a new visitor, a cleared cookie), each
-  // only after a Turnstile check (src/app/api/engagement/viewer/route.ts):
-  // per IPv4 address, generous for carrier-grade NAT where many people share
-  // one address; per IPv6 /48.
-  "engagement:viewer:v4": [
+  // only after a Turnstile check (src/app/api/engagement/viewer/route.ts),
+  // which is the main gate; spent only by a successful issue. Generous, for
+  // carrier-grade NAT where many people share one address or /48.
+  "engagement:viewer": [
     { limit: 300, ttl: 3600 },
     { limit: 3000, ttl: 86400 },
-  ],
-  "engagement:viewer:v6": [
-    { limit: 60, ttl: 3600 },
-    { limit: 600, ttl: 86400 },
   ],
   "engagement:like": [
     { limit: 30, ttl: 60 },

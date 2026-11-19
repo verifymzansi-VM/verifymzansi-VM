@@ -3,7 +3,7 @@
 import { useState, useSyncExternalStore, useTransition } from "react";
 import { trackContactAction } from "@/lib/analytics/commercial-events";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf-client";
-import { obtainViewerIdentifier } from "@/lib/views/viewer-challenge";
+import { obtainViewerIdentifier } from "@/components/engagement/viewer-challenge";
 
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";

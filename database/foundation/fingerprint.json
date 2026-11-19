@@ -49,28 +49,28 @@
       "fingerprint": "11724f805587a82326eae936e0200f0c"
     },
     "columns": {
-      "items": 1361,
-      "fingerprint": "e79543aeba7b4f654f163f815d47f173"
+      "items": 1359,
+      "fingerprint": "df713dad50593b8961d40d6f0dd878b9"
     },
     "constraints": {
       "items": 1206,
-      "fingerprint": "e6f12c4826cf9b3a87d90e78cb6bec99"
+      "fingerprint": "5d22b60dd2ff0105f41b46669f21f4f7"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1030,
-      "fingerprint": "89f866b955f60b77352decbe2149598a"
+      "items": 1032,
+      "fingerprint": "336181e1035dc3eac8093c73f8456801"
     },
     "function_grants": {
       "items": 747,
-      "fingerprint": "9b9b45181c1e9154198bf519b1dfb985"
+      "fingerprint": "799465d16fec54831969a8edd8f36e83"
     },
     "function_metadata": {
-      "items": 1030,
-      "fingerprint": "f58f1442a6ad8a3a5237554e58291c25"
+      "items": 1032,
+      "fingerprint": "8e68468fef3b021e06e28182dd81b4be"
     },
     "indexes": {
       "items": 549,

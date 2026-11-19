@@ -104,6 +104,7 @@ export async function POST(request: NextRequest) {
       postIds: allowed,
       device: viewer.id,
       account: caller.account,
+      deviceIssuedAt: viewer.issuedAt,
     });
     return caller.respond(NextResponse.json({ ok: true, counted }));
   } catch (error) {

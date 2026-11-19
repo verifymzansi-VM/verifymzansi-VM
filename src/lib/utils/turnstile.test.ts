@@ -120,6 +120,30 @@ describe("turnstile verification", () => {
         })
       );
     });
+
+    it("with an expected action and hostname, refuses a token solved for another purpose or site", async () => {
+      const reply = (action: string, hostname: string) =>
+        vi.stubGlobal(
+          "fetch",
+          vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve({ success: true, action, hostname }),
+          })
+        );
+      const expected = {
+        expectedAction: "engagement_viewer",
+        expectedHostnames: ["verifymzansi.com"],
+      };
+      reply("engagement_viewer", "verifymzansi.com");
+      expect((await verifyTurnstileToken({ token: "t", ...expected })).success).toBe(true);
+      reply("enquiry", "verifymzansi.com");
+      expect((await verifyTurnstileToken({ token: "t", ...expected })).success).toBe(false);
+      reply("engagement_viewer", "elsewhere.example");
+      expect((await verifyTurnstileToken({ token: "t", ...expected })).success).toBe(false);
+      // Callers that name no action are checked as before.
+      reply("enquiry", "elsewhere.example");
+      expect((await verifyTurnstileToken({ token: "t" })).success).toBe(true);
+    });
   });
 
   describe("getTurnstileConfigStatus", () => {

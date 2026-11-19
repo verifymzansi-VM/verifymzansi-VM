@@ -137,7 +137,9 @@ describe("the identifier route", () => {
     expect(await response.json()).toEqual({ ok: true });
     expect(issued(response)).toMatch(/^v1\.[0-9a-f-]{36}\.\d+\.[A-Za-z0-9_-]{43}$/);
     expect(response.headers.get("set-cookie")).toMatch(/HttpOnly/i);
-    expect(mocks.captcha).toHaveBeenCalledWith(expect.anything(), "token", expect.anything());
+    expect(mocks.captcha).toHaveBeenCalledWith(expect.anything(), "token", expect.anything(), {
+      action: "engagement_viewer",
+    });
   });
 
   it("a failed or unavailable Turnstile check issues nothing (fail closed for issuing)", async () => {
@@ -163,22 +165,41 @@ describe("the identifier route", () => {
     expect(mocks.captcha).not.toHaveBeenCalled();
   });
 
-  it("issuing is limited per IPv4 address and per IPv6 /48, before the check", async () => {
+  it("the issuing allowance is read before the check and spent only by a successful issue", async () => {
+    // No room: refused before the check, nothing spent.
     mocks.rate.mockResolvedValue({ limited: true, retryAfter: 60 });
     const limited = await challenge(null, { "cf-connecting-ip": "2001:db8:1:2:aaaa::1" });
     expect(limited.status).toBe(429);
     expect(mocks.captcha).not.toHaveBeenCalled();
+    expect(mocks.rate).toHaveBeenCalledTimes(1);
     expect(mocks.rate).toHaveBeenLastCalledWith(
-      expect.objectContaining({ action: "engagement:viewer:v6", key: "v6:2001:db8:1::/48" })
+      expect.objectContaining({
+        action: "engagement:viewer",
+        key: "v6:2001:db8:1::/48",
+        readOnly: true,
+      })
     );
-    // Another /64 of the same /48 shares the allowance.
-    await challenge(null, { "cf-connecting-ip": "2001:db8:1:ffff::9" });
-    expect(mocks.rate).toHaveBeenLastCalledWith(
-      expect.objectContaining({ key: "v6:2001:db8:1::/48" })
+    // A failed check spends nothing.
+    mocks.rate.mockReset().mockResolvedValue({ limited: false });
+    mocks.captcha.mockResolvedValueOnce(
+      NextResponse.json({ error: "CAPTCHA verification failed" }, { status: 400 })
     );
+    expect((await challenge(null, { "cf-connecting-ip": "2001:db8:1:ffff::9" })).status).toBe(400);
+    expect(mocks.rate.mock.calls.every(([options]) => options.readOnly === true)).toBe(true);
+    // A passed check spends one, keyed by the same /48 for another /64.
+    mocks.rate.mockClear();
+    const ok = await challenge(null, { "cf-connecting-ip": "2001:db8:1:ffff::9" });
+    expect(issued(ok)).toMatch(/^v1\./);
+    expect(
+      mocks.rate.mock.calls.map(([options]) => [options.key, options.readOnly ?? false])
+    ).toEqual([
+      ["v6:2001:db8:1::/48", true],
+      ["v6:2001:db8:1::/48", false],
+    ]);
+    mocks.rate.mockClear();
     await challenge(null, { "cf-connecting-ip": "::ffff:198.51.100.4" });
     expect(mocks.rate).toHaveBeenLastCalledWith(
-      expect.objectContaining({ action: "engagement:viewer:v4", key: "v4:198.51.100.4" })
+      expect.objectContaining({ action: "engagement:viewer", key: "v4:198.51.100.4" })
     );
   });
 
@@ -205,8 +226,12 @@ describe("views through the route", () => {
     expect(await (await view(cookie)).json()).toEqual({ ok: true, counted: [POST_ID] });
     expect(await (await view(cookie)).json()).toEqual({ ok: true, counted: [] });
     expect(db.state.views.get(POST_ID)).toBe(1);
-    // The database gets the bare identifier, never the signed cookie.
+    // The database gets the bare identifier, never the signed cookie, and when
+    // it was issued (for the safety valve's trust rule).
     expect(db.state.calls[0]!.args.p_device).toBe(cookie.split(".")[1]);
+    expect(Date.parse(db.state.calls[0]!.args.p_device_issued_at as string)).toBe(
+      Number(cookie.split(".")[2]) * 1000
+    );
   });
 
   it("a made-up identifier is never counted and never issued a cookie", async () => {
@@ -240,7 +265,7 @@ describe("views through the route", () => {
     expect(mocks.rate).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "engagement:view:post",
-        key: `v6:2001:db8:1:2::/64|${ids[0]}`,
+        key: `v6:2001:db8:1::/48|${ids[0]}`,
       })
     );
   });

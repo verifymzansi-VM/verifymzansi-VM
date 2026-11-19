@@ -11,7 +11,7 @@
  */
 
 import type { ContentTargetType } from "@/lib/engagement";
-import { obtainViewerIdentifier } from "@/lib/views/viewer-challenge";
+import { obtainViewerIdentifier } from "@/components/engagement/viewer-challenge";
 
 export type ViewSource = "video" | "page";
 

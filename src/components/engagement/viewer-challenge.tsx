@@ -2,6 +2,7 @@
 
 import { createRoot } from "react-dom/client";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
+import { VIEWER_CHALLENGE_ACTION } from "@/lib/engagement";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf-client";
 
 /**
@@ -73,6 +74,7 @@ function challengeToken(): Promise<string | null> {
     root.render(
       <TurnstileWidget
         appearance="interaction-only"
+        action={VIEWER_CHALLENGE_ACTION}
         size="compact"
         onSuccess={(token) => finish(token)}
         onError={() => finish(null)}

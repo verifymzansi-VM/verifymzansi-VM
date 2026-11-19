@@ -69,7 +69,14 @@ const viewsResult = z.strictObject({ counted: z.array(z.uuid()).max(5) });
  * views. */
 export async function recordFoundationPostViews(
   api: FoundationServiceApi,
-  input: { postIds: readonly string[]; device: string; account: string | null }
+  input: {
+    postIds: readonly string[];
+    device: string;
+    account: string | null;
+    /** When the browser identifier was issued (over the site's safety valve
+     * only established viewers count). */
+    deviceIssuedAt?: Date | null;
+  }
 ): Promise<string[]> {
   const postIds = z
     .array(z.uuid())
@@ -80,6 +87,7 @@ export async function recordFoundationPostViews(
     p_post_ids: postIds,
     p_device: z.uuid().parse(input.device),
     ...(input.account ? { p_account: z.uuid().parse(input.account) } : {}),
+    ...(input.deviceIssuedAt ? { p_device_issued_at: input.deviceIssuedAt.toISOString() } : {}),
   });
   if (error) refusal(error);
   const counted = viewsResult.parse(data).counted;

@@ -15,6 +15,10 @@ const log = createLogger("Turnstile");
 interface TurnstileVerifyParams {
   token: string;
   remoteIp?: string;
+  /** When set, the token must come from a widget rendered with this action. */
+  expectedAction?: string;
+  /** When set, the token must have been solved on one of these hostnames. */
+  expectedHostnames?: readonly string[];
 }
 
 interface TurnstileVerifyResult {
@@ -181,6 +185,25 @@ export async function verifyTurnstileToken(
         success: false,
         error: errorCodes.join(", ") || "CAPTCHA verification failed",
       };
+    }
+
+    // A token solved for another purpose, or on another site, is not accepted.
+    const wrongAction =
+      params.expectedAction !== undefined && data.action !== params.expectedAction;
+    const wrongHost =
+      params.expectedHostnames !== undefined &&
+      params.expectedHostnames.length > 0 &&
+      !params.expectedHostnames.includes(String(data.hostname ?? "").toLowerCase());
+    if (wrongAction || wrongHost) {
+      log.warn("Turnstile token for another action or hostname", {
+        category: wrongAction ? "action_mismatch" : "hostname_mismatch",
+      });
+      recordSecurityEvent({
+        event: "request.captcha_failed",
+        ip: params.remoteIp,
+        reason: wrongAction ? "action_mismatch" : "hostname_mismatch",
+      });
+      return { success: false, error: "CAPTCHA verification failed" };
     }
 
     return {

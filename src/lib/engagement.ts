@@ -14,3 +14,7 @@ interface _ContentEngagementSnapshot {
 export function createAnonymousViewerId() {
   return crypto.randomUUID();
 }
+
+/** The Turnstile action of the check that issues the view-and-like identifier
+ * (src/components/engagement/viewer-challenge.tsx, /api/engagement/viewer). */
+export const VIEWER_CHALLENGE_ACTION = "engagement_viewer";

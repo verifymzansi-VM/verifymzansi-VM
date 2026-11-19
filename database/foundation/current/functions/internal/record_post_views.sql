@@ -1,7 +1,7 @@
 -- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
 -- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
 
-CREATE OR REPLACE FUNCTION internal.record_post_views(p_post_ids uuid[], p_device uuid, p_account uuid)
+CREATE OR REPLACE FUNCTION internal.record_post_views(p_post_ids uuid[], p_device uuid, p_account uuid, p_device_issued_at timestamp with time zone)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -10,7 +10,7 @@ AS $function$
 declare
   today date := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
   viewer uuid := p_account; salt_today bytea; salt_before bytea; pid uuid; post_owner uuid;
-  new_mark bytea; counted uuid[] := '{}'::uuid[]; day_views integer;
+  new_mark bytea; counted uuid[] := '{}'::uuid[]; day_views integer; after_views integer;
 begin
   if p_post_ids is null or p_device is null or cardinality(p_post_ids) not between 1 and 5
     or array_position(p_post_ids, null) is not null then
@@ -34,12 +34,9 @@ begin
   end if;
   select s.salt, s.views into salt_today, day_views from private.post_view_salts s where s.day = today;
   select s.salt into salt_before from private.post_view_salts s where s.day = today - 1;
-  -- Storage safety valve for the whole site (requests racing may pass it by a
-  -- few views).
-  if day_views >= 300000 then
-    insert into private.cost_alarms (metric, level, period, used, free_quantity)
-      values ('post_views_counted', 'critical', to_char(today, 'YYYY-MM-DD'), day_views, 300000)
-      on conflict (metric, level, period) do nothing;
+  -- Storage safety valve for the whole site: over 300,000 counted views in a
+  -- day only established viewers keep counting (and storing marks).
+  if day_views >= 300000 and not internal.engagement_established(viewer, p_device_issued_at) then
     return jsonb_build_object('counted', '[]'::jsonb);
   end if;
   for pid in select distinct x from unnest(p_post_ids) x order by 1 loop
@@ -68,11 +65,14 @@ begin
   end loop;
   -- The day's count, once per request and last.
   if cardinality(counted) > 0 then
-    update private.post_view_salts s set views = s.views + cardinality(counted) where s.day = today;
+    update private.post_view_salts s set views = s.views + cardinality(counted) where s.day = today
+      returning s.views into after_views;
+    perform internal.engagement_valve_alarms('post_views_counted', 300000,
+      after_views - cardinality(counted), after_views);
   end if;
   return jsonb_build_object('counted', to_jsonb(counted));
 end;
 $function$;
-alter function internal.record_post_views(uuid[],uuid,uuid) owner to postgres;
-revoke all on function internal.record_post_views(uuid[],uuid,uuid) from public;
-grant execute on function internal.record_post_views(uuid[],uuid,uuid) to service_role;
+alter function internal.record_post_views(uuid[],uuid,uuid,timestamp with time zone) owner to postgres;
+revoke all on function internal.record_post_views(uuid[],uuid,uuid,timestamp with time zone) from public;
+grant execute on function internal.record_post_views(uuid[],uuid,uuid,timestamp with time zone) to service_role;

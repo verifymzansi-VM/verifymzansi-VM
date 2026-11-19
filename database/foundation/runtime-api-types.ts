@@ -814,7 +814,12 @@ export type FoundationRuntimeServiceDatabase = {
         Returns: Json;
       };
       record_post_views: {
-        Args: { p_post_ids: string[]; p_device: string; p_account?: string };
+        Args: {
+          p_post_ids: string[];
+          p_device: string;
+          p_account?: string;
+          p_device_issued_at?: string;
+        };
         Returns: Json;
       };
       set_post_like: {

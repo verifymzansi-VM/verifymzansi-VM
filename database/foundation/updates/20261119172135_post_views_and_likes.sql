@@ -5,15 +5,19 @@
 -- so a made-up identifier is never counted, and passes it, with the
 -- GoTrue-verified account or none, to the two service commands below. The
 -- database never stores that identifier, a network address or a user agent.
--- Abuse is limited per source on the website (per address, per post, per
--- cookie); the caps here only protect storage, and staff are alerted
--- (private.cost_alarms) when one is reached.
+-- Abuse is limited per source on the website (per IPv4 address or IPv6 /48,
+-- per post, per cookie). The two site-wide safety valves here only protect
+-- storage and never switch a feature off for everyone: over a valve, viewers
+-- and likers that are established (a browser identifier older than 24 hours,
+-- or a signed-in account older than 7 days) keep counting; only new ones stop.
+-- Staff get a cost alarm at 70% of a valve (warning) and at the valve
+-- (critical).
 --
 -- Tables (row level security on; no API role has table access):
 -- 1. private.engagement_keys: one random 32-byte key, made here, for like
 --    hashes.
 -- 2. private.post_view_salts: one random 32-byte salt per day
---    (Africa/Johannesburg), with the day's counted views and new likes.
+--    (Africa/Johannesburg), with the day's counted views and net new likes.
 -- 3. private.post_view_marks: sha256(day salt || browser || post) and the
 --    time, one per counted view. Never an account. The daily retention job
 --    (api.run_retention) deletes marks older than 24 hours and salts older
@@ -21,9 +25,9 @@
 -- 4. private.post_view_days: views per post per day (the only lasting view
 --    data; deleted with the post).
 -- 5. private.post_engagement_totals: one row per post with its total views
---    and counted likes (kept by triggers on private.post_likes) and the
---    current hour's new likes; the public read and the like command read
---    this row, and it is the lock for changes to the post's likes.
+--    and counted likes (kept by triggers on private.post_likes); the public
+--    read and the like command read this row, and it is the lock for changes
+--    to the post's likes.
 -- 6. private.post_likes: one row per like: either sha256(like key || browser)
 --    for a like made signed out, or the account for a like made signed in,
 --    never both, and when it starts to count. Deleted with the post; a
@@ -31,14 +35,14 @@
 --    the Auth user's deletion cascades).
 --
 -- Commands:
--- - api.record_post_views(p_post_ids uuid[], p_device uuid, p_account uuid)
---   (service only): 1 to 5 posts (22023 views_invalid), counted in id order.
---   A post counts at most once per browser in 24 hours (today's or
---   yesterday's salt), never when it is not publicly live, never the signed-in
---   owner's own view, never any view by an account with an active staff role
---   (an inactive account counts as signed out). Storage safety valve: after
---   300,000 counted views in a day nothing more is counted that day and a
---   critical cost alarm (post_views_counted) is raised. Returns
+-- - api.record_post_views(p_post_ids uuid[], p_device uuid, p_account uuid,
+--   p_device_issued_at timestamptz) (service only): 1 to 5 posts (22023
+--   views_invalid), counted in id order. A post counts at most once per
+--   browser in 24 hours (today's or yesterday's salt), never when it is not
+--   publicly live, never the signed-in owner's own view, never any view by an
+--   account with an active staff role (an inactive account counts as signed
+--   out). No per-post cap. Safety valve: over 300,000 counted views in a day,
+--   only established viewers are counted (others store nothing). Returns
 --   {"counted": [post ids]}.
 -- - api.set_post_like(p_post_id uuid, p_device uuid, p_account uuid,
 --   p_liked boolean, p_device_issued_at timestamptz) (service only): sets
@@ -47,19 +51,18 @@
 --   22023 like_invalid). Signed in it acts only on the account's like, signed
 --   out only on the browser's. The owner's and staff's own likes are never
 --   stored ("counted": false); they may remove the like their browser made
---   while signed out. A like is always stored; it starts to count:
---   - for a browser identifier issued less than 10 minutes earlier
---     (p_device_issued_at), 10 minutes after its issue;
---   - after the post's first 600 new likes in an hour, at the next hour
---     (unliking in the same hour gives the place back, so liking and unliking
---     never fills it).
---   Storage safety valve: after 50,000 new likes in a day, new likes are not
---   stored that day ("liked": false, "counted": false; unliking still works)
---   and a critical cost alarm (post_likes_new) is raised. Returns {"liked", "likes", "counted"}; likes
---   is the post's counted total plus the caller's own like while it waits.
+--   while signed out. A signed-out like from a browser identifier issued less
+--   than 10 minutes earlier is stored but counts only from then. No per-post
+--   cap. Safety valve: over 50,000 net new likes in a day (a like taken back
+--   the same day gives its place back), only established likers' likes are
+--   stored; others answer "liked": false, "counted": false. Returns
+--   {"liked", "likes", "counted"}; likes is the post's counted total plus
+--   the caller's own like while it waits.
 -- - api.get_post_engagement(p_post_ids uuid[]) (anon and authenticated): up
 --   to 50 ids (22023 engagement_invalid); for each publicly live post
 --   {"post_id", "views", "likes"}; a hidden or unknown post is simply absent.
+-- - internal.engagement_established and internal.engagement_valve_alarms:
+--   the helpers of the valves (no API role).
 --
 -- Replaced functions (full bodies; each checked against its reviewed body):
 -- - internal.frontend_privacy_export_data: datasets post_likes (the latest
@@ -95,17 +98,19 @@ begin
     + (to_regclass('private.post_view_days') is not null)::integer
     + (to_regclass('private.post_engagement_totals') is not null)::integer
     + (to_regclass('private.post_likes') is not null)::integer
-    + (to_regprocedure('internal.record_post_views(uuid[],uuid,uuid)') is not null)::integer
-    + (to_regprocedure('api.record_post_views(uuid[],uuid,uuid)') is not null)::integer
+    + (to_regprocedure('internal.record_post_views(uuid[],uuid,uuid,timestamptz)') is not null)::integer
+    + (to_regprocedure('api.record_post_views(uuid[],uuid,uuid,timestamptz)') is not null)::integer
     + (to_regprocedure('internal.set_post_like(uuid,uuid,uuid,boolean,timestamptz)') is not null)::integer
     + (to_regprocedure('api.set_post_like(uuid,uuid,uuid,boolean,timestamptz)') is not null)::integer
     + (to_regprocedure('internal.get_post_engagement(uuid[])') is not null)::integer
     + (to_regprocedure('api.get_post_engagement(uuid[])') is not null)::integer
     + (to_regprocedure('internal.purge_post_engagement()') is not null)::integer
     + (to_regprocedure('internal.post_likes_count()') is not null)::integer
+    + (to_regprocedure('internal.engagement_established(uuid,timestamptz)') is not null)::integer
+    + (to_regprocedure('internal.engagement_valve_alarms(text,integer,integer,integer)') is not null)::integer
   into present;
-  if present not in (0, 14) then
-    raise exception 'post views and likes precondition: % of 14 objects exist', present
+  if present not in (0, 16) then
+    raise exception 'post views and likes precondition: % of 16 objects exist', present
       using errcode='55000';
   end if;
   for shape in
@@ -184,11 +189,9 @@ create table if not exists private.post_engagement_totals (
   post_id uuid not null,
   views bigint not null default 0,
   likes integer not null default 0,
-  like_hour_start timestamptz,
-  like_hour_count integer not null default 0,
   constraint post_engagement_totals_pkey primary key (post_id),
   constraint post_engagement_totals_post_id_fkey foreign key (post_id) references private.posts(id) on delete cascade,
-  constraint post_engagement_totals_counts_check check (views >= 0 and likes >= 0 and like_hour_count >= 0)
+  constraint post_engagement_totals_counts_check check (views >= 0 and likes >= 0)
 );
 alter table private.post_engagement_totals owner to postgres;
 alter table private.post_engagement_totals enable row level security;
@@ -267,9 +270,46 @@ drop trigger if exists post_likes_count on private.post_likes;
 create trigger post_likes_count after insert or delete or update of waiting on private.post_likes
   for each row execute function internal.post_likes_count();
 
+-- Whether a viewer or liker is established: a signed-in account (active)
+-- created more than 7 days ago, or a browser identifier issued more than 24
+-- hours ago. Over a safety valve only established viewers and likers keep
+-- counting, so a flood of new identifiers never switches counting off for
+-- everyone.
+CREATE OR REPLACE FUNCTION internal.engagement_established(p_account uuid, p_device_issued_at timestamptz)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select coalesce(p_device_issued_at < statement_timestamp() - interval '24 hours', false)
+    or (p_account is not null and exists(select 1 from auth.users u
+      join private.current_account_access a on a.id = u.id
+      where u.id = p_account and u.created_at < statement_timestamp() - interval '7 days'));
+$function$;
+alter function internal.engagement_established(uuid,timestamptz) owner to postgres;
+revoke all on function internal.engagement_established(uuid,timestamptz) from public, anon, authenticated, service_role;
+
+-- Staff cost alarms of a safety valve when the day's count crosses 70% of it
+-- (warning) and the valve itself (critical); each at most once a day.
+CREATE OR REPLACE FUNCTION internal.engagement_valve_alarms(p_metric text, p_valve integer, p_before integer, p_after integer)
+ RETURNS void
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+  insert into private.cost_alarms (metric, level, period, used, free_quantity)
+  select p_metric, l.level, to_char((statement_timestamp() at time zone 'Africa/Johannesburg')::date, 'YYYY-MM-DD'),
+    p_after, p_valve
+  from (values ('warning', p_valve * 7 / 10), ('critical', p_valve)) l(level, threshold)
+  where p_before < l.threshold and p_after >= l.threshold
+  on conflict (metric, level, period) do nothing;
+$function$;
+alter function internal.engagement_valve_alarms(text,integer,integer,integer) owner to postgres;
+revoke all on function internal.engagement_valve_alarms(text,integer,integer,integer) from public, anon, authenticated, service_role;
+
 -- Lock order (no deadlock): a post's days row, then its totals row, then its
 -- like rows, posts in id order; the day's salt row last of all.
-CREATE OR REPLACE FUNCTION internal.record_post_views(p_post_ids uuid[], p_device uuid, p_account uuid)
+CREATE OR REPLACE FUNCTION internal.record_post_views(p_post_ids uuid[], p_device uuid, p_account uuid, p_device_issued_at timestamptz)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -278,7 +318,7 @@ AS $function$
 declare
   today date := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
   viewer uuid := p_account; salt_today bytea; salt_before bytea; pid uuid; post_owner uuid;
-  new_mark bytea; counted uuid[] := '{}'::uuid[]; day_views integer;
+  new_mark bytea; counted uuid[] := '{}'::uuid[]; day_views integer; after_views integer;
 begin
   if p_post_ids is null or p_device is null or cardinality(p_post_ids) not between 1 and 5
     or array_position(p_post_ids, null) is not null then
@@ -302,12 +342,9 @@ begin
   end if;
   select s.salt, s.views into salt_today, day_views from private.post_view_salts s where s.day = today;
   select s.salt into salt_before from private.post_view_salts s where s.day = today - 1;
-  -- Storage safety valve for the whole site (requests racing may pass it by a
-  -- few views).
-  if day_views >= 300000 then
-    insert into private.cost_alarms (metric, level, period, used, free_quantity)
-      values ('post_views_counted', 'critical', to_char(today, 'YYYY-MM-DD'), day_views, 300000)
-      on conflict (metric, level, period) do nothing;
+  -- Storage safety valve for the whole site: over 300,000 counted views in a
+  -- day only established viewers keep counting (and storing marks).
+  if day_views >= 300000 and not internal.engagement_established(viewer, p_device_issued_at) then
     return jsonb_build_object('counted', '[]'::jsonb);
   end if;
   for pid in select distinct x from unnest(p_post_ids) x order by 1 loop
@@ -336,25 +373,28 @@ begin
   end loop;
   -- The day's count, once per request and last.
   if cardinality(counted) > 0 then
-    update private.post_view_salts s set views = s.views + cardinality(counted) where s.day = today;
+    update private.post_view_salts s set views = s.views + cardinality(counted) where s.day = today
+      returning s.views into after_views;
+    perform internal.engagement_valve_alarms('post_views_counted', 300000,
+      after_views - cardinality(counted), after_views);
   end if;
   return jsonb_build_object('counted', to_jsonb(counted));
 end;
 $function$;
-alter function internal.record_post_views(uuid[],uuid,uuid) owner to postgres;
-revoke all on function internal.record_post_views(uuid[],uuid,uuid) from public, anon, authenticated, service_role;
-grant execute on function internal.record_post_views(uuid[],uuid,uuid) to service_role;
+alter function internal.record_post_views(uuid[],uuid,uuid,timestamptz) owner to postgres;
+revoke all on function internal.record_post_views(uuid[],uuid,uuid,timestamptz) from public, anon, authenticated, service_role;
+grant execute on function internal.record_post_views(uuid[],uuid,uuid,timestamptz) to service_role;
 
-CREATE OR REPLACE FUNCTION api.record_post_views(p_post_ids uuid[], p_device uuid, p_account uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION api.record_post_views(p_post_ids uuid[], p_device uuid, p_account uuid DEFAULT NULL::uuid, p_device_issued_at timestamp with time zone DEFAULT NULL::timestamp with time zone)
  RETURNS jsonb
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.record_post_views(p_post_ids, p_device, p_account);
+  select internal.record_post_views(p_post_ids, p_device, p_account, p_device_issued_at);
 $function$;
-alter function api.record_post_views(uuid[],uuid,uuid) owner to postgres;
-revoke all on function api.record_post_views(uuid[],uuid,uuid) from public, anon, authenticated, service_role;
-grant execute on function api.record_post_views(uuid[],uuid,uuid) to service_role;
+alter function api.record_post_views(uuid[],uuid,uuid,timestamptz) owner to postgres;
+revoke all on function api.record_post_views(uuid[],uuid,uuid,timestamptz) from public, anon, authenticated, service_role;
+grant execute on function api.record_post_views(uuid[],uuid,uuid,timestamptz) to service_role;
 
 CREATE OR REPLACE FUNCTION internal.set_post_like(p_post_id uuid, p_device uuid, p_account uuid, p_liked boolean, p_device_issued_at timestamptz)
  RETURNS jsonb
@@ -364,7 +404,7 @@ CREATE OR REPLACE FUNCTION internal.set_post_like(p_post_id uuid, p_device uuid,
 AS $function$
 declare
   liker uuid := p_account; post_owner uuid; device bytea; mine private.post_likes; wanted boolean;
-  totals private.post_engagement_totals; this_hour timestamptz := date_trunc('hour', statement_timestamp());
+  totals private.post_engagement_totals;
   today date := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
   starts timestamptz := statement_timestamp(); day_likes integer;
 begin
@@ -413,11 +453,10 @@ begin
       values (today, decode(replace(gen_random_uuid()::text,'-','')||replace(gen_random_uuid()::text,'-',''),'hex'))
       on conflict (day) do nothing;
     select s.likes into day_likes from private.post_view_salts s where s.day = today;
-    if day_likes >= 50000 then
-      insert into private.cost_alarms (metric, level, period, used, free_quantity)
-        values ('post_likes_new', 'critical', to_char(today, 'YYYY-MM-DD'), day_likes, 50000)
-        on conflict (metric, level, period) do nothing;
-      -- Not stored (an exception would undo the alarm too).
+    -- Storage safety valve: over 50,000 net new likes in a day only
+    -- established likers' likes are stored (not an error: that would undo
+    -- the alarm).
+    if day_likes >= 50000 and not internal.engagement_established(liker, p_device_issued_at) then
       return jsonb_build_object('liked', false, 'counted', false, 'likes',
         (select t.likes from private.post_engagement_totals t where t.post_id = p_post_id));
     end if;
@@ -425,22 +464,16 @@ begin
     if liker is null and p_device_issued_at is not null then
       starts := greatest(starts, p_device_issued_at + interval '10 minutes');
     end if;
-    -- After the post's first 600 new likes this hour, the rest wait for the next hour.
-    if totals.like_hour_start = this_hour and totals.like_hour_count >= 600 then
-      starts := greatest(starts, this_hour + interval '1 hour');
-    end if;
     insert into private.post_likes(post_id, device_mark, account_id, counts_from, waiting)
       values (p_post_id, case when liker is null then device end, liker, starts, starts > statement_timestamp());
-    update private.post_engagement_totals t set like_hour_start = this_hour,
-        like_hour_count = case when t.like_hour_start = this_hour then t.like_hour_count + 1 else 1 end
-      where t.post_id = p_post_id;
-    update private.post_view_salts s set likes = s.likes + 1 where s.day = today;
+    update private.post_view_salts s set likes = s.likes + 1 where s.day = today
+      returning s.likes into day_likes;
+    perform internal.engagement_valve_alarms('post_likes_new', 50000, day_likes - 1, day_likes);
   elsif mine.id is not null and not wanted then
     delete from private.post_likes l where l.id = mine.id;
-    -- A like given and taken back in the same hour gives its place back.
-    if mine.created_at >= this_hour then
-      update private.post_engagement_totals t set like_hour_count = greatest(t.like_hour_count - 1, 0)
-        where t.post_id = p_post_id and t.like_hour_start = this_hour;
+    -- The day's count is net: a like made today and taken back gives its place back.
+    if (mine.created_at at time zone 'Africa/Johannesburg')::date = today then
+      update private.post_view_salts s set likes = greatest(s.likes - 1, 0) where s.day = today;
     end if;
   end if;
   return jsonb_build_object('liked', wanted, 'counted', true, 'likes',

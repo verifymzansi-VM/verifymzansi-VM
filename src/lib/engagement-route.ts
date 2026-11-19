@@ -81,34 +81,16 @@ function clientAddress(request: Request): ClientAddress {
 }
 
 /**
- * The limiter key of a client for views and likes: its IPv4 address, or the
- * /64 network of its IPv6 address (an IPv4-mapped IPv6 address is its IPv4
- * address).
+ * The limiter key of a client for every view, like and issuing limit: its
+ * IPv4 address, or the /48 network of its IPv6 address (the block one site
+ * usually holds, so a host cannot spread over its /64s); an IPv4-mapped IPv6
+ * address is its IPv4 address.
  */
 export function engagementClientKey(request: Request): string {
   const client = clientAddress(request);
   if (client.family === "v4") return `v4:${client.address}`;
-  if (client.family === "v6") return `v6:${client.groups.slice(0, 4).join(":")}::/64`;
+  if (client.family === "v6") return `v6:${client.groups.slice(0, 3).join(":")}::/48`;
   return client.key;
-}
-
-/**
- * The limiter action and key for issuing new identifiers: per IPv4 address
- * (a generous allowance, for carrier-grade NAT where many people share one
- * address) or per IPv6 /48, the block one site usually holds, so a host
- * cannot spread over its /64s.
- */
-export function viewerIssuingLimit(request: Request) {
-  const client = clientAddress(request);
-  if (client.family === "v6")
-    return {
-      action: "engagement:viewer:v6",
-      key: `v6:${client.groups.slice(0, 3).join(":")}::/48`,
-    };
-  return {
-    action: "engagement:viewer:v4",
-    key: client.family === "v4" ? `v4:${client.address}` : client.key,
-  };
 }
 
 /** Sets a new signed identifier on `response`; returns it, or null without the

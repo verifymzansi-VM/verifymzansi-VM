@@ -6,7 +6,7 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and reads "update not applied".
 --
--- The summary says whether the six tables and eight functions of the update
+-- The summary says whether the six tables and ten functions of the update
 -- are all absent (update not applied, with the number of publicly listed
 -- posts), all present (already applied, with the likes, the days of views and
 -- the views recorded) or partly present (unexpected state). A problem row
@@ -24,10 +24,10 @@ with objects as (
     ('private.post_view_days', to_regclass('private.post_view_days') is not null),
     ('private.post_engagement_totals', to_regclass('private.post_engagement_totals') is not null),
     ('private.post_likes', to_regclass('private.post_likes') is not null),
-    ('internal.record_post_views(uuid[],uuid,uuid)',
-      to_regprocedure('internal.record_post_views(uuid[],uuid,uuid)') is not null),
-    ('api.record_post_views(uuid[],uuid,uuid)',
-      to_regprocedure('api.record_post_views(uuid[],uuid,uuid)') is not null),
+    ('internal.record_post_views(uuid[],uuid,uuid,timestamptz)',
+      to_regprocedure('internal.record_post_views(uuid[],uuid,uuid,timestamptz)') is not null),
+    ('api.record_post_views(uuid[],uuid,uuid,timestamptz)',
+      to_regprocedure('api.record_post_views(uuid[],uuid,uuid,timestamptz)') is not null),
     ('internal.set_post_like(uuid,uuid,uuid,boolean,timestamptz)',
       to_regprocedure('internal.set_post_like(uuid,uuid,uuid,boolean,timestamptz)') is not null),
     ('api.set_post_like(uuid,uuid,uuid,boolean,timestamptz)',
@@ -36,7 +36,11 @@ with objects as (
       to_regprocedure('internal.get_post_engagement(uuid[])') is not null),
     ('api.get_post_engagement(uuid[])', to_regprocedure('api.get_post_engagement(uuid[])') is not null),
     ('internal.purge_post_engagement()', to_regprocedure('internal.purge_post_engagement()') is not null),
-    ('internal.post_likes_count()', to_regprocedure('internal.post_likes_count()') is not null)
+    ('internal.post_likes_count()', to_regprocedure('internal.post_likes_count()') is not null),
+    ('internal.engagement_established(uuid,timestamptz)',
+      to_regprocedure('internal.engagement_established(uuid,timestamptz)') is not null),
+    ('internal.engagement_valve_alarms(text,integer,integer,integer)',
+      to_regprocedure('internal.engagement_valve_alarms(text,integer,integer,integer)') is not null)
   ) v(name, present)
 ),
 state as (

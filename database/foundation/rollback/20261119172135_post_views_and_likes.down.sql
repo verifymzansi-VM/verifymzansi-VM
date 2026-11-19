@@ -3,8 +3,8 @@
 -- owner has decided so. Prefer a forward fix; to stop showing the counters,
 -- switch SHOW_ENGAGEMENT_TOTALS off instead.
 --
--- It drops the three commands, their internal functions, the purge and
--- trigger functions, the six tables and the two safety-valve cost allowances
+-- It drops the three commands, their internal functions, the purge, trigger
+-- and valve functions, the six tables and the two safety-valve cost allowances
 -- (with any alarm they raised), and puts back the earlier bodies of
 -- the privacy export, the retention job and account erasure byte for byte.
 -- Revert and deploy the website release first: the rollback removes commands
@@ -23,14 +23,16 @@ begin
     or to_regclass('private.post_view_days') is null
     or to_regclass('private.post_engagement_totals') is null
     or to_regclass('private.post_likes') is null
-    or to_regprocedure('internal.record_post_views(uuid[],uuid,uuid)') is null
-    or to_regprocedure('api.record_post_views(uuid[],uuid,uuid)') is null
+    or to_regprocedure('internal.record_post_views(uuid[],uuid,uuid,timestamptz)') is null
+    or to_regprocedure('api.record_post_views(uuid[],uuid,uuid,timestamptz)') is null
     or to_regprocedure('internal.set_post_like(uuid,uuid,uuid,boolean,timestamptz)') is null
     or to_regprocedure('api.set_post_like(uuid,uuid,uuid,boolean,timestamptz)') is null
     or to_regprocedure('internal.get_post_engagement(uuid[])') is null
     or to_regprocedure('api.get_post_engagement(uuid[])') is null
     or to_regprocedure('internal.purge_post_engagement()') is null
-    or to_regprocedure('internal.post_likes_count()') is null then
+    or to_regprocedure('internal.post_likes_count()') is null
+    or to_regprocedure('internal.engagement_established(uuid,timestamptz)') is null
+    or to_regprocedure('internal.engagement_valve_alarms(text,integer,integer,integer)') is null then
     raise exception 'rollback precondition: post views and likes are not fully present'
       using errcode='55000';
   end if;
@@ -301,8 +303,8 @@ $function$;
 alter function internal.erase_closed_account(uuid,text) owner to postgres;
 revoke all on function internal.erase_closed_account(uuid,text) from public;
 
-drop function api.record_post_views(uuid[],uuid,uuid);
-drop function internal.record_post_views(uuid[],uuid,uuid);
+drop function api.record_post_views(uuid[],uuid,uuid,timestamptz);
+drop function internal.record_post_views(uuid[],uuid,uuid,timestamptz);
 drop function api.set_post_like(uuid,uuid,uuid,boolean,timestamptz);
 drop function internal.set_post_like(uuid,uuid,uuid,boolean,timestamptz);
 drop function api.get_post_engagement(uuid[]);
@@ -310,6 +312,8 @@ drop function internal.get_post_engagement(uuid[]);
 drop function internal.purge_post_engagement();
 drop table private.post_likes;
 drop function internal.post_likes_count();
+drop function internal.engagement_established(uuid,timestamptz);
+drop function internal.engagement_valve_alarms(text,integer,integer,integer);
 drop table private.post_engagement_totals;
 drop table private.post_view_days;
 drop table private.post_view_marks;
