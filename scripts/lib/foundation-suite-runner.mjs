@@ -79,7 +79,12 @@ export async function runSuites(suites, { jobs, run = nodeSuite, report = () => 
       try {
         result = await run(suites[index]);
       } catch (error) {
-        result = { suite: suites[index], code: 1, seconds: 0, output: `${error?.stack ?? error}\n` };
+        result = {
+          suite: suites[index],
+          code: 1,
+          seconds: 0,
+          output: `${error?.stack ?? error}\n`,
+        };
       }
       results[index] = result;
       report(result);
@@ -93,7 +98,8 @@ export async function runSuites(suites, { jobs, run = nodeSuite, report = () => 
 export function formatResult(result, { actions = false } = {}) {
   const passed = result.code === 0;
   const head = `${result.suite}: ${passed ? "passed" : `FAILED (exit ${result.code})`} in ${result.seconds} s`;
-  const body = result.output.endsWith("\n") || result.output === "" ? result.output : `${result.output}\n`;
+  const body =
+    result.output.endsWith("\n") || result.output === "" ? result.output : `${result.output}\n`;
   if (!actions) return `===== ${head}\n${body}`;
   if (passed) return `::group::${head}\n${body}::endgroup::\n`;
   return `::error title=Foundation suite failed::${head}\n${body}`;
@@ -104,14 +110,19 @@ export function summary(results, { jobs, seconds }) {
   const failed = results.filter((result) => result.code !== 0);
   const lines = [...results]
     .sort((a, b) => b.seconds - a.seconds)
-    .map((r) => `  ${r.code === 0 ? "pass" : "FAIL"} ${String(r.seconds).padStart(4)} s  ${r.suite}`);
+    .map(
+      (r) => `  ${r.code === 0 ? "pass" : "FAIL"} ${String(r.seconds).padStart(4)} s  ${r.suite}`
+    );
   const verdict = failed.length
     ? `${failed.length} of ${results.length} foundation suites failed: ${failed.map((r) => r.suite).join(", ")}`
     : `All ${results.length} foundation suites passed`;
   return `\nFoundation suites, ${jobs} at a time, ${seconds} s in all:\n${lines.join("\n")}\n${verdict}.\n`;
 }
 
-export async function main(argv = process.argv.slice(2), { write = (text) => process.stdout.write(text), env = process.env } = {}) {
+export async function main(
+  argv = process.argv.slice(2),
+  { write = (text) => process.stdout.write(text), env = process.env } = {}
+) {
   const { jobs, suites } = parseArgs(argv);
   const actions = env.GITHUB_ACTIONS === "true";
   const started = Date.now();
