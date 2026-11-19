@@ -102,12 +102,12 @@ and its table is absent or has the update's shape.
   `internal.grant_house_slots(p_recipient_email, p_slots, p_days, p_reason, p_approved_by_email)`
   is executable by no API role (like `internal.bootstrap_first_administrator`);
   the owner runs it in the Supabase SQL editor. It makes the recipient hold
-  `p_slots` (1 to 4) house slots, each running until `p_days` (7 to 180) days
+  `p_slots` (1 to 15) house slots, each running until `p_days` (7 to 180) days
   from now: current house slots that end earlier are extended to that date
   (never shortened; their posts' search end follows,
   `internal.refresh_slot_chain_documents`), and new ones are added up to
   `p_slots`. Nothing renews by itself. Refusals: 22023
-  `house_slots_count_invalid` (a count outside 1 to 4, or below the house slots
+  `house_slots_count_invalid` (a count outside 1 to 15, or below the house slots
   already held), `house_slots_term_invalid`, `house_slots_reason_required` (5 to
   500 characters of plain text); 42501 `house_slots_recipient_invalid`,
   `house_slots_not_admin`, `house_slots_recipient_inactive`,

@@ -10,8 +10,8 @@ AS $function$
 declare v_recipient uuid; v_approver uuid; v_ends timestamptz; v_held uuid[]; v_slot private.entitlements;
   v_id uuid; v_added integer:=0; v_extended integer:=0;
 begin
-  if p_slots is null or p_slots<1 or p_slots>4 then
-    raise exception 'house slots: choose 1 to 4 slots' using errcode='22023', detail='house_slots_count_invalid';
+  if p_slots is null or p_slots<1 or p_slots>15 then
+    raise exception 'house slots: choose 1 to 15 slots' using errcode='22023', detail='house_slots_count_invalid';
   end if;
   if p_days is null or p_days<7 or p_days>180 then
     raise exception 'house slots: choose a term of 7 to 180 days' using errcode='22023', detail='house_slots_term_invalid';

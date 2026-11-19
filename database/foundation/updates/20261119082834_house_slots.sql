@@ -18,7 +18,7 @@
 --    approver email), which only the database owner can run (execute revoked
 --    from public, granted to no API role; run in the Supabase SQL editor, like
 --    internal.bootstrap_first_administrator). It makes the recipient hold
---    `slots` (1 to 4) house slots, each running until `days` (7 to 180) days
+--    `slots` (1 to 15) house slots, each running until `days` (7 to 180) days
 --    from now: current house slots that end earlier are extended to that date
 --    (never shortened), and new ones are added up to `slots`. It refuses
 --    (22023) a count or term outside those ranges, a reason that is not 5 to
@@ -67,7 +67,7 @@ begin
   loop
     if shape not in (
         'internal.grant_house_slots(text,integer,integer,text,text) absent',
-        'internal.grant_house_slots(text,integer,integer,text,text) 236ad7e13692d8dd51759289cf647a61',
+        'internal.grant_house_slots(text,integer,integer,text,text) d456341442ebecc2d5a28d2b824d4433',
         'internal.end_house_slot(uuid,text) absent',
         'internal.end_house_slot(uuid,text) bbd9eded84273b962814a997daaed2e4',
         'internal.house_slots_on_staff_role_change() absent',
@@ -196,8 +196,8 @@ as $function$
 declare v_recipient uuid; v_approver uuid; v_ends timestamptz; v_held uuid[]; v_slot private.entitlements;
   v_id uuid; v_added integer:=0; v_extended integer:=0;
 begin
-  if p_slots is null or p_slots<1 or p_slots>4 then
-    raise exception 'house slots: choose 1 to 4 slots' using errcode='22023', detail='house_slots_count_invalid';
+  if p_slots is null or p_slots<1 or p_slots>15 then
+    raise exception 'house slots: choose 1 to 15 slots' using errcode='22023', detail='house_slots_count_invalid';
   end if;
   if p_days is null or p_days<7 or p_days>180 then
     raise exception 'house slots: choose a term of 7 to 180 days' using errcode='22023', detail='house_slots_term_invalid';

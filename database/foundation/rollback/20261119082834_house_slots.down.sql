@@ -21,7 +21,7 @@ begin
       ('internal.house_slots_on_staff_role_change()')) v(sig)
   loop
     if shape not in (
-        'internal.grant_house_slots(text,integer,integer,text,text) 236ad7e13692d8dd51759289cf647a61',
+        'internal.grant_house_slots(text,integer,integer,text,text) d456341442ebecc2d5a28d2b824d4433',
         'internal.end_house_slot(uuid,text) bbd9eded84273b962814a997daaed2e4',
         'internal.house_slots_on_staff_role_change() f100ded1785d690054ba54e150e33bff') then
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';

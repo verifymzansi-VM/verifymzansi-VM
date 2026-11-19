@@ -14,7 +14,7 @@
 // checks: no API role can run the grant; each refusal (not an admin, no
 // accepted ID review, no authenticator app, an inactive account, the approver
 // the same account or not an admin, a count, term or reason outside the rules,
-// more than 4 house slots); a granted slot's shape (an Individual slot: 1 live
+// more than 15 house slots); a granted slot's shape (an Individual slot: 1 live
 // post, 4 going live per 30 days, 10 photos and 1 video, no add-ons, no
 // payment); a post in it goes through moderation (its own account cannot
 // approve it) and never touches the free first post, payments, commissions,
@@ -50,7 +50,7 @@ import {
 const UPDATE = "20261119082834_house_slots.sql";
 const GRANT = "internal.grant_house_slots(text,integer,integer,text,text)";
 const ADDED = {
-  [GRANT]: "236ad7e13692d8dd51759289cf647a61",
+  [GRANT]: "d456341442ebecc2d5a28d2b824d4433",
   "internal.end_house_slot(uuid,text)": "bbd9eded84273b962814a997daaed2e4",
   "internal.house_slots_on_staff_role_change()": "f100ded1785d690054ba54e150e33bff",
 };
@@ -263,7 +263,7 @@ try {
   await check("refused: no written reason, a count or term outside the rules", () => {
     for (const reason of [null, "", "ok", " padded reason ", "x".repeat(501)])
       fails(grantSql(admin, 1, 90, reason, admin2), "22023", /house_slots_reason_required/);
-    for (const slots of [null, 0, 5, -1])
+    for (const slots of [null, 0, 16, -1])
       fails(grantSql(admin, slots, 90, REASON, admin2), "22023", /house_slots_count_invalid/);
     for (const days of [null, 6, 181])
       fails(grantSql(admin, 1, days, REASON, admin2), "22023", /house_slots_term_invalid/);
@@ -414,48 +414,46 @@ try {
     fourth = next;
   });
 
-  await check(
-    "more than 4 house slots is refused; extending moves the end and the search end",
-    () => {
-      // Up to 4: three are added, the current one is extended to the new end.
-      q(`update private.entitlements set ends_at=now()+interval '10 days' where id='${slot}';`);
-      const done = grant(admin, 4, 120);
-      assert.deepEqual([done.added, done.extended, done.slots.length], [3, 1, 4]);
-      const slots = houseSlots(admin);
-      assert.equal(slots.length, 4);
-      assert.equal(
-        q(
-          `select count(distinct ends_at) from private.entitlements where owner_id='${admin.id}' and source='staff_grant';`
-        ),
-        "1"
-      );
-      assert.equal(
-        q(
-          `select abs(extract(epoch from ends_at-(now()+interval '120 days')))<60 from private.entitlements where id='${slot}';`
-        ),
-        "t"
-      );
-      // The live post's search end follows the slot.
-      assert.equal(
-        q(`select s.visible_until=e.ends_at from private.post_search_documents s, private.entitlements e
+  await check("a 16th house slot is refused; extending moves the end and the search end", () => {
+    // Up to 15: fourteen are added, the current one is extended to the new end.
+    q(`update private.entitlements set ends_at=now()+interval '10 days' where id='${slot}';`);
+    const done = grant(admin, 15, 120);
+    assert.deepEqual([done.added, done.extended, done.slots.length], [14, 1, 15]);
+    const slots = houseSlots(admin);
+    assert.equal(slots.length, 15);
+    assert.equal(
+      q(
+        `select count(distinct ends_at) from private.entitlements where owner_id='${admin.id}' and source='staff_grant';`
+      ),
+      "1"
+    );
+    assert.equal(
+      q(
+        `select abs(extract(epoch from ends_at-(now()+interval '120 days')))<60 from private.entitlements where id='${slot}';`
+      ),
+      "t"
+    );
+    // The live post's search end follows the slot.
+    assert.equal(
+      q(`select s.visible_until=e.ends_at from private.post_search_documents s, private.entitlements e
          where s.post_id='${fourth}' and e.id='${slot}';`),
-        "t"
-      );
-      assert.deepEqual(
-        events(admin)
-          .map((e) => e.action)
-          .sort(),
-        ["extended", "granted", "granted", "granted", "granted"]
-      );
-      fails(grantSql(admin, 5, 90, REASON, admin2), "22023", /house_slots_count_invalid/);
-      fails(grantSql(admin, 3, 90, REASON, admin2), "22023", /already holds 4 house slots/);
-      // Running it again never shortens a slot.
-      const again = grant(admin, 4, 30);
-      assert.deepEqual([again.added, again.extended], [0, 0]);
-      assert.equal(houseSlots(admin).length, 4);
-      assert.equal(events(admin).length, 5);
-    }
-  );
+      "t"
+    );
+    assert.deepEqual(
+      events(admin)
+        .map((e) => e.action)
+        .sort(),
+      ["extended", ...Array(15).fill("granted")]
+    );
+    fails(grantSql(admin, 16, 90, REASON, admin2), "22023", /house_slots_count_invalid/);
+    fails(grantSql(admin, 14, 90, REASON, admin2), "22023", /already holds 15 house slots/);
+    assert.equal(houseSlots(admin).length, 15);
+    // Running it again never shortens a slot.
+    const again = grant(admin, 15, 30);
+    assert.deepEqual([again.added, again.extended], [0, 0]);
+    assert.equal(houseSlots(admin).length, 15);
+    assert.equal(events(admin).length, 16);
+  });
   await check("the record is append-only", () => {
     const id = events(admin)[0].id;
     fails(
@@ -478,14 +476,14 @@ try {
     q(
       `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${moderator.id}';`
     );
-    assert.equal(houseSlots(admin).filter((e) => e.status === "active").length, 4);
+    assert.equal(houseSlots(admin).filter((e) => e.status === "active").length, 15);
     q(
       `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${admin.id}' and revoked_at is null;`
     );
     const slots = houseSlots(admin);
     assert.deepEqual(
       slots.map((e) => [e.status, e.revoked_reason]),
-      Array(4).fill(["revoked", "house_slot_ended"])
+      Array(15).fill(["revoked", "house_slot_ended"])
     );
     const post = row(fourth);
     assert.deepEqual([post.status, post.status_reason], ["expired", "Slot ended"]);
@@ -495,7 +493,7 @@ try {
       "f"
     );
     const ended = events(admin).filter((e) => e.action === "ended");
-    assert.equal(ended.length, 4);
+    assert.equal(ended.length, 15);
     assert.ok(ended.every((e) => e.approved_by === null && e.reason === "Admin role removed"));
     fails(grantSql(admin, 1, 90, REASON, admin2), "42501", /house_slots_not_admin/);
     assert.deepEqual(money(admin), NO_MONEY);
