@@ -27,7 +27,9 @@ export default defineConfig({
   testDir: "./e2e/foundation",
   // The picture checks run only inside the pinned Playwright image
   // (scripts/foundation-visual.mjs, playwright.visual.config.ts).
-  testIgnore: "visual-regression.spec.ts",
+  // launch-config.spec.ts needs the launch-configuration build and runs only
+  // in playwright.launch-config.config.ts.
+  testIgnore: ["visual-regression.spec.ts", "launch-config.spec.ts"],
   globalSetup: "./e2e/foundation/global.setup.ts",
   outputDir: "test-results/foundation",
   fullyParallel: false,

@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const { withSentryConfig } = require("@sentry/nextjs/config");
 const { shouldSkipNextTypecheck } = require("./scripts/lib/next-typecheck-skip.cjs");
+const {
+  LAUNCH_CONFIG_BUILD_DEFINE,
+  launchConfigBuild,
+} = require("./scripts/lib/launch-config-build.cjs");
 // The retired ("source") backend has been removed. A leftover backend setting
 // fails the build instead of passing silently.
 if (
@@ -61,6 +65,14 @@ const clientEnv = Object.fromEntries(
     NEXT_PUBLIC_CF_IMAGE_RESIZING: process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING,
   }).filter(([, value]) => typeof value === "string" && value.length > 0)
 );
+// The launch-configuration test build (scripts/lib/launch-config-build.cjs):
+// always defined, "0" in every production build, so the compiled value can
+// never be changed by a Worker variable; "1" only for the local browser-test
+// copy, and asking for it anywhere else fails the build.
+const buildDefines = {
+  ...clientEnv,
+  [LAUNCH_CONFIG_BUILD_DEFINE]: launchConfigBuild(process.env) ? "1" : "0",
+};
 
 const sharpServerExternalPackages = [
   "sharp",
@@ -113,7 +125,7 @@ const nextConfig = {
   // Explicitly inline NEXT_PUBLIC_* vars into the client bundle.
   // Turbopack on Cloudflare may not replace process.env.NEXT_PUBLIC_*
   // at build time; the `env` field forces inlining without masking missing config.
-  env: clientEnv,
+  env: buildDefines,
   images: {
     // Cloudflare Workers does not support the default Next.js image
     // optimisation endpoint (/_next/image), and the zone has no Cloudflare

@@ -62,7 +62,8 @@ const DROPPED = new RegExp(
     "NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE$|PLAYWRIGHT_E2E_AUTH$|PLAYWRIGHT_E2E_AUTO_APPROVE$|" +
     "DATABASE_URL$|POSTGRES_URL$|OZOW_|PAYFAST_|SENTRY_|NEXT_PUBLIC_SENTRY_|" +
     "CLOUDFLARE_|KYC_WEBHOOK_SECRET$|INTERNAL_JOBS_SECRET$|OPS_JOBS_SECRET$|" +
-    "HEALTH_DIAGNOSTIC_TOKEN$|SITE_MONITOR_API_KEY$|NEXT_PUBLIC_DATA_BACKEND$)",
+    "HEALTH_DIAGNOSTIC_TOKEN$|SITE_MONITOR_API_KEY$|NEXT_PUBLIC_DATA_BACKEND$|" +
+    "VERIFYMZANSI_LAUNCH_CONFIG$|ADDON_SALES_ENABLED$)",
   "i"
 );
 
@@ -101,7 +102,21 @@ export const LOCAL_MAIL_RELAY_KEY = "re_local_fixture_mail_relay";
 /** Keys Next itself manages, in any letter case; never blanked. */
 const NEXT_MANAGED = new Set(["NODE_ENV"]);
 
-export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
+/**
+ * The launch configuration (playwright.launch-config.config.ts): the build
+ * switch that turns every hidden feature on (scripts/lib/launch-config-build.cjs;
+ * next.config.js accepts it only for this copy) and the runtime switches set
+ * to their launch values. Production's own values stay in wrangler.toml.
+ * OZOW_API_REFUNDS_ENABLED has no effect with mock Ozow (src/lib/payments/ozow-refunds.ts).
+ */
+export const LAUNCH_CONFIG_SETTINGS = {
+  VERIFYMZANSI_LAUNCH_CONFIG: "1",
+  FOUNDATION_REGISTRATION_INVITE_ONLY: "false",
+  ADDON_SALES_ENABLED: "true",
+  OZOW_API_REFUNDS_ENABLED: "true",
+};
+
+export function foundationWebsiteEnv(status, { root = process.cwd(), launchConfig = false } = {}) {
   // The caller's environment plus the fixed test values; database, persona
   // and provider settings are dropped.
   const inherited = { ...process.env, ...BROWSER_TEST_SETTINGS };
@@ -164,6 +179,7 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
     INTERNAL_JOBS_SECRET: LOCAL_INTERNAL_JOBS_SECRET,
     // Staff payment alerts go to the local mail catcher (a .test address).
     PAYMENT_ALERT_EMAILS: LOCAL_PAYMENT_ALERT_EMAIL,
+    ...(launchConfig ? LAUNCH_CONFIG_SETTINGS : {}),
   };
   // A name in another letter case beside its all-capitals form (a parent's
   // "Kyc_Provider" next to KYC_PROVIDER) is dropped, so the copy's value wins.
@@ -187,10 +203,12 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
 export const BUILD_STAMP = ".next/foundation-e2e-stamp.json";
 
 /** Hash of the values that `next build` inlines or binds for the copy
- * (NEXT_PUBLIC_* and FOUNDATION_*). Only the hash is stored. */
+ * (NEXT_PUBLIC_*, FOUNDATION_* and the launch-configuration build switch), so
+ * a launch-configuration build is never served as the ordinary copy or the
+ * other way round. Only the hash is stored. */
 function buildFingerprint(env) {
   const entries = Object.entries(env)
-    .filter(([key]) => /^(NEXT_PUBLIC_|FOUNDATION_)/.test(key))
+    .filter(([key]) => /^(NEXT_PUBLIC_|FOUNDATION_|VERIFYMZANSI_LAUNCH_CONFIG$)/.test(key))
     .sort(([a], [b]) => a.localeCompare(b));
   return createHash("sha256").update(JSON.stringify(entries)).digest("hex");
 }
