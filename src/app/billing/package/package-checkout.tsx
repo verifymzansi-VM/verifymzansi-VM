@@ -72,6 +72,7 @@ export function PackageCheckout({
   initialDays = 30,
   block = null,
   onlineMaxCents = null,
+  unpaidInvoices = [],
 }: {
   terms: PackageCheckoutTerm[];
   initialSlots?: number;
@@ -80,6 +81,9 @@ export function PackageCheckout({
   /** The most one online (Ozow) payment may be, in cents; null when unknown
    * (the database still applies it). */
   onlineMaxCents?: number | null;
+  /** The member's unpaid Individual slot invoices (their numbers), which can
+   * still be paid by bank transfer once the package runs (D6). */
+  unpaidInvoices?: string[];
 }) {
   const ids = useId();
   const firstTerm = terms.find((term) => term.days === initialDays) ?? terms[0];
@@ -406,6 +410,27 @@ export function PackageCheckout({
                   </Link>
                 </>
               ) : null}
+            </p>
+          ) : null}
+          {!block && unpaidInvoices.length > 0 ? (
+            <p
+              role="status"
+              data-testid="package-unpaid-invoices"
+              className="rounded-xl border border-border/80 bg-muted/40 p-3.5 text-sm leading-6 text-foreground/80"
+            >
+              {unpaidInvoices.length === 1
+                ? `You have an unpaid invoice for Individual slots (${unpaidInvoices[0]}). `
+                : `You have ${unpaidInvoices.length} unpaid invoices for Individual slots (${unpaidInvoices.join(", ")}). `}
+              {
+                "If you pay by bank transfer after your package starts, those slots run beside the package until their own end. See "
+              }
+              <Link
+                href="/billing/invoices"
+                className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
+              >
+                Invoices
+              </Link>
+              .
             </p>
           ) : null}
           {block ? (

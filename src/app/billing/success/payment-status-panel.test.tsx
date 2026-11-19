@@ -7,6 +7,8 @@ vi.mock("next/link", () => ({
     <a href={href}>{children}</a>
   ),
 }));
+const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 
 describe("PaymentStatusPanel", () => {
   it.each([
@@ -154,5 +156,64 @@ describe("PaymentStatusPanel", () => {
       } as Response);
     });
     expect(screen.getByText("Payment confirmed")).toBeInTheDocument();
+  });
+
+  const packageDetails = {
+    slots: 10,
+    startsAt: "2026-11-19T08:00:00.000Z",
+    endsAt: "2026-12-19T08:00:00.000Z",
+    newPostsLimit: 40,
+    paidCents: 100000,
+    individualSlots: true,
+  };
+
+  it("shows a paid Multi-listing package with its slots, dates in SA time and fair use", () => {
+    render(
+      <PaymentStatusPanel
+        initialStatus="complete"
+        paymentId="pay-package"
+        packagePayment
+        packageDetails={packageDetails}
+      />
+    );
+    expect(screen.getByRole("heading", { name: "Your package is active" })).toBeInTheDocument();
+    expect(screen.getByText(/Your 10 slots are ready to use now/)).toBeInTheDocument();
+    expect(screen.getByText("19 Nov 2026, 10:00")).toBeInTheDocument();
+    expect(screen.getByText("19 Dec 2026, 10:00 (SA time)")).toBeInTheDocument();
+    expect(screen.getByText("Up to 40 every 30 days")).toBeInTheDocument();
+    expect(screen.getByText(/Nothing renews automatically/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Create a post" })).toHaveAttribute(
+      "href",
+      "/post/create"
+    );
+    expect(screen.getByRole("link", { name: "Go to My slots" })).toHaveAttribute(
+      "href",
+      "/dashboard/slots"
+    );
+    expect(screen.getByText(/Individual slots keep running/)).toBeInTheDocument();
+    expect(screen.queryByText("Payment confirmed")).not.toBeInTheDocument();
+  });
+
+  it("leaves out the Individual slot note when the member holds none", () => {
+    render(
+      <PaymentStatusPanel
+        initialStatus="complete"
+        packagePayment
+        packageDetails={{ ...packageDetails, individualSlots: false }}
+      />
+    );
+    expect(screen.queryByText(/Individual slots keep running/)).not.toBeInTheDocument();
+  });
+
+  it("reads the package once a package payment is confirmed while the page is open", async () => {
+    render(<PaymentStatusPanel initialStatus="pending" paymentId="pay-package" packagePayment />);
+    await waitFor(() => expect(screen.getByText("Payment confirmed")).toBeInTheDocument());
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("never reloads for a payment that is not a package", async () => {
+    render(<PaymentStatusPanel initialStatus="pending" paymentId="pay-slot" />);
+    await waitFor(() => expect(screen.getByText("Payment confirmed")).toBeInTheDocument());
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

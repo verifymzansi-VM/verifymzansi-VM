@@ -80,6 +80,138 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Multi-listing packages: the small part-one gaps, 19 November 2026
+
+`20261119151152_package_gap_fixes.sql` is not applied yet (`pending` in the
+applied register). Roadmap P4a; the owner's decision D6 of 19 November 2026. It
+needs `20261114154823_slot_packages.sql` and
+`20261119025106_package_invoices.sql`, and refuses (55000) unless the five
+functions it replaces have their reviewed bodies (or this update's), the six it
+adds are absent (or this update's) and its table is absent or has the update's
+shape. It only adds: one staff read command and three fields in the reply of the
+service command `api.run_slot_renewals` (read by the operations job without a
+strict schema); no command, argument or grant is removed or changed, and no
+field is added to an answer the website reads strictly. Packages stay off sale.
+
+- **A record of the moves the sweep could not make.** New table
+  `private.slot_package_move_failures`: one row per package, post (none when the
+  package itself was busy) and direction (`into_package`: the post of an ended
+  Individual slot the package takes; `out_of_package`: a package post moving
+  into a free Individual slot in the package's last 7 days), with the tries, the
+  first and last failure and the reason (`busy` or `error <SQLSTATE>`). A
+  failure more than 15 minutes after the last one starts the count again. A row
+  goes when the post moves, when the sweep finds it no longer waiting, or 7 days
+  after its last failure once its package ended over a day ago. No foreign key
+  on purpose: a key-share lock on the post or package would make the sweep wait
+  for an activation, and the sweep never waits. Row level security on; no API
+  role reads it.
+- **The sweep.** `internal.run_slot_renewals` (full body) records every failure
+  it counts in `package_skipped`, and now also counts a post another transaction
+  holds (as `busy`). Its reply gains `package_stuck` (current failures that
+  started over 30 minutes ago, or whose package ends within a day;
+  `internal.slot_package_move_stuck`), `package_stuck_moves` (up to 20 of them:
+  package, post, direction, tries, first failure, reason; ids only) and
+  `package_paused_released`. The website's operations job logs
+  `Package moves skipped this run` for a non-zero `package_skipped` and, while
+  `package_stuck` is above 0, `Package move stuck` with the list, and fails its
+  run with the step `package_moves_stuck`, so the failed run and the missing
+  heartbeat alert a person (`docs/RUNBOOK.md`, "Package moves").
+- **Paused posts after a refund.** A paused post still held in its ended
+  Individual slot, whose own end date the lifecycle job had raised to the
+  package's end, kept that date once no package took it (refunded, charged back
+  or full), so its 3-day grace and deletion clock started at the old package
+  end. New `internal.slot_package_release_paused(owner)` sets such a post's end
+  date back to its slot's paid end; the lifecycle job then expires it on its
+  next run. The revocation trigger function
+  `internal.slot_package_grant_revoked` (full body) and the sweep run it. Each
+  post is changed in its own subtransaction with the posts' deferred checks run
+  at once (`set constraints ... immediate`) and only when no other transaction
+  holds it (skip locked), so a post saved under rules that have since changed
+  never stops a refund, a chargeback or the sweep; such a post is left as it was
+  until it can be changed.
+- **Bank transfers for an invoice issued before a package (D6).** New
+  `internal.slot_package_blocks_invoice(identity, owner, issued at)`: E3 refuses
+  only a package that started at or before the invoice was issued.
+  `internal.record_staff_invoice_transfer` and
+  `internal.confirm_staff_invoice_payment` (full bodies) use it for an
+  Individual invoice: its slots are recorded and delivered and run beside the
+  package to their own end, like slots already held. A transfer to an invoice
+  issued after the package started, and a transfer recorded without an invoice
+  (`internal.record_staff_invoice_payment`, unchanged), are refused as before
+  (PT409 `package_active`). The Individual slot limit still applies. Pay now is
+  unchanged.
+- **An unsent online package checkout.** `internal.claim_checkout_request` (full
+  body) refuses to send a package payment to Ozow while the account has a
+  package that has not ended (PT409 `package_active`) or an unpaid package
+  invoice it is not an attempt of (PT409 `package_invoice_unpaid`). It checks
+  under the account's package lock, which a bank transfer's confirmation, Pay
+  now and a package delivery hold while they work, taken without waiting after
+  the payment row (a delivery locks the payment before that lock, so waiting
+  could deadlock): while it is busy the claim is refused with PT409
+  `package_busy` and the member tries again. The website shows the package
+  checkout's own words for the first two. This closes the known gap of
+  `20261119025106_package_invoices.sql`.
+- **Staff read.** `api.get_staff_package_move_failures()` (`payments:view`): the
+  failures of the past 15 minutes, oldest first, at most 50, each with the
+  package's end, the owner's public name ("Thandeka D."), the post's title and
+  whether it is stuck. The website shows them as "Needs attention" on Payments &
+  Refunds.
+
+**Order: apply first, then merge.** The website release from the same pull
+request reads the new command and the deploy preflight probes every command in
+`../runtime-api-manifest.json`, so a deploy without the update stops there.
+Earlier releases do not call it and keep working with the update applied: the
+reply of `api.run_slot_renewals` only gains fields, which the earlier operations
+job ignores. It is recorded after `20261119082834_house_slots.sql`.
+
+**Applying.**
+
+1. Run `../preflight/20261119151152_package_gap_fixes.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "package gap fixes: update not applied; on sale: no;
+   packages: 0; paused posts to put back: 0; unsent package checkouts to refuse:
+   0; unpaid Individual invoices issued before a package: 0; move record: none
+   (table absent)".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "package gap fixes: already applied; on sale: no;
+   packages: 0; paused posts to put back: 0; unsent package checkouts to refuse:
+   0; unpaid Individual invoices issued before a package: 0; move record: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is `../rollback/20261119151152_package_gap_fixes.down.sql`
+(only with the owner's decision; prefer a forward fix). Revert and deploy the
+website release first: the rollback removes the command its staff payments page
+reads. It refuses unless every added and replaced function has this update's
+body; otherwise it puts back the five earlier bodies byte for byte and drops the
+added functions and the table (an operational record). Slots already delivered
+from a transfer to an invoice issued before a package, and paused posts already
+put back, stay as they are.
+
+`node --import tsx scripts/test-foundation-package-gap-fixes.mjs` (part of
+`pnpm db:foundation:lifecycle-test`, 13 checks) proves on the throwaway
+database: the preflight before and after, read only; drifted bodies and a
+premature rollback refused, changing nothing; apply, rollback and re-apply
+return the same fingerprints; the grants; a failed move recorded (tries, times,
+`error P0001`), counted again on the next run, reported stuck after 30 minutes
+(in the sweep's reply with ids only, and for staff with `payments:view`, never a
+moderator, a member or a visitor), restarted after 15 quiet minutes and cleared
+once the post moves; a post another transaction holds recorded as `busy` without
+the sweep waiting; a failing move out of a package in its last day stuck at
+once; a paused post put back to its slot's end by a refund, then expired with
+the 3-day grace; a paused post saved under rules that have since changed neither
+stopping the refund nor being changed, then put back by the sweep once it can
+be; a bank transfer to an Individual invoice issued before the package recorded
+and confirmed (one 30-day slot beside the running package, the invoice paid),
+while one issued after the package started and a transfer without an invoice are
+refused; an unsent online package checkout refused while a package invoice is
+unpaid and once a package runs, while the invoice's own Pay now attempt is sent;
+a package checkout refused at once (`package_busy`, without waiting) while
+another transaction holds the account's package lock, and sent once it is free;
+and the rollback refused with another body.
+
 ## House slots for administrators, 19 November 2026
 
 `20261119082834_house_slots.sql` was applied on 19 November 2026 at 14:04 UTC
@@ -327,6 +459,7 @@ the owner switches them on.
   the payment lands in `needs_reconciliation` beside the package (staff refund
   it). The fix belongs in `internal.claim_checkout_request`: refuse to send a
   package checkout while the account has a package or an unpaid package invoice.
+  `20261119151152_package_gap_fixes.sql` makes it.
 
 **Order: apply first, then merge.** The website release from the same pull
 request calls the new commands and the deploy preflight probes every command in
@@ -5447,5 +5580,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   slots: 0 (events: 0)"; production fingerprint after it (fingerprint.sql at
   2d761c47, captured about 14:04 UTC) matched the full replay (except the known
   schema grant difference)
+- `20261119151152_package_gap_fixes.sql`: pending
 
 <!-- applied-register:end -->

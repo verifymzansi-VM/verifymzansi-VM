@@ -295,7 +295,16 @@ async function command(
               : error.code === "PT409" && !hasDatabaseReason(error, "package_active")
                 ? null
                 : PACKAGE_CHECKOUT_REFUSALS[error.code ?? ""]
-            : null;
+            : // A package checkout is not sent to Ozow beside a package or an
+              // unpaid package invoice (update 20261119151152): the package
+              // checkout's own words.
+              name === "claim_checkout_request" && error.code === "PT409"
+              ? hasDatabaseReason(error, "package_invoice_unpaid")
+                ? PACKAGE_INVOICE_UNPAID
+                : hasDatabaseReason(error, "package_active")
+                  ? PACKAGE_CHECKOUT_REFUSALS.PT409
+                  : null
+              : null;
   if (refusal) throw new FoundationBillingCommandError(...refusal);
   if (error)
     throw new FoundationBillingCommandError(

@@ -91,8 +91,12 @@ begin
     end if;
   else
     -- E3 (20261114154823): while the person's Multi-listing package runs (until
-    -- its last 7 days), no Individual slot is sold, whatever the way it is paid.
-    if internal.slot_package_blocks_individual(fingerprint, t.account_id) then
+    -- its last 7 days), no Individual slot is sold, whatever the way it is paid;
+    -- except (D6, 20261119151152) a transfer to an invoice issued before the
+    -- package started: its slots run beside the package to their own end. A
+    -- transfer recorded without an invoice is refused as before.
+    if internal.slot_package_blocks_invoice(fingerprint, t.account_id,
+        (select i.issued_at from private.customer_invoices i where i.id = t.customer_invoice_id)) then
       raise exception 'Individual slots cannot be sold while the person''s Multi-listing package runs'
         using errcode='PT409', detail='package_active';
     end if;

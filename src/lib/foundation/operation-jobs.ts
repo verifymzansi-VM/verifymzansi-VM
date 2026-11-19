@@ -140,6 +140,42 @@ const sweepFailures = z.object({
     .optional(),
 });
 
+// Package moves the slot sweep could not make
+// (20261119151152_package_gap_fixes.sql): `package_skipped` this run, and the
+// recorded failures that are stuck (failing for over 30 minutes, or in the
+// package's last day), the oldest 20 with ids only. A database without that
+// update sends no `package_stuck`.
+const packageMoves = z.object({
+  package_skipped: z.number().int().min(0).optional(),
+  package_stuck: z.number().int().min(0).optional(),
+  package_stuck_moves: z
+    .array(
+      z.object({
+        package_id: z.uuid(),
+        post_id: z.uuid().nullable(),
+        direction: z.enum(["into_package", "out_of_package"]),
+        tries: z.number().int().min(1),
+        first_failed_at: z.iso.datetime({ offset: true }),
+        reason: z.string().regex(/^(busy|error [0-9A-Z]{5})$/),
+      })
+    )
+    .max(20)
+    .optional(),
+});
+/** Logs the package moves the sweep skipped (a warning, retried next run)
+ * and fails the run while any is stuck, so the failed run and the missing
+ * heartbeat reach a person (docs/RUNBOOK.md, "Package moves"). */
+function reportPackageMoves(data: unknown, fail: (step: string) => void) {
+  const moves = packageMoves.safeParse(data);
+  if (!moves.success) return;
+  const { package_skipped: skipped = 0, package_stuck: stuck = 0 } = moves.data;
+  if (skipped > 0) log.warn("Package moves skipped this run", { skipped });
+  if (stuck > 0) {
+    log.error("Package move stuck", { stuck, moves: moves.data.package_stuck_moves ?? [] });
+    fail("package_moves_stuck");
+  }
+}
+
 const jobSchema = z
   .object({
     id: z.uuid(),
@@ -285,6 +321,7 @@ export async function runFoundationOperationJobs(
             failed: failures.data.failed,
             ...(failures.data.failures ? { rows: failures.data.failures } : {}),
           });
+        if (name === "run_slot_renewals") reportPackageMoves(result.data, fail);
       }
     }
   })();

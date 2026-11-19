@@ -1394,6 +1394,39 @@ describe("the Multi-listing package checkout (P4a)", () => {
     rpc.mockResolvedValueOnce({ data: null, error: { code: "PT409" } });
     await expect(packageCheckout()).rejects.toMatchObject({ status: 409, code: undefined });
   });
+  it.each([
+    [{ code: "PT409", details: "package_active" }, "PACKAGE_ACTIVE", /already has a Multi-listing/],
+    [
+      { code: "PT409", details: "package_invoice_unpaid" },
+      "PACKAGE_INVOICE_UNPAID",
+      /package invoice is not paid yet/,
+    ],
+  ])(
+    "does not send a package to Ozow beside a package or an unpaid package invoice (%o)",
+    async (error, code, message) => {
+      rpc.mockResolvedValueOnce({
+        data: { ...quote, amount_cents: "50000", slots: 5, package: true },
+        error: null,
+      });
+      machine.mockResolvedValueOnce({ data: null, error });
+      const refused = packageCheckout();
+      await expect(refused).rejects.toMatchObject({ status: 409, code });
+      await expect(refused).rejects.toThrow(message);
+      expect(createOzowHostedPayment).not.toHaveBeenCalled();
+    }
+  );
+  it("keeps a busy package lock generic at Ozow's door", async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ...quote, amount_cents: "50000", slots: 5, package: true },
+      error: null,
+    });
+    machine.mockResolvedValueOnce({
+      data: null,
+      error: { code: "PT409", details: "package_busy" },
+    });
+    await expect(packageCheckout()).rejects.toMatchObject({ status: 409, code: undefined });
+    expect(createOzowHostedPayment).not.toHaveBeenCalled();
+  });
   it("names an unpaid package open at Ozow", async () => {
     rpc.mockResolvedValueOnce({
       data: { ...quote, amount_cents: "50000", slots: 5, package: true, reused: true },

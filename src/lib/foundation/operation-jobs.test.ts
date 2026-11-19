@@ -191,6 +191,45 @@ describe("independent steps", () => {
     warn.mockRestore();
   });
 
+  it("logs skipped package moves and fails the run while a package move is stuck", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const lines = (spy: typeof warn, text: string) =>
+      spy.mock.calls.map(([line]) => String(line)).filter((line) => line.includes(text));
+    const base = rpc.getMockImplementation()!;
+    const sweepReply = (data: Record<string, unknown>) =>
+      rpc.mockImplementation(async (name, args) =>
+        name === "run_slot_renewals" ? { data, error: null } : base(name, args)
+      );
+    // Skipped but not stuck: a warning, the run still succeeds.
+    sweepReply({ moved: 0, package_skipped: 2, package_stuck: 0, package_stuck_moves: [] });
+    await expect(run()).resolves.toMatchObject({ failed: [] });
+    expect(lines(warn, "Package moves skipped this run")).toHaveLength(1);
+    expect(lines(errorLog, "Package move stuck")).toHaveLength(0);
+    // Stuck: logged with ids only, and the run fails so the alert fires.
+    const move = {
+      package_id: id,
+      post_id: claim,
+      direction: "into_package",
+      tries: 31,
+      first_failed_at: "2026-11-19T10:02:00.000Z",
+      reason: "busy",
+    };
+    sweepReply({ package_skipped: 1, package_stuck: 1, package_stuck_moves: [move] });
+    const error = await run().catch((e) => e);
+    expect(error).toBeInstanceOf(OperationJobsIncompleteError);
+    expect(error.failed).toEqual(["package_moves_stuck"]);
+    const stuck = lines(errorLog, "Package move stuck");
+    expect(stuck).toHaveLength(1);
+    expect(stuck[0]).toContain(claim);
+    // An earlier database sends neither count: nothing is logged.
+    sweepReply({ moved: 0, package_skipped: 0 });
+    await expect(run()).resolves.toMatchObject({ failed: [] });
+    expect(lines(errorLog, "Package move stuck")).toHaveLength(1);
+    warn.mockRestore();
+    errorLog.mockRestore();
+  });
+
   it("does not wait for a slow sweep before sending emails", async () => {
     queue(job());
     const base = rpc.getMockImplementation()!;
