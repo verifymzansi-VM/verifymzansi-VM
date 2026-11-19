@@ -14,7 +14,9 @@ index 2222222..3333333 100644
 +xit("old behaviour", () => {});
 +fdescribe("focused", () => {});
 +// it.skip("a comment is not a mark", () => {});
-+  * test.only("neither is a doc comment line")
++/**
++ * test.only("neither is a doc comment line")
++ */
  it("still runs", () => {});
 diff --git a/e2e/foundation/checkout.spec.ts b/e2e/foundation/checkout.spec.ts
 index 6666666..7777777 100644

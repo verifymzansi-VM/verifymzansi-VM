@@ -1,29 +1,41 @@
 #!/usr/bin/env node
 // Check-change guard (.github/workflows/check-changes.yml). Reads a pull
 // request's changed files through the GitHub API, works out whether it deletes
-// tests, adds skip or only marks, changes the check configuration or adds
+// tests, adds skip or only marks, changes the check configuration or changes
 // dependencies (scripts/lib/check-changes.mjs), then sets one label
 // (checks-changed or checks-clean) and writes one comment, which it rewrites
 // on every push. The label is information for the reviewer; it blocks nothing.
 //
+// It fails closed: the label is set to checks-changed before anything is
+// analysed and moves to checks-clean only after a clean verdict's comment is
+// written. On any error or time-out the comment says the pull request could
+// not be checked and must be treated as changing checks.
+//
 // In CI it runs from main's copy of this file. It never runs, imports or checks
-// out the pull request's code: file names and patches are only read as data.
+// out the pull request's code: file names, patches and the two package.json
+// files (fetched through the contents API) are only read as data.
 //
 //   PR_NUMBER=123 GITHUB_REPOSITORY=owner/repo GITHUB_TOKEN=... node scripts/check-changed-checks.mjs
+//   PR_NUMBER=123 ... node scripts/check-changed-checks.mjs --could-not-check
 //   git diff origin/main... | node scripts/check-changed-checks.mjs --diff -   (local, prints only)
 //
 // Environment (CI): GITHUB_TOKEN, GITHUB_REPOSITORY, PR_NUMBER, optional
-// GITHUB_API_URL and BASE_PACKAGE_JSON (main's package.json, default
-// ./package.json).
-import { readFileSync } from "node:fs";
+// GITHUB_API_URL and BASE_DIR (main's checkout, holding package.json,
+// vitest.config.ts and the Playwright configs; default the working directory).
+// Local --diff runs also read BASE_PACKAGE_JSON and HEAD_PACKAGE_JSON (default
+// ./package.json) when the diff changes package.json.
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   LABEL_CHANGED,
   LABEL_CLEAN,
   MARKER,
   analyseChanges,
+  buildTestSuites,
   filesFromGitDiff,
   renderComment,
+  renderFailureComment,
   summarySentence,
   verdictLabel,
 } from "./lib/check-changes.mjs";
@@ -32,6 +44,11 @@ const BOT_LOGIN = "github-actions[bot]";
 // GitHub lists at most 3000 files for a pull request (30 pages of 100).
 const MAX_FILE_PAGES = 30;
 const MAX_COMMENT_PAGES = 50;
+// Each API call, and the whole analysis, have a time limit well inside the
+// workflow step's, so a slow run still ends with the could-not-check comment.
+const REQUEST_TIMEOUT_MS = 30_000;
+const ANALYSIS_DEADLINE_MS = 150_000;
+const SHA = /^[0-9a-f]{40}$/;
 
 const LABELS = {
   [LABEL_CHANGED]: {
@@ -41,12 +58,34 @@ const LABELS = {
   [LABEL_CLEAN]: { color: "0e8a16", description: "This PR changes no tests or checks" },
 };
 
-function readBasePackageJson(path) {
+function readText(file) {
   try {
-    return readFileSync(path, "utf8");
+    return readFileSync(file, "utf8");
   } catch {
     return undefined;
   }
+}
+
+/** Main's test configuration, read as text from its checkout. */
+export function readBaseSuites(baseDir, extraPackageJsons = []) {
+  let names = [];
+  try {
+    names = readdirSync(baseDir).filter((name) =>
+      /^playwright(?:\.[^/]+)?\.config\.[cm]?[jt]s$/.test(name)
+    );
+  } catch {
+    names = [];
+  }
+  const playwrightConfigs = {};
+  for (const name of names) {
+    const text = readText(path.join(baseDir, name));
+    if (text !== undefined) playwrightConfigs[name] = text;
+  }
+  return buildTestSuites({
+    vitestConfig: readText(path.join(baseDir, "vitest.config.ts")),
+    playwrightConfigs,
+    packageJsons: [readText(path.join(baseDir, "package.json")), ...extraPackageJsons],
+  });
 }
 
 export function createApi({ token, apiUrl, repository, fetchImpl = fetch }) {
@@ -62,6 +101,7 @@ export function createApi({ token, apiUrl, repository, fetchImpl = fetch }) {
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (allow.includes(response.status)) return { status: response.status, data: null };
     if (!response.ok) {
@@ -86,6 +126,32 @@ async function listFiles(api, number) {
   return files;
 }
 
+// package.json at one commit, as text; null when it does not exist there.
+async function packageJsonAt(api, sha) {
+  const { status, data } = await api("GET", `/contents/package.json?ref=${sha}`, undefined, {
+    allow: [404],
+  });
+  if (status === 404) return null;
+  if (data?.type !== "file" || data.encoding !== "base64" || typeof data.content !== "string") {
+    throw new Error("package.json could not be read through the contents API.");
+  }
+  return Buffer.from(data.content, "base64").toString("utf8");
+}
+
+// The merge base's and the head's package.json, compared as data. They are
+// never written to disk or mapped onto main's copy.
+async function fetchPackages(api, pull) {
+  const baseSha = pull?.base?.sha;
+  const headSha = pull?.head?.sha;
+  if (!SHA.test(String(baseSha)) || !SHA.test(String(headSha))) {
+    throw new Error("The pull request has no valid base or head commit.");
+  }
+  const { data: comparison } = await api("GET", `/compare/${baseSha}...${headSha}?per_page=1`);
+  const mergeBase = comparison?.merge_base_commit?.sha;
+  if (!SHA.test(String(mergeBase))) throw new Error("GitHub gave no merge base.");
+  return { base: await packageJsonAt(api, mergeBase), head: await packageJsonAt(api, headSha) };
+}
+
 async function findOwnComment(api, number) {
   for (let page = 1; page <= MAX_COMMENT_PAGES; page += 1) {
     const { data } = await api("GET", `/issues/${number}/comments?per_page=100&page=${page}`);
@@ -102,6 +168,15 @@ async function findOwnComment(api, number) {
     if (data.length < 100) break;
   }
   return null;
+}
+
+async function writeComment(api, number, body) {
+  const existing = await findOwnComment(api, number);
+  if (existing) {
+    await api("PATCH", `/issues/comments/${existing.id}`, { body });
+  } else {
+    await api("POST", `/issues/${number}/comments`, { body });
+  }
 }
 
 async function ensureLabel(api, name) {
@@ -122,8 +197,15 @@ async function setVerdictLabel(api, number, label) {
   });
 }
 
-/** Runs the guard against one pull request. Returns the analysis and label. */
-export async function run({ env, fetchImpl = fetch, log = console.log }) {
+function withDeadline(promise, ms) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`The check did not finish within ${ms} ms.`)), ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
+function connect(env, fetchImpl) {
   const token = env.GITHUB_TOKEN;
   const repository = env.GITHUB_REPOSITORY ?? "";
   const number = env.PR_NUMBER ?? "";
@@ -132,39 +214,81 @@ export async function run({ env, fetchImpl = fetch, log = console.log }) {
     throw new Error("GITHUB_REPOSITORY must look like owner/repo.");
   }
   if (!/^[1-9]\d{0,9}$/.test(number)) throw new Error("PR_NUMBER must be a pull request number.");
-
   const api = createApi({
     token,
     apiUrl: env.GITHUB_API_URL || "https://api.github.com",
     repository,
     fetchImpl,
   });
-  const { data: pull } = await api("GET", `/pulls/${number}`);
-  const files = await listFiles(api, number);
-  const expected = Number(pull?.changed_files);
-  const complete = !Number.isFinite(expected) || files.length >= expected;
-  const result = analyseChanges(files, {
-    basePackageJson: readBasePackageJson(env.BASE_PACKAGE_JSON || "package.json"),
-    complete,
-  });
-  const label = verdictLabel(result);
-  const body = renderComment(result, { headSha: pull?.head?.sha });
+  return { api, number };
+}
 
-  await setVerdictLabel(api, number, label);
-  const existing = await findOwnComment(api, number);
-  if (existing) {
-    await api("PATCH", `/issues/comments/${existing.id}`, { body });
-  } else {
-    await api("POST", `/issues/${number}/comments`, { body });
+async function analysePullRequest(api, number, baseDir) {
+  const { data: before } = await api("GET", `/pulls/${number}`);
+  const files = await listFiles(api, number);
+  // The head is read again after the file list, so the verdict names the
+  // commit the list belongs to; a push in between means the list may be mixed.
+  const { data: pull } = await api("GET", `/pulls/${number}`);
+  if (before?.head?.sha !== pull?.head?.sha) {
+    throw new Error("The pull request changed while it was being checked.");
   }
+  const expected = Number(pull?.changed_files);
+  const complete = Number.isFinite(expected) && files.length >= expected;
+  const touchesPackage = files.some(
+    (file) => file?.filename === "package.json" || file?.previous_filename === "package.json"
+  );
+  const packages = touchesPackage ? await fetchPackages(api, pull) : undefined;
+  const suites = readBaseSuites(baseDir, packages?.head ? [packages.head] : []);
+  const result = analyseChanges(files, { complete, packages, suites });
+  return { result, headSha: pull?.head?.sha };
+}
+
+/** Labels the pull request checks-changed and writes the could-not-check comment. */
+export async function markCouldNotCheck({ env, fetchImpl = fetch }) {
+  const { api, number } = connect(env, fetchImpl);
+  await setVerdictLabel(api, number, LABEL_CHANGED);
+  await writeComment(api, number, renderFailureComment());
+}
+
+/** Runs the guard against one pull request. Returns the analysis and label. */
+export async function run({
+  env,
+  fetchImpl = fetch,
+  log = console.log,
+  deadlineMs = ANALYSIS_DEADLINE_MS,
+}) {
+  const { api, number } = connect(env, fetchImpl);
+  // Fail closed: until a verdict is written, the pull request counts as
+  // changing checks.
+  await setVerdictLabel(api, number, LABEL_CHANGED);
+
+  let analysis;
+  try {
+    analysis = await withDeadline(analysePullRequest(api, number, env.BASE_DIR || "."), deadlineMs);
+  } catch (error) {
+    await writeComment(api, number, renderFailureComment()).catch(() => {});
+    throw error;
+  }
+  const { result, headSha } = analysis;
+  const label = verdictLabel(result);
+  const body = renderComment(result, { headSha });
+  await writeComment(api, number, body);
+  if (label === LABEL_CLEAN) await setVerdictLabel(api, number, LABEL_CLEAN);
   log(`${label}: ${summarySentence(result)}`);
   return { result, label, body };
 }
 
 function runLocal(source) {
   const text = readFileSync(source === "-" ? 0 : source, "utf8");
-  const result = analyseChanges(filesFromGitDiff(text), {
-    basePackageJson: readBasePackageJson(process.env.BASE_PACKAGE_JSON || "package.json"),
+  const files = filesFromGitDiff(text);
+  const base = process.env.BASE_PACKAGE_JSON;
+  const head = process.env.HEAD_PACKAGE_JSON || "package.json";
+  const packages = base
+    ? { base: readText(base) ?? null, head: readText(head) ?? null }
+    : undefined;
+  const result = analyseChanges(files, {
+    packages,
+    suites: readBaseSuites(".", packages?.head ? [packages.head] : []),
   });
   process.stdout.write(`Label: ${verdictLabel(result)}\n\n${renderComment(result)}`);
 }
@@ -173,6 +297,10 @@ async function main(argv) {
   if (argv[0] === "--diff") {
     if (!argv[1]) throw new Error("Usage: check-changed-checks.mjs --diff <file|->");
     runLocal(argv[1]);
+    return;
+  }
+  if (argv[0] === "--could-not-check" && argv.length === 1) {
+    await markCouldNotCheck({ env: process.env });
     return;
   }
   if (argv.length > 0) throw new Error(`Unknown argument: ${argv.join(" ")}`);

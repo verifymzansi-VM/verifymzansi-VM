@@ -222,23 +222,70 @@ thresholds are 75%, 64%, 82% and 76%, respectively, selected by
 
 `.github/workflows/check-changes.yml` labels every pull request into `main`
 `checks-changed` or `checks-clean` and keeps one comment that says in plain
-words whether it deletes test files or test cases, adds skip, only, todo, fails
-or fixme marks, changes the files that configure the checks (coverage
-thresholds, audit baselines, rulesets, workflows, check scripts, lint, scanner
-and Playwright configuration, the browser test skip policy, visual baselines,
-database contract steps) or the test and check commands, or adds dependencies.
-The comment is rewritten on every push. The label is for the reviewer and is not
-a required check.
+words whether it:
+
+- deletes test files, or renames or moves them out of the vitest and Playwright
+  include patterns on `main` (for example `.test.ts` to `.test.mts`, or `src/`
+  to `scripts/`);
+- removes test cases (removed and added test cases are counted separately, so
+  swapping real tests for empty ones is reported) or native database checks
+  (`record(...)` calls);
+- adds skip, only, todo, fails or fixme marks, including aliases and context
+  skips such as `ctx.skip()` and `testInfo.fixme()`;
+- changes the files that configure the checks: coverage thresholds and the unit
+  test setup, audit baselines and the dependency audit, rulesets, workflows,
+  code owners and Dependabot, check scripts and every `scripts/lib` file they
+  import, the native database checks and the reviewed access list, lint, type,
+  duplication, Lighthouse and scanner configuration, Playwright configuration,
+  the browser test skip policy, visual baselines, database contract steps, and
+  the package manager settings, lockfile and dependency patches;
+- changes the test and check commands, adds dependencies, takes a dependency
+  from outside the registry (`github:`, `npm:` aliases, `file:`, `link:`, URLs,
+  git), adds or changes overrides, lets more packages run install scripts, or
+  changes `packageManager`. Both `package.json` files, at the head and at the
+  merge base, are read through the GitHub API and compared as parsed JSON.
+
+The comment is rewritten on every push and each list in it is capped. The label
+is for the reviewer and is not a required check.
+
+It fails closed. The label is set to `checks-changed` before anything is read
+and moves to `checks-clean` only after a clean verdict has been written. A run
+that errors or times out leaves `checks-changed` and the comment "Could not
+check this PR; treat it as changing checks". Whatever it cannot read (binary
+files, diffs GitHub leaves out, lines over 2,000 characters, a file list GitHub
+cut short) counts as changing checks.
+
+It reads lines, not meaning: deleting the assertions inside a test that stays is
+not detected. Reviewers still read test changes.
 
 It runs on `pull_request_target`, so the workflow and its script
 (`scripts/check-changed-checks.mjs`, `scripts/lib/check-changes.mjs`) always
 come from `main`. It checks out nothing from the pull request and reads its diff
-only through the GitHub API; the pull request's own text plays no part. The
-detection is tested by `scripts/check-changes.test.mjs`. To see the verdict for
-local work:
+only through the GitHub API; the pull request's own text plays no part.
+
+A pull request that changes workflows can still rewrite its own verdict: a
+workflow it adds runs on its own branch with a token that can relabel the pull
+request and edit the comment as the same bot. So when a pull request is flagged
+for changing the CI workflows, the reviewer checks the guard's verdict by hand:
+open the latest "Check changes" run for the pull request's head commit and
+compare its log line with the label and comment.
+
+The detection is tested by `scripts/check-changes.test.mjs`. To see the verdict
+for local work:
 
 ```bash
 git diff origin/main... | node scripts/check-changed-checks.mjs --diff -
+```
+
+When the diff changes `package.json`, pass `main`'s copy too, or the verdict
+reports `package.json` as unreadable:
+
+```bash
+git show origin/main:package.json > /tmp/base-package.json
+```
+
+```bash
+git diff origin/main... | BASE_PACKAGE_JSON=/tmp/base-package.json node scripts/check-changed-checks.mjs --diff -
 ```
 
 ## Deployment enforcement

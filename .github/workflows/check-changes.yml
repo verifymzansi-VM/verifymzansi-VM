@@ -3,19 +3,25 @@ name: Check changes
 # Gives each pull request into main one label, checks-changed or checks-clean,
 # and one comment saying in plain words whether it deletes tests or test cases,
 # adds skip, only, todo or expected-failure marks, changes the files that
-# configure the checks, or adds dependencies. The comment is rewritten on every
-# push. The label blocks nothing: it tells the reviewer where to look.
+# configure the checks, or changes dependencies. The comment is rewritten on
+# every push. The label blocks nothing: it tells the reviewer where to look.
+#
+# It fails closed: the label is checks-changed until a clean verdict has been
+# written, and a run that errors or times out says "Could not check this PR".
 #
 # pull_request_target runs this file and the guard script as they are on main,
 # with a token that can write labels and comments. Nothing from the pull
 # request runs: the job checks out only main's copy of the guard script and of
-# package.json (to tell new dependencies from old ones), and reads the pull
-# request's diff through the GitHub API, as data. Its title, description and
-# commits play no part. scripts/check-changes.test.mjs tests the detection.
+# the files that say which files are tests (package.json, vitest.config.ts and
+# the Playwright configs), and reads them as text. It reads the pull request's
+# diff and its package.json through the GitHub API, as data. Its title,
+# description and commits play no part. scripts/check-changes.test.mjs tests
+# the detection.
 on:
   # Never checks out or runs pull request code (see above).
   pull_request_target: # zizmor: ignore[dangerous-triggers]
-    types: [opened, reopened, synchronize]
+    # edited: a pull request retargeted onto main is checked too.
+    types: [opened, reopened, synchronize, edited]
     branches: [main]
 
 permissions: {}
@@ -29,10 +35,10 @@ jobs:
   guard:
     name: Check-change guard
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     permissions:
-      pull-requests: write # reads the changed files; adds and removes the label
-      issues: write # creates the label once; writes the one comment
+      contents: read # reads package.json at the head and merge base, as data
+      pull-requests: write # reads the changed files; writes the label and the one comment
     steps:
       # github.sha is main's newest commit here, the one this file came from.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,14 +48,26 @@ jobs:
           sparse-checkout: |
             scripts/check-changed-checks.mjs
             scripts/lib/check-changes.mjs
-            package.json
+            /package.json
+            /vitest.config.ts
+            /playwright*.config.ts
           sparse-checkout-cone-mode: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Label and comment on the pull request
+        timeout-minutes: 4
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_PACKAGE_JSON: package.json
+          BASE_DIR: .
         run: node scripts/check-changed-checks.mjs
+      # Runs when the step above failed or hit its time limit, so the comment
+      # never keeps an older verdict. A newer push cancels the run instead.
+      - name: Say the pull request could not be checked
+        if: ${{ failure() }}
+        timeout-minutes: 2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/check-changed-checks.mjs --could-not-check
