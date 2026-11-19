@@ -59,18 +59,43 @@ const SESSION_ENTRY = new RegExp(
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** The text of a top-level function or const named `name`, up to its closing line. */
+/**
+ * Source text without // and /* *\/ comments, so a comment that names a
+ * guard cannot satisfy a check. String and template literals are kept as they
+ * are (a "//" inside a URL is not a comment). Regular-expression literals are
+ * not parsed; this is a text check, not a JavaScript parser.
+ */
+function withoutComments(code: string): string {
+  return code.replace(
+    /("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\[\s\S]|[^`\\])*`)|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
+    (match, literal: string | undefined) => literal ?? match.replace(/[^\n]/g, "")
+  );
+}
+
+/** A route or module's source text with comments removed. */
+const codeOf = (file: string) => withoutComments(source(file));
+
+// The start of the next top-level declaration ends the one before it.
+const TOP_LEVEL_DECLARATION =
+  /^(?:export|function|async|const|let|var|import|type|interface|class|enum|declare)\b/gm;
+
+/**
+ * The text of a top-level function or const named `name`: from its start to
+ * the next top-level declaration (or the end of the file). Ending at the next
+ * declaration, not at the first "}" line, keeps a braceless arrow const or a
+ * wrapped const ending in "});" from running into the function after it.
+ */
 function definitionOf(code: string, name: string): string | null {
   const start = new RegExp(
     String.raw`^(?:export\s+)?(?:(?:async\s+)?function\s*\*?\s*|(?:const|let)\s+)${escapeRegExp(name)}\b`,
     "m"
   ).exec(code);
   if (!start) return null;
-  // The closing line is "}" or "};" at column 0 (formatted code), not "}: {".
-  const close = /\n\};?\r?(?:\n|$)/g;
-  close.lastIndex = start.index;
-  const end = close.exec(code);
-  return code.slice(start.index, end ? end.index + end[0].length : undefined);
+  const firstLineEnd = code.indexOf("\n", start.index);
+  if (firstLineEnd === -1) return code.slice(start.index);
+  TOP_LEVEL_DECLARATION.lastIndex = firstLineEnd + 1;
+  const next = TOP_LEVEL_DECLARATION.exec(code);
+  return code.slice(start.index, next ? next.index : undefined);
 }
 
 /** Whether `body` calls a session entry point, directly or through helpers defined in `code`. */
@@ -102,14 +127,14 @@ function resolveImport(from: string, specifier: string): string | null {
  * same module are followed). A module that merely is imported does not count.
  */
 function reachesSession(file: string): boolean {
-  const code = source(file);
+  const code = codeOf(file);
   if (callsSessionEntry(code, code)) return true;
   for (const [, names, specifier] of code.matchAll(
     /^import\s+(?!type\b)\{([^}]*)\}\s+from\s+"([^"]+)"/gm
   )) {
     const target = resolveImport(file, specifier);
     if (!target) continue;
-    const targetCode = source(target);
+    const targetCode = codeOf(target);
     for (const part of names.split(",")) {
       const [remote, local = remote] = part
         .replace(/^\s*type\s+/, "")
@@ -144,7 +169,7 @@ describe("staff two-step coverage", () => {
 
   it("counts a shared route helper only when it resolves the session itself", () => {
     for (const [helper, file] of Object.entries(SESSION_HELPERS)) {
-      const code = source(file);
+      const code = codeOf(file);
       const body = definitionOf(code, helper);
       expect(body, `${helper} in ${file}`).not.toBeNull();
       expect(SESSION_PRIMITIVE.test(body ?? ""), helper).toBe(true);
@@ -187,6 +212,46 @@ describe("staff two-step coverage", () => {
       expect(reachesSession(route)).toBe(true);
       write("export async function GET(request) {\n  return requireStaff();\n}\n");
       expect(reachesSession(route)).toBe(true);
+
+      // An unguarded definition does not run into a guarded one after it.
+      const shapes = path.join(dir, "shapes.ts").split(path.sep).join("/");
+      writeFileSync(
+        shapes,
+        [
+          "export const braceless = (r) => Response.json({ ok: true });",
+          "export function guardedAfterBraceless(request) {",
+          "  return handleFoundationOwnerRoute({ request });",
+          "}",
+          "export const wrapped = withLogging(async (r) => {",
+          "  return Response.json({ ok: true });",
+          "});",
+          "export function guardedAfterWrapped(request) {",
+          "  return requireStaff();",
+          "}",
+          "",
+        ].join("\n")
+      );
+      write('import { braceless } from "./shapes";\nexport const GET = (r) => braceless(r);\n');
+      expect(reachesSession(route)).toBe(false);
+      write('import { wrapped } from "./shapes";\nexport const GET = (r) => wrapped(r);\n');
+      expect(reachesSession(route)).toBe(false);
+      write(
+        'import { guardedAfterWrapped } from "./shapes";\nexport const GET = (r) => guardedAfterWrapped(r);\n'
+      );
+      expect(reachesSession(route)).toBe(true);
+
+      // A comment that names a guard is not a call.
+      write(
+        [
+          "// This route does not call requireStaff() or handleFoundationOwnerRoute().",
+          "/* Nor context.authenticateCaller(); it is open. */",
+          "export async function GET() {",
+          '  return Response.json({ docs: "https://example.test/x" }); // supabase.auth.getUser()',
+          "}",
+          "",
+        ].join("\n")
+      );
+      expect(reachesSession(route)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

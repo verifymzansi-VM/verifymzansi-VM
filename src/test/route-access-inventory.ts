@@ -13,9 +13,10 @@
  *   protectBusinessEvidenceRoute, requireStaff, checkStaffApiMfa,
  *   enforceAdminMutationGuard, evaluateStaffMfa, or a legacy auth.getUser()),
  *   or call an imported function whose own definition does.
- *   Only one import hop is followed (plus helpers defined in that module). The
- *   check is per file, not per method or code path, and it does not prove that
- *   an anonymous caller is refused.
+ *   Comments are ignored, and a definition ends at the next top-level
+ *   declaration. Only one import hop is followed (plus helpers defined in that
+ *   module). The check is per file, not per method or code path, and it does
+ *   not prove that an anonymous caller is refused.
  * - staff on the foundation backend: the check proves a verified session is
  *   resolved, not that the command needs staff authority. That is enforced in
  *   the database by internal.staff_actor; no test here ties a route to the
