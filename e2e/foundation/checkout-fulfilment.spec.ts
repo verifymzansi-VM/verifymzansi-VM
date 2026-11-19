@@ -116,17 +116,21 @@ async function guard(context: BrowserContext) {
   const outside: string[] = [];
   const failures: string[] = [];
   const replies: Reply[] = [];
+  // Playwright's WebKit cannot fulfil a routed request with a redirect status;
+  // there the mock page returns the member with a meta refresh instead.
+  const redirect = context.browser()?.browserType().name() !== "webkit";
   await context.route("**/*", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     if (url.origin === MOCK_PAYMENT_ORIGIN) {
+      let served;
       try {
-        const served = await ozow.handle(url);
-        return await route.fulfill(served);
+        served = await ozow.handle(url, { redirect });
       } catch (error) {
         failures.push(error instanceof Error ? error.message : String(error));
         return route.fulfill({ status: 500, body: "Mock provider failure" });
       }
+      return route.fulfill(served);
     }
     if (url.origin !== APP_ORIGIN && url.origin !== API_ORIGIN) {
       outside.push(url.origin);

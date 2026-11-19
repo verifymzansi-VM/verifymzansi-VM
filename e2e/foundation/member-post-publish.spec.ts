@@ -9,6 +9,7 @@ import {
 import sharp from "sharp";
 import { E2E_FIXTURE, LOCAL_OPS_JOBS_SECRET } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { endedWithTest } from "./support/route-teardown";
+import { waitForToastsToClose } from "./support/toasts";
 import {
   browserSessionCookies,
   caughtMailFor,
@@ -370,6 +371,8 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
       .poll(() => reply("/api/otp/send"))
       .toEqual([expect.objectContaining({ status: 200 })]);
     await page.getByLabel("6-digit code").fill(code as string);
+    // The "code sent" toast can cover the button on a short phone.
+    await waitForToastsToClose(page);
     await page.getByRole("button", { name: "Verify", exact: true }).click();
     await expect(page.getByText("This phone number is verified.")).toBeVisible();
     await expect

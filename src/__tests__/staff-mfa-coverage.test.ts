@@ -38,26 +38,33 @@ const ROUTE_FILE = /\/route\.(ts|tsx|js|mjs)$/;
  * context's authenticate()/authenticateCaller(), the staff guards (which read
  * the session first), and a legacy auth.getUser(). Static text only.
  */
-const SESSION_PRIMITIVE = new RegExp(
-  String.raw`\.authenticate(?:Caller)?\(|\.auth\.getUser\(|` + MFA_GUARDS.source
-);
+const SESSION_METHOD_CALL = /\.authenticate(?:Caller)?\(|\.auth\.getUser\(/;
+const STAFF_GUARD_NAMES = [
+  "requireStaff",
+  "checkStaffApiMfa",
+  "enforceAdminMutationGuard",
+  "evaluateStaffMfa",
+];
 /**
  * Shared route helpers that count as a session entry point. Each one's own
- * body must call a SESSION_PRIMITIVE (checked below), so a route may reach the
- * session through one of them.
+ * body must call a session primitive (checked below), so a route may reach
+ * the session through one of them.
  */
 const SESSION_HELPERS: Record<string, string> = {
   handleFoundationOwnerRoute: "src/lib/foundation/owner-route.ts",
   handleFoundationBillingRoute: "src/lib/foundation/billing-route.ts",
   protectBusinessEvidenceRoute: "src/lib/foundation/business-evidence-route.ts",
 };
-// A call, allowing explicit type arguments: name(...) or name<T>(...).
-const CALL = String.raw`(?:<[^>()]*>)?\(`;
-const SESSION_ENTRY = new RegExp(
-  `${SESSION_PRIMITIVE.source}|\\b(?:${Object.keys(SESSION_HELPERS).join("|")})${CALL}`
-);
+const SESSION_ENTRY_NAMES = new Set([...STAFF_GUARD_NAMES, ...Object.keys(SESSION_HELPERS)]);
 
-const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// A call, allowing explicit type arguments: name(...) or name<T>(...).
+// Fixed patterns only: names are compared as strings, never built into a RegExp.
+const CALLED_NAME = /\b([A-Za-z_$][\w$]*)(?:<[^>()]*>)?\(/g;
+const calledNames = (code: string) => new Set([...code.matchAll(CALLED_NAME)].map(([, n]) => n));
+
+/** Whether `body` itself calls a session primitive (not a shared helper). */
+const callsSessionPrimitive = (body: string) =>
+  SESSION_METHOD_CALL.test(body) || STAFF_GUARD_NAMES.some((name) => calledNames(body).has(name));
 
 /**
  * Source text without // and /* *\/ comments, so a comment that names a
@@ -78,6 +85,9 @@ const codeOf = (file: string) => withoutComments(source(file));
 // The start of the next top-level declaration ends the one before it.
 const TOP_LEVEL_DECLARATION =
   /^(?:export|function|async|const|let|var|import|type|interface|class|enum|declare)\b/gm;
+// The start of a top-level function or const, with its name.
+const DEFINITION_START =
+  /^(?:export\s+)?(?:(?:async\s+)?function\s*\*?\s*|(?:const|let)\s+)([A-Za-z_$][\w$]*)\b/gm;
 
 /**
  * The text of a top-level function or const named `name`: from its start to
@@ -86,10 +96,7 @@ const TOP_LEVEL_DECLARATION =
  * wrapped const ending in "});" from running into the function after it.
  */
 function definitionOf(code: string, name: string): string | null {
-  const start = new RegExp(
-    String.raw`^(?:export\s+)?(?:(?:async\s+)?function\s*\*?\s*|(?:const|let)\s+)${escapeRegExp(name)}\b`,
-    "m"
-  ).exec(code);
+  const start = [...code.matchAll(DEFINITION_START)].find(([, found]) => found === name);
   if (!start) return null;
   const firstLineEnd = code.indexOf("\n", start.index);
   if (firstLineEnd === -1) return code.slice(start.index);
@@ -100,8 +107,10 @@ function definitionOf(code: string, name: string): string | null {
 
 /** Whether `body` calls a session entry point, directly or through helpers defined in `code`. */
 function callsSessionEntry(body: string, code: string, seen = new Set<string>()): boolean {
-  if (SESSION_ENTRY.test(body)) return true;
-  for (const [, name] of body.matchAll(new RegExp(String.raw`\b([A-Za-z_$][\w$]*)${CALL}`, "g"))) {
+  const names = calledNames(body);
+  if (SESSION_METHOD_CALL.test(body) || [...names].some((name) => SESSION_ENTRY_NAMES.has(name)))
+    return true;
+  for (const name of names) {
     if (seen.has(name)) continue;
     seen.add(name);
     const local = definitionOf(code, name);
@@ -129,6 +138,7 @@ function resolveImport(from: string, specifier: string): string | null {
 function reachesSession(file: string): boolean {
   const code = codeOf(file);
   if (callsSessionEntry(code, code)) return true;
+  const called = calledNames(code);
   for (const [, names, specifier] of code.matchAll(
     /^import\s+(?!type\b)\{([^}]*)\}\s+from\s+"([^"]+)"/gm
   )) {
@@ -140,7 +150,7 @@ function reachesSession(file: string): boolean {
         .replace(/^\s*type\s+/, "")
         .split(/\s+as\s+/)
         .map((name) => name.trim());
-      if (!remote || !new RegExp(String.raw`\b${escapeRegExp(local)}${CALL}`).test(code)) continue;
+      if (!remote || !called.has(local)) continue;
       const body = definitionOf(targetCode, remote);
       if (body && callsSessionEntry(body, targetCode)) return true;
     }
@@ -172,7 +182,7 @@ describe("staff two-step coverage", () => {
       const code = codeOf(file);
       const body = definitionOf(code, helper);
       expect(body, `${helper} in ${file}`).not.toBeNull();
-      expect(SESSION_PRIMITIVE.test(body ?? ""), helper).toBe(true);
+      expect(callsSessionPrimitive(body ?? ""), helper).toBe(true);
     }
   });
 

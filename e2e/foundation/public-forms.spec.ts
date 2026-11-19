@@ -11,6 +11,12 @@ import { browserSessionCookies, readTestCopy } from "./support/test-copy";
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 
+// The site registers its service worker in the browser tests too. Playwright's
+// page.route can miss requests from a page that worker controls (WebKit routes
+// them past the page), so specs that answer requests in the browser block it,
+// as Playwright recommends for request interception.
+test.use({ serviceWorkers: "block" });
+
 /** Waits until React has hydrated the element (it carries React's own
  * properties), so a click runs the page's handler and not a plain form post. */
 async function hydrated(locator: Locator) {
