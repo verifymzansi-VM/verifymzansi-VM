@@ -20,7 +20,7 @@ begin
   select * into d from private.frontend_cipc_reviews where check_id=x.id and submitted_at is not null;
   if not found then return null;end if;
   select * into c from private.evidence_cases where id=x.id;
-  permitted:=actor<>x.owner_id and coalesce(actor=x.reviewed_by or (c.status='open' and c.claimed_by=actor and c.claim_expires_at>clock_timestamp()),false);
+  permitted:=actor<>x.owner_id and coalesce(actor=x.reviewed_by and internal.business_check_reread_open(x.decided_at) or (c.status='open' and c.claimed_by=actor and c.claim_expires_at>clock_timestamp()),false);
   if permitted then
     perform internal.staff_actor('evidence:view');
     select * into owner_doc from private.frontend_cipc_documents where artifact_id=d.owner_file;

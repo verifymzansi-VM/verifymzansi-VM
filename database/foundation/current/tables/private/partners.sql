@@ -15,7 +15,7 @@ create table private.partners (
   constraint partners_account_id_key UNIQUE (account_id),
   constraint partners_code_check CHECK (code ~ '^[A-Z0-9]{4,16}$'::text),
   constraint partners_code_key UNIQUE (code),
-  constraint partners_commission_bps_check CHECK (commission_bps IS NULL OR commission_bps >= 0 AND commission_bps <= 5000),
+  constraint partners_commission_bps_check CHECK (commission_bps IS NULL OR commission_bps >= 0 AND commission_bps <= 2000),
   constraint partners_pkey PRIMARY KEY (id),
   constraint partners_revision_check CHECK (revision >= 1 AND revision <= 2147483647),
   constraint partners_status_check CHECK (status = ANY (ARRAY['pending'::text, 'active'::text, 'suspended'::text]))

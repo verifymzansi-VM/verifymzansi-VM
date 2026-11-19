@@ -106,11 +106,11 @@ describe("hasCapability", () => {
   it("governance_controller can decide appeals", () => {
     expect(hasCapability(makeUser("governance_controller"), "appeal:decide")).toBe(true);
   });
-  it("admin can view BI", () => {
-    expect(hasCapability(makeUser("admin"), "bi:view")).toBe(true);
+  it("admin can toggle feature flags", () => {
+    expect(hasCapability(makeUser("admin"), "feature_flag:toggle")).toBe(true);
   });
-  it("admin can export BI", () => {
-    expect(hasCapability(makeUser("admin"), "bi:export")).toBe(true);
+  it("governance_controller cannot toggle feature flags", () => {
+    expect(hasCapability(makeUser("governance_controller"), "feature_flag:toggle")).toBe(false);
   });
   it("member cannot view queues", () => {
     expect(hasCapability(makeUser("member"), "queue:view")).toBe(false);

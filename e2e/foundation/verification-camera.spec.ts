@@ -1,7 +1,9 @@
 import { randomInt } from "node:crypto";
 import { expect, test, type BrowserContext, type Page, type Request } from "@playwright/test";
 import { E2E_FIXTURE } from "../../scripts/lib/foundation-e2e-target.mjs";
+import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
 import { endedWithTest } from "./support/route-teardown";
+import { switchOn } from "./support/switches";
 import {
   browserSessionCookies,
   queryTestCopy,
@@ -37,6 +39,14 @@ import { registerConfirmedMember, syntheticIdNumber } from "./support/verified-m
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
+const DETECT_PATH = "/api/verification/location/detect";
+const A17 = "A17, the location suggestion route still on the retired backend";
+/** The suggestion route's reply today (A17): it still checks the retired
+ * backend's feature flag, which the foundation does not have. */
+const A17_SYMPTOM = {
+  status: 404,
+  body: { error: "Location confirmation is not enabled", code: "kyc_v2_disabled" },
+};
 
 // A service worker could fetch outside page routing; the allowlist must see every request.
 test.use({
@@ -286,11 +296,39 @@ test.describe("verification wizard with the camera", () => {
     ).toBeVisible({ timeout: 30_000 });
     expect(reply("/api/verification/upload")).toEqual([200, 200]);
 
+    const detect = page.getByRole("button", { name: /detect province and city/i });
+    if (switchOn("SHOW_LOCATION_DETECTION")) {
+      // Launch lane: the button is offered with its hint. The copy's requests
+      // carry no Cloudflare location, so pressing it suggests nothing: the
+      // member is told to pick from the list, and nothing is saved yet.
+      await expect(detect).toBeVisible();
+      await expect(detect).toBeEnabled();
+      await expect(page.getByText(/detection is approximate/i)).toBeVisible();
+      const detected = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" && new URL(response.url()).pathname === DETECT_PATH
+      );
+      await detect.click();
+      await detected;
+      // The route's answer is pinned as A17 (the last test below): the page
+      // shows the same message for its refusal as for "nothing detected".
+      expect(reply(DETECT_PATH)).toEqual([A17_SYMPTOM.status]);
+      await expect(
+        page.getByText("We could not detect your province and city. Select them below to continue.")
+      ).toBeVisible();
+      await expect(detect).toBeEnabled();
+      expect(
+        queryTestCopy(
+          `select count(*) from private.verification_localities where owner_id = '${member.id}';`
+        )
+      ).toBe("0");
+    } else {
+      // "Detect province and city" is hidden until it works (src/lib/hidden-features.ts).
+      await expect(detect).toHaveCount(0);
+      await expect(page.getByText(/detection is approximate/i)).toHaveCount(0);
+    }
     await page.locator("#province").selectOption("Gauteng");
     await page.locator("#city").selectOption("Johannesburg");
-    // "Detect province and city" is hidden until it works (src/lib/hidden-features.ts).
-    await expect(page.getByRole("button", { name: /detect province and city/i })).toHaveCount(0);
-    await expect(page.getByText(/detection is approximate/i)).toHaveCount(0);
     await expect(page.locator("#province")).toHaveValue("Gauteng");
     await expect(page.locator("#city")).toHaveValue("Johannesburg");
     await expect(page.locator("#town")).toHaveCount(0);
@@ -319,5 +357,50 @@ test.describe("verification wizard with the camera", () => {
       )
     ).toBe("gp/gp_johannesburg");
     expect(outside).toEqual([]);
+  });
+
+  // The suggestion route behind "Detect province and city", called as a
+  // confirmed member (the route does not depend on the switch). The copy's
+  // requests carry no Cloudflare location, so the right answer is "nothing
+  // detected", with nothing saved. Today the route answers A17_SYMPTOM; this
+  // test is marked until the route is moved to the live backend, and turns the
+  // run red once it answers correctly, so the mark is removed then.
+  test.afterEach(({}, testInfo) => requireOnlyKnownBreak(testInfo));
+
+  test("the location suggestion route answers that it detected nothing", async ({
+    context,
+    page,
+  }) => {
+    test.fail(true, A17);
+    test.setTimeout(90_000);
+    await characterise(A17, async () => {
+      const member = await registerConfirmedMember("detect");
+      const { outside } = await guard(context);
+      const session = await browserSessionCookies(readTestCopy(), member);
+      await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+      // Any member page gives the browser the CSRF cookie the page would use.
+      await page.goto("/dashboard");
+      const answer = await page.evaluate(async (path) => {
+        const token = document.cookie.match(/(?:^|; )vm_csrf=([a-f0-9]{64})/)?.[1] ?? "";
+        const response = await fetch(path, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "x-csrf-token": token },
+        });
+        return { status: response.status, body: await response.json() };
+      }, DETECT_PATH);
+      expect(outside).toEqual([]);
+      if (JSON.stringify(answer) === JSON.stringify(A17_SYMPTOM))
+        throw new KnownBreak(`${A17}: the route answers 404 kyc_v2_disabled`);
+      expect(answer).toEqual({
+        status: 200,
+        body: { detected: false, province: null, city: null },
+      });
+      expect(
+        queryTestCopy(
+          `select count(*) from private.verification_localities where owner_id = '${member.id}';`
+        )
+      ).toBe("0");
+    });
   });
 });

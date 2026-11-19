@@ -38,6 +38,7 @@ export const FOUNDATION_ERROR_REASONS = {
   business_unavailable: ["PT404"],
   choice_invalid: ["22023"],
   choice_limit: ["PT429"],
+  choice_unavailable: ["22023"],
   cleared_date_invalid: ["22023"],
   commission_invalid: ["22023"],
   commission_state: ["PT409"],

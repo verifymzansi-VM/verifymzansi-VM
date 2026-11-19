@@ -30,6 +30,7 @@ import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { cn } from "@/lib/utils";
 import { createLogger } from "@/lib/utils/logger";
+import { searchPagination } from "@/lib/foundation/search-depth";
 
 const log = createLogger("PromotionsExplorer");
 
@@ -472,12 +473,17 @@ export function PromotionsExplorer() {
   const total = tourismTotal + eventsTotal;
   const page =
     (activeTab === "events" ? eventsResponse.page : tourismResponse.page) ?? filters.page;
-  const pagesFor = (count: number, limit: number | undefined) => Math.ceil(count / (limit ?? 24));
-  const totalPages = Math.max(
-    1,
-    pagesFor(tourismTotal, tourismResponse.limit),
-    pagesFor(eventsTotal, eventsResponse.limit)
-  );
+  const tourismLimit = tourismResponse.limit ?? 24;
+  const eventsLimit = eventsResponse.limit ?? 24;
+  const tourismPages = searchPagination(tourismTotal, tourismLimit);
+  const eventPages = searchPagination(eventsTotal, eventsLimit);
+  const totalPages = Math.max(1, tourismPages.totalPages, eventPages.totalPages);
+  // When either feed goes deeper than the page links, the results they reach.
+  const limitedTo =
+    tourismPages.limitedTo === null && eventPages.limitedTo === null
+      ? null
+      : Math.min(tourismTotal, totalPages * tourismLimit) +
+        Math.min(eventsTotal, totalPages * eventsLimit);
 
   /* ── Tourism data ── */
   const tourismBusinesses = activeTab === "events" ? [] : (tourismResponse.businesses ?? []);
@@ -762,6 +768,7 @@ export function PromotionsExplorer() {
                 <MarketplacePaginationControls
                   page={page}
                   totalPages={totalPages}
+                  limitedTo={limitedTo}
                   onPageChange={(p) => {
                     triggerHaptic("light");
                     updateFilters({ page: String(p) }, { preservePage: true });

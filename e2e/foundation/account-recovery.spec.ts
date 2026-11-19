@@ -1196,7 +1196,7 @@ test.describe("account recovery and self-service", () => {
       "aria-checked",
       "false"
     );
-    // Hidden until the site uses them (SHOW_DATA_USE_CHOICES).
+    // Analytics and Third-party sharing are no longer offered.
     for (const name of ["Analytics", "Third-party sharing"])
       await expect(page.getByRole("switch", { name })).toHaveCount(0);
     await choice.click();

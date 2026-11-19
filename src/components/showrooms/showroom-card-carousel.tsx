@@ -2,8 +2,6 @@
 
 import { feedSourceAttribute } from "@/lib/feed/session";
 import { trackCommercialEvents } from "@/lib/analytics/commercial-events";
-import { ShowroomProvinceChip } from "./showroom-province-chip";
-import { SHOW_SHOWROOM_PROVINCE_CHIP } from "@/lib/hidden-features";
 import {
   ShowroomSectionShell as SectionShell,
   getBackgroundOverlayClasses,
@@ -75,8 +73,6 @@ export interface ShowroomCardCarouselProps {
    * "showroom:home", "showroom:business", "showroom:market", "showroom:tourism".
    */
   surface?: string;
-  /** The province whose posts are offered first; shows the "Change" chip. */
-  visitorProvince?: { province: string | null; source: "chosen" | "detected" | null };
 }
 
 /* ── Constants ─────────────────────────────────────────────── */
@@ -276,7 +272,6 @@ export function ShowroomCardCarousel({
   emptyMediaUrl = "/images/fallbacks/hero-home.svg",
   background,
   surface = "showroom",
-  visitorProvince,
 }: ShowroomCardCarouselProps) {
   const carouselItems = items.slice(0, DESKTOP_SHOWROOM_ITEM_LIMIT);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -963,233 +958,220 @@ export function ShowroomCardCarousel({
 
   if (count === 0) {
     return (
-      <>
-        <SectionShell
-          sectionClassName={SECTION_SPACING}
-          extraClassName={className}
-          background={background}
-        >
-          <div className="container-page flex items-center justify-center lg:h-full">
-            <div className="flex w-full max-w-5xl flex-col items-center gap-6 sm:gap-8 lg:flex-row lg:justify-center lg:gap-14">
-              {/* Area-branded artwork card */}
-              <div className={cn(CARD_W, "shrink-0")}>
-                <PosterCardShell
-                  href="/search"
-                  title={emptyTitle}
-                  description={emptyDescription}
-                  location="South Africa"
-                  mediaUrl={emptyMediaUrl}
-                  cardVariant="hero"
-                  mediaControlVariant="hero"
-                />
-              </div>
+      <SectionShell
+        sectionClassName={SECTION_SPACING}
+        extraClassName={className}
+        background={background}
+      >
+        <div className="container-page flex items-center justify-center lg:h-full">
+          <div className="flex w-full max-w-5xl flex-col items-center gap-6 sm:gap-8 lg:flex-row lg:justify-center lg:gap-14">
+            {/* Area-branded artwork card */}
+            <div className={cn(CARD_W, "shrink-0")}>
+              <PosterCardShell
+                href="/search"
+                title={emptyTitle}
+                description={emptyDescription}
+                location="South Africa"
+                mediaUrl={emptyMediaUrl}
+                cardVariant="hero"
+                mediaControlVariant="hero"
+              />
             </div>
           </div>
-        </SectionShell>
-        {/* An empty feed has no province to change, but keep the chip's room so the
-          page below stays where the loading skeleton put it. */}
-        {SHOW_SHOWROOM_PROVINCE_CHIP && visitorProvince ? (
-          <div className="h-14" aria-hidden="true" />
-        ) : null}
-      </>
+        </div>
+      </SectionShell>
     );
   }
 
   /* ── Main render ───────────────────────────────────────── */
 
   return (
-    <>
-      <SectionShell
-        sectionRef={containerRef}
-        sectionClassName={SECTION_SPACING}
-        extraClassName={className}
-        background={background}
-        hasListings
-      >
-        <div
-          className={cn(
-            "pointer-events-none absolute inset-x-0 top-[12%] z-[2] hidden h-28 lg:block blur-3xl",
-            background
-              ? getBackgroundOverlayClasses(background.overlayPreset).topGlow
-              : "bg-[radial-gradient(circle,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.08)_45%,transparent_72%)]"
-          )}
-          aria-hidden="true"
-        />
-        <div
-          className={cn(
-            "pointer-events-none absolute inset-x-0 bottom-[12%] z-[2] hidden h-24 lg:block blur-3xl",
-            background
-              ? getBackgroundOverlayClasses(background.overlayPreset).bottomGlow
-              : "bg-[radial-gradient(circle,rgba(15,23,42,0.32)_0%,rgba(15,23,42,0.08)_40%,transparent_72%)]"
-          )}
-          aria-hidden="true"
-        />
-        {/* First in the tab order, before the slides (ARIA carousel pattern). */}
-        {autoplayAvailable && (
-          <ShowroomRotationButton paused={userPaused} onClick={toggleUserPaused} />
+    <SectionShell
+      sectionRef={containerRef}
+      sectionClassName={SECTION_SPACING}
+      extraClassName={className}
+      background={background}
+      hasListings
+    >
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-[12%] z-[2] hidden h-28 lg:block blur-3xl",
+          background
+            ? getBackgroundOverlayClasses(background.overlayPreset).topGlow
+            : "bg-[radial-gradient(circle,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.08)_45%,transparent_72%)]"
         )}
-        {/* Card coverflow area */}
-        <div
-          ref={coverflowRef}
-          className={cn(
-            "relative mx-auto w-full max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y",
-            isDragging ? "cursor-grabbing" : "cursor-grab"
-          )}
-          onPointerDown={handlePointerDown}
-          onMouseDown={handleMouseDown}
-          onPointerCancel={handlePointerCancel}
-          onLostPointerCapture={handleLostPointerCapture}
-          onDragStartCapture={(e) => {
-            e.preventDefault();
-          }}
-          onClickCapture={handleClickCapture}
-          onKeyDown={handleKeyDown}
-          onMouseEnter={() => {
-            holdRef.current = true;
-          }}
-          onMouseLeave={() => {
-            // Keyboard focus on the slides keeps holding them after the mouse leaves.
-            if (!focusHeldRef.current) holdRef.current = false;
-            pauseAutoSwipe();
-          }}
-          onFocus={holdForFocus}
-          onBlur={releaseFocusHold}
-          tabIndex={0}
-          aria-label="Carousel slides"
-          data-feed-source={feedSourceAttribute({
-            kind: "rail",
-            label: SHOWROOM_LABELS[surface] ?? "Showroom",
-            wrap: true,
-          })}
-        >
-          {/* Height-establishing invisible card */}
-          <div className={cn("invisible mx-auto", CARD_W)} aria-hidden="true">
-            <PosterCardShell
-              href="#"
-              title="Carousel sizing card"
-              description="Hidden layout sizing element"
-              location=""
-              eyebrow=""
-              mediaUrl="/images/fallbacks/hero-shop.svg"
-              cardVariant="hero"
-              mediaControlVariant="hero"
-            />
-          </div>
-
-          {/* Absolutely positioned coverflow cards */}
-          {carouselItems.map((item, i) => {
-            const offset = signedOffset(i);
-            const itemIsVideo = isVideoItem(item);
-            const sideMediaFallback =
-              item.posterUrl ?? (itemIsVideo ? getFallbackMediaUrl(item) : item.mediaUrl);
-            const activeVideoNeedsArtwork = offset === 0 && itemIsVideo && !item.posterUrl;
-            const cardMediaUrl =
-              offset === 0 && !activeVideoNeedsArtwork ? item.mediaUrl : sideMediaFallback;
-
-            return (
-              <div
-                key={item.id}
-                className={cn(
-                  CARD_W,
-                  // will-change is applied via CSS only to the active slide and
-                  // its immediate neighbours (see globals.css .showroom-slide);
-                  // promoting all 15 slides to compositor layers exhausts mobile
-                  // GPU memory and causes jank.
-                  "showroom-slide absolute left-1/2 top-0"
-                )}
-                style={getInitialSlideStyle(i, count)}
-                data-showroom-index={i}
-                data-showroom-layer={
-                  offset === 0 ? "active" : Math.abs(offset) <= 3 ? "stack" : "offscreen"
-                }
-                data-slot-offset={offset}
-                role="group"
-                aria-roledescription="slide"
-                aria-label={`${i + 1} of ${count}`}
-                {...(offset !== 0
-                  ? {
-                      onClickCapture: (e: React.MouseEvent) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        pauseAutoSwipe();
-                        goTo(i);
-                      },
-                    }
-                  : undefined)}
-              >
-                <PosterCardShell
-                  href={item.href}
-                  viewTarget={{ type: item.type, id: item.id }}
-                  viewSurface={surface}
-                  title={item.title}
-                  location={item.location}
-                  mediaUrl={cardMediaUrl}
-                  isVideo={itemIsVideo && cardMediaUrl === item.mediaUrl}
-                  posterUrl={item.posterUrl}
-                  mediaFallbackUrl={getFallbackMediaUrl(item)}
-                  logoUrl={item.logoUrl}
-                  eyebrow={item.eyebrow}
-                  statusLabel={item.statusLabel}
-                  statusClassName={item.statusClassName}
-                  focalX={item.focalX}
-                  focalY={item.focalY}
-                  mediaWidth={item.mediaWidth}
-                  mediaHeight={item.mediaHeight}
-                  priority={offset === 0}
-                  mediaSizes="(max-width: 767px) and (max-height: 650px) and (orientation: portrait) 200px, (max-width: 767px) 260px, (max-width: 1023px) 300px, 440px"
-                  deferVideoLoadUntilPlay
-                  videoMode={offset === 0 ? "ambient" : undefined}
-                  onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
-                  showPlaybackControl={offset === 0}
-                  stickyAutoplay={offset === 0}
-                  // Peeking side cards never autoplay; only the centered card plays.
-                  feedPlaybackActive={offset === 0}
-                  makeEntireCardClickable
-                  cardVariant="hero"
-                  mediaControlVariant={offset === 0 ? "hero" : "default"}
-                  fitStrategy="contain"
-                />
-              </div>
-            );
-          })}
+        aria-hidden="true"
+      />
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-[12%] z-[2] hidden h-24 lg:block blur-3xl",
+          background
+            ? getBackgroundOverlayClasses(background.overlayPreset).bottomGlow
+            : "bg-[radial-gradient(circle,rgba(15,23,42,0.32)_0%,rgba(15,23,42,0.08)_40%,transparent_72%)]"
+        )}
+        aria-hidden="true"
+      />
+      {/* First in the tab order, before the slides (ARIA carousel pattern). */}
+      {autoplayAvailable && (
+        <ShowroomRotationButton paused={userPaused} onClick={toggleUserPaused} />
+      )}
+      {/* Card coverflow area */}
+      <div
+        ref={coverflowRef}
+        className={cn(
+          "relative mx-auto w-full max-w-[1680px] overflow-x-clip overflow-y-visible select-none touch-pan-y",
+          isDragging ? "cursor-grabbing" : "cursor-grab"
+        )}
+        onPointerDown={handlePointerDown}
+        onMouseDown={handleMouseDown}
+        onPointerCancel={handlePointerCancel}
+        onLostPointerCapture={handleLostPointerCapture}
+        onDragStartCapture={(e) => {
+          e.preventDefault();
+        }}
+        onClickCapture={handleClickCapture}
+        onKeyDown={handleKeyDown}
+        onMouseEnter={() => {
+          holdRef.current = true;
+        }}
+        onMouseLeave={() => {
+          // Keyboard focus on the slides keeps holding them after the mouse leaves.
+          if (!focusHeldRef.current) holdRef.current = false;
+          pauseAutoSwipe();
+        }}
+        onFocus={holdForFocus}
+        onBlur={releaseFocusHold}
+        tabIndex={0}
+        aria-label="Carousel slides"
+        data-feed-source={feedSourceAttribute({
+          kind: "rail",
+          label: SHOWROOM_LABELS[surface] ?? "Showroom",
+          wrap: true,
+        })}
+      >
+        {/* Height-establishing invisible card */}
+        <div className={cn("invisible mx-auto", CARD_W)} aria-hidden="true">
+          <PosterCardShell
+            href="#"
+            title="Carousel sizing card"
+            description="Hidden layout sizing element"
+            location=""
+            eyebrow=""
+            mediaUrl="/images/fallbacks/hero-shop.svg"
+            cardVariant="hero"
+            mediaControlVariant="hero"
+          />
         </div>
 
-        {/* Screen-reader live announcer: silent while the slides change by
-            themselves, polite when the visitor moves them or has paused. */}
-        {count > 1 && (
-          <div className="sr-only" aria-live={rotating ? "off" : "polite"} aria-atomic="true">
-            {`Slide ${displayIndex + 1} of ${count}`}
-          </div>
-        )}
+        {/* Absolutely positioned coverflow cards */}
+        {carouselItems.map((item, i) => {
+          const offset = signedOffset(i);
+          const itemIsVideo = isVideoItem(item);
+          const sideMediaFallback =
+            item.posterUrl ?? (itemIsVideo ? getFallbackMediaUrl(item) : item.mediaUrl);
+          const activeVideoNeedsArtwork = offset === 0 && itemIsVideo && !item.posterUrl;
+          const cardMediaUrl =
+            offset === 0 && !activeVideoNeedsArtwork ? item.mediaUrl : sideMediaFallback;
 
-        {/* Desktop arrow controls */}
-        {count > 1 && (
-          <>
-            <ShowroomArrowButton
-              direction="prev"
-              onClick={() => {
-                pauseAutoSwipe();
-                prev();
-              }}
-              onFocus={holdForArrowFocus}
-              onBlur={releaseFocusHold}
-            />
-            <ShowroomArrowButton
-              direction="next"
-              onClick={() => {
-                pauseAutoSwipe();
-                next();
-              }}
-              onFocus={holdForArrowFocus}
-              onBlur={releaseFocusHold}
-            />
-          </>
-        )}
-      </SectionShell>
-      {/* Below the showroom, so it never sits behind a card. */}
-      {SHOW_SHOWROOM_PROVINCE_CHIP && visitorProvince ? (
-        <ShowroomProvinceChip {...visitorProvince} />
-      ) : null}
-    </>
+          return (
+            <div
+              key={item.id}
+              className={cn(
+                CARD_W,
+                // will-change is applied via CSS only to the active slide and
+                // its immediate neighbours (see globals.css .showroom-slide);
+                // promoting all 15 slides to compositor layers exhausts mobile
+                // GPU memory and causes jank.
+                "showroom-slide absolute left-1/2 top-0"
+              )}
+              style={getInitialSlideStyle(i, count)}
+              data-showroom-index={i}
+              data-showroom-layer={
+                offset === 0 ? "active" : Math.abs(offset) <= 3 ? "stack" : "offscreen"
+              }
+              data-slot-offset={offset}
+              role="group"
+              aria-roledescription="slide"
+              aria-label={`${i + 1} of ${count}`}
+              {...(offset !== 0
+                ? {
+                    onClickCapture: (e: React.MouseEvent) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      pauseAutoSwipe();
+                      goTo(i);
+                    },
+                  }
+                : undefined)}
+            >
+              <PosterCardShell
+                href={item.href}
+                viewTarget={{ type: item.type, id: item.id }}
+                viewSurface={surface}
+                title={item.title}
+                location={item.location}
+                mediaUrl={cardMediaUrl}
+                isVideo={itemIsVideo && cardMediaUrl === item.mediaUrl}
+                posterUrl={item.posterUrl}
+                mediaFallbackUrl={getFallbackMediaUrl(item)}
+                logoUrl={item.logoUrl}
+                eyebrow={item.eyebrow}
+                statusLabel={item.statusLabel}
+                statusClassName={item.statusClassName}
+                focalX={item.focalX}
+                focalY={item.focalY}
+                mediaWidth={item.mediaWidth}
+                mediaHeight={item.mediaHeight}
+                priority={offset === 0}
+                mediaSizes="(max-width: 767px) and (max-height: 650px) and (orientation: portrait) 200px, (max-width: 767px) 260px, (max-width: 1023px) 300px, 440px"
+                deferVideoLoadUntilPlay
+                videoMode={offset === 0 ? "ambient" : undefined}
+                onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
+                showPlaybackControl={offset === 0}
+                stickyAutoplay={offset === 0}
+                // Peeking side cards never autoplay; only the centered card plays.
+                feedPlaybackActive={offset === 0}
+                makeEntireCardClickable
+                cardVariant="hero"
+                mediaControlVariant={offset === 0 ? "hero" : "default"}
+                fitStrategy="contain"
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Screen-reader live announcer: silent while the slides change by
+            themselves, polite when the visitor moves them or has paused. */}
+      {count > 1 && (
+        <div className="sr-only" aria-live={rotating ? "off" : "polite"} aria-atomic="true">
+          {`Slide ${displayIndex + 1} of ${count}`}
+        </div>
+      )}
+
+      {/* Desktop arrow controls */}
+      {count > 1 && (
+        <>
+          <ShowroomArrowButton
+            direction="prev"
+            onClick={() => {
+              pauseAutoSwipe();
+              prev();
+            }}
+            onFocus={holdForArrowFocus}
+            onBlur={releaseFocusHold}
+          />
+          <ShowroomArrowButton
+            direction="next"
+            onClick={() => {
+              pauseAutoSwipe();
+              next();
+            }}
+            onFocus={holdForArrowFocus}
+            onBlur={releaseFocusHold}
+          />
+        </>
+      )}
+    </SectionShell>
   );
 }

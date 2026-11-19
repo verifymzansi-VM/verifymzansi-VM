@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { test } from "node:test";
 import { buildNextConfig as buildConfig } from "./lib/next-config-harness.mjs";
 
-// The launch-configuration test build (every hidden feature on) can only be
+// The launch-configuration test build (each switch at its launch value) can only be
 // made for the local browser-test copy; every production build keeps today's
 // values (scripts/lib/launch-config-build.cjs).
 const require = createRequire(import.meta.url);
@@ -104,7 +104,13 @@ test("the switches read only the build-time value, and next.config.js defines it
     flag,
     /export const LAUNCH_CONFIG_BUILD: boolean = process\.env\.VERIFYMZANSI_LAUNCH_CONFIG_BUILD === "1";/
   );
-  // Nothing else in the switch files reads the environment.
+  // That line is its only read of the environment (the launch values table
+  // beside it is fixed), and nothing else in the switch files reads it.
+  const code = flag
+    .split("\n")
+    .filter((line) => !/^\s*(\/\*\*?|\*|\/\/)/.test(line))
+    .join("\n");
+  assert.equal(code.match(/process\.env/g)?.length, 1);
   for (const file of [
     "src/lib/hidden-features.ts",
     "src/lib/prelaunch-banner.ts",

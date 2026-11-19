@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { readTestCopy } from "./support/test-copy";
+import { switchOn } from "./support/switches";
 
 // Public pages of the restored website in foundation mode: the checks of the
 // stub suite's smoke.spec.ts and golden.spec.ts that need no account or data,
@@ -283,6 +284,39 @@ test.describe("public pages", () => {
       .toBeFalsy();
   });
 
+  test("page links stop at page 100 and the last page asks to narrow the search", async ({
+    page,
+    request,
+  }) => {
+    // A deeper page number serves page 100 (never an error page), and no read
+    // goes past the deepest offset the database serves.
+    for (const path of ["/api/businesses?page=150&limit=24", "/api/promotions?page=10000"]) {
+      const deep = await request.get(path);
+      expect(deep.status(), path).toBe(200);
+      expect(await deep.json(), path).toMatchObject({ page: 100 });
+    }
+    // The fixture holds a handful of posts, so the answer is given many more
+    // results: the grid then offers 100 pages and says so on the last one.
+    await page.route(/\/api\/businesses\?/, async (route) => {
+      const url = new URL(route.request().url());
+      url.searchParams.delete("page");
+      const response = await route.fetch({ url: url.toString() });
+      const body = await response.json();
+      await route.fulfill({ response, json: { ...body, total: 10_000, page: 100 } });
+    });
+    // A typed deeper page shows as the last page.
+    await page.goto("/mzansi-business?page=150", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("mzansi-business-grid-ready")).toBeVisible({ timeout: 20_000 });
+    await expect(
+      page.getByText(/Showing the first 2.400 results\. Narrow your search to see more\./)
+    ).toBeVisible();
+    await expect(
+      page
+        .getByTestId("mzansi-business-grid-ready")
+        .getByRole("button", { name: "Next", exact: true })
+    ).toBeDisabled();
+  });
+
   test("the phone footer and area tabs stay clear of the bottom tab bar", async ({ page }) => {
     test.skip((page.viewportSize()?.width ?? 1280) >= 768, "Mobile-only layout check");
     await page.goto("/mzansi-business");
@@ -399,12 +433,43 @@ test.describe("pricing and organisations", () => {
     await expect(main).not.toContainText(
       /Save R|Best value|R50\b|R140|R250|R1,200|R15,000|R650|R450|12 months|Growth|Starter/
     );
-    // One Individual slot works in every section: no section picker, and no
-    // tab row while Individual slots are the only offer on sale.
+    // One Individual slot works in every section: no section picker.
     await expect(main.getByRole("radio")).toHaveCount(0);
-    await expect(main.getByRole("tablist")).toHaveCount(0);
     await expect(main).toContainText("Market, Business or Tourism");
     await expect(main).toContainText("Up to 4 posts per 30 days");
+    // The tab row follows PACKAGES_ON_SALE (support/switches.ts): none while
+    // Individual slots are the only offer on sale, as in production; in the
+    // launch lane an Individual and a Multi-listing tab, and the Multi-listing
+    // tab shows the package price and leads to its page.
+    if (!switchOn("PACKAGES_ON_SALE")) {
+      await expect(main.getByRole("tablist")).toHaveCount(0);
+      return;
+    }
+    const tabs = main.getByRole("tablist", { name: "Offers" });
+    await expect(tabs).toBeVisible();
+    await expect(tabs.getByRole("tab")).toHaveText(["Individual", "Multi-listing"]);
+    await expect(tabs.getByRole("tab", { name: "Individual" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    // Clicked again until the page has hydrated and the tab takes it.
+    const multiListing = tabs.getByRole("tab", { name: "Multi-listing" });
+    await expect(async () => {
+      await multiListing.click();
+      await expect(multiListing).toHaveAttribute("aria-selected", "true", { timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
+    const packages = main.getByRole("tabpanel");
+    await expect(packages).toContainText("R100");
+    await expect(packages).toContainText("per slot per 30 days");
+    // The amount is formatted for South Africa: a space groups the thousands.
+    await expect(packages).toContainText(/Example: 10 slots for 30 days = R1\s000(?!\d)/);
+    await expect(packages.getByRole("link", { name: "Choose your package" })).toHaveAttribute(
+      "href",
+      "/pricing/multi-listing"
+    );
+    await expect(main).not.toContainText(
+      /Save R|Best value|R50\b|R140|R250|R1,200|R15,000|R650|R450|12 months|Growth|Starter/
+    );
   });
 
   test("a retired plan cannot be bought", async ({ request }) => {

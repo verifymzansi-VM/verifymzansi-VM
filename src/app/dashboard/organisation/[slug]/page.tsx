@@ -12,12 +12,7 @@ import {
   PerformanceReport,
   parsePerformanceReport,
 } from "@/components/organisations/performance-report";
-import { ExtensionOfferCard } from "@/components/trials/extension-offer-card";
-import {
-  SHOW_ORGANISATION_REPORT,
-  SHOW_SPONSOR_OFFER,
-  SHOW_TRIAL_EXTENSION_OFFERS,
-} from "@/lib/hidden-features";
+import { SHOW_ORGANISATION_REPORT, SHOW_SPONSOR_OFFER } from "@/lib/hidden-features";
 
 import {
   FoundationServerSessionError,
@@ -94,7 +89,6 @@ async function readNativeDashboard(slug: string) {
     applications,
     members,
     admins: native.admins,
-    isOwner: native.viewer_role === "owner",
     // Without applicant contacts in the page's data (database update
     // 20261118072601_staff_data_minimisation.sql), a pending applicant's
     // contact is shown on request; before it, inline as before.
@@ -102,7 +96,6 @@ async function readNativeDashboard(slug: string) {
     canSponsor: native.programme_status === "active_paid",
     settings: DEFAULT_COMMERCIAL_SETTINGS,
     report: null,
-    offer: null,
   };
 }
 
@@ -119,12 +112,10 @@ export default async function OrganisationDashboardPage({
     applications,
     members,
     admins,
-    isOwner,
     revealContacts,
     canSponsor,
     settings,
     report,
-    offer,
   } = await readNativeDashboard(slug);
   const window = reportWindow(org.trial_starts_at);
   const parsedReport = parsePerformanceReport(report);
@@ -202,10 +193,6 @@ export default async function OrganisationDashboardPage({
             </Link>
           </div>
         </section>
-      ) : null}
-
-      {SHOW_TRIAL_EXTENSION_OFFERS && offer ? (
-        <ExtensionOfferCard offer={offer} canRespond={isOwner} />
       ) : null}
 
       <section aria-labelledby="programme-places" className="grid gap-3 sm:grid-cols-2">
