@@ -7,7 +7,11 @@ import { requireTestData } from "../support/test-data";
 // checks the restored grid's own video behaviour in foundation mode and
 // reads no posts from the test copy.
 
+// WebKit projects skip the playback tests through the documented skip below
+// (e2e/support/skip-policy.ts). The touch branches still name both phone
+// projects, so lifting that skip runs the phone path, not the desktop one.
 const WEBKIT_SKIP = ["webkit", "mobile-safari"];
+const isMobileProject = (name: string) => name === "mobile-chrome" || name === "mobile-safari";
 const WEBKIT_SKIP_MSG =
   "WebKit media playback under headless CI is unreliable for autoplay assertions.";
 
@@ -187,7 +191,7 @@ test.describe("Singleton video playback", () => {
     await firstVideo.scrollIntoViewIfNeeded();
 
     // Trigger play on the first video via user gesture
-    if (testInfo.project.name === "mobile-chrome") {
+    if (isMobileProject(testInfo.project.name)) {
       await firstVideo
         .locator("xpath=ancestor::div[@data-card-variant]")
         .getByRole("button", { name: /^Preview video/ })
@@ -203,7 +207,7 @@ test.describe("Singleton video playback", () => {
 
     // Now scroll the second video into view and trigger play via the manager
     await secondVideo.scrollIntoViewIfNeeded();
-    if (testInfo.project.name === "mobile-chrome") {
+    if (isMobileProject(testInfo.project.name)) {
       await secondVideo
         .locator("xpath=ancestor::div[@data-card-variant]")
         .getByRole("button", { name: /^Preview video/ })

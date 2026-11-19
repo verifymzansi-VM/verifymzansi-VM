@@ -207,7 +207,9 @@ test.describe("showroom carousel on its test page", () => {
     expect(videos).toEqual([]);
     await play.click();
     await expect(active.locator("video")).toHaveAttribute("src", /advertiser-desktop.webm/);
-    if (testInfo.project.name === "mobile-chrome")
+    // Phones fetch the video once Play is pressed (mobile-chrome and the WebKit
+    // phone project alike).
+    if (isMobileProject(testInfo.project.name))
       await expect.poll(() => videos.length).toBeGreaterThan(0);
   });
 

@@ -9,19 +9,22 @@ const { default: localRules } = await import("./scripts/eslint-rules/no-silent-e
 // The only files allowed to use dangerouslySetInnerHTML: each writes inline
 // JSON-LD (with "</" escaped) or a fixed bootstrap script or style from a
 // constant. Any other use is a lint error until it is reviewed and added here.
-// scripts/dangerous-html-allowlist.test.mjs keeps this list equal to the files
-// that use it.
-export const DANGEROUS_HTML_ALLOWLIST = [
-  "src/app/(marketplace)/_lib/promotion-detail-page-content.tsx",
-  "src/app/(marketplace)/mzansi-business/page.tsx",
-  "src/app/(marketplace)/mzansi-market/page.tsx",
-  "src/app/(marketplace)/promotions/page.tsx",
-  "src/app/layout.tsx",
-  "src/app/listing/[id]/page.tsx",
-  "src/app/organisation/[slug]/page.tsx",
-  "src/app/page.tsx",
-  "src/app/pricing/page.tsx",
-];
+// Each entry pins how many times the file names it (the rule ignores the file
+// as a whole, so a second use there must be reviewed too).
+// scripts/dangerous-html-allowlist.test.mjs keeps these counts equal to the
+// uses in code anywhere in the repository.
+export const DANGEROUS_HTML_USES = {
+  "src/app/(marketplace)/_lib/promotion-detail-page-content.tsx": 1,
+  "src/app/(marketplace)/mzansi-business/page.tsx": 1,
+  "src/app/(marketplace)/mzansi-market/page.tsx": 1,
+  "src/app/(marketplace)/promotions/page.tsx": 1,
+  "src/app/layout.tsx": 6,
+  "src/app/listing/[id]/page.tsx": 1,
+  "src/app/organisation/[slug]/page.tsx": 1,
+  "src/app/page.tsx": 1,
+  "src/app/pricing/page.tsx": 1,
+};
+export const DANGEROUS_HTML_ALLOWLIST = Object.keys(DANGEROUS_HTML_USES);
 
 // Flat-config file patterns are globs: match brackets and parentheses literally.
 const literalGlob = (file) => file.replace(/[[\]()]/g, (char) => `\\${char}`);

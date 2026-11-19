@@ -7,7 +7,11 @@ import { requireTestData } from "../support/test-data";
 // checks the restored grid's own video behaviour in foundation mode and
 // reads no posts from the test copy.
 
+// WebKit projects skip the playback tests through the documented skip below
+// (e2e/support/skip-policy.ts). The touch branches still name both phone
+// projects, so lifting that skip runs the phone path, not the desktop one.
 const WEBKIT_SKIP = ["webkit", "mobile-safari"];
+const isMobileProject = (name: string) => name === "mobile-chrome" || name === "mobile-safari";
 // Desktop (reduced motion): the "Play video" button. Touch screens: the small
 // labelled "Preview" button; a tap anywhere else on the card opens the post.
 const CARD_PLAY_BUTTON = /^(Play video$|Preview video)/;
@@ -289,7 +293,7 @@ test.describe("Card video autoplay", () => {
         `cards on ${route.name}`
       );
 
-      if (testInfo.project.name === "mobile-chrome") {
+      if (isMobileProject(testInfo.project.name)) {
         const card = page
           .locator("[data-card-variant]")
           .filter({ has: page.locator("video") })
@@ -313,7 +317,8 @@ test.describe("Card video autoplay", () => {
     test(`${route.name}: one tap opens a video post; Preview plays it; data saver stops autoplay`, async ({
       page,
     }, testInfo) => {
-      test.skip(testInfo.project.name !== "mobile-chrome", "Runs only on mobile projects.");
+      test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
+      test.skip(!isMobileProject(testInfo.project.name), "Runs only on mobile projects.");
 
       await installMediaPlaybackShim(page);
       await stubCardApiWithVideoData(page, route.name);

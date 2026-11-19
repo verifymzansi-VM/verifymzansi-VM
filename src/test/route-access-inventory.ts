@@ -1,9 +1,27 @@
 /**
- * Who may call each route handler (every route.ts under src/app), method by
- * method, and the back-office pages. src/__tests__/staff-mfa-coverage.test.ts
- * fails when a route or method is missing here, when an entry no longer
- * exists, and when a route's code does not show the protection its class
- * needs.
+ * Who may call each route handler (every route.ts, .tsx, .js or .mjs under
+ * src/app), method by method, and the back-office pages.
+ * src/__tests__/staff-mfa-coverage.test.ts fails when a route or method is
+ * missing here, when an entry no longer exists, and when a route's code does
+ * not show the protection its class needs.
+ *
+ * Limits of those code checks. They read source text; they are a tripwire,
+ * not proof that a route is protected:
+ * - signed-in and staff: the route file must call a session entry point (a
+ *   foundation route context's authenticate() or authenticateCaller(),
+ *   handleFoundationOwnerRoute, handleFoundationBillingRoute,
+ *   protectBusinessEvidenceRoute, requireStaff, checkStaffApiMfa,
+ *   enforceAdminMutationGuard, evaluateStaffMfa, or a legacy auth.getUser()),
+ *   or call an imported function whose own definition does.
+ *   Only one import hop is followed (plus helpers defined in that module). The
+ *   check is per file, not per method or code path, and it does not prove that
+ *   an anonymous caller is refused.
+ * - staff on the foundation backend: the check proves a verified session is
+ *   resolved, not that the command needs staff authority. That is enforced in
+ *   the database by internal.staff_actor; no test here ties a route to the
+ *   staff command it calls.
+ * - service: the route itself must call a signature or constant-time secret
+ *   check; whether it rejects before doing work is not checked.
  *
  * - public: anyone, signed in or not. Each one is listed in PUBLIC_ROUTE_REASONS
  *   with the reason it is open; add a route here only after review.
@@ -13,7 +31,7 @@
  * - service: called by another service or a payment or identity provider, and
  *   checks a signature or shared secret in the route itself.
  *
- * Keys are paths under src/app without the trailing "/route.ts".
+ * Keys are paths under src/app without the trailing "/route.ts" (or .tsx, .js, .mjs).
  */
 export type RouteAccess = "public" | "signed-in" | "staff" | "service";
 export type RouteMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
@@ -185,6 +203,7 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/promotions/[id]/featured": { POST: "signed-in" },
   "api/promotions/[id]/urgent": { POST: "signed-in" },
   "api/reports": { POST: "public" },
+  "api/share-preview/[type]/[id]": { GET: "public" },
   "api/verification/location/detect": { POST: "signed-in" },
   "api/verification/location/manual": { POST: "signed-in" },
   "api/verification/session/start": { POST: "signed-in" },
@@ -248,11 +267,14 @@ export const PUBLIC_ROUTE_REASONS: Record<string, string> = {
   "api/media/serve/[...key] GET": "Serves files from the public media bucket, rate limited",
   "api/media/upload HEAD": "Upload preflight probe; answers 200 with no body",
   "api/mock-ozow GET": "Test-only payment stand-in; refuses outside test runs",
-  "api/organisations/affiliations GET": "Public list of an organisation's members, rate limited",
+  "api/organisations/affiliations GET":
+    "Public affiliation badges for the given business ids (at most 100), rate limited",
   "api/organisations/search GET": "Public organisation directory search, rate limited",
   "api/promotions GET": "Public directory of live promotions",
   "api/promotions/[id] GET": "Live promotion detail; the owner view (?owner=1) needs a session",
   "api/reports POST": "Reports a post; behind Turnstile and a rate limit, sign-in optional",
+  "api/share-preview/[type]/[id] GET":
+    "Renders the link-preview image of a publicly live post for shared links; rate limited",
 };
 
 /** Every back-office page (each page.tsx under src/app/admin): all are staff pages. */
