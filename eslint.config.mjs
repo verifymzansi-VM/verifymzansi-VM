@@ -6,8 +6,54 @@ const tseslint = require("typescript-eslint");
 const security = require("eslint-plugin-security");
 const { default: localRules } = await import("./scripts/eslint-rules/no-silent-error-handler.mjs");
 
+// The only files allowed to use dangerouslySetInnerHTML: each writes inline
+// JSON-LD (with "</" escaped) or a fixed bootstrap script or style from a
+// constant. Any other use is a lint error until it is reviewed and added here.
+// scripts/dangerous-html-allowlist.test.mjs keeps this list equal to the files
+// that use it.
+export const DANGEROUS_HTML_ALLOWLIST = [
+  "src/app/(marketplace)/_lib/promotion-detail-page-content.tsx",
+  "src/app/(marketplace)/mzansi-business/page.tsx",
+  "src/app/(marketplace)/mzansi-market/page.tsx",
+  "src/app/(marketplace)/promotions/page.tsx",
+  "src/app/layout.tsx",
+  "src/app/listing/[id]/page.tsx",
+  "src/app/organisation/[slug]/page.tsx",
+  "src/app/page.tsx",
+  "src/app/pricing/page.tsx",
+];
+
+// Flat-config file patterns are globs: match brackets and parentheses literally.
+const literalGlob = (file) => file.replace(/[[\]()]/g, (char) => `\\${char}`);
+
+const DANGEROUS_HTML_MESSAGE =
+  "dangerouslySetInnerHTML is allowed only in the reviewed files listed in DANGEROUS_HTML_ALLOWLIST (eslint.config.mjs).";
+
 const eslintConfig = [
   ...nextConfig,
+  {
+    files: ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"],
+    ignores: DANGEROUS_HTML_ALLOWLIST.map(literalGlob),
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        // <div dangerouslySetInnerHTML={...} />
+        {
+          selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+          message: DANGEROUS_HTML_MESSAGE,
+        },
+        // createElement("div", { dangerouslySetInnerHTML: ... }) and spread props.
+        {
+          selector: "Property[key.name='dangerouslySetInnerHTML']",
+          message: DANGEROUS_HTML_MESSAGE,
+        },
+        {
+          selector: "Property[key.value='dangerouslySetInnerHTML']",
+          message: DANGEROUS_HTML_MESSAGE,
+        },
+      ],
+    },
+  },
   {
     files: ["**/*.{tsx,jsx}"],
     rules: {

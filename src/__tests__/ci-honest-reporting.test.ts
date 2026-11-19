@@ -252,7 +252,11 @@ describe("CI job graph", () => {
       jobs: Record<string, Job & { strategy?: { matrix: { project: string[] } } }>;
     };
     const browser = e2e.jobs.browser;
-    expect(browser.strategy?.matrix.project).toEqual(["chromium", "mobile-chrome"]);
+    expect(browser.strategy?.matrix.project).toEqual([
+      "chromium",
+      "mobile-chrome",
+      "mobile-safari",
+    ]);
     const steps = browser.steps;
     const run = steps.findIndex((step) => (step.run ?? "").includes("playwright test"));
     expect(steps[run].env?.PLAYWRIGHT_JSON_REPORT).toBe(

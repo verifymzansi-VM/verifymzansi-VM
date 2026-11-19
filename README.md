@@ -242,8 +242,9 @@ pnpm supabase:cli -- --env-file=.env.local migration list
 - Playwright does not depend on your local `.env.local`: the copy's website gets
   fixed test settings (`scripts/lib/foundation-e2e-website.mjs`) with
   `VERIFYMZANSI_RUNTIME_MODE=e2e` and serves on `http://127.0.0.1:3110`
-- Projects: `chromium` and `mobile-chrome`. CI runs them as the required check
-  `e2e-foundation` (workflow "E2E foundation")
+- Projects: `chromium`, `mobile-chrome` and `mobile-safari` (iPhone Safari,
+  WebKit). CI runs them as the required check `e2e-foundation` (workflow "E2E
+  foundation")
 - Delete the copy afterwards with `pnpm foundation:e2e:down`
 - The old stub browser suite (`playwright.config.ts`, `e2e/*.spec.ts`) was
   retired on 2026-11-11 (`e2e/foundation/PORTING.md`)

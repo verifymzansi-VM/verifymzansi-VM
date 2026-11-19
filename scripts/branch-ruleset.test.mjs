@@ -94,7 +94,11 @@ test("the committed ruleset only requires checks that run on pull requests to ma
     assert.doesNotMatch(name, /^e2e-full-matrix|^Browser test build$/, name);
   // Matrix jobs are named as GitHub reports them; the release-gate callers in
   // CI never run on pull requests, so they can never be required.
-  for (const name of ["e2e-foundation (chromium)", "e2e-foundation (mobile-chrome)"])
+  for (const name of [
+    "e2e-foundation (chromium)",
+    "e2e-foundation (mobile-chrome)",
+    "e2e-foundation (mobile-safari)",
+  ])
     assert.ok(available.has(name), name);
   for (const name of available) assert.doesNotMatch(name, /\$\{\{|Release gate/, name);
 });
