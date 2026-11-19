@@ -150,8 +150,14 @@ export class MockOzow {
     return json(404, { title: "Not found" });
   }
 
-  /** Browser requests to the mock payment page's origin. */
-  async handle(url: URL): Promise<Served> {
+  /**
+   * Browser requests to the mock payment page's origin. The member is sent
+   * back with a 302, as the provider does. Playwright's WebKit cannot fulfil a
+   * routed request with a redirect status ("Cannot fulfill with redirect
+   * status"), so with `redirect: false` the same return is an HTML page that
+   * navigates to the return address at once (a meta refresh, no script).
+   */
+  async handle(url: URL, { redirect = true }: { redirect?: boolean } = {}): Promise<Served> {
     const paymentId = url.searchParams.get("paymentId") ?? "";
     const returnUrl = url.searchParams.get("returnUrl") ?? "";
     if (!UUID.test(paymentId) || returnUrl !== `${APP_ORIGIN}/billing/success?payment=${paymentId}`)
@@ -185,7 +191,15 @@ export class MockOzow {
         "Mock Ozow",
         "<h1>Payment made at the test bank</h1><p>You can close this window.</p>"
       );
-    return { status: 302, headers: { Location: returnUrl } };
+    if (redirect) return { status: 302, headers: { Location: returnUrl } };
+    return {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+      body:
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
+        `<meta http-equiv="refresh" content="0;url=${escapeHtml(returnUrl)}">` +
+        "<title>Mock Ozow</title></head><body><p>Returning to the website…</p></body></html>",
+    };
   }
 
   /**

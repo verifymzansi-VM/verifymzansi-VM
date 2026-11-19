@@ -13,6 +13,12 @@ import { registerVerifiedMember } from "./support/verified-member";
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 
+// The site registers its service worker in the browser tests too. Playwright's
+// page.route can miss requests from a page that worker controls (WebKit routes
+// them past the page), so specs that answer requests in the browser block it,
+// as Playwright recommends for request interception.
+test.use({ serviceWorkers: "block" });
+
 const publicPages = [
   { name: "homepage", path: "/" },
   { name: "login", path: "/login" },

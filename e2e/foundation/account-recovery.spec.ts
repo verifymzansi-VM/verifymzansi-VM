@@ -7,6 +7,7 @@ import {
   type GoogleMember,
 } from "./support/google-member";
 import { endedWithTest } from "./support/route-teardown";
+import { waitForToastsToClose } from "./support/toasts";
 import {
   browserSessionCookies,
   latestMailTo,
@@ -1107,6 +1108,8 @@ test.describe("account recovery and self-service", () => {
       await page.getByLabel("Current password", { exact: true }).fill(current);
       await page.getByLabel("New password", { exact: true }).fill(next);
       await page.getByLabel("Confirm new password", { exact: true }).fill(next);
+      // The previous answer's toast can cover the button on a short phone.
+      await waitForToastsToClose(page);
       await page.getByRole("button", { name: "Update password" }).click();
       await expect
         .poll(() => guarded.reply(CHANGE_PASSWORD_PATH).length, { timeout: 20_000 })
