@@ -20,6 +20,12 @@ const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const LOGIN_PATH = "/api/auth/login";
 const CAPTCHA_STAND_IN = "local-fixture-captcha-stand-in";
 
+// The site registers its service worker in the browser tests too. Playwright's
+// page.route can miss requests from a page that worker controls (WebKit routes
+// them past the page), so specs that answer requests in the browser block it,
+// as Playwright recommends for request interception.
+test.use({ serviceWorkers: "block" });
+
 test.describe.configure({ mode: "serial" });
 
 let member: VerifiedMember;

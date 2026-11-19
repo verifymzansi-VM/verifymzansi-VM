@@ -6,11 +6,11 @@ import {
   type Browser,
   type BrowserContext,
   type Page,
-  type Request,
 } from "@playwright/test";
 import sharp from "sharp";
 import { E2E_FIXTURE, LOCAL_OPS_JOBS_SECRET } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
+import { isMultipartForm } from "./support/multipart";
 import { endedWithTest } from "./support/route-teardown";
 import {
   browserSessionCookies,
@@ -106,9 +106,8 @@ test.describe.configure({ mode: "serial" });
 type Reply = { method: string; path: string; status: number; body: unknown };
 
 /** Lets only the copy's website and its gateway through and records the
- * website's API replies (POST, PATCH, DELETE). `rewrite` may replace the body
- * of such a request before it is sent (see asCameraSelfie). */
-async function guard(context: BrowserContext, rewrite?: (request: Request) => Buffer | undefined) {
+ * website's API replies (POST, PATCH, DELETE). */
+async function guard(context: BrowserContext) {
   const outside: string[] = [];
   const failures: string[] = [];
   const replies: Reply[] = [];
@@ -127,29 +126,46 @@ async function guard(context: BrowserContext, rewrite?: (request: Request) => Bu
     )
       return route.continue();
     sent.push(url.pathname);
+    const record = (status: number, headers: Record<string, string>, bytes: Buffer) => {
+      let body: unknown = `${bytes.length} bytes`;
+      if (/json/i.test(headers["content-type"] ?? ""))
+        try {
+          body = JSON.parse(bytes.toString("utf8"));
+        } catch {
+          // Malformed JSON; keep the size only.
+        }
+      replies.push({ method: request.method(), path: url.pathname, status, body });
+    };
+    // Recorded, not thrown: every step checks `failures`, and an error in a
+    // route handler would otherwise fail a marked test outside its pin.
+    const fail = (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${request.method()} ${url.pathname}: ${message.slice(0, 200)}`);
+    };
+    if (isMultipartForm(request)) {
+      // A file upload goes as the browser sent it (see isMultipartForm).
+      try {
+        await route.continue();
+        const answer = await request.response();
+        if (answer) record(answer.status(), answer.headers(), await answer.body());
+      } catch (error) {
+        // The test already ended (its page closed mid-request); nothing to record.
+        if (!endedWithTest(error)) fail(error);
+      }
+      return;
+    }
     let response;
     let bytes: Buffer;
     try {
-      const postData = rewrite?.(request);
-      response = await route.fetch({ maxRedirects: 0, ...(postData ? { postData } : {}) });
+      response = await route.fetch({ maxRedirects: 0 });
       bytes = await response.body();
     } catch (error) {
       // The test already ended (its page closed mid-request); nothing to record.
       if (endedWithTest(error)) return;
-      // Recorded, not thrown: every step checks `failures`, and an error in a
-      // route handler would otherwise fail a marked test outside its pin.
-      const message = error instanceof Error ? error.message : String(error);
-      failures.push(`${request.method()} ${url.pathname}: ${message.slice(0, 200)}`);
+      fail(error);
       return route.abort("failed").catch(() => undefined);
     }
-    let body: unknown = `${bytes.length} bytes`;
-    if (/json/i.test(response.headers()["content-type"] ?? ""))
-      try {
-        body = JSON.parse(bytes.toString("utf8"));
-      } catch {
-        // Malformed JSON; keep the size only.
-      }
-    replies.push({ method: request.method(), path: url.pathname, status: response.status(), body });
+    record(response.status(), response.headers(), bytes);
     return route.fulfill({ response, body: bytes });
   });
   const reply = (pathname: string) => replies.filter((entry) => entry.path === pathname);
@@ -194,28 +210,31 @@ async function withoutCamera(context: BrowserContext) {
  * request's two capture fields are changed from what the upload fallback sends
  * (captureMethod "file_upload") to what a camera capture with a completed
  * liveness challenge sends (captureMethod "camera", livenessPassed "true").
- * Nothing else in the request changes; other requests pass unchanged. */
-function asCameraSelfie(request: Request): Buffer | undefined {
-  if (new URL(request.url()).pathname !== "/api/verification/upload") return undefined;
-  const boundary = /boundary=([^;]+)/.exec(request.headers()["content-type"] ?? "")?.[1];
-  const body = request.postDataBuffer();
-  if (!boundary || !body) throw new Error("the upload is not a multipart form");
-  // latin1 keeps the photo's bytes as they are.
-  const form = body.toString("latin1");
-  if (!form.includes('name="docType"\r\n\r\nselfie\r\n')) return undefined;
-  const fallback = 'name="captureMethod"\r\n\r\nfile_upload\r\n';
-  const end = `--${boundary}--`;
-  if (!form.includes(fallback) || form.includes('name="livenessPassed"') || !form.includes(end))
-    throw new Error("the selfie form is not the upload fallback's");
-  return Buffer.from(
-    form
-      .replace(fallback, 'name="captureMethod"\r\n\r\ncamera\r\n')
-      .replace(
-        end,
-        `--${boundary}\r\nContent-Disposition: form-data; name="livenessPassed"\r\n\r\ntrue\r\n${end}`
-      ),
-    "latin1"
-  );
+ * Nothing else in the request changes; other requests pass unchanged.
+ *
+ * The change is made in the page, to the form the page hands to fetch(), not
+ * to the request on the network: Playwright's WebKit cannot read or rewrite a
+ * multipart body with its files (see isMultipartForm). A selfie form that is
+ * not the upload fallback's is refused in the page, so the step fails. */
+async function asCameraSelfie(context: BrowserContext) {
+  await context.addInitScript(() => {
+    const send = window.fetch.bind(window);
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+      const target = input instanceof Request ? input.url : String(input);
+      const form = init?.body;
+      if (
+        form instanceof FormData &&
+        new URL(target, window.location.href).pathname === "/api/verification/upload" &&
+        form.get("docType") === "selfie"
+      ) {
+        if (form.get("captureMethod") !== "file_upload" || form.has("livenessPassed"))
+          return Promise.reject(new Error("the selfie form is not the upload fallback's"));
+        form.set("captureMethod", "camera");
+        form.append("livenessPassed", "true");
+      }
+      return send(input, init);
+    };
+  });
 }
 
 /** A synthetic photo: random noise over a flat colour, never a face or a
@@ -485,10 +504,8 @@ test.describe("staff review with an authenticator", () => {
         await withoutCamera(context);
         // One member's selfie arrives as a camera capture, the other's as an
         // uploaded file (the staff viewer tells them apart later).
-        const { outside, failures, reply } = await guard(
-          context,
-          member === returned ? asCameraSelfie : undefined
-        );
+        if (member === returned) await asCameraSelfie(context);
+        const { outside, failures, reply } = await guard(context);
         await signInBrowser(context, member);
         const page = await context.newPage();
         await page.goto("/verification");
