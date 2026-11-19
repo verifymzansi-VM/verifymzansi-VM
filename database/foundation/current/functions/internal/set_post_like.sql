@@ -9,7 +9,6 @@ CREATE OR REPLACE FUNCTION internal.set_post_like(p_post_id uuid, p_device uuid,
 AS $function$
 declare
   liker uuid := p_account; post_owner uuid; device bytea; mine private.post_likes; wanted boolean;
-  totals private.post_engagement_totals;
   today date := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
   starts timestamptz := statement_timestamp(); day_likes integer;
 begin
@@ -31,7 +30,7 @@ begin
     from private.engagement_keys k where k.id = 1;
   -- One change at a time per post: its totals row is the lock.
   insert into private.post_engagement_totals(post_id) values (p_post_id) on conflict (post_id) do nothing;
-  select t.* into totals from private.post_engagement_totals t where t.post_id = p_post_id for update;
+  perform 1 from private.post_engagement_totals t where t.post_id = p_post_id for update;
   -- Likes of this post that were waiting and are due now start to count.
   update private.post_likes l set waiting = false
     where l.post_id = p_post_id and l.waiting and l.counts_from <= statement_timestamp();
