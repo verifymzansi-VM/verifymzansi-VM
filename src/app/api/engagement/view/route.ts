@@ -5,7 +5,6 @@ import {
   engagementCaller,
   engagementClientKey,
   isCountableRequest,
-  issueViewerId,
   readViewerId,
 } from "@/lib/engagement-route";
 import { recordFoundationPostViews } from "@/lib/foundation/post-engagement";
@@ -51,12 +50,12 @@ const notCounted = () => NextResponse.json({ ok: true, counted: [] as string[] }
  * seconds (src/hooks/use-track-content-view.ts, use-dwell-view.ts): events
  * with source "page", at most three per request. Video plays on cards are not
  * views. Never counted: a crawler or headless browser, a prefetch, a browser
- * without an identifier this website signed (it gets one, within the
- * per-address issuing limit, and is asked to send again), or views over the
- * per-address limits (`engagement:view` per request, `engagement:view:post`
- * per post and day). The database counts a post at most once per browser in
- * 24 hours, never the owner's or staff views, and caps each post's counted
- * views per hour and day (api.record_post_views).
+ * without an identifier this website signed (it is told `needs_challenge` and
+ * gets one from /api/engagement/viewer after a Turnstile check), or views over
+ * the per-source limits (`engagement:view` per address, `engagement:view:post`
+ * per address and post a day), so a flood from a few sources only uses up
+ * their own allowance. The database counts a post at most once per browser in
+ * 24 hours and never the owner's or staff views (api.record_post_views).
  *
  * While SHOW_ENGAGEMENT_TOTALS is off the route answers 204 No Content without
  * reading the request, calling a database or setting a cookie.
@@ -73,18 +72,9 @@ export async function POST(request: NextRequest) {
   ].slice(0, MAX_PAGE_VIEWS);
   if (pageViews.length === 0) return notCounted();
 
-  const device = await readViewerId(request);
-  if (!device) {
-    // A real browser keeps the new cookie and sends the views once more; a
-    // made-up or missing identifier is never counted.
-    const response = notCounted();
-    if (await issueViewerId(request, response))
-      return NextResponse.json(
-        { ok: true, counted: [] as string[], retry: true },
-        { headers: response.headers }
-      );
-    return response;
-  }
+  const viewer = await readViewerId(request);
+  if (!viewer)
+    return NextResponse.json({ ok: true, counted: [] as string[], needs_challenge: true });
 
   const client = engagementClientKey(request);
   const limit = await checkRateLimit({
@@ -112,7 +102,7 @@ export async function POST(request: NextRequest) {
   try {
     const counted = await recordFoundationPostViews(createFoundationServiceApi(), {
       postIds: allowed,
-      device,
+      device: viewer.id,
       account: caller.account,
     });
     return caller.respond(NextResponse.json({ ok: true, counted }));

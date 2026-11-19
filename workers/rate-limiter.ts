@@ -328,16 +328,24 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   ],
   // Per address and post: counted views of one post from one address a day.
   "engagement:view:post": [{ limit: 50, ttl: 86400 }],
-  // New signed browser identifiers per address (a new visitor, a cleared
-  // cookie); a script cannot mint browsers faster than this.
-  "engagement:viewer": [
-    { limit: 30, ttl: 3600 },
-    { limit: 200, ttl: 86400 },
+  // New signed browser identifiers (a new visitor, a cleared cookie), each
+  // only after a Turnstile check (src/app/api/engagement/viewer/route.ts):
+  // per IPv4 address, generous for carrier-grade NAT where many people share
+  // one address; per IPv6 /48.
+  "engagement:viewer:v4": [
+    { limit: 300, ttl: 3600 },
+    { limit: 3000, ttl: 86400 },
+  ],
+  "engagement:viewer:v6": [
+    { limit: 60, ttl: 3600 },
+    { limit: 600, ttl: 86400 },
   ],
   "engagement:like": [
     { limit: 30, ttl: 60 },
     { limit: 300, ttl: 3600 },
   ],
+  // Per address and post: new likes of one post from one address a day.
+  "engagement:like:post": [{ limit: 10, ttl: 86400 }],
   // Owner enquiry inbox and notifications. Realtime signals replace polling,
   // so reads stay modest per client.
   "inbox:read": [{ limit: 60, ttl: 60 }],

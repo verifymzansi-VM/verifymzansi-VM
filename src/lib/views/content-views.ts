@@ -11,6 +11,7 @@
  */
 
 import type { ContentTargetType } from "@/lib/engagement";
+import { obtainViewerIdentifier } from "@/lib/views/viewer-challenge";
 
 export type ViewSource = "video" | "page";
 
@@ -121,11 +122,12 @@ async function send(batch: Pending[], useBeacon: boolean, again = false): Promis
     if (!response.ok) throw new Error(`View request failed: ${response.status}`);
     const payload = (await response.json().catch(() => null)) as {
       counted?: string[];
-      retry?: boolean;
+      needs_challenge?: boolean;
     } | null;
-    // A first visit: the server has just given this browser its identifier
-    // cookie and asks for the views once more.
-    if (payload?.retry && !again) return send(batch, false, true);
+    // A first visit: the browser has no signed identifier yet. Get one (a
+    // Turnstile check) and send the views once more.
+    if (payload?.needs_challenge && !again && (await obtainViewerIdentifier()))
+      return send(batch, false, true);
     // The server lists each post it counted as a new view once; credit it to
     // the first event for that post so the page number moves by exactly one.
     const counted = new Set(payload?.counted ?? []);

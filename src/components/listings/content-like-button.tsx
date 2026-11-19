@@ -3,6 +3,7 @@
 import { useState, useSyncExternalStore, useTransition } from "react";
 import { trackContactAction } from "@/lib/analytics/commercial-events";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf-client";
+import { obtainViewerIdentifier } from "@/lib/views/viewer-challenge";
 
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -120,12 +121,17 @@ export function ContentLikeButton({
           startTransition(async () => {
             try {
               await ensureCsrfTokenReady();
-              const response = await fetch("/api/engagement/like", {
-                method: "POST",
-                headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                // The state asked for, so a stale heart never undoes a like.
-                body: JSON.stringify({ targetId, targetType, liked: optimisticLiked }),
-              });
+              const send = () =>
+                fetch("/api/engagement/like", {
+                  method: "POST",
+                  headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+                  // The state asked for, so a stale heart never undoes a like.
+                  body: JSON.stringify({ targetId, targetType, liked: optimisticLiked }),
+                });
+              let response = await send();
+              // A signed-out browser without its identifier yet: one check, then again.
+              if (response.status === 428 && (await obtainViewerIdentifier()))
+                response = await send();
 
               const payload = (await response.json().catch(() => null)) as {
                 liked?: boolean;

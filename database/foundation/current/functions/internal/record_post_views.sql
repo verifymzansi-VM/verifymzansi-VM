@@ -9,9 +9,8 @@ CREATE OR REPLACE FUNCTION internal.record_post_views(p_post_ids uuid[], p_devic
 AS $function$
 declare
   today date := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
-  this_hour timestamptz := date_trunc('hour', statement_timestamp());
   viewer uuid := p_account; salt_today bytea; salt_before bytea; pid uuid; post_owner uuid;
-  new_mark bytea; counted uuid[] := '{}'::uuid[];
+  new_mark bytea; counted uuid[] := '{}'::uuid[]; day_views integer;
 begin
   if p_post_ids is null or p_device is null or cardinality(p_post_ids) not between 1 and 5
     or array_position(p_post_ids, null) is not null then
@@ -33,13 +32,16 @@ begin
   if found then
     delete from private.post_view_salts s where s.day < today - 1;
   end if;
-  select s.salt into salt_today from private.post_view_salts s where s.day = today;
-  -- The day's limit for the whole site (a few views over it at most, when
-  -- requests race).
-  if (select s.views from private.post_view_salts s where s.day = today) >= 300000 then
+  select s.salt, s.views into salt_today, day_views from private.post_view_salts s where s.day = today;
+  select s.salt into salt_before from private.post_view_salts s where s.day = today - 1;
+  -- Storage safety valve for the whole site (requests racing may pass it by a
+  -- few views).
+  if day_views >= 300000 then
+    insert into private.cost_alarms (metric, level, period, used, free_quantity)
+      values ('post_views_counted', 'critical', to_char(today, 'YYYY-MM-DD'), day_views, 300000)
+      on conflict (metric, level, period) do nothing;
     return jsonb_build_object('counted', '[]'::jsonb);
   end if;
-  select s.salt into salt_before from private.post_view_salts s where s.day = today - 1;
   for pid in select distinct x from unnest(p_post_ids) x order by 1 loop
     select p.owner_id into post_owner from private.posts p
       join private.post_search_documents d on d.post_id = p.id
@@ -55,21 +57,19 @@ begin
     insert into private.post_view_marks(mark) values (new_mark) on conflict (mark) do nothing;
     -- A view sent twice at once counts once.
     continue when not found;
-    insert into private.post_view_days as d (post_id, day, views, hour_start, hour_views)
-      values (pid, today, 1, this_hour, 1)
-      on conflict (post_id, day) do update set views = d.views + 1, hour_start = excluded.hour_start,
-        hour_views = case when d.hour_start = excluded.hour_start then d.hour_views + 1 else 1 end
-      where d.views < 20000 and (d.hour_start <> excluded.hour_start or d.hour_views < 3000);
-    if not found then
-      -- Over the post's hourly or daily cap: not counted, and not remembered.
-      delete from private.post_view_marks m where m.mark = new_mark;
-      continue;
-    end if;
+    insert into private.post_view_days as d (post_id, day, views) values (pid, today, 1)
+      on conflict (post_id, day) do update set views = d.views + 1;
     insert into private.post_engagement_totals as t (post_id, views) values (pid, 1)
       on conflict (post_id) do update set views = t.views + 1;
-    update private.post_view_salts s set views = s.views + 1 where s.day = today;
+    -- Likes of this post that were waiting and are due now start to count.
+    update private.post_likes l set waiting = false
+      where l.post_id = pid and l.waiting and l.counts_from <= statement_timestamp();
     counted := counted || pid;
   end loop;
+  -- The day's count, once per request and last.
+  if cardinality(counted) > 0 then
+    update private.post_view_salts s set views = s.views + cardinality(counted) where s.day = today;
+  end if;
   return jsonb_build_object('counted', to_jsonb(counted));
 end;
 $function$;

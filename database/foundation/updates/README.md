@@ -89,64 +89,77 @@ every command in `../runtime-api-manifest.json`, so a deploy without the update
 stops there. The website calls them only while its switch
 `SHOW_ENGAGEMENT_TOTALS` (`src/lib/hidden-features.ts`) is on; it stays off in
 production until the owner approves showing the counters, so applying the update
-changes nothing anyone sees. It adds three API commands, two internal functions
-and six tables, and replaces three functions with full bodies: the privacy
-export, the retention job and account erasure. It refuses (55000) unless its
-tables and functions are all absent or all present and the three functions have
-their reviewed bodies (or this update's).
+changes nothing anyone sees. It adds three API commands, two internal functions,
+six tables and two cost allowances (the safety valves below), and replaces three
+functions with full bodies: the privacy export, the retention job and account
+erasure. It refuses (55000) unless its tables and functions are all absent or
+all present and the three functions have their reviewed bodies (or this
+update's).
 
 - **What is stored.** The website gives each browser a random identifier in a
   first-party cookie (`vmz_viewer`, HttpOnly, one year), signed with the Worker
-  secret `ENGAGEMENT_COOKIE_SECRET`, so only identifiers it issued are counted.
-  It passes the identifier, with the GoTrue-verified account or none, to the two
-  service commands. The database never stores that identifier, a network address
-  or a user agent:
+  secret `ENGAGEMENT_COOKIE_SECRET` and issued only after a Turnstile check, so
+  only identifiers it issued are counted. It passes the identifier, with the
+  GoTrue-verified account or none, to the two service commands. The database
+  never stores that identifier, a network address or a user agent:
   - `private.engagement_keys`: one random 32-byte key, made by the update, for
     like hashes;
   - `private.post_view_salts`: one random 32-byte salt per day
-    (Africa/Johannesburg), with the day's counted views (at most 300,000 a day,
-    so view marks can never fill the database);
+    (Africa/Johannesburg), with the day's counted views and new likes (the
+    safety valves);
   - `private.post_view_marks`: `sha256(day salt || browser || post)` and the
     time, one per counted view, never an account;
-  - `private.post_view_days`: views per post per day, with the current hour's
-    count for the caps (deleted with the post);
-  - `private.post_engagement_totals`: each post's total views and likes and its
-    new likes this hour; the public read and the like command read only this row
-    (likes kept by a trigger on `private.post_likes`);
+  - `private.post_view_days`: views per post per day (deleted with the post);
+  - `private.post_engagement_totals`: each post's total views and counted likes
+    and its new likes this hour; the public read and the like command read only
+    this row, and it is the lock for the post's likes (likes kept by a trigger
+    on `private.post_likes`);
   - `private.post_likes`: the post and either `sha256(like key || browser)` (a
     like made signed out) or the account (a like made signed in), never both,
-    and the time. Deleted with the post; a signed-in like also by account
-    erasure, and by the Auth user's deletion.
+    the time, and when it starts to count (`waiting` until then). Deleted with
+    the post; a signed-in like also by account erasure, and by the Auth user's
+    deletion.
 
   Row level security is on for all six; no API role has table access.
 
 - **Purge.** `internal.run_retention` (daily, `api.run_retention`) now also runs
   `internal.purge_post_engagement()` (`"engagement": {salts, marks}`): marks
   older than 24 hours (the dedupe window), in batches of 10,000 up to 200,000 a
-  run, and salts older than yesterday. A mark is therefore gone within 2 days
-  and a salt within 3, whether or not anyone views a post. A view request only
-  makes the day's salt (and drops salts older than yesterday if the job has not
-  run); it never deletes marks.
+  run, and salts older than yesterday, and it releases waiting likes that are
+  due (likes are also released when the post is viewed or liked). A mark is
+  therefore gone within 2 days and a salt within 3, whether or not anyone views
+  a post. A view request only makes the day's salt (and drops salts older than
+  yesterday if the job has not run); it never deletes marks.
 - **Views.** `api.record_post_views(p_post_ids, p_device, p_account)` (service
-  only): 1 to 5 posts (22023 `views_invalid` otherwise). A post counts at most
-  once per browser in 24 hours (today's or yesterday's salt). Never counted: a
-  post that is not publicly live (search document visible and
+  only): 1 to 5 posts (22023 `views_invalid` otherwise), handled in id order
+  (each post's days row, then its totals row, then its like rows; the day's salt
+  row once, last), so two requests never deadlock. A post counts at most once
+  per browser in 24 hours (today's or yesterday's salt). Never counted: a post
+  that is not publicly live (search document visible and
   `private.public_eligible_posts`), the owner's own view (signed in), or any
   view by an account with an active staff role; an account that is not active
-  counts as signed out. At most 3,000 counted views per post per hour, 20,000
-  per post per day and 300,000 in all per day; a view over a cap leaves no mark.
-  Returns `{"counted": [post ids]}`.
-- **Likes.** `api.set_post_like(p_post_id, p_device, p_account, p_liked)`
+  counts as signed out. There is no per-post cap (per-source limits are the
+  website's). Storage safety valve: after 300,000 counted views in a day nothing
+  more is counted (or stored) that day and a critical cost alarm
+  `post_views_counted` is raised for staff. Returns `{"counted": [post ids]}`.
+- **Likes.**
+  `api.set_post_like(p_post_id, p_device, p_account, p_liked, p_device_issued_at)`
   (service only): sets (null toggles) the like of the signed-in account, or of
   the browser when signed out, and returns `{"liked", "likes", "counted"}`.
   Signed in it acts only on the account's like, signed out only on the
   browser's, so on a shared browser one person never removes another's like. The
   owner's and staff's own likes are never stored (`counted: false`); they may
   remove the like their browser made while signed out. Changes to one post's
-  likes happen one at a time (its totals row is locked), so the limit of 600 new
-  likes per post per hour (PT429 `like_limit`) holds under races. An unknown or
-  hidden post is PT404 `post_unavailable`; a missing post or browser 22023
-  `like_invalid`.
+  likes happen one at a time (its totals row is locked). A like is always stored
+  and never refused for others' activity; it starts to count 10 minutes after a
+  new browser identifier was issued (`p_device_issued_at`, signed out only), and
+  after the post's first 600 new likes in an hour at the next hour (a like taken
+  back in the same hour gives its place back, so liking and unliking never fills
+  it). The answer's `likes` adds the caller's own waiting like. Storage safety
+  valve: after 50,000 new likes in a day new likes are not stored that day
+  (`"liked": false, "counted": false`; unliking still works) and a critical cost
+  alarm `post_likes_new` is raised. An unknown or hidden post is PT404
+  `post_unavailable`; a missing post or browser 22023 `like_invalid`.
 - **Totals.** `api.get_post_engagement(p_post_ids)` (anon and authenticated):
   for up to 50 ids (22023 `engagement_invalid` above that), each publicly live
   post as `{"post_id", "views", "likes"}`; a hidden or unknown post is absent,
@@ -162,13 +175,20 @@ their reviewed bodies (or this update's).
   out per browser and one signed in per account on the same post: a signed-out
   like is not moved to the account on sign-in, because on a shared browser it
   may be someone else's.
-- **Website limits (not in the database).** The rate limiter, keyed by IPv4
-  address or IPv6 /64 network: `engagement:view` (requests),
-  `engagement:view:post` (counted views of one post from one address a day),
-  `engagement:viewer` (new signed identifiers) and `engagement:like`. A view
+- **Cost allowances.** `post_views_counted` (300,000 a day) and `post_likes_new`
+  (50,000 a day), measurement `estimate`, so `internal.check_cost_alarms` never
+  checks them; they name the two valves on the staff cost page, and the commands
+  raise their alarms.
+- **Website limits (not in the database).** New signed identifiers come only
+  from `/api/engagement/viewer` after a Turnstile check, within
+  `engagement:viewer:v4` (per IPv4 address, generous for carrier-grade NAT) or
+  `engagement:viewer:v6` (per IPv6 /48). Views and likes, keyed by IPv4 address
+  or IPv6 /64: `engagement:view` (requests), `engagement:view:post` (counted
+  views of one post from one address a day), `engagement:like` and
+  `engagement:like:post` (new likes of one post from one address a day). A view
   request counts at most 3 posts. Crawlers and headless browsers
   (`isAutomatedUserAgent`), prefetches and requests without a signed identifier
-  are not counted.
+  are not counted; a signed-in like needs no identifier.
 
 Preflight `../preflight/20261119172135_post_views_and_likes.check.sql` (summary
 "post views and likes: update not applied; publicly listed posts: N" before,
@@ -180,156 +200,6 @@ once a like or a counted view is recorded, and puts back the three earlier
 function bodies byte for byte). Behaviour test
 `scripts/test-foundation-post-views-and-likes.mjs` (part of
 `pnpm db:foundation:lifecycle-test`).
-
-## Multi-listing packages: the small part-one gaps, 19 November 2026
-
-`20261119151152_package_gap_fixes.sql` is not applied yet (`pending` in the
-applied register). Roadmap P4a; the owner's decision D6 of 19 November 2026. It
-needs `20261114154823_slot_packages.sql` and
-`20261119025106_package_invoices.sql`, and refuses (55000) unless the six
-functions it replaces have their reviewed bodies (or this update's), the six it
-adds are absent (or this update's) and its table is absent or has the update's
-shape. It only adds: one staff read command and three fields in the reply of the
-service command `api.run_slot_renewals` (read by the operations job without a
-strict schema); no command, argument or grant is removed or changed, and no
-field is added to an answer the website reads strictly. Packages stay off sale.
-
-- **A record of the moves the sweep could not make.** New table
-  `private.slot_package_move_failures`: one row per package, post (none when the
-  package itself was busy) and direction (`into_package`: the post of an ended
-  Individual slot the package takes; `out_of_package`: a package post moving
-  into a free Individual slot in the package's last 7 days), with the tries, the
-  first and last failure, the reason (`busy` or `error <SQLSTATE>`) and when it
-  was reported as stuck (`alerted_at`). A failure more than 15 minutes after the
-  last one starts the count again (and may be reported again). A row goes when
-  the post moves, when the sweep finds it no longer waiting, or 7 days after its
-  last failure once its package ended over a day ago. No foreign key on purpose:
-  a key-share lock on the post or package would make the sweep wait for an
-  activation, and the sweep never waits. Row level security on; no API role
-  reads it.
-- **The sweep.** `internal.run_slot_renewals` (full body) records every failure
-  it counts in `package_skipped`, and now also counts a post another transaction
-  holds (as `busy`). Its reply gains `package_stuck` (current failures that
-  started over 30 minutes ago, or whose package ends within a day unless the
-  only failure is a single busy lock; `internal.slot_package_move_stuck`),
-  `package_stuck_moves` (the stuck ones not reported before, up to 20, each
-  marked under the owner's fence so it is reported once: package, post,
-  direction, tries, first failure, reason; ids only) and
-  `package_paused_released`. The website's operations job logs
-  `Package moves skipped this run` and `Package moves stuck` (warnings), logs
-  `Package move stuck` and emails the payment alert addresses
-  (`PAYMENT_ALERT_EMAILS`) once about newly stuck moves, and its run keeps
-  passing; only an email that cannot go out fails that one run
-  (`package_move_alert`). See `docs/RUNBOOK.md`, "Package moves".
-- **Paused posts after a refund.** A paused post still held in its ended
-  Individual slot, whose own end date the lifecycle job had raised to the
-  package's end, kept that date once no package took it (refunded, charged back
-  or full), so its 3-day grace and deletion clock started at the old package
-  end. New `internal.slot_package_release_paused(owner)` sets such a post's end
-  date back to its slot's paid end; the lifecycle job then expires it on its
-  next run. The revocation trigger function
-  `internal.slot_package_grant_revoked` (full body) and the sweep run it. Each
-  post is changed in its own subtransaction with the posts' deferred checks run
-  at once (`set constraints ... immediate`) and only when no other transaction
-  holds it (skip locked), so a post saved under rules that have since changed
-  never stops a refund, a chargeback or the sweep; such a post is left as it was
-  until it can be changed.
-- **Bank transfers for an invoice issued before a package (D6).** New
-  `internal.slot_package_blocks_invoice(identity, owner, issued at)`, read at
-  clock time: E3 refuses only a package that started at or before the invoice
-  was issued. `internal.record_staff_invoice_transfer` and
-  `internal.confirm_staff_invoice_payment` (full bodies) use it for an
-  Individual invoice: its slots are recorded and delivered and run beside the
-  package to their own end, like slots already held. A transfer to an invoice
-  issued after the package started, and a transfer recorded without an invoice
-  (`internal.record_staff_invoice_payment`, unchanged), are refused as before
-  (PT409 `package_active`). The Individual slot limit still applies. Pay now is
-  unchanged. `internal.issue_staff_invoice` (full body) takes the account's
-  package lock after its fence, reads E3 at clock time and records that moment
-  as the invoice's issue time: issuing and a package delivery are serialised, so
-  an invoice issued while a package was being delivered (for example while the
-  sweep held the fence and the issue waited) is refused, never dated before the
-  package.
-- **An unsent online package checkout.** `internal.claim_checkout_request` (full
-  body) refuses to send a package payment to Ozow while the account has a
-  package that has not ended (PT409 `package_active`) or an unpaid package
-  invoice it is not an attempt of (PT409 `package_invoice_unpaid`). It checks
-  under the account's package lock, which a bank transfer's confirmation, Pay
-  now and a package delivery hold while they work, taken without waiting after
-  the payment row (a delivery locks the payment before that lock, so waiting
-  could deadlock): while it is busy the claim is refused with PT409
-  `package_busy` and the member is asked to try again in a moment. These checks
-  apply only to a payment not sent to Ozow yet; one already open there keeps the
-  member's continue, check or cancel choice. The website shows the package
-  checkout's own words. A package checkout stays refused while a package invoice
-  remains issued; nothing voids an overdue one automatically (staff void it).
-  This closes the known gap of `20261119025106_package_invoices.sql`.
-- **Staff read.** `api.get_staff_package_move_failures()` (`payments:view`): the
-  failures of the past 15 minutes, oldest first, at most 50, each with the
-  package's end, the owner's public name ("Thandeka D."), a short post reference
-  (the first 8 characters of its id; never the title, as a paused post is not
-  public) and whether it is stuck. The website shows them as "Needs attention"
-  on Payments & Refunds.
-
-**Order: apply first, then merge.** The website release from the same pull
-request reads the new command and the deploy preflight probes every command in
-`../runtime-api-manifest.json`, so a deploy without the update stops there.
-Earlier releases do not call it and keep working with the update applied: the
-reply of `api.run_slot_renewals` only gains fields, which the earlier operations
-job ignores. It is recorded after `20261119082834_house_slots.sql`.
-
-**Applying.**
-
-1. Run `../preflight/20261119151152_package_gap_fixes.check.sql` unchanged in
-   the SQL editor. It is read only. Continue only if its result is the single
-   "summary" row reading "package gap fixes: update not applied; on sale: no;
-   packages: 0; paused posts to put back: 0; unsent package checkouts to refuse:
-   0; unpaid Individual invoices issued before a package: 0; move record: none
-   (table absent)".
-2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
-   again: it must read "package gap fixes: already applied; on sale: no;
-   packages: 0; paused posts to put back: 0; unsent package checkouts to refuse:
-   0; unpaid Individual invoices issued before a package: 0; move record: 0".
-3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
-   compare with `../fingerprint.json`, which lists this update under
-   `productionCheck.pendingApplication`. Once production's fingerprint matches,
-   record it (its register line and `productionCheck`) as described above.
-
-The reviewed rollback is `../rollback/20261119151152_package_gap_fixes.down.sql`
-(only with the owner's decision; prefer a forward fix). Revert and deploy the
-website release first: the rollback removes the command its staff payments page
-reads. It refuses unless every added and replaced function has this update's
-body, and while any other function refers to an added function or the table (a
-later update that uses them: undo it first); otherwise it puts back the six
-earlier bodies byte for byte and drops the added functions and the table (an
-operational record). Slots already delivered from a transfer to an invoice
-issued before a package, and paused posts already put back, stay as they are.
-
-`node --import tsx scripts/test-foundation-package-gap-fixes.mjs` (part of
-`pnpm db:foundation:lifecycle-test`, 16 checks) proves on the throwaway
-database: the preflight before and after, read only; drifted bodies and a
-premature rollback refused, changing nothing; apply, rollback and re-apply
-return the same fingerprints; the grants; a failed move recorded (tries, times,
-`error P0001`), counted again on the next run, reported stuck after 30 minutes
-once (in the sweep's reply with ids only, not again on the next run, and for
-staff with `payments:view` with a post reference and never the title; never a
-moderator, a member or a visitor), restarted after 15 quiet minutes and cleared
-once the post moves; a post another transaction holds recorded as `busy` without
-the sweep waiting; a failing move out of a package in its last day stuck at
-once, and a single busy lock there not stuck until it repeats; a paused post put
-back to its slot's end by a refund, then expired with the 3-day grace; a paused
-post saved under rules that have since changed neither stopping the refund nor
-being changed, then put back by the sweep once it can be; a bank transfer to an
-Individual invoice issued before the package recorded and confirmed (one 30-day
-slot beside the running package, the invoice paid), while one issued after the
-package started and a transfer without an invoice are refused; an Individual
-invoice issued while a package is being delivered in another session waits for
-it and is refused; an unsent online package checkout refused while a package
-invoice is unpaid and once a package runs, while the invoice's own Pay now
-attempt is sent and a checkout already open at Ozow keeps its page; a package
-checkout refused at once (`package_busy`, without waiting) while another
-transaction holds the account's package lock, and sent once it is free; and the
-rollback refused with another body.
 
 ## House slots for administrators, 19 November 2026
 

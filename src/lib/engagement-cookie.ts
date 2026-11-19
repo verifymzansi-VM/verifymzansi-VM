@@ -5,9 +5,10 @@ import "server-only";
  * `vmz_viewer`): `v1.<random UUID>.<issued, unix seconds>.<HMAC-SHA256>`,
  * signed with the Worker secret ENGAGEMENT_COOKIE_SECRET (at least 32
  * characters). Only an identifier this website issued is ever counted, so a
- * script cannot make up a new browser for every request; issuing is rate
- * limited per network address (src/lib/engagement-route.ts). Without the
- * secret nothing is issued or counted (fail closed).
+ * script cannot make up a new browser for every request; it is issued only
+ * after a Turnstile check and within a per-address limit
+ * (src/app/api/engagement/viewer/route.ts). Without the secret nothing is
+ * issued or counted (fail closed).
  */
 
 const VERSION = "v1";
@@ -69,9 +70,13 @@ export async function issueViewerToken(nowMs = Date.now()) {
   return { id, value: `${VERSION}.${id}.${issued}.${await signature(await key, id, issued)}` };
 }
 
-/** The identifier inside a cookie value this website signed, or null for
- * anything else (unsigned, tampered, expired, from the future, or no secret). */
-export async function readViewerToken(value: string | undefined | null, nowMs = Date.now()) {
+/** The identifier inside a cookie value this website signed, with when it
+ * was issued, or null for anything else (unsigned, tampered, expired, from the
+ * future, or no secret). */
+export async function readViewerToken(
+  value: string | undefined | null,
+  nowMs = Date.now()
+): Promise<{ id: string; issuedAt: Date } | null> {
   const key = signingKey();
   if (!key || !value || value.length > 120) return null;
   const parts = value.split(".");
@@ -81,5 +86,7 @@ export async function readViewerToken(value: string | undefined | null, nowMs = 
   const issued = Number(issuedText);
   const now = Math.floor(nowMs / 1000);
   if (issued > now + FUTURE_SKEW_SECONDS || now - issued > ACCEPT_SECONDS) return null;
-  return sameText(mac, await signature(await key, id, issued)) ? id : null;
+  return sameText(mac, await signature(await key, id, issued))
+    ? { id, issuedAt: new Date(issued * 1000) }
+    : null;
 }

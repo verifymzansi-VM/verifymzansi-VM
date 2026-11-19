@@ -30,8 +30,10 @@ export async function readFoundationPostEngagement(
 ): Promise<Map<string, PostEngagement>> {
   const unique = [...new Set(ids.parse(postIds))];
   const totals = new Map<string, PostEngagement>();
-  for (let offset = 0; offset < unique.length; offset += 50) {
-    const batch = unique.slice(offset, offset + 50);
+  const batches: string[][] = [];
+  while (unique.length > batches.length * 50)
+    batches.push(unique.slice(batches.length * 50, batches.length * 50 + 50));
+  for (const batch of batches) {
     const { data, error } = await api.rpc(
       "get_post_engagement",
       { p_post_ids: batch },
@@ -50,14 +52,13 @@ export async function readFoundationPostEngagement(
 
 export class FoundationEngagementError extends Error {
   override name = "FoundationEngagementError";
-  constructor(readonly reason: "unavailable" | "limit" | "invalid") {
+  constructor(readonly reason: "unavailable" | "invalid") {
     super(`Post engagement refused: ${reason}`);
   }
 }
 
 function refusal(error: { code?: string } | null): never {
   if (error?.code === "PT404") throw new FoundationEngagementError("unavailable");
-  if (error?.code === "PT429") throw new FoundationEngagementError("limit");
   if (error?.code === "22023") throw new FoundationEngagementError("invalid");
   throw new Error("Post engagement command failed");
 }
@@ -89,17 +90,26 @@ export async function recordFoundationPostViews(
 
 const likeResult = z.strictObject({ liked: z.boolean(), likes: count, counted: z.boolean() });
 
-/** Sets the browser's (and signed-in account's) like on a post to `liked`, or
- * toggles it when `liked` is null. */
+/** Sets the signed-in account's like, or the browser's when signed out, on a
+ * post to `liked`, or toggles it when `liked` is null. `deviceIssuedAt`: when
+ * the browser identifier was issued (a signed-out like from a new identifier
+ * counts from 10 minutes after it). */
 export async function setFoundationPostLike(
   api: FoundationServiceApi,
-  input: { postId: string; device: string; account: string | null; liked: boolean | null }
+  input: {
+    postId: string;
+    device: string;
+    account: string | null;
+    liked: boolean | null;
+    deviceIssuedAt?: Date | null;
+  }
 ): Promise<z.infer<typeof likeResult>> {
   const { data, error } = await api.rpc("set_post_like", {
     p_post_id: z.uuid().parse(input.postId),
     p_device: z.uuid().parse(input.device),
     ...(input.account ? { p_account: z.uuid().parse(input.account) } : {}),
     ...(input.liked === null ? {} : { p_liked: input.liked }),
+    ...(input.deviceIssuedAt ? { p_device_issued_at: input.deviceIssuedAt.toISOString() } : {}),
   });
   if (error) refusal(error);
   return likeResult.parse(data);

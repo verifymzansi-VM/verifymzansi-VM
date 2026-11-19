@@ -1,12 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { CONTENT_TARGET_TYPES } from "@/lib/engagement";
-import { viewerSigningReady } from "@/lib/engagement-cookie";
 import {
   engagementCaller,
   engagementClientKey,
   isCountableRequest,
-  issueViewerId,
   readViewerId,
 } from "@/lib/engagement-route";
 import { FoundationEngagementError, setFoundationPostLike } from "@/lib/foundation/post-engagement";
@@ -26,21 +24,20 @@ const likeRequest = z.object({
   liked: z.boolean().optional(),
 });
 
-const unavailable = () =>
-  NextResponse.json({ error: "Unable to update like right now." }, { status: 503 });
-
 /**
  * POST /api/engagement/like
  *
  * Anyone can like a publicly live post. Signed in, the like is the account's
- * (on any browser); signed out, it is the browser's, identified by the
- * `vmz_viewer` cookie this website signed (issued here when missing, within
- * the per-address issuing limit). The database stores the account, or only a
- * keyed hash of the browser identifier (api.set_post_like); the owner's and
- * staff's own likes are never stored. Origin and CSRF checks, crawlers and
- * headless browsers refused, a per-address limit (`engagement:like`) and a
- * per-post limit in the database. Without the signing secret no like is
- * stored (503). Answers { liked, likeCount, counted }.
+ * (on any browser, with or without the browser cookie). Signed out, it is the
+ * browser's: it needs the `vmz_viewer` identifier this website signed; without
+ * one the route answers 428 `needs_challenge` and the page gets one from
+ * /api/engagement/viewer after a Turnstile check. A like from an identifier
+ * issued less than 10 minutes earlier is kept but counts only from then
+ * (api.set_post_like). The database stores the account, or only a keyed hash of
+ * the browser identifier; the owner's and staff's own likes are never stored.
+ * Origin and CSRF checks, crawlers and headless browsers refused, and
+ * per-source limits: `engagement:like` per address and `engagement:like:post`
+ * per address and post a day. Answers { liked, likeCount, counted }.
  *
  * While SHOW_ENGAGEMENT_TOTALS is off the route answers 204 No Content without
  * reading the request, calling a database or setting a cookie.
@@ -53,13 +50,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Likes are not available here" }, { status: 403 });
   const parsed = likeRequest.safeParse(await parseJsonRequest(request, { maxBytes: 2048 }));
   if (!parsed.success) return NextResponse.json({ error: "Invalid like request" }, { status: 400 });
-  if (!viewerSigningReady()) {
-    log.error("Like refused: ENGAGEMENT_COOKIE_SECRET is not set");
-    return unavailable();
-  }
 
+  const client = engagementClientKey(request);
   const limit = await checkRateLimit({
-    key: engagementClientKey(request),
+    key: client,
     action: "engagement:like",
     degradedMode: "local",
   });
@@ -69,42 +63,51 @@ export async function POST(request: NextRequest) {
       { status: 429, headers: { "Retry-After": String(limit.retryAfter ?? 60) } }
     );
 
-  // A first like from this browser starts its signed identifier.
-  const cookieCarrier = NextResponse.json({});
-  const device = (await readViewerId(request)) ?? (await issueViewerId(request, cookieCarrier));
-  if (!device)
-    return NextResponse.json(
-      { error: "Too many likes from this network; try again later" },
-      { status: 429 }
+  const [viewer, caller] = await Promise.all([readViewerId(request), engagementCaller(request)]);
+  if (!caller.account && !viewer)
+    return caller.respond(
+      NextResponse.json(
+        { error: "Confirm you are not a robot to like posts", needs_challenge: true },
+        { status: 428 }
+      )
     );
-  const caller = await engagementCaller(request);
-  const finish = async (response: NextResponse) => {
-    const issued = cookieCarrier.cookies.getAll();
-    for (const cookie of issued) response.cookies.set(cookie);
-    return caller.respond(response);
-  };
+  // A new like (not an unlike): a few per address and post a day.
+  if (parsed.data.liked !== false) {
+    const perPost = await checkRateLimit({
+      key: `${client}|${parsed.data.targetId}`,
+      action: "engagement:like:post",
+      degradedMode: "local",
+    });
+    if (perPost.limited)
+      return caller.respond(
+        NextResponse.json(
+          { error: "Too many likes on this post from your network today" },
+          { status: 429 }
+        )
+      );
+  }
   try {
     const result = await setFoundationPostLike(createFoundationServiceApi(), {
       postId: parsed.data.targetId,
-      device,
+      // Signed in without the cookie: the account's like needs no browser.
+      device: viewer?.id ?? crypto.randomUUID(),
       account: caller.account,
       liked: parsed.data.liked ?? null,
+      deviceIssuedAt: caller.account ? null : (viewer?.issuedAt ?? null),
     });
-    return finish(
+    return caller.respond(
       NextResponse.json({ liked: result.liked, likeCount: result.likes, counted: result.counted })
     );
   } catch (error) {
-    if (error instanceof FoundationEngagementError) {
-      if (error.reason === "unavailable")
-        return finish(NextResponse.json({ error: "This post is not available" }, { status: 404 }));
-      if (error.reason === "limit")
-        return finish(
-          NextResponse.json({ error: "Too many likes; try again later" }, { status: 429 })
-        );
-    }
+    if (error instanceof FoundationEngagementError && error.reason === "unavailable")
+      return caller.respond(
+        NextResponse.json({ error: "This post is not available" }, { status: 404 })
+      );
     log.error("Failed to update like", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
-    return finish(unavailable());
+    return caller.respond(
+      NextResponse.json({ error: "Unable to update like right now." }, { status: 503 })
+    );
   }
 }

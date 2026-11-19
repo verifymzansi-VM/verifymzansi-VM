@@ -8,11 +8,21 @@ CREATE OR REPLACE FUNCTION internal.post_likes_count()
 AS $function$
 begin
   if tg_op = 'INSERT' then
-    insert into private.post_engagement_totals as t (post_id, likes) values (new.post_id, 1)
-      on conflict (post_id) do update set likes = t.likes + 1;
+    if not new.waiting then
+      insert into private.post_engagement_totals as t (post_id, likes) values (new.post_id, 1)
+        on conflict (post_id) do update set likes = t.likes + 1;
+    end if;
+    return new;
+  elsif tg_op = 'UPDATE' then
+    if old.waiting and not new.waiting then
+      insert into private.post_engagement_totals as t (post_id, likes) values (new.post_id, 1)
+        on conflict (post_id) do update set likes = t.likes + 1;
+    end if;
     return new;
   end if;
-  update private.post_engagement_totals t set likes = greatest(t.likes - 1, 0) where t.post_id = old.post_id;
+  if not old.waiting then
+    update private.post_engagement_totals t set likes = greatest(t.likes - 1, 0) where t.post_id = old.post_id;
+  end if;
   return old;
 end;
 $function$;

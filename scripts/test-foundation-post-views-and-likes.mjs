@@ -115,10 +115,11 @@ try {
         `select api.record_post_views(${ids(posts)},'${device}',${account ? `'${account.id}'` : "null"});`
       )
     ).counted;
-  const like = (post, device, account = null, liked = null) =>
+  /** `issued`: when the browser identifier was issued (null: unknown, counts at once). */
+  const like = (post, device, account = null, liked = null, issued = null) =>
     json(
       service(
-        `select api.set_post_like('${post}','${device}',${account ? `'${account.id}'` : "null"},${liked === null ? "null" : liked});`
+        `select api.set_post_like('${post}','${device}',${account ? `'${account.id}'` : "null"},${liked === null ? "null" : liked},${issued ? `'${issued}'::timestamptz` : "null"});`
       )
     );
   const totals = (posts) =>
@@ -133,7 +134,7 @@ try {
   const totalsMatchRows = () =>
     assert.equal(
       count(`private.post_engagement_totals t where t.likes<>(select count(*) from private.post_likes l
-        where l.post_id=t.post_id)`),
+        where l.post_id=t.post_id and not l.waiting)`),
       0
     );
   /** Moves the view clock: today's salt becomes yesterday's and every mark
@@ -194,10 +195,10 @@ try {
   await check("grants: views and likes are service only; totals are public", () => {
     const grants = executeGrants(json, [
       "api.record_post_views(uuid[],uuid,uuid)",
-      "api.set_post_like(uuid,uuid,uuid,boolean)",
+      "api.set_post_like(uuid,uuid,uuid,boolean,timestamptz)",
       "api.get_post_engagement(uuid[])",
       "internal.record_post_views(uuid[],uuid,uuid)",
-      "internal.set_post_like(uuid,uuid,uuid,boolean)",
+      "internal.set_post_like(uuid,uuid,uuid,boolean,timestamptz)",
       "internal.get_post_engagement(uuid[])",
       "internal.purge_post_engagement()",
       "internal.post_likes_count()",
@@ -206,9 +207,12 @@ try {
     const open = { anon: true, authenticated: true, service_role: false };
     const none = { anon: false, authenticated: false, service_role: false };
     assert.deepEqual(grants["api.record_post_views(uuid[],uuid,uuid)"], serviceOnly);
-    assert.deepEqual(grants["api.set_post_like(uuid,uuid,uuid,boolean)"], serviceOnly);
+    assert.deepEqual(grants["api.set_post_like(uuid,uuid,uuid,boolean,timestamptz)"], serviceOnly);
     assert.deepEqual(grants["internal.record_post_views(uuid[],uuid,uuid)"], serviceOnly);
-    assert.deepEqual(grants["internal.set_post_like(uuid,uuid,uuid,boolean)"], serviceOnly);
+    assert.deepEqual(
+      grants["internal.set_post_like(uuid,uuid,uuid,boolean,timestamptz)"],
+      serviceOnly
+    );
     assert.deepEqual(grants["api.get_post_engagement(uuid[])"], open);
     assert.deepEqual(grants["internal.get_post_engagement(uuid[])"], open);
     assert.deepEqual(grants["internal.purge_post_engagement()"], none);
@@ -275,27 +279,33 @@ try {
     fails(service(`select api.record_post_views(${ids([post])},null);`), "22023");
     fails(service(`select api.record_post_views('{}'::uuid[],'${randomUUID()}');`), "22023");
   });
-  await check("at most 3,000 counted views per post per hour and 20,000 per day", () => {
-    const capped = event(owner);
-    assert.deepEqual(views([capped], randomUUID()), [capped]);
-    q(`update private.post_view_days set hour_views=3000,views=3000 where post_id='${capped}';`);
-    const marksBefore = count("private.post_view_marks");
-    assert.deepEqual(views([capped], randomUUID()), []);
-    assert.equal(count("private.post_view_marks"), marksBefore, "a capped view leaves no mark");
-    q(
-      `update private.post_view_days set hour_start=hour_start-interval '1 hour' where post_id='${capped}';`
-    );
-    assert.deepEqual(views([capped], randomUUID()), [capped]);
-    q(`update private.post_view_days set views=20000,hour_views=1 where post_id='${capped}';`);
-    assert.deepEqual(views([capped], randomUUID()), []);
-    // The whole site: 300,000 counted views a day.
-    const fresh = event(owner);
-    q(`update private.post_view_salts set views=300000
-      where day=(statement_timestamp() at time zone 'Africa/Johannesburg')::date;`);
-    assert.deepEqual(views([fresh], randomUUID()), []);
-    q(`update private.post_view_salts set views=0;`);
-    assert.deepEqual(views([fresh], randomUUID()), [fresh]);
-  });
+  await check(
+    "the site-wide safety valve: 300,000 views a day, then an alarm, never per post",
+    () => {
+      // No per-post cap: a busy post keeps counting.
+      const busy = event(owner);
+      for (let n = 0; n < 5; n++) assert.deepEqual(views([busy], randomUUID()), [busy]);
+      // The day's count is added once per request, after the posts.
+      const today = "(statement_timestamp() at time zone 'Africa/Johannesburg')::date";
+      const before = Number(q(`select views from private.post_view_salts where day=${today};`));
+      const pair = [event(owner), event(owner)];
+      assert.equal(views(pair, randomUUID()).length, 2);
+      assert.equal(
+        Number(q(`select views from private.post_view_salts where day=${today};`)),
+        before + 2
+      );
+      q(`update private.post_view_salts set views=300000 where day=${today};`);
+      const marksBefore = count("private.post_view_marks");
+      assert.deepEqual(views([busy], randomUUID()), []);
+      assert.equal(count("private.post_view_marks"), marksBefore, "nothing stored over the valve");
+      assert.equal(
+        count("private.cost_alarms where metric='post_views_counted' and level='critical'"),
+        1
+      );
+      q(`update private.post_view_salts set views=0;`);
+      assert.deepEqual(views([busy], randomUUID()), [busy]);
+    }
+  );
   await check("24 hours across the daily salt change; the retention job forgets old marks", () => {
     const device = randomUUID();
     const fresh = event(owner);
@@ -427,16 +437,89 @@ try {
     const many = Array.from({ length: 51 }, () => randomUUID());
     fails(anon(`select api.get_post_engagement(${ids(many)});`), "22023");
   });
-  await check("at most 600 new likes per post per hour, counted under the post's lock", () => {
-    const busy = event(owner);
-    like(busy, randomUUID(), null, true);
-    q(`update private.post_engagement_totals set like_hour_count=600 where post_id='${busy}';`);
-    fails(service(`select api.set_post_like('${busy}','${randomUUID()}');`), "PT429", /like_limit/);
-    // Unliking is never limited.
-    q(`update private.post_engagement_totals set like_hour_start=like_hour_start-interval '1 hour'
-      where post_id='${busy}';`);
-    assert.equal(like(busy, randomUUID()).likes, 2);
-  });
+  await check(
+    "liking and unliking never fills the hourly place; over 600 a like waits, never refused",
+    () => {
+      const busy = event(owner);
+      const device = randomUUID();
+      for (let n = 0; n < 20; n++) {
+        like(busy, device, null, true);
+        like(busy, device, null, false);
+      }
+      assert.ok(
+        Number(
+          q(`select like_hour_count from private.post_engagement_totals where post_id='${busy}';`)
+        ) <= 1
+      );
+      like(busy, randomUUID(), null, true);
+      q(`update private.post_engagement_totals set like_hour_count=600 where post_id='${busy}';`);
+      const before = likesOf(busy);
+      const late = like(busy, randomUUID(), null, true);
+      assert.deepEqual(
+        late,
+        { liked: true, likes: before + 1, counted: true },
+        "the liker sees their like"
+      );
+      assert.equal(likesOf(busy), before, "the public total waits for the next hour");
+      // Due: a view of the post releases it.
+      q(
+        `update private.post_likes set counts_from=now()-interval '1 second' where post_id='${busy}' and waiting;`
+      );
+      views([busy], randomUUID());
+      assert.equal(likesOf(busy), before + 1);
+      totalsMatchRows();
+    }
+  );
+  await check(
+    "a browser identifier younger than 10 minutes: its like waits; the daily job releases it",
+    () => {
+      const fresh = event(owner);
+      const young = like(fresh, randomUUID(), null, true, new Date().toISOString());
+      assert.deepEqual(young, { liked: true, likes: 1, counted: true });
+      assert.equal(likesOf(fresh), 0);
+      const older = like(
+        fresh,
+        randomUUID(),
+        null,
+        true,
+        new Date(Date.now() - 3600e3).toISOString()
+      );
+      assert.equal(older.likes, 1);
+      assert.equal(likesOf(fresh), 1);
+      q(
+        `update private.post_likes set counts_from=now()-interval '1 second' where post_id='${fresh}' and waiting;`
+      );
+      const result = json(service("select api.run_retention(100);"));
+      assert.ok(result.engagement.likes_released >= 1, JSON.stringify(result.engagement));
+      assert.equal(likesOf(fresh), 2);
+      // Signed in, the issue time never matters.
+      const member = syntheticMember("views-young-member");
+      assert.equal(like(fresh, randomUUID(), member, true, new Date().toISOString()).likes, 3);
+      totalsMatchRows();
+    }
+  );
+  await check(
+    "the site-wide likes valve: 50,000 a day, then not stored, an alarm; unliking still works",
+    () => {
+      const today = "(statement_timestamp() at time zone 'Africa/Johannesburg')::date";
+      const valve = event(owner);
+      const device = randomUUID();
+      like(valve, device, null, true);
+      q(`update private.post_view_salts set likes=50000 where day=${today};`);
+      assert.deepEqual(like(valve, randomUUID(), null, true), {
+        liked: false,
+        likes: 1,
+        counted: false,
+      });
+      assert.equal(
+        count("private.cost_alarms where metric='post_likes_new' and level='critical'"),
+        1
+      );
+      assert.equal(like(valve, device, null, false).liked, false);
+      q(`update private.post_view_salts set likes=0;`);
+      assert.equal(like(valve, randomUUID(), null, true).liked, true);
+    }
+  );
   await check("the privacy export lists the latest 2,000 signed-in likes and their number", () => {
     const liker = syntheticMember("views-export");
     like(second, randomUUID(), liker, true);

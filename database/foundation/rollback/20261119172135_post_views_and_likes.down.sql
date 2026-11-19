@@ -4,7 +4,8 @@
 -- switch SHOW_ENGAGEMENT_TOTALS off instead.
 --
 -- It drops the three commands, their internal functions, the purge and
--- trigger functions and the six tables, and puts back the earlier bodies of
+-- trigger functions, the six tables and the two safety-valve cost allowances
+-- (with any alarm they raised), and puts back the earlier bodies of
 -- the privacy export, the retention job and account erasure byte for byte.
 -- Revert and deploy the website release first: the rollback removes commands
 -- that release calls. It refuses (55000) unless every part of the update is
@@ -24,8 +25,8 @@ begin
     or to_regclass('private.post_likes') is null
     or to_regprocedure('internal.record_post_views(uuid[],uuid,uuid)') is null
     or to_regprocedure('api.record_post_views(uuid[],uuid,uuid)') is null
-    or to_regprocedure('internal.set_post_like(uuid,uuid,uuid,boolean)') is null
-    or to_regprocedure('api.set_post_like(uuid,uuid,uuid,boolean)') is null
+    or to_regprocedure('internal.set_post_like(uuid,uuid,uuid,boolean,timestamptz)') is null
+    or to_regprocedure('api.set_post_like(uuid,uuid,uuid,boolean,timestamptz)') is null
     or to_regprocedure('internal.get_post_engagement(uuid[])') is null
     or to_regprocedure('api.get_post_engagement(uuid[])') is null
     or to_regprocedure('internal.purge_post_engagement()') is null
@@ -302,8 +303,8 @@ revoke all on function internal.erase_closed_account(uuid,text) from public;
 
 drop function api.record_post_views(uuid[],uuid,uuid);
 drop function internal.record_post_views(uuid[],uuid,uuid);
-drop function api.set_post_like(uuid,uuid,uuid,boolean);
-drop function internal.set_post_like(uuid,uuid,uuid,boolean);
+drop function api.set_post_like(uuid,uuid,uuid,boolean,timestamptz);
+drop function internal.set_post_like(uuid,uuid,uuid,boolean,timestamptz);
 drop function api.get_post_engagement(uuid[]);
 drop function internal.get_post_engagement(uuid[]);
 drop function internal.purge_post_engagement();
@@ -314,6 +315,8 @@ drop table private.post_view_days;
 drop table private.post_view_marks;
 drop table private.post_view_salts;
 drop table private.engagement_keys;
+delete from private.cost_alarms a where a.metric in ('post_views_counted', 'post_likes_new');
+delete from private.cost_allowances a where a.metric in ('post_views_counted', 'post_likes_new');
 
 notify pgrst,'reload schema';
 commit;

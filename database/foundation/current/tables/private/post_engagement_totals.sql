@@ -7,7 +7,7 @@ create table private.post_engagement_totals (
   likes integer default 0 not null,
   like_hour_start timestamp with time zone,
   like_hour_count integer default 0 not null,
-  constraint post_engagement_totals_counts_check CHECK (views >= 0 AND likes >= 0 AND like_hour_count >= 0 AND like_hour_count <= 600),
+  constraint post_engagement_totals_counts_check CHECK (views >= 0 AND likes >= 0 AND like_hour_count >= 0),
   constraint post_engagement_totals_pkey PRIMARY KEY (post_id),
   constraint post_engagement_totals_post_id_fkey FOREIGN KEY (post_id) REFERENCES private.posts(id) ON DELETE CASCADE
 );

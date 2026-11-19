@@ -6,6 +6,8 @@ import {
 } from "./content-views";
 
 const ID = "00000000-0000-4000-8000-000000000123";
+const challenge = vi.hoisted(() => vi.fn(async () => true));
+vi.mock("./viewer-challenge", () => ({ obtainViewerIdentifier: challenge }));
 
 describe("trackContentView", () => {
   const fetchMock = vi.fn();
@@ -53,27 +55,39 @@ describe("trackContentView", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("sends once more when the server has just issued the browser cookie", async () => {
+  it("a new browser gets its identifier (one check) and sends once more", async () => {
+    challenge.mockClear().mockResolvedValue(true);
     fetchMock.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ ok: true, counted: [], retry: true }),
+      json: async () => ({ ok: true, counted: [], needs_challenge: true }),
     });
     const view = trackContentView({ type: "listing", id: ID, source: "page" });
     await vi.advanceTimersByTimeAsync(1100);
     await expect(view).resolves.toBe(true);
+    expect(challenge).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][1].body).toBe(fetchMock.mock.calls[0][1].body);
   });
 
-  it("asks only once more, even if the cookie still does not stick", async () => {
+  it("sends only once more, and not at all when the check fails", async () => {
+    challenge.mockClear().mockResolvedValue(true);
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => ({ ok: true, counted: [], retry: true }),
+      json: async () => ({ ok: true, counted: [], needs_challenge: true }),
     });
     const view = trackContentView({ type: "listing", id: ID, source: "page" });
     await vi.advanceTimersByTimeAsync(1100);
     await expect(view).resolves.toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    resetContentViewQueueForTests();
+    localStorage.clear();
+    fetchMock.mockClear();
+    challenge.mockClear().mockResolvedValue(false);
+    const refused = trackContentView({ type: "business", id: ID, source: "page" });
+    await vi.advanceTimersByTimeAsync(1100);
+    await expect(refused).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("forgets the send after a failure so a later play can retry", async () => {

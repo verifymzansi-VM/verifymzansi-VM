@@ -818,7 +818,13 @@ export type FoundationRuntimeServiceDatabase = {
         Returns: Json;
       };
       set_post_like: {
-        Args: { p_post_id: string; p_device: string; p_account?: string; p_liked?: boolean };
+        Args: {
+          p_post_id: string;
+          p_device: string;
+          p_account?: string;
+          p_liked?: boolean;
+          p_device_issued_at?: string;
+        };
         Returns: Json;
       };
     };

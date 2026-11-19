@@ -99,7 +99,6 @@ describe("the service commands", () => {
     });
     for (const [code, reason] of [
       ["PT404", "unavailable"],
-      ["PT429", "limit"],
       ["22023", "invalid"],
     ] as const) {
       const refused = vi.fn(async () => ({ data: null, error: { code } }));

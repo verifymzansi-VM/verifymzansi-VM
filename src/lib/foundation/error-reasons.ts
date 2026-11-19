@@ -106,7 +106,6 @@ export const FOUNDATION_ERROR_REASONS = {
   legal_name_locked: ["PT409"],
   legal_name_required: ["PT409"],
   like_invalid: ["22023"],
-  like_limit: ["PT429"],
   location_invalid: ["22023"],
   logo_unavailable: ["22023"],
   no_account: ["PT409"],
