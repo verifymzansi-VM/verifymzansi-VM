@@ -217,8 +217,17 @@ test.describe("showroom carousel on its test page", () => {
   }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile-chrome", "Native touch input uses Chromium CDP");
     await page.goto(routePath);
+    // The load event can fire while React still holds the streamed page in a
+    // hidden segment beside the root loading skeleton (both render <main>).
+    // Wait for the carousel's layout effect, which runs only after the page is
+    // revealed and hydrated, so its touch handlers are live and the skeleton is
+    // gone; the role query then finds the page's only main landmark.
+    await expect(page.locator("[data-showroom-index]").first()).toHaveAttribute(
+      "style",
+      /(?:^|;)\s*transform:/
+    );
     // Give the isolated carousel fixture the same scrollable space as a long page.
-    await page.locator("main").evaluate((main) => {
+    await page.getByRole("main").evaluate((main) => {
       const spacer = document.createElement("div");
       spacer.style.height = "2000px";
       main.appendChild(spacer);
