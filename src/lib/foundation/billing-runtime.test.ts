@@ -1415,7 +1415,7 @@ describe("the Multi-listing package checkout (P4a)", () => {
       expect(createOzowHostedPayment).not.toHaveBeenCalled();
     }
   );
-  it("keeps a busy package lock generic at Ozow's door", async () => {
+  it("asks the member to try again in a moment while the package lock is busy", async () => {
     rpc.mockResolvedValueOnce({
       data: { ...quote, amount_cents: "50000", slots: 5, package: true },
       error: null,
@@ -1424,7 +1424,9 @@ describe("the Multi-listing package checkout (P4a)", () => {
       data: null,
       error: { code: "PT409", details: "package_busy" },
     });
-    await expect(packageCheckout()).rejects.toMatchObject({ status: 409, code: undefined });
+    const refused = packageCheckout();
+    await expect(refused).rejects.toMatchObject({ status: 409, code: "PACKAGE_BUSY" });
+    await expect(refused).rejects.toThrow("Your package is being updated. Try again in a moment.");
     expect(createOzowHostedPayment).not.toHaveBeenCalled();
   });
   it("names an unpaid package open at Ozow", async () => {

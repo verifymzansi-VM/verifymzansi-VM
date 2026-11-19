@@ -12,6 +12,7 @@ begin
   update private.slot_package_move_failures f set
       tries = case when f.last_failed_at < v_now - interval '15 minutes' then 1 else f.tries + 1 end,
       first_failed_at = case when f.last_failed_at < v_now - interval '15 minutes' then v_now else f.first_failed_at end,
+      alerted_at = case when f.last_failed_at < v_now - interval '15 minutes' then null else f.alerted_at end,
       last_failed_at = v_now, reason = v_reason
     where f.package_id = p_package and f.post_id is not distinct from p_post and f.direction = p_direction;
   if not found then

@@ -9,6 +9,12 @@ import {
 } from "../services/email";
 import { runFoundationPrivacyNotice } from "./privacy-notice-job";
 import { runFoundationPaymentAlerts, type PaymentAlertStep } from "./payment-alerts";
+import {
+  emailPackageMoveAlert,
+  readPackageMoves,
+  type PackageMoveAlert,
+  type StuckPackageMove,
+} from "./package-move-alerts";
 import { createLogger } from "../utils/logger";
 import { hasDatabaseMessage } from "./error-reasons";
 import { paymentNoLongerComplete, readPaymentReceipt } from "./payment-receipt";
@@ -140,42 +146,6 @@ const sweepFailures = z.object({
     .optional(),
 });
 
-// Package moves the slot sweep could not make
-// (20261119151152_package_gap_fixes.sql): `package_skipped` this run, and the
-// recorded failures that are stuck (failing for over 30 minutes, or in the
-// package's last day), the oldest 20 with ids only. A database without that
-// update sends no `package_stuck`.
-const packageMoves = z.object({
-  package_skipped: z.number().int().min(0).optional(),
-  package_stuck: z.number().int().min(0).optional(),
-  package_stuck_moves: z
-    .array(
-      z.object({
-        package_id: z.uuid(),
-        post_id: z.uuid().nullable(),
-        direction: z.enum(["into_package", "out_of_package"]),
-        tries: z.number().int().min(1),
-        first_failed_at: z.iso.datetime({ offset: true }),
-        reason: z.string().regex(/^(busy|error [0-9A-Z]{5})$/),
-      })
-    )
-    .max(20)
-    .optional(),
-});
-/** Logs the package moves the sweep skipped (a warning, retried next run)
- * and fails the run while any is stuck, so the failed run and the missing
- * heartbeat reach a person (docs/RUNBOOK.md, "Package moves"). */
-function reportPackageMoves(data: unknown, fail: (step: string) => void) {
-  const moves = packageMoves.safeParse(data);
-  if (!moves.success) return;
-  const { package_skipped: skipped = 0, package_stuck: stuck = 0 } = moves.data;
-  if (skipped > 0) log.warn("Package moves skipped this run", { skipped });
-  if (stuck > 0) {
-    log.error("Package move stuck", { stuck, moves: moves.data.package_stuck_moves ?? [] });
-    fail("package_moves_stuck");
-  }
-}
-
 const jobSchema = z
   .object({
     id: z.uuid(),
@@ -226,6 +196,8 @@ export interface OperationJobOptions {
   alertStaff?: StaffAlert;
   /** The payment alert and daily payment summary step (./payment-alerts.ts). */
   paymentAlerts?: PaymentAlertStep;
+  /** The staff email about newly stuck package moves (./package-move-alerts.ts). */
+  packageMoveAlert?: PackageMoveAlert;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -258,6 +230,7 @@ export async function runFoundationOperationJobs(
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const alertStaff = options.alertStaff ?? sendOutboxFinalFailureAlert;
   const paymentAlerts = options.paymentAlerts ?? ((context) => runFoundationPaymentAlerts(context));
+  const packageMoveAlert = options.packageMoveAlert ?? emailPackageMoveAlert;
   const deadline = now() + RUN_DEADLINE_MS;
   const failed: string[] = [];
   const summary: OperationJobSummary = { claimed: 0, succeeded: 0, retrying: 0, lost: 0, failed };
@@ -299,6 +272,7 @@ export async function runFoundationOperationJobs(
   // Each sweep runs on its own: one failing sweep is reported, the rest and
   // the emails still run. The sweeps run beside the emails so a slow sweep
   // cannot hold up the emails or the staff alert.
+  let stuckMoves: StuckPackageMove[] = [];
   const sweeps = (async () => {
     for (const [name, args] of SWEEPS) {
       const result = await call(name, args);
@@ -321,7 +295,22 @@ export async function runFoundationOperationJobs(
             failed: failures.data.failed,
             ...(failures.data.failures ? { rows: failures.data.failures } : {}),
           });
-        if (name === "run_slot_renewals") reportPackageMoves(result.data, fail);
+        if (name === "run_slot_renewals") stuckMoves = readPackageMoves(result.data);
+      }
+    }
+    // Each stuck package move is reported once (the database marks it), so
+    // staff get one email about it and later runs keep passing. Only a failed
+    // email fails this run; the moves stay listed under Needs attention.
+    if (stuckMoves.length) {
+      let sent = false;
+      try {
+        sent = (await packageMoveAlert(stuckMoves)).success;
+      } catch {
+        sent = false;
+      }
+      if (!sent) {
+        log.error("Package move alert not emailed", { moves: stuckMoves });
+        fail("package_move_alert");
       }
     }
   })();

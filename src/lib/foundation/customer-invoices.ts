@@ -273,7 +273,7 @@ export async function readMyInvoices(api: FoundationAuthenticatedApi) {
 
 /** A package invoice's description, as the database writes it
  * (internal.issue_package_customer_invoice, 20261119025106). */
-const PACKAGE_INVOICE_DESCRIPTION = /^Multi-listing package: /;
+export const PACKAGE_INVOICE_DESCRIPTION = /^Multi-listing package: /;
 
 /** The numbers of the member's unpaid Individual slot invoices (not package
  * invoices), newest first: shown before they buy a package, since a bank

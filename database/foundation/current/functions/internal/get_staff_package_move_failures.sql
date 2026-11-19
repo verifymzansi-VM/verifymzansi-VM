@@ -13,17 +13,16 @@ begin
       'package_id', f.package_id,
       'owner_name', internal.profile_public_name((select pr.display_name from private.profiles pr
         where pr.account_id = k.owner_id)),
-      'post_id', f.post_id, 'post_title', p.title, 'direction', f.direction, 'tries', f.tries,
+      'post_id', f.post_id, 'post_ref', left(f.post_id::text, 8), 'direction', f.direction, 'tries', f.tries,
       'first_failed_at', f.first_failed_at, 'last_failed_at', f.last_failed_at, 'reason', f.reason,
       'package_ends_at', e.ends_at,
-      'stuck', internal.slot_package_move_stuck(f.first_failed_at, e.ends_at))
+      'stuck', internal.slot_package_move_stuck(f.first_failed_at, e.ends_at, f.tries, f.reason))
       order by f.first_failed_at, f.id), '[]'::jsonb))
     into result
   from (select x.* from private.slot_package_move_failures x
       where x.last_failed_at >= statement_timestamp() - interval '15 minutes'
       order by x.first_failed_at, x.id limit 50) f
     left join private.slot_packages k on k.id = f.package_id
-    left join private.posts p on p.id = f.post_id
     left join lateral (select max(g.ends_at) as ends_at from private.entitlements g
       where g.package_id = f.package_id and g.status = 'active') e on true;
   if internal.staff_actor('payments:view') is distinct from actor then

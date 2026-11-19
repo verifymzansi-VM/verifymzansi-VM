@@ -85,7 +85,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 `20261119151152_package_gap_fixes.sql` is not applied yet (`pending` in the
 applied register). Roadmap P4a; the owner's decision D6 of 19 November 2026. It
 needs `20261114154823_slot_packages.sql` and
-`20261119025106_package_invoices.sql`, and refuses (55000) unless the five
+`20261119025106_package_invoices.sql`, and refuses (55000) unless the six
 functions it replaces have their reviewed bodies (or this update's), the six it
 adds are absent (or this update's) and its table is absent or has the update's
 shape. It only adds: one staff read command and three fields in the reply of the
@@ -98,24 +98,28 @@ field is added to an answer the website reads strictly. Packages stay off sale.
   package itself was busy) and direction (`into_package`: the post of an ended
   Individual slot the package takes; `out_of_package`: a package post moving
   into a free Individual slot in the package's last 7 days), with the tries, the
-  first and last failure and the reason (`busy` or `error <SQLSTATE>`). A
-  failure more than 15 minutes after the last one starts the count again. A row
-  goes when the post moves, when the sweep finds it no longer waiting, or 7 days
-  after its last failure once its package ended over a day ago. No foreign key
-  on purpose: a key-share lock on the post or package would make the sweep wait
-  for an activation, and the sweep never waits. Row level security on; no API
-  role reads it.
+  first and last failure, the reason (`busy` or `error <SQLSTATE>`) and when it
+  was reported as stuck (`alerted_at`). A failure more than 15 minutes after the
+  last one starts the count again (and may be reported again). A row goes when
+  the post moves, when the sweep finds it no longer waiting, or 7 days after its
+  last failure once its package ended over a day ago. No foreign key on purpose:
+  a key-share lock on the post or package would make the sweep wait for an
+  activation, and the sweep never waits. Row level security on; no API role
+  reads it.
 - **The sweep.** `internal.run_slot_renewals` (full body) records every failure
   it counts in `package_skipped`, and now also counts a post another transaction
   holds (as `busy`). Its reply gains `package_stuck` (current failures that
-  started over 30 minutes ago, or whose package ends within a day;
-  `internal.slot_package_move_stuck`), `package_stuck_moves` (up to 20 of them:
-  package, post, direction, tries, first failure, reason; ids only) and
+  started over 30 minutes ago, or whose package ends within a day unless the
+  only failure is a single busy lock; `internal.slot_package_move_stuck`),
+  `package_stuck_moves` (the stuck ones not reported before, up to 20, each
+  marked under the owner's fence so it is reported once: package, post,
+  direction, tries, first failure, reason; ids only) and
   `package_paused_released`. The website's operations job logs
-  `Package moves skipped this run` for a non-zero `package_skipped` and, while
-  `package_stuck` is above 0, `Package move stuck` with the list, and fails its
-  run with the step `package_moves_stuck`, so the failed run and the missing
-  heartbeat alert a person (`docs/RUNBOOK.md`, "Package moves").
+  `Package moves skipped this run` and `Package moves stuck` (warnings), logs
+  `Package move stuck` and emails the payment alert addresses
+  (`PAYMENT_ALERT_EMAILS`) once about newly stuck moves, and its run keeps
+  passing; only an email that cannot go out fails that one run
+  (`package_move_alert`). See `docs/RUNBOOK.md`, "Package moves".
 - **Paused posts after a refund.** A paused post still held in its ended
   Individual slot, whose own end date the lifecycle job had raised to the
   package's end, kept that date once no package took it (refunded, charged back
@@ -130,16 +134,21 @@ field is added to an answer the website reads strictly. Packages stay off sale.
   never stops a refund, a chargeback or the sweep; such a post is left as it was
   until it can be changed.
 - **Bank transfers for an invoice issued before a package (D6).** New
-  `internal.slot_package_blocks_invoice(identity, owner, issued at)`: E3 refuses
-  only a package that started at or before the invoice was issued.
-  `internal.record_staff_invoice_transfer` and
+  `internal.slot_package_blocks_invoice(identity, owner, issued at)`, read at
+  clock time: E3 refuses only a package that started at or before the invoice
+  was issued. `internal.record_staff_invoice_transfer` and
   `internal.confirm_staff_invoice_payment` (full bodies) use it for an
   Individual invoice: its slots are recorded and delivered and run beside the
   package to their own end, like slots already held. A transfer to an invoice
   issued after the package started, and a transfer recorded without an invoice
   (`internal.record_staff_invoice_payment`, unchanged), are refused as before
   (PT409 `package_active`). The Individual slot limit still applies. Pay now is
-  unchanged.
+  unchanged. `internal.issue_staff_invoice` (full body) takes the account's
+  package lock after its fence, reads E3 at clock time and records that moment
+  as the invoice's issue time: issuing and a package delivery are serialised, so
+  an invoice issued while a package was being delivered (for example while the
+  sweep held the fence and the issue waited) is refused, never dated before the
+  package.
 - **An unsent online package checkout.** `internal.claim_checkout_request` (full
   body) refuses to send a package payment to Ozow while the account has a
   package that has not ended (PT409 `package_active`) or an unpaid package
@@ -148,14 +157,18 @@ field is added to an answer the website reads strictly. Packages stay off sale.
   now and a package delivery hold while they work, taken without waiting after
   the payment row (a delivery locks the payment before that lock, so waiting
   could deadlock): while it is busy the claim is refused with PT409
-  `package_busy` and the member tries again. The website shows the package
-  checkout's own words for the first two. This closes the known gap of
-  `20261119025106_package_invoices.sql`.
+  `package_busy` and the member is asked to try again in a moment. These checks
+  apply only to a payment not sent to Ozow yet; one already open there keeps the
+  member's continue, check or cancel choice. The website shows the package
+  checkout's own words. A package checkout stays refused while a package invoice
+  remains issued; nothing voids an overdue one automatically (staff void it).
+  This closes the known gap of `20261119025106_package_invoices.sql`.
 - **Staff read.** `api.get_staff_package_move_failures()` (`payments:view`): the
   failures of the past 15 minutes, oldest first, at most 50, each with the
-  package's end, the owner's public name ("Thandeka D."), the post's title and
-  whether it is stuck. The website shows them as "Needs attention" on Payments &
-  Refunds.
+  package's end, the owner's public name ("Thandeka D."), a short post reference
+  (the first 8 characters of its id; never the title, as a paused post is not
+  public) and whether it is stuck. The website shows them as "Needs attention"
+  on Payments & Refunds.
 
 **Order: apply first, then merge.** The website release from the same pull
 request reads the new command and the deploy preflight probes every command in
@@ -185,32 +198,37 @@ The reviewed rollback is `../rollback/20261119151152_package_gap_fixes.down.sql`
 (only with the owner's decision; prefer a forward fix). Revert and deploy the
 website release first: the rollback removes the command its staff payments page
 reads. It refuses unless every added and replaced function has this update's
-body; otherwise it puts back the five earlier bodies byte for byte and drops the
-added functions and the table (an operational record). Slots already delivered
-from a transfer to an invoice issued before a package, and paused posts already
-put back, stay as they are.
+body, and while any other function refers to an added function or the table (a
+later update that uses them: undo it first); otherwise it puts back the six
+earlier bodies byte for byte and drops the added functions and the table (an
+operational record). Slots already delivered from a transfer to an invoice
+issued before a package, and paused posts already put back, stay as they are.
 
 `node --import tsx scripts/test-foundation-package-gap-fixes.mjs` (part of
-`pnpm db:foundation:lifecycle-test`, 13 checks) proves on the throwaway
+`pnpm db:foundation:lifecycle-test`, 16 checks) proves on the throwaway
 database: the preflight before and after, read only; drifted bodies and a
 premature rollback refused, changing nothing; apply, rollback and re-apply
 return the same fingerprints; the grants; a failed move recorded (tries, times,
 `error P0001`), counted again on the next run, reported stuck after 30 minutes
-(in the sweep's reply with ids only, and for staff with `payments:view`, never a
+once (in the sweep's reply with ids only, not again on the next run, and for
+staff with `payments:view` with a post reference and never the title; never a
 moderator, a member or a visitor), restarted after 15 quiet minutes and cleared
 once the post moves; a post another transaction holds recorded as `busy` without
 the sweep waiting; a failing move out of a package in its last day stuck at
-once; a paused post put back to its slot's end by a refund, then expired with
-the 3-day grace; a paused post saved under rules that have since changed neither
-stopping the refund nor being changed, then put back by the sweep once it can
-be; a bank transfer to an Individual invoice issued before the package recorded
-and confirmed (one 30-day slot beside the running package, the invoice paid),
-while one issued after the package started and a transfer without an invoice are
-refused; an unsent online package checkout refused while a package invoice is
-unpaid and once a package runs, while the invoice's own Pay now attempt is sent;
-a package checkout refused at once (`package_busy`, without waiting) while
-another transaction holds the account's package lock, and sent once it is free;
-and the rollback refused with another body.
+once, and a single busy lock there not stuck until it repeats; a paused post put
+back to its slot's end by a refund, then expired with the 3-day grace; a paused
+post saved under rules that have since changed neither stopping the refund nor
+being changed, then put back by the sweep once it can be; a bank transfer to an
+Individual invoice issued before the package recorded and confirmed (one 30-day
+slot beside the running package, the invoice paid), while one issued after the
+package started and a transfer without an invoice are refused; an Individual
+invoice issued while a package is being delivered in another session waits for
+it and is refused; an unsent online package checkout refused while a package
+invoice is unpaid and once a package runs, while the invoice's own Pay now
+attempt is sent and a checkout already open at Ozow keeps its page; a package
+checkout refused at once (`package_busy`, without waiting) while another
+transaction holds the account's package lock, and sent once it is free; and the
+rollback refused with another body.
 
 ## House slots for administrators, 19 November 2026
 

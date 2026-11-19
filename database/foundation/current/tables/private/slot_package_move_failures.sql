@@ -10,6 +10,7 @@ create table private.slot_package_move_failures (
   first_failed_at timestamp with time zone not null,
   last_failed_at timestamp with time zone not null,
   reason text not null,
+  alerted_at timestamp with time zone,
   constraint slot_package_move_failures_direction_check CHECK (direction = ANY (ARRAY['into_package'::text, 'out_of_package'::text])),
   constraint slot_package_move_failures_pkey PRIMARY KEY (id),
   constraint slot_package_move_failures_reason_check CHECK (reason = 'busy'::text OR reason ~ '^error [0-9A-Z]{5}$'::text),

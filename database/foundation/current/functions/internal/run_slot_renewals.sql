@@ -11,7 +11,7 @@ declare n_moved integer := 0; n_reminders integer := 0; r record; post private.p
   activation private.post_activations; used integer; n_package_moved integer := 0; n_documents integer := 0;
   waiting record; held_back integer; places integer; n_downsized integer := 0; n_skipped integer := 0;
   package_ends timestamptz; target record; moved boolean; n_paused integer := 0; seen uuid[]; failed uuid[];
-  stuck jsonb;
+  stuck jsonb; stuck_count integer;
 begin
   if p_limit is null or p_limit not between 1 and 5000 then
     raise exception 'limit 1 to 5000' using errcode='22023';
@@ -293,28 +293,39 @@ begin
   -- package that ended over a day ago go (slot_package_move_failures_last_idx,
   -- at most p_limit a run); no step above can still write them, and rows
   -- another transaction holds are skipped. The current ones that are stuck
-  -- (internal.slot_package_move_stuck) are reported, the oldest 20 with their
-  -- package, post, direction, tries, first failure and reason, so the
-  -- operations job can alert.
+  -- (internal.slot_package_move_stuck) are counted, and each is reported once
+  -- for an alert (alerted_at; a new failure run after 15 quiet minutes may be
+  -- reported again): the oldest 20 not reported yet, with their package, post,
+  -- direction, tries, first failure and reason, marked under the owner's
+  -- fence (tried, never waited for; a busy owner's row is reported next run).
   delete from private.slot_package_move_failures f where f.id in (select x.id
     from private.slot_package_move_failures x where x.last_failed_at < statement_timestamp() - interval '7 days'
       and not exists(select 1 from private.entitlements e where e.package_id = x.package_id
         and e.ends_at > statement_timestamp() - interval '1 day')
     order by x.last_failed_at limit p_limit for update skip locked);
-  select jsonb_build_object('count', count(*), 'moves', coalesce(jsonb_agg(jsonb_build_object(
-      'package_id', s.package_id, 'post_id', s.post_id, 'direction', s.direction, 'tries', s.tries,
-      'first_failed_at', s.first_failed_at, 'reason', s.reason) order by s.first_failed_at, s.id)
-      filter (where s.n <= 20), '[]'::jsonb))
-    into stuck
-  from (select f.*, row_number() over (order by f.first_failed_at, f.id) as n
+  stuck := '[]'::jsonb;
+  stuck_count := 0;
+  for target in
+    select f.id, f.package_id, f.post_id, f.direction, f.tries, f.first_failed_at, f.reason, f.alerted_at,
+      k.owner_id
     from private.slot_package_move_failures f
+      left join private.slot_packages k on k.id = f.package_id
     where f.last_failed_at >= statement_timestamp() - interval '15 minutes'
       and internal.slot_package_move_stuck(f.first_failed_at, (select max(e.ends_at) from private.entitlements e
-        where e.package_id = f.package_id and e.status = 'active'))) s;
+        where e.package_id = f.package_id and e.status = 'active'), f.tries, f.reason)
+    order by f.first_failed_at, f.id
+  loop
+    stuck_count := stuck_count + 1;
+    continue when target.alerted_at is not null or jsonb_array_length(stuck) >= 20 or target.owner_id is null
+      or not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(target.owner_id::text,2408));
+    update private.slot_package_move_failures set alerted_at = clock_timestamp() where id = target.id;
+    stuck := stuck || jsonb_build_array(jsonb_build_object('package_id', target.package_id,
+      'post_id', target.post_id, 'direction', target.direction, 'tries', target.tries,
+      'first_failed_at', target.first_failed_at, 'reason', target.reason));
+  end loop;
   return jsonb_build_object('moved', n_moved, 'reminders', n_reminders, 'package_moved', n_package_moved,
     'package_documents', n_documents, 'package_downsized', n_downsized, 'package_skipped', n_skipped,
-    'package_paused_released', n_paused, 'package_stuck', (stuck->>'count')::integer,
-    'package_stuck_moves', stuck->'moves');
+    'package_paused_released', n_paused, 'package_stuck', stuck_count, 'package_stuck_moves', stuck);
 end;
 $function$;
 alter function internal.run_slot_renewals(integer) owner to postgres;

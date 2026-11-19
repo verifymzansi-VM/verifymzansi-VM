@@ -178,7 +178,7 @@ describe("PaymentStatusPanel", () => {
     );
     expect(screen.getByRole("heading", { name: "Your package is active" })).toBeInTheDocument();
     expect(screen.getByText(/Your 10 slots are ready to use now/)).toBeInTheDocument();
-    expect(screen.getByText("19 Nov 2026, 10:00")).toBeInTheDocument();
+    expect(screen.getByText("19 Nov 2026, 10:00 (SA time)")).toBeInTheDocument();
     expect(screen.getByText("19 Dec 2026, 10:00 (SA time)")).toBeInTheDocument();
     expect(screen.getByText("Up to 40 every 30 days")).toBeInTheDocument();
     expect(screen.getByText("Nothing renews automatically.")).toBeInTheDocument();
@@ -192,7 +192,9 @@ describe("PaymentStatusPanel", () => {
       "href",
       "/dashboard/slots"
     );
-    expect(screen.getByText(/Individual slots keep running/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Posts in your Individual slots can move into the package/)
+    ).toBeInTheDocument();
     expect(screen.queryByText("Payment confirmed")).not.toBeInTheDocument();
   });
 
@@ -204,7 +206,9 @@ describe("PaymentStatusPanel", () => {
         packageDetails={{ ...packageDetails, individualSlots: false }}
       />
     );
-    expect(screen.queryByText(/Individual slots keep running/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Posts in your Individual slots can move into the package/)
+    ).not.toBeInTheDocument();
   });
 
   it("reads the package once a package payment is confirmed while the page is open", async () => {

@@ -37,7 +37,7 @@ export function PackageMoveAttention({ failures }: { failures: PackageMoveFailur
               {failure.post_id ? TITLES[failure.direction] : "The package was busy"}
             </p>
             <p className="text-muted-foreground">
-              {failure.post_title ? <>“{failure.post_title}” · </> : null}
+              {failure.post_ref ? <>Post {failure.post_ref} · </> : null}
               tried {failure.tries.toLocaleString("en-ZA")} {failure.tries === 1 ? "time" : "times"}{" "}
               since {formatDateTime(failure.first_failed_at)} · reason: {failure.reason}
             </p>

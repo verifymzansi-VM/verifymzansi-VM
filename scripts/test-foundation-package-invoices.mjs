@@ -30,6 +30,7 @@ import {
   applyAndProveRollback,
   assertDriftRefused,
   createPaymentWorld,
+  ozowSettle,
   fingerprintOf,
   P30,
   psqlSessions,
@@ -123,27 +124,7 @@ try {
       `select api.start_invoice_payment('${invoice.invoice_number}',${invoice.total_cents},true);`
     );
   /** Ozow's page opened and its settlement notice applied, as the server does. */
-  const settle = (owner, paymentId) => {
-    const lease = json(service(`select api.claim_checkout_request('${paymentId}','${owner.id}');`));
-    q(
-      service(
-        `select api.complete_checkout_request('${paymentId}','${owner.id}','${lease.claim_token}','req-${paymentId}','https://one.ozow.com/checkout/req-${paymentId}');`
-      )
-    );
-    const row = json(
-      `select jsonb_build_object('ref',merchant_reference,'amount',amount_cents) from private.payments where id='${paymentId}';`
-    );
-    const event = {
-      payload_sha256: sha(`event-${paymentId}`),
-      merchant_reference: row.ref,
-      provider_request_id: `req-${paymentId}`,
-      provider_transaction_id: `tx-${paymentId}`,
-      status: "complete",
-      amount_cents: Number(row.amount),
-      currency: "ZAR",
-    };
-    return json(service(`select api.apply_provider_event($e$${JSON.stringify(event)}$e$::jsonb);`));
-  };
+  const settle = (owner, paymentId) => ozowSettle(kit, owner, paymentId);
   /** The package grant of a payment: its one line and one grant. */
   const grantOf = (paymentId) =>
     json(`select jsonb_build_object('lines',(select count(*) from private.payment_lines where payment_id='${paymentId}'),

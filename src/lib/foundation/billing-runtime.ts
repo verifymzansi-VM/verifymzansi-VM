@@ -246,6 +246,13 @@ const PACKAGE_INVOICE_UNPAID = [
   `Your package invoice is not paid yet. Pay it from Invoices, or email ${BILLING_EMAIL} to cancel it first.`,
   "PACKAGE_INVOICE_UNPAID",
 ] as const;
+/** A package payment, transfer or invoice of the account is being recorded at
+ * this moment (update 20261119151152): nothing changed, the member retries. */
+const PACKAGE_BUSY = [
+  409,
+  "Your package is being updated. Try again in a moment.",
+  "PACKAGE_BUSY",
+] as const;
 /** While a package runs, Individual slots are not bought or renewed (E3). */
 const PACKAGE_ACTIVE = [
   409,
@@ -303,7 +310,9 @@ async function command(
                 ? PACKAGE_INVOICE_UNPAID
                 : hasDatabaseReason(error, "package_active")
                   ? PACKAGE_CHECKOUT_REFUSALS.PT409
-                  : null
+                  : hasDatabaseReason(error, "package_busy")
+                    ? PACKAGE_BUSY
+                    : null
               : null;
   if (refusal) throw new FoundationBillingCommandError(...refusal);
   if (error)

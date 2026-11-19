@@ -24,10 +24,13 @@ begin
   -- the account's package lock, which a bank transfer's confirmation, Pay now
   -- and a package delivery hold while they work, taken without waiting (this
   -- already holds the payment, which a delivery locks before that lock): while
-  -- one of them runs, the member is asked to try again in a moment.
+  -- one of them runs, the member is asked to try again in a moment. These
+  -- three apply only to a payment not sent to Ozow yet: one already open there
+  -- keeps the member's choice to continue, check or cancel it.
   if exists(select 1 from private.plan_versions v where v.id=pay.plan_version_id
       and internal.slot_package_plan(v.plan_code)) then
-    if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||pay.owner_id::text, 707)) then
+    if pay.checkout_url is null and not pg_catalog.pg_try_advisory_xact_lock(
+        pg_catalog.hashtextextended('slot-package:'||pay.owner_id::text, 707)) then
       raise exception 'your package is being updated; try again in a moment' using errcode='PT409', detail='package_busy';
     end if;
     if not internal.slot_packages_on_sale() then
@@ -36,10 +39,11 @@ begin
     if internal.current_verified_identity(pay.owner_id) is null then
       raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
     end if;
-    if internal.slot_package_open(pay.owner_id) then
+    if pay.checkout_url is null and internal.slot_package_open(pay.owner_id) then
       raise exception 'this account already has a Multi-listing package' using errcode='PT409', detail='package_active';
     end if;
-    if exists(select 1 from private.customer_invoices i join private.plan_versions v on v.id=i.plan_version_id
+    if pay.checkout_url is null and exists(select 1 from private.customer_invoices i
+        join private.plan_versions v on v.id=i.plan_version_id
         where i.account_id=pay.owner_id and i.status='issued' and internal.slot_package_plan(v.plan_code)
           and not exists(select 1 from private.customer_invoice_payments l where l.invoice_id=i.id and l.payment_id=pay.id)) then
       raise exception 'your package invoice is not paid yet; pay it, or ask us to cancel it first'

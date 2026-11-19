@@ -5,12 +5,14 @@
 -- which that release's staff payments page reads (it then shows the page
 -- without the list, with a warning).
 --
--- It refuses (55000) unless the six added functions and the five replaced
+-- It refuses (55000) unless the six added functions and the six replaced
 -- ones have this update's bodies (a later update changed one: undo that update
--- first). Otherwise it puts back the earlier bodies of
+-- first), and while any other function refers to an added function or the
+-- table (a later update that uses them: undo it first). Otherwise it puts back the earlier bodies of
 -- internal.run_slot_renewals, internal.slot_package_grant_revoked,
--- internal.claim_checkout_request, internal.record_staff_invoice_transfer and
--- internal.confirm_staff_invoice_payment byte for byte, and drops the added
+-- internal.claim_checkout_request, internal.record_staff_invoice_transfer,
+-- internal.confirm_staff_invoice_payment and internal.issue_staff_invoice byte
+-- for byte, and drops the added
 -- functions and the table private.slot_package_move_failures with its
 -- indexes (its rows are an operational record kept at most a few days after
 -- a package ends; nothing else refers to them). No other row is changed:
@@ -21,12 +23,12 @@ begin;
 set local lock_timeout='5s';
 
 do $$
-declare shape text;
+declare shape text; dependants text;
 begin
   for shape in
     select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)),'absent')
     from (values ('internal.slot_package_move_failed(uuid,uuid,text,text)'),
-      ('internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone)'),
+      ('internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone,integer,text)'),
       ('internal.slot_package_release_paused(uuid)'),
       ('internal.slot_package_blocks_invoice(text,uuid,timestamp with time zone)'),
       ('internal.get_staff_package_move_failures()'),
@@ -35,25 +37,52 @@ begin
       ('internal.slot_package_grant_revoked()'),
       ('internal.claim_checkout_request(uuid,uuid)'),
       ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)'),
-      ('internal.confirm_staff_invoice_payment(uuid)')) v(sig)
+      ('internal.confirm_staff_invoice_payment(uuid)'),
+      ('internal.issue_staff_invoice(text,integer,integer,integer,text,uuid)')) v(sig)
   loop
     if shape not in (
-        'internal.slot_package_move_failed(uuid,uuid,text,text) a202bfe80af8e5021d85c61c954f4afd',
-        'internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone) f12afc45d9dcd4d66a3c426121776f8a',
+        'internal.slot_package_move_failed(uuid,uuid,text,text) e4b6ce4b2aee3ff1938607d6e4c13b62',
+        'internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone,integer,text) 1a00e8cdc844d71492dafff93b9214ab',
         'internal.slot_package_release_paused(uuid) 7a759a9a2eae8a30e821acb1bc9502af',
-        'internal.slot_package_blocks_invoice(text,uuid,timestamp with time zone) 936d94bad14a6dd93b088d713d7afc50',
-        'internal.get_staff_package_move_failures() 68b72b4d76c7326eafa78f4622e96c2c',
+        'internal.slot_package_blocks_invoice(text,uuid,timestamp with time zone) abe2bfd47931f123e0ae7d0ade767324',
+        'internal.get_staff_package_move_failures() 2f537d010494190f161fb7db1ddf5967',
         'api.get_staff_package_move_failures() 3f539d70b5e2b7e538b77b0eecc94c68',
-        'internal.run_slot_renewals(integer) f27b3048f7bff4b071a579a5fbf56c98',
+        'internal.run_slot_renewals(integer) 287781841f49b3a0e2aa3a6d10280a5f',
         'internal.slot_package_grant_revoked() 3d22cd9389fa075274e8ba14343e9aea',
-        'internal.claim_checkout_request(uuid,uuid) cf0116ac2b82826a71f30adbad3309eb',
+        'internal.claim_checkout_request(uuid,uuid) 4922a976d1652603d491349a40f4f7da',
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) e37a32a916640c9a16f5924818b9b735',
-        'internal.confirm_staff_invoice_payment(uuid) c9adba77f7b7ac7c6366083956e53454') then
+        'internal.confirm_staff_invoice_payment(uuid) c9adba77f7b7ac7c6366083956e53454',
+        'internal.issue_staff_invoice(text,integer,integer,integer,text,uuid) 98f455b38a64273d664a5a745ad862e0') then
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
     end if;
   end loop;
   if pg_catalog.to_regclass('private.slot_package_move_failures') is null then
     raise exception 'rollback precondition: private.slot_package_move_failures is missing' using errcode='55000';
+  end if;
+  -- A later function that calls an added function, or reads the table, would
+  -- break silently once they are dropped: undo that update first.
+  select string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text) into dependants
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname in ('api', 'internal', 'private', 'public')
+    and p.oid not in (select to_regprocedure(s) from unnest(array[
+      'internal.slot_package_move_failed(uuid,uuid,text,text)',
+      'internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone,integer,text)',
+      'internal.slot_package_release_paused(uuid)',
+      'internal.slot_package_blocks_invoice(text,uuid,timestamp with time zone)',
+      'internal.get_staff_package_move_failures()',
+      'api.get_staff_package_move_failures()',
+      'internal.run_slot_renewals(integer)',
+      'internal.slot_package_grant_revoked()',
+      'internal.claim_checkout_request(uuid,uuid)',
+      'internal.record_staff_invoice_transfer(text,text,text,boolean,text)',
+      'internal.confirm_staff_invoice_payment(uuid)',
+      'internal.issue_staff_invoice(text,integer,integer,integer,text,uuid)']) s)
+    and (p.prosrc ilike '%slot_package_move_failed%' or p.prosrc ilike '%slot_package_move_stuck%'
+      or p.prosrc ilike '%slot_package_release_paused%' or p.prosrc ilike '%slot_package_blocks_invoice%'
+      or p.prosrc ilike '%get_staff_package_move_failures%' or p.prosrc ilike '%slot_package_move_failures%');
+  if dependants is not null then
+    raise exception 'rollback precondition: % refers to a function or table this rollback drops; undo that update first',
+      dependants using errcode='55000';
   end if;
 end$$;
 
@@ -743,12 +772,106 @@ alter function internal.confirm_staff_invoice_payment(uuid) owner to postgres;
 revoke all on function internal.confirm_staff_invoice_payment(uuid) from public;
 grant execute on function internal.confirm_staff_invoice_payment(uuid) to authenticated;
 
+-- The earlier internal.issue_staff_invoice, byte for byte.
+CREATE OR REPLACE FUNCTION internal.issue_staff_invoice(p_account_email text, p_term_days integer, p_slots integer, p_due_days integer, p_reason text, p_request_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid; buyer uuid; plan private.plan_versions; fingerprint text; prior private.customer_invoices;
+  made private.customer_invoices; issued_on date; year_number integer; next_number integer;
+begin
+  actor := internal.staff_actor('payments:refund');
+  if length(btrim(coalesce(p_account_email, ''))) not between 3 and 254 or p_term_days is null
+      or p_term_days not in (30, 90, 180) or p_slots is null or p_slots not between 1 and 25
+      or p_due_days is null or p_due_days not between 1 and 30 or p_request_id is null then
+    raise exception 'customer email, slot term, number of slots and days to pay required'
+      using errcode='22023', detail='invoice_issue_invalid';
+  end if;
+  if not coalesce(internal.plain_text_valid(p_reason, 5, 500, true), false) then
+    raise exception 'audit reason required' using errcode='22023';
+  end if;
+  buyer := internal.invoice_customer_by_email(p_account_email);
+  perform internal.assert_staff_payment_actor(actor, buyer);
+  perform internal.lock_evidence_subject(buyer);
+  perform internal.staff_actor('payments:refund'); -- authority after any lock wait
+  perform internal.assert_staff_payment_actor(actor, buyer);
+  perform internal.assert_staff_not_referrer(actor, buyer);
+  -- The same request again (a retried submission) returns the first invoice.
+  select * into prior from private.customer_invoices i where i.issued_by = actor and i.request_id = p_request_id;
+  if found then
+    if prior.account_id = buyer and prior.slots = p_slots and prior.issue_reason = btrim(p_reason)
+        and prior.due_on - internal.customer_invoice_day(prior.issued_at) = p_due_days
+        and (select v.duration_days from private.plan_versions v where v.id = prior.plan_version_id) = p_term_days then
+      return internal.customer_invoice_dto(prior, actor) || jsonb_build_object('repeated', true);
+    end if;
+    raise exception 'that request already issued another invoice' using errcode='PT409', detail='invoice_request_conflict';
+  end if;
+  if not exists(select 1 from private.current_account_access a where a.id = buyer) then
+    raise exception 'the customer''s account cannot use slots now' using errcode='PT409', detail='payment_account_unavailable';
+  end if;
+  select * into plan from private.plan_versions v
+    where v.plan_code = 'individual_'||p_term_days||'d' and v.retired_at is null and v.is_public
+      and internal.individual_slot_plan(v.plan_code)
+    order by v.version desc limit 1;
+  if not found then
+    raise exception 'no slot for that term is on sale' using errcode='PT409', detail='invoice_plan_unavailable';
+  end if;
+  fingerprint := internal.current_verified_identity(buyer);
+  if fingerprint is null then
+    raise exception 'the customer''s ID review must be accepted before an invoice is issued'
+      using errcode='PT412', detail='invoice_buyer_unverified';
+  end if;
+  -- E3 (20261114154823): while the person's Multi-listing package runs (until
+  -- its last 7 days), no Individual slot is sold, whatever the way it is paid.
+  if internal.slot_package_blocks_individual(fingerprint, buyer) then
+    raise exception 'Individual slots cannot be sold while the person''s Multi-listing package runs'
+      using errcode='PT409', detail='package_active';
+  end if;
+  if plan.price_cents * p_slots > 5000000 then
+    raise exception 'invoices above R50,000 cannot be issued yet' using errcode='PT413', detail='invoice_amount_above_limit';
+  end if;
+  -- An early check of the slot limit; the payment checks it again.
+  if (internal.individual_slots_counted(fingerprint, buyer, null)->>'held')::integer + p_slots
+      > internal.individual_slot_limit(fingerprint) then
+    raise exception 'more slots than the person''s limit; raise the limit first' using errcode='PT429', detail='slot_limit_reached';
+  end if;
+  -- The invoice says "not registered for VAT": only while the merchant setting says so.
+  if not exists(select 1 from private.invoice_merchant_config c where c.singleton
+      and c.registration_status = 'not_registered' and c.confirmed_at is not null) then
+    raise exception 'the VAT registration setting changed; invoices need updating first'
+      using errcode='PT409', detail='invoice_vat_status_changed';
+  end if;
+  issued_on := internal.customer_invoice_day(statement_timestamp());
+  year_number := extract(year from issued_on)::integer;
+  insert into private.customer_invoice_numbers as n (invoice_year, last_number) values (year_number, 1)
+    on conflict (invoice_year) do update set last_number = n.last_number + 1
+    returning n.last_number into next_number;
+  insert into private.customer_invoices (invoice_number, invoice_year, sequence_number, account_id, plan_version_id,
+      slots, unit_price_cents, total_cents, description, due_on, issued_by, issue_reason, request_id, seller)
+    values ('VM-' || year_number::text || '-' || lpad(next_number::text, 6, '0'), year_number, next_number, buyer, plan.id,
+      p_slots, plan.price_cents, plan.price_cents * p_slots,
+      case when p_slots = 1 then plan.label else p_slots::text || ' × ' || plan.label end,
+      issued_on + p_due_days, actor, btrim(p_reason), p_request_id,
+      jsonb_build_object('legal_name', 'Verifymzansi (Pty) Ltd', 'registration_number', '2026/155305/07',
+        'vat_registered', false))
+    returning * into made;
+  perform internal.staff_actor('payments:refund');
+  perform internal.assert_staff_payment_actor(actor, buyer);
+  return internal.customer_invoice_dto(made, actor) || jsonb_build_object('repeated', false);
+end;
+$function$;
+alter function internal.issue_staff_invoice(text,integer,integer,integer,text,uuid) owner to postgres;
+revoke all on function internal.issue_staff_invoice(text,integer,integer,integer,text,uuid) from public;
+grant execute on function internal.issue_staff_invoice(text,integer,integer,integer,text,uuid) to authenticated;
+
 -- The earlier bodies call none of the added functions: drop them and the table.
 drop function api.get_staff_package_move_failures();
 drop function internal.get_staff_package_move_failures();
 drop function internal.slot_package_blocks_invoice(text,uuid,timestamptz);
 drop function internal.slot_package_release_paused(uuid);
-drop function internal.slot_package_move_stuck(timestamptz,timestamptz);
+drop function internal.slot_package_move_stuck(timestamptz,timestamptz,integer,text);
 drop function internal.slot_package_move_failed(uuid,uuid,text,text);
 drop table private.slot_package_move_failures;
 

@@ -9,7 +9,7 @@ const failure: PackageMoveFailure = {
   package_id: "11111111-1111-4111-8111-111111111111",
   owner_name: "Sipho D.",
   post_id: "22222222-2222-4222-8222-222222222222",
-  post_title: "Demo bakkie 2.4",
+  post_ref: "22222222",
   direction: "into_package",
   tries: 14,
   first_failed_at: "2026-11-18T08:02:00.000Z",
@@ -33,7 +33,7 @@ describe("PackageMoveAttention (P4a)", () => {
           {
             ...failure,
             post_id: null,
-            post_title: null,
+            post_ref: null,
             direction: "into_package",
             tries: 1,
             reason: "busy",
@@ -56,9 +56,7 @@ describe("PackageMoveAttention (P4a)", () => {
     expect(screen.getByText("Post could not move out of the package")).toBeInTheDocument();
     expect(screen.getByText("The package was busy")).toBeInTheDocument();
     expect(
-      screen.getAllByText(
-        /“Demo bakkie 2\.4” · tried 14 times since 18 Nov 2026, 10:02 · reason: busy/
-      )
+      screen.getAllByText(/Post 22222222 · tried 14 times since 18 Nov 2026, 10:02 · reason: busy/)
     ).toHaveLength(1);
     expect(screen.getByText(/tried 1 time since/)).toBeInTheDocument();
     expect(screen.getByText(/reason: error P0001/)).toBeInTheDocument();

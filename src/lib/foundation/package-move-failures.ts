@@ -17,7 +17,11 @@ const packageMoveFailureSchema = z.strictObject({
   owner_name: z.string().max(120).nullable(),
   // None when the package itself was busy.
   post_id: z.uuid().nullable(),
-  post_title: z.string().max(200).nullable(),
+  // The first 8 characters of the post id (never its title).
+  post_ref: z
+    .string()
+    .regex(/^[0-9a-f]{8}$/)
+    .nullable(),
   direction: z.enum(["into_package", "out_of_package"]),
   tries: z.number().int().min(1),
   first_failed_at: instant,

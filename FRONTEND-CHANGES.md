@@ -897,7 +897,7 @@ None left: the three filter files were put back to `0b562f42` (see "Put back").
 | `src/hooks/use-post-transport.test.tsx`                             | test   | New test. Retired-backend cases removed; the rest run on the new backend. No longer sets the removed backend switch.                                                                                                                                                                                                                                                                                                                                                                              | Nothing (not part of a page) | keep     | awaiting owner                                                                                                                                                                              | 2026-11-11 | 0c3508d8ba8a |
 | `src/hooks/use-post-transport.ts`                                   | helper | New hook: posting-terms version/hash and request receipt for the existing forms. Retired-backend branch removed.                                                                                                                                                                                                                                                                                                                                                                                  | Nothing (not part of a page) | keep     | awaiting owner                                                                                                                                                                              | 2026-11-08 | fc4949c6db5f |
 | `src/hooks/use-realtime-foundation.test.tsx`                        | test   | New test. Mocks the foundation browser client module; no backend switch.                                                                                                                                                                                                                                                                                                                                                                                                                          | Nothing (not part of a page) | keep     | awaiting owner                                                                                                                                                                              | 2026-11-11 | 8aa9baf29fec |
-| `src/app/billing/success/payment-status-panel.test.tsx` | test | Test for the new state. Group 60: checks the package confirmation, the Individual slot note and the one reload. | Nothing (not part of a page) | keep | awaiting owner; group 60 part awaiting owner | 2026-11-19 | a0a953005946 |
+| `src/app/billing/success/payment-status-panel.test.tsx` | test | Test for the new state. Group 60: checks the package confirmation, the Individual slot note and the one reload. | Nothing (not part of a page) | keep | awaiting owner; group 60 part awaiting owner | 2026-11-19 | c50f30cb0df3 |
 | `src/app/dashboard/listings/page.test.tsx`                          | test   | Unit tests for the page reading from the new backend; expects no view counts (M2.8). Retired-backend cases removed; the rest run on the new backend.                                                                                                                                                                                                                                                                                                                                              | Nothing (not part of a page) | keep     | approved by owner 2026-11-10 (M2.8 hidden until it works)                                                                                                                                   | 2026-11-10 | f54994514fd5 |
 | `src/app/dashboard/page.test.tsx`                                   | test   | Unit tests for the page reading from the new backend; no second sign-in check (M9.2). Retired-backend removal: retired-backend cases removed; the rest run on the new backend. No longer mocks the removed engagement reads.                                                                                                                                                                                                                                                                      | Nothing (not part of a page) | keep     | awaiting owner (earlier change); M9.2 part approved by owner 2026-11-12; retired-backend removal part awaiting owner                                                                        | 2026-11-12 | 6afe30e91bc2 |
 | `src/app/dashboard/profile/page.test.tsx`                           | test   | Unit tests for the page reading from the new backend; email-change message. Mocks the foundation browser client module; no backend switch. Group 27: a test that, while account deletion is hidden, the Account tab shows no 'Delete' and links the data request form; the deletion tests switch it on. Group 43: tests for the row and dialog text, the typed word, the request it sends, the fresh sign-in step, the staff refusal, a lost or unclear answer, a retry with the session gone, and the closed state after success; the hidden-state test stays. | Nothing (not part of a page) | keep     | awaiting owner; group 27 part awaiting owner; group 43 approved by owner 2026-11-19                                                                                                                       | 2026-11-19 | 4a88e17849bd |
@@ -2389,11 +2389,14 @@ switch in the database).
 
 - 'Payment confirmed' for a package (draft n1): after paying for a package
   online, the payment result page reads 'Your package is active' and 'Payment
-  confirmed. Your <n> slots are ready to use now.', then Slots, Started, Ends
-  '<date, time> (SA time)', New posts 'Up to <n> every 30 days', Paid 'R<amount>
-  online', the note 'Nothing renews automatically.', 'Create a post' and 'Go to My slots', and, when the
-  member also holds Individual slots, 'Your Individual slots keep running and
-  move into the package when they end.' A package confirmed while the page is
+  confirmed. Your <n> slots are ready to use now.', then Slots, Started
+  '<date, time> (SA time)', Ends '<date, time> (SA time)', New posts 'Up to <n>
+  every 30 days', Paid 'R<amount> online', the note 'Nothing renews
+  automatically.', 'Create a post' and 'Go to My slots', and, when the member
+  also holds Individual slots, 'Posts in your Individual slots can move into the
+  package when those slots end, while it has free places.' (draft n1 said 'Your
+  Individual slots keep running and move into the package when they end.', which
+  promised more than a full package can do). A package confirmed while the page is
   open reloads the page's data once to show it. Every other payment keeps the
   general 'Payment confirmed' card. Draft n1's 'We remind you 14 days and 3 days
   before it ends.' is left out until package reminders exist: P4d adds it back
@@ -2416,10 +2419,12 @@ switch in the database).
   'Moves are checked every minute. A post that never moves falls into the 3-day
   grace when its package ends.', one item each: 'Post could not move
   into the package' (or 'out of the package', or 'The package was busy'),
-  '"<post title>" · tried <n> times since <date, time> · reason: busy' (or
+  'Post <reference> · tried <n> times since <date, time> · reason: busy' (or
   'error <code>'), and 'Package of <short name> · ends <date, time> (SA time)'.
-  A stuck move (failing for over 30 minutes, or in the package's last day) is
-  shown in red, others in gold. Nothing is shown while nothing fails. The
+  The post is named by a short reference (the first 8 characters of its id),
+  never its title: a paused post is not public. A stuck move (failing for over 30
+  minutes, or repeatedly in the package's last day) is shown in red, others in
+  gold. Nothing is shown while nothing fails. The
   draft's 'Retry now' is left out: the sweep retries every minute by itself.
   The rest of draft n7 (the staff package page) is part A5. The draft's
   'Bank transfer for an invoice issued before the package' item needs no card:
@@ -2427,11 +2432,11 @@ switch in the database).
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/billing/package-confirmed.tsx` | visual | Group 60: the package confirmation (draft n1). | After paying for a package: 'Your package is active' with slots, start, end in SA time, new posts per 30 days, the amount paid, 'Nothing renews automatically.', 'Create a post' and 'Go to My slots' (the reminder sentence comes back with P4d). | keep | awaiting owner | 2026-11-19 | 026ce545c817 |
+| `src/components/billing/package-confirmed.tsx` | visual | Group 60: the package confirmation (draft n1). | After paying for a package: 'Your package is active' with slots, start and end in SA time, new posts per 30 days, the amount paid, 'Nothing renews automatically.', 'Create a post' and 'Go to My slots' (the reminder sentence comes back with P4d), and for a member with Individual slots 'Posts in your Individual slots can move into the package when those slots end, while it has free places.' | keep | awaiting owner | 2026-11-19 | 542906df7c61 |
 | `src/app/billing/success/page.tsx` | rewiring | Group 60: reads whether the payment bought a package and, once delivered, the package it opened. | Nothing by itself (see `package-confirmed.tsx`). | keep | awaiting owner | 2026-11-19 | af1f9a821fab |
 | `src/app/billing/success/package-refresh.tsx` | helper | Group 60: reloads the page's data once when a package payment is confirmed while the page is open. | Nothing by itself: the package confirmation replaces the general one without a manual reload. | keep | awaiting owner | 2026-11-19 | 46d5133af172 |
-| `src/components/admin/commercial/package-move-attention.tsx` | visual | Group 60: staff see package moves the sweep keeps failing to make (part of draft n7). | Staff only, Payments & Refunds: the 'Needs attention' card described in group 60, only while a move fails. | keep | awaiting owner | 2026-11-19 | 63f77ee62d78 |
-| `src/components/admin/commercial/package-move-attention.test.tsx` | test | Group 60: checks the card is absent with nothing failing, and the stuck and not-yet-stuck items. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-19 | 0aa6891277a1 |
+| `src/components/admin/commercial/package-move-attention.tsx` | visual | Group 60: staff see package moves the sweep keeps failing to make (part of draft n7). | Staff only, Payments & Refunds: the 'Needs attention' card described in group 60 (posts by short reference, never by title), only while a move fails. | keep | awaiting owner | 2026-11-19 | f9e9342487b1 |
+| `src/components/admin/commercial/package-move-attention.test.tsx` | test | Group 60: checks the card is absent with nothing failing, and the stuck and not-yet-stuck items. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-19 | fb20fee57798 |
 
 <!-- frontend-ledger:end -->
 

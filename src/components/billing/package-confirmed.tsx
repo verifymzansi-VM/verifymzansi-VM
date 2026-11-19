@@ -13,7 +13,7 @@ import type { PackageConfirmation } from "@/lib/payments/package-confirmation";
 export function PackageConfirmed({ details }: { details: PackageConfirmation }) {
   const rows: Array<[string, string]> = [
     ["Slots", details.slots.toLocaleString("en-ZA")],
-    ["Started", formatDateTime(details.startsAt)],
+    ["Started", `${formatDateTime(details.startsAt)} (SA time)`],
     ["Ends", `${formatDateTime(details.endsAt)} (SA time)`],
     ["New posts", `Up to ${details.newPostsLimit.toLocaleString("en-ZA")} every 30 days`],
     ["Paid", `${formatPlanPrice(details.paidCents)} online`],
@@ -60,7 +60,8 @@ export function PackageConfirmed({ details }: { details: PackageConfirmation }) 
 
         {details.individualSlots ? (
           <p className="mt-5 text-center text-xs leading-5 text-muted-foreground">
-            Your Individual slots keep running and move into the package when they end.
+            Posts in your Individual slots can move into the package when those slots end, while it
+            has free places.
           </p>
         ) : null}
       </div>

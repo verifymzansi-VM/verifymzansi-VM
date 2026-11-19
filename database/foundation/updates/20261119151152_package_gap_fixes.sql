@@ -9,7 +9,7 @@
 -- service command api.run_slot_renewals; no command, argument or grant is
 -- removed or changed, and no field is added to an answer the website reads
 -- strictly. It refuses with 55000 unless the six functions it adds are absent
--- (or this update's), the five it replaces have their reviewed bodies (or
+-- (or this update's), the six it replaces have their reviewed bodies (or
 -- this update's) and its table is absent or has this update's shape. Packages
 -- stay off sale (private.slot_package_sales is not touched). In one
 -- transaction it:
@@ -32,11 +32,13 @@
 --    failure it counts in `package_skipped` is recorded (a post another
 --    transaction holds is now counted too, as `busy`), and its reply gains
 --    `package_stuck` (current failures that started over 30 minutes ago, or
---    whose package ends within a day), `package_stuck_moves` (up to 20 of
---    them: package, post, direction, tries, first failure, reason; no
---    personal data) and `package_paused_released` (see 3). The website's
---    operations job logs a non-zero `package_skipped` and alerts on
---    `package_stuck`. Every other step is unchanged.
+--    whose package ends within a day unless a single busy lock),
+--    `package_stuck_moves` (the stuck ones not reported before, up to 20,
+--    each reported once per failure run: package, post, direction, tries,
+--    first failure, reason; no personal data; column alerted_at) and
+--    `package_paused_released` (see 3). The website's operations job logs a
+--    non-zero `package_skipped` and emails staff once about newly stuck
+--    moves; its run keeps passing. Every other step is unchanged.
 -- 3. Paused posts after a package refund. A paused post still held in its
 --    ended Individual slot, whose own end date the lifecycle job had raised to
 --    the package's end while the package took it, keeps that date once no
@@ -56,8 +58,12 @@
 --    them: the slots run beside the package to their own end, like slots
 --    already held. E3 still refuses a transfer to an invoice issued after the
 --    person's package started, and a transfer recorded without an invoice
---    (new internal.slot_package_blocks_invoice). The Individual slot limit
---    still applies.
+--    (new internal.slot_package_blocks_invoice, read at clock time). The
+--    Individual slot limit still applies. internal.issue_staff_invoice
+--    (replaced) takes the account's package lock before E3, reads E3 at
+--    clock time and records that moment as the invoice's issue time, so an
+--    invoice issued while a package was being delivered can never count as
+--    issued before it.
 -- 5. An unsent online package checkout. internal.claim_checkout_request
 --    (replaced) refuses a package payment while the account has a package
 --    that has not ended (PT409 package_active) or an unpaid package invoice
@@ -65,13 +71,16 @@
 --    account's package lock (the one a bank transfer's confirmation, Pay now
 --    and a package delivery hold), taken without waiting after the payment
 --    row: while that lock is busy it refuses with PT409 package_busy and the
---    member tries again. So a checkout started before a package invoice was
+--    member tries again. A payment already sent to Ozow is not refused (its
+--    continue, check or cancel choice stays). So a checkout started before a
+--    package invoice was
 --    paid by bank transfer can no longer be sent to Ozow and paid beside the
 --    package.
 -- 6. Adds the staff read api.get_staff_package_move_failures()
 --    (`payments:view`): the current failures (last one in the past 15
 --    minutes), oldest first, at most 50, each with the package's end, the
---    owner's public name, the post's title and whether it is stuck.
+--    owner's public name, a short post reference (never the title) and
+--    whether it is stuck.
 --
 -- No existing row is changed. Read-only preflight:
 -- ../preflight/20261119151152_package_gap_fixes.check.sql. Rollback:
@@ -88,7 +97,7 @@ begin
   for shape in
     select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)),'absent')
     from (values ('internal.slot_package_move_failed(uuid,uuid,text,text)'),
-      ('internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone)'),
+      ('internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone,integer,text)'),
       ('internal.slot_package_release_paused(uuid)'),
       ('internal.slot_package_blocks_invoice(text,uuid,timestamp with time zone)'),
       ('internal.get_staff_package_move_failures()'),
@@ -97,30 +106,33 @@ begin
       ('internal.slot_package_grant_revoked()'),
       ('internal.claim_checkout_request(uuid,uuid)'),
       ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)'),
-      ('internal.confirm_staff_invoice_payment(uuid)')) v(sig)
+      ('internal.confirm_staff_invoice_payment(uuid)'),
+      ('internal.issue_staff_invoice(text,integer,integer,integer,text,uuid)')) v(sig)
   loop
     if shape not in (
         'internal.slot_package_move_failed(uuid,uuid,text,text) absent',
-        'internal.slot_package_move_failed(uuid,uuid,text,text) a202bfe80af8e5021d85c61c954f4afd',
-        'internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone) absent',
-        'internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone) f12afc45d9dcd4d66a3c426121776f8a',
+        'internal.slot_package_move_failed(uuid,uuid,text,text) e4b6ce4b2aee3ff1938607d6e4c13b62',
+        'internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone,integer,text) absent',
+        'internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone,integer,text) 1a00e8cdc844d71492dafff93b9214ab',
         'internal.slot_package_release_paused(uuid) absent',
         'internal.slot_package_release_paused(uuid) 7a759a9a2eae8a30e821acb1bc9502af',
         'internal.slot_package_blocks_invoice(text,uuid,timestamp with time zone) absent',
-        'internal.slot_package_blocks_invoice(text,uuid,timestamp with time zone) 936d94bad14a6dd93b088d713d7afc50',
+        'internal.slot_package_blocks_invoice(text,uuid,timestamp with time zone) abe2bfd47931f123e0ae7d0ade767324',
         'internal.get_staff_package_move_failures() absent',
-        'internal.get_staff_package_move_failures() 68b72b4d76c7326eafa78f4622e96c2c',
+        'internal.get_staff_package_move_failures() 2f537d010494190f161fb7db1ddf5967',
         'api.get_staff_package_move_failures() absent',
         'api.get_staff_package_move_failures() 3f539d70b5e2b7e538b77b0eecc94c68',
         'internal.run_slot_renewals(integer) 91941c5d801ac26cb0a8fc98051cd04b',
-        'internal.run_slot_renewals(integer) f27b3048f7bff4b071a579a5fbf56c98',
+        'internal.run_slot_renewals(integer) 287781841f49b3a0e2aa3a6d10280a5f',
         'internal.slot_package_grant_revoked() e052094af78e8fe39eeb26f11b8c3e69',
         'internal.slot_package_grant_revoked() 3d22cd9389fa075274e8ba14343e9aea',
         'internal.claim_checkout_request(uuid,uuid) ed0fda34dc274593ad117b51d47eb13c',
-        'internal.claim_checkout_request(uuid,uuid) cf0116ac2b82826a71f30adbad3309eb',
+        'internal.claim_checkout_request(uuid,uuid) 4922a976d1652603d491349a40f4f7da',
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 6f508a66a82ad2a24e4c43c324fd90a3',
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) e37a32a916640c9a16f5924818b9b735',
         'internal.confirm_staff_invoice_payment(uuid) 3daa82e3347ee5e2880279251c9521c2',
+        'internal.issue_staff_invoice(text,integer,integer,integer,text,uuid) cd64d93855e2db900d3600321759a07f',
+        'internal.issue_staff_invoice(text,integer,integer,integer,text,uuid) 98f455b38a64273d664a5a745ad862e0',
         'internal.confirm_staff_invoice_payment(uuid) c9adba77f7b7ac7c6366083956e53454') then
       raise exception 'package gap fixes precondition: % is not a reviewed body', shape using errcode='55000';
     end if;
@@ -143,6 +155,8 @@ create table if not exists private.slot_package_move_failures (
   first_failed_at timestamptz not null,
   last_failed_at timestamptz not null,
   reason text not null,
+  -- When the operations job was told it is stuck (once per failure run).
+  alerted_at timestamptz,
   constraint slot_package_move_failures_pkey primary key (id),
   constraint slot_package_move_failures_direction_check check (direction in ('into_package', 'out_of_package')),
   constraint slot_package_move_failures_tries_check check (tries >= 1),
@@ -159,9 +173,9 @@ create unique index if not exists slot_package_move_failures_move_idx on private
 create index if not exists slot_package_move_failures_last_idx on private.slot_package_move_failures (last_failed_at);
 
 -- A move failed: counted on the row of its package, post and direction. A
--- failure more than 15 minutes after the last one starts the count again.
--- Called only by the sweep while it holds the owner's fence, so two runs
--- never write the same row at once.
+-- failure more than 15 minutes after the last one starts the count again (and
+-- may be alerted again). Called only by the sweep while it holds the owner's
+-- fence, so two runs never write the same row at once.
 create or replace function internal.slot_package_move_failed(p_package uuid, p_post uuid, p_direction text,
     p_sqlstate text)
  returns void
@@ -174,6 +188,7 @@ begin
   update private.slot_package_move_failures f set
       tries = case when f.last_failed_at < v_now - interval '15 minutes' then 1 else f.tries + 1 end,
       first_failed_at = case when f.last_failed_at < v_now - interval '15 minutes' then v_now else f.first_failed_at end,
+      alerted_at = case when f.last_failed_at < v_now - interval '15 minutes' then null else f.alerted_at end,
       last_failed_at = v_now, reason = v_reason
     where f.package_id = p_package and f.post_id is not distinct from p_post and f.direction = p_direction;
   if not found then
@@ -186,19 +201,22 @@ alter function internal.slot_package_move_failed(uuid,uuid,text,text) owner to p
 revoke all on function internal.slot_package_move_failed(uuid,uuid,text,text) from public;
 
 -- A current failure is stuck once it started over 30 minutes ago, or while
--- its package ends within a day (one rule for the sweep and the staff read).
-create or replace function internal.slot_package_move_stuck(p_first_failed_at timestamptz, p_package_ends timestamptz)
+-- its package ends within a day, unless it is a single busy lock there (a
+-- lock another transaction held once is retried a minute later); one rule for
+-- the sweep and the staff read.
+create or replace function internal.slot_package_move_stuck(p_first_failed_at timestamptz, p_package_ends timestamptz,
+    p_tries integer, p_reason text)
  returns boolean
  language sql
  stable
  set search_path to 'pg_catalog'
 as $$
   select p_first_failed_at <= statement_timestamp() - interval '30 minutes'
-    or coalesce(p_package_ends > statement_timestamp() and p_package_ends <= statement_timestamp() + interval '1 day',
-      false);
+    or coalesce(p_package_ends > statement_timestamp() and p_package_ends <= statement_timestamp() + interval '1 day'
+      and (p_tries >= 2 or p_reason <> 'busy'), false);
 $$;
-alter function internal.slot_package_move_stuck(timestamptz,timestamptz) owner to postgres;
-revoke all on function internal.slot_package_move_stuck(timestamptz,timestamptz) from public;
+alter function internal.slot_package_move_stuck(timestamptz,timestamptz,integer,text) owner to postgres;
+revoke all on function internal.slot_package_move_stuck(timestamptz,timestamptz,integer,text) from public;
 
 -- 3. Paused posts no package takes any more go back to the end of their
 -- slot's paid run. Only the owner's paused posts still held in an ended paid
@@ -274,20 +292,23 @@ $function$;
 alter function internal.slot_package_grant_revoked() owner to postgres;
 revoke all on function internal.slot_package_grant_revoked() from public;
 
--- 4. E3 for a bank transfer to an Individual invoice: the person's running
--- package refuses it only when the package started at or before the invoice
--- was issued (D6: an invoice issued before the package is honoured). Without
--- an invoice (p_issued_at null) it is internal.slot_package_blocks_individual.
+-- 4. E3 for an Individual invoice: the person's running package refuses it
+-- only when the package started at or before the invoice was issued (D6: an
+-- invoice issued before the package is honoured). Without an invoice
+-- (p_issued_at null) any running package refuses it, as
+-- internal.slot_package_blocks_individual does. Read at the moment of the
+-- call (clock time, not the statement's start), so a package delivered while
+-- the caller waited for the account's package lock counts.
 create or replace function internal.slot_package_blocks_invoice(p_identity text, p_owner uuid, p_issued_at timestamptz)
  returns boolean
  language sql
- stable
+ volatile
  set search_path to 'pg_catalog'
 as $$
   select exists(select 1 from private.entitlements e join private.slot_packages k on k.id = e.package_id
     where e.owner_id in (select internal.individual_slot_owners(p_identity, p_owner))
-      and e.package_id is not null and e.status = 'active' and e.starts_at <= statement_timestamp()
-      and e.ends_at > statement_timestamp() + interval '7 days'
+      and e.package_id is not null and e.status = 'active' and e.starts_at <= clock_timestamp()
+      and e.ends_at > clock_timestamp() + interval '7 days'
       and (p_issued_at is null or k.created_at <= p_issued_at));
 $$;
 alter function internal.slot_package_blocks_invoice(text,uuid,timestamptz) owner to postgres;
@@ -306,7 +327,7 @@ declare n_moved integer := 0; n_reminders integer := 0; r record; post private.p
   activation private.post_activations; used integer; n_package_moved integer := 0; n_documents integer := 0;
   waiting record; held_back integer; places integer; n_downsized integer := 0; n_skipped integer := 0;
   package_ends timestamptz; target record; moved boolean; n_paused integer := 0; seen uuid[]; failed uuid[];
-  stuck jsonb;
+  stuck jsonb; stuck_count integer;
 begin
   if p_limit is null or p_limit not between 1 and 5000 then
     raise exception 'limit 1 to 5000' using errcode='22023';
@@ -588,28 +609,39 @@ begin
   -- package that ended over a day ago go (slot_package_move_failures_last_idx,
   -- at most p_limit a run); no step above can still write them, and rows
   -- another transaction holds are skipped. The current ones that are stuck
-  -- (internal.slot_package_move_stuck) are reported, the oldest 20 with their
-  -- package, post, direction, tries, first failure and reason, so the
-  -- operations job can alert.
+  -- (internal.slot_package_move_stuck) are counted, and each is reported once
+  -- for an alert (alerted_at; a new failure run after 15 quiet minutes may be
+  -- reported again): the oldest 20 not reported yet, with their package, post,
+  -- direction, tries, first failure and reason, marked under the owner's
+  -- fence (tried, never waited for; a busy owner's row is reported next run).
   delete from private.slot_package_move_failures f where f.id in (select x.id
     from private.slot_package_move_failures x where x.last_failed_at < statement_timestamp() - interval '7 days'
       and not exists(select 1 from private.entitlements e where e.package_id = x.package_id
         and e.ends_at > statement_timestamp() - interval '1 day')
     order by x.last_failed_at limit p_limit for update skip locked);
-  select jsonb_build_object('count', count(*), 'moves', coalesce(jsonb_agg(jsonb_build_object(
-      'package_id', s.package_id, 'post_id', s.post_id, 'direction', s.direction, 'tries', s.tries,
-      'first_failed_at', s.first_failed_at, 'reason', s.reason) order by s.first_failed_at, s.id)
-      filter (where s.n <= 20), '[]'::jsonb))
-    into stuck
-  from (select f.*, row_number() over (order by f.first_failed_at, f.id) as n
+  stuck := '[]'::jsonb;
+  stuck_count := 0;
+  for target in
+    select f.id, f.package_id, f.post_id, f.direction, f.tries, f.first_failed_at, f.reason, f.alerted_at,
+      k.owner_id
     from private.slot_package_move_failures f
+      left join private.slot_packages k on k.id = f.package_id
     where f.last_failed_at >= statement_timestamp() - interval '15 minutes'
       and internal.slot_package_move_stuck(f.first_failed_at, (select max(e.ends_at) from private.entitlements e
-        where e.package_id = f.package_id and e.status = 'active'))) s;
+        where e.package_id = f.package_id and e.status = 'active'), f.tries, f.reason)
+    order by f.first_failed_at, f.id
+  loop
+    stuck_count := stuck_count + 1;
+    continue when target.alerted_at is not null or jsonb_array_length(stuck) >= 20 or target.owner_id is null
+      or not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(target.owner_id::text,2408));
+    update private.slot_package_move_failures set alerted_at = clock_timestamp() where id = target.id;
+    stuck := stuck || jsonb_build_array(jsonb_build_object('package_id', target.package_id,
+      'post_id', target.post_id, 'direction', target.direction, 'tries', target.tries,
+      'first_failed_at', target.first_failed_at, 'reason', target.reason));
+  end loop;
   return jsonb_build_object('moved', n_moved, 'reminders', n_reminders, 'package_moved', n_package_moved,
     'package_documents', n_documents, 'package_downsized', n_downsized, 'package_skipped', n_skipped,
-    'package_paused_released', n_paused, 'package_stuck', (stuck->>'count')::integer,
-    'package_stuck_moves', stuck->'moves');
+    'package_paused_released', n_paused, 'package_stuck', stuck_count, 'package_stuck_moves', stuck);
 end;
 $function$;
 alter function internal.run_slot_renewals(integer) owner to postgres;
@@ -640,10 +672,13 @@ begin
   -- the account's package lock, which a bank transfer's confirmation, Pay now
   -- and a package delivery hold while they work, taken without waiting (this
   -- already holds the payment, which a delivery locks before that lock): while
-  -- one of them runs, the member is asked to try again in a moment.
+  -- one of them runs, the member is asked to try again in a moment. These
+  -- three apply only to a payment not sent to Ozow yet: one already open there
+  -- keeps the member's choice to continue, check or cancel it.
   if exists(select 1 from private.plan_versions v where v.id=pay.plan_version_id
       and internal.slot_package_plan(v.plan_code)) then
-    if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||pay.owner_id::text, 707)) then
+    if pay.checkout_url is null and not pg_catalog.pg_try_advisory_xact_lock(
+        pg_catalog.hashtextextended('slot-package:'||pay.owner_id::text, 707)) then
       raise exception 'your package is being updated; try again in a moment' using errcode='PT409', detail='package_busy';
     end if;
     if not internal.slot_packages_on_sale() then
@@ -652,10 +687,11 @@ begin
     if internal.current_verified_identity(pay.owner_id) is null then
       raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
     end if;
-    if internal.slot_package_open(pay.owner_id) then
+    if pay.checkout_url is null and internal.slot_package_open(pay.owner_id) then
       raise exception 'this account already has a Multi-listing package' using errcode='PT409', detail='package_active';
     end if;
-    if exists(select 1 from private.customer_invoices i join private.plan_versions v on v.id=i.plan_version_id
+    if pay.checkout_url is null and exists(select 1 from private.customer_invoices i
+        join private.plan_versions v on v.id=i.plan_version_id
         where i.account_id=pay.owner_id and i.status='issued' and internal.slot_package_plan(v.plan_code)
           and not exists(select 1 from private.customer_invoice_payments l where l.invoice_id=i.id and l.payment_id=pay.id)) then
       raise exception 'your package invoice is not paid yet; pay it, or ask us to cancel it first'
@@ -1070,11 +1106,117 @@ alter function internal.confirm_staff_invoice_payment(uuid) owner to postgres;
 revoke all on function internal.confirm_staff_invoice_payment(uuid) from public;
 grant execute on function internal.confirm_staff_invoice_payment(uuid) to authenticated;
 
+-- 4. Issuing an Individual invoice (the full function; it takes the account's
+-- package lock, reads E3 at the moment and records that moment as the issue
+-- time).
+CREATE OR REPLACE FUNCTION internal.issue_staff_invoice(p_account_email text, p_term_days integer, p_slots integer, p_due_days integer, p_reason text, p_request_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid; buyer uuid; plan private.plan_versions; fingerprint text; prior private.customer_invoices;
+  made private.customer_invoices; issued_on date; year_number integer; next_number integer; issued timestamptz;
+begin
+  actor := internal.staff_actor('payments:refund');
+  if length(btrim(coalesce(p_account_email, ''))) not between 3 and 254 or p_term_days is null
+      or p_term_days not in (30, 90, 180) or p_slots is null or p_slots not between 1 and 25
+      or p_due_days is null or p_due_days not between 1 and 30 or p_request_id is null then
+    raise exception 'customer email, slot term, number of slots and days to pay required'
+      using errcode='22023', detail='invoice_issue_invalid';
+  end if;
+  if not coalesce(internal.plain_text_valid(p_reason, 5, 500, true), false) then
+    raise exception 'audit reason required' using errcode='22023';
+  end if;
+  buyer := internal.invoice_customer_by_email(p_account_email);
+  perform internal.assert_staff_payment_actor(actor, buyer);
+  perform internal.lock_evidence_subject(buyer);
+  -- The account's package lock (20261119151152): issuing waits for a package
+  -- being delivered to the account and the other way round, so the invoice's
+  -- issue time and E3 below see every package delivered before it.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||buyer::text, 707));
+  perform internal.staff_actor('payments:refund'); -- authority after any lock wait
+  perform internal.assert_staff_payment_actor(actor, buyer);
+  perform internal.assert_staff_not_referrer(actor, buyer);
+  -- The same request again (a retried submission) returns the first invoice.
+  select * into prior from private.customer_invoices i where i.issued_by = actor and i.request_id = p_request_id;
+  if found then
+    if prior.account_id = buyer and prior.slots = p_slots and prior.issue_reason = btrim(p_reason)
+        and prior.due_on - internal.customer_invoice_day(prior.issued_at) = p_due_days
+        and (select v.duration_days from private.plan_versions v where v.id = prior.plan_version_id) = p_term_days then
+      return internal.customer_invoice_dto(prior, actor) || jsonb_build_object('repeated', true);
+    end if;
+    raise exception 'that request already issued another invoice' using errcode='PT409', detail='invoice_request_conflict';
+  end if;
+  if not exists(select 1 from private.current_account_access a where a.id = buyer) then
+    raise exception 'the customer''s account cannot use slots now' using errcode='PT409', detail='payment_account_unavailable';
+  end if;
+  select * into plan from private.plan_versions v
+    where v.plan_code = 'individual_'||p_term_days||'d' and v.retired_at is null and v.is_public
+      and internal.individual_slot_plan(v.plan_code)
+    order by v.version desc limit 1;
+  if not found then
+    raise exception 'no slot for that term is on sale' using errcode='PT409', detail='invoice_plan_unavailable';
+  end if;
+  fingerprint := internal.current_verified_identity(buyer);
+  if fingerprint is null then
+    raise exception 'the customer''s ID review must be accepted before an invoice is issued'
+      using errcode='PT412', detail='invoice_buyer_unverified';
+  end if;
+  -- E3 (20261114154823): while the person's Multi-listing package runs (until
+  -- its last 7 days), no Individual slot is sold, whatever the way it is paid;
+  -- read at this moment, after the lock (20261119151152).
+  if internal.slot_package_blocks_invoice(fingerprint, buyer, null) then
+    raise exception 'Individual slots cannot be sold while the person''s Multi-listing package runs'
+      using errcode='PT409', detail='package_active';
+  end if;
+  if plan.price_cents * p_slots > 5000000 then
+    raise exception 'invoices above R50,000 cannot be issued yet' using errcode='PT413', detail='invoice_amount_above_limit';
+  end if;
+  -- An early check of the slot limit; the payment checks it again.
+  if (internal.individual_slots_counted(fingerprint, buyer, null)->>'held')::integer + p_slots
+      > internal.individual_slot_limit(fingerprint) then
+    raise exception 'more slots than the person''s limit; raise the limit first' using errcode='PT429', detail='slot_limit_reached';
+  end if;
+  -- The invoice says "not registered for VAT": only while the merchant setting says so.
+  if not exists(select 1 from private.invoice_merchant_config c where c.singleton
+      and c.registration_status = 'not_registered' and c.confirmed_at is not null) then
+    raise exception 'the VAT registration setting changed; invoices need updating first'
+      using errcode='PT409', detail='invoice_vat_status_changed';
+  end if;
+  -- Issued now, after the package lock (20261119151152): a bank transfer to
+  -- it is honoured beside a package only if that package started before this.
+  issued := clock_timestamp();
+  issued_on := internal.customer_invoice_day(issued);
+  year_number := extract(year from issued_on)::integer;
+  insert into private.customer_invoice_numbers as n (invoice_year, last_number) values (year_number, 1)
+    on conflict (invoice_year) do update set last_number = n.last_number + 1
+    returning n.last_number into next_number;
+  insert into private.customer_invoices (invoice_number, invoice_year, sequence_number, account_id, plan_version_id,
+      slots, unit_price_cents, total_cents, description, due_on, issued_by, issue_reason, request_id, seller, issued_at)
+    values ('VM-' || year_number::text || '-' || lpad(next_number::text, 6, '0'), year_number, next_number, buyer, plan.id,
+      p_slots, plan.price_cents, plan.price_cents * p_slots,
+      case when p_slots = 1 then plan.label else p_slots::text || ' × ' || plan.label end,
+      issued_on + p_due_days, actor, btrim(p_reason), p_request_id,
+      jsonb_build_object('legal_name', 'Verifymzansi (Pty) Ltd', 'registration_number', '2026/155305/07',
+        'vat_registered', false), issued)
+    returning * into made;
+  perform internal.staff_actor('payments:refund');
+  perform internal.assert_staff_payment_actor(actor, buyer);
+  return internal.customer_invoice_dto(made, actor) || jsonb_build_object('repeated', false);
+end;
+$function$;
+alter function internal.issue_staff_invoice(text,integer,integer,integer,text,uuid) owner to postgres;
+revoke all on function internal.issue_staff_invoice(text,integer,integer,integer,text,uuid) from public;
+grant execute on function internal.issue_staff_invoice(text,integer,integer,integer,text,uuid) to authenticated;
+
 -- 6. Staff read: the package moves the sweep is failing to make now (the last
 -- failure in the past 15 minutes), oldest first, at most 50. Each with the
--- package's end, the owner's public name ("Thandeka D."), the post's title and
--- whether it is stuck (internal.slot_package_move_stuck). Never an email,
--- phone or identity detail.
+-- package's end, the owner's public name ("Thandeka D."), a short post
+-- reference (the first 8 characters of its id) and whether it is stuck
+-- (internal.slot_package_move_stuck). Never the post's title (a paused post
+-- is not public; the reference is enough to find it), an email, phone or
+-- identity detail.
 create or replace function internal.get_staff_package_move_failures()
  returns jsonb
  language plpgsql
@@ -1087,17 +1229,16 @@ begin
       'package_id', f.package_id,
       'owner_name', internal.profile_public_name((select pr.display_name from private.profiles pr
         where pr.account_id = k.owner_id)),
-      'post_id', f.post_id, 'post_title', p.title, 'direction', f.direction, 'tries', f.tries,
+      'post_id', f.post_id, 'post_ref', left(f.post_id::text, 8), 'direction', f.direction, 'tries', f.tries,
       'first_failed_at', f.first_failed_at, 'last_failed_at', f.last_failed_at, 'reason', f.reason,
       'package_ends_at', e.ends_at,
-      'stuck', internal.slot_package_move_stuck(f.first_failed_at, e.ends_at))
+      'stuck', internal.slot_package_move_stuck(f.first_failed_at, e.ends_at, f.tries, f.reason))
       order by f.first_failed_at, f.id), '[]'::jsonb))
     into result
   from (select x.* from private.slot_package_move_failures x
       where x.last_failed_at >= statement_timestamp() - interval '15 minutes'
       order by x.first_failed_at, x.id limit 50) f
     left join private.slot_packages k on k.id = f.package_id
-    left join private.posts p on p.id = f.post_id
     left join lateral (select max(g.ends_at) as ends_at from private.entitlements g
       where g.package_id = f.package_id and g.status = 'active') e on true;
   if internal.staff_actor('payments:view') is distinct from actor then

@@ -7,10 +7,11 @@
 -- summary is the only row and starts "package gap fixes: update not applied".
 --
 -- The summary says whether the six functions the update adds, its table and
--- its two indexes are absent and the five functions it replaces
+-- its two indexes are absent and the six functions it replaces
 -- (internal.run_slot_renewals, internal.slot_package_grant_revoked,
 -- internal.claim_checkout_request, internal.record_staff_invoice_transfer,
--- internal.confirm_staff_invoice_payment) have their reviewed earlier bodies
+-- internal.confirm_staff_invoice_payment, internal.issue_staff_invoice) have
+-- their reviewed earlier bodies
 -- (update not applied), all present with the update's bodies (already
 -- applied), or a mix (unexpected state), and counts:
 -- - "on sale": whether Multi-listing packages are on sale;
@@ -33,16 +34,17 @@ with added as (
   select v.sig, v.before, v.after,
     coalesce((select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)), 'absent') as body
   from (values
-    ('internal.slot_package_move_failed(uuid,uuid,text,text)', 'absent', 'a202bfe80af8e5021d85c61c954f4afd'),
-    ('internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone)', 'absent', 'f12afc45d9dcd4d66a3c426121776f8a'),
+    ('internal.slot_package_move_failed(uuid,uuid,text,text)', 'absent', 'e4b6ce4b2aee3ff1938607d6e4c13b62'),
+    ('internal.slot_package_move_stuck(timestamp with time zone,timestamp with time zone,integer,text)', 'absent', '1a00e8cdc844d71492dafff93b9214ab'),
     ('internal.slot_package_release_paused(uuid)', 'absent', '7a759a9a2eae8a30e821acb1bc9502af'),
-    ('internal.slot_package_blocks_invoice(text,uuid,timestamp with time zone)', 'absent', '936d94bad14a6dd93b088d713d7afc50'),
-    ('internal.get_staff_package_move_failures()', 'absent', '68b72b4d76c7326eafa78f4622e96c2c'),
+    ('internal.slot_package_blocks_invoice(text,uuid,timestamp with time zone)', 'absent', 'abe2bfd47931f123e0ae7d0ade767324'),
+    ('internal.get_staff_package_move_failures()', 'absent', '2f537d010494190f161fb7db1ddf5967'),
     ('api.get_staff_package_move_failures()', 'absent', '3f539d70b5e2b7e538b77b0eecc94c68'),
-    ('internal.run_slot_renewals(integer)', '91941c5d801ac26cb0a8fc98051cd04b', 'f27b3048f7bff4b071a579a5fbf56c98'),
+    ('internal.run_slot_renewals(integer)', '91941c5d801ac26cb0a8fc98051cd04b', '287781841f49b3a0e2aa3a6d10280a5f'),
     ('internal.slot_package_grant_revoked()', 'e052094af78e8fe39eeb26f11b8c3e69', '3d22cd9389fa075274e8ba14343e9aea'),
-    ('internal.claim_checkout_request(uuid,uuid)', 'ed0fda34dc274593ad117b51d47eb13c', 'cf0116ac2b82826a71f30adbad3309eb'),
+    ('internal.claim_checkout_request(uuid,uuid)', 'ed0fda34dc274593ad117b51d47eb13c', '4922a976d1652603d491349a40f4f7da'),
     ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)', '6f508a66a82ad2a24e4c43c324fd90a3', 'e37a32a916640c9a16f5924818b9b735'),
+    ('internal.issue_staff_invoice(text,integer,integer,integer,text,uuid)', 'cd64d93855e2db900d3600321759a07f', '98f455b38a64273d664a5a745ad862e0'),
     ('internal.confirm_staff_invoice_payment(uuid)', '3daa82e3347ee5e2880279251c9521c2', 'c9adba77f7b7ac7c6366083956e53454')
   ) v(sig, before, after)
 ),

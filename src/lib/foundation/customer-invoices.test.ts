@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import {
   FoundationInvoiceError,
   invoiceRouteRefusal,
+  PACKAGE_INVOICE_DESCRIPTION,
   issueStaffInvoice,
   readMyInvoice,
   readMyInvoiceTransferExpiry,
@@ -107,6 +109,21 @@ describe("customer invoice reads", () => {
     };
     const { api } = fixture(ok({ items: [item] }));
     await expect(readMyInvoices(api)).resolves.toEqual([item]);
+  });
+
+  it("tells package invoices apart by the description the database writes for them", () => {
+    // The member's invoice list has no kind field yet: a package invoice is
+    // known by internal.issue_package_customer_invoice's description. If that
+    // wording changes, this fails before the package checkout's note breaks.
+    const source = readFileSync(
+      "database/foundation/current/functions/internal/issue_package_customer_invoice.sql",
+      "utf8"
+    );
+    expect(source).toContain("'Multi-listing package: ' || r.slots::text || ' slots × '");
+    expect(PACKAGE_INVOICE_DESCRIPTION.test("Multi-listing package: 25 slots × 90 days")).toBe(
+      true
+    );
+    expect(PACKAGE_INVOICE_DESCRIPTION.test("25 × Individual slot, 30 days")).toBe(false);
   });
 
   it("lists the numbers of the member's unpaid Individual slot invoices, not package ones", async () => {

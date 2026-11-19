@@ -5065,7 +5065,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payments:view capability and recent authenticator proof: the Multi-listing package moves the minute sweep failed to make in the past 15 minutes, oldest first, at most 50, each with the package, its end, the owner's public name, the post and its title, the direction, the number of tries, the first and last failure, the reason (busy or an SQLSTATE) and whether it is stuck; never an email, phone or identity detail. Read only."
+      "authority": "Current payments:view capability and recent authenticator proof: the Multi-listing package moves the minute sweep failed to make in the past 15 minutes, oldest first, at most 50, each with the package, its end, the owner's public name, the post and a short reference to it (never its title), the direction, the number of tries, the first and last failure, the reason (busy or an SQLSTATE) and whether it is stuck; never an email, phone or identity detail. Read only."
     },
     {
       "name": "issue_staff_package_invoice",
