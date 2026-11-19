@@ -1,51 +1,107 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { resolveIpGeolocation } from "@/lib/services/ip-geolocation";
+/**
+ * POST /api/verification/location/detect
+ * Suggests a province and city from the request's network location
+ * (Cloudflare's request data). A suggestion only: it reads and writes no
+ * verification data, and the member still confirms or picks the pair, which
+ * /api/verification/location/manual saves.
+ */
+
+import { type NextRequest } from "next/server";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import {
+  FoundationAccountContextError,
+  readFoundationAccountContext,
+} from "@/lib/foundation/account-context";
+import { resolveRestoredLocality } from "@/lib/foundation/restored-locality";
+import { resolveIpGeolocation, type IpGeoSignal } from "@/lib/services/ip-geolocation";
 import { normalizeProvinceName, resolveCityName } from "@/lib/constants/sa-provinces";
 import { createLogger } from "@/lib/utils/logger";
+import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { isFeatureEnabled } from "@/lib/services/feature-flags";
-import { enforceConfirmedVerificationRequest } from "../../_lib/verification-request-prelude";
 
 const log = createLogger("LocationSuggestion");
 
-/** A suggestion only: never writes a step or approves an account. */
-export async function POST(request: NextRequest) {
-  const prelude = await enforceConfirmedVerificationRequest(request, log);
-  if (!prelude.success) return prelude.response;
+/** Detection attempts per account per window, kept apart from manual saving
+ * so using them up never blocks picking the province and city by hand. This
+ * counter is in memory, so it holds per Worker instance only; the bulk control
+ * is the shared per-client limit (action "verification:location-detect" in
+ * workers/rate-limiter.ts) that handleFoundationOwnerRoute checks first. */
+const DETECTION_CAP = 10;
 
-  try {
-    if (!(await isFeatureEnabled("kyc_v2_flow"))) {
-      return NextResponse.json(
-        { error: "Location confirmation is not enabled", code: "kyc_v2_disabled" },
-        { status: 404 }
-      );
-    }
-    // This read-only suggestion does not need a new distributed limiter/service.
-    // Keep detection's counter separate so exhausting it never blocks manual save.
-    const rate = checkLocalRateLimit(prelude.user.id, "verification:location-detect", 10);
-    if (rate.limited) {
-      return NextResponse.json(
-        { error: "Too many detection attempts. Select your province and city manually." },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": String(rate.retryAfter ?? 60),
-            "Cache-Control": "private, no-store",
-          },
-        }
-      );
-    }
-    const geo = await resolveIpGeolocation();
-    const province = geo?.country === "ZA" ? normalizeProvinceName(geo.province) : null;
-    const city = resolveCityName(province, geo?.city);
-    return NextResponse.json(
-      { detected: Boolean(province && city), province, city },
-      { headers: { "Cache-Control": "private, no-store" } }
-    );
-  } catch {
-    return NextResponse.json(
-      { detected: false, province: null, city: null },
-      { headers: { "Cache-Control": "private, no-store" } }
-    );
+type Suggestion = { detected: boolean; province: string | null; city: string | null };
+const NOTHING_DETECTED: Suggestion = { detected: false, province: null, city: null };
+
+class DetectionLimited extends Error {
+  override name = "DetectionLimited";
+  constructor(readonly retryAfter: number) {
+    super("Detection cap reached");
   }
+}
+
+/** A South African province and city that the wizard's lists offer and the
+ * foundation's locality list accepts, or nothing. */
+function suggestLocality(geo: IpGeoSignal | null): Suggestion {
+  if (geo?.country !== "ZA") return NOTHING_DETECTED;
+  const province = normalizeProvinceName(geo.province);
+  const city = resolveCityName(province, geo.city);
+  if (!province || !city) return NOTHING_DETECTED;
+  try {
+    resolveRestoredLocality(province, city);
+  } catch {
+    return NOTHING_DETECTED;
+  }
+  return { detected: true, province, city };
+}
+
+function detectedLocality(): Suggestion {
+  try {
+    // Only this request's Cloudflare data, never wrangler's platform proxy.
+    return suggestLocality(resolveIpGeolocation());
+  } catch {
+    // No location data (not on Cloudflare, or it could not be read).
+    return NOTHING_DETECTED;
+  }
+}
+
+export async function POST(request: NextRequest) {
+  // Same-origin and CSRF, though nothing is saved: the request carries the session.
+  const blocked = enforceMutationRequest(request, log);
+  if (blocked) return blocked;
+  return handleFoundationOwnerRoute({
+    request,
+    log,
+    action: "verification:location-detect",
+    mutate: false,
+    requireCaller: true,
+    unavailableMessage: "Location detection is unavailable",
+    signInMessage: "Sign in to manage verification",
+    command: async (api, _input, caller) => {
+      if (!caller) throw new Error("Verified caller missing");
+      const rate = checkLocalRateLimit(
+        caller.accountId,
+        "verification:location-detect",
+        DETECTION_CAP
+      );
+      if (rate.limited) throw new DetectionLimited(rate.retryAfter ?? 60);
+      // A live account with a confirmed email (the database checks both).
+      await readFoundationAccountContext(api);
+      return detectedLocality();
+    },
+    refusal: (error) =>
+      error instanceof DetectionLimited
+        ? {
+            status: 429,
+            error: "Too many detection attempts. Select your province and city manually.",
+            reason: "location_detection_limited",
+            code: "rate_limited",
+            retryAfter: error.retryAfter,
+          }
+        : error instanceof FoundationAccountContextError && error.reason === "forbidden"
+          ? {
+              status: 403,
+              error: "Account access is unavailable",
+              reason: "account_access_unavailable",
+            }
+          : null,
+  });
 }
