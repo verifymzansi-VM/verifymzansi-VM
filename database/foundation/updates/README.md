@@ -82,11 +82,11 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Multi-listing package invoices and "Ask for an invoice", 19 November 2026
 
-`20261119025106_package_invoices.sql` is pending (see the applied register).
-Roadmap P4e; the owner's decisions 5, 6 and 12 of 14 November 2026
-(multi-listing gap review) and of 16 November 2026 (an invoice first at any
-amount, paid with Pay now up to the online payment limit or by bank transfer).
-It needs `20261114154823_slot_packages.sql`,
+`20261119025106_package_invoices.sql` was applied on 19 November 2026 at 06:42
+UTC (see the applied register). Roadmap P4e; the owner's decisions 5, 6 and 12
+of 14 November 2026 (multi-listing gap review) and of 16 November 2026 (an
+invoice first at any amount, paid with Pay now up to the online payment limit or
+by bank transfer). It needs `20261114154823_slot_packages.sql`,
 `20261114041000_customer_invoice_pay_now.sql` and
 `20261118044440_bank_transfer_expiry.sql`, and refuses (55000) unless the nine
 functions it replaces have their reviewed bodies (or this update's) and the
@@ -185,6 +185,13 @@ the owner switches them on.
 - **Privacy export.** New dataset `package_invoice_requests` (term, slots,
   amounts, dates, consent, status, invoice number; never the staff member or the
   reasons).
+- **Known gap (fix before packages go on sale).** Confirming a bank transfer to
+  a package invoice waits while another package payment of the account is open
+  at Ozow, but an online package checkout that was started and not yet sent to
+  Ozow is neither cancelled nor rechecked. If it is sent and paid afterwards,
+  the payment lands in `needs_reconciliation` beside the package (staff refund
+  it). The fix belongs in `internal.claim_checkout_request`: refuse to send a
+  package checkout while the account has a package or an unpaid package invoice.
 
 **Order: apply first, then merge.** The website release from the same pull
 request calls the new commands and the deploy preflight probes every command in
@@ -5275,6 +5282,15 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   problem rows); production fingerprint after it (fingerprint.sql at 07418a73,
   captured about 21:29 UTC) matched the full replay (except the known schema
   grant difference)
-- `20261119025106_package_invoices.sql`: pending
+- `20261119025106_package_invoices.sql`: applied 2026-11-19 06:42 UTC; Supabase
+  SQL editor (browser), preflight + fingerprint checked; from the reviewed file
+  at ca11da3a (raw GitHub; pull request #277, sha256 starting 23a41e0dc2fdfa86,
+  merged as 88248654); preflight (sha256 starting 0031e9a5) before "package
+  invoices: update not applied; on sale: no; invoice requests: none (table
+  absent); package invoices: 0; package bank transfers: 0", after "package
+  invoices: already applied; on sale: no; invoice requests: 0 (open: 0); package
+  invoices: 0; package bank transfers: 0"; production fingerprint after it
+  (fingerprint.sql at ca11da3a, captured about 06:45 UTC) matched the full
+  replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
