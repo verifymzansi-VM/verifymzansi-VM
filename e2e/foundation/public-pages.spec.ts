@@ -375,7 +375,7 @@ test.describe("pricing and organisations", () => {
   // Paid plans are paused (the switch takes every plan off sale): the page
   // shows the Individual slot prices with no way to buy, and no old price.
   // The R69 Individual slots are on sale (Pricing v2 P2): one slot for any
-  // section, so every section's card links to the same checkout.
+  // section, so each term links to that one plan's checkout.
   test("pricing shows the R69 slots with their checkout, and no old price", async ({ page }) => {
     await page.goto("/pricing", { waitUntil: "domcontentloaded" });
     // The page area itself: while the page streams in, the loading screen has
@@ -395,20 +395,16 @@ test.describe("pricing and organisations", () => {
       await expect(
         main.getByTestId(`retail-offer-${tier}`).getByRole("link", { name: /^choose /i })
       ).toHaveAttribute("href", `/billing/checkout?plan=${id}`);
-    await expect(main.getByText("Until the event ends")).toBeVisible();
+    await expect(main.getByTestId("free-events")).toContainText("live until the event ends");
     await expect(main).not.toContainText(
       /Save R|Best value|R50\b|R140|R250|R1,200|R15,000|R650|R450|12 months|Growth|Starter/
     );
-    // The section picker changes where the slot is used, not the plan or price.
-    // A click before hydration does nothing, so retry until it is selected.
-    await expect(async () => {
-      await main.getByRole("radio", { name: /tourism/i }).click({ timeout: 2_000 });
-      await expect(main.getByRole("radio", { name: /tourism/i })).toBeChecked({ timeout: 2_000 });
-    }).toPass({ timeout: 20_000 });
-    await expect(
-      main.getByTestId("retail-offer-month").getByRole("link", { name: /^choose /i })
-    ).toHaveAttribute("href", "/billing/checkout?plan=d6ca48e5-43be-40df-8d8c-72c98a6fda96");
-    await expect(main.getByTestId("retail-offer-month")).toContainText("R69");
+    // One Individual slot works in every section: no section picker, and no
+    // tab row while Individual slots are the only offer on sale.
+    await expect(main.getByRole("radio")).toHaveCount(0);
+    await expect(main.getByRole("tablist")).toHaveCount(0);
+    await expect(main).toContainText("Market, Business or Tourism");
+    await expect(main).toContainText("Up to 4 posts per 30 days");
   });
 
   test("a retired plan cannot be bought", async ({ request }) => {
@@ -422,24 +418,6 @@ test.describe("pricing and organisations", () => {
       },
     });
     expect([400, 401, 403]).toContain(refused.status());
-  });
-
-  test("tourism leads with the free trial above the paid plans", async ({ page }) => {
-    await page.goto("/pricing", { waitUntil: "domcontentloaded" });
-    const main = page.locator("main");
-    const trial = main.getByTestId("tourism-free-trial");
-    await expect(trial).toHaveCount(0);
-    await expect(async () => {
-      await main.getByRole("radio", { name: /tourism/i }).click({ timeout: 2_000 });
-      await expect(trial).toBeVisible({ timeout: 2_000 });
-    }).toPass({ timeout: 20_000 });
-    await expect(trial.getByRole("link", { name: /start free trial/i })).toHaveAttribute(
-      "href",
-      "/post/create-tourism?type=tourism"
-    );
-    const trialBox = await trial.boundingBox();
-    const planBox = await main.getByTestId("retail-offer-month").boundingBox();
-    expect(trialBox!.y).toBeLessThan(planBox!.y);
   });
 
   test("pricing has no horizontal overflow on phones", async ({ page }) => {

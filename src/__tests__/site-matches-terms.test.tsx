@@ -6,7 +6,10 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { BillingFaq } from "@/components/billing/billing-faq";
+import { PricingOffers } from "@/components/billing/pricing-offers";
 import { RetailPricing } from "@/components/billing/retail-pricing";
+import { INDIVIDUAL_SLOT_LIMIT, POSTS_PER_SLOT_PER_30_DAYS } from "@/lib/billing/slot-checkout";
+import postingTermsV5 from "@/lib/legal/terms-documents/posting-v5.json";
 import { TrialPolicy } from "@/components/billing/trial-policy";
 import { getPlanFeatureItems, PLANS, RETAIL_OFFERS } from "@/lib/constants/pricing";
 import type { PublicSponsor } from "@/lib/organisations/sponsors";
@@ -95,6 +98,45 @@ describe("paid add-ons, hidden until they deliver", () => {
         "Optional Urgent label add-on"
       );
     }
+  });
+});
+
+describe("the pricing page's offers (Terms: Pricing)", () => {
+  const terms = JSON.stringify(postingTermsV5);
+  const offers = RETAIL_OFFERS.map((offer) => ({
+    ...offer,
+    planIds: { MZANSI_MARKET: "p", MZANSI_BUSINESS: "p", PROMOTIONS_EVENTS: "p" },
+  }));
+
+  it("states only what the Terms say about Individual slots and free events", () => {
+    const { container } = render(<PricingOffers offers={offers} onSale showMultiListing={false} />);
+    const text = container.textContent ?? "";
+
+    // Prices and terms.
+    expect(terms).toContain(
+      "Individual slots cost R69 per slot for each 30 days: R69 for 30 days, R207 for 90 days or R414 for 180 days."
+    );
+    for (const price of ["R69", "R207", "R414"]) expect(text).toContain(price);
+    // How many slots at a time.
+    expect(terms).toContain(
+      `You may hold 1 to ${INDIVIDUAL_SLOT_LIMIT} Individual slots at a time.`
+    );
+    expect(text).toContain(`Hold up to ${INDIVIDUAL_SLOT_LIMIT} slots at a time.`);
+    // Fair use: posts going live per slot per 30 days.
+    expect(terms).toContain(
+      `each paid slot can take at most ${POSTS_PER_SLOT_PER_30_DAYS} posts going live in each 30-day period`
+    );
+    expect(text).toContain(`Up to ${POSTS_PER_SLOT_PER_30_DAYS} posts per 30 days`);
+    // Any section.
+    expect(terms).toContain(
+      "An Individual slot can hold a post in any of the three posting areas."
+    );
+    expect(text).toContain("Market, Business or Tourism");
+    // Free events.
+    expect(terms).toContain("Events are free until the event ends");
+    expect(text).toContain("live until the event ends");
+    // Nothing on hold or not built.
+    expect(text).not.toMatch(/sponsor|Urgent|Boost|Featured|renews automatically|team/i);
   });
 });
 

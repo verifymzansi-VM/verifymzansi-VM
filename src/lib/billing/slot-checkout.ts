@@ -14,6 +14,9 @@ export const COOLING_OFF_CONSENT =
 /** Posts going live per paid slot per 30 days (posting-v4 fair use). */
 export const POSTS_PER_SLOT_PER_30_DAYS = 4;
 
+/** Individual slots one ID-reviewed person may hold at a time (posting-v5: "1 to 4"). */
+export const INDIVIDUAL_SLOT_LIMIT = 4;
+
 /**
  * Renewing (roadmap P3, owner's rule of 14 November 2026): a slot can be
  * renewed from this many days before it ends. The database's one setting is
