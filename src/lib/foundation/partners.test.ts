@@ -5,6 +5,7 @@ import {
   recordFoundationAcquisition,
   recordRestoredAcquisitionCookie,
   saveFoundationPartner,
+  saveRestoredPartner,
 } from "./partners";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 
@@ -92,6 +93,26 @@ describe("foundation partner adapter", () => {
         reason: "Synthetic payout",
       })
     ).rejects.toMatchObject({ reason: "invalid" });
+  });
+
+  it("sets a partner rate of at most 20% without calling the database for more", async () => {
+    const saved = { id, code: "ABCD12", status: "pending", commission_bps: 2000, revision: 1 };
+    const client = api({ data: saved, error: null });
+    const change = {
+      account_id: id,
+      action: "create",
+      code: "ABCD12",
+      reason: "Synthetic partner",
+    };
+    await expect(
+      saveFoundationPartner(client, { ...change, commission_bps: 2000 })
+    ).resolves.toEqual(saved);
+    expect(client.rpc.mock.calls[0][1]).toMatchObject({ p_commission_bps: 2000 });
+    await expect(
+      saveFoundationPartner(client, { ...change, commission_bps: 2001 })
+    ).rejects.toMatchObject({ reason: "invalid" });
+    expect(() => saveRestoredPartner(client, { ...change, commission_bps: 5000 })).toThrow();
+    expect(client.rpc).toHaveBeenCalledTimes(1);
   });
 
   it("maps a self-management refusal to forbidden", async () => {

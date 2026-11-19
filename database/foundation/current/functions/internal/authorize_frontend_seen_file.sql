@@ -15,7 +15,7 @@ begin
   perform internal.lock_verification_subject(subject);actor:=internal.staff_actor('evidence:view');
   select * into x from private.frontend_business_checks where id=check_id;
   select * into c from private.evidence_cases where id=check_id;
-  if actor=subject or not coalesce(actor=x.assigned_to or actor=x.reviewed_by
+  if actor=subject or not coalesce((actor=x.assigned_to or actor=x.reviewed_by) and internal.business_check_reread_open(x.decided_at)
     or (c.status='open' and c.claimed_by=actor and c.claim_expires_at>clock_timestamp()),false)
     then raise exception 'an authorized verifier must view this photo' using errcode='42501';end if;
   if not exists(select 1 from private.evidence_artifacts a where a.id=p_artifact and a.case_id=c.id and a.state='clean'

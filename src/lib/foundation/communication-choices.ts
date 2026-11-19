@@ -65,7 +65,10 @@ function refused(
 ): never {
   if (error?.code === "PT429" && hasDatabaseReason(error, "choice_limit"))
     throw new FoundationCommunicationError("limited");
-  if (error?.code === "22023" && hasDatabaseReason(error, "choice_invalid"))
+  // choice_unavailable: analytics and third-party sharing cannot be turned on
+  // yet (20261119065758_privacy_tightening_2), as saveCommunicationChoices
+  // already refuses while SHOW_DATA_USE_CHOICES is off.
+  if (error?.code === "22023" && hasDatabaseReason(error, "choice_invalid", "choice_unavailable"))
     throw new FoundationCommunicationError("invalid");
   if (error?.code === "42501") {
     // The session ended (or the account is no longer a signed-in, confirmed

@@ -144,6 +144,60 @@ describe("restored marketplace reads", () => {
     expect(rpc.mock.calls[0]?.[1].p_request).toMatchObject({ offset: 48, limit: 24 });
   });
 
+  it.each([
+    [24, "101", 100, 99 * 24],
+    [24, "10000", 100, 99 * 24],
+    [50, "100", 96, 95 * 50],
+    [12, "150", 100, 99 * 12],
+  ])(
+    "serves the last page within the search depth at %i a page for page %s",
+    async (limit, asked, served, offset) => {
+      const rpc = vi.fn().mockResolvedValue({ data: page([], 10_000), error: null });
+      const result = await readRestoredCollection(
+        apiWith(rpc),
+        "listings",
+        new URLSearchParams({ page: asked, limit: String(limit) })
+      );
+      expect(result.page).toBe(served);
+      expect(result.total).toBe(10_000);
+      expect(rpc.mock.calls[0]?.[1].p_request).toMatchObject({ offset });
+      // Every read starts at or before the deepest offset the database serves.
+      for (const call of rpc.mock.calls) expect(call[1].p_request.offset).toBeLessThanOrEqual(4800);
+    }
+  );
+
+  it("reads an organisation's businesses no deeper than the search depth", async () => {
+    const rpc = vi.fn(async (name: string, args: { p_request?: { offset?: number } }) => ({
+      data:
+        name === "search_post_cards"
+          ? page(
+              Array.from({ length: 48 }, (_, n) =>
+                card((args.p_request?.offset ?? 0) + n + 1, {
+                  kind: "business",
+                  area: "business",
+                  category: "general_other",
+                  price_mode: null,
+                  price_cents: null,
+                  condition: null,
+                })
+              ),
+              20_000
+            )
+          : [],
+      error: null,
+    }));
+    const result = await readRestoredCollection(
+      apiWith(rpc),
+      "businesses",
+      new URLSearchParams({ org: "example-org", limit: "24" })
+    );
+    expect(result.total).toBe(0);
+    const offsets = rpc.mock.calls
+      .filter(([name]) => name === "search_post_cards")
+      .map(([, args]) => args.p_request?.offset ?? 0);
+    expect(Math.max(...offsets)).toBe(4800);
+  });
+
   it("delegates price sorting before paging to the database", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: { ...page([card(1), card(3)], 3), sort: "price_asc" },
