@@ -123,7 +123,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 57. Removed for launch: old staff tools, trial tools, data-use choices, province chip | awaiting owner (removal approved by owner 2026-11-19; with the group 57 part of 16 rows elsewhere) | Staff: the Commercial settings, Free posts & trials, Programmes & contracts and six Intelligence pages answer 'Page not found'. Members: nothing visible changes apart from 'Optional messages.' on the Preferences card; the showroom help page loses 'Local first, never local only' and its 'How we know your province' section, and the privacy notice its 'Showroom location' paragraph |
 | 58. 'Detect province and city' shown at launch | awaiting owner (no file rows: the group 58 part of 1 existing row in group 2) | Nothing before launch (its switch stays off). At launch: the verification location step offers 'Detect province and city' again, as in the chosen version; it fills in a suggested province and city, or says to pick them from the list |
 | 60. Multi-listing packages: the small part-one gaps (Pricing v2 P4a) | awaiting owner (with the group 60 part of 7 rows elsewhere) | Members (only once packages are on sale): 'Your package is active' after paying for a package (draft n1), and a note on 'Choose your package' about unpaid Individual slot invoices. Staff: a 'Needs attention' card on Payments & Refunds while a package move keeps failing (part of draft n7) |
-| 61. Real view counts and likes (P6) | awaiting owner (with the group 61 part of 12 rows elsewhere) | Nothing today (switch off). When the owner switches SHOW_ENGAGEMENT_TOTALS on: 'N views' and the heart with its count are back as on 27 October, with real numbers; anyone can like (signed in, per account; signed out, per browser; tap again to unlike); a signed-out visitor's first counted view or like may show Cloudflare's 'Verify you are human' box bottom-right, only when Cloudflare needs a click; a signed-out like from a browser seen for the first time counts after 10 minutes (the visitor sees it at once); a view counts after 2 seconds on the post's page, once a day per visitor, never the owner's or staff's own; the privacy notice and PAIA manual describe what is stored |
+| 61. Real view counts and likes (P6) | awaiting owner (with the group 61 part of 11 rows elsewhere) | Nothing today (switch off). When the owner switches SHOW_ENGAGEMENT_TOTALS on: 'N views' and the heart with its count are back as on 27 October, with real numbers; anyone can like (signed in, per account; signed out, per browser; tap again to unlike); a signed-out visitor's first counted view or like may show Cloudflare's 'Verify you are human' box bottom-right, only when Cloudflare needs a click; a signed-out like from a browser seen for the first time counts after 10 minutes (the visitor sees it at once); a view counts after 2 seconds on the post's page, once a day per visitor, never the owner's or staff's own; the privacy notice and PAIA manual describe what is stored |
 
 Questions for the owner:
 
@@ -2416,7 +2416,17 @@ website reads and records them, but only while the switch
 production until the owner approves showing them; it is on in the launch
 configuration build. Turning it on brings back the 27 October look: the eye
 icon with 'N views' on post pages, cards, the full-screen viewer, Video mode and
-the owner's post lists, and the heart with its count; nothing is redesigned.
+the owner's post lists, and the heart with its count, in the same places and
+style. Three things are new and visible:
+
+- Cloudflare's 'Verify you are human' box can appear in the bottom-right corner
+  (16 px from the edges, above the page) on a signed-out visitor's first
+  counted view or first like, only when Cloudflare needs a click; it closes
+  once solved. Most visitors never see it.
+- If that check cannot be completed, the like is not saved, the heart goes
+  back, and screen readers hear 'Confirm you are not a robot to like posts'.
+- A signed-out like from a browser seen for the first time counts in the
+  public total after 10 minutes; the visitor sees their own like at once.
 
 What is new behind the switch: anyone can like a post, signed in or not, and
 the like stays (signed in, one per account; signed out, one per browser; tapping
