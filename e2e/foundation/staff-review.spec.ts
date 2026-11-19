@@ -556,21 +556,22 @@ test.describe("staff review with an authenticator", () => {
   test("the identity check counter equals the cases the queue lists", async ({ context, page }) => {
     test.setTimeout(60_000);
     const { outside, failures } = await guard(context);
-    // The queue's rule: open, a current submission at the case's version and
-    // an active account (20261119065758_privacy_tightening_2.sql). An open
-    // case with nothing to review is not counted.
+    const adminId = await signInBrowser(context, "admin");
+    // The queue's rule: open, a current submission at the case's version, an
+    // active account and not the staff member's own case
+    // (20261119065758_privacy_tightening_2.sql). An open case with nothing to
+    // review is not counted.
     const listed = Number(
       queryTestCopy(
         "select count(*) from private.evidence_cases e " +
           "join private.verification_current_submissions v on v.case_id = e.id " +
           "join private.verification_identity_submissions s on s.id = v.submission_id " +
           "and s.case_version = e.version " +
-          "where e.kind = 'kyc' and e.status = 'open' " +
+          `where e.kind = 'kyc' and e.status = 'open' and e.subject_id <> '${adminId}' ` +
           "and exists (select 1 from private.current_account_access u where u.id = e.subject_id);"
       )
     );
     expect(listed).toBeGreaterThanOrEqual(2);
-    await signInBrowser(context, "admin");
     await page.goto("/admin");
     const counter = page
       .getByRole("link")

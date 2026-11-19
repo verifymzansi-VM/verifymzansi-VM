@@ -50,7 +50,7 @@ with bodies as (
     ('internal.account_closing_actor()',
       '170006872f636cdda2a2bbc3e08a0a43', 'f693dcfec7976a87e42941286d8b2305'),
     ('internal.business_check_reread_open(timestamp with time zone)',
-      null, '257483078d7b7b9a21d81fc6680ab2cd')
+      null, '67e43d6564d23e2aa5826bec441c088f')
   ) v(sig, reviewed, updated)
 ),
 state as (

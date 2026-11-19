@@ -260,16 +260,35 @@ try {
     }
     // A submitted case is counted; the staff member's own case is not (they
     // cannot review it, and the queue does not list it).
-    const second = pendingFor(named("second", "Second", "Member"));
+    const secondMember = named("second", "Second", "Member");
+    const second = pendingFor(secondMember);
     const own = pendingFor(moderator);
     assert.equal(dashboard(moderator).counts.kyc, 2);
     assert.equal(queueTotal(moderator), 2);
     assert.equal(dashboard(governor).counts.kyc, 3);
     assert.equal(queueTotal(governor), 3);
-    // A case whose account is no longer active leaves both.
+    // A case whose account is no longer active (suspended, then closed) leaves
+    // both, while the case itself stays open.
+    const counted = (who) => {
+      const view = dashboard(who);
+      assert.equal(view.counts.kyc, queueTotal(who));
+      assert.equal(view.restored_queues.kyc.pending, queueTotal(who));
+      return view.counts.kyc;
+    };
+    q(`update auth.users set banned_until=now()+interval '7 days' where id='${secondMember.id}';`);
+    assert.equal(counted(governor), 2);
+    assert.equal(counted(moderator), 1);
+    q(`update auth.users set banned_until=null where id='${secondMember.id}';`);
+    assert.equal(counted(governor), 3);
     q(`set session_replication_role=replica;
-      update private.evidence_cases set status='closed' where id in('${second}','${own}');`);
-    assert.equal(dashboard(governor).restored_queues.kyc.pending, queueTotal(governor));
+      insert into private.account_closures(user_id,closed_at,evidence_delete_after)
+        values('${secondMember.id}',statement_timestamp(),statement_timestamp()+interval '90 days');`);
+    assert.equal(counted(governor), 2);
+    assert.equal(counted(moderator), 1);
+    assert.equal(count(`private.evidence_cases where id='${second}' and status='open'`), 1);
+    q(`set session_replication_role=replica;
+      update private.evidence_cases set status='closed' where id='${own}';`);
+    assert.equal(counted(governor), 1);
     assert.equal(
       count(`private.evidence_cases where id in('${waiting}','${empty}') and status='open'`),
       2

@@ -89,7 +89,10 @@ the thirteen functions it replaces have their reviewed bodies (or this
 update's), its helper is absent (or this update's) and no partner's rate is
 above 20%. No API command, argument, grant or return type changes and no field
 is added to an existing result; the staff organisation detail loses
-`public_contacts` (hand-reviewed jsonb).
+`public_contacts` (hand-reviewed jsonb). **Revert:** the website before this
+pull request requires `public_contacts`, so its staff organisation page fails
+once the update is applied: if the website is reverted after apply, run the
+rollback SQL first.
 
 - **Communication choices.** `internal.save_my_communication_choices` refuses to
   turn analytics or third-party sharing on (22023 `choice_unavailable`). Turning
@@ -117,7 +120,8 @@ is added to an existing result; the staff organisation detail loses
   check (or was assigned to the visit) opens its private details without a claim
   only until 90 days after the decision (`internal.get_frontend_cipc_case`,
   `internal.get_frontend_seen_case`, `internal.authorize_frontend_seen_file`,
-  through the new `internal.business_check_reread_open`).
+  through the new `internal.business_check_reread_open`). After that they see
+  only what every `queue:view` reader sees (a decided check cannot be claimed).
 - **Closing an account.** `internal.account_closing_actor` counts only a
   password or Google sign-in (`amr` methods `password` and `oauth`) from the
   last 15 minutes, never a stamp more than 30 seconds in the future.

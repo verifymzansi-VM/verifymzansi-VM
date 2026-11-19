@@ -303,7 +303,8 @@ test.describe("public pages", () => {
       const body = await response.json();
       await route.fulfill({ response, json: { ...body, total: 10_000, page: 100 } });
     });
-    await page.goto("/mzansi-business?page=100", { waitUntil: "domcontentloaded" });
+    // A typed deeper page shows as the last page.
+    await page.goto("/mzansi-business?page=150", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("mzansi-business-grid-ready")).toBeVisible({ timeout: 20_000 });
     await expect(
       page.getByText(/Showing the first 2.400 results\. Narrow your search to see more\./)

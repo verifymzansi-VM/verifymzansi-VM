@@ -39,8 +39,9 @@
 --    without claiming it only until 90 days after the decision
 --    (internal.get_frontend_cipc_case, internal.get_frontend_seen_case and
 --    internal.authorize_frontend_seen_file, through the new helper
---    internal.business_check_reread_open); after that they claim it like
---    anyone else. Undecided checks are unchanged.
+--    internal.business_check_reread_open); after that they see only what
+--    every queue:view reader sees (a decided check cannot be claimed).
+--    Undecided checks are unchanged.
 -- 8. Closing an account: internal.account_closing_actor counts only a recent
 --    sign-in with a password or Google (amr methods 'password' and 'oauth',
 --    within 15 minutes, never a stamp more than 30 seconds in the future), as
@@ -60,6 +61,10 @@
 -- error page for a hand-typed search page deeper than the new limit. The
 -- precondition accepts the reviewed bodies or this update's own, so a
 -- repeated run changes nothing.
+-- REVERT: the website before this pull request requires 'public_contacts'
+-- in the staff organisation detail, so its staff organisation page fails
+-- once this update is applied. If the website is reverted after apply, run
+-- the rollback SQL first.
 -- Read-only preflight: ../preflight/20261119065758_privacy_tightening_2.check.sql.
 -- Rollback: ../rollback/20261119065758_privacy_tightening_2.down.sql.
 begin;
@@ -118,7 +123,7 @@ begin
         'internal.account_closing_actor() 170006872f636cdda2a2bbc3e08a0a43',
         'internal.account_closing_actor() f693dcfec7976a87e42941286d8b2305',
         'internal.business_check_reread_open(timestamp with time zone) absent',
-        'internal.business_check_reread_open(timestamp with time zone) 257483078d7b7b9a21d81fc6680ab2cd') then
+        'internal.business_check_reread_open(timestamp with time zone) 67e43d6564d23e2aa5826bec441c088f') then
       raise exception 'privacy tightening 2 precondition: % is not a reviewed body', shape
         using errcode='55000';
     end if;
@@ -143,7 +148,8 @@ AS $function$
   -- Whether the staff member who decided a business check (or, for a visit,
   -- was assigned to it) may still open its private details without claiming
   -- it: while it is undecided, and for 90 days after the decision. After that
-  -- they claim it like anyone else.
+  -- they see only what every queue:view reader sees (a decided check cannot
+  -- be claimed).
   select p_decided_at is null or p_decided_at>clock_timestamp()-interval '90 days';
 $function$;
 alter function internal.business_check_reread_open(timestamp with time zone) owner to postgres;
@@ -1010,7 +1016,7 @@ begin
       ('internal.get_frontend_seen_case(uuid)','a1a42c71ed078d188ebe94a2e9ac4bb5'),
       ('internal.authorize_frontend_seen_file(uuid,boolean)','7a51ab618ce14a97309fdb50fd21acea'),
       ('internal.account_closing_actor()','f693dcfec7976a87e42941286d8b2305'),
-      ('internal.business_check_reread_open(timestamp with time zone)','257483078d7b7b9a21d81fc6680ab2cd')
+      ('internal.business_check_reread_open(timestamp with time zone)','67e43d6564d23e2aa5826bec441c088f')
     ) v(sig,body)
     where (select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)) is distinct from v.body)
     or not exists(select 1 from pg_constraint c where c.conrelid='private.partners'::regclass

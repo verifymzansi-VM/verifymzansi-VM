@@ -233,6 +233,10 @@ async function readCards(
     if (count >= 200) throw new Error("Public collection is too large to paginate safely");
     const requested = Math.min(48, want - cards.length);
     const offset = start + cards.length;
+    // TODO(per-organisation read): the org= filter reads its area from offset
+    // 0 and keeps only the organisation's businesses, so past offset 4,800 it
+    // silently stops and misses later ones. Replace it with a database read of
+    // one organisation's affiliated businesses before an area grows that large.
     if (offset > SEARCH_MAX_OFFSET) break;
     const result = await searchFoundationPresentedCards(api, {
       ...input,

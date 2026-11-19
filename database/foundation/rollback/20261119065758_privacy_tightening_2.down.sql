@@ -49,7 +49,7 @@ begin
         'internal.get_frontend_seen_case(uuid) a1a42c71ed078d188ebe94a2e9ac4bb5',
         'internal.authorize_frontend_seen_file(uuid,boolean) 7a51ab618ce14a97309fdb50fd21acea',
         'internal.account_closing_actor() f693dcfec7976a87e42941286d8b2305',
-        'internal.business_check_reread_open(timestamp with time zone) 257483078d7b7b9a21d81fc6680ab2cd') then
+        'internal.business_check_reread_open(timestamp with time zone) 67e43d6564d23e2aa5826bec441c088f') then
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
     end if;
   end loop;
