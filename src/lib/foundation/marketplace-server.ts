@@ -3,11 +3,14 @@ import { cache } from "react";
 import { z } from "zod";
 import { foundationServerPublicApi } from "./server-public";
 import {
+  readPublicEngagement,
   readRestoredCollection,
   readRestoredPublicDetail,
   restoredPublicRow,
   type PublicCollection,
 } from "./marketplace-read";
+import type { PostEngagement } from "./post-engagement";
+import { SHOW_ENGAGEMENT_TOTALS } from "../hidden-features";
 import type { FoundationPublicPostCore } from "./public-post-contract";
 import { readPublicBusinessStickers } from "./business-seen";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
@@ -66,6 +69,13 @@ export async function restoredHomeCollection(collection: PublicCollection, touri
     log.warn("Home preview unavailable", { collection, error: message });
     return { data: null, error: { message } };
   }
+}
+
+/** View and like totals of publicly listed posts, for the owner's post lists.
+ * Empty, with no connection made, while SHOW_ENGAGEMENT_TOTALS is off. */
+export async function restoredPostEngagement(ids: readonly string[]) {
+  if (!SHOW_ENGAGEMENT_TOTALS || ids.length === 0) return new Map<string, PostEngagement>();
+  return readPublicEngagement(foundationServerPublicApi(), ids);
 }
 
 export const restoredPublicDetail = cache(async (id: string) => {
