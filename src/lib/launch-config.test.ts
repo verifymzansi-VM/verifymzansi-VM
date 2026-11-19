@@ -28,7 +28,7 @@ describe("launch configuration switches", () => {
       const { flag, hidden, pricing, banner } = await loadSwitches(value);
       expect(flag.LAUNCH_CONFIG_BUILD).toBe(false);
       const switches = Object.entries(hidden);
-      expect(switches.length).toBeGreaterThanOrEqual(17);
+      expect(switches.length).toBeGreaterThanOrEqual(9);
       for (const [name, on] of switches) expect(on, name).toBe(false);
       expect(pricing.PACKAGES_ON_SALE).toBe(false);
       expect(banner.PRELAUNCH_BANNER_ENABLED).toBe(true);

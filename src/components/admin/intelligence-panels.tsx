@@ -10,13 +10,6 @@ export type ChartDatum = {
   tone?: Tone;
 };
 
-export type DecisionItem = {
-  label: string;
-  value: string;
-  detail: string;
-  tone?: Tone;
-};
-
 const toneClasses: Record<Tone, { bar: string; dot: string; text: string; bg: string }> = {
   brand: {
     bar: "bg-brand-green-600 dark:bg-brand-green-400",
@@ -190,42 +183,6 @@ export function ColumnChartPanel({
             );
           })}
         </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-export function DecisionPanel({
-  title,
-  description,
-  items,
-}: {
-  title: string;
-  description?: string;
-  items: DecisionItem[];
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
-      </CardHeader>
-      <CardContent className="grid gap-3">
-        {items.map((item) => {
-          const tone = toneClasses[item.tone ?? "slate"];
-
-          return (
-            <div key={item.label} className={cn("rounded-lg border p-4", tone.bg)}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium">{item.label}</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.detail}</p>
-                </div>
-                <p className={cn("shrink-0 text-sm font-semibold", tone.text)}>{item.value}</p>
-              </div>
-            </div>
-          );
-        })}
       </CardContent>
     </Card>
   );

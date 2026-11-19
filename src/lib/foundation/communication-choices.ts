@@ -3,7 +3,6 @@ import "server-only";
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { hasDatabaseMessage, hasDatabaseReason } from "./error-reasons";
-import { SHOW_DATA_USE_CHOICES } from "../hidden-features";
 
 /**
  * The version of the switch wording on the communication page. Every saved
@@ -13,10 +12,20 @@ import { SHOW_DATA_USE_CHOICES } from "../hidden-features";
  * until both are updated together.
  */
 export const COMMUNICATION_WORDING_VERSION = "communication-2026-11";
-/** SHA-256 (base64url) of the four switches' labels and descriptions (see the test). */
-export const COMMUNICATION_WORDING_SHA256 = "MkPrw-j1TTgkOkvREpa8Fm5FgB33C-9HqzFk-xMQVRs";
+/**
+ * SHA-256 (base64url) of the switches' labels and descriptions (see the test).
+ * The two marketing switches' wording is unchanged since this version was set;
+ * the Analytics and Third-party sharing switches, never shown on the live
+ * site, were removed, so the digest now covers two switches.
+ */
+export const COMMUNICATION_WORDING_SHA256 = "23IWVKj6gdC2gt-BFrirdml3RuqrrCxjRqJkTvr9V6w";
 
-/** The member's four optional choices. Each is off until turned on. */
+/**
+ * The member's four optional choices, as the database stores them. Each is off
+ * until turned on. The page offers only the two marketing choices: analytics
+ * and third-party sharing were removed (nothing uses them), so they can only
+ * be turned off, which keeps an earlier "on" withdrawable.
+ */
 export const communicationChoicesSchema = z.strictObject({
   marketing_email: z.boolean(),
   marketing_sms: z.boolean(),
@@ -65,9 +74,9 @@ function refused(
 ): never {
   if (error?.code === "PT429" && hasDatabaseReason(error, "choice_limit"))
     throw new FoundationCommunicationError("limited");
-  // choice_unavailable: analytics and third-party sharing cannot be turned on
-  // yet (20261119065758_privacy_tightening_2), as saveCommunicationChoices
-  // already refuses while SHOW_DATA_USE_CHOICES is off.
+  // choice_unavailable: the database also refuses turning analytics or
+  // third-party sharing on (20261119065758_privacy_tightening_2), as
+  // saveCommunicationChoices already does before calling it.
   if (error?.code === "22023" && hasDatabaseReason(error, "choice_invalid", "choice_unavailable"))
     throw new FoundationCommunicationError("invalid");
   if (error?.code === "42501") {
@@ -109,12 +118,9 @@ export async function saveCommunicationChoices(
 ): Promise<CommunicationChoices> {
   const change = communicationChoiceUpdateSchema.safeParse(input);
   if (!change.success) throw new FoundationCommunicationError("invalid");
-  // Hidden choices stay at their safe default: a crafted request cannot turn
-  // one on, but can still turn it off.
-  if (
-    !SHOW_DATA_USE_CHOICES &&
-    (change.data.analytics === true || change.data.third_party_sharing === true)
-  )
+  // The removed choices stay at their safe default: a crafted request cannot
+  // turn one on, but can still turn it off.
+  if (change.data.analytics === true || change.data.third_party_sharing === true)
     throw new FoundationCommunicationError("invalid");
   const { data, error } = await api.rpc("save_my_communication_choices", {
     p_wording: COMMUNICATION_WORDING_VERSION,

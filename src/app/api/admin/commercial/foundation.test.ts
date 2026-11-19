@@ -139,11 +139,12 @@ describe("POST /api/admin/commercial on foundation", () => {
     expect(saveRestoredPartner).not.toHaveBeenCalled();
   });
 
-  it("refuses actions the foundation backend does not offer, and invalid input", async () => {
+  it("refuses the retired trial, programme and settings actions, and invalid input", async () => {
     const run = await command();
-    await expect(
-      run(api, { action: "trial.override", userId: id, kind: "NONE", reason })
-    ).rejects.toMatchObject({ status: 501 });
+    for (const action of ["trial.override", "settings.update", "trial_extension.offer"])
+      await expect(run(api, { action, userId: id, kind: "NONE", reason })).rejects.toMatchObject({
+        name: "ZodError",
+      });
     await expect(run(api, { action: "payment.reverse", paymentId: id, reason })).rejects.toThrow();
   });
 });

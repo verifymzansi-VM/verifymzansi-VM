@@ -480,8 +480,8 @@ export default async function MetricsPage() {
               Showroom turns, last 7 days
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Everyone gets an equal turn. Posts seen least go next, new posts get 72 hours up
-              front, and visitors see posts from their own province first.{" "}
+              Everyone gets an equal turn. Posts seen least go next, and new posts get 72 hours up
+              front.{" "}
               <Link href="/help/showroom" className="font-medium underline underline-offset-2">
                 How the showroom works
               </Link>

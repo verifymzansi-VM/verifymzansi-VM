@@ -1,8 +1,7 @@
 "use client";
 
-import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bell, Inbox, Mail, Loader2, Megaphone, BarChart2 } from "lucide-react";
+import { Bell, Inbox, Mail, Loader2, Megaphone } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { useToast } from "@/hooks/use-toast";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { SHOW_DATA_USE_CHOICES } from "@/lib/hidden-features";
 
 interface NotificationItem {
   id: string;
@@ -27,8 +25,6 @@ interface NotificationItem {
 interface OptionalPreferences {
   marketing_email: boolean;
   marketing_sms: boolean;
-  analytics: boolean;
-  third_party_sharing: boolean;
 }
 
 interface EmailActivityItem {
@@ -52,8 +48,6 @@ const EMAIL_TEMPLATE_CATALOG = [
 const DEFAULT_PREFERENCES: OptionalPreferences = {
   marketing_email: false,
   marketing_sms: false,
-  analytics: false,
-  third_party_sharing: false,
 };
 
 export function CommunicationHub() {
@@ -101,8 +95,6 @@ export function CommunicationHub() {
       setPreferences({
         marketing_email: Boolean(data.preferences?.marketing_email),
         marketing_sms: Boolean(data.preferences?.marketing_sms),
-        analytics: Boolean(data.preferences?.analytics),
-        third_party_sharing: Boolean(data.preferences?.third_party_sharing),
       });
     } catch (error) {
       toast({
@@ -366,7 +358,7 @@ export function CommunicationHub() {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Your preferences</CardTitle>
-            <CardDescription>Optional messages and data use.</CardDescription>
+            <CardDescription>Optional messages.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {loadingPreferences ? (
@@ -394,30 +386,6 @@ export function CommunicationHub() {
                   disabled={savingKey !== null}
                   onCheckedChange={(checked) => void togglePreference("marketing_sms", checked)}
                 />
-                {SHOW_DATA_USE_CHOICES && (
-                  <>
-                    <PreferenceRow
-                      icon={BarChart2}
-                      id="analytics"
-                      label="Analytics"
-                      description="Allow usage analytics to improve platform features."
-                      checked={preferences.analytics}
-                      disabled={savingKey !== null}
-                      onCheckedChange={(checked) => void togglePreference("analytics", checked)}
-                    />
-                    <PreferenceRow
-                      icon={ShieldCheck}
-                      id="third-party-sharing"
-                      label="Third-party sharing"
-                      description="Allow approved third-party processing for extended services."
-                      checked={preferences.third_party_sharing}
-                      disabled={savingKey !== null}
-                      onCheckedChange={(checked) =>
-                        void togglePreference("third_party_sharing", checked)
-                      }
-                    />
-                  </>
-                )}
               </>
             )}
           </CardContent>

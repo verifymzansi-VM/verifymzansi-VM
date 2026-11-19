@@ -17,7 +17,6 @@ type MaybeUser = Pick<User, "app_metadata" | "is_anonymous"> | null | undefined;
 
 export type Capability =
   | "posting:bypass_limits"
-  | "trials:manage"
   // Moderator operations
   | "queue:view"
   | "queue:claim"
@@ -38,19 +37,13 @@ export type Capability =
   /** Review role-change proposals (approve moderator grants, propose moderator removal). */
   | "role:review"
   | "oversight:view"
-  // Admin intelligence (read-only)
-  | "bi:view"
-  | "bi:export"
-  | "bi:drill_down"
   // Cross-role
   | "audit:view"
   | "feature_flag:toggle"
   | "dsar:manage"
   // Commercial model
-  | "commercial:manage"
   | "organisations:manage"
   | "partners:manage"
-  | "contracts:manage"
   | "payments:view"
   | "payments:refund";
 
@@ -67,7 +60,6 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
   ]),
   /* 2nd — Governance Controller: decisions, oversight, appeals, enforcement */
   governance_controller: new Set<Capability>([
-    "trials:manage",
     "posting:bypass_limits",
     "queue:view",
     "case:view",
@@ -83,14 +75,11 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "oversight:view",
     "audit:view",
     "dsar:manage",
-    "commercial:manage",
     "organisations:manage",
     "partners:manage",
-    "contracts:manage",
   ]),
   /* 1st — Admin: super-role — ALL platform capabilities */
   admin: new Set<Capability>([
-    "trials:manage",
     "posting:bypass_limits",
     // Moderator operations
     "queue:view",
@@ -113,17 +102,12 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "role:assign",
     "role:revoke",
     "role:review",
-    // Admin-exclusive: intelligence & tools
-    "bi:view",
-    "bi:export",
-    "bi:drill_down",
+    // Admin-exclusive: tools
     "audit:view",
     "feature_flag:toggle",
     // Commercial model. Refunds and chargebacks are admin-only.
-    "commercial:manage",
     "organisations:manage",
     "partners:manage",
-    "contracts:manage",
     "payments:view",
     "payments:refund",
   ]),

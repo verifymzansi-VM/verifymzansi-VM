@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
-import { FilterSheet, rememberProvince } from "@/components/immersive/immersive-top-bar";
+import { FilterSheet } from "@/components/immersive/immersive-top-bar";
 import { BrandShield } from "@/components/shared/brand-shield";
 import {
   Sheet,
@@ -555,7 +555,6 @@ export function VideoModeViewer({
         setBrowseError(true);
         return;
       }
-      if (next.province !== feed.browse.province) rememberProvince(next.province);
       rememberVertical(next.vertical);
       setOnEnd(false);
       setActive({ id: null, index: 0 });
