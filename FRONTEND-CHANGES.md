@@ -117,6 +117,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 52. Old multi-listing wording and a council mention | awaiting owner (no file rows: the group 52 part of 6 existing rows) | Nothing visible today (all behind switches that are off). When shown: the multi-listing box in the posting flow and on billing states the package rules on sale (5 to 250 posts, 30, 90 or 180 days, R100 per slot per 30 days); no 'Founding pilots' box on Advertise; the empty Business Sponsors box names no council or place |
 | 53. Package invoices and 'Ask for an invoice' (P4e) | awaiting owner (with the P4e part of 3 rows elsewhere) | Nothing while packages are not on sale (the owner's switch). Then: on 'Choose your package' above Ozow's maximum, a tick and an 'Ask for an invoice' button send the request to staff (no email); staff only: a 'Package invoice requests' card on Payments & Refunds to issue, prepare (above R50 000, approved by a second admin) or decline; the invoice then appears under the member's Invoices as today |
 | 54. Privacy tightening 2: short names, search depth, partner rate | awaiting owner (with the group 54 part of 6 rows elsewhere) | Search and browsing: page links stop at page 100, and the last page says 'Showing the first N results. Narrow your search to see more.' when there are more; staff only: restricted members, partners and organisation administrators named 'Thandeka D.', partner rates up to 20%, and applicant contacts on the staff organisation page only for pending applications behind 'Show contact' |
+| 56. Loading screen named for screen readers | awaiting owner | Nothing visible; screen readers hear one 'Loading' status on the placeholder shown while a page loads |
 | 57. Removed for launch: old staff tools, trial tools, data-use choices, province chip | awaiting owner (removal approved by owner 2026-11-19; with the group 57 part of 16 rows elsewhere) | Staff: the Commercial settings, Free posts & trials, Programmes & contracts and six Intelligence pages answer 'Page not found'. Members: nothing visible changes apart from 'Optional messages.' on the Preferences card; the showroom help page loses 'Local first, never local only' and its 'How we know your province' section, and the privacy notice its 'Showroom location' paragraph |
 
 Questions for the owner:
@@ -2189,6 +2190,20 @@ release is deployed before the update is applied). Owner decisions A1 to A3
 | `src/app/(marketplace)/mzansi-business/grid.tsx` | wording-behaviour | Group 54: page links stop at page 100. | Mzansi Business grid: Group 54: page links stop at page 100; on the last page, when there are more results, 'Showing the first N results. Narrow your search to see more.' (N = 100 pages of results); a deeper page address shows page 100. 24 a page, so 'Showing the first 2 400 results.' | keep | awaiting owner | 2026-11-19 | a9ca5ae89088 |
 | `src/components/listings/marketplace-pagination-controls.tsx` | wording-behaviour | Group 54: the line on the last page when results go deeper than the page links. | Mzansi Market, Mzansi Business and Tourism & Events: under the page links on the last page, 'Showing the first N results. Narrow your search to see more.' when there are more results. | keep | awaiting owner | 2026-11-19 | d73cfa7a34c3 |
 | `src/components/listings/marketplace-pagination-controls.test.tsx` | test | Group 54: checks the line shows on the last page only, and not when every result has a page. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-19 | 0aab704618f2 |
+
+### 56. Loading screen named for screen readers
+
+Accessibility fix with no visual change. The grey placeholder shown while any
+page loads was labelled 'Loading' on a plain box, which most screen readers
+ignore, while each of its six grey blocks announced 'Loading' on its own. As
+on the sign-in loading screen (`src/app/(auth)/loading.tsx`), one hidden
+'Loading' status now sits before the main area and the grey blocks are hidden
+from screen readers. The page keeps its single main area and looks the same.
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/app/loading.tsx` | wording-behaviour | Group 56: the wrapper's 'Loading' label (ignored by most screen readers on a box with no role) is replaced by one visually hidden `role="status"` 'Loading' text before `<main>`, and the six skeleton blocks get `aria-hidden`, as in `src/app/(auth)/loading.tsx`. | Nothing visible; screen readers hear one 'Loading' status while a page loads | keep | awaiting owner | 2026-11-19 | 84f5c08935da |
+| `src/app/loading.test.tsx` | test | Group 56: checks the placeholder has exactly one status, reading 'Loading', its six skeleton blocks are hidden from screen readers, and it keeps exactly one main area. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-19 | 38c19ac5c6f4 |
 
 ### 57. Removed for launch: old staff tools, trial tools, data-use choices and the province chip
 
