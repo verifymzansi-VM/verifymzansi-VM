@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { E2E_FIXTURE, KNOWN_BREACHED_PASSWORD } from "../../scripts/lib/foundation-e2e-target.mjs";
-import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
+import { requireOnlyKnownBreak } from "./support/known-break";
 import {
   googleMemberSession,
   registerGoogleMember,
@@ -89,14 +89,13 @@ import {
 // addresses. Each link returns to the website's callback, which only picks
 // the page to show (the profile's Account tab) and opens no session.
 //
-// One step is broken today and is marked test.fail(), pinned to its exact
-// known symptom (characterise, support/known-break.ts); any other outcome
-// turns the run red:
-// - "delete my account ...": SEC-02, fixed by M1.6c. The delete route reads a
-//   table of the retired backend after re-checking the password and answers
-//   500; the account stays and can still sign in.
-// The tests run in order; a failure skips the rest, so the marked step comes
-// after the working flow.
+// "Delete my account" (M1.6c, which fixed SEC-02) closes the account through
+// the foundation: the member is signed out everywhere and cannot sign in
+// again; the erasure follows 30 days later. It stays hidden behind
+// SHOW_ACCOUNT_DELETION until the owner approves it, so the full flow runs
+// only in the launch configuration (playwright.launch-config.config.ts); the
+// usual build checks that it is hidden. The tests run in order; a failure
+// skips the rest, so it comes last.
 //
 // Emails: local Auth sends its own emails (reset links) through its SMTP
 // setting straight to the copy's mail catcher (Mailpit); the website's emails
@@ -122,7 +121,6 @@ import {
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
-const SEC02 = "SEC-02, fixed by M1.6c";
 const CAPTCHA_STAND_IN = "local-fixture-captcha-stand-in";
 const RESET_PATH = "/api/auth/reset-password";
 const RECOVERY_PATH = "/api/auth/forgot-password";
@@ -279,11 +277,6 @@ function expectNoProviderSince(mark: number) {
           entry.outcome !== "answered-locally" || entry.origin !== "https://api.pwnedpasswords.com"
       )
   ).toEqual([]);
-}
-
-/** The same as a reply's body, compared as JSON (for exact pins). */
-function sameJson(actual: unknown, expected: unknown) {
-  return JSON.stringify(actual) === JSON.stringify(expected);
 }
 
 async function signInBrowser(context: BrowserContext, member: VerifiedMember) {
@@ -1256,67 +1249,75 @@ test.describe("account recovery and self-service", () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    test.fail(true, SEC02);
-    await characterise(SEC02, async () => {
-      const mark = readOutboundAttempts().length;
-      const guarded = await guard(context);
-      await signInBrowser(context, leaver);
-      await openProfileTab(page, "Account");
-      const closeLine = page.getByText("To close your account, send us a data request.");
-      await expect(
-        closeLine.or(page.getByRole("button", { name: "Delete", exact: true })).first()
-      ).toBeVisible({ timeout: 20_000 });
-      if (await closeLine.isVisible()) {
-        // Hidden until it works (SHOW_ACCOUNT_DELETION): no Delete button, a
-        // line pointing to the data request form, and the route is not served.
-        await expect(page.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
-        await expect(page.getByRole("link", { name: "data request" })).toHaveAttribute(
-          "href",
-          "/dsar"
-        );
-        expect(guarded.reply(DELETE_PATH)).toEqual([]);
-        expect(await canSignIn(leaver.email, leaver.password)).toBe(true);
-        expectContained(guarded);
-        expectNoProviderSince(mark);
-        throw new KnownBreak(`${SEC02}: account deletion is hidden until it works`);
-      }
-      await page.getByRole("button", { name: "Delete", exact: true }).click();
-      const dialog = page.getByRole("dialog", { name: "Confirm account deletion" });
-      await dialog.getByLabel("Current password").fill(leaver.password);
-      await dialog.getByLabel("Type DELETE to confirm").fill("DELETE");
-      await dialog.getByRole("button", { name: "Continue" }).click();
-      await expect.poll(() => guarded.reply(DELETE_PATH).length, { timeout: 20_000 }).toBe(1);
-      const deleted = guarded.reply(DELETE_PATH)[0];
-      if (
-        deleted.status === 500 &&
-        sameJson(deleted.body, { error: "Unable to delete account right now" }) &&
-        guarded.sentTo(DELETE_PATH)[0].fields.join() === "confirmation,currentPassword"
-      ) {
-        // SEC-02 as recorded: nothing is deleted; the account and its profile
-        // stay, and the password still signs in.
-        await expect(toast(page, "Account deletion failed")).toBeVisible();
-        expect(
-          queryTestCopy(
-            `select count(*) from auth.users u join private.profiles p on p.account_id = u.id where u.id = '${leaver.id}';`
-          )
-        ).toBe("1");
-        expect(await canSignIn(leaver.email, leaver.password)).toBe(true);
-        expectContained(guarded);
-        expectNoProviderSince(mark);
-        throw new KnownBreak(
-          `${SEC02}: the delete route fails (500) and the account stays and can still sign in`
-        );
-      }
-      // Promised (M1.6c): deleted, signed out and sent home; the password no
-      // longer signs in and the member pages send the visitor to sign in.
-      expect(deleted).toMatchObject({ status: 200 });
-      await expect(toast(page, "Account deleted")).toBeVisible();
-      await page.waitForURL(`${APP_ORIGIN}/`);
-      expect(await canSignIn(leaver.email, leaver.password)).toBe(false);
-      await page.goto("/dashboard");
-      await page.waitForURL((url) => url.pathname === "/login");
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    // A fresh sign-in: closing needs one from the last 15 minutes.
+    await signInBrowser(context, leaver);
+    await openProfileTab(page, "Account");
+    if (process.env.VERIFYMZANSI_LAUNCH_CONFIG !== "1") {
+      // Hidden until the owner approves it (SHOW_ACCOUNT_DELETION, on only in
+      // the launch configuration): no Delete button, a line pointing to the
+      // data request form, nothing sent, and the account stays.
+      await expect(page.getByText("To close your account, send us a data request.")).toBeVisible({
+        timeout: 20_000,
+      });
+      await expect(page.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: "data request" })).toHaveAttribute(
+        "href",
+        "/dsar"
+      );
+      expect(guarded.reply(DELETE_PATH)).toEqual([]);
+      expect(await canSignIn(leaver.email, leaver.password)).toBe(true);
       expectContained(guarded);
       expectNoProviderSince(mark);
-    });
+      return;
+    }
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Confirm account deletion" });
+    // It says what happens before anything can be confirmed.
+    for (const text of [
+      "Your posts leave the site at once and are deleted with your account.",
+      "You are signed out on every device and can't sign in again.",
+      "For your safety, this works only within 15 minutes of signing in with your password or Google.",
+    ])
+      await expect(dialog.getByText(text)).toBeVisible();
+    await expect(
+      dialog.getByText(/closing your account counts as a request to cancel all your slots/)
+    ).toBeVisible();
+    await expect(dialog.getByText(/is planned for .*, 30 days after closing/)).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
+      "href",
+      "/privacy#retention"
+    );
+    await expect(dialog.getByLabel("Current password")).toHaveCount(0);
+    const confirm = dialog.getByRole("button", { name: "Continue" });
+    await expect(confirm).toBeDisabled();
+    await dialog.getByLabel("Type DELETE to confirm").fill("DELETE");
+    await confirm.click();
+    await expect.poll(() => guarded.reply(DELETE_PATH).length, { timeout: 20_000 }).toBe(1);
+    // Only the typed word is sent; the account comes from the session.
+    expect(guarded.sentTo(DELETE_PATH)[0].fields.join()).toBe("confirmation");
+    const closed = guarded.reply(DELETE_PATH)[0];
+    expect(closed).toMatchObject({ status: 200, body: { status: "closed" } });
+    const { closedAt, eraseAfter, eraseBy } = closed.body as Record<string, string>;
+    expect(Date.parse(eraseAfter) - Date.parse(closedAt)).toBe(30 * 86_400_000);
+    expect(Date.parse(eraseBy) - Date.parse(eraseAfter)).toBe(7 * 86_400_000);
+    // Closed and scheduled, with a deletion request due 7 days after the grace period.
+    expect(
+      queryTestCopy(
+        "select count(*) from private.account_erasures e join private.account_erasure_requests r " +
+          "on r.user_id = e.user_id join private.privacy_requests q on q.id = r.request_id " +
+          `where e.user_id = '${leaver.id}' and e.closed_by = 'member' and e.erased_at is null ` +
+          "and e.erase_after = e.closed_at + interval '30 days' " +
+          "and q.due_by = e.erase_after + interval '7 days';"
+      )
+    ).toBe("1");
+    await expect(toast(page, "Account closed")).toBeVisible();
+    await page.waitForURL(`${APP_ORIGIN}/`);
+    expect(await canSignIn(leaver.email, leaver.password)).toBe(false);
+    await page.goto("/dashboard");
+    await page.waitForURL((url) => url.pathname === "/login");
+    expectContained(guarded);
+    expectNoProviderSince(mark);
   });
 });

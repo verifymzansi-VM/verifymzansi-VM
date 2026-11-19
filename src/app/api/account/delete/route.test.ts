@@ -1,5 +1,36 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+/** @vitest-environment node */
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { NextRequest, type NextResponse } from "next/server";
+import { POST } from "./route";
+import { createFoundationRouteContext } from "@/lib/foundation/request-route";
+import { FoundationSessionError } from "@/lib/foundation/request-api";
+import { foundationLatestSignIn } from "@/lib/foundation/sign-in-claims";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type * as HiddenFeatures from "@/lib/hidden-features";
+
+// Through the real owner route (origin, CSRF, limits, session), with only the
+// session context, the limiter and the database call replaced.
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: vi.fn() }));
+vi.mock("@/lib/foundation/runtime-connection", () => ({
+  readFoundationRuntimeConnection: () => ({}),
+}));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: vi.fn(),
+  getClientRateLimitIdentity: () => ({ key: "client" }),
+}));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(() => {
+    throw new Error("Retired backend used");
+  }),
+}));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(() => {
+    throw new Error("Retired backend used");
+  }),
+}));
 // The route is hidden until it works (src/lib/hidden-features.ts); these
 // tests switch it on to keep the code behind the switch checked.
 const hiddenFeature = vi.hoisted(() => ({ shown: true }));
@@ -9,515 +40,208 @@ vi.mock("@/lib/hidden-features", async (importOriginal) => ({
     return hiddenFeature.shown;
   },
 }));
-import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCreateAdminClient, mockCheckRateLimit, mockQueuePublicMediaCleanup } =
-  vi.hoisted(() => ({
-    mockCreateClient: vi.fn(),
-    mockCreateAdminClient: vi.fn(),
-    mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
-    mockQueuePublicMediaCleanup: vi.fn(),
-  }));
+const account = "22222222-2222-4222-8222-222222222222";
+const csrf = "c".repeat(64);
+const rpc = vi.fn();
+const now = () => Math.floor(Date.now() / 1000);
+let amr: unknown;
+let session: "live" | "gone";
 
-vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
-vi.mock("@/lib/utils/rate-limit", () => ({
-  checkRateLimit: mockCheckRateLimit,
-  getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
-}));
-vi.mock("@/lib/services/media-cleanup", () => ({
-  queuePublicMediaCleanup: mockQueuePublicMediaCleanup,
-}));
-
-import { POST } from "./route";
-
-const CSRF_TOKEN = "a".repeat(64);
-
-function createRequest(body: unknown, headers: Record<string, string> = {}) {
-  const mergedHeaders: Record<string, string> = {
-    origin: "http://localhost:3000",
-    cookie: `vm_csrf=${CSRF_TOKEN}`,
-    "x-csrf-token": CSRF_TOKEN,
-    ...Object.fromEntries(
-      Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value])
-    ),
-  };
-
-  return {
+function request(body: unknown, headers: Record<string, string> = {}) {
+  return new NextRequest("https://verifymzansi.com/api/account/delete", {
     method: "POST",
-    json: async () => body,
-    url: "http://localhost:3000/api/account/delete",
-    nextUrl: new URL("http://localhost:3000/api/account/delete"),
+    body: JSON.stringify(body),
     headers: {
-      get(name: string) {
-        return mergedHeaders[name.toLowerCase()] ?? null;
-      },
+      origin: "https://verifymzansi.com",
+      "content-type": "application/json",
+      cookie: `vm_csrf=${csrf}`,
+      "x-csrf-token": csrf,
+      ...headers,
     },
-  } as unknown as NextRequest;
+  });
 }
-
-type MockError = { code?: string; message?: string } | null;
-
-type RecordedMutation = {
-  table: string;
-  op: "update" | "delete";
-  payload?: unknown;
-  filter: [string, unknown];
+const confirm = { confirmation: "DELETE" };
+const closedReply = {
+  status: "closed",
+  closed_at: "2026-11-17T10:00:00+00:00",
+  erase_after: "2026-12-17T10:00:00+00:00",
+  request_id: "33333333-3333-4333-8333-333333333333",
 };
 
-function createAdminClientMock(
-  options: {
-    legalHold?: boolean;
-    cleanupError?: MockError;
-    deleteUserError?: { message: string } | null;
-    staffRole?: string | null;
-    redactError?: { message: string } | null;
-    mediaUploads?: Array<{ url: string }>;
-    mediaUploadsError?: { message: string } | null;
-    avatarFiles?: Array<{ name: string }>;
-    avatarListError?: { message: string } | null;
-    avatarRemoveError?: { message: string } | null;
-  } = {}
-) {
-  const rpc = vi.fn(async (fn: string) => {
-    if (fn === "staff_access_of") {
-      return {
-        data: options.staffRole ? [{ role: options.staffRole, mfa_required_after: null }] : [],
-        error: null,
-      };
-    }
-    return { data: 0, error: options.redactError ?? null };
-  });
-  const deleteUser = vi.fn().mockResolvedValue({ error: options.deleteUserError ?? null });
-
-  // Every cleanup mutation is recorded; the first update fails when cleanupError is set.
-  const mutations: RecordedMutation[] = [];
-  const recordMutation = (table: string, op: RecordedMutation["op"], payload?: unknown) => ({
-    eq: vi.fn(async (column: string, value: unknown) => {
-      const isFirstUpdate = op === "update" && !mutations.some((m) => m.op === "update");
-      mutations.push({ table, op, payload, filter: [column, value] });
-      return { error: isFirstUpdate ? (options.cleanupError ?? null) : null };
-    }),
-  });
-
-  const mediaUploadsEq = vi.fn().mockResolvedValue({
-    data: options.mediaUploads ?? [],
-    error: options.mediaUploadsError ?? null,
-  });
-  const mediaUploadsSelect = vi.fn().mockReturnValue({ eq: mediaUploadsEq });
-
-  const from = vi.fn((table: string) => {
-    if (table === "account_profiles") {
-      return {
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { legal_hold: options.legalHold ?? false },
-              error: null,
-            }),
-          }),
-        }),
-      };
-    }
-
-    if (table === "media_uploads") {
-      return { select: mediaUploadsSelect };
-    }
-
-    return {
-      delete: vi.fn(() => recordMutation(table, "delete")),
-      update: vi.fn((payload: unknown) => recordMutation(table, "update", payload)),
-    };
-  });
-
-  const avatarList = vi.fn().mockResolvedValue({
-    data: options.avatarFiles ?? [],
-    error: options.avatarListError ?? null,
-  });
-  const avatarRemove = vi.fn().mockResolvedValue({
-    data: [],
-    error: options.avatarRemoveError ?? null,
-  });
-  const storageFrom = vi.fn().mockReturnValue({ list: avatarList, remove: avatarRemove });
-
-  const admin = {
-    from,
-    rpc,
-    storage: { from: storageFrom },
-    auth: {
-      admin: { deleteUser },
-    },
-  };
-  mockCreateAdminClient.mockReturnValue(admin);
-  return {
-    admin,
-    deleteUser,
-    rpc,
-    mutations,
-    mediaUploadsSelect,
-    mediaUploadsEq,
-    storageFrom,
-    avatarList,
-    avatarRemove,
-  };
-}
-
-const GOOGLE_USER = {
-  id: "user-1",
-  email: "user@gmail.com",
-  identities: [{ provider: "google" }],
-  app_metadata: { provider: "google" },
-};
-
-function createSupabaseClientMock(user: unknown, options: { passwordError?: boolean } = {}) {
-  const signInWithPassword = vi
-    .fn()
-    .mockResolvedValue({ error: options.passwordError ? { message: "bad password" } : null });
-  const signOut = vi.fn().mockResolvedValue({ error: null });
-  mockCreateClient.mockResolvedValue({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user }, error: null }),
-      signInWithPassword,
-      signOut,
-    },
-  });
-  return { signInWithPassword, signOut };
-}
-
-describe("POST /api/account/delete while hidden", () => {
-  it("answers 404 before any other check", async () => {
-    hiddenFeature.shown = false;
-    try {
-      const res = await POST(
-        new Request("https://verifymzansi.com/api/account/delete", {
-          method: "POST",
-          body: "{}",
-        }) as unknown as NextRequest
-      );
-      expect(res.status).toBe(404);
-      expect(await res.json()).toEqual({ error: "Not found" });
-    } finally {
-      hiddenFeature.shown = true;
-    }
-  });
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+  vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
+  amr = [{ method: "password", timestamp: now() - 60 }];
+  session = "live";
+  vi.mocked(createFoundationRouteContext).mockImplementation(
+    () =>
+      ({
+        // The verified caller as request-api.ts builds it from the token's amr.
+        authenticateCaller: async () => {
+          if (session === "gone") throw new FoundationSessionError(401);
+          return {
+            api: { rpc },
+            accountId: account,
+            sessionId: account,
+            signedInAt: foundationLatestSignIn(amr),
+          };
+        },
+        respond: (response: NextResponse) => response,
+      }) as unknown as ReturnType<typeof createFoundationRouteContext>
+  );
+});
+afterEach(() => {
+  hiddenFeature.shown = true;
+  vi.unstubAllEnvs();
 });
 
-describe("POST /api/account/delete", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockCheckRateLimit.mockResolvedValue({ limited: false });
-    mockQueuePublicMediaCleanup.mockResolvedValue([]);
-    createAdminClientMock();
-  });
+it("answers 404 while account deletion is hidden, before any check or database call", async () => {
+  hiddenFeature.shown = false;
+  const response = await POST(request(confirm));
+  expect(response.status).toBe(404);
+  expect(checkRateLimit).not.toHaveBeenCalled();
+  expect(createFoundationRouteContext).not.toHaveBeenCalled();
+  expect(rpc).not.toHaveBeenCalled();
+});
 
-  it("rejects unauthenticated requests", async () => {
-    createSupabaseClientMock(null);
+it("refuses a request from another site or without the CSRF token, before any database call", async () => {
+  expect((await POST(request(confirm, { origin: "https://attacker.example" }))).status).toBe(403);
+  expect((await POST(request(confirm, { "x-csrf-token": "d".repeat(64) }))).status).toBe(403);
+  expect(rpc).not.toHaveBeenCalled();
+});
 
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(401);
-  });
-
-  it("rejects cross-site requests before auth or cleanup", async () => {
-    const res = await POST(
-      createRequest({ confirmation: "DELETE" }, { origin: "https://evil.example" })
-    );
-
-    expect(res.status).toBe(403);
-    expect(mockCreateClient).not.toHaveBeenCalled();
-  });
-
-  it("rejects requests without a CSRF token", async () => {
-    const res = await POST(
-      createRequest(
-        { confirmation: "DELETE" },
-        {
-          cookie: "",
-          "x-csrf-token": "",
-        }
-      )
-    );
-
-    expect(res.status).toBe(403);
-  });
-
-  it("requires DELETE confirmation", async () => {
-    createSupabaseClientMock({
-      id: "user-1",
-      email: "user@example.com",
-      identities: [{ provider: "google" }],
-      app_metadata: { provider: "google" },
-    });
-
-    const res = await POST(createRequest({ confirmation: "nope" }));
-
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 429 when rate limited", async () => {
-    mockCheckRateLimit.mockResolvedValueOnce({ limited: true, degraded: false, retryAfter: 30 });
-
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(429);
-    expect(res.headers.get("Retry-After")).toBe("30");
-  });
-
-  it("requires current password for password accounts", async () => {
-    createSupabaseClientMock({
-      id: "user-1",
-      email: "user@example.com",
-      identities: [{ provider: "email" }],
-      app_metadata: { provider: "email" },
-    });
-
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toMatchObject({ code: "PASSWORD_REQUIRED" });
-  });
-
-  it("rejects an incorrect password for password accounts", async () => {
-    const { signInWithPassword } = createSupabaseClientMock(
-      {
-        id: "user-1",
-        email: "user@example.com",
-        identities: [{ provider: "email" }],
-        app_metadata: { provider: "email" },
-      },
-      { passwordError: true }
-    );
-
-    const res = await POST(
-      createRequest({ confirmation: "DELETE", currentPassword: "wrong-password" })
-    );
-
-    expect(res.status).toBe(401);
-    expect(signInWithPassword).toHaveBeenCalledWith({
-      email: "user@example.com",
-      password: "wrong-password",
-    });
-  });
-
-  it("allows Google-only authenticated deletion without a password", async () => {
-    const { signInWithPassword, signOut } = createSupabaseClientMock({
-      id: "user-1",
-      email: "user@gmail.com",
-      identities: [{ provider: "google" }],
-      app_metadata: { provider: "google" },
-    });
-    const { admin, deleteUser } = createAdminClientMock();
-
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(200);
-    expect(signInWithPassword).not.toHaveBeenCalled();
-    expect(admin.from).toHaveBeenCalledWith("consent_records");
-    expect(admin.from).toHaveBeenCalledWith("content_edit_requests");
-    // The audit trail and decision ledger are kept and redacted, not deleted.
-    for (const kept of [
-      "audit_logs",
-      "decision_records",
-      "decision_record_events",
-      "appeal_cases",
-      "role_assignments_history",
-      "moderation_actions",
-    ]) {
-      expect(admin.from).not.toHaveBeenCalledWith(kept);
-    }
-    expect(admin.rpc).toHaveBeenCalledWith("redact_personal_audit_data", {
-      p_user: "user-1",
-      p_reason: "Account deleted by the account holder",
-    });
-    expect(deleteUser).toHaveBeenCalledWith("user-1");
-    expect(signOut).toHaveBeenCalled();
-  });
-
-  it("keeps KYC evidence access logs where the user was the actor, clearing only actor_id", async () => {
-    createSupabaseClientMock(GOOGLE_USER);
-    const { mutations } = createAdminClientMock();
-
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(200);
-    expect(mutations).toContainEqual({
-      table: "kyc_evidence_access_logs",
-      op: "update",
-      payload: { actor_id: null },
-      filter: ["actor_id", "user-1"],
-    });
-    // Rows about the user's own evidence are still removed.
-    expect(mutations).toContainEqual({
-      table: "kyc_evidence_access_logs",
-      op: "delete",
-      payload: undefined,
-      filter: ["user_id", "user-1"],
-    });
-    expect(mutations).not.toContainEqual(
-      expect.objectContaining({
-        table: "kyc_evidence_access_logs",
-        op: "delete",
-        filter: ["actor_id", "user-1"],
-      })
-    );
-  });
-
-  it("deletes the auth user first, then removes stored media and avatar files", async () => {
-    createSupabaseClientMock(GOOGLE_USER);
-    const uploadUrl = "https://media.example.com/uploads/user-1/photo.jpg";
-    const mocks = createAdminClientMock({
-      mediaUploads: [{ url: uploadUrl }],
-      avatarFiles: [{ name: "avatar.jpg" }, { name: "avatar.png" }],
-    });
-
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(200);
-    expect(mocks.admin.from).toHaveBeenCalledWith("media_uploads");
-    expect(mocks.mediaUploadsSelect).toHaveBeenCalledWith("url");
-    expect(mocks.mediaUploadsEq).toHaveBeenCalledWith("user_id", "user-1");
-    expect(mockQueuePublicMediaCleanup).toHaveBeenCalledWith(
-      mocks.admin,
-      [uploadUrl],
-      "account_deleted",
-      "user-1"
-    );
-    expect(mocks.storageFrom).toHaveBeenCalledWith("avatars");
-    expect(mocks.avatarList).toHaveBeenCalledWith("user-1");
-    expect(mocks.avatarRemove).toHaveBeenCalledWith(["user-1/avatar.jpg", "user-1/avatar.png"]);
-
-    // Nothing irreversible happens before the account itself is deleted.
-    const deleteOrder = mocks.deleteUser.mock.invocationCallOrder[0];
-    expect(deleteOrder).toBeDefined();
-    expect(mockQueuePublicMediaCleanup.mock.invocationCallOrder[0]).toBeGreaterThan(deleteOrder);
-    expect(mocks.avatarRemove.mock.invocationCallOrder[0]).toBeGreaterThan(deleteOrder);
-  });
-
-  it("skips media queueing and avatar removal when the user has no stored files", async () => {
-    createSupabaseClientMock(GOOGLE_USER);
-    const { deleteUser, avatarList, avatarRemove } = createAdminClientMock();
-
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(200);
-    expect(mockQueuePublicMediaCleanup).not.toHaveBeenCalled();
-    expect(avatarList).toHaveBeenCalledWith("user-1");
-    expect(avatarRemove).not.toHaveBeenCalled();
-    expect(deleteUser).toHaveBeenCalledWith("user-1");
-  });
-
-  it("returns 500 and keeps the auth user when the media_uploads lookup fails", async () => {
-    createSupabaseClientMock(GOOGLE_USER);
-    const { deleteUser } = createAdminClientMock({ mediaUploadsError: { message: "db down" } });
-
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(500);
-    expect(deleteUser).not.toHaveBeenCalled();
-  });
-
-  it.each<[string, Parameters<typeof createAdminClientMock>[0], boolean]>([
-    ["media cleanup queueing fails", { mediaUploads: [{ url: "https://x.example/y.jpg" }] }, true],
-    ["avatar listing fails", { avatarListError: { message: "storage down" } }, false],
-    [
-      "avatar removal fails",
-      { avatarFiles: [{ name: "avatar.jpg" }], avatarRemoveError: { message: "storage down" } },
-      false,
-    ],
-  ])(
-    "still deletes the account when %s afterwards (logged)",
-    async (_label, options, queueFails) => {
-      createSupabaseClientMock(GOOGLE_USER);
-      if (queueFails) {
-        mockQueuePublicMediaCleanup.mockRejectedValueOnce(new Error("queue insert failed"));
-      }
-      const { deleteUser } = createAdminClientMock(options);
-
-      const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-      expect(res.status).toBe(200);
-      expect(deleteUser).toHaveBeenCalledWith("user-1");
-    }
+it("limits each client and then each account, before any database call", async () => {
+  vi.mocked(checkRateLimit).mockResolvedValueOnce({ limited: true, retryAfter: 60 });
+  expect((await POST(request(confirm))).status).toBe(429);
+  expect(checkRateLimit).toHaveBeenLastCalledWith(
+    expect.objectContaining({ key: "client", action: "account:delete" })
   );
+  vi.mocked(checkRateLimit)
+    .mockResolvedValueOnce({ limited: false })
+    .mockResolvedValueOnce({ limited: true, retryAfter: 60 });
+  const perAccount = await POST(request(confirm));
+  expect(perAccount.status).toBe(429);
+  expect(checkRateLimit).toHaveBeenLastCalledWith(
+    expect.objectContaining({ key: account, action: "account:delete", degradedMode: "block" })
+  );
+  expect(rpc).not.toHaveBeenCalled();
+});
 
-  it("blocks legal-hold accounts", async () => {
-    createSupabaseClientMock({
-      id: "user-1",
-      email: "user@gmail.com",
-      identities: [{ provider: "google" }],
-      app_metadata: { provider: "google" },
-    });
-    const { deleteUser } = createAdminClientMock({ legalHold: true });
-
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(409);
-    expect(deleteUser).not.toHaveBeenCalled();
+it.each([
+  ["recovery", "a reset link"],
+  ["magiclink", "a magic link"],
+])("sends a %s session (%s) to sign in again, before any database call", async (method) => {
+  amr = [{ method, timestamp: now() - 10 }];
+  const response = await POST(request(confirm));
+  expect(response.status).toBe(401);
+  expect(await response.json()).toMatchObject({
+    reason: "recent_sign_in_required",
+    code: "reauthentication_required",
   });
+  expect(rpc).not.toHaveBeenCalled();
+});
 
-  it("returns 500 if cleanup fails and does not delete auth user", async () => {
-    createSupabaseClientMock({
-      id: "user-1",
-      email: "user@gmail.com",
-      identities: [{ provider: "google" }],
-      app_metadata: { provider: "google" },
-    });
-    const { deleteUser } = createAdminClientMock({
-      cleanupError: { code: "500", message: "cleanup failed" },
-    });
-
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(500);
-    expect(deleteUser).not.toHaveBeenCalled();
+it("closes the account of a fresh password sign-in and reports the planned dates", async () => {
+  rpc.mockResolvedValueOnce({ data: closedReply, error: null });
+  const response = await POST(request(confirm));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    status: "closed",
+    closedAt: closedReply.closed_at,
+    eraseAfter: closedReply.erase_after,
+    eraseBy: "2026-12-24T10:00:00.000Z",
   });
+  expect(rpc).toHaveBeenCalledWith("close_my_account", {}, { get: false });
+  expect(createAdminClient).not.toHaveBeenCalled();
+  expect(createClient).not.toHaveBeenCalled();
+});
 
-  it("returns 500 if Supabase auth deletion fails", async () => {
-    createSupabaseClientMock({
-      id: "user-1",
-      email: "user@gmail.com",
-      identities: [{ provider: "google" }],
-      app_metadata: { provider: "google" },
-    });
-    const { deleteUser } = createAdminClientMock({
-      deleteUserError: { message: "delete failed" },
-    });
+it("expires the session cookies once the account is closed, and only then", async () => {
+  const withSession = {
+    cookie: `vm_csrf=${csrf}; sb-local-auth-token.0=a; sb-local-auth-token.1=b; theme=dark`,
+  };
+  rpc.mockResolvedValueOnce({ data: closedReply, error: null });
+  const closed = await POST(request(confirm, withSession));
+  expect(closed.status).toBe(200);
+  for (const name of ["sb-local-auth-token.0", "sb-local-auth-token.1"])
+    expect(closed.cookies.get(name)).toMatchObject({ value: "", maxAge: 0, path: "/" });
+  expect(closed.cookies.get("theme")).toBeUndefined();
+  expect(closed.cookies.get("vm_csrf")).toBeUndefined();
 
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
+  rpc.mockResolvedValueOnce({ data: null, error: { code: "55000", message: "not closed" } });
+  const refused = await POST(request(confirm, withSession));
+  expect(refused.status).toBe(503);
+  expect(refused.cookies.get("sb-local-auth-token.0")).toBeUndefined();
+});
 
-    expect(res.status).toBe(500);
-    // Reached the auth deletion itself rather than failing earlier.
-    expect(deleteUser).toHaveBeenCalledWith("user-1");
+it("answers a second tab's request after the first closed the account as signed out", async () => {
+  // Both passed the session check; the first closure then ended every session,
+  // so the database refuses the second with no reason.
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: { code: "42501", message: "live confirmed member session required", details: null },
   });
+  const response = await POST(request(confirm));
+  expect(response.status).toBe(401);
+  const body = await response.json();
+  expect(body).toMatchObject({ reason: "session_required", code: "session_required" });
+  expect(body.error).toContain("If you just deleted your account, it is closed");
+  expect(body.error).toContain("email address is not confirmed");
+});
 
-  it("keeps staff accounts until their role is removed", async () => {
-    createSupabaseClientMock({
-      id: "user-1",
-      email: "admin@gmail.com",
-      identities: [{ provider: "google" }],
-      app_metadata: { provider: "google" },
-    });
-    const { deleteUser } = createAdminClientMock({ staffRole: "admin" });
-
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(409);
-    await expect(res.json()).resolves.toMatchObject({ code: "STAFF_ROLE_ACTIVE" });
-    expect(deleteUser).not.toHaveBeenCalled();
+it("asks for a fresh sign-in when the database refuses the session's sign-in", async () => {
+  // A Google sign-in the route accepts, refused by the database's own check
+  // (internal.account_closing_actor, which counts only a password or Google
+  // sign-in from the last 15 minutes).
+  amr = [{ method: "oauth", timestamp: now() - 60 }];
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: {
+      code: "42501",
+      message: "sign in again to close the account",
+      details: "recent_sign_in_required",
+    },
   });
-
-  it("deletes the account even if the audit redaction afterwards fails (logged)", async () => {
-    createSupabaseClientMock({
-      id: "user-1",
-      email: "user@gmail.com",
-      identities: [{ provider: "google" }],
-      app_metadata: { provider: "google" },
-    });
-    const { deleteUser } = createAdminClientMock({ redactError: { message: "db down" } });
-
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(200);
-    expect(deleteUser).toHaveBeenCalledWith("user-1");
+  const response = await POST(request(confirm));
+  expect(response.status).toBe(401);
+  expect(await response.json()).toMatchObject({
+    reason: "recent_sign_in_required",
+    code: "reauthentication_required",
   });
+  expect(rpc).toHaveBeenCalledTimes(1);
+});
+
+it("says the outcome is unknown when the answer is lost after sending", async () => {
+  rpc.mockResolvedValueOnce({ data: null, error: { code: "", message: "fetch failed" } });
+  const response = await POST(request(confirm));
+  expect(response.status).toBe(503);
+  const body = await response.json();
+  expect(body).toMatchObject({
+    code: "outcome_unknown",
+    error:
+      "We couldn't confirm whether your account was closed. Try signing in: if you can't, it was closed. Contact support if unsure.",
+  });
+  expect(body.error).not.toMatch(/could not be closed/);
+});
+
+it("answers a retry after a closure with the closed state, not a bare sign-in request", async () => {
+  rpc.mockResolvedValueOnce({ data: closedReply, error: null });
+  expect((await POST(request(confirm))).status).toBe(200);
+  // The closure ended every session.
+  session = "gone";
+  const retry = await POST(request(confirm));
+  expect(retry.status).toBe(401);
+  expect(await retry.json()).toEqual({
+    error:
+      "You are signed out. If you just deleted your account, it is closed; otherwise sign in again to delete it.",
+  });
+  expect(rpc).toHaveBeenCalledTimes(1);
+});
+
+it("refuses a missing confirmation word without calling the database", async () => {
+  const response = await POST(request({ confirmation: "yes" }));
+  expect(response.status).toBe(422);
+  expect(rpc).not.toHaveBeenCalled();
 });
