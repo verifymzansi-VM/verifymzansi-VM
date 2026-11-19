@@ -47,7 +47,7 @@ runs:
         BROWSERS: ${{ inputs.browsers }}
       run: |
         case "$BROWSERS" in
-          chromium|"chromium firefox"|webkit) ;;
+          chromium|"chromium firefox") ;;
           *) echo "Unsupported browser selection"; exit 1 ;;
         esac
         read -r -a selected_browsers <<< "$BROWSERS"

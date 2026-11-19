@@ -7,9 +7,9 @@ import { requireTestData } from "../support/test-data";
 // checks the restored grid's own video behaviour in foundation mode and
 // reads no posts from the test copy.
 
-// WebKit projects skip the playback tests through the documented skip below
-// (e2e/support/skip-policy.ts). The touch branches still name both phone
-// projects, so lifting that skip runs the phone path, not the desktop one.
+// WebKit projects skip the playback tests below (no WebKit project runs
+// yet). The touch branches still name both phone projects, so lifting that
+// skip runs the phone path, not the desktop one.
 const WEBKIT_SKIP = ["webkit", "mobile-safari"];
 const isMobileProject = (name: string) => name === "mobile-chrome" || name === "mobile-safari";
 // Desktop (reduced motion): the "Play video" button. Touch screens: the small

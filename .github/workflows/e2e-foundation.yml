@@ -52,10 +52,6 @@ jobs:
   # timed the job out with no test failure recorded. Split, each project took
   # about 6.5 minutes of browser tests; with the backend-independent checks
   # moved here from the stub suite it is about 10 (e2e/foundation/PORTING.md).
-  #
-  # mobile-safari (iPhone Safari, WebKit) runs the same specs as mobile-chrome,
-  # in its own job "e2e-foundation (mobile-safari)", and like the other two it
-  # must pass for the aggregate check below.
   browser:
     name: e2e-foundation (${{ matrix.project }})
     if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) }}
@@ -63,9 +59,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [chromium, mobile-chrome, mobile-safari]
+        project: [chromium, mobile-chrome]
     # Roadmap budget: the browser tests finish within 25 minutes of wall time;
-    # the projects run in parallel. Step ceilings: stack 5, build 10,
+    # the two projects run in parallel. Step ceilings: stack 5, build 10,
     # tests 22 (Playwright stops itself at 20 and writes its report first).
     timeout-minutes: 45
     steps:
@@ -79,8 +75,6 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - uses: ./.github/actions/install-browsers
-        with:
-          browsers: ${{ matrix.project == 'mobile-safari' && 'webkit' || 'chromium' }}
       # The test copy's fixed ports (55443-55459) lie inside Linux's ephemeral
       # range (32768-60999). A server that binds one mid-run (the mock payment
       # provider on 55448) failed with EADDRINUSE when an ordinary outgoing

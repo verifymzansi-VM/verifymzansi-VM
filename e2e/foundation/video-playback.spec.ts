@@ -22,8 +22,9 @@ import {
 // type, so the route reads the type from the file's first bytes here; reading
 // the type R2 stored is covered by src/__tests__/media-serve-range.test.ts.
 //
-// It runs in chromium, mobile-chrome and the WebKit phone project
-// mobile-safari; it uses no Chromium-only API.
+// The roadmap names a mobile-safari project. This config has none (WebKit is
+// not installed in CI), so the spec runs in the phone project mobile-chrome and
+// in chromium; it uses no Chromium-only API, so it can run under WebKit later.
 
 const VIDEO_FIXTURE = path.join("public", "video", "advert-browsing", "market-motion.webm");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

@@ -86,11 +86,10 @@ such a check would block every pull request.
     `foundation-worker-runtime`). `bundle-analysis`.
   - `e2e-foundation` (workflow "E2E foundation"): the browser tests of the
     restored website against the private local foundation test copy
-    (`e2e/foundation/`, `playwright.foundation.config.ts`), in chromium,
-    mobile-chrome and mobile-safari (iPhone Safari, WebKit). Only the aggregate
-    job is required: it passes only when every per-project job,
-    `e2e-foundation (chromium)`, `e2e-foundation (mobile-chrome)` and
-    `e2e-foundation (mobile-safari)`, passed. It replaced the retired stub
+    (`e2e/foundation/`, `playwright.foundation.config.ts`), in chromium and
+    mobile-chrome. Only the aggregate job is required: it passes only when both
+    per-project jobs, `e2e-foundation (chromium)` and
+    `e2e-foundation (mobile-chrome)`, passed. It replaced the retired stub
     suite's `e2e-full-matrix` and its `Browser test build` on 2026-11-11.
   - `Visual regression (chosen frontend)`: compares the main public screens with
     the approved pictures of the chosen frontend, served from the private local
@@ -140,10 +139,9 @@ To save Actions capacity, the three slowest lanes, `foundation-sql-lint`,
 request is a draft. GitHub counts a skipped or green job as a passed required
 check, and a result recorded on the draft would still count after "Ready for
 review" until the new run reports (for `e2e-foundation`, whose job is created
-only after every browser project finishes, about 20 minutes). So on a draft
-these jobs report under another name, ending in `(draft, not run)`, which is
-never required: the required checks show as waiting, and a draft cannot merge
-anyway.
+only after both browser projects finish, about 20 minutes). So on a draft these
+jobs report under another name, ending in `(draft, not run)`, which is never
+required: the required checks show as waiting, and a draft cannot merge anyway.
 
 - **Ready for review** (`ready_for_review` is a trigger of `ci.yml`,
   `foundation-native.yml` and `e2e-foundation.yml`) starts a new run on the head

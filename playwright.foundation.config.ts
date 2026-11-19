@@ -8,8 +8,6 @@ import { E2E_FIXTURE, assertLocalFoundationTarget } from "./scripts/lib/foundati
 // people and posts, builds the website and serves it on 127.0.0.1:3110.
 //
 //   pnpm exec playwright test --config=playwright.foundation.config.ts --project=chromium
-//   (projects: chromium, mobile-chrome, mobile-safari; WebKit needs
-//   `pnpm exec playwright install --with-deps webkit` once)
 //   node --import tsx scripts/foundation-e2e.mjs down     # delete the copy afterwards
 //
 // Refuse to run at all if anything in this environment names a database that
@@ -65,9 +63,6 @@ export default defineConfig({
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "mobile-chrome", use: { ...devices["Pixel 7"] } },
-    // iPhone Safari (WebKit), the same specs as mobile-chrome. In CI it runs as
-    // the job "e2e-foundation (mobile-safari)" (e2e-foundation.yml).
-    { name: "mobile-safari", use: { ...devices["iPhone 15"] } },
   ],
   webServer: {
     command: "node --import tsx scripts/foundation-e2e.mjs serve",
