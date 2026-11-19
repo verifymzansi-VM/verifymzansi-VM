@@ -218,6 +218,28 @@ thresholds are 75%, 64%, 82% and 76%, respectively, selected by
 `src/test/coverage-excluded-suites.ts`; CI runs them in their own lane
 (`unit-coverage-excluded`) and the local blocking lane still runs them.
 
+## Test and check changes label
+
+`.github/workflows/check-changes.yml` labels every pull request into `main`
+`checks-changed` or `checks-clean` and keeps one comment that says in plain
+words whether it deletes test files or test cases, adds skip, only, todo, fails
+or fixme marks, changes the files that configure the checks (coverage
+thresholds, audit baselines, rulesets, workflows, check scripts, lint, scanner
+and Playwright configuration, visual baselines, database contract steps) or the
+test and check commands, or adds dependencies. The comment is rewritten on every
+push. The label is for the reviewer and is not a required check.
+
+It runs on `pull_request_target`, so the workflow and its script
+(`scripts/check-changed-checks.mjs`, `scripts/lib/check-changes.mjs`) always
+come from `main`. It checks out nothing from the pull request and reads its diff
+only through the GitHub API; the pull request's own text plays no part. The
+detection is tested by `scripts/check-changes.test.mjs`. To see the verdict for
+local work:
+
+```bash
+git diff origin/main... | node scripts/check-changed-checks.mjs --diff -
+```
+
 ## Deployment enforcement
 
 `.github/workflows/deploy.yml` requires successful main-push CI for the exact

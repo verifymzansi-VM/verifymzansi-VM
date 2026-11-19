@@ -1,0 +1,55 @@
+name: Check changes
+
+# Gives each pull request into main one label, checks-changed or checks-clean,
+# and one comment saying in plain words whether it deletes tests or test cases,
+# adds skip, only, todo or expected-failure marks, changes the files that
+# configure the checks, or adds dependencies. The comment is rewritten on every
+# push. The label blocks nothing: it tells the reviewer where to look.
+#
+# pull_request_target runs this file and the guard script as they are on main,
+# with a token that can write labels and comments. Nothing from the pull
+# request runs: the job checks out only main's copy of the guard script and of
+# package.json (to tell new dependencies from old ones), and reads the pull
+# request's diff through the GitHub API, as data. Its title, description and
+# commits play no part. scripts/check-changes.test.mjs tests the detection.
+on:
+  # Never checks out or runs pull request code (see above).
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types: [opened, reopened, synchronize]
+    branches: [main]
+
+permissions: {}
+
+# A newer push replaces the verdict of an older one still running.
+concurrency:
+  group: check-changes-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Check-change guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write # reads the changed files; adds and removes the label
+      issues: write # creates the label once; writes the one comment
+    steps:
+      # github.sha is main's newest commit here, the one this file came from.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/check-changed-checks.mjs
+            scripts/lib/check-changes.mjs
+            package.json
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: Label and comment on the pull request
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_PACKAGE_JSON: package.json
+        run: node scripts/check-changed-checks.mjs
