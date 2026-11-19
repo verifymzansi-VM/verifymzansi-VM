@@ -87,6 +87,8 @@ test.describe("header", () => {
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(toggle).toBeFocused();
     await toggle.click();
+    // Open before the resize, so the desktop breakpoint is what closes it.
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await page.setViewportSize({ width: 1280, height: 900 });
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await page.setViewportSize({ width: 390, height: 844 });

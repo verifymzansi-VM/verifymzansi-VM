@@ -8,6 +8,7 @@ import {
 } from "@playwright/test";
 import sharp from "sharp";
 import { E2E_FIXTURE, LOCAL_OPS_JOBS_SECRET } from "../../scripts/lib/foundation-e2e-target.mjs";
+import { isMultipartForm } from "./support/multipart";
 import { endedWithTest } from "./support/route-teardown";
 import { waitForToastsToClose } from "./support/toasts";
 import {
@@ -116,6 +117,30 @@ async function guard(context: BrowserContext) {
       if (body.turnstileToken === "dev-turnstile-bypass")
         postData = JSON.stringify({ ...body, turnstileToken: CAPTCHA_STAND_IN });
     }
+    // Binary replies (evidence images) are recorded by size, never as text.
+    const record = (status: number, headers: Record<string, string>, bytes: Buffer) => {
+      let body: unknown = `${bytes.length} bytes`;
+      if (/json/i.test(headers["content-type"] ?? ""))
+        try {
+          body = JSON.parse(bytes.toString("utf8"));
+        } catch {
+          // Malformed JSON; keep the size only.
+        }
+      replies.push({ method: request.method(), path: url.pathname, status, body });
+    };
+    if (isMultipartForm(request)) {
+      // A file upload goes as the browser sent it (see isMultipartForm).
+      try {
+        await route.continue();
+        const answer = await request.response();
+        if (answer) record(answer.status(), answer.headers(), await answer.body());
+      } catch (error) {
+        // The test already ended (its page closed mid-request); nothing to record.
+        if (endedWithTest(error)) return;
+        throw error;
+      }
+      return;
+    }
     let response;
     let bytes: Buffer;
     try {
@@ -126,15 +151,8 @@ async function guard(context: BrowserContext) {
       if (endedWithTest(error)) return;
       throw error;
     }
-    // Binary replies (evidence images) are passed on untouched, never as text.
-    let body: unknown = `${bytes.length} bytes`;
-    if (/json/i.test(response.headers()["content-type"] ?? ""))
-      try {
-        body = JSON.parse(bytes.toString("utf8"));
-      } catch {
-        // Malformed JSON; keep the size only.
-      }
-    replies.push({ method: request.method(), path: url.pathname, status: response.status(), body });
+    // Passed on untouched.
+    record(response.status(), response.headers(), bytes);
     return route.fulfill({ response, body: bytes });
   });
   const reply = (pathname: string) => replies.filter((entry) => entry.path === pathname);

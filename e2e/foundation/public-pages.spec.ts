@@ -78,6 +78,12 @@ function getCapturedOauthRequests(page: Page) {
   );
 }
 
+// The site registers its service worker in the browser tests too. Playwright's
+// page.route can miss requests from a page that worker controls (WebKit routes
+// them past the page), so specs that answer requests in the browser block it,
+// as Playwright recommends for request interception.
+test.use({ serviceWorkers: "block" });
+
 test.describe("public pages", () => {
   test("every public page answers without an error", async ({ request }) => {
     for (const path of PUBLIC_PATHS) {

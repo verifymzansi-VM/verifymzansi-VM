@@ -123,6 +123,12 @@ async function stubMarketplaceWithMultipleVideos(page: Page, count: number) {
   });
 }
 
+// The site registers its service worker in the browser tests too. Playwright's
+// page.route can miss requests from a page that worker controls (WebKit routes
+// them past the page), so specs that answer requests in the browser block it,
+// as Playwright recommends for request interception.
+test.use({ serviceWorkers: "block" });
+
 test.describe("Singleton video playback", () => {
   test("at most one video plays at any time on the marketplace grid", async ({
     page,

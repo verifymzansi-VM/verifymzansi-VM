@@ -172,6 +172,12 @@ async function gotoReady(page: Page, route: MediaRoute) {
   await page.waitForLoadState("networkidle").catch(() => {});
 }
 
+// The site registers its service worker in the browser tests too. Playwright's
+// page.route can miss requests from a page that worker controls (WebKit routes
+// them past the page), so specs that answer requests in the browser block it,
+// as Playwright recommends for request interception.
+test.use({ serviceWorkers: "block" });
+
 test.describe("Card media fit compliance", () => {
   for (const route of routes) {
     test(`${route.name} keeps first card media fully visible`, async ({ page }) => {

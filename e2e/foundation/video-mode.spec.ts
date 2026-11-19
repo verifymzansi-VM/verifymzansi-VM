@@ -52,6 +52,12 @@ async function swipe(page: Page, from: [number, number], to: [number, number]) {
   );
 }
 
+// The site registers its service worker in the browser tests too. Playwright's
+// page.route can miss requests from a page that worker controls (WebKit routes
+// them past the page), so specs that answer requests in the browser block it,
+// as Playwright recommends for request interception.
+test.use({ serviceWorkers: "block" });
+
 test.beforeEach(async ({ page, isMobile }) => {
   test.skip(!isMobile, "Video mode is for phones and tablets");
   await page.emulateMedia({ reducedMotion: "reduce" });
