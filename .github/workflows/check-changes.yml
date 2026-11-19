@@ -1,0 +1,103 @@
+name: Check changes
+
+# Gives each pull request into main one label, checks-changed or checks-clean,
+# and one comment saying in plain words whether it deletes tests or test cases,
+# adds skip, only, todo or expected-failure marks, changes the files that
+# configure the checks, or changes dependencies. The comment is rewritten on
+# every push. The label blocks nothing: it tells the reviewer where to look.
+#
+# It fails closed: the label is checks-changed until a clean verdict has been
+# written, and a run that errors or times out says "Could not check this PR".
+#
+# pull_request_target runs this file and the guard script as they are on main,
+# with a token that can write labels and comments. Nothing from the pull
+# request runs: the job checks out only main's copy of the guard script and of
+# the files that say which files are tests and which commands CI runs
+# (package.json, vitest.config.ts, the Playwright configs, the workflows and
+# the scripts), and reads all but the guard as text. It reads the pull request's
+# diff and its package.json through the GitHub API, as data. Its title,
+# description and commits play no part. scripts/check-changes.test.mjs tests
+# the detection.
+on:
+  # Never checks out or runs pull request code (see above).
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    # edited: a pull request retargeted onto main is checked too.
+    types: [opened, reopened, synchronize, edited]
+    branches: [main]
+
+permissions: {}
+
+# A newer push replaces the verdict of an older one still running.
+concurrency:
+  group: check-changes-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Check-change guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read # reads package.json at the head and merge base, as data
+      pull-requests: write # reads the changed files; writes the label and the one comment
+    steps:
+      # Before anything can fail (checkout, Node), the pull request already
+      # counts as changing checks, so an older checks-clean never outlives a
+      # push. Only the GitHub API is used here, with the pull-requests: write
+      # permission; adding a missing label creates it.
+      - name: Mark the pull request as not yet checked
+        timeout-minutes: 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]{0,9}$ ]] || { echo "::error::Bad pull request number."; exit 1; }
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels" \
+            -f "labels[]=checks-changed" --silent
+          if ! out="$(gh api --method DELETE "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels/checks-clean" 2>&1)"; then
+            case "$out" in
+              *"HTTP 404"*) ;;
+              *) printf '%s\n' "$out" >&2; exit 1 ;;
+            esac
+          fi
+      # github.sha is main's newest commit here, the one this file came from.
+      # Besides the guard, it reads main's test configuration, workflows and
+      # scripts as text, to know which files are tests and which commands and
+      # scripts CI runs. None of them is run.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            /package.json
+            /vitest.config.ts
+            /playwright*.config.ts
+            /.github/workflows/*.yml
+            /.github/workflows/*.yaml
+            /scripts/**/*.mjs
+            /scripts/**/*.js
+            /scripts/**/*.cjs
+            /scripts/**/*.ts
+            /scripts/**/*.mts
+            /scripts/**/*.cts
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: Label and comment on the pull request
+        timeout-minutes: 4
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_DIR: .
+        run: node scripts/check-changed-checks.mjs
+      # Runs when the step above failed or hit its time limit, so the comment
+      # never keeps an older verdict. A newer push cancels the run instead.
+      - name: Say the pull request could not be checked
+        if: ${{ failure() }}
+        timeout-minutes: 2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/check-changed-checks.mjs --could-not-check

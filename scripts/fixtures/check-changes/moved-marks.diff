@@ -1,0 +1,9 @@
+diff --git a/src/lib/a.test.ts b/src/lib/a.test.ts
+index 1111111..2222222 100644
+--- a/src/lib/a.test.ts
++++ b/src/lib/a.test.ts
+@@ -1,2 +1,2 @@
+-it.skip("x", () => {});
+-  it("y", () => {});
++  it("y", () => {});
++    it.skip("x", () => {});
