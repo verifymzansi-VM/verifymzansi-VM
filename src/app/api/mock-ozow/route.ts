@@ -59,9 +59,29 @@ function isPrivateIp(hostname: string): boolean {
   );
 }
 
+// Backslashes, ASCII control characters and whitespace, raw or percent-encoded.
+// Browsers and URL parsers drop or reinterpret these, so "/\evil.com" or
+// "/%09/evil.com" can resolve to another host.
+const UNSAFE_URL_CHARACTERS = /[\x00-\x20\x7f\\]|%(?:[01][0-9a-f]|20|7f|5c)/i;
+
+// Fixed base for resolving relative paths: a path is safe only when it stays on it.
+const RELATIVE_URL_BASE = new URL("https://return-url.invalid");
+
+function isSafeRelativePath(url: string): boolean {
+  if (!url.startsWith("/") || url.startsWith("//")) return false;
+  try {
+    return new URL(url, RELATIVE_URL_BASE).origin === RELATIVE_URL_BASE.origin;
+  } catch {
+    return false;
+  }
+}
+
 function isSafeUrl(url: string): boolean {
+  if (UNSAFE_URL_CHARACTERS.test(url)) return false;
+  if (url.startsWith("/")) return isSafeRelativePath(url);
   try {
     const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
     const allowedHosts = ["verifymzansi.com", "www.verifymzansi.com"];
     const runtimeMode = (process.env.VERIFYMZANSI_RUNTIME_MODE || "").toLowerCase();
     const allowLocalE2eHosts =
@@ -78,8 +98,7 @@ function isSafeUrl(url: string): boolean {
       (host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`)
     );
   } catch {
-    // Only allow relative paths (starting with "/" but not "//")
-    return url.startsWith("/") && !url.startsWith("//");
+    return false;
   }
 }
 
