@@ -225,9 +225,10 @@ thresholds are 75%, 64%, 82% and 76%, respectively, selected by
 words whether it deletes test files or test cases, adds skip, only, todo, fails
 or fixme marks, changes the files that configure the checks (coverage
 thresholds, audit baselines, rulesets, workflows, check scripts, lint, scanner
-and Playwright configuration, visual baselines, database contract steps) or the
-test and check commands, or adds dependencies. The comment is rewritten on every
-push. The label is for the reviewer and is not a required check.
+and Playwright configuration, the browser test skip policy, visual baselines,
+database contract steps) or the test and check commands, or adds dependencies.
+The comment is rewritten on every push. The label is for the reviewer and is not
+a required check.
 
 It runs on `pull_request_target`, so the workflow and its script
 (`scripts/check-changed-checks.mjs`, `scripts/lib/check-changes.mjs`) always

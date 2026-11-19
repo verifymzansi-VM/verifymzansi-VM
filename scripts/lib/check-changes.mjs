@@ -116,6 +116,12 @@ const CHECK_CONFIG_GROUPS = [
     match: (file) => /^playwright(?:\.[^/]+)?\.config\.[cm]?[jt]s$/.test(file),
   },
   {
+    id: "skip-policy",
+    words: "the browser test skip policy",
+    match: (file) =>
+      file === "e2e/support/skip-policy.ts" || file === "e2e/support/skip-guard-reporter.ts",
+  },
+  {
     id: "visual-baselines",
     words: "the visual baseline images",
     match: (file) => /-snapshots\/[^/]+\.(?:png|jpe?g|webp)$/.test(file),

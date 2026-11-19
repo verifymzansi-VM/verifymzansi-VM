@@ -116,10 +116,11 @@ test("every check-configuration group is reported, including binary baselines", 
     "the Gitleaks allowlist",
     "the ESLint configuration",
     "the Playwright configuration",
+    "the browser test skip policy",
     "the visual baseline images",
     "the database contract steps",
   ]);
-  assert.equal(result.configFiles.length, 12);
+  assert.equal(result.configFiles.length, 13);
   assert.match(
     summarySentence(result),
     /^This PR changes the audit baselines, the legacy surface baseline, .* and the database contract steps\.$/
