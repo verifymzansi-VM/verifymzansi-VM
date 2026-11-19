@@ -300,30 +300,36 @@ describe("rate-limiter worker", () => {
     expect((await send()).status).toBe(429);
   });
 
-  it("caps manual location at ten attempts per account without blocking another account", async () => {
-    const { env } = createWorkerEnv();
-    for (let attempt = 0; attempt < 10; attempt++) {
+  it.each(["verification:manual-location", "verification:location-detect"])(
+    "caps %s at ten attempts per key without blocking another key",
+    async (action) => {
+      const { env } = createWorkerEnv();
+      for (let attempt = 0; attempt < 10; attempt++) {
+        expect(
+          (await rateLimiterWorker.fetch(createWorkerRequest(action, "user-1"), env as never))
+            .status
+        ).toBe(200);
+      }
       expect(
-        (
-          await rateLimiterWorker.fetch(
-            createWorkerRequest("verification:manual-location", "user-1"),
-            env as never
-          )
-        ).status
+        (await rateLimiterWorker.fetch(createWorkerRequest(action, "user-1"), env as never)).status
+      ).toBe(429);
+      expect(
+        (await rateLimiterWorker.fetch(createWorkerRequest(action, "user-2"), env as never)).status
       ).toBe(200);
     }
+  );
+
+  it("counts location detection apart from manual location", async () => {
+    const { env } = createWorkerEnv();
+    for (let attempt = 0; attempt < 10; attempt++)
+      await rateLimiterWorker.fetch(
+        createWorkerRequest("verification:location-detect", "user-1"),
+        env as never
+      );
     expect(
       (
         await rateLimiterWorker.fetch(
           createWorkerRequest("verification:manual-location", "user-1"),
-          env as never
-        )
-      ).status
-    ).toBe(429);
-    expect(
-      (
-        await rateLimiterWorker.fetch(
-          createWorkerRequest("verification:manual-location", "user-2"),
           env as never
         )
       ).status
