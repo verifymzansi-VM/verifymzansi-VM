@@ -1035,6 +1035,10 @@ describe("backup and alert scripts, run for real on sample inputs", () => {
         newerRuns(["CI", "pull_request", "in_progress", null]),
         newerRuns(["Deploy", "workflow_run", "completed", "skipped"]),
         newerRuns(["Deploy", "workflow_run", "completed", "cancelled"]),
+        // A manual Deploy (staging only, or an old successful deploy of a
+        // commit main was reset to) does not release the newer main.
+        newerRuns(["Deploy", "workflow_dispatch", "in_progress", null]),
+        newerRuns(["Deploy", "workflow_dispatch", "completed", "success"]),
         newerRuns(["Security Scan", "push", "in_progress", null]),
         other("head_sha", sha("c")), // the API ignored the commit filter
         other("head_branch", "feature"),
