@@ -80,6 +80,63 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## House slots for administrators, 19 November 2026
+
+`20261119082834_house_slots.sql` is pending (see the applied register). **Order:
+apply-first** (the default): nothing in the website uses it. It adds no API
+command, argument, grant or result field and changes no existing function. It
+refuses (55000) unless the three functions it adds are absent (or this update's)
+and its table is absent or has the update's shape.
+
+- **What a house slot is.** A `staff_grant` slot with exactly the shape of a
+  paid Individual slot: any posting area, 1 live post, 4 posts going live per 30
+  days, 10 photos and 1 video, no add-ons. `granted_by` is the approving
+  administrator. It has no payment, so it never appears in revenue, commission,
+  refunds or invoices; it is not one of the 4 paid Individual slots
+  (`internal.individual_slots_counted` counts paid slots only); it does not use
+  the free first post. Posts in it follow every normal rule:
+  `internal.submit_post`, `internal.activate_post` and moderation are unchanged.
+  "My slots" already lists it as "Slot from VerifyMzansi", with no checkout or
+  renewal.
+- **Granting (database owner only).**
+  `internal.grant_house_slots(p_recipient_email, p_slots, p_days, p_reason, p_approved_by_email)`
+  is executable by no API role (like `internal.bootstrap_first_administrator`);
+  the owner runs it in the Supabase SQL editor. It makes the recipient hold
+  `p_slots` (1 to 4) house slots, each running until `p_days` (7 to 180) days
+  from now: current house slots that end earlier are extended to that date
+  (never shortened; their posts' search end follows,
+  `internal.refresh_slot_chain_documents`), and new ones are added up to
+  `p_slots`. Nothing renews by itself. Refusals: 22023
+  `house_slots_count_invalid` (a count outside 1 to 4, or below the house slots
+  already held), `house_slots_term_invalid`, `house_slots_reason_required` (5 to
+  500 characters of plain text); 42501 `house_slots_recipient_invalid`,
+  `house_slots_not_admin`, `house_slots_recipient_inactive`,
+  `house_slots_identity_required` (accepted ID review),
+  `house_slots_mfa_required` (verified authenticator app),
+  `house_slots_self_approval` (the approver must be a different account) and
+  `house_slots_approver_invalid` (the approver must be a confirmed, active
+  account with an active admin role and a verified authenticator app).
+- **The record.** New append-only table `private.house_slot_events`: one row per
+  slot granted, extended or ended, with the slot's end after it, the approving
+  administrator (none for an end) and the written reason. Row level security on,
+  no API role has access; updates, deletes and truncation are refused
+  (`internal.append_only_guard`), except the retention job's removal of a slot,
+  which takes its events with it.
+- **Ending.** Trigger `staff_roles_end_house_slots` on `private.staff_roles`
+  (after a role is revoked, changed or deleted) runs
+  `internal.house_slots_on_staff_role_change`: when the account no longer holds
+  an active admin role, `internal.end_house_slot` revokes each current house
+  slot (`revoked_reason` `house_slot_ended`), expires its posts (status reason
+  "Slot ended"), takes them out of search and records the end ("Admin role
+  removed"). A slot also ends at its end date, as any slot does. Account erasure
+  revokes it like any other slot.
+
+Preflight `../preflight/20261119082834_house_slots.check.sql` (summary "house
+slots: update not applied; admins: N; ready to receive: N; staff-granted slots:
+0; house slots: none (table absent)"); rollback
+`../rollback/20261119082834_house_slots.down.sql` (refuses once a house slot
+event is recorded). Behaviour test `scripts/test-foundation-house-slots.mjs`.
+
 ## Multi-listing package invoices and "Ask for an invoice", 19 November 2026
 
 `20261119025106_package_invoices.sql` was applied on 19 November 2026 at 06:42
@@ -5293,5 +5350,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   0; package bank transfers: 0"; production fingerprint after it
   (fingerprint.sql at ca11da3a, captured about 06:45 UTC) matched the full
   replay (except the known schema grant difference)
+- `20261119082834_house_slots.sql`: pending
 
 <!-- applied-register:end -->
