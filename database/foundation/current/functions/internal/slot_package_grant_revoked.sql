@@ -12,6 +12,11 @@ begin
   exception when others then
     raise warning 'slot package search documents left to the sweep (%)', sqlstate;
   end;
+  begin
+    perform internal.slot_package_release_paused(new.owner_id);
+  exception when others then
+    raise warning 'slot package paused posts left to the sweep (%)', sqlstate;
+  end;
   return null;
 end;
 $function$;

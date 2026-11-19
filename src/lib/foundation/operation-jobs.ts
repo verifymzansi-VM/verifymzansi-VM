@@ -9,6 +9,12 @@ import {
 } from "../services/email";
 import { runFoundationPrivacyNotice } from "./privacy-notice-job";
 import { runFoundationPaymentAlerts, type PaymentAlertStep } from "./payment-alerts";
+import {
+  emailPackageMoveAlert,
+  readPackageMoves,
+  type PackageMoveAlert,
+  type StuckPackageMove,
+} from "./package-move-alerts";
 import { createLogger } from "../utils/logger";
 import { hasDatabaseMessage } from "./error-reasons";
 import { paymentNoLongerComplete, readPaymentReceipt } from "./payment-receipt";
@@ -190,6 +196,8 @@ export interface OperationJobOptions {
   alertStaff?: StaffAlert;
   /** The payment alert and daily payment summary step (./payment-alerts.ts). */
   paymentAlerts?: PaymentAlertStep;
+  /** The staff email about newly stuck package moves (./package-move-alerts.ts). */
+  packageMoveAlert?: PackageMoveAlert;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -222,6 +230,7 @@ export async function runFoundationOperationJobs(
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const alertStaff = options.alertStaff ?? sendOutboxFinalFailureAlert;
   const paymentAlerts = options.paymentAlerts ?? ((context) => runFoundationPaymentAlerts(context));
+  const packageMoveAlert = options.packageMoveAlert ?? emailPackageMoveAlert;
   const deadline = now() + RUN_DEADLINE_MS;
   const failed: string[] = [];
   const summary: OperationJobSummary = { claimed: 0, succeeded: 0, retrying: 0, lost: 0, failed };
@@ -263,6 +272,7 @@ export async function runFoundationOperationJobs(
   // Each sweep runs on its own: one failing sweep is reported, the rest and
   // the emails still run. The sweeps run beside the emails so a slow sweep
   // cannot hold up the emails or the staff alert.
+  let stuckMoves: StuckPackageMove[] = [];
   const sweeps = (async () => {
     for (const [name, args] of SWEEPS) {
       const result = await call(name, args);
@@ -285,6 +295,22 @@ export async function runFoundationOperationJobs(
             failed: failures.data.failed,
             ...(failures.data.failures ? { rows: failures.data.failures } : {}),
           });
+        if (name === "run_slot_renewals") stuckMoves = readPackageMoves(result.data);
+      }
+    }
+    // Each stuck package move is reported once (the database marks it), so
+    // staff get one email about it and later runs keep passing. Only a failed
+    // email fails this run; the moves stay listed under Needs attention.
+    if (stuckMoves.length) {
+      let sent = false;
+      try {
+        sent = (await packageMoveAlert(stuckMoves)).success;
+      } catch {
+        sent = false;
+      }
+      if (!sent) {
+        log.error("Package move alert not emailed", { moves: stuckMoves });
+        fail("package_move_alert");
       }
     }
   })();
