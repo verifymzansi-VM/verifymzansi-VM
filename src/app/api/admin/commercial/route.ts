@@ -26,6 +26,11 @@ import {
   voidStaffInvoice,
 } from "@/lib/foundation/customer-invoices";
 import {
+  approveStaffPackageInvoice,
+  declineStaffPackageInvoiceRequest,
+  issueStaffPackageInvoice,
+} from "@/lib/foundation/package-invoices";
+import {
   inviteFrontendStaffOrganisationAdmin,
   manageFrontendStaffOrganisation,
   revokeFrontendStaffOrganisationInvite,
@@ -180,6 +185,17 @@ const schema = z.discriminatedUnion("action", [
     reason,
   }),
   z.object({ action: z.literal("invoice.void"), invoiceId: uuid, reason }),
+  // A member's request for a Multi-listing package invoice (P4e): staff issue
+  // it at the price asked for (above R50 000 a second staff member approves
+  // it) or decline it; the database prices, numbers and checks it.
+  z.object({
+    action: z.literal("package_invoice.issue"),
+    requestId: uuid,
+    dueDays: z.number().int().min(1).max(30),
+    reason,
+  }),
+  z.object({ action: z.literal("package_invoice.approve"), requestId: uuid }),
+  z.object({ action: z.literal("package_invoice.decline"), requestId: uuid, reason }),
   // A cleared bank transfer to an invoice; a second staff member confirms it.
   invoiceTransferInput.extend({ action: z.literal("invoice.record_transfer") }),
   z.object({ action: z.literal("payment.refund_approve"), requestId: uuid }),
@@ -339,6 +355,17 @@ export async function POST(request: NextRequest) {
         return {
           success: true,
           data: await voidStaffInvoice(api, body.invoiceId.toLowerCase(), body.reason),
+        };
+      if (body.action === "package_invoice.issue") {
+        const { action: _action, ...issue } = body;
+        return { success: true, data: await issueStaffPackageInvoice(api, issue) };
+      }
+      if (body.action === "package_invoice.approve")
+        return { success: true, data: await approveStaffPackageInvoice(api, body.requestId) };
+      if (body.action === "package_invoice.decline")
+        return {
+          success: true,
+          data: await declineStaffPackageInvoiceRequest(api, body.requestId, body.reason),
         };
       if (body.action === "payment.refund_approve") {
         // The same rules as the Ozow refunds route: a refund through Ozow is

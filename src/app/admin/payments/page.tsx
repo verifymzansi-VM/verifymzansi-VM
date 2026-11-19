@@ -11,6 +11,8 @@ import {
 import { BankTransferPanel } from "@/components/admin/commercial/bank-transfer-form";
 import { InvoicePanel } from "@/components/admin/commercial/invoice-panel";
 import { readStaffInvoices } from "@/lib/foundation/customer-invoices";
+import { readStaffPackageInvoiceRequests } from "@/lib/foundation/package-invoices";
+import { PackageInvoiceRequestPanel } from "@/components/admin/commercial/package-invoice-requests";
 import { PaymentsPanel } from "@/components/admin/commercial/partners-panel";
 import { OzowRefundAttention } from "@/components/admin/commercial/ozow-refund-actions";
 import { PageHeader } from "@/components/layout/page-header";
@@ -49,6 +51,7 @@ export default async function PaymentsAdminPage({
     expiredCount,
     ozow,
     invoices,
+    packageRequests,
   } = await (async () => {
     const { api } = await readFoundationServerSession();
     const result = await readStaffPaymentList(api, page, status);
@@ -82,31 +85,37 @@ export default async function PaymentsAdminPage({
       log.warn("Bank transfer details unavailable", { error });
       unavailable = true;
     };
-    const [details, waitingTransfers, expiredTransfers, invoiceList] = await Promise.all([
-      readStaffBankTransfers(
-        api,
-        result.items.map((item) => item.id)
-      ).catch((error: unknown) => {
-        missing(error);
-        return [];
-      }),
-      readStaffBankTransfersWaiting(api)
-        .then((read) => read.items)
-        .catch((error: unknown) => {
+    const [details, waitingTransfers, expiredTransfers, invoiceList, packageRequestList] =
+      await Promise.all([
+        readStaffBankTransfers(
+          api,
+          result.items.map((item) => item.id)
+        ).catch((error: unknown) => {
           missing(error);
           return [];
         }),
-      // Transfers nobody confirmed within 14 days, until each is followed up.
-      readStaffBankTransfersExpired(api).catch((error: unknown) => {
-        missing(error);
-        return { unresolved: 0, items: [] };
-      }),
-      // Customer invoices (P2b): the payments list still loads without them.
-      readStaffInvoices(api).catch((error: unknown) => {
-        log.warn("Invoices unavailable", { error });
-        return null;
-      }),
-    ]);
+        readStaffBankTransfersWaiting(api)
+          .then((read) => read.items)
+          .catch((error: unknown) => {
+            missing(error);
+            return [];
+          }),
+        // Transfers nobody confirmed within 14 days, until each is followed up.
+        readStaffBankTransfersExpired(api).catch((error: unknown) => {
+          missing(error);
+          return { unresolved: 0, items: [] };
+        }),
+        // Customer invoices (P2b): the payments list still loads without them.
+        readStaffInvoices(api).catch((error: unknown) => {
+          log.warn("Invoices unavailable", { error });
+          return null;
+        }),
+        // Multi-listing package invoice requests (P4e): the open ones.
+        readStaffPackageInvoiceRequests(api).catch((error: unknown) => {
+          log.warn("Package invoice requests unavailable", { error });
+          return null;
+        }),
+      ]);
     const transfers = new Map(details.map((transfer) => [transfer.payment_id, transfer]));
     return {
       transfersUnavailable: unavailable,
@@ -130,6 +139,7 @@ export default async function PaymentsAdminPage({
       awaitingApproval: result.awaiting_approval,
       ozow: view,
       invoices: invoiceList,
+      packageRequests: packageRequestList,
     };
   })();
 
@@ -211,6 +221,14 @@ export default async function PaymentsAdminPage({
           waiting={waiting}
           expired={expired}
           expiredCount={expiredCount}
+        />
+      ) : null}
+      {packageRequests ? (
+        <PackageInvoiceRequestPanel
+          canIssue={canRefund}
+          canApprove={canConfirm}
+          requests={packageRequests.items}
+          approvalAboveCents={packageRequests.approval_above_cents}
         />
       ) : null}
       {invoices ? (

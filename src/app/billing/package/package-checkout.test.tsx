@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { PackageCheckout } from "./package-checkout";
 import { formatPlanPrice } from "@/lib/constants/pricing";
 
@@ -79,14 +79,80 @@ describe("PackageCheckout (P4a)", () => {
       `Ozow takes payments of up to ${formatPlanPrice(130_000)}, so this package is paid by invoice, at the same price.`
     );
     expect(screen.getByText("A package for 90 days is paid by invoice.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Ask for an invoice" })).toHaveAttribute(
-      "href",
-      expect.stringContaining("mailto:billing@verifymzansi.com")
-    );
+    expect(screen.getByText("When your invoice is paid")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask for an invoice" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: /^Pay/ })).toBeNull();
     type("101");
     fireEvent.click(screen.getByRole("radio", { name: "30 days" }));
     expect(screen.getByTestId("package-invoice")).toBeInTheDocument();
+  });
+
+  it("asks for an invoice only after the invoice's own tick, once per order", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, request: { status: "requested" } }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const uuid = vi
+      .spyOn(globalThis.crypto, "randomUUID")
+      .mockReturnValue("11111111-2222-4333-8444-5555555555aa");
+    onTestFinished(() => uuid.mockRestore());
+    render(
+      <PackageCheckout terms={terms} initialSlots={50} initialDays={90} onlineMaxCents={130_000} />
+    );
+    const ask = () => screen.getByRole("button", { name: "Ask for an invoice" });
+    expect(ask()).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /My slots start as soon as this invoice/ })
+    );
+    fireEvent.click(ask());
+    expect(await screen.findByText(/Invoice requested\./)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Invoices" })).toHaveAttribute(
+      "href",
+      "/billing/invoices"
+    );
+    expect(screen.queryByRole("button", { name: "Ask for an invoice" })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      "/api/billing/package-invoice",
+      expect.objectContaining({ method: "POST" })
+    );
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
+    expect(JSON.parse(init.body)).toEqual({
+      planId: terms[1].planId,
+      slots: 50,
+      expectedTotalCents: 1_500_000,
+      coolingOffConsent: true,
+      requestId: "11111111-2222-4333-8444-5555555555aa",
+    });
+    // Another order asks again, with its own tick.
+    type("60");
+    expect(ask()).toBeDisabled();
+    expect(
+      screen.getByRole("checkbox", { name: /My slots start as soon as this invoice/ })
+    ).not.toBeChecked();
+  });
+
+  it("shows the database's refusal of an invoice request", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: "This account already has a Multi-listing package." }),
+      }))
+    );
+    render(
+      <PackageCheckout terms={terms} initialSlots={50} initialDays={90} onlineMaxCents={130_000} />
+    );
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /My slots start as soon as this invoice/ })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Ask for an invoice" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This account already has a Multi-listing package."
+    );
+    expect(screen.getByRole("button", { name: "Ask for an invoice" })).toBeEnabled();
   });
 
   it("pays only after the 'my slots start now' tick, with the total shown", async () => {

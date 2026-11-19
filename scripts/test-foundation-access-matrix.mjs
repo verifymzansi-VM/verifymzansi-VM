@@ -281,6 +281,7 @@ const OWNER_TABLES = [
     "notification_id in (select id from private.notifications where account_id=$1)",
   ],
   ["organisation_admins", "account_id=$1"],
+  ["package_invoice_requests", "account_id=$1"],
   ["organisation_affiliations", ownPosts],
   // An event's subject is an account, application, affiliation, sponsorship,
   // invitation, programme or logo; match every one that belongs to A.

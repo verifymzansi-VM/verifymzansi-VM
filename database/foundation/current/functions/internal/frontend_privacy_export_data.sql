@@ -47,6 +47,9 @@ begin
       from private.entitlements where owner_id=$1 order by created_at,id$q$),
     ('slot_packages',$q$select id,term_days,slot_count,created_at from private.slot_packages where owner_id=$1
       order by created_at,id$q$),
+    ('package_invoice_requests',$q$select r.id,r.term_days,r.slots,r.unit_price_cents,r.total_cents,r.requested_at,r.consent_at,
+      r.consent_version,r.status,r.closed_at,(select i.invoice_number from private.customer_invoices i where i.id=r.invoice_id) invoice_number
+      from private.package_invoice_requests r where r.account_id=$1 order by r.requested_at,r.id$q$),
     ('post_activations',$q$select post_id,entitlement_id,activated_at,released_at,release_reason,continued
       from private.post_activations where owner_id=$1 order by activated_at,id$q$),
     ('event_submissions',$q$select post_id,submitted_at,released_at,release_reason

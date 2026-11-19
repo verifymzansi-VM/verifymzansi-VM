@@ -27,7 +27,7 @@ create table private.invoice_transfers (
   resolved_by uuid,
   resolved_at timestamp with time zone,
   constraint invoice_transfers_account_id_fkey FOREIGN KEY (account_id) REFERENCES auth.users(id) ON DELETE RESTRICT,
-  constraint invoice_transfers_amount_received_cents_check CHECK (amount_received_cents > 0 AND amount_received_cents <= 5000000),
+  constraint invoice_transfers_amount_received_cents_check CHECK (amount_received_cents > 0 AND amount_received_cents <= 15000000),
   constraint invoice_transfers_bank_reference_check CHECK (bank_reference ~ '^[A-Za-z0-9][A-Za-z0-9 ._:/-]{3,59}$'::text AND bank_reference = btrim(bank_reference) AND bank_reference !~ '  '::text AND length(regexp_replace(bank_reference, '[^A-Za-z0-9]'::text, ''::text, 'g'::text)) >= 4),
   constraint invoice_transfers_confirmed CHECK ((status = 'confirmed'::text) = (confirmed_by IS NOT NULL AND confirmed_at IS NOT NULL AND payment_id IS NOT NULL)),
   constraint invoice_transfers_confirmed_by_fkey FOREIGN KEY (confirmed_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
@@ -48,7 +48,7 @@ create table private.invoice_transfers (
   constraint invoice_transfers_resolution_reason_check CHECK (resolution_reason IS NULL OR internal.plain_text_valid(resolution_reason, 5, 500, true)),
   constraint invoice_transfers_resolved CHECK ((resolved_at IS NULL) = (resolved_by IS NULL) AND (resolved_at IS NULL) = (resolution IS NULL) AND (resolved_at IS NULL) = (resolution_reason IS NULL) AND (resolved_at IS NULL OR status = 'expired'::text)),
   constraint invoice_transfers_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
-  constraint invoice_transfers_slots_check CHECK (slots >= 1 AND slots <= 25),
+  constraint invoice_transfers_slots_check CHECK (slots >= 1 AND slots <= 250),
   constraint invoice_transfers_status_check CHECK (status = ANY (ARRAY['awaiting_confirmation'::text, 'confirmed'::text, 'declined'::text, 'expired'::text]))
 );
 alter table private.invoice_transfers owner to postgres;

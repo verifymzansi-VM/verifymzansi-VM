@@ -80,6 +80,172 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Multi-listing package invoices and "Ask for an invoice", 19 November 2026
+
+`20261119025106_package_invoices.sql` is pending (see the applied register).
+Roadmap P4e; the owner's decisions 5, 6 and 12 of 14 November 2026
+(multi-listing gap review) and of 16 November 2026 (an invoice first at any
+amount, paid with Pay now up to the online payment limit or by bank transfer).
+It needs `20261114154823_slot_packages.sql`,
+`20261114041000_customer_invoice_pay_now.sql` and
+`20261118044440_bank_transfer_expiry.sql`, and refuses (55000) unless the nine
+functions it replaces have their reviewed bodies (or this update's) and the
+eighteen it adds are absent (or this update's). It only adds: no API command,
+argument or grant is removed or changed, and no field is added to an existing
+command's answer. **Nothing can be bought after it is applied**: packages stay
+off sale and every new command refuses with PT403 `packages_not_on_sale` until
+the owner switches them on.
+
+- **Wider invoice limits.** `private.customer_invoices` and
+  `private.invoice_transfers` hold up to 250 slots and R150,000 (250 slots for
+  180 days at R600). The Individual commands keep their own limits (1 to 25
+  slots, at most R50,000). A payment line holding more than one slot (a package
+  line) may be up to R150,000 (`payment_lines_amount_cents_check`); a one-slot
+  line stays at most R10,000.
+- **"Ask for an invoice" (member).**
+  `api.request_package_invoice(p_plan_id, p_slots, p_expected_total_cents, p_cooling_off_consent, p_request_id)`:
+  5 to 250 slots of one package term at any amount (22023
+  `package_slots_invalid`), priced here from the catalogue (PT428 when the total
+  shown differs), with an accepted ID review (PT412) and the box ticked (22023
+  `invoice_consent_required`; recorded as `invoice-cooling-off-v1`, the words
+  every invoice uses, with the current posting terms). Refused while the account
+  has a package that has not ended (PT409 `package_active`) or an unpaid package
+  invoice (PT409 `package_invoice_unpaid`). One open request per account (a
+  partial unique index): the same request id returns the first answer
+  (`repeated: true`, another order with it PT409 `invoice_request_conflict`);
+  the same order again keeps the waiting request; another order replaces it
+  (`withdrawn`) while no staff member has prepared it, and is refused once one
+  has (PT409 `package_invoice_request_open`). At most 10 new requests per
+  account in 24 hours (PT429 `package_invoice_requests_limit`).
+  `api.get_my_package_invoice_request()` reads the account's latest request
+  (never another account's, never staff details).
+- **The request record.** New table `private.package_invoice_requests`: the
+  account, term, slots, price and total, the consent, the status (`requested`,
+  `awaiting_approval`, `issued`, `declined`, `withdrawn`), and what staff did
+  (who prepared it with the days to pay and the reason, who approved it, the
+  invoice, who declined it and why). What the member asked never changes; staff
+  details are written once; it moves on once (trigger
+  `package_invoice_requests_guard`, which also checks that an issued request
+  names its own invoice of that order). Closing an account withdraws its open
+  request (`internal.close_account_evidence`), so it leaves the staff queue;
+  erasure withdraws it too and unlinks every request from the account
+  (`internal.erase_closed_account`; the guard allows only that change), as its
+  invoice and payment are unlinked. The retention job
+  (`internal.retention_commerce`, new count `package_invoice_requests`) removes
+  declined and withdrawn requests five tax years after they closed, the period
+  of declined bank transfers; an issued one goes with its invoice. No API role
+  reads it.
+- **Staff.** `api.get_staff_package_invoice_requests()` (`payments:view`): the
+  open requests, oldest first (at most 100), with the customer's account email,
+  public name, whether their ID review is accepted and whether they have a
+  package. `api.issue_staff_package_invoice(p_request_id, p_due_days, p_reason)`
+  (`payments:refund`, recent second factor) issues the customer invoice at the
+  price asked for, with the next `VM-YYYY-NNNNNN` number, the description
+  "Multi-listing package: <n> slots × <days> days" and the issuing staff member,
+  after checking the account, its ID review, the switch, the price still sold
+  (PT409 `invoice_plan_unavailable`), no package (PT409 `package_active`), no
+  other unpaid package invoice and the VAT setting again. **Above R50,000** it
+  only prepares the invoice (`awaiting_approval`, no number taken);
+  `api.approve_staff_package_invoice(p_request_id)`
+  (`payments:confirm_transfer`, admin) issues it, never by the preparer or
+  another account of their identity (42501 `invoice_approver_same`) and only
+  while the preparer still holds `payments:refund` and a current accepted ID
+  review of their own (PT409 `invoice_preparer_inactive`); the preparer is the
+  invoice's issuer.
+  `api.decline_staff_package_invoice_request(p_request_id, p_reason)`
+  (`payments:refund`) closes an open request. Every staff command checks the
+  staff member's own ID review, never their own identity's account and never a
+  customer they referred, again after every lock wait (the customer, then their
+  package, then the row); repeats by the same staff member return the first
+  answer; a closed request is refused (PT409 `package_invoice_request_closed`,
+  PT404 `package_invoice_request_unavailable` for an unknown id). The issued
+  invoice notifies the member as every invoice does.
+- **Paying a package invoice.** As an Individual invoice, as a package:
+  `internal.start_invoice_payment` ("Pay now", only up to the online payment
+  limit, so 13 slots for 30 days today) starts one Ozow payment with one line
+  holding every slot and the package checkout's snapshot, after checking the
+  switch and no package (an unsent package checkout is closed; one open at Ozow
+  refuses with PT409 `invoice_checkout_open`); the existing Ozow notice delivers
+  it as a package (`internal.customer_invoice_payment_guard` accepts that one
+  line as the attempt). `internal.record_staff_invoice_transfer` and
+  `internal.confirm_staff_invoice_payment` (two staff members) record and
+  deliver a bank transfer to it the same way: one line, the grant that opens the
+  package (`internal.issue_slot_line_entitlements`), the invoice record, the
+  receipt event and the partner commission; `slots_started` is the package's
+  number of slots. Both refuse while packages are off sale (PT403
+  `packages_not_on_sale`) or the account has a package (PT409 `package_active`).
+  The Individual slot limit and E3 do not apply to a package. Individual
+  invoices are unchanged, except that confirming any bank transfer now also
+  needs the recorder's own current accepted ID review (PT409
+  `transfer_recorder_inactive`). Refunds work on the package line as for a
+  package bought online.
+- **Online package checkout.** `internal.start_package_checkout` (full body)
+  refuses while a package invoice of the account is unpaid (PT409
+  `package_invoice_unpaid`): it is paid or voided first.
+- **Privacy export.** New dataset `package_invoice_requests` (term, slots,
+  amounts, dates, consent, status, invoice number; never the staff member or the
+  reasons).
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the new commands and the deploy preflight probes every command in
+`../runtime-api-manifest.json`, so a deploy without the update stops there.
+Earlier releases do not call them and keep working with the update applied: no
+package invoice can exist while packages are off sale, so the earlier invoice
+readers (at most 25 slots and R50,000) never meet one. It is recorded after
+`20261118182332_refund_follow_ups.sql`.
+
+**Applying.**
+
+1. Run `../preflight/20261119025106_package_invoices.check.sql` unchanged in the
+   SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "package invoices: update not applied (apply before the
+   website release that uses it is deployed); on sale: no; invoice requests:
+   none (table absent); package invoices: 0; package bank transfers: 0".
+2. Run the update. It waits at most 5 seconds for any lock (it briefly locks
+   `private.customer_invoices`, `private.invoice_transfers` and
+   `private.payment_lines` to widen their rules). Run the preflight again: it
+   must read "package invoices: already applied; on sale: no; invoice requests:
+   0 (open: 0); package invoices: 0; package bank transfers: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is `../rollback/20261119025106_package_invoices.down.sql`
+(only with the owner's decision; prefer a forward fix). Revert and deploy the
+website release first: the rollback removes the commands that release calls. It
+refuses once a package invoice request, a package invoice, a bank transfer for a
+package or a payment line above R10,000 exists; otherwise it puts back the nine
+earlier bodies byte for byte and the earlier limits, and drops the added
+functions and the table.
+
+`node --import tsx scripts/test-foundation-package-invoices.mjs` (part of
+`pnpm db:foundation:lifecycle-test`, 30 checks) proves on the throwaway
+database: the preflight before and after, read only; drifted bodies and a
+premature rollback refused, changing nothing; apply, rollback and re-apply
+return the same fingerprints; the grants; with packages off sale nothing can be
+asked for; the term, slot, total, tick and ID review rules; repeats, the same
+order and a replacing order; the staff queue for `payments:view` only; issuing
+at the price asked for, its repeat, and no second issue or decline; no new
+request while an invoice is unpaid or a package runs; Pay now refused above the
+online limit; a bank transfer confirmed by a second staff member opens a 25-slot
+package (one line, one grant, 100 new posts per 30 days, 90 days, the invoice
+paid, receipt event and invoice record); above R50,000 a prepared invoice takes
+no number until another admin approves it (never the preparer, a moderator, or
+once the preparer lost the role); Pay now within the limit closes an unsent
+online checkout, pays the invoice with one line and opens a 5-slot package; a
+declined request issues nothing; issuing rechecks the switch, the customer's ID
+review and the staff member's identity; a bank transfer is refused while
+packages are off sale; the record's guard; a R10,200 bank transfer and the
+approved R60,000 invoice paid in full (one line each); confirming and approving
+need the recorder's and the preparer's own current ID review; two approvers, and
+an approval and a decline, at the same moment (one wins, at most one invoice);
+the daily request limit; the online package checkout refused while a package
+invoice is unpaid; closure withdraws open requests and erasure unlinks every
+request, invoice and payment; retention of declined and withdrawn requests;
+Individual invoices unchanged; the privacy export; and the rollback refused once
+a request exists.
+
 ## Refund follow-ups and Ozow's refund window, 18 November 2026
 
 `20261118182332_refund_follow_ups.sql` was applied on 18 November 2026 at 21:25
@@ -5109,5 +5275,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   problem rows); production fingerprint after it (fingerprint.sql at 07418a73,
   captured about 21:29 UTC) matched the full replay (except the known schema
   grant difference)
+- `20261119025106_package_invoices.sql`: pending
 
 <!-- applied-register:end -->
