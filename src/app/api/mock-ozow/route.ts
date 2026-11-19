@@ -62,6 +62,7 @@ function isPrivateIp(hostname: string): boolean {
 // Backslashes, ASCII control characters and whitespace, raw or percent-encoded.
 // Browsers and URL parsers drop or reinterpret these, so "/\evil.com" or
 // "/%09/evil.com" can resolve to another host.
+// Strict on purpose, query included: test-only route; its real caller never sends these.
 const UNSAFE_URL_CHARACTERS = /[\x00-\x20\x7f\\]|%(?:[01][0-9a-f]|20|7f|5c)/i;
 
 // Fixed base for resolving relative paths: a path is safe only when it stays on it.

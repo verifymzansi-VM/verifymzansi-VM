@@ -73,6 +73,21 @@ describe("GET /api/mock-ozow", () => {
     expect(res.headers.get("location")).toBe("http://localhost/billing/success?plan=slot");
   });
 
+  it("redirects to the production-shaped return url", async () => {
+    const returnUrl = `https://verifymzansi.com/billing/success?payment=${MOCK_PAYMENT_ID}`;
+    const res = await GET(requestWithReturnUrl(returnUrl));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe(returnUrl);
+  });
+
+  it("accepts an encoded slash in a query value", async () => {
+    const res = await GET(requestWithReturnUrl("/billing/success?next=%2Fdashboard"));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe("http://localhost/billing/success?next=%2Fdashboard");
+  });
+
   it.each([
     "//evil.com",
     "/\\evil.com",
