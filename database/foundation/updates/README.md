@@ -84,10 +84,11 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 `20261119082834_house_slots.sql` is pending (see the applied register). **Order:
 apply-first** (the default): nothing in the website uses it. It adds no API
-command, argument, grant or result field; the only existing function it changes
-is the privacy export. It refuses (55000) unless the three functions it adds are
-absent (or this update's), the privacy export it replaces has its reviewed body
-(or this update's) and its table is absent or has the update's shape.
+command, argument, grant or result field; the only existing functions it changes
+are the privacy export and the lifecycle job. It refuses (55000) unless the
+three functions it adds are absent (or this update's), the two it replaces have
+their reviewed bodies (or this update's) and its table is absent or has the
+update's shape.
 
 - **What a house slot is.** A `staff_grant` slot with exactly the shape of a
   paid Individual slot: any posting area, 1 live post, 4 posts going live per 30
@@ -119,6 +120,12 @@ absent (or this update's), the privacy export it replaces has its reviewed body
   account with an active admin role and a verified authenticator app); 55000
   `house_slots_isolation` outside a read committed transaction (the SQL editor's
   default), so two grants at once never exceed 15.
+- **Approval needs a second ID-verified person.** The approver's accepted ID
+  review must belong to a different person than the recipient's (42501
+  `house_slots_approver_identity_required` when the approver has none,
+  `house_slots_same_person` when it is the recipient's identity); an identity is
+  active on one account only, so two accounts of one person cannot approve each
+  other.
 - **The record.** New append-only table `private.house_slot_events`: one row per
   slot granted, extended or ended, with the slot's end after it, the approving
   administrator (none for an end) and the written reason. Row level security on,
@@ -134,13 +141,18 @@ absent (or this update's), the privacy export it replaces has its reviewed body
   removed"). Removing a role never fails or waits because of a post: the slot is
   revoked first (the only row waited for, never held for long), which at once
   stops activations and takes its posts out of public view
-  (`private.public_eligible_posts` needs an active slot); its posts are then
-  released with SKIP LOCKED. A post in use at that moment keeps its activation
-  on the revoked slot, out of public view, until
-  `select internal.end_house_slot('<slot id>', 'Admin role removed');` is run
-  again (owner, SQL editor) or its end date passes (the lifecycle job expires
-  it). A slot also ends at its end date, as any slot does. Account erasure
-  revokes it like any other slot.
+  (`private.public_eligible_posts` needs an active slot). Slots are revoked in
+  the order `internal.activate_post` locks them (end date, then id), so a
+  removal and an activation never deadlock. Its posts are then released with FOR
+  NO KEY UPDATE SKIP LOCKED (a key-share lock from a row referring to the post
+  does not stop it). A post in use at that moment keeps its activation on the
+  revoked slot, out of public view, until the next run of the lifecycle job:
+  `internal.run_post_lifecycle` has a new first step that runs
+  `internal.end_house_slot` again for ended house slots that still have an open
+  activation (at most `p_limit` slots per run, counted in `expired`; read
+  through the new partial index `entitlements_house_slot_ended_idx`). A slot
+  also ends at its end date, as any slot does. Account erasure revokes it like
+  any other slot.
 - **Privacy export.** `internal.frontend_privacy_export_data` gains the dataset
   `house_slot_events` (slot, action, end date, time; never the approving
   administrator or the reason).

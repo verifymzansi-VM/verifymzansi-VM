@@ -25,7 +25,7 @@ begin
   select coalesce(array_agg(x.id), '{}') into v_locked from (select p.id from private.posts p
       where p.id in(select a.post_id from private.post_activations a
         where a.entitlement_id=p_entitlement and a.released_at is null)
-      order by p.id for update of p skip locked) x;
+      order by p.id for no key update of p skip locked) x;
   with released as (
     update private.post_activations a set released_at=statement_timestamp(), release_reason='entitlement_ended'
     where a.entitlement_id=p_entitlement and a.released_at is null and a.post_id=any(v_locked) returning a.post_id)

@@ -45,6 +45,7 @@ import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 import {
   applyAndProveRollback,
   createPaymentWorld,
+  fingerprintOf,
   functionBodyMd5,
   P30,
   psqlSessions,
@@ -56,13 +57,16 @@ import {
 const UPDATE = "20261119082834_house_slots.sql";
 const GRANT = "internal.grant_house_slots(text,integer,integer,text,text)";
 const ADDED = {
-  [GRANT]: "4d1d0e822e358b6489f0cdf69a22c564",
-  "internal.end_house_slot(uuid,text)": "86419d57cc0266fcb6ec5881c62ae5e5",
-  "internal.house_slots_on_staff_role_change()": "f100ded1785d690054ba54e150e33bff",
+  [GRANT]: "77527fd29f2348e228441612a842cce2",
+  "internal.end_house_slot(uuid,text)": "29401d1db1447bd6ad4fe372f73fc08f",
+  "internal.house_slots_on_staff_role_change()": "2ddae0e784aebb3c57e31677de530d9c",
 };
 const EXPORT = "internal.frontend_privacy_export_data(uuid)";
 const EXPORT_BEFORE = "0b4cd3f792ffecf94c329277db4da28e";
 const EXPORT_AFTER = "e3842fd91a8d4f6b0bfe4cdc5b3030d9";
+const LIFECYCLE = "internal.run_post_lifecycle(integer)";
+const LIFECYCLE_BEFORE = "cb5770e3e71e9e6ed31d1eff3e06e3fc";
+const LIFECYCLE_AFTER = "9496376abcf65c764efe02d4971bba5e";
 const NONE = { anon: false, authenticated: false, service_role: false };
 const REASON = "Owner-approved house slot for real offers";
 const NOT_APPLIED =
@@ -77,6 +81,16 @@ try {
   const { admin, admin2 } = twoAdmins(world, "house");
   const { q, json, fails, member, staff, service, preflight, fingerprint, count } = kit;
   const bodyMd5 = (signature) => functionBodyMd5(kit, signature);
+  // The world's stand-in for internal.current_verified_identity, with aliases:
+  // an alias gives an account another account's identity, which the real
+  // schema never allows (an identity is active on one account only), to check
+  // the grant's own same-person refusal.
+  q(`create table vmtest.identity_alias(owner_id uuid primary key, identity_hmac text not null);
+    create or replace function internal.current_verified_identity(p_owner uuid) returns text
+      language sql set search_path to 'pg_catalog' as $fn$
+      select coalesce((select x.identity_hmac from vmtest.identity_alias x where x.owner_id=p_owner),
+          (select f.identity_hmac from private.accepted_identity_facts f where f.owner_id=p_owner and f.revoked_at is null))
+        where exists(select 1 from private.current_account_access a where a.id=p_owner) $fn$;`);
 
   // Ready posting: the current posting terms accepted, a ready cover image,
   // the form contact channel; a draft Market listing.
@@ -196,6 +210,7 @@ try {
     for (const signature of Object.keys(ADDED))
       assert.equal(bodyMd5(signature), "missing", signature);
     assert.equal(bodyMd5(EXPORT), EXPORT_BEFORE);
+    assert.equal(bodyMd5(LIFECYCLE), LIFECYCLE_BEFORE);
     assert.equal(q("select to_regclass('private.house_slot_events') is null;"), "t");
   });
   await check("preflight: read only; reads 'not applied'", () => {
@@ -243,6 +258,7 @@ try {
       assert.deepEqual(grants[signature], NONE, signature);
     }
     assert.equal(bodyMd5(EXPORT), EXPORT_AFTER);
+    assert.equal(bodyMd5(LIFECYCLE), LIFECYCLE_AFTER);
     fails(member(admin, grantSql(admin, 1, 90, REASON, admin2)), "42501");
     fails(staff(admin2, grantSql(admin, 1, 90, REASON, admin2)), "42501");
     fails(service(grantSql(admin, 1, 90, REASON, admin2)), "42501");
@@ -292,6 +308,28 @@ try {
     fails(grantSql(admin, 1, 90, REASON, banned), "42501", /house_slots_approver_invalid/);
     fails(grantSql(admin, 1, 90, REASON, unconfirmed), "42501", /house_slots_approver_invalid/);
     for (const extra of [noId, noMfa, banned, unconfirmed])
+      q(
+        `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${extra.id}';`
+      );
+  });
+  await check("refused: an approver without an accepted ID review, or the same person", () => {
+    const noIdApprover = world.staffUser("house-approver-noid", "admin");
+    fails(
+      grantSql(admin, 1, 90, REASON, noIdApprover),
+      "42501",
+      /house_slots_approver_identity_required/
+    );
+    // Another account of the same person (the recipient's identity).
+    const twin = world.staffUser("house-twin", "admin");
+    q(`insert into vmtest.identity_alias values('${twin.id}','${fingerprintOf("house-admin")}');`);
+    fails(grantSql(admin, 1, 90, REASON, twin), "42501", /house_slots_same_person/);
+    q(
+      `insert into vmtest.identity_alias values('${admin2.id}','${fingerprintOf("house-admin")}');`
+    );
+    fails(grantSql(admin, 1, 90, REASON, admin2), "42501", /house_slots_same_person/);
+    q(`delete from vmtest.identity_alias;`);
+    assert.deepEqual(houseSlots(admin), []);
+    for (const extra of [noIdApprover, twin])
       q(
         `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${extra.id}';`
       );
@@ -574,7 +612,8 @@ try {
       assert.equal(fundedBy(fourth), slot);
       open("house-post-in-use");
       assert.equal((await holder.done).status, 0);
-      assert.equal(q(`select internal.end_house_slot('${slot}','Admin role removed');`), "1");
+      // The lifecycle job finishes the job on its next run.
+      assert.ok(json(service("select api.run_post_lifecycle(100);")).expired >= 1);
       assert.equal(q(`select internal.end_house_slot('${slot}','Admin role removed');`), "0");
       const post = row(fourth);
       assert.deepEqual([post.status, post.status_reason], ["expired", "Slot ended"]);
@@ -610,6 +649,85 @@ try {
     q(`delete from private.staff_roles where user_id='${admin4.id}';`);
     assert.ok(houseSlots(admin4).every((e) => e.status === "revoked"));
   });
+  await check(
+    "a removal racing an activation never deadlocks: slots end in activation order",
+    async () => {
+      const admin8 = ready(world.staffUser("house-admin8", "admin"));
+      world.review(admin8, admin2, "house-admin8");
+      assert.equal(grant(admin8, 2, 90).added, 2);
+      const [x, y] = houseSlots(admin8)
+        .map((e) => e.id)
+        .sort();
+      // y (the later id) ends first, so an activation locks y before x; y is full.
+      q(`update private.entitlements set ends_at=now()+interval '10 days' where id='${y}';`);
+      const first = draft(admin8);
+      assert.equal(json(submitSql(admin8, first)).status, "pending_moderation");
+      assert.equal(fundedBy(first), y);
+      const second = draft(admin8);
+      // x is held elsewhere: the activation locks y, then waits for x.
+      const holdX = await hold(
+        "house-hold-x",
+        `select 1 from private.entitlements where id='${x}' for update;`
+      );
+      const activating = await blocked("house-activating", submitSql(admin8, second));
+      // The removal ends y first (as the activation does), so it waits for the
+      // activation instead of holding x against it.
+      const removing = await blocked(
+        "house-removing",
+        staff(
+          admin2,
+          `select api.propose_frontend_staff_role('${admin8.email}','member','Synthetic removal racing an activation');`
+        )
+      );
+      open("house-hold-x");
+      const [held, activated, removed] = await Promise.all([
+        holdX.done,
+        activating.done,
+        removing.done,
+      ]);
+      assert.equal(held.status, 0, held.stderr);
+      assert.equal(activated.status, 0, activated.stderr);
+      assert.equal(removed.status, 0, removed.stderr);
+      assert.equal(
+        q(
+          `select count(*) from private.staff_roles where user_id='${admin8.id}' and revoked_at is null;`
+        ),
+        "0"
+      );
+      assert.ok(houseSlots(admin8).every((e) => e.status === "revoked"));
+      for (const id of [first, second]) {
+        assert.equal(row(id).status, "expired", id);
+        assert.equal(fundedBy(id), "", id);
+      }
+    }
+  );
+  await check(
+    "a post with only a key-share lock (a row referring to it) is released at once",
+    async () => {
+      const admin9 = ready(world.staffUser("house-admin9", "admin"));
+      world.review(admin9, admin2, "house-admin9");
+      assert.equal(grant(admin9, 1, 90).added, 1);
+      const post = draft(admin9);
+      assert.equal(json(submitSql(admin9, post)).status, "pending_moderation");
+      const keyShare = await hold(
+        "house-key-share",
+        `select 1 from private.posts where id='${post}' for key share;`
+      );
+      // The post is released in the removal itself (not skipped); the
+      // removal's commit-time check of the post waits for that short
+      // transaction, then succeeds.
+      const removing = await blocked(
+        "house-key-share-removal",
+        `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${admin9.id}' and revoked_at is null;`
+      );
+      open("house-key-share");
+      const [held, removed] = await Promise.all([keyShare.done, removing.done]);
+      assert.equal(held.status, 0, held.stderr);
+      assert.equal(removed.status, 0, removed.stderr);
+      assert.deepEqual([row(post).status, row(post).status_reason], ["expired", "Slot ended"]);
+      assert.equal(fundedBy(post), "");
+    }
+  );
   await check("a mixed grant: holding 2 at 90 days, 3 at 30 days adds 1 at 30 days", () => {
     const admin7 = ready(world.staffUser("house-admin7", "admin"));
     world.review(admin7, admin2, "house-admin7");
@@ -700,6 +818,7 @@ try {
       for (const [signature, md5] of Object.entries(ADDED))
         assert.equal(bodyMd5(signature), md5, signature);
       assert.equal(bodyMd5(EXPORT), EXPORT_AFTER);
+      assert.equal(bodyMd5(LIFECYCLE), LIFECYCLE_AFTER);
     });
   }
 } catch (error) {

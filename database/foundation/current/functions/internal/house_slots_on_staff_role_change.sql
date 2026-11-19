@@ -19,7 +19,8 @@ begin
   for v_slot in select e.id from private.entitlements e
       where e.owner_id=v_user and e.source='staff_grant' and e.status<>'revoked' and e.ends_at>statement_timestamp()
         and exists(select 1 from private.house_slot_events h where h.entitlement_id=e.id)
-      order by e.id loop
+      -- The order internal.activate_post locks slots in, so they never deadlock.
+      order by e.ends_at, e.id loop
     perform internal.end_house_slot(v_slot, 'Admin role removed');
   end loop;
   return null;

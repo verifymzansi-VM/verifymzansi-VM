@@ -7,7 +7,8 @@ CREATE OR REPLACE FUNCTION internal.grant_house_slots(p_recipient_email text, p_
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare v_recipient uuid; v_approver uuid; v_ends timestamptz; v_held uuid[]; v_slot private.entitlements;
+declare v_recipient uuid; v_approver uuid; v_identity text; v_approver_identity text; v_ends timestamptz;
+  v_held uuid[]; v_slot private.entitlements;
   v_id uuid; v_added integer:=0; v_extended integer:=0;
 begin
   -- The count of slots already held is read after the staff role lock; only
@@ -54,7 +55,8 @@ begin
     raise exception 'house slots: the recipient account is not active' using errcode='42501',
       detail='house_slots_recipient_inactive';
   end if;
-  if internal.current_verified_identity(v_recipient) is null then
+  v_identity:=internal.current_verified_identity(v_recipient);
+  if v_identity is null then
     raise exception 'house slots: the recipient''s ID review must be accepted' using errcode='42501',
       detail='house_slots_identity_required';
   end if;
@@ -68,18 +70,30 @@ begin
     raise exception 'house slots: the approver must be an active administrator with a verified authenticator app'
       using errcode='42501', detail='house_slots_approver_invalid';
   end if;
+  -- Approval needs a second ID-verified person, not only a second account.
+  v_approver_identity:=internal.current_verified_identity(v_approver);
+  if v_approver_identity is null then
+    raise exception 'house slots: the approver''s ID review must be accepted' using errcode='42501',
+      detail='house_slots_approver_identity_required';
+  end if;
+  if v_approver_identity=v_identity then
+    raise exception 'house slots: the approver must be a different person' using errcode='42501',
+      detail='house_slots_same_person';
+  end if;
   v_ends:=statement_timestamp()+make_interval(days=>p_days);
-  -- The account's current house slots.
-  select coalesce(array_agg(x.id order by x.id), '{}') into v_held from (select e.id from private.entitlements e
+  -- The account's current house slots, locked in the order
+  -- internal.activate_post locks slots in (end date, then id).
+  select coalesce(array_agg(x.id order by x.ends_at, x.id), '{}') into v_held from (select e.id, e.ends_at
+      from private.entitlements e
       where e.owner_id=v_recipient and e.source='staff_grant' and e.status='active'
         and e.starts_at<=statement_timestamp() and e.ends_at>statement_timestamp()
         and exists(select 1 from private.house_slot_events h where h.entitlement_id=e.id)
-      order by e.id for update) x;
+      order by e.ends_at, e.id for update) x;
   if cardinality(v_held)>p_slots then
     raise exception 'house slots: the account already holds % house slots; this command only adds or extends them',
       cardinality(v_held) using errcode='22023', detail='house_slots_count_invalid';
   end if;
-  for v_slot in select e.* from private.entitlements e where e.id=any(v_held) and e.ends_at<v_ends order by e.id loop
+  for v_slot in select e.* from private.entitlements e where e.id=any(v_held) and e.ends_at<v_ends order by e.ends_at, e.id loop
     update private.entitlements set ends_at=v_ends where id=v_slot.id;
     perform internal.refresh_slot_chain_documents(v_slot.id);
     insert into private.house_slot_events(entitlement_id, action, ends_at, approved_by, reason)

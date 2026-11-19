@@ -4,9 +4,10 @@
 -- update does not depend on it and touches none of its functions or tables).
 -- Order: apply-first. Nothing in the website uses it: it adds no API command,
 -- argument, grant or result field. It refuses with 55000 unless the three
--- functions it adds are absent (or this update's), the one it replaces
--- (internal.frontend_privacy_export_data) has its reviewed body (or this
--- update's) and its table is absent or has this update's shape. In one
+-- functions it adds are absent (or this update's), the two it replaces
+-- (internal.frontend_privacy_export_data, internal.run_post_lifecycle) have
+-- their reviewed bodies (or this update's) and its table is absent or has
+-- this update's shape. In one
 -- transaction it:
 --
 -- 1. Adds the append-only table private.house_slot_events: one row per house
@@ -29,7 +30,10 @@
 --    confirmed, active account with an active admin role, an accepted ID
 --    review (internal.current_verified_identity) and a verified authenticator
 --    app, and the approver is a different confirmed, active account with an
---    active admin role and a verified authenticator app. Both staff role rows
+--    active admin role, a verified authenticator app and an accepted ID review
+--    of a different person: approval needs a second ID-verified person (the
+--    approver's verified identity must differ from the recipient's; an
+--    identity is active on one account only). Both staff role rows
 --    are locked first, so a role removal at the same moment either waits for
 --    the grant (and then ends what it added) or is seen by it.
 --    It refuses (55000 house_slots_isolation) outside a read committed
@@ -56,14 +60,21 @@
 --    once stops any activation (internal.activate_post and
 --    internal.entitlement_for_post_eligible need an active slot) and takes
 --    its posts out of public view (private.public_eligible_posts needs an
---    active slot). Its posts are then released with SKIP LOCKED: a post in
---    use at that moment keeps its open activation on the revoked slot, out of
---    public view, until internal.end_house_slot is run again for the slot or
---    the post's end date passes (internal.run_post_lifecycle expires it).
+--    active slot). Slots are revoked in the order internal.activate_post
+--    locks them (end date, then id), so the two never deadlock. Its posts
+--    are then released with FOR NO KEY UPDATE SKIP LOCKED (a key-share lock
+--    from a row referring to the post does not stop it): a post in use at
+--    that moment keeps its open activation on the revoked slot, out of
+--    public view, until the next run of the lifecycle job.
 -- 4. Replaces internal.frontend_privacy_export_data: a member's export gains
 --    the dataset `house_slot_events` (their slots' grant, extension and end
 --    records: slot, action, end date, time; never the approving administrator
 --    or the reason). Every other dataset is unchanged.
+-- 5. Replaces internal.run_post_lifecycle: a new first step releases the
+--    posts of ended house slots that were in use when the slot ended
+--    (internal.end_house_slot again, at most p_limit slots per run, counted
+--    in `expired`). Every other step is unchanged. The partial index
+--    entitlements_house_slot_ended_idx keeps that step's read small.
 --
 -- No existing row is changed. Read-only preflight:
 -- ../preflight/20261119082834_house_slots.check.sql. Rollback:
@@ -81,17 +92,20 @@ begin
     from (values ('internal.grant_house_slots(text,integer,integer,text,text)'),
       ('internal.end_house_slot(uuid,text)'),
       ('internal.house_slots_on_staff_role_change()'),
-      ('internal.frontend_privacy_export_data(uuid)')) v(sig)
+      ('internal.frontend_privacy_export_data(uuid)'),
+      ('internal.run_post_lifecycle(integer)')) v(sig)
   loop
     if shape not in (
+        'internal.run_post_lifecycle(integer) cb5770e3e71e9e6ed31d1eff3e06e3fc',
+        'internal.run_post_lifecycle(integer) 9496376abcf65c764efe02d4971bba5e',
         'internal.frontend_privacy_export_data(uuid) 0b4cd3f792ffecf94c329277db4da28e',
         'internal.frontend_privacy_export_data(uuid) e3842fd91a8d4f6b0bfe4cdc5b3030d9',
         'internal.grant_house_slots(text,integer,integer,text,text) absent',
-        'internal.grant_house_slots(text,integer,integer,text,text) 4d1d0e822e358b6489f0cdf69a22c564',
+        'internal.grant_house_slots(text,integer,integer,text,text) 77527fd29f2348e228441612a842cce2',
         'internal.end_house_slot(uuid,text) absent',
-        'internal.end_house_slot(uuid,text) 86419d57cc0266fcb6ec5881c62ae5e5',
+        'internal.end_house_slot(uuid,text) 29401d1db1447bd6ad4fe372f73fc08f',
         'internal.house_slots_on_staff_role_change() absent',
-        'internal.house_slots_on_staff_role_change() f100ded1785d690054ba54e150e33bff') then
+        'internal.house_slots_on_staff_role_change() 2ddae0e784aebb3c57e31677de530d9c') then
       raise exception 'house slots precondition: % is not a reviewed body', shape using errcode='55000';
     end if;
   end loop;
@@ -133,14 +147,18 @@ create trigger house_slot_events_append_only before delete or update on private.
 drop trigger if exists house_slot_events_no_truncate on private.house_slot_events;
 create trigger house_slot_events_no_truncate before truncate on private.house_slot_events
   for each statement execute function internal.append_only_guard();
+-- 5. The lifecycle job's read of ended house slots.
+create index if not exists entitlements_house_slot_ended_idx on private.entitlements (id)
+  where source='staff_grant' and status='revoked' and revoked_reason='house_slot_ended';
 
 -- 3. Ending a house slot. The slot is revoked first: the only row this waits
 -- for, never held for long. From then on nothing can activate a post in it
 -- and its posts are out of public view. Its posts are then released (expired,
--- out of search) with SKIP LOCKED, so this never waits for a post and can
--- never deadlock with an activation; a post in use at that moment is released
--- when this runs again for the slot, or expires at its end date. The end is
--- recorded once. Returns the number of posts released by this call.
+-- out of search) with FOR NO KEY UPDATE SKIP LOCKED, so this never waits for
+-- a post and can never deadlock with an activation; a post in use at that
+-- moment is released when this runs again for the slot (the lifecycle job
+-- does so on its next run). The end is recorded once. Returns the number of
+-- posts released by this call.
 create or replace function internal.end_house_slot(p_entitlement uuid, p_reason text)
  returns integer
  language plpgsql
@@ -165,7 +183,7 @@ begin
   select coalesce(array_agg(x.id), '{}') into v_locked from (select p.id from private.posts p
       where p.id in(select a.post_id from private.post_activations a
         where a.entitlement_id=p_entitlement and a.released_at is null)
-      order by p.id for update of p skip locked) x;
+      order by p.id for no key update of p skip locked) x;
   with released as (
     update private.post_activations a set released_at=statement_timestamp(), release_reason='entitlement_ended'
     where a.entitlement_id=p_entitlement and a.released_at is null and a.post_id=any(v_locked) returning a.post_id)
@@ -201,7 +219,8 @@ begin
   for v_slot in select e.id from private.entitlements e
       where e.owner_id=v_user and e.source='staff_grant' and e.status<>'revoked' and e.ends_at>statement_timestamp()
         and exists(select 1 from private.house_slot_events h where h.entitlement_id=e.id)
-      order by e.id loop
+      -- The order internal.activate_post locks slots in, so they never deadlock.
+      order by e.ends_at, e.id loop
     perform internal.end_house_slot(v_slot, 'Admin role removed');
   end loop;
   return null;
@@ -221,7 +240,8 @@ create or replace function internal.grant_house_slots(p_recipient_email text, p_
  security definer
  set search_path to 'pg_catalog'
 as $function$
-declare v_recipient uuid; v_approver uuid; v_ends timestamptz; v_held uuid[]; v_slot private.entitlements;
+declare v_recipient uuid; v_approver uuid; v_identity text; v_approver_identity text; v_ends timestamptz;
+  v_held uuid[]; v_slot private.entitlements;
   v_id uuid; v_added integer:=0; v_extended integer:=0;
 begin
   -- The count of slots already held is read after the staff role lock; only
@@ -268,7 +288,8 @@ begin
     raise exception 'house slots: the recipient account is not active' using errcode='42501',
       detail='house_slots_recipient_inactive';
   end if;
-  if internal.current_verified_identity(v_recipient) is null then
+  v_identity:=internal.current_verified_identity(v_recipient);
+  if v_identity is null then
     raise exception 'house slots: the recipient''s ID review must be accepted' using errcode='42501',
       detail='house_slots_identity_required';
   end if;
@@ -282,18 +303,30 @@ begin
     raise exception 'house slots: the approver must be an active administrator with a verified authenticator app'
       using errcode='42501', detail='house_slots_approver_invalid';
   end if;
+  -- Approval needs a second ID-verified person, not only a second account.
+  v_approver_identity:=internal.current_verified_identity(v_approver);
+  if v_approver_identity is null then
+    raise exception 'house slots: the approver''s ID review must be accepted' using errcode='42501',
+      detail='house_slots_approver_identity_required';
+  end if;
+  if v_approver_identity=v_identity then
+    raise exception 'house slots: the approver must be a different person' using errcode='42501',
+      detail='house_slots_same_person';
+  end if;
   v_ends:=statement_timestamp()+make_interval(days=>p_days);
-  -- The account's current house slots.
-  select coalesce(array_agg(x.id order by x.id), '{}') into v_held from (select e.id from private.entitlements e
+  -- The account's current house slots, locked in the order
+  -- internal.activate_post locks slots in (end date, then id).
+  select coalesce(array_agg(x.id order by x.ends_at, x.id), '{}') into v_held from (select e.id, e.ends_at
+      from private.entitlements e
       where e.owner_id=v_recipient and e.source='staff_grant' and e.status='active'
         and e.starts_at<=statement_timestamp() and e.ends_at>statement_timestamp()
         and exists(select 1 from private.house_slot_events h where h.entitlement_id=e.id)
-      order by e.id for update) x;
+      order by e.ends_at, e.id for update) x;
   if cardinality(v_held)>p_slots then
     raise exception 'house slots: the account already holds % house slots; this command only adds or extends them',
       cardinality(v_held) using errcode='22023', detail='house_slots_count_invalid';
   end if;
-  for v_slot in select e.* from private.entitlements e where e.id=any(v_held) and e.ends_at<v_ends order by e.id loop
+  for v_slot in select e.* from private.entitlements e where e.id=any(v_held) and e.ends_at<v_ends order by e.ends_at, e.id loop
     update private.entitlements set ends_at=v_ends where id=v_slot.id;
     perform internal.refresh_slot_chain_documents(v_slot.id);
     insert into private.house_slot_events(entitlement_id, action, ends_at, approved_by, reason)
@@ -425,6 +458,200 @@ begin
 end$function$;
 alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
 revoke all on function internal.frontend_privacy_export_data(uuid) from public;
+
+-- 5. The lifecycle job finishes ended house slots (the full function; only
+-- step 0 is new).
+CREATE OR REPLACE FUNCTION internal.run_post_lifecycle(p_limit integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare n_expired integer:=0; n_notices integer:=0; n_deleted integer:=0; n_extended integer:=0; n_kept integer:=0;
+  r record; post private.posts; changed integer; decision jsonb; funded timestamptz;
+begin
+  if p_limit is null or p_limit not between 1 and 5000 then
+    raise exception 'limit 1 to 5000' using errcode='22023';
+  end if;
+  -- 0. House slots that ended while one of their posts was in use
+  -- (20261119082834_house_slots.sql): release those posts now.
+  for r in
+    select e.id from private.entitlements e
+    where e.source='staff_grant' and e.status='revoked' and e.revoked_reason='house_slot_ended'
+      and exists(select 1 from private.post_activations a where a.entitlement_id=e.id and a.released_at is null)
+    order by e.id limit p_limit
+  loop
+    n_expired:=n_expired+internal.end_house_slot(r.id,'Admin role removed');
+  end loop;
+  -- 1. Expiry. A Market or Business post whose paid run has ended expires,
+  -- whether live or paused while it still holds its slot. Events are not
+  -- expired: they are deleted when they end (step 3). A post under a staff
+  -- hold keeps its state until the hold is released. A post whose end date
+  -- passed while its slot runs on in a renewal (20261114093742) is not
+  -- expired: its end date moves to the end of the slot's run; a post whose
+  -- slot run ended early (a renewal revoked) expires although its end date
+  -- has not come.
+  -- Candidates are read by date only (posts_paid_run_due_idx,
+  -- post_search_documents_due_idx, against the statement's time so the
+  -- indexes bound the read): posts whose own end date has passed, and live
+  -- posts whose search document's end has passed before it (a revoked renewal
+  -- moves the document's end back to the slot's remaining run).
+  -- Candidates are unlocked. Take the shared hold/closure subject guard before
+  -- locking a post, then re-evaluate all mutable eligibility under those locks.
+  for r in
+    select c.id,c.owner_id from (
+      (select p.id,p.owner_id,p.visible_until as due from private.posts p
+        where p.kind<>'event' and p.status in('live','paused') and p.visible_until<=statement_timestamp()
+          and (p.status='live' or (select true from private.post_activations a
+            where a.post_id=p.id and a.released_at is null))
+          and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
+          and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
+        order by p.visible_until,p.id limit p_limit)
+      union all
+      (select p.id,p.owner_id,d.visible_until from private.post_search_documents d join private.posts p on p.id=d.post_id
+        where d.is_visible and d.kind<>'event' and d.visible_until<=statement_timestamp()
+          and p.kind<>'event' and p.status='live' and p.visible_until>statement_timestamp()
+          and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
+          and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
+        order by d.visible_until,d.post_id limit p_limit)
+    ) c order by c.due,c.id limit p_limit
+  loop
+    if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
+    select * into post from private.posts p where p.id=r.id and p.kind<>'event'
+      and (p.status='live' or (p.status='paused' and exists(select 1 from private.post_activations a
+        where a.post_id=p.id and a.released_at is null)))
+      for update skip locked;
+    if not found or exists(select 1 from private.legal_holds h where h.subject_id=r.owner_id and h.released_at is null)
+      or exists(select 1 from private.frontend_content_holds h where h.post_id=r.id and h.released_at is null) then continue; end if;
+    select max(f.funded_until) into funded from internal.post_funding(post.id) f;
+    if funded>clock_timestamp() then
+      -- Still funded through its slot: only its end dates catch up.
+      if post.visible_until is distinct from funded then
+        update private.posts set visible_until=funded where id=post.id;
+      end if;
+      update private.post_search_documents set visible_until=funded
+        where post_id=post.id and visible_until is distinct from funded;
+      continue;
+    end if;
+    continue when post.visible_until>clock_timestamp() and exists(select 1 from private.post_activations a
+      join private.entitlements g on g.id=a.entitlement_id
+      where a.post_id=post.id and a.released_at is null and internal.slot_grant_usable(g.id,g.status,g.starts_at,g.ends_at));
+    update private.posts set status='expired',status_reason='Visibility period ended',revision=revision+1 where id=post.id;
+    update private.post_search_documents set is_visible=false where post_id=post.id;
+    update private.post_activations set released_at=clock_timestamp(),release_reason='expired'
+      where post_id=post.id and released_at is null;
+    n_expired:=n_expired+1;
+  end loop;
+  -- 2. Notices. At most p_limit new notices per invocation; old dedupe rows
+  -- do not starve later notices. Lock/recheck each post so a concurrent change
+  -- invalidates the captured revision first. The expiry notice keys on
+  -- ended_at, which edits do not move; its ':3d' suffix gives posts that ended
+  -- before this update one notice of the 3-day rule. The sold notice keys on
+  -- the slot the post was sold in (its last activation, released or not), so
+  -- neither a refund freeing the slot nor undoing and redoing "sold" repeats it.
+  -- A post already due for deletion gets the deletion notice instead. A held
+  -- post is not warned about a deletion that will not happen; an idle post's
+  -- clock counts from the release of its last staff hold. A paused post that
+  -- holds a slot is not idle: it expires with its run.
+  for r in
+    select n.* from (
+      select 'post_expired'::text as kind,p.id,p.owner_id,p.revision,p.ended_at as due_at,
+        'post_expired:'||p.id||':'||floor(extract(epoch from p.ended_at))::bigint||':3d' as dedupe_key
+      from private.posts p where p.status='expired' and p.kind<>'event' and p.deletes_at>clock_timestamp()
+      union all
+      select 'post_sold',p.id,p.owner_id,p.revision,p.ended_at,
+        'post_sold:'||p.id||':'||coalesce((select a.id::text from private.post_activations a
+          where a.post_id=p.id and a.activated_at<=p.ended_at order by a.activated_at desc,a.id desc limit 1),'none')
+      from private.posts p where p.status='sold' and p.deletes_at>clock_timestamp()
+      union all
+      select 'draft_deletion_warning',p.id,p.owner_id,p.revision,i.idle_since+interval '45 days',
+        'draft_deletion_warning:'||p.id||':'||floor(extract(epoch from i.idle_since))::bigint
+      from private.posts p cross join lateral (select greatest(p.content_updated_at,p.status_changed_at,
+        (select max(h.released_at) from private.frontend_content_holds h where h.post_id=p.id)) as idle_since) i
+      where (p.status in('draft','rejected') or (p.status='paused' and not exists(select 1 from private.post_activations a
+          where a.post_id=p.id and a.released_at is null)))
+        and i.idle_since<=clock_timestamp()-interval '45 days'
+    ) n where not exists(select 1 from private.outbox_events o where o.dedupe_key=n.dedupe_key)
+      and not exists(select 1 from private.legal_holds h where h.subject_id=n.owner_id and h.released_at is null)
+      and not exists(select 1 from private.frontend_content_holds h where h.post_id=n.id and h.released_at is null)
+    order by n.due_at,n.id,n.kind,n.dedupe_key limit p_limit
+  loop
+    if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
+    select * into post from private.posts p where p.id=r.id and p.revision=r.revision for update skip locked;
+    if not found or exists(select 1 from private.legal_holds h where h.subject_id=r.owner_id and h.released_at is null)
+      or exists(select 1 from private.frontend_content_holds h where h.post_id=r.id and h.released_at is null) then continue; end if;
+    insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key) values(r.kind,r.id,r.owner_id,r.dedupe_key)
+      on conflict(dedupe_key) do nothing;
+    get diagnostics changed=row_count; n_notices:=n_notices+changed;
+  end loop;
+  -- 3. Deletion: ended runs at their deletion date (moved by the late-payment
+  -- rule, internal.ended_post_decision), events that have ended, and idle
+  -- drafts, rejected posts and paused posts without a slot, unless an open
+  -- report keeps the post a little longer (internal.post_report_deferred).
+  -- Deleting a post releases its slot (posts_release_activation). The payment
+  -- rule is evaluated only for posts that are due or whose owner has confirmed
+  -- a recent plan payment.
+  for r in
+    select p.id,p.owner_id from private.posts p
+    where ((p.status in('expired','sold','archived') and (p.deletes_at<=clock_timestamp()
+          or (p.status='expired' and p.kind<>'event' and exists(select 1 from private.payments pay
+            where pay.owner_id=p.owner_id and pay.product_kind='plan' and pay.created_at>=p.ended_at-interval '24 hours'
+              and pay.status='complete' and pay.fulfillment_status='fulfilled')))
+          and internal.ended_post_decision(p) is not null)
+        or (p.kind='event' and p.edit_of is null and p.status not in('expired','sold','archived')
+          and p.deletes_at<=clock_timestamp() and exists(select 1 from private.event_details e
+            where e.post_id=p.id and e.ends_at<=clock_timestamp()))
+        or (p.status in('draft','rejected','paused') and greatest(p.content_updated_at,p.status_changed_at)<=clock_timestamp()-interval '60 days'
+          and internal.post_idle_deletion_due(p)))
+      and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
+      and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
+      and not internal.post_report_deferred(p)
+    order by coalesce(p.deletes_at,p.status_changed_at),p.id limit p_limit
+  loop
+    if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
+    select * into post from private.posts p where p.id=r.id for update skip locked;
+    if not found or exists(select 1 from private.legal_holds h where h.subject_id=r.owner_id and h.released_at is null)
+      or exists(select 1 from private.frontend_content_holds h where h.post_id=post.id and h.released_at is null) then continue; end if;
+    if post.status in('expired','sold','archived') then
+      decision:=internal.ended_post_decision(post);
+      if decision is null then continue; end if;
+      if decision->>'action' in('extend','keep') then
+        insert into private.post_deletion_extensions(post_id,ended_at,grace_ended_at,payment_id,kept_at)
+          values(post.id,post.ended_at,(decision->>'grace_ended_at')::timestamptz,(decision->>'payment_id')::uuid,
+            case when decision->>'action'='keep' then clock_timestamp() end)
+          on conflict(post_id) do update set ended_at=excluded.ended_at,grace_ended_at=excluded.grace_ended_at,
+            payment_id=excluded.payment_id,extended_at=excluded.extended_at,kept_at=excluded.kept_at;
+        update private.posts set deletes_at=(decision->>'deletes_at')::timestamptz where id=post.id;
+        if decision->>'action'='keep' then
+          insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key)
+            values('post_kept',post.id,post.owner_id,'post_kept:'||post.id||':'||floor(extract(epoch from post.ended_at))::bigint)
+            on conflict(dedupe_key) do nothing;
+          n_kept:=n_kept+1;
+        else
+          n_extended:=n_extended+1;
+        end if;
+        continue;
+      end if;
+    elsif not ((post.kind='event' and post.edit_of is null and post.deletes_at<=clock_timestamp()
+        and exists(select 1 from private.event_details e where e.post_id=post.id and e.ends_at<=clock_timestamp()))
+      or internal.post_idle_deletion_due(post)) then
+      continue;
+    end if;
+    if internal.post_report_deferred(post) then continue; end if;
+    insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key)
+      values('post_deleted',post.id,post.owner_id,'post_deleted:'||post.id) on conflict(dedupe_key) do nothing;
+    delete from private.posts where id=post.id;
+    n_deleted:=n_deleted+1;
+  end loop;
+  -- Free-event submissions older than every rolling 30-day window.
+  delete from private.event_submissions s where s.id in(select x.id from private.event_submissions x
+    where x.submitted_at<=clock_timestamp()-interval '31 days' order by x.submitted_at limit p_limit);
+  return jsonb_build_object('expired',n_expired,'notices',n_notices,'deleted',n_deleted,'extended',n_extended,'kept',n_kept);
+end;
+$function$;
+alter function internal.run_post_lifecycle(integer) owner to postgres;
+revoke all on function internal.run_post_lifecycle(integer) from public;
+grant execute on function internal.run_post_lifecycle(integer) to service_role;
 
 notify pgrst,'reload schema';
 commit;

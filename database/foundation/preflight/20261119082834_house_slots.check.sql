@@ -6,10 +6,10 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and starts "house slots: update not applied".
 --
--- The summary says whether the three functions the update adds, the privacy
--- export it replaces (internal.frontend_privacy_export_data), its table and
--- its three triggers are absent and the export has its reviewed earlier body
--- (update not applied), all present with the
+-- The summary says whether the three functions the update adds, its table,
+-- index and three triggers are absent and the two functions it replaces
+-- (internal.frontend_privacy_export_data, internal.run_post_lifecycle) have
+-- their reviewed earlier bodies (update not applied), all present with the
 -- update's bodies (already applied), or a mix (unexpected state), and counts:
 -- - "admins": accounts with an active admin role;
 -- - "ready to receive": of those, confirmed active accounts with an accepted
@@ -25,21 +25,24 @@ with added as (
   select v.sig, v.before, v.after,
     coalesce((select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)), 'absent') as body
   from (values
-    ('internal.grant_house_slots(text,integer,integer,text,text)', 'absent', '4d1d0e822e358b6489f0cdf69a22c564'),
-    ('internal.end_house_slot(uuid,text)', 'absent', '86419d57cc0266fcb6ec5881c62ae5e5'),
-    ('internal.house_slots_on_staff_role_change()', 'absent', 'f100ded1785d690054ba54e150e33bff'),
-    ('internal.frontend_privacy_export_data(uuid)', '0b4cd3f792ffecf94c329277db4da28e', 'e3842fd91a8d4f6b0bfe4cdc5b3030d9')
+    ('internal.grant_house_slots(text,integer,integer,text,text)', 'absent', '77527fd29f2348e228441612a842cce2'),
+    ('internal.end_house_slot(uuid,text)', 'absent', '29401d1db1447bd6ad4fe372f73fc08f'),
+    ('internal.house_slots_on_staff_role_change()', 'absent', '2ddae0e784aebb3c57e31677de530d9c'),
+    ('internal.frontend_privacy_export_data(uuid)', '0b4cd3f792ffecf94c329277db4da28e', 'e3842fd91a8d4f6b0bfe4cdc5b3030d9'),
+    ('internal.run_post_lifecycle(integer)', 'cb5770e3e71e9e6ed31d1eff3e06e3fc', '9496376abcf65c764efe02d4971bba5e')
   ) v(sig, before, after)
 ),
 others as (
   select v.name,
     case v.kind
       when 'table' then to_regclass(v.name) is not null
+      when 'index' then to_regclass(v.name) is not null
       when 'trigger' then exists (select 1 from pg_trigger t where t.tgname = split_part(v.name, ' on ', 1)
         and not t.tgisinternal and t.tgrelid = to_regclass(split_part(v.name, ' on ', 2)))
     end as present
   from (values
     ('table', 'private.house_slot_events'),
+    ('index', 'private.entitlements_house_slot_ended_idx'),
     ('trigger', 'house_slot_events_append_only on private.house_slot_events'),
     ('trigger', 'house_slot_events_no_truncate on private.house_slot_events'),
     ('trigger', 'staff_roles_end_house_slots on private.staff_roles')
