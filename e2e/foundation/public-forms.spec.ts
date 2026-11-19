@@ -90,6 +90,16 @@ test.describe("header", () => {
     // Open before the resize, so the desktop breakpoint is what closes it.
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await page.setViewportSize({ width: 1280, height: 900 });
+    // The page must see the desktop width before its breakpoint can close the
+    // menu. Asserted on its own, so a browser whose phone emulation does not
+    // apply the resize to the page's media queries fails here, not below.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => `${window.innerWidth} ${window.matchMedia("(min-width: 1024px)").matches}`
+        )
+      )
+      .toBe("1280 true");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole("navigation", { name: "Mobile navigation" })).toBeHidden();

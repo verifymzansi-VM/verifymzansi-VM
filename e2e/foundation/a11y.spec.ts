@@ -50,10 +50,27 @@ async function expectNoSeriousViolations(page: Page, name: string): Promise<void
   const criticalViolations = results.violations.filter(
     (v) => v.impact === "critical" || v.impact === "serious"
   );
+  // A contrast failure also names the colours axe measured: they show whether
+  // the text is too faint or axe read another background in this browser.
   expect(
-    criticalViolations.map((v) => ({ id: v.id, targets: v.nodes.map((node) => node.target) })),
+    criticalViolations.map((v) => ({
+      id: v.id,
+      targets: v.nodes.map((node) =>
+        v.id === "color-contrast" ? [...node.target, contrastData(node.any)] : node.target
+      ),
+    })),
     `${name} has ${criticalViolations.length} critical/serious a11y violations`
   ).toEqual([]);
+}
+
+/** fgColor, bgColor, contrastRatio and font of an axe color-contrast check. */
+function contrastData(checks: { id: string; data?: unknown }[]) {
+  const data = checks.find((check) => check.id === "color-contrast")?.data as
+    Record<string, unknown> | undefined;
+  if (!data) return "(no data)";
+  return ["fgColor", "bgColor", "contrastRatio", "expectedContrastRatio", "fontSize", "fontWeight"]
+    .map((key) => `${key}=${String(data[key])}`)
+    .join(" ");
 }
 
 async function open(page: Page, path: string) {

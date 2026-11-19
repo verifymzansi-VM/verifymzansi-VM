@@ -274,6 +274,28 @@ describe("CI job graph", () => {
       'if [ "$RESULT" != "success" ]'
     );
   });
+
+  it("runs the WebKit browser lane only as an advisory check", () => {
+    const webkit = parse(readFileSync(".github/workflows/e2e-webkit.yml", "utf8")) as {
+      on: Record<string, unknown>;
+      jobs: Record<string, Job>;
+    };
+    // Pull requests and manual runs only: CI never calls it on main (so it
+    // never gates a release) and no schedule can raise a failure alert.
+    expect(Object.keys(webkit.on).sort()).toEqual(["pull_request", "workflow_dispatch"]);
+    expect(readFileSync(".github/workflows/ci.yml", "utf8")).not.toContain("e2e-webkit");
+    expect(readFileSync(".github/workflows/e2e-foundation.yml", "utf8")).not.toContain(
+      "mobile-safari"
+    );
+    const job = webkit.jobs.webkit;
+    expect(job.name).toBe("e2e-foundation (mobile-safari, advisory)");
+    const run = job.steps.map((step) => step.run ?? "").join("\n");
+    expect(run).toContain("--project=mobile-safari");
+    // The skip guard and the summary apply here too.
+    expect(run).not.toContain("--reporter");
+    expect(run).toContain("scripts/e2e-foundation-summary.mjs");
+    expect(JSON.stringify(job)).not.toContain("continue-on-error");
+  });
 });
 describe("scheduled monitoring reports what it checked", () => {
   const load = (name: string) =>

@@ -1,0 +1,91 @@
+name: E2E WebKit (advisory)
+
+# The browser tests of e2e-foundation.yml in iPhone Safari (WebKit, the
+# Playwright project mobile-safari), against their own throwaway test copy.
+#
+# ADVISORY: this check is not required (it is not in
+# .github/rulesets/protect-main.json), it is not part of the required
+# aggregate check `e2e-foundation`, and CI does not call it on main, so it
+# never holds back a merge or a release. It runs on pull requests (not drafts,
+# unless labelled run-full-ci) and by hand, and has no schedule, so a red run
+# raises no failure alert. It may be made required only once it has passed on
+# a run of consecutive pull requests (owner decision).
+#
+# WebKit takes about 1.6 times as long as mobile-chrome (about 20 minutes
+# against 12), so Playwright's own limit is 40 minutes here, not 20.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-webkit-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  webkit:
+    name: e2e-foundation (mobile-safari, advisory)
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) }}
+    runs-on: ubuntu-latest
+    # Step ceilings: stack 5, build 10, tests 42 (Playwright stops itself at 40
+    # and writes its report first).
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/install-browsers
+        with:
+          browsers: webkit
+      # See e2e-foundation.yml: the test copy's fixed ports lie inside Linux's
+      # ephemeral range, so they are reserved before anything binds them.
+      - name: Keep the test copy's ports out of the ephemeral range
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55440-55460
+      - name: Start the test copy (local stack, schema proof, test people)
+        timeout-minutes: 5
+        run: node --import tsx scripts/foundation-e2e.mjs up
+      - name: Build the website for the test copy
+        timeout-minutes: 10
+        run: node --import tsx scripts/foundation-e2e.mjs build
+      - name: Note when the browser tests start
+        run: echo "E2E_TESTS_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+      - name: Browser tests (mobile-safari)
+        timeout-minutes: 42
+        env:
+          PLAYWRIGHT_SKIP_BUILD: "1"
+          PLAYWRIGHT_GLOBAL_TIMEOUT_MS: "2400000"
+          PLAYWRIGHT_JSON_REPORT: test-results/foundation-mobile-safari.json
+        run: >-
+          pnpm exec playwright test --config=playwright.foundation.config.ts
+          --project=mobile-safari
+      - name: Summarise the browser tests
+        if: always()
+        run: |
+          node scripts/e2e-foundation-summary.mjs "test-results/foundation-mobile-safari.json" "mobile-safari" "${E2E_TESTS_STARTED:-}" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -n "${E2E_TESTS_STARTED:-}" ]; then
+            echo "Browser tests (mobile-safari) ran for $(( $(date +%s) - E2E_TESTS_STARTED )) seconds."
+          fi
+      - name: Keep the browser report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-webkit-report-mobile-safari
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            playwright-report/foundation
+            test-results/foundation
+            test-results/foundation-mobile-safari.json
+      - name: Delete the test copy
+        if: always()
+        run: node --import tsx scripts/foundation-e2e.mjs down
