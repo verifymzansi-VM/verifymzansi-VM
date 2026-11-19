@@ -147,42 +147,6 @@ export const PLANS: PlanDefinition[] = ACTIVE_MARKETPLACE_AREAS.flatMap((area) =
   }))
 );
 
-export interface EnterprisePlanDefinition {
-  planCode: string;
-  slots: number;
-  durationDays: number;
-  label: string;
-  priceCents: number;
-  monthlyActivations: number;
-}
-
-/** Group 2 multi-listing: [live slots, [90-day price, 180-day price]] (Document 03 §3). */
-const ENTERPRISE_PRICE_TABLE: ReadonlyArray<readonly [number, readonly [number, number]]> = [
-  [10, [120000, 215000]],
-  [25, [270000, 485000]],
-  [50, [500000, 900000]],
-  [100, [900000, 1600000]],
-];
-
-const ENTERPRISE_TERMS: readonly number[] = [90, 180];
-
-/** Above 100 live slots is a written quote for a 90- or 180-day term. */
-export const ENTERPRISE_QUOTE_ABOVE_SLOTS = 100;
-/** Named administrators included with every multi-listing plan. */
-export const ENTERPRISE_ADMINS_INCLUDED = 2;
-
-export const ENTERPRISE_PLANS: readonly EnterprisePlanDefinition[] = ENTERPRISE_PRICE_TABLE.flatMap(
-  ([slots, prices]) =>
-    ENTERPRISE_TERMS.map((durationDays, index) => ({
-      planCode: `ENT_${slots}_${durationDays}D`,
-      slots,
-      durationDays,
-      label: `${durationDays} days`,
-      priceCents: prices[index] ?? 0,
-      monthlyActivations: slots * 2,
-    }))
-);
-
 /** Group 3 sponsor programme: total fee by capacity and term (Document 03 §5). */
 export interface SponsorProgrammePrice {
   capacity: number;

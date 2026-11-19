@@ -43,13 +43,14 @@ describe("readFoundationCheckoutSummary", () => {
     });
   });
 
-  it("labels an all-sections plan and includes administrators for several slots", async () => {
+  it("labels an all-sections plan and names no administrators, even for several slots", async () => {
     vi.mocked(readFoundationBillingCatalogue).mockResolvedValueOnce(
       catalogue([plan({ area: null, slot_capacity: 5 })])
     );
     const summary = await readFoundationCheckoutSummary(planId);
     expect(summary?.areaLabel).toBe("All sections");
-    expect(summary?.administrators).not.toBeNull();
+    // Package teams are not built yet (roadmap P4c).
+    expect(summary?.administrators).toBeNull();
   });
 
   it("offers every Individual slot term to choose from, in any section", async () => {

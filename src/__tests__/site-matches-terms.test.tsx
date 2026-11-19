@@ -30,7 +30,7 @@ const sponsors = vi.hoisted(() => ({ list: [] as unknown[] }));
 vi.mock("@/lib/organisations/sponsors", () => ({
   getPublicSponsors: async () => sponsors.list,
   organisationTypeLabel: () => "Chamber",
-  sponsorArea: () => "uMhlathuze",
+  sponsorArea: () => "Example District",
 }));
 
 const SPONSOR: PublicSponsor = {
@@ -171,9 +171,7 @@ describe("the sponsor offer, on hold", () => {
 describe("links to hidden sections and the hidden pricing package block", () => {
   it("drops the sponsor card and fees, and states the package rules on the multi-listing card", async () => {
     const { EnterprisePricing } = await import("@/components/billing/enterprise-pricing");
-    const { container } = render(
-      <EnterprisePricing plans={[]} checkoutEnabled retailFromCents={6900} />
-    );
+    const { container } = render(<EnterprisePricing checkoutEnabled retailFromCents={6900} />);
     const text = container.textContent ?? "";
     expect(screen.queryByRole("link", { name: /Full details of Business Sponsor/ })).toBeNull();
     expect(container.querySelector("#programme-prices")).toBeNull();
@@ -203,7 +201,6 @@ describe("the hidden Multi-listing package on Advertise", () => {
     vi.doMock("@/lib/commercial/plans", () => ({
       getCommercialCatalog: async () => ({
         retail: [],
-        enterprise: [],
         source: "database",
         onSale: false,
       }),
@@ -224,5 +221,26 @@ describe("the hidden Multi-listing package on Advertise", () => {
     vi.doUnmock("@/lib/constants/pricing");
     vi.doUnmock("@/lib/commercial/plans");
     vi.doUnmock("@/components/brand");
+  });
+});
+
+describe("the hidden multi-listing nudge", () => {
+  it("states only the package rules on sale today (P4a): no team, adding later, renewal or invoice", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/constants/pricing", async (importOriginal) => ({
+      ...(await importOriginal<Record<string, unknown>>()),
+      PACKAGES_ON_SALE: true,
+    }));
+    const { MultiListingNudge } = await import("@/components/billing/multi-listing-nudge");
+    const { container } = render(<MultiListingNudge emphasis="strong" />);
+    const text = container.textContent ?? "";
+
+    expect(text).toMatch(
+      /A Multi-listing package keeps 5 to 250 posts live at the same time for 30, 90 or 180 days, at R100 per slot per 30 days\./
+    );
+    expect(text).not.toMatch(
+      /10 to 100|lower price|administrators|team|later|renew|invoice|quote/i
+    );
+    vi.doUnmock("@/lib/constants/pricing");
   });
 });

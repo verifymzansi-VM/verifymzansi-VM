@@ -47,6 +47,7 @@ import { PLAN_SALES_PAUSED_NOTE } from "@/lib/billing/plan-sales";
 import { BILLING_EMAIL } from "@/lib/billing/slot-checkout";
 import {
   PACKAGE_MAX_ONLINE_SLOTS,
+  PACKAGE_MAX_SLOTS,
   PACKAGE_MIN_SLOTS,
   PACKAGE_POSTS_PER_SLOT_PER_30_DAYS,
   PACKAGE_QUICK_SIZES,
@@ -490,7 +491,7 @@ export default async function AdvertisePage() {
         label: `${slots} slots`,
         cells: PACKAGE_TERMS.map((days) => formatPlanPrice(packageTotalCents(slots, days))),
       })),
-      footnote: `${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days, any number from ${PACKAGE_MIN_SLOTS}. Does not renew automatically.`,
+      footnote: `${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days, any number from ${PACKAGE_MIN_SLOTS} to ${PACKAGE_MAX_SLOTS}. Does not renew automatically.`,
     },
     programmes: PACKAGES_ON_SALE
       ? {
@@ -705,18 +706,7 @@ export default async function AdvertisePage() {
 
         {/* 4 ── The three packages in full ──────────────────── */}
         {packages.map((pkg, index) => (
-          <PackageSection key={pkg.id} pkg={pkg} sheet={sheets[pkg.id]} shaded={index % 2 === 1}>
-            {pkg.id === "programmes" ? (
-              <div className="rounded-2xl border border-brand-gold/40 bg-brand-gold/10 p-4 text-sm">
-                <p className="font-semibold text-foreground">Founding pilots</p>
-                <p className="mt-1 text-muted-foreground">
-                  3 programmes in the City of uMhlathuze, up to 25 businesses each, free for 90
-                  days. Invitations close on 31 December 2026. Nothing renews or charges
-                  automatically.
-                </p>
-              </div>
-            ) : null}
-          </PackageSection>
+          <PackageSection key={pkg.id} pkg={pkg} sheet={sheets[pkg.id]} shaded={index % 2 === 1} />
         ))}
 
         {/* 5 ── Where your post appears ─────────────────────── */}
