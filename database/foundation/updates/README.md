@@ -24,11 +24,12 @@ Code and database must never disagree, so every change follows this order:
    before merge; the pull request job `staging-database` then fails when staging
    lacks a command the change expects. Until staging is configured that job is
    skipped. It never runs on `main`, so staging cannot block a deploy.
-4. **Merge, then apply to production.** The owner applies the update (or
-   explicitly approves applying it) after the merge and before the code that
-   needs it is deployed. The release preflight compares what production answers
-   with what the commit expects and warns "database behind by N" or "database
-   ahead by N". Afterwards, one pull request records it, changing together:
+4. **Apply to production, then merge.** The owner applies the update (or
+   explicitly approves applying it) before the pull request merges: merging
+   deploys the code that needs it automatically. The release preflight compares
+   what production answers with what the commit expects and warns "database
+   behind by N" or "database ahead by N". Afterwards, one pull request records
+   it, changing together:
    - its register line, from `pending` to
      `applied YYYY-MM-DD HH:MM UTC; <how it was applied>`;
    - `../fingerprint.json` `productionCheck`: the owner's read-only fingerprint

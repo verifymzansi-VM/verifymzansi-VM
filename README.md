@@ -15,8 +15,9 @@ deployment instructions below.
   retired and empty in production. Sections below marked "Historical" describe
   it.
 - **Merging into `main` releases to production.** Changes reach `main` only
-  through pull requests that the owner merges
-  ([docs/branch-protection.md](docs/branch-protection.md)).
+  through pull requests whose required checks pass and whose review has no open
+  blocker, merged by the owner or by the coordinator under the owner's standing
+  approval ([docs/branch-protection.md](docs/branch-protection.md)).
 
 South African marketplace built on Next.js, Supabase, and Cloudflare. The
 platform has exactly three marketplace areas: `Mzansi Market`,
@@ -552,7 +553,9 @@ admin is set up with the owner bootstrap procedure in
 ## Deployment
 
 Merging a pull request into `main` releases it. Nobody pushes to `main`
-directly; the owner merges reviewed pull requests whose required checks pass
+directly. A pull request merges when its required checks pass and its
+independent review has no open blocker; the owner merges it, or the coordinator
+does under the owner's standing approval
 ([docs/branch-protection.md](docs/branch-protection.md)).
 
 What happens after a merge (`.github/workflows/deploy.yml`):
@@ -571,8 +574,9 @@ What happens after a merge (`.github/workflows/deploy.yml`):
 
 A manual run of the Deploy workflow (Actions → Deploy → Run workflow) releases
 the current `main` commit and also requires its successful CI run. Database
-updates are not part of the deploy: the owner applies them before the code that
-needs them is merged ([AGENTS.md](AGENTS.md#database-changes)).
+updates are not part of the deploy: the owner applies them (or approves applying
+them) before the pull request with the code that needs them is merged
+([AGENTS.md](AGENTS.md#database-changes)).
 
 ## Startup Failures
 

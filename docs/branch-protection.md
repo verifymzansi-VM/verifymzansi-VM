@@ -41,8 +41,12 @@ such a check would block every pull request.
   opened and merged from the same account, and GitHub does not let an author
   approve their own pull request. A pull request merges only when its required
   checks pass and its independent review has no open blocker. The owner merges
-  it, or the coordinator does under the owner's standing approval (`AGENTS.md`).
-  Merge methods: squash or merge commit.
+  it, or the coordinator (the one agent session the owner designates) does under
+  the owner's standing approval, given in writing and withdrawable at any time.
+  That approval does not cover a pull request with a pending database update,
+  which merges only after the owner approved the update and it is applied in
+  production, nor a frontend change, which still needs the owner's sign-off
+  (`AGENTS.md`). Merge methods: squash or merge commit.
 - **No force pushes, no deletion** of `main`.
 - **Required checks** (GitHub Actions only, `integration_id` 15368):
   - `foundation-replay`: rebuilds the production database schema from

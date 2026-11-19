@@ -46,8 +46,9 @@ baseline. Read `FRONTEND-RESTORE.md` before continuing integration work.
    `desktop-linux` context) and the replay and contract steps in
    `database/foundation/README.md`.
 4. The change travels in the same pull request as the code that needs it. The
-   owner applies it to production (or explicitly approves applying it) after the
-   merge and **before** that code is deployed. The new file starts as `pending`
+   owner applies it to production (or explicitly approves applying it)
+   **before** that pull request merges: merging deploys the code automatically,
+   so the update must already be in production. The new file starts as `pending`
    in the applied register at the end of `database/foundation/updates/README.md`
    (and in `fingerprint.json` `pendingApplication`). Recording the application
    later changes the register line to `applied YYYY-MM-DD HH:MM UTC` together
@@ -65,8 +66,13 @@ baseline. Read `FRONTEND-RESTORE.md` before continuing integration work.
   (`docs/branch-protection.md`).
 - A pull request merges only when its required checks pass and its independent
   review has no open blocker. The owner merges it, or the coordinator does under
-  the owner's standing approval. Database updates are still applied only with
-  the owner's approval, before the code that needs them is deployed.
+  the owner's standing approval.
+- The standing approval does not cover two things. A pull request that carries a
+  pending database update merges only after the owner has approved that update
+  and it has been applied in production, because merging deploys the code
+  automatically (step 4 of "Database changes"). A frontend change still needs
+  the owner's sign-off under "Changing the frontend" and the frontend change
+  ledger.
 - Describe security fixes neutrally: the repository is public.
 - To undo a release, revert its pull request. Database updates are not undone by
   a code rollback.
@@ -101,6 +107,9 @@ approval.
 - **Native**: the local Docker test setup for foundation SQL
   (`pnpm test:foundation:native`), not a backend.
 - **Source** or **legacy**: the retired backend.
+- **Coordinator**: the one agent session the owner designates to coordinate
+  work. It may merge pull requests under the owner's standing approval, which
+  the owner gave in writing and can withdraw at any time.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
