@@ -32,6 +32,7 @@ import {
   createPaymentWorld,
   fingerprintOf,
   P30,
+  psqlSessions,
   sqlValue,
   twoAdmins,
   updateCheckKit,
@@ -67,6 +68,7 @@ try {
   const kit = updateCheckKit(database, UPDATE, current);
   const { q, json, fails, count, member, staff, service, preflight } = kit;
   const world = createPaymentWorld(kit);
+  const { session } = psqlSessions(database);
   const { admin, admin2 } = twoAdmins(world, "pkinv");
   const moderator = world.staffUser("pkinv-moderator", "moderator");
   world.review(moderator, admin, "pkinv-moderator");
@@ -469,14 +471,15 @@ try {
     "Pay now pays a package invoice within the online limit and opens the package",
     () => {
       const zanele = verified("pkinv-zanele");
+      // An online package checkout started before the invoice was issued, never
+      // sent to Ozow: Pay now closes it.
+      const online = json(
+        member(zanele, `select api.start_package_checkout('${K30.id}',6,60000,true);`)
+      );
       const request = ask(zanele, K30, 5);
       const issued = json(issueSql(admin, request.request_id)).invoice;
       assert.equal(issued.total_cents, 50000);
       billing(zanele, issued.invoice_number);
-      // The member's other open package checkout never sent to Ozow is closed.
-      const online = json(
-        member(zanele, `select api.start_package_checkout('${K30.id}',6,60000,true);`)
-      );
       const quote = json(payNowSql(zanele, issued));
       assert.equal(quote.slots, 5);
       assert.equal(quote.amount_cents, "50000");
@@ -575,6 +578,216 @@ try {
     );
   });
 
+  await check("a bank transfer above R10,000 pays a package invoice in one line", () => {
+    const sizwe = verified("pkinv-sizwe");
+    const issued = json(issueSql(admin, ask(sizwe, K90, 34).request_id)).invoice;
+    assert.equal(issued.total_cents, 1020000);
+    const recorded = json(transferSql(admin, issued.invoice_number, "FNB PKG 1020"));
+    const confirmed = json(confirmSql(admin2, recorded.transfer_id));
+    assert.equal(confirmed.slots_started, 34);
+    const grant = grantOf(confirmed.payment_id);
+    assert.equal(grant.lines, 1);
+    assert.equal(grant.amount, 1020000);
+    assert.equal(grant.package_slots, 34);
+    // A one-slot line still stops at R10,000.
+    fails(
+      `insert into private.payment_lines(payment_id,line_number,plan_version_id,amount_cents)
+         values('${confirmed.payment_id}',2,'${K90.id}',1000100);`,
+      "23514"
+    );
+  });
+
+  await check("the approved R60,000 invoice is paid in full by bank transfer", () => {
+    const number = q(
+      `select i.invoice_number from private.customer_invoices i join private.package_invoice_requests r on r.invoice_id=i.id
+        where r.total_cents=6000000 and r.approved_by is not null and i.status='issued' order by i.issued_at limit 1;`
+    );
+    const owner = q(
+      `select account_id from private.customer_invoices where invoice_number='${number}';`
+    );
+    const recorded = json(transferSql(admin, number, "FNB PKG 60000"));
+    assert.equal(recorded.amount_received_cents, 6000000);
+    const confirmed = json(confirmSql(admin2, recorded.transfer_id));
+    assert.equal(confirmed.slots_started, 100);
+    const grant = grantOf(confirmed.payment_id);
+    assert.deepEqual(
+      [grant.lines, grant.amount, grant.capacity, grant.days],
+      [1, 6000000, 100, 180]
+    );
+    assert.equal(invoiceRow(number).status, "paid");
+    assert.equal(count(`private.slot_packages where owner_id='${owner}'`), 1);
+  });
+
+  await check("confirming needs the recorder's own current ID review", () => {
+    const recorder = world.staffUser("pkinv-recorder", "admin");
+    world.review(recorder, admin, "pkinv-recorder");
+    const issued = json(
+      issueSql(admin, ask(verified("pkinv-recorded"), K30, 5).request_id)
+    ).invoice;
+    const recorded = json(transferSql(recorder, issued.invoice_number, "FNB PKG 0500"));
+    q(
+      `update private.accepted_identity_facts set revoked_at=now() where owner_id='${recorder.id}';`
+    );
+    fails(confirmSql(admin2, recorded.transfer_id), "PT409", /transfer_recorder_inactive/);
+  });
+
+  await check("an approval needs the preparer's own current ID review", () => {
+    const preparer = world.staffUser("pkinv-preparer2", "admin");
+    world.review(preparer, admin, "pkinv-preparer2");
+    const request = ask(verified("pkinv-prepared"), K180, 85);
+    assert.equal(json(issueSql(preparer, request.request_id)).status, "awaiting_approval");
+    q(
+      `update private.accepted_identity_facts set revoked_at=now() where owner_id='${preparer.id}';`
+    );
+    fails(approveSql(admin2, request.request_id), "PT409", /invoice_preparer_inactive/);
+    json(declineSql(admin, request.request_id));
+  });
+
+  await check(
+    "two approvers, or an approval and a decline, at the same moment: one wins",
+    async () => {
+      const admin3 = world.staffUser("pkinv-admin3", "admin");
+      world.review(admin3, admin, "pkinv-admin3");
+      const race = (a, b) => Promise.all([session(a), session(b)]);
+      const first = ask(verified("pkinv-race1"), K180, 90);
+      assert.equal(json(issueSql(admin, first.request_id)).status, "awaiting_approval");
+      const approvals = await race(
+        approveSql(admin2, first.request_id),
+        approveSql(admin3, first.request_id)
+      );
+      assert.equal(approvals.filter((r) => r.status === 0).length, 1, JSON.stringify(approvals));
+      assert.match(approvals.find((r) => r.status !== 0).stderr, /package_invoice_request_closed/);
+      assert.equal(count(`private.customer_invoices where request_id='${first.request_id}'`), 1);
+      const second = ask(verified("pkinv-race2"), K180, 90);
+      assert.equal(json(issueSql(admin, second.request_id)).status, "awaiting_approval");
+      const [approved, declined] = await race(
+        approveSql(admin2, second.request_id),
+        declineSql(admin3, second.request_id)
+      );
+      assert.equal([approved, declined].filter((r) => r.status === 0).length, 1);
+      const status = q(
+        `select status from private.package_invoice_requests where id='${second.request_id}';`
+      );
+      assert.equal(status, approved.status === 0 ? "issued" : "declined");
+      assert.equal(
+        count(`private.customer_invoices where request_id='${second.request_id}'`),
+        status === "issued" ? 1 : 0
+      );
+    }
+  );
+
+  await check("at most 10 new requests per account in 24 hours", () => {
+    const busy = verified("pkinv-busy");
+    for (let slots = 5; slots < 15; slots++)
+      assert.equal(ask(busy, K30, slots).status, "requested");
+    fails(askSql(busy, K30, 20), "PT429", /package_invoice_requests_limit/);
+    // The same order again keeps the waiting request and is not counted.
+    assert.equal(ask(busy, K30, 14).repeated, true);
+    assert.equal(
+      count(
+        `private.package_invoice_requests where account_id='${busy.id}' and status='requested'`
+      ),
+      1
+    );
+  });
+
+  await check("the online package checkout waits while a package invoice is unpaid", () => {
+    const thembi = verified("pkinv-thembi");
+    json(issueSql(admin, ask(thembi, K30, 5).request_id));
+    fails(
+      member(thembi, `select api.start_package_checkout('${K30.id}',5,50000,true);`),
+      "PT409",
+      /package_invoice_unpaid/
+    );
+  });
+
+  await check(
+    "closing an account withdraws its open request; erasure unlinks every request",
+    () => {
+      // A member with a paid package invoice and a later open request.
+      const leaving = verified("pkinv-leaving");
+      const issued = json(issueSql(admin, ask(leaving, K30, 5).request_id)).invoice;
+      const recorded = json(transferSql(admin, issued.invoice_number, "FNB PKG LEAVE"));
+      const paid = json(confirmSql(admin2, recorded.transfer_id));
+      // Another member with a request waiting for approval when they close.
+      const closing = verified("pkinv-closing");
+      const waiting = ask(closing, K180, 90);
+      json(issueSql(admin, waiting.request_id));
+      // The package must end before the member with it can be erased.
+      q(`set session_replication_role=replica;
+       update private.entitlements set starts_at=starts_at-interval '40 days',ends_at=ends_at-interval '40 days'
+         where owner_id='${leaving.id}';
+       set session_replication_role=origin;`);
+      const open = ask(leaving, K30, 6);
+      for (const person of [leaving, closing]) {
+        q(`select internal.close_account_now('${person.id}','member','${person.id}');`);
+      }
+      assert.equal(
+        q(`select status from private.package_invoice_requests where id='${open.request_id}';`),
+        "withdrawn"
+      );
+      assert.equal(
+        q(`select status from private.package_invoice_requests where id='${waiting.request_id}';`),
+        "withdrawn"
+      );
+      const queued = queue().items.map((i) => i.request_id);
+      assert.ok(!queued.includes(open.request_id) && !queued.includes(waiting.request_id));
+      for (const person of [leaving, closing]) {
+        q(`update private.account_erasures set closed_at=closed_at-interval '31 days',erase_after=erase_after-interval '31 days'
+           where user_id='${person.id}';
+         update private.account_closures set closed_at=closed_at-interval '31 days',
+           evidence_delete_after=evidence_delete_after-interval '31 days' where user_id='${person.id}';`);
+        const erased = json(`select internal.erase_closed_account('${person.id}','staff');`);
+        assert.equal(
+          count(`private.account_erasures where user_id='${person.id}' and erased_at is not null`),
+          1,
+          JSON.stringify(erased)
+        );
+        assert.equal(
+          count(`private.package_invoice_requests where account_id='${person.id}'`),
+          0,
+          `no request names ${person.id} (${JSON.stringify(erased)})`
+        );
+      }
+      assert.equal(count(`private.customer_invoices where account_id='${leaving.id}'`), 0);
+      assert.equal(count(`private.payments where owner_id='${leaving.id}'`), 0);
+      assert.equal(
+        q(
+          `select account_id is null from private.package_invoice_requests where invoice_id='${issued.invoice_id}';`
+        ),
+        "t"
+      );
+      assert.equal(
+        q(`select owner_id is null from private.payments where id='${paid.payment_id}';`),
+        "t"
+      );
+    }
+  );
+
+  await check(
+    "retention removes declined and withdrawn requests five tax years after they closed",
+    () => {
+      const before = count(
+        "private.package_invoice_requests where status in ('declined','withdrawn')"
+      );
+      assert.ok(before > 0);
+      const keep = count(
+        "private.package_invoice_requests where status not in ('declined','withdrawn')"
+      );
+      q(`set session_replication_role=replica;
+       update private.package_invoice_requests set closed_at=closed_at-interval '7 years'
+         where status in ('declined','withdrawn');
+       set session_replication_role=origin;`);
+      const run = json(service("select api.run_retention(1000);"));
+      assert.equal(run.commerce.package_invoice_requests, before);
+      assert.equal(
+        count("private.package_invoice_requests where status in ('declined','withdrawn')"),
+        0
+      );
+      assert.equal(count("private.package_invoice_requests"), keep);
+    }
+  );
+
   await check("Individual invoices work as before", () => {
     const mpho = verified("pkinv-mpho");
     const issued = json(
@@ -601,7 +814,8 @@ try {
   await check("the privacy export lists the member's package invoice requests", () => {
     const exported = json(`select internal.frontend_privacy_export_data('${lerato.id}');`);
     const requests = exported.package_invoice_requests;
-    assert.equal(requests.length, 2);
+    // (its withdrawn first request was removed by the retention check above)
+    assert.equal(requests.length, 1);
     assert.ok(requests.some((r) => r.invoice_number === leratoInvoice.invoice_number));
     assert.ok(requests.every((r) => r.consent_version === "invoice-cooling-off-v1"));
   });

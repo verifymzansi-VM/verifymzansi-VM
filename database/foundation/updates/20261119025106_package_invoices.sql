@@ -6,7 +6,7 @@
 -- Apply after 20261118182332_refund_follow_ups.sql (filename order; this update
 -- needs 20261114154823_slot_packages.sql, 20261114041000_customer_invoice_pay_now.sql
 -- and 20261118044440_bank_transfer_expiry.sql). It refuses with 55000 unless the
--- five functions it replaces have their reviewed bodies (or this update's) and
+-- nine functions it replaces have their reviewed bodies (or this update's) and
 -- the ones it adds are absent (or this update's). Only adds: no API command,
 -- argument or grant is removed or changed, and no field is added to an existing
 -- command's answer. **Nothing can be bought after it is applied**: Multi-listing
@@ -16,13 +16,17 @@
 --
 -- 1. Lets an invoice and a bank transfer hold a package order: up to 250 slots
 --    and R150,000 (250 slots for 180 days at R600). The Individual commands
---    keep their own limits (1 to 25 slots, at most R50,000).
+--    keep their own limits (1 to 25 slots, at most R50,000). A payment line
+--    holding more than one slot (a package line) may be up to R150,000; a
+--    one-slot line stays at most R10,000.
 -- 2. Adds private.package_invoice_requests: a member's request for a package
 --    invoice (term, slots, the price and total computed here from the
 --    catalogue, the cooling-off confirmation in the invoice's own words
 --    'invoice-cooling-off-v1', and what staff did with it). What the member
 --    asked never changes; staff details are written once; it moves on once
---    (trigger package_invoice_requests_guard). One open request per account.
+--    (trigger package_invoice_requests_guard). One open request per account,
+--    at most 10 new requests per account in 24 hours (PT429
+--    package_invoice_requests_limit).
 -- 3. "Ask for an invoice": api.request_package_invoice(p_plan_id, p_slots,
 --    p_expected_total_cents, p_cooling_off_consent, p_request_id) (member) for
 --    5 to 250 slots at any amount, with an accepted ID review (PT412), the total
@@ -44,8 +48,8 @@
 --    api.approve_staff_package_invoice(p_request_id)
 --    (payments:confirm_transfer) issues it: never the preparer or another
 --    account of their identity (42501 invoice_approver_same), and only while
---    the preparer still holds payments:refund (PT409
---    invoice_preparer_inactive). api.decline_staff_package_invoice_request
+--    the preparer still holds payments:refund and a current accepted ID
+--    review of their own (PT409 invoice_preparer_inactive). api.decline_staff_package_invoice_request
 --    (p_request_id, p_reason) (payments:refund) closes an open request. Every
 --    staff command checks the staff member's own ID review, never their own
 --    identity's account and never a customer they referred, again after every
@@ -61,9 +65,17 @@
 --    the package, its invoice record, receipt event and partner commission).
 --    Each needs packages on sale and no package of the account that has not
 --    ended; none counts the Individual slot limit or E3. Individual invoices
---    are unchanged.
+--    are unchanged, except that confirming any bank transfer now also needs the
+--    recorder's own current ID review (PT409 transfer_recorder_inactive). The
+--    online package checkout (internal.start_package_checkout) refuses while a
+--    package invoice of the account is unpaid (PT409 package_invoice_unpaid).
 -- 6. The privacy export lists the member's package invoice requests (dataset
---    package_invoice_requests).
+--    package_invoice_requests). Closing an account withdraws its open request
+--    (internal.close_account_evidence); erasure withdraws it too and unlinks
+--    every request from the account (internal.erase_closed_account; the
+--    guard allows only that); the retention job removes declined and withdrawn
+--    requests five tax years after they closed (internal.retention_commerce),
+--    and an issued one goes with its invoice.
 --
 -- Order: apply first, then merge (the website release calls the new commands
 -- and the deploy preflight probes them). Earlier releases keep working: they
@@ -86,7 +98,11 @@ begin
       ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)'),
       ('internal.confirm_staff_invoice_payment(uuid)'),
       ('internal.frontend_privacy_export_data(uuid)'),
-      ('internal.customer_invoice_payment_guard()')) v(sig)
+      ('internal.customer_invoice_payment_guard()'),
+      ('internal.start_package_checkout(uuid,integer,bigint,boolean)'),
+      ('internal.close_account_evidence(uuid)'),
+      ('internal.erase_closed_account(uuid,text)'),
+      ('internal.retention_commerce(integer)')) v(sig)
     union all
     select n.nspname||'.'||v.name||' '||coalesce((select string_agg(md5(replace(p.prosrc,E'\r\n',E'\n')), ',')
         from pg_proc p where p.pronamespace=n.oid and p.proname=v.name),'absent')
@@ -107,13 +123,21 @@ begin
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 9e52c2ebd9dae698e4b7ee59904d4c46',
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 6f508a66a82ad2a24e4c43c324fd90a3',
         'internal.confirm_staff_invoice_payment(uuid) 0ccc38ab7e5dff36bf27b4047c58b218',
-        'internal.confirm_staff_invoice_payment(uuid) 27f70945d95889b3eabd2410e077e608',
+        'internal.confirm_staff_invoice_payment(uuid) 8f35a1917b7d78eaf669121b79a335c6',
         'internal.frontend_privacy_export_data(uuid) 86a879279ebd9dcadf6f3f4fa11e7f44',
         'internal.frontend_privacy_export_data(uuid) 0b4cd3f792ffecf94c329277db4da28e',
         'internal.customer_invoice_payment_guard() 7ad52ae1b3e37ad792d8dca2a275ca96',
         'internal.customer_invoice_payment_guard() 397c6a0239c508923a8215b2953d23d5',
+        'internal.start_package_checkout(uuid,integer,bigint,boolean) 947486cd48be84b7a45714ec51d1bae4',
+        'internal.start_package_checkout(uuid,integer,bigint,boolean) d5d9713994c8789030bd30c90c4c00b5',
+        'internal.close_account_evidence(uuid) 0300a2d267a77b797d7316a4cdf43e75',
+        'internal.close_account_evidence(uuid) ae0f20403df41b820bad1c96d93a0be1',
+        'internal.erase_closed_account(uuid,text) 1dc0781f7497f50fd305dd0903b37ec5',
+        'internal.erase_closed_account(uuid,text) 0110024c386259da47b96caf79555bac',
+        'internal.retention_commerce(integer) 55051470a07c224838cb58dc45d66406',
+        'internal.retention_commerce(integer) 755823787c716f14012a64aad254134d',
         'internal.package_invoice_request_guard absent',
-        'internal.package_invoice_request_guard b817a4a19fca44754c44d93d5d749d3f',
+        'internal.package_invoice_request_guard e41853f9d3e75297df7a4bf00e736792',
         'internal.package_invoice_approval_above_cents absent',
         'internal.package_invoice_approval_above_cents b775e7ca727cdf3583b884cf83106404',
         'internal.package_invoice_request_dto absent',
@@ -123,7 +147,7 @@ begin
         'internal.issue_package_customer_invoice absent',
         'internal.issue_package_customer_invoice 117d33c9a93c2d965e138a7fdc7930b8',
         'internal.request_package_invoice absent',
-        'internal.request_package_invoice 24f09558db7a52a1af19b4c2a9b42f79',
+        'internal.request_package_invoice beb95771af677d39b775e83197dfd8d1',
         'api.request_package_invoice absent',
         'api.request_package_invoice 096d60996af28df5e8aaa0d5fe51918d',
         'internal.get_my_package_invoice_request absent',
@@ -131,17 +155,17 @@ begin
         'api.get_my_package_invoice_request absent',
         'api.get_my_package_invoice_request 5208556a35b7224da595e8cbc7e65b4d',
         'internal.get_staff_package_invoice_requests absent',
-        'internal.get_staff_package_invoice_requests 1158221a7d1145dd57b4299bedef3db2',
+        'internal.get_staff_package_invoice_requests 30e148de7bfe9c6730218c712a622710',
         'api.get_staff_package_invoice_requests absent',
         'api.get_staff_package_invoice_requests 7662153696a6e67c6b58431e88285f16',
         'internal.lock_package_invoice_request absent',
-        'internal.lock_package_invoice_request 0691532c5dd81ed3bb1575f1c7ad39c3',
+        'internal.lock_package_invoice_request c61bd2426d996277afa7d62b4e34c047',
         'internal.issue_staff_package_invoice absent',
         'internal.issue_staff_package_invoice a69a568ea6d0173b70b2cc924da1c548',
         'api.issue_staff_package_invoice absent',
         'api.issue_staff_package_invoice 9df49639f4e8861953faf6a8972e237a',
         'internal.approve_staff_package_invoice absent',
-        'internal.approve_staff_package_invoice 11824877864a0aed9c6d733fbf9c02c2',
+        'internal.approve_staff_package_invoice f8666f0fef8839ad924daaff4d99d2bf',
         'api.approve_staff_package_invoice absent',
         'api.approve_staff_package_invoice fe1e424c2d010af354ee0bff1eb6b43b',
         'internal.decline_staff_package_invoice_request absent',
@@ -165,11 +189,17 @@ alter table private.invoice_transfers drop constraint if exists invoice_transfer
   add constraint invoice_transfers_slots_check check (slots >= 1 and slots <= 250);
 alter table private.invoice_transfers drop constraint if exists invoice_transfers_amount_received_cents_check,
   add constraint invoice_transfers_amount_received_cents_check check (amount_received_cents > 0 and amount_received_cents <= 15000000);
+-- A payment line is one slot (at most R10,000) or one package line holding
+-- every slot of a package (more than one slot, at most R150,000).
+alter table private.payment_lines drop constraint if exists payment_lines_amount_cents_check,
+  add constraint payment_lines_amount_cents_check check (amount_cents >= 100
+    and (amount_cents <= 1000000 or (slot_count > 1 and amount_cents <= 15000000)));
 
 -- 2. A member's request for a package invoice ("Ask for an invoice").
 create table if not exists private.package_invoice_requests (
   id uuid default gen_random_uuid() not null,
-  account_id uuid not null,
+  -- Null once the account was erased (the record is kept, unlinked).
+  account_id uuid,
   member_request_id uuid not null,
   plan_version_id uuid not null,
   term_days integer not null,
@@ -192,8 +222,9 @@ create table if not exists private.package_invoice_requests (
   closed_at timestamp with time zone,
   close_reason text,
   constraint package_invoice_requests_pkey primary key (id),
-  -- The request goes with the account (erasure removes the Auth user); an
-  -- issued request goes with its invoice (retention, five tax years on).
+  -- Erasure unlinks the account (internal.erase_closed_account); an issued
+  -- request goes with its invoice and a declined or withdrawn one is removed
+  -- five tax years after it closed (internal.retention_commerce).
   constraint package_invoice_requests_account_id_fkey foreign key (account_id) references auth.users(id) on delete cascade,
   constraint package_invoice_requests_plan_version_id_fkey foreign key (plan_version_id) references private.plan_versions(id) on delete restrict,
   constraint package_invoice_requests_invoice_id_fkey foreign key (invoice_id) references private.customer_invoices(id) on delete cascade,
@@ -223,7 +254,8 @@ create table if not exists private.package_invoice_requests (
       and close_reason is null
     when 'declined' then invoice_id is null and approved_by is null and closed_at is not null and closed_by is not null
       and close_reason is not null
-    else invoice_id is null and approved_by is null and prepared_by is null and closed_at is not null
+    -- withdrawn: replaced by the member's next order, or the account closed.
+    else invoice_id is null and approved_by is null and closed_at is not null
       and closed_by is null and close_reason is null end),
   constraint package_invoice_requests_not_own check (prepared_by <> account_id and approved_by <> account_id
     and closed_by <> account_id)
@@ -260,6 +292,12 @@ begin
     end if;
     return new;
   end if;
+  -- An erasure unlinks the erased account from this kept record
+  -- (internal.erase_closed_account); nothing else may change with it.
+  if coalesce(pg_catalog.current_setting('vm.erasure', true), '') <> ''
+      and internal.erasure_unlinks(to_jsonb(old), to_jsonb(new), array['account_id']) then
+    return new;
+  end if;
   -- What the member asked for never changes; staff details are written once.
   if (new.id, new.account_id, new.member_request_id, new.plan_version_id, new.term_days, new.slots,
       new.unit_price_cents, new.total_cents, new.requested_at, new.consent_at, new.consent_version,
@@ -272,9 +310,10 @@ begin
     raise exception 'a package invoice request keeps what was asked and prepared' using errcode='23514';
   end if;
   -- requested -> awaiting_approval, issued, declined or withdrawn;
-  -- awaiting_approval -> issued or declined; nothing after that.
+  -- awaiting_approval -> issued, declined or withdrawn (the account closed);
+  -- nothing after that.
   if not ((old.status = 'requested' and new.status in ('awaiting_approval', 'issued', 'declined', 'withdrawn'))
-      or (old.status = 'awaiting_approval' and new.status in ('issued', 'declined'))) then
+      or (old.status = 'awaiting_approval' and new.status in ('issued', 'declined', 'withdrawn'))) then
     raise exception 'a package invoice request moves on once, from requested or awaiting approval'
       using errcode='23514';
   end if;
@@ -487,6 +526,15 @@ begin
       perform internal.price_draft_actor();
       return internal.package_invoice_request_dto(waiting, null) || jsonb_build_object('repeated', true);
     end if;
+  end if;
+  -- At most 10 new requests per account in 24 hours (each other order is a
+  -- new request), so the staff queue cannot be flooded.
+  if (select count(*) from private.package_invoice_requests r
+      where r.account_id = actor and r.requested_at > statement_timestamp() - interval '24 hours') >= 10 then
+    raise exception 'too many invoice requests today; try again tomorrow or contact us'
+      using errcode='PT429', detail='package_invoice_requests_limit';
+  end if;
+  if waiting.id is not null then
     update private.package_invoice_requests set status = 'withdrawn', closed_at = statement_timestamp()
       where id = waiting.id;
   end if;
@@ -560,6 +608,7 @@ begin
     'approval_above_cents', internal.package_invoice_approval_above_cents())
     into result
   from (select * from private.package_invoice_requests x where x.status in ('requested', 'awaiting_approval')
+      and x.account_id is not null
     order by x.requested_at, x.id limit 100) r;
   if internal.staff_actor('payments:view') is distinct from actor then
     raise exception 'staff actor changed' using errcode='42501';
@@ -597,6 +646,10 @@ begin
   select * into r from private.package_invoice_requests x where x.id = p_request_id;
   if not found then
     raise exception 'invoice request not found' using errcode='PT404', detail='package_invoice_request_unavailable';
+  end if;
+  if r.account_id is null then
+    raise exception 'this invoice request belongs to an erased account' using errcode='PT409',
+      detail='package_invoice_request_closed';
   end if;
   perform internal.assert_staff_payment_actor(p_actor, r.account_id);
   perform internal.lock_evidence_subject(r.account_id);
@@ -704,6 +757,13 @@ begin
   if not exists(select 1 from private.staff_roles s join private.staff_capabilities c on c.role = s.role
       where s.user_id = r.prepared_by and s.revoked_at is null and c.capability = 'payments:refund')
     or not exists(select 1 from private.current_account_access a where a.id = r.prepared_by) then
+    raise exception 'the staff member who prepared this invoice can no longer issue invoices; decline it'
+      using errcode='PT409', detail='invoice_preparer_inactive';
+  end if;
+  -- ...and must still have a current accepted ID review of their own and
+  -- never be the customer's identity.
+  if internal.current_verified_identity(r.prepared_by) is null
+      or internal.same_identity(r.prepared_by, r.account_id) then
     raise exception 'the staff member who prepared this invoice can no longer issue invoices; decline it'
       using errcode='PT409', detail='invoice_preparer_inactive';
   end if;
@@ -1219,6 +1279,13 @@ begin
     raise exception 'the staff member who recorded this bank transfer can no longer record payments; decline it'
       using errcode='PT409', detail='transfer_recorder_inactive';
   end if;
+  -- ...and must still have a current accepted ID review of their own and
+  -- never be the customer's identity (20261119025106).
+  if internal.current_verified_identity(t.recorded_by) is null
+      or internal.same_identity(t.recorded_by, t.account_id) then
+    raise exception 'the staff member who recorded this bank transfer can no longer record payments; decline it'
+      using errcode='PT409', detail='transfer_recorder_inactive';
+  end if;
   if exists(select 1 from private.account_acquisitions a join private.partners p on p.id = a.partner_id
       where a.account_id = t.account_id and internal.same_identity(t.recorded_by, p.account_id)) then
     raise exception 'the staff member who recorded this bank transfer referred the customer; decline it'
@@ -1381,7 +1448,118 @@ alter function internal.confirm_staff_invoice_payment(uuid) owner to postgres;
 revoke all on function internal.confirm_staff_invoice_payment(uuid) from public;
 grant execute on function internal.confirm_staff_invoice_payment(uuid) to authenticated;
 
--- 6. The privacy export lists package invoice requests (full body).
+CREATE OR REPLACE FUNCTION internal.start_package_checkout(p_plan_id uuid, p_slots integer, p_expected_total_cents bigint, p_cooling_off_consent boolean)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare
+  actor uuid := internal.price_draft_actor();
+  plan private.plan_versions;
+  pay private.payments;
+  fingerprint text;
+  total bigint;
+  open_slots integer;
+begin
+  if p_plan_id is null or p_slots is null or p_expected_total_cents is null then
+    raise exception 'package term, number of slots and total required' using errcode='22023';
+  end if;
+  if p_cooling_off_consent is distinct from true then
+    raise exception 'cooling-off consent required before payment' using errcode='22023';
+  end if;
+  perform internal.lock_evidence_subject(actor);
+  if not internal.slot_packages_on_sale() then
+    raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
+  end if;
+  select * into plan from private.plan_versions v
+    where v.id=p_plan_id and v.retired_at is null and internal.slot_package_plan(v.plan_code);
+  if not found then raise exception 'this package term is not on sale' using errcode='22023'; end if;
+  -- Typed: a whole number of slots, at least 5 (1 to 4 are Individual slots),
+  -- at most 250 per business; more than 100 is bought by invoice.
+  if p_slots < 5 or p_slots > 250 then
+    raise exception 'a package has 5 to 250 slots' using errcode='22023', detail='package_slots_invalid';
+  end if;
+  fingerprint := internal.current_verified_identity(actor);
+  if fingerprint is null then
+    raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
+  end if;
+  total := plan.price_cents * p_slots;
+  -- More than 100 slots, or above the most Ozow accepts in one payment
+  -- (internal.online_payment_max_cents, the one setting): by invoice.
+  if p_slots > 100 or total > internal.online_payment_max_cents() then
+    raise exception 'packages above 100 slots or the online payment limit of % cents are paid by invoice',
+      internal.online_payment_max_cents() using errcode='PT413',
+      detail='package_invoice_required';
+  end if;
+  if total <> p_expected_total_cents then
+    raise exception 'the price changed; check the total again' using errcode='PT428';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text, 707));
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||actor::text, 707));
+  if internal.slot_package_open(actor) then
+    raise exception 'this account already has a Multi-listing package' using errcode='PT409', detail='package_active';
+  end if;
+  -- 20261119025106: while a package invoice of the account is unpaid, it is
+  -- paid (or cancelled) first, so no second package is bought beside it.
+  if exists(select 1 from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
+      where i.account_id = actor and i.status = 'issued' and internal.slot_package_plan(v.plan_code)) then
+    raise exception 'your package invoice is not paid yet; pay it, or ask us to cancel it first'
+      using errcode='PT409', detail='package_invoice_unpaid';
+  end if;
+  select p.* into pay from private.payments p join private.plan_versions v on v.id=p.plan_version_id
+    where p.owner_id=actor and p.status='pending' and p.target_post_id is null and internal.slot_package_plan(v.plan_code)
+    order by p.created_at desc, p.id limit 1
+    for update of p;
+  if found then
+    select l.slot_count into open_slots from private.payment_lines l where l.payment_id=pay.id and l.line_number=1;
+    if pay.plan_version_id <> plan.id or open_slots is distinct from p_slots then
+      if pay.checkout_url is not null then
+        -- Open at Ozow for another package order: the member continues,
+        -- checks or cancels it first.
+        perform internal.price_draft_actor();
+        return jsonb_build_object('payment_id', pay.id, 'merchant_reference', pay.merchant_reference,
+          'amount_cents', pay.amount_cents::text, 'currency', pay.currency, 'status', pay.status,
+          'slots', open_slots, 'package', true, 'reused', true);
+      elsif pay.checkout_claim_until > clock_timestamp() then
+        raise exception 'checkout is being created' using errcode='PT409';
+      end if;
+      -- Never sent to Ozow, so it can never be paid: replaced.
+      update private.payments set status='cancelled', status_changed_at=clock_timestamp() where id=pay.id;
+      pay := null;
+    end if;
+  end if;
+  if pay.id is null then
+    insert into private.payments (owner_id, product_kind, plan_version_id, amount_cents, currency, snapshot)
+    values (actor, 'plan', plan.id, total, plan.currency, jsonb_build_object('kind', 'plan', 'category', 'slot_package',
+        'code', plan.plan_code, 'version', plan.version, 'label', plan.label, 'area', plan.area,
+        'price_cents', plan.price_cents, 'slots', p_slots, 'total_cents', total,
+        'duration_days', plan.duration_days, 'slot_capacity', p_slots,
+        'activations_per_period', plan.activations_per_period * p_slots,
+        'activation_period_days', plan.activation_period_days,
+        'max_photos', plan.max_photos, 'max_videos', plan.max_videos,
+        'addon_capabilities', to_jsonb(plan.addon_capabilities),
+        'invoice_description', 'Multi-listing package: ' || p_slots::text || ' slots × ' || plan.duration_days::text || ' days',
+        'cooling_off_consent', jsonb_build_object('accepted_at', statement_timestamp(),
+          'terms_version', (select c.version from private.posting_terms_current c where c.singleton),
+          'wording_version', 'package-starts-now-v1',
+          'wording', 'My slots start now; the 7-day cooling-off does not apply because the service starts immediately')))
+    returning * into pay;
+    insert into private.payment_lines (payment_id, line_number, plan_version_id, amount_cents, slot_count)
+      values (pay.id, 1, plan.id, total, p_slots);
+  end if;
+  perform internal.price_draft_actor(); -- final live owner/session check after all waits
+  return jsonb_build_object('payment_id', pay.id, 'merchant_reference', pay.merchant_reference,
+    'amount_cents', pay.amount_cents::text, 'currency', pay.currency, 'status', pay.status,
+    'slots', p_slots, 'package', true, 'reused', pay.created_at < statement_timestamp());
+end;
+$function$;
+alter function internal.start_package_checkout(uuid,integer,bigint,boolean) owner to postgres;
+revoke all on function internal.start_package_checkout(uuid,integer,bigint,boolean) from public;
+grant execute on function internal.start_package_checkout(uuid,integer,bigint,boolean) to authenticated;
+
+-- 6. The privacy export lists package invoice requests; closure withdraws an
+-- open request, erasure unlinks them and retention removes them (full bodies).
 CREATE OR REPLACE FUNCTION internal.frontend_privacy_export_data(p_subject uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1482,6 +1660,274 @@ begin
 end$function$;
 alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
 revoke all on function internal.frontend_privacy_export_data(uuid) from public;
+
+CREATE OR REPLACE FUNCTION internal.close_account_evidence(p_user_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare closure private.account_closures; scheduled integer; trial_fingerprints integer;
+begin
+  perform internal.lock_evidence_subject(p_user_id);
+  perform e.id from private.evidence_cases e where e.subject_id=p_user_id order by e.id for update;
+  insert into private.account_closures (user_id, closed_at, evidence_delete_after)
+  values (p_user_id, statement_timestamp(), statement_timestamp() + interval '90 days')
+  on conflict (user_id) do nothing;
+  select * into closure from private.account_closures x where x.user_id = p_user_id;
+  update private.evidence_artifacts a
+    set retain_until = least(coalesce(a.retain_until,'infinity'::timestamptz), closure.evidence_delete_after)
+  where a.owner_id = p_user_id and a.state in ('uploaded', 'clean', 'rejected')
+    and a.retain_until is distinct from least(coalesce(a.retain_until,'infinity'::timestamptz), closure.evidence_delete_after);
+  get diagnostics scheduled = row_count;
+  -- DEC-27: detach the trial fingerprint and keep it 3 years after closure.
+  update private.trial_identities set owner_id = null, entitlement_id = null,
+    detached_at = closure.closed_at, retain_until = closure.closed_at + interval '3 years'
+  where owner_id = p_user_id;
+  get diagnostics trial_fingerprints = row_count;
+  -- 20261119025106: an open package invoice request is withdrawn, so it leaves
+  -- the staff queue and no invoice is issued to a closed account.
+  update private.package_invoice_requests set status = 'withdrawn', closed_at = statement_timestamp()
+    where account_id = p_user_id and status in ('requested', 'awaiting_approval');
+  update private.evidence_cases set status = 'closed', claimed_by = null, claim_expires_at = null,claim_nonce=null,
+    version=least(version::bigint+1,2147483647)::integer
+  where subject_id = p_user_id and status = 'open' and kind in('kyc','business');
+  return jsonb_build_object('closed_at', closure.closed_at,
+    'evidence_delete_after', closure.evidence_delete_after, 'scheduled', scheduled,
+    'trial_fingerprints_detached', trial_fingerprints);
+end;
+$function$;
+alter function internal.close_account_evidence(uuid) owner to postgres;
+revoke all on function internal.close_account_evidence(uuid) from public;
+grant execute on function internal.close_account_evidence(uuid) to service_role;
+
+CREATE OR REPLACE FUNCTION internal.erase_closed_account(p_user uuid, p_by text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare er private.account_erasures; reason text; earlier_retention text; counts jsonb := '{}'::jsonb; n integer;
+begin
+  if p_user is null or p_by is null or p_by not in ('staff', 'sweep') then
+    raise exception 'account and erasing party required' using errcode = '22023';
+  end if;
+  perform internal.lock_evidence_subject(p_user);
+  select * into er from private.account_erasures e where e.user_id = p_user for update;
+  if not found then raise exception 'account is not closed' using errcode = 'PT404', detail = 'account_not_closed'; end if;
+  if er.erased_at is not null or er.erase_after > statement_timestamp() then
+    return internal.account_erasure_state(p_user);
+  end if;
+  reason := internal.account_erasure_hold(p_user);
+  if reason is not null then
+    update private.account_erasures set blocked_at = statement_timestamp(), blocked_reason = reason
+      where user_id = p_user;
+    return internal.account_erasure_state(p_user);
+  end if;
+  earlier_retention := coalesce(pg_catalog.current_setting('vm.retention', true), '');
+  perform pg_catalog.set_config('vm.retention', 'on', true);
+  perform pg_catalog.set_config('vm.erasure', p_user::text, true);
+
+  select count(*) into n from private.enquiries q where q.owner_id = p_user or q.sender_account_id = p_user;
+  counts := counts || jsonb_build_object('enquiries', n);
+  -- Enquiries the account sent, with the other owner's notice and email.
+  with gone as (
+    delete from private.enquiries q where q.sender_account_id = p_user returning q.id
+  ), notices as (
+    delete from private.notifications x using gone where x.kind = 'enquiry_received' and x.subject_id = gone.id
+  )
+  delete from private.outbox_events o using gone where o.kind = 'enquiry_received' and o.subject_id = gone.id;
+  -- Sponsored places first: deleting a place returns its grant.
+  delete from private.organisation_sponsorships s where s.owner_id = p_user;
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('sponsored_places', n);
+  -- Posts, with their edit copies, contacts, media links, search documents,
+  -- received enquiries and everything else that belongs to a post.
+  delete from private.posts p where p.owner_id = p_user;
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('posts', n);
+  delete from private.event_submissions e where e.owner_id = p_user;
+  delete from private.enquiries q where q.owner_id = p_user;
+  delete from private.notifications x where x.account_id = p_user;
+  delete from private.outbox_events o where o.owner_id = p_user;
+  delete from private.profiles x where x.account_id = p_user;
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('profile', n);
+  delete from private.frontend_form_drafts d where d.owner_id = p_user;
+  delete from private.listing_price_drafts d where d.owner_id = p_user;
+  delete from private.intro_trial_requests t where t.owner_id = p_user;
+  delete from private.frontend_business_checks b where b.owner_id = p_user;
+  delete from private.organisation_admins a where a.account_id = p_user;
+  delete from private.organisation_applications a where a.applicant_id = p_user;
+  delete from private.entitlement_members m where m.member_id = p_user or m.added_by = p_user
+    or m.entitlement_id in (select e.id from private.entitlements e where e.owner_id = p_user);
+  delete from private.frontend_post_commands c where c.owner_id = p_user;
+  delete from private.frontend_post_action_receipts r where r.owner_id = p_user;
+  delete from private.account_acquisitions a where a.account_id = p_user;
+  delete from private.communication_choice_events c where c.account_id = p_user;
+  delete from private.signup_terms_acceptances a where a.account_id = p_user;
+  delete from private.posting_terms_acceptances a where a.owner_id = p_user;
+  delete from private.verification_localities l where l.owner_id = p_user;
+  -- Photos and videos nothing kept still uses: queued for deletion from
+  -- storage now (the media cleanup job deletes the objects).
+  update private.media_objects m set state = 'cleanup_required', cleanup_lease_until = null
+    where m.owner_id = p_user and m.state in ('intent', 'ready', 'rejected') and not internal.media_object_in_use(m.id);
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('media_queued', n);
+
+  -- Paid time ends; payment records stay for their tax years, no longer
+  -- linked to the account.
+  update private.entitlements e set status = 'revoked', revoked_reason = 'account_erased'
+    where e.owner_id = p_user and e.status <> 'revoked';
+  update private.trial_identities t set owner_id = null, entitlement_id = null,
+      detached_at = er.closed_at, retain_until = er.closed_at + interval '3 years'
+    where t.owner_id = p_user;
+  update private.post_activations a set owner_id = null where a.owner_id = p_user;
+  update private.entitlements e set owner_id = null where e.owner_id = p_user;
+  update private.payments p set owner_id = null where p.owner_id = p_user;
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('payments_unlinked', n);
+  update private.customer_invoices i set account_id = null where i.account_id = p_user;
+  update private.invoice_transfers t set account_id = null where t.account_id = p_user;
+  update private.payment_refund_requests r set account_id = null where r.account_id = p_user;
+  update private.partner_commissions c set referred_account_id = null where c.referred_account_id = p_user;
+  update private.individual_slot_limits l set account_id = null where l.account_id = p_user;
+  update private.slot_packages k set owner_id = null where k.owner_id = p_user;
+  -- Package invoice requests (20261119025106): an open one is withdrawn (it
+  -- leaves the staff queue), then every one is kept unlinked like its invoice.
+  update private.package_invoice_requests r set status = 'withdrawn', closed_at = statement_timestamp()
+    where r.account_id = p_user and r.status in ('requested', 'awaiting_approval');
+  update private.package_invoice_requests r set account_id = null where r.account_id = p_user;
+
+  perform internal.remove_account_sign_in(p_user);
+  perform pg_catalog.set_config('vm.erasure', '', true);
+  perform pg_catalog.set_config('vm.retention', earlier_retention, true);
+  update private.account_erasures set erased_at = statement_timestamp(), erased_by = p_by, erased_counts = counts,
+      blocked_at = null, blocked_reason = null, auth_checked_at = statement_timestamp()
+    where user_id = p_user;
+  -- Deleting the Auth user never undoes the finished erasure: a failure is
+  -- recorded and the daily check tries again.
+  begin
+    if internal.remove_erased_auth_user(p_user) then
+      update private.account_erasures set auth_removed_at = statement_timestamp() where user_id = p_user;
+    end if;
+  exception when others then
+    update private.account_erasures set blocked_at = statement_timestamp(), blocked_reason = 'error',
+        blocked_detail = sqlstate
+      where user_id = p_user;
+  end;
+  return internal.account_erasure_state(p_user);
+end;
+$function$;
+alter function internal.erase_closed_account(uuid,text) owner to postgres;
+revoke all on function internal.erase_closed_account(uuid,text) from public;
+
+CREATE OR REPLACE FUNCTION internal.retention_commerce(p_limit integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare provider_events integer; invoices integer; addon_windows integer; partner_events integer;
+  commissions integer; acquisitions integer; sponsorships integer; trial_claims integer; activations integer;
+  entitlements integer; payments integer; customer_invoices integer; bank_transfers integer; slot_packages integer;
+  package_invoice_requests integer;
+begin
+  -- Package invoice requests (20261119025106) declined or withdrawn: five tax
+  -- years after they closed, as declined bank transfers. An issued one goes
+  -- with its invoice (below).
+  delete from private.package_invoice_requests where id in(select r.id from private.package_invoice_requests r
+    where r.status in('declined','withdrawn') and internal.retention_tax_year_due(r.closed_at)
+    order by r.closed_at limit p_limit);
+  get diagnostics package_invoice_requests=row_count;
+  delete from private.provider_events where id in(select e.id from private.provider_events e
+    where internal.retention_tax_year_due(e.received_at) order by e.received_at limit p_limit);
+  get diagnostics provider_events=row_count;
+  delete from private.invoices where id in(select i.id from private.invoices i
+    where internal.retention_tax_year_due(i.issued_at) order by i.issued_at limit p_limit);
+  get diagnostics invoices=row_count;
+  -- Recorded bank transfers: five tax years after they were confirmed,
+  -- declined, expired or recorded, and always with the invoice they name.
+  delete from private.invoice_transfers where id in(select t.id from private.invoice_transfers t
+    where internal.retention_tax_year_due(coalesce(t.confirmed_at,t.declined_at,t.expired_at,t.recorded_at))
+      or t.customer_invoice_id in(select i.id from private.customer_invoices i
+        where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at)))
+    order by t.recorded_at limit p_limit);
+  get diagnostics bank_transfers=row_count;
+  delete from private.customer_invoice_payments where invoice_id in(select i.id from private.customer_invoices i
+    where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at))
+      and not exists(select 1 from private.invoice_transfers t where t.customer_invoice_id=i.id)
+    order by i.issued_at limit p_limit);
+  delete from private.customer_invoices where id in(select i.id from private.customer_invoices i
+    where internal.retention_tax_year_due(coalesce(i.paid_at,i.voided_at,i.issued_at))
+      and not exists(select 1 from private.customer_invoice_payments l where l.invoice_id=i.id)
+      and not exists(select 1 from private.invoice_transfers t where t.customer_invoice_id=i.id)
+    order by i.issued_at limit p_limit);
+  get diagnostics customer_invoices=row_count;
+  delete from private.post_addon_windows where id in(select w.id from private.post_addon_windows w
+    where coalesce(w.revoked_at,w.ends_at)<=statement_timestamp()
+      and internal.retention_tax_year_due(coalesce(w.revoked_at,w.ends_at)) order by w.ends_at limit p_limit);
+  get diagnostics addon_windows=row_count;
+  delete from private.partner_events where id in(select e.id from private.partner_events e
+    where internal.retention_tax_year_due(e.created_at) order by e.created_at limit p_limit);
+  get diagnostics partner_events=row_count;
+  delete from private.partner_commissions where id in(select c.id from private.partner_commissions c
+    where c.status in('paid','reversed') and internal.retention_tax_year_due(coalesce(c.reversed_at,c.paid_at))
+      and not exists(select 1 from private.partner_events e where e.commission_id=c.id)
+    order by c.created_at limit p_limit for update skip locked);
+  get diagnostics commissions=row_count;
+  delete from private.account_acquisitions where account_id in(select a.account_id from private.account_acquisitions a
+    where internal.retention_tax_year_due(a.recorded_at) order by a.recorded_at limit p_limit);
+  get diagnostics acquisitions=row_count;
+  delete from private.organisation_sponsorships where id in(select s.id from private.organisation_sponsorships s
+    where s.status in('ended','revoked') and internal.retention_tax_year_due(s.ended_at)
+    order by s.ended_at limit p_limit for update skip locked);
+  get diagnostics sponsorships=row_count;
+  delete from private.post_trial_claims where post_id in(select c.post_id from private.post_trial_claims c
+    where internal.retention_tax_year_due(coalesce(c.converted_at,c.claimed_at)) order by c.claimed_at limit p_limit);
+  get diagnostics trial_claims=row_count;
+  delete from private.post_activations where id in(select a.id from private.post_activations a
+    where a.released_at is not null and internal.retention_tax_year_due(a.released_at)
+      and not exists(select 1 from private.post_trial_claims c where c.converted_by_activation_id=a.id)
+    order by a.released_at limit p_limit for update skip locked);
+  get diagnostics activations=row_count;
+  -- A slot's periods go newest first: a grant stays while a later renewal (or
+  -- a payment line) still names it.
+  delete from private.entitlements where id in(select e.id from private.entitlements e
+    where (e.status='revoked' or e.ends_at<=statement_timestamp())
+      and internal.retention_tax_year_due(coalesce(e.ends_at,e.created_at))
+      and not exists(select 1 from private.organisation_sponsorships s where s.entitlement_id=e.id)
+      and not exists(select 1 from private.post_activations a where a.entitlement_id=e.id)
+      and not exists(select 1 from private.post_trial_claims c where c.trial_entitlement_id=e.id)
+      and not exists(select 1 from private.trial_identities t where t.entitlement_id=e.id)
+      and not exists(select 1 from private.entitlements r where r.renews_entitlement_id=e.id or r.slot_id=e.id)
+      and not exists(select 1 from private.payment_lines l where l.renews_entitlement_id=e.id)
+    order by e.created_at limit p_limit for update skip locked);
+  get diagnostics entitlements=row_count;
+  -- A Multi-listing package (20261114154823) goes with the last of its grants,
+  -- which follow their payments' five tax years.
+  delete from private.slot_packages where id in(select k.id from private.slot_packages k
+    where internal.retention_tax_year_due(k.created_at)
+      and not exists(select 1 from private.entitlements e where e.package_id=k.id)
+    order by k.created_at limit p_limit for update skip locked);
+  get diagnostics slot_packages=row_count;
+  delete from private.payments where id in(select p.id from private.payments p
+    where p.status<>'pending' and internal.retention_tax_year_due(coalesce(p.completed_at,p.status_changed_at,p.created_at))
+      and not exists(select 1 from private.entitlements e where e.payment_id=p.id)
+      and not exists(select 1 from private.invoices i where i.payment_id=p.id)
+      and not exists(select 1 from private.partner_commissions c where c.payment_id=p.id)
+      and not exists(select 1 from private.post_addon_windows w where w.payment_id=p.id)
+      and not exists(select 1 from private.provider_events e where e.payment_id=p.id)
+      and not exists(select 1 from private.customer_invoice_payments l where l.payment_id=p.id)
+      and not exists(select 1 from private.customer_invoices ci where ci.payment_id=p.id)
+      and not exists(select 1 from private.invoice_transfers t where t.payment_id=p.id)
+    order by p.created_at limit p_limit for update skip locked);
+  get diagnostics payments=row_count;
+  return jsonb_build_object('provider_events',provider_events,'invoices',invoices,'addon_windows',addon_windows,
+    'partner_events',partner_events,'partner_commissions',commissions,'account_acquisitions',acquisitions,
+    'sponsorships',sponsorships,'post_trial_claims',trial_claims,'post_activations',activations,
+    'entitlements',entitlements,'payments',payments,'customer_invoices',customer_invoices,
+    'bank_transfers',bank_transfers,'slot_packages',slot_packages,
+    'package_invoice_requests',package_invoice_requests);
+end;
+$function$;
+alter function internal.retention_commerce(integer) owner to postgres;
+revoke all on function internal.retention_commerce(integer) from public;
 
 -- The replaced functions keep their grants; the helpers have none; the new
 -- commands are for signed-in members and staff only.

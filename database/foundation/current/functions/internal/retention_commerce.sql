@@ -10,7 +10,15 @@ AS $function$
 declare provider_events integer; invoices integer; addon_windows integer; partner_events integer;
   commissions integer; acquisitions integer; sponsorships integer; trial_claims integer; activations integer;
   entitlements integer; payments integer; customer_invoices integer; bank_transfers integer; slot_packages integer;
+  package_invoice_requests integer;
 begin
+  -- Package invoice requests (20261119025106) declined or withdrawn: five tax
+  -- years after they closed, as declined bank transfers. An issued one goes
+  -- with its invoice (below).
+  delete from private.package_invoice_requests where id in(select r.id from private.package_invoice_requests r
+    where r.status in('declined','withdrawn') and internal.retention_tax_year_due(r.closed_at)
+    order by r.closed_at limit p_limit);
+  get diagnostics package_invoice_requests=row_count;
   delete from private.provider_events where id in(select e.id from private.provider_events e
     where internal.retention_tax_year_due(e.received_at) order by e.received_at limit p_limit);
   get diagnostics provider_events=row_count;
@@ -98,7 +106,8 @@ begin
     'partner_events',partner_events,'partner_commissions',commissions,'account_acquisitions',acquisitions,
     'sponsorships',sponsorships,'post_trial_claims',trial_claims,'post_activations',activations,
     'entitlements',entitlements,'payments',payments,'customer_invoices',customer_invoices,
-    'bank_transfers',bank_transfers,'slot_packages',slot_packages);
+    'bank_transfers',bank_transfers,'slot_packages',slot_packages,
+    'package_invoice_requests',package_invoice_requests);
 end;
 $function$;
 alter function internal.retention_commerce(integer) owner to postgres;

@@ -53,6 +53,13 @@ begin
   if internal.slot_package_open(actor) then
     raise exception 'this account already has a Multi-listing package' using errcode='PT409', detail='package_active';
   end if;
+  -- 20261119025106: while a package invoice of the account is unpaid, it is
+  -- paid (or cancelled) first, so no second package is bought beside it.
+  if exists(select 1 from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
+      where i.account_id = actor and i.status = 'issued' and internal.slot_package_plan(v.plan_code)) then
+    raise exception 'your package invoice is not paid yet; pay it, or ask us to cancel it first'
+      using errcode='PT409', detail='package_invoice_unpaid';
+  end if;
   select p.* into pay from private.payments p join private.plan_versions v on v.id=p.plan_version_id
     where p.owner_id=actor and p.status='pending' and p.target_post_id is null and internal.slot_package_plan(v.plan_code)
     order by p.created_at desc, p.id limit 1

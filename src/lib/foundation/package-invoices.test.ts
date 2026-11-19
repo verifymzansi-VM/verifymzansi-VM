@@ -117,6 +117,7 @@ describe("Ask for an invoice (member)", () => {
     ["PT409", "package_invoice_request_open", 409, /preparing your invoice/],
     ["PT412", undefined, 403, /ID review must be accepted/],
     ["PT428", undefined, 409, /price changed/],
+    ["PT429", "package_invoice_requests_limit", 429, /many invoices today/],
   ] as const)("puts %s %s in plain words", async (code, detail, status, message) => {
     const { api } = fixture(refused(code, detail));
     const error = await requestPackageInvoice(api, order).catch((caught: unknown) => caught);

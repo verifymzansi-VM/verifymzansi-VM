@@ -15,6 +15,7 @@ begin
     'approval_above_cents', internal.package_invoice_approval_above_cents())
     into result
   from (select * from private.package_invoice_requests x where x.status in ('requested', 'awaiting_approval')
+      and x.account_id is not null
     order by x.requested_at, x.id limit 100) r;
   if internal.staff_actor('payments:view') is distinct from actor then
     raise exception 'staff actor changed' using errcode='42501';

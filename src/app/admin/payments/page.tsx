@@ -230,11 +230,7 @@ export default async function PaymentsAdminPage({
           requests={packageRequests.items}
           approvalAboveCents={packageRequests.approval_above_cents}
         />
-      ) : (
-        <p role="alert" className="text-sm text-destructive">
-          Package invoice requests could not be loaded. Reload the page.
-        </p>
-      )}
+      ) : null}
       {invoices ? (
         <InvoicePanel canIssue={canRefund} invoices={invoices.items} unpaid={invoices.unpaid} />
       ) : (

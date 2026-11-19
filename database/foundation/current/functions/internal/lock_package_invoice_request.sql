@@ -15,6 +15,10 @@ begin
   if not found then
     raise exception 'invoice request not found' using errcode='PT404', detail='package_invoice_request_unavailable';
   end if;
+  if r.account_id is null then
+    raise exception 'this invoice request belongs to an erased account' using errcode='PT409',
+      detail='package_invoice_request_closed';
+  end if;
   perform internal.assert_staff_payment_actor(p_actor, r.account_id);
   perform internal.lock_evidence_subject(r.account_id);
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(r.account_id::text, 707));

@@ -3,7 +3,7 @@
 
 create table private.package_invoice_requests (
   id uuid default gen_random_uuid() not null,
-  account_id uuid not null,
+  account_id uuid,
   member_request_id uuid not null,
   plan_version_id uuid not null,
   term_days integer not null,
@@ -48,7 +48,7 @@ CASE status
     WHEN 'awaiting_approval'::text THEN prepared_by IS NOT NULL AND invoice_id IS NULL AND closed_at IS NULL AND closed_by IS NULL
     WHEN 'issued'::text THEN prepared_by IS NOT NULL AND invoice_id IS NOT NULL AND closed_at IS NULL AND closed_by IS NULL AND close_reason IS NULL
     WHEN 'declined'::text THEN invoice_id IS NULL AND approved_by IS NULL AND closed_at IS NOT NULL AND closed_by IS NOT NULL AND close_reason IS NOT NULL
-    ELSE invoice_id IS NULL AND approved_by IS NULL AND prepared_by IS NULL AND closed_at IS NOT NULL AND closed_by IS NULL AND close_reason IS NULL
+    ELSE invoice_id IS NULL AND approved_by IS NULL AND closed_at IS NOT NULL AND closed_by IS NULL AND close_reason IS NULL
 END),
   constraint package_invoice_requests_status_check CHECK (status = ANY (ARRAY['requested'::text, 'awaiting_approval'::text, 'issued'::text, 'declined'::text, 'withdrawn'::text])),
   constraint package_invoice_requests_term_days_check CHECK (term_days = ANY (ARRAY[30, 90, 180])),

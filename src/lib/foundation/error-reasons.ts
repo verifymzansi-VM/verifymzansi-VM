@@ -113,6 +113,7 @@ export const FOUNDATION_ERROR_REASONS = {
   package_invoice_request_closed: ["PT409"],
   package_invoice_request_open: ["PT409"],
   package_invoice_request_unavailable: ["PT404"],
+  package_invoice_requests_limit: ["PT429"],
   package_invoice_required: ["PT413"],
   package_invoice_unpaid: ["PT409"],
   package_slots_invalid: ["22023"],

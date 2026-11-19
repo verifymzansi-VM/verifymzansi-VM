@@ -28,7 +28,7 @@ import {
 import { PRODUCTION_CHECKOUT_ORIGIN, testCopyCheckout } from "../payments/checkout-origins";
 import type { PaymentRecordShape } from "../payments/types";
 import { hasDatabaseReason } from "./error-reasons";
-import { RENEWAL_WINDOW_DAYS } from "../billing/slot-checkout";
+import { BILLING_EMAIL, RENEWAL_WINDOW_DAYS } from "../billing/slot-checkout";
 
 type BillingRpcName =
   | "get_my_billing"
@@ -240,6 +240,12 @@ const PACKAGE_CHECKOUT_REFUSALS: Readonly<
     "PACKAGE_ACTIVE",
   ],
 };
+/** A package invoice of the account is unpaid (update 20261119025106). */
+const PACKAGE_INVOICE_UNPAID = [
+  409,
+  `Your package invoice is not paid yet. Pay it from Invoices, or email ${BILLING_EMAIL} to cancel it first.`,
+  "PACKAGE_INVOICE_UNPAID",
+] as const;
 /** While a package runs, Individual slots are not bought or renewed (E3). */
 const PACKAGE_ACTIVE = [
   409,
@@ -284,9 +290,11 @@ async function command(
             ? RENEWAL_NOT_OPEN
             : RENEWAL_CHECKOUT_REFUSALS[error.code ?? ""]
           : name === "start_package_checkout"
-            ? error.code === "PT409" && !hasDatabaseReason(error, "package_active")
-              ? null
-              : PACKAGE_CHECKOUT_REFUSALS[error.code ?? ""]
+            ? error.code === "PT409" && hasDatabaseReason(error, "package_invoice_unpaid")
+              ? PACKAGE_INVOICE_UNPAID
+              : error.code === "PT409" && !hasDatabaseReason(error, "package_active")
+                ? null
+                : PACKAGE_CHECKOUT_REFUSALS[error.code ?? ""]
             : null;
   if (refusal) throw new FoundationBillingCommandError(...refusal);
   if (error)

@@ -15,6 +15,12 @@ begin
     end if;
     return new;
   end if;
+  -- An erasure unlinks the erased account from this kept record
+  -- (internal.erase_closed_account); nothing else may change with it.
+  if coalesce(pg_catalog.current_setting('vm.erasure', true), '') <> ''
+      and internal.erasure_unlinks(to_jsonb(old), to_jsonb(new), array['account_id']) then
+    return new;
+  end if;
   -- What the member asked for never changes; staff details are written once.
   if (new.id, new.account_id, new.member_request_id, new.plan_version_id, new.term_days, new.slots,
       new.unit_price_cents, new.total_cents, new.requested_at, new.consent_at, new.consent_version,
@@ -27,9 +33,10 @@ begin
     raise exception 'a package invoice request keeps what was asked and prepared' using errcode='23514';
   end if;
   -- requested -> awaiting_approval, issued, declined or withdrawn;
-  -- awaiting_approval -> issued or declined; nothing after that.
+  -- awaiting_approval -> issued, declined or withdrawn (the account closed);
+  -- nothing after that.
   if not ((old.status = 'requested' and new.status in ('awaiting_approval', 'issued', 'declined', 'withdrawn'))
-      or (old.status = 'awaiting_approval' and new.status in ('issued', 'declined'))) then
+      or (old.status = 'awaiting_approval' and new.status in ('issued', 'declined', 'withdrawn'))) then
     raise exception 'a package invoice request moves on once, from requested or awaiting approval'
       using errcode='23514';
   end if;

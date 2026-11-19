@@ -43,7 +43,8 @@ export const packageInvoiceRequestSchema = z.strictObject({
 export type PackageInvoiceRequest = z.infer<typeof packageInvoiceRequestSchema>;
 
 export const staffPackageInvoiceRequestSchema = packageInvoiceRequestSchema.extend({
-  account_id: z.uuid(),
+  // Null once the account was erased (the request is kept, unlinked).
+  account_id: z.uuid().nullable(),
   customer_email: z.string().max(254).nullable(),
   customer_name: z.string().max(120).nullable(),
   identity_accepted: z.boolean(),
@@ -89,6 +90,10 @@ const MEMBER_REFUSALS: ReadonlyMap<
     [409, `We are preparing your invoice. Email ${BILLING_EMAIL} to change it.`],
   ],
   ["invoice_request_conflict", [409, "Reload the page and try again."]],
+  [
+    "package_invoice_requests_limit",
+    [429, `You have asked for many invoices today. Try again tomorrow, or email ${BILLING_EMAIL}.`],
+  ],
 ]);
 
 type RpcResult = PromiseLike<{

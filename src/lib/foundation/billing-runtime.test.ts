@@ -1377,6 +1377,12 @@ describe("the Multi-listing package checkout (P4a)", () => {
       "PACKAGE_ACTIVE",
       /already has a Multi-listing package/,
     ],
+    [
+      { code: "PT409", details: "package_invoice_unpaid" },
+      409,
+      "PACKAGE_INVOICE_UNPAID",
+      /package invoice is not paid yet/,
+    ],
   ])("tells the member why the database refused (%o)", async (error, status, code, message) => {
     rpc.mockResolvedValueOnce({ data: null, error });
     const refused = packageCheckout();

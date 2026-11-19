@@ -38,6 +38,13 @@ begin
     raise exception 'the staff member who recorded this bank transfer can no longer record payments; decline it'
       using errcode='PT409', detail='transfer_recorder_inactive';
   end if;
+  -- ...and must still have a current accepted ID review of their own and
+  -- never be the customer's identity (20261119025106).
+  if internal.current_verified_identity(t.recorded_by) is null
+      or internal.same_identity(t.recorded_by, t.account_id) then
+    raise exception 'the staff member who recorded this bank transfer can no longer record payments; decline it'
+      using errcode='PT409', detail='transfer_recorder_inactive';
+  end if;
   if exists(select 1 from private.account_acquisitions a join private.partners p on p.id = a.partner_id
       where a.account_id = t.account_id and internal.same_identity(t.recorded_by, p.account_id)) then
     raise exception 'the staff member who recorded this bank transfer referred the customer; decline it'

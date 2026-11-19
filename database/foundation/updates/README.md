@@ -85,7 +85,7 @@ Roadmap P4e; the owner's decisions 5, 6 and 12 of 14 November 2026
 amount, paid with Pay now up to the online payment limit or by bank transfer).
 It needs `20261114154823_slot_packages.sql`,
 `20261114041000_customer_invoice_pay_now.sql` and
-`20261118044440_bank_transfer_expiry.sql`, and refuses (55000) unless the five
+`20261118044440_bank_transfer_expiry.sql`, and refuses (55000) unless the nine
 functions it replaces have their reviewed bodies (or this update's) and the
 eighteen it adds are absent (or this update's). It only adds: no API command,
 argument or grant is removed or changed, and no field is added to an existing
@@ -96,7 +96,9 @@ the owner switches them on.
 - **Wider invoice limits.** `private.customer_invoices` and
   `private.invoice_transfers` hold up to 250 slots and R150,000 (250 slots for
   180 days at R600). The Individual commands keep their own limits (1 to 25
-  slots, at most R50,000).
+  slots, at most R50,000). A payment line holding more than one slot (a package
+  line) may be up to R150,000 (`payment_lines_amount_cents_check`); a one-slot
+  line stays at most R10,000.
 - **"Ask for an invoice" (member).**
   `api.request_package_invoice(p_plan_id, p_slots, p_expected_total_cents, p_cooling_off_consent, p_request_id)`:
   5 to 250 slots of one package term at any amount (22023
@@ -110,7 +112,8 @@ the owner switches them on.
   (`repeated: true`, another order with it PT409 `invoice_request_conflict`);
   the same order again keeps the waiting request; another order replaces it
   (`withdrawn`) while no staff member has prepared it, and is refused once one
-  has (PT409 `package_invoice_request_open`).
+  has (PT409 `package_invoice_request_open`). At most 10 new requests per
+  account in 24 hours (PT429 `package_invoice_requests_limit`).
   `api.get_my_package_invoice_request()` reads the account's latest request
   (never another account's, never staff details).
 - **The request record.** New table `private.package_invoice_requests`: the
@@ -120,9 +123,15 @@ the owner switches them on.
   invoice, who declined it and why). What the member asked never changes; staff
   details are written once; it moves on once (trigger
   `package_invoice_requests_guard`, which also checks that an issued request
-  names its own invoice of that order). It goes with the account (deleted with
-  the Auth user at erasure) and, once issued, with its invoice (the retention
-  job, five tax years on). No API role reads it.
+  names its own invoice of that order). Closing an account withdraws its open
+  request (`internal.close_account_evidence`), so it leaves the staff queue;
+  erasure withdraws it too and unlinks every request from the account
+  (`internal.erase_closed_account`; the guard allows only that change), as its
+  invoice and payment are unlinked. The retention job
+  (`internal.retention_commerce`, new count `package_invoice_requests`) removes
+  declined and withdrawn requests five tax years after they closed, the period
+  of declined bank transfers; an issued one goes with its invoice. No API role
+  reads it.
 - **Staff.** `api.get_staff_package_invoice_requests()` (`payments:view`): the
   open requests, oldest first (at most 100), with the customer's account email,
   public name, whether their ID review is accepted and whether they have a
@@ -137,8 +146,9 @@ the owner switches them on.
   `api.approve_staff_package_invoice(p_request_id)`
   (`payments:confirm_transfer`, admin) issues it, never by the preparer or
   another account of their identity (42501 `invoice_approver_same`) and only
-  while the preparer still holds `payments:refund` (PT409
-  `invoice_preparer_inactive`); the preparer is the invoice's issuer.
+  while the preparer still holds `payments:refund` and a current accepted ID
+  review of their own (PT409 `invoice_preparer_inactive`); the preparer is the
+  invoice's issuer.
   `api.decline_staff_package_invoice_request(p_request_id, p_reason)`
   (`payments:refund`) closes an open request. Every staff command checks the
   staff member's own ID review, never their own identity's account and never a
@@ -162,8 +172,13 @@ the owner switches them on.
   number of slots. Both refuse while packages are off sale (PT403
   `packages_not_on_sale`) or the account has a package (PT409 `package_active`).
   The Individual slot limit and E3 do not apply to a package. Individual
-  invoices are unchanged. Refunds work on the package line as for a package
-  bought online.
+  invoices are unchanged, except that confirming any bank transfer now also
+  needs the recorder's own current accepted ID review (PT409
+  `transfer_recorder_inactive`). Refunds work on the package line as for a
+  package bought online.
+- **Online package checkout.** `internal.start_package_checkout` (full body)
+  refuses while a package invoice of the account is unpaid (PT409
+  `package_invoice_unpaid`): it is paid or voided first.
 - **Privacy export.** New dataset `package_invoice_requests` (term, slots,
   amounts, dates, consent, status, invoice number; never the staff member or the
   reasons).
@@ -184,10 +199,10 @@ readers (at most 25 slots and R50,000) never meet one. It is recorded after
    website release that uses it is deployed); on sale: no; invoice requests:
    none (table absent); package invoices: 0; package bank transfers: 0".
 2. Run the update. It waits at most 5 seconds for any lock (it briefly locks
-   `private.customer_invoices` and `private.invoice_transfers` to widen their
-   rules). Run the preflight again: it must read "package invoices: already
-   applied; on sale: no; invoice requests: 0 (open: 0); package invoices: 0;
-   package bank transfers: 0".
+   `private.customer_invoices`, `private.invoice_transfers` and
+   `private.payment_lines` to widen their rules). Run the preflight again: it
+   must read "package invoices: already applied; on sale: no; invoice requests:
+   0 (open: 0); package invoices: 0; package bank transfers: 0".
 3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
    compare with `../fingerprint.json`, which lists this update under
    `productionCheck.pendingApplication`. Once production's fingerprint matches,
@@ -196,12 +211,13 @@ readers (at most 25 slots and R50,000) never meet one. It is recorded after
 The reviewed rollback is `../rollback/20261119025106_package_invoices.down.sql`
 (only with the owner's decision; prefer a forward fix). Revert and deploy the
 website release first: the rollback removes the commands that release calls. It
-refuses once a package invoice request, a package invoice or a bank transfer for
-a package exists; otherwise it puts back the five earlier bodies byte for byte
-and the earlier limits, and drops the added functions and the table.
+refuses once a package invoice request, a package invoice, a bank transfer for a
+package or a payment line above R10,000 exists; otherwise it puts back the nine
+earlier bodies byte for byte and the earlier limits, and drops the added
+functions and the table.
 
 `node --import tsx scripts/test-foundation-package-invoices.mjs` (part of
-`pnpm db:foundation:lifecycle-test`, 21 checks) proves on the throwaway
+`pnpm db:foundation:lifecycle-test`, 30 checks) proves on the throwaway
 database: the preflight before and after, read only; drifted bodies and a
 premature rollback refused, changing nothing; apply, rollback and re-apply
 return the same fingerprints; the grants; with packages off sale nothing can be
@@ -217,8 +233,15 @@ once the preparer lost the role); Pay now within the limit closes an unsent
 online checkout, pays the invoice with one line and opens a 5-slot package; a
 declined request issues nothing; issuing rechecks the switch, the customer's ID
 review and the staff member's identity; a bank transfer is refused while
-packages are off sale; the record's guard; Individual invoices unchanged; the
-privacy export; and the rollback refused once a request exists.
+packages are off sale; the record's guard; a R10,200 bank transfer and the
+approved R60,000 invoice paid in full (one line each); confirming and approving
+need the recorder's and the preparer's own current ID review; two approvers, and
+an approval and a decline, at the same moment (one wins, at most one invoice);
+the daily request limit; the online package checkout refused while a package
+invoice is unpaid; closure withdraws open requests and erasure unlinks every
+request, invoice and payment; retention of declined and withdrawn requests;
+Individual invoices unchanged; the privacy export; and the rollback refused once
+a request exists.
 
 ## Refund follow-ups and Ozow's refund window, 18 November 2026
 

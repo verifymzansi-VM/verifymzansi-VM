@@ -32,6 +32,13 @@ begin
     raise exception 'the staff member who prepared this invoice can no longer issue invoices; decline it'
       using errcode='PT409', detail='invoice_preparer_inactive';
   end if;
+  -- ...and must still have a current accepted ID review of their own and
+  -- never be the customer's identity.
+  if internal.current_verified_identity(r.prepared_by) is null
+      or internal.same_identity(r.prepared_by, r.account_id) then
+    raise exception 'the staff member who prepared this invoice can no longer issue invoices; decline it'
+      using errcode='PT409', detail='invoice_preparer_inactive';
+  end if;
   perform internal.assert_staff_not_referrer(r.prepared_by, r.account_id);
   plan := internal.package_invoice_issue_check(r);
   made := internal.issue_package_customer_invoice(r, plan, r.prepared_by, r.due_days, r.staff_reason);

@@ -88,6 +88,11 @@ begin
   update private.partner_commissions c set referred_account_id = null where c.referred_account_id = p_user;
   update private.individual_slot_limits l set account_id = null where l.account_id = p_user;
   update private.slot_packages k set owner_id = null where k.owner_id = p_user;
+  -- Package invoice requests (20261119025106): an open one is withdrawn (it
+  -- leaves the staff queue), then every one is kept unlinked like its invoice.
+  update private.package_invoice_requests r set status = 'withdrawn', closed_at = statement_timestamp()
+    where r.account_id = p_user and r.status in ('requested', 'awaiting_approval');
+  update private.package_invoice_requests r set account_id = null where r.account_id = p_user;
 
   perform internal.remove_account_sign_in(p_user);
   perform pg_catalog.set_config('vm.erasure', '', true);

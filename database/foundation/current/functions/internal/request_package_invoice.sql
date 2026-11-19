@@ -74,6 +74,15 @@ begin
       perform internal.price_draft_actor();
       return internal.package_invoice_request_dto(waiting, null) || jsonb_build_object('repeated', true);
     end if;
+  end if;
+  -- At most 10 new requests per account in 24 hours (each other order is a
+  -- new request), so the staff queue cannot be flooded.
+  if (select count(*) from private.package_invoice_requests r
+      where r.account_id = actor and r.requested_at > statement_timestamp() - interval '24 hours') >= 10 then
+    raise exception 'too many invoice requests today; try again tomorrow or contact us'
+      using errcode='PT429', detail='package_invoice_requests_limit';
+  end if;
+  if waiting.id is not null then
     update private.package_invoice_requests set status = 'withdrawn', closed_at = statement_timestamp()
       where id = waiting.id;
   end if;

@@ -50,11 +50,11 @@
     },
     "columns": {
       "items": 1320,
-      "fingerprint": "31e1e08e970370bfb950468490c11c0e"
+      "fingerprint": "98f485f41526e68aae1b2a470af875ac"
     },
     "constraints": {
       "items": 1176,
-      "fingerprint": "a835f8596cb1e0a68866595129df262e"
+      "fingerprint": "85696471247cd4a581018b7b32fd347b"
     },
     "event_triggers": {
       "items": 1,
@@ -62,7 +62,7 @@
     },
     "function_bodies": {
       "items": 1012,
-      "fingerprint": "6daa108f07b9e88f7efc7e9eb859a4ef"
+      "fingerprint": "e3ea9040f409abca9a8028dc567c5f93"
     },
     "function_grants": {
       "items": 737,
