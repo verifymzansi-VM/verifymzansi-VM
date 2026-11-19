@@ -1,4 +1,4 @@
-import { LAUNCH_CONFIG_BUILD } from "@/lib/launch-config";
+import { LAUNCH_CONFIG_BUILD, LAUNCH_VALUES } from "@/lib/launch-config";
 
 /**
  * The "Launching soon" pop-up shown when a visitor opens the site before the
@@ -6,7 +6,9 @@ import { LAUNCH_CONFIG_BUILD } from "@/lib/launch-config";
  * are viewing an early preview. On launch day set this to false (or remove the
  * pop-up) and redeploy.
  *
- * True in production; false only in the launch-configuration browser-test
- * build, which shows the site as on launch day (src/lib/launch-config.ts).
+ * True in production; in the launch-configuration browser-test build, which
+ * shows the site as on launch day, it takes its launch value (false;
+ * LAUNCH_VALUES in src/lib/launch-config.ts).
  */
-export const PRELAUNCH_BANNER_ENABLED: boolean = !LAUNCH_CONFIG_BUILD;
+export const PRELAUNCH_BANNER_ENABLED: boolean =
+  !LAUNCH_CONFIG_BUILD || LAUNCH_VALUES.PRELAUNCH_BANNER_ENABLED;

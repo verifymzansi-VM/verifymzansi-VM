@@ -9,18 +9,19 @@
  *
  * Every switch is off (false) in production. LAUNCH_CONFIG_BUILD is true only
  * in the launch-configuration browser-test build of the local test copy, where
- * every switch is on as it will be on launch day (src/lib/launch-config.ts);
- * a production build cannot be made with it.
+ * each switch takes its launch-day value from LAUNCH_VALUES
+ * (src/lib/launch-config.ts); a production build cannot be made with it.
  */
 
-import { LAUNCH_CONFIG_BUILD } from "@/lib/launch-config";
+import { LAUNCH_CONFIG_BUILD, LAUNCH_VALUES } from "@/lib/launch-config";
 
 /**
  * View counts, the like button and like totals. The live backend does not
  * store views or likes yet, so every post showed "0 views" and a like undid
  * itself. To be rebuilt after launch on the new backend.
  */
-export const SHOW_ENGAGEMENT_TOTALS: boolean = LAUNCH_CONFIG_BUILD;
+export const SHOW_ENGAGEMENT_TOTALS: boolean =
+  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_ENGAGEMENT_TOTALS;
 
 /**
  * The member "Performance" page (/dashboard/metrics) and the links to it. The
@@ -28,14 +29,15 @@ export const SHOW_ENGAGEMENT_TOTALS: boolean = LAUNCH_CONFIG_BUILD;
  * empty. While hidden, its address leads to the dashboard. To be rebuilt
  * after launch (OD-07).
  */
-export const SHOW_OWNER_METRICS: boolean = LAUNCH_CONFIG_BUILD;
+export const SHOW_OWNER_METRICS: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_OWNER_METRICS;
 
 /**
  * The "Detect province and city" button in the verification location step.
  * The live backend has no location suggestion, so the button only failed;
  * members pick their province and city from the list (OD-07).
  */
-export const SHOW_LOCATION_DETECTION: boolean = LAUNCH_CONFIG_BUILD;
+export const SHOW_LOCATION_DETECTION: boolean =
+  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_LOCATION_DETECTION;
 
 /**
  * Staff "Operations health" page (/admin/operations), its menu entry, the
@@ -44,7 +46,8 @@ export const SHOW_LOCATION_DETECTION: boolean = LAUNCH_CONFIG_BUILD;
  * the live backend does not have. While hidden, the page's address leads to
  * the staff home and the route answers 404.
  */
-export const SHOW_STAFF_OPERATIONS: boolean = LAUNCH_CONFIG_BUILD;
+export const SHOW_STAFF_OPERATIONS: boolean =
+  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_STAFF_OPERATIONS;
 
 /**
  * The "Performance" tab of an organisation's dashboard, with its two "CSV"
@@ -52,7 +55,8 @@ export const SHOW_STAFF_OPERATIONS: boolean = LAUNCH_CONFIG_BUILD;
  * The live backend has no programme report yet, so the tab held only the
  * links, and the downloads failed. While hidden, the route answers 404.
  */
-export const SHOW_ORGANISATION_REPORT: boolean = LAUNCH_CONFIG_BUILD;
+export const SHOW_ORGANISATION_REPORT: boolean =
+  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_ORGANISATION_REPORT;
 
 /**
  * "Delete account" on the profile's Account tab, its confirmation dialog, and
@@ -60,7 +64,8 @@ export const SHOW_ORGANISATION_REPORT: boolean = LAUNCH_CONFIG_BUILD;
  * on the live backend yet (SEC-02). While hidden, the tab says to send a data
  * request instead and the route answers 404.
  */
-export const SHOW_ACCOUNT_DELETION: boolean = LAUNCH_CONFIG_BUILD;
+export const SHOW_ACCOUNT_DELETION: boolean =
+  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_ACCOUNT_DELETION;
 
 /**
  * Paid add-ons (Urgent, Boost, Featured) where they are offered or listed as
@@ -70,7 +75,7 @@ export const SHOW_ACCOUNT_DELETION: boolean = LAUNCH_CONFIG_BUILD;
  * (ADDON_SALES_ENABLED) and paid add-ons do not deliver yet (roadmap M1.10),
  * so the pages promised something nobody could buy.
  */
-export const SHOW_PAID_ADDONS: boolean = LAUNCH_CONFIG_BUILD;
+export const SHOW_PAID_ADDONS: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_PAID_ADDONS;
 
 /**
  * The Business Sponsor offer: the sponsor package, founding pilots, sample
@@ -82,10 +87,10 @@ export const SHOW_PAID_ADDONS: boolean = LAUNCH_CONFIG_BUILD;
  * decision, and the Terms (posting-v5) sell no sponsor package. Existing
  * sponsors and the businesses they support are still listed.
  */
-export const SHOW_SPONSOR_OFFER: boolean = LAUNCH_CONFIG_BUILD;
+export const SHOW_SPONSOR_OFFER: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_SPONSOR_OFFER;
 
 /**
  * "You + 1 person (you + 4 from 50 slots)" on the (hidden) Multi-listing page.
  * Package teams are not built yet (roadmap P4c), so a package has one person.
  */
-export const SHOW_PACKAGE_TEAMS: boolean = LAUNCH_CONFIG_BUILD;
+export const SHOW_PACKAGE_TEAMS: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_PACKAGE_TEAMS;
