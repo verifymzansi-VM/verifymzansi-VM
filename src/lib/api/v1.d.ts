@@ -791,8 +791,15 @@ export interface operations {
         };
         content?: never;
       };
-      /** @description Detection cap reached; manual submission remains available */
+      /** @description Too many detection attempts; manual submission remains available. The shared per-client limit is the bulk control; the per-account cap of 10 is counted per Worker instance only */
       429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Rate limit protection, the session check or the account check is unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };

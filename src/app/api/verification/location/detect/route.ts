@@ -22,7 +22,10 @@ import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 const log = createLogger("LocationSuggestion");
 
 /** Detection attempts per account per window, kept apart from manual saving
- * so using them up never blocks picking the province and city by hand. */
+ * so using them up never blocks picking the province and city by hand. This
+ * counter is in memory, so it holds per Worker instance only; the bulk control
+ * is the shared per-client limit (action "verification:location-detect" in
+ * workers/rate-limiter.ts) that handleFoundationOwnerRoute checks first. */
 const DETECTION_CAP = 10;
 
 type Suggestion = { detected: boolean; province: string | null; city: string | null };
@@ -50,9 +53,10 @@ function suggestLocality(geo: IpGeoSignal | null): Suggestion {
   return { detected: true, province, city };
 }
 
-async function detectedLocality(): Promise<Suggestion> {
+function detectedLocality(): Suggestion {
   try {
-    return suggestLocality(await resolveIpGeolocation());
+    // Only this request's Cloudflare data, never wrangler's platform proxy.
+    return suggestLocality(resolveIpGeolocation());
   } catch {
     // No location data (not on Cloudflare, or it could not be read).
     return NOTHING_DETECTED;

@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
+import type * as RequestApi from "@/lib/foundation/request-api";
 
 const { rpc, authenticateCaller, sharedLimit, localLimit, adminClient, serverClient } = vi.hoisted(
   () => ({
@@ -14,15 +15,18 @@ const { rpc, authenticateCaller, sharedLimit, localLimit, adminClient, serverCli
   })
 );
 vi.mock("server-only", () => ({}));
+// The real route context (cookies and private cache headers); only the
+// GoTrue session check behind it is replaced.
 vi.mock("@/lib/foundation/runtime-connection", () => ({
-  readFoundationRuntimeConnection: vi.fn(() => ({})),
-}));
-vi.mock("@/lib/foundation/request-route", () => ({
-  createFoundationRouteContext: vi.fn(() => ({
-    authenticateCaller,
-    authenticate: vi.fn(),
-    respond: async (response: Response) => response,
+  readFoundationRuntimeConnection: vi.fn(() => ({
+    url: "http://127.0.0.1:55441/",
+    expectedProjectRef: "local-foundation",
+    publishableKey: "sb_publishable_test",
   })),
+}));
+vi.mock("@/lib/foundation/request-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof RequestApi>()),
+  createFoundationRequestCaller: authenticateCaller,
 }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: sharedLimit,
@@ -36,12 +40,16 @@ vi.mock("@/lib/security/security-events", () => ({
 // The retired backend must not be reached.
 vi.mock("@/lib/supabase/server", () => ({ createClient: serverClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: adminClient }));
-// Outside the Worker there is no Cloudflare context to fall back to.
-vi.mock("@opennextjs/cloudflare", () => ({
-  getCloudflareContext: vi.fn(async () => {
-    throw new Error("not on Cloudflare");
-  }),
+// Outside the Worker, getCloudflareContext() asks wrangler's platform proxy,
+// which answers with the server machine's own location. The route must never
+// use it, so this mock offers a South African place and every test checks it
+// was not asked.
+const { platformProxy } = vi.hoisted(() => ({
+  platformProxy: vi.fn(async () => ({
+    cf: { country: "ZA", regionCode: "KZN", region: "KwaZulu-Natal", city: "Durban" },
+  })),
 }));
+vi.mock("@opennextjs/cloudflare", () => ({ getCloudflareContext: platformProxy }));
 
 import { POST } from "./route";
 
@@ -95,7 +103,19 @@ beforeEach(() => {
   });
   rpc.mockResolvedValue({ data: accountContext, error: null });
 });
-afterEach(() => withCf(undefined));
+afterEach(() => {
+  withCf(undefined);
+  expect(platformProxy).not.toHaveBeenCalled();
+});
+
+/** The private, uncached answer every reply of this route carries. */
+function expectNoStore(response: Response) {
+  expect(response.headers.get("Cache-Control")).toBe(
+    "private, no-cache, no-store, must-revalidate, max-age=0"
+  );
+  expect(response.headers.get("CDN-Cache-Control")).toBe("no-store");
+  expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
+}
 
 describe("location detection from the Cloudflare request data", () => {
   it.each([
@@ -116,6 +136,7 @@ describe("location detection from the Cloudflare request data", () => {
     const response = await POST(request());
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ detected: true, province, city });
+    expectNoStore(response);
     expect(localLimit).toHaveBeenCalledWith(ACCOUNT, "verification:location-detect", 10);
     expect(sharedLimit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "verification:location-detect", degradedMode: "block" })
@@ -139,6 +160,7 @@ describe("location detection from the Cloudflare request data", () => {
     const response = await POST(request());
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ detected: false, province: null, city: null });
+    expectNoStore(response);
   });
 
   it("answers that it detected nothing when the request data cannot be read", async () => {
@@ -170,6 +192,7 @@ describe("location detection protections", () => {
     const response = await POST(request());
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "Sign in to manage verification" });
+    expectNoStore(response);
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -187,7 +210,23 @@ describe("location detection protections", () => {
     expect(response.status).toBe(429);
     expect(response.headers.get("Retry-After")).toBe("30");
     expect(await response.json()).toMatchObject({ reason: "location_detection_limited" });
+    expectNoStore(response);
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("answers 503 when the session check is unavailable", async () => {
+    authenticateCaller.mockRejectedValue(new FoundationSessionError(503));
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: "Location detection is unavailable" });
+    expectNoStore(response);
+  });
+
+  it("answers 503 when the shared limiter is unavailable", async () => {
+    sharedLimit.mockResolvedValue({ limited: false, degraded: true });
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(authenticateCaller).not.toHaveBeenCalled();
   });
 
   it("stops at the shared per-client limit", async () => {
