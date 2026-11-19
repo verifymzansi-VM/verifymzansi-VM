@@ -67,7 +67,7 @@ type TabValue = "profile" | "security" | "account";
 /** Sign-in that brings the member back to the Account tab. */
 const DELETE_SIGN_IN_PATH = `/login?returnUrl=${encodeURIComponent("/dashboard/profile#account")}`;
 
-/** How long the "Account deleted" toast stays readable before the full reload home. */
+/** How long the "Account closed" toast stays readable before the full reload home. */
 const ACCOUNT_DELETED_REDIRECT_DELAY_MS = 1500;
 
 function getIdentityProviders(user: { app_metadata?: unknown; identities?: unknown }): string[] {
@@ -607,6 +607,12 @@ export default function ProfilePage() {
         const message = typeof data.error === "string" ? data.error : "Please try again.";
         if (data.code === "outcome_unknown") {
           toast({ title: "Account status unknown", description: message, variant: "destructive" });
+        } else if (data.code === "session_required") {
+          // The database refused the session itself: it ended (another tab may
+          // have just closed the account) or the email address is not
+          // confirmed. The answer says both; this page signs nothing out.
+          handleDeleteDialogOpenChange(false);
+          toast({ title: "Sign in again", description: message, variant: "destructive" });
         } else if (status === 401 && data.code !== "reauthentication_required") {
           // The session is gone, for example because an earlier attempt closed
           // the account; the answer says so. Sign-in decides either way.
@@ -625,7 +631,7 @@ export default function ProfilePage() {
       setClosedAccount({ eraseAfter: planned });
       handleDeleteDialogOpenChange(false);
       toast({
-        title: "Account deleted",
+        title: "Account closed",
         description: planned
           ? `Your account is closed and you are signed out. Erasure is planned for ${formatSaLongDate(planned)}; it waits while a payment, refund, invoice, report or legal hold is still open.`
           : "Your account is closed and you are signed out.",

@@ -151,8 +151,10 @@ describe("closeMyAccount", () => {
       await refusalFor({ code: "42501", message: "live confirmed member session required" })
     ).toEqual({
       status: 401,
-      error: "Sign in again to delete your account.",
+      error:
+        "Your session has ended or your email address is not confirmed. If you just deleted your account, it is closed; otherwise confirm your email address, sign in again and try again.",
       reason: "session_required",
+      code: "session_required",
     });
   });
 

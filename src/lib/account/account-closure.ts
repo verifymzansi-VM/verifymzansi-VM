@@ -17,8 +17,19 @@ export function confirmsAccountClosure(value: string): boolean {
 export const ACCOUNT_CLOSURE_UNKNOWN_OUTCOME =
   "We couldn't confirm whether your account was closed. Try signing in: if you can't, it was closed. Contact support if unsure.";
 
+/** What the route says when the session is gone: also the answer to a retry
+ * after a closure, whose sessions have ended. */
+export const ACCOUNT_CLOSURE_SIGNED_OUT =
+  "You are signed out. If you just deleted your account, it is closed; otherwise sign in again to delete it.";
+
+/** What the member is told when the database refuses the session itself (it
+ * ended, for example because another tab just closed the account, or the
+ * email address is not confirmed). */
+export const ACCOUNT_CLOSURE_SESSION_REFUSED =
+  "Your session has ended or your email address is not confirmed. If you just deleted your account, it is closed; otherwise confirm your email address, sign in again and try again.";
+
 /** How recent the member's password or Google sign-in must be (the route's
- * rule; internal.account_closing_actor also counts other sign-in methods). */
+ * rule, which internal.account_closing_actor enforces as well). */
 export const ACCOUNT_CLOSURE_SIGN_IN_MINUTES = 15;
 
 const DAY_MS = 24 * 60 * 60 * 1000;

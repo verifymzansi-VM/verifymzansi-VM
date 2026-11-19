@@ -6,6 +6,7 @@ import type { FoundationRefusal } from "./owner-route";
 import { hasDatabaseReason } from "./error-reasons";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import {
+  ACCOUNT_CLOSURE_SESSION_REFUSED,
   ACCOUNT_CLOSURE_SIGN_IN_MINUTES,
   ACCOUNT_CLOSURE_WORD,
   ACCOUNT_CLOSURE_UNKNOWN_OUTCOME,
@@ -71,11 +72,14 @@ function refusalOf(error: { code?: string | null; details?: string | null }) {
       reason: "staff_account",
     });
   // No live session, or the address is not confirmed (internal.account_closing_actor).
+  // A second request sent before an earlier one closed the account (two tabs)
+  // lands here too: the closure ended its session after it was verified.
   if (error.code === "42501")
     return new AccountClosureRefusal({
       status: 401,
-      error: "Sign in again to delete your account.",
+      error: ACCOUNT_CLOSURE_SESSION_REFUSED,
       reason: "session_required",
+      code: "session_required",
     });
   if (error.code === "PT404" && hasDatabaseReason(error, "account_unavailable"))
     return new AccountClosureRefusal({
@@ -101,9 +105,10 @@ type Caller = { accountId: string; signedInAt?: number | null };
 /**
  * Closes the caller's own account (api.close_my_account). Before the call:
  * the typed word, a per-account limit, and a password or Google sign-in in
- * the last 15 minutes. The database's own check also accepts a session opened
- * by an emailed link (reset, magic link, invite) or an authenticator step, so
- * this route refuses those first. The database decides the rest: the
+ * the last 15 minutes. The database enforces the same sign-in rule
+ * (internal.account_closing_actor, since privacy tightening 2, applied in
+ * production on 19 Nov 2026); checking it here first saves a database call
+ * and words the refusal the same way. The database decides the rest: the
  * session's own account, never a staff account; the posts leave the site,
  * sign-in is blocked, every session ends, and the account is erased 30 days
  * later. Exactly one call, never retried.

@@ -1312,7 +1312,7 @@ test.describe("account recovery and self-service", () => {
           "and q.due_by = e.erase_after + interval '7 days';"
       )
     ).toBe("1");
-    await expect(toast(page, "Account deleted")).toBeVisible();
+    await expect(toast(page, "Account closed")).toBeVisible();
     await page.waitForURL(`${APP_ORIGIN}/`);
     expect(await canSignIn(leaver.email, leaver.password)).toBe(false);
     await page.goto("/dashboard");

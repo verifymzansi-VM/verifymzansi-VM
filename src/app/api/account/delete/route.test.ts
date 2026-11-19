@@ -158,9 +158,43 @@ it("closes the account of a fresh password sign-in and reports the planned dates
   expect(createClient).not.toHaveBeenCalled();
 });
 
+it("expires the session cookies once the account is closed, and only then", async () => {
+  const withSession = {
+    cookie: `vm_csrf=${csrf}; sb-local-auth-token.0=a; sb-local-auth-token.1=b; theme=dark`,
+  };
+  rpc.mockResolvedValueOnce({ data: closedReply, error: null });
+  const closed = await POST(request(confirm, withSession));
+  expect(closed.status).toBe(200);
+  for (const name of ["sb-local-auth-token.0", "sb-local-auth-token.1"])
+    expect(closed.cookies.get(name)).toMatchObject({ value: "", maxAge: 0, path: "/" });
+  expect(closed.cookies.get("theme")).toBeUndefined();
+  expect(closed.cookies.get("vm_csrf")).toBeUndefined();
+
+  rpc.mockResolvedValueOnce({ data: null, error: { code: "55000", message: "not closed" } });
+  const refused = await POST(request(confirm, withSession));
+  expect(refused.status).toBe(503);
+  expect(refused.cookies.get("sb-local-auth-token.0")).toBeUndefined();
+});
+
+it("answers a second tab's request after the first closed the account as signed out", async () => {
+  // Both passed the session check; the first closure then ended every session,
+  // so the database refuses the second with no reason.
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: { code: "42501", message: "live confirmed member session required", details: null },
+  });
+  const response = await POST(request(confirm));
+  expect(response.status).toBe(401);
+  const body = await response.json();
+  expect(body).toMatchObject({ reason: "session_required", code: "session_required" });
+  expect(body.error).toContain("If you just deleted your account, it is closed");
+  expect(body.error).toContain("email address is not confirmed");
+});
+
 it("asks for a fresh sign-in when the database refuses the session's sign-in", async () => {
   // A Google sign-in the route accepts, refused by the database's own check
-  // (internal.account_closing_actor, with or without the narrower rule).
+  // (internal.account_closing_actor, which counts only a password or Google
+  // sign-in from the last 15 minutes).
   amr = [{ method: "oauth", timestamp: now() - 60 }];
   rpc.mockResolvedValueOnce({
     data: null,

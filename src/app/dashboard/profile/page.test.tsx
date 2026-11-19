@@ -442,6 +442,39 @@ describe("ProfilePage", () => {
     window.location.hash = "";
   });
 
+  it("explains a refused session (ended, or the address unconfirmed) without signing out", async () => {
+    const message =
+      "Your session has ended or your email address is not confirmed. If you just deleted your account, it is closed; otherwise confirm your email address, sign in again and try again.";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({
+          reason: "session_required",
+          code: "session_required",
+          error: message,
+        }),
+      })
+    );
+    window.location.hash = "#account";
+    try {
+      await confirmDeletion();
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({ title: "Sign in again", description: message })
+        )
+      );
+      expect(mockToast).not.toHaveBeenCalledWith(
+        expect.objectContaining({ title: "You are signed out" })
+      );
+      expect(mockSignOut).not.toHaveBeenCalled();
+      expect(screen.queryByRole("dialog", { name: "Confirm account deletion" })).toBeNull();
+    } finally {
+      window.location.hash = "";
+    }
+  });
+
   async function confirmDeletion() {
     render(<ProfilePage />);
     await screen.findByRole("heading", { name: "My profile" });
@@ -755,7 +788,7 @@ describe("ProfilePage", () => {
 
       await waitFor(() => {
         expect(mockToast).toHaveBeenCalledWith({
-          title: "Account deleted",
+          title: "Account closed",
           description:
             "Your account is closed and you are signed out. Erasure is planned for 17 December 2026; it waits while a payment, refund, invoice, report or legal hold is still open.",
           variant: "success",
