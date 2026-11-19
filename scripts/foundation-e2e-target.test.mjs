@@ -24,6 +24,7 @@ import {
   LOCAL_LIMITER_URL,
   LOCAL_MAIL_RELAY_KEY,
   LOCAL_MAIL_RELAY_URL,
+  LAUNCH_CONFIG_SETTINGS,
   assertBuildIsCopy,
   envFileKeyNames,
   foundationWebsiteEnv,
@@ -217,6 +218,42 @@ test("the website runs in foundation mode against the copy only, with the existi
       () => foundationWebsiteEnv({ ...status, apiUrl: "https://x.supabase.co" }),
       refused
     );
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+});
+
+test("the launch configuration is opt-in, explicit and changes the build fingerprint", () => {
+  const status = {
+    apiUrl: API,
+    publishableKey: "sb_publishable_local_fixture",
+    secretKey: "sb_secret_local_fixture_value_000000",
+  };
+  const saved = { ...process.env };
+  try {
+    // Inherited switches never reach the copy: only the option turns it on.
+    process.env.VERIFYMZANSI_LAUNCH_CONFIG = "1";
+    process.env.ADDON_SALES_ENABLED = "true";
+    const root = mkdtempSync(path.join(tmpdir(), "vm-noenv-"));
+    const ordinary = foundationWebsiteEnv(status, { root });
+    assert.equal(ordinary.VERIFYMZANSI_LAUNCH_CONFIG, undefined);
+    assert.equal(ordinary.ADDON_SALES_ENABLED, "false");
+    assert.equal(ordinary.FOUNDATION_REGISTRATION_INVITE_ONLY, "true");
+    const launch = foundationWebsiteEnv(status, { root, launchConfig: true });
+    for (const [key, value] of Object.entries(LAUNCH_CONFIG_SETTINGS))
+      assert.equal(launch[key], value, key);
+    assert.equal(launch.VERIFYMZANSI_LAUNCH_CONFIG, "1");
+    // Still the local copy, and a launch build is never served as the
+    // ordinary copy (or the other way round).
+    assert.equal(launch.NEXT_PUBLIC_SUPABASE_URL, API);
+    const project = mkdtempSync(path.join(tmpdir(), "vm-stamp-"));
+    mkdirSync(path.join(project, ".next", "static"), { recursive: true });
+    writeBuildStamp(launch, project);
+    assert.doesNotThrow(() => assertBuildIsCopy(launch, project));
+    assert.throws(() => assertBuildIsCopy(ordinary, project), /other settings/);
+    writeBuildStamp(ordinary, project);
+    assert.throws(() => assertBuildIsCopy(launch, project), /other settings/);
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
     Object.assign(process.env, saved);

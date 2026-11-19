@@ -17,6 +17,8 @@ function buildConfig(env) {
       if (name === "./package.json") return { version: "synthetic-build" };
       if (name === "./scripts/lib/next-typecheck-skip.cjs")
         return requireReal("./lib/next-typecheck-skip.cjs");
+      if (name === "./scripts/lib/launch-config-build.cjs")
+        return requireReal("./lib/launch-config-build.cjs");
       assert.equal(name, "@sentry/nextjs/config");
       return { withSentryConfig: (config) => config };
     },
