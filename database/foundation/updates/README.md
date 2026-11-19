@@ -82,13 +82,13 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## House slots for administrators, 19 November 2026
 
-`20261119082834_house_slots.sql` is pending (see the applied register). **Order:
-apply-first** (the default): nothing in the website uses it. It adds no API
-command, argument, grant or result field; the only existing functions it changes
-are the privacy export and the lifecycle job. It refuses (55000) unless the
-three functions it adds are absent (or this update's), the two it replaces have
-their reviewed bodies (or this update's) and its table is absent or has the
-update's shape.
+`20261119082834_house_slots.sql` was applied on 19 November 2026 at 14:04 UTC
+(see the applied register). **Order: apply-first** (the default): nothing in the
+website uses it. It adds no API command, argument, grant or result field; the
+only existing functions it changes are the privacy export and the lifecycle job.
+It refuses (55000) unless the three functions it adds are absent (or this
+update's), the two it replaces have their reviewed bodies (or this update's) and
+its table is absent or has the update's shape.
 
 - **What a house slot is.** A `staff_grant` slot with exactly the shape of a
   paid Individual slot: any posting area, 1 live post, 4 posts going live per 30
@@ -5435,6 +5435,9 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   checks with nothing to review: 0"; production fingerprint after it (captured
   about 10:50 UTC) matched the full replay at 772f770e (except the known schema
   grant difference)
-- `20261119082834_house_slots.sql`: pending
+- `20261119082834_house_slots.sql`: applied 2026-11-19 14:04 UTC;
+  owner-approved, apply-first (pull request #286, merged as 9742737f);
+  production fingerprint after it matched the full replay (except the known
+  schema grant difference)
 
 <!-- applied-register:end -->
