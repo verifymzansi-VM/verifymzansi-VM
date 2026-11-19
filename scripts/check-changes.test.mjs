@@ -702,13 +702,14 @@ test("the check commands are the scripts main's workflows run, and the scripts t
     "scripts/prebuild.mjs",
     "scripts/probe-native-one.mjs",
     "scripts/probe-native-two.mjs",
+    // A test runner a command runs is a check script: it decides which suites run.
+    "scripts/test-native.mjs",
   ]);
   // Test files are tests (their imports are the code under test), app code is
   // not followed, and scripts no workflow reaches are not check scripts.
   for (const file of [
     "scripts/a.test.mjs",
     "scripts/lib/under-test.mjs",
-    "scripts/test-native.mjs",
     "src/lib/app.ts",
     "scripts/unrelated.mjs",
     "scripts/lib/unrelated-lib.mjs",
@@ -772,6 +773,43 @@ test("main's workflows make the foundation scripts and their libraries check scr
   }
   assert.ok(!real.files.has("scripts/check-changes.test.mjs"));
   assert.ok(![...real.files].some((file) => file.startsWith("src/")));
+
+  // Dropping a whole native suite from the runner is a check change, not a
+  // clean edit of a test file.
+  assert.ok(real.files.has("scripts/test-foundation-native.mjs"));
+  const dropped = analyseChanges(
+    [
+      {
+        filename: "scripts/test-foundation-native.mjs",
+        status: "modified",
+        patch: [
+          "@@ -7703,7 +7703,6 @@",
+          "     });",
+          '     nativeStage = "data retention";',
+          "-    await testRetention({",
+          "+    void ({",
+          "       createUser: createTrackedUser,",
+          "       rpc,",
+          "       sql,",
+        ].join("\n"),
+      },
+    ],
+    { checks: real, suites: readBaseSuites(repoRoot) }
+  );
+  assert.equal(verdictLabel(dropped), LABEL_CHANGED);
+  assert.deepEqual(dropped.configFiles, ["scripts/test-foundation-native.mjs"]);
+  assert.deepEqual(dropped.configGroups, ["the scripts the CI commands run"]);
+  const removedCall = analyseChanges(
+    [
+      modified(
+        "scripts/test-foundation-native.mjs",
+        '     nativeStage = "data retention";',
+        "-    await testRetention(context);"
+      ),
+    ],
+    { checks: real }
+  );
+  assert.equal(verdictLabel(removedCall), LABEL_CHANGED);
   // A file outside the checkout is never read.
   assert.equal(
     buildCheckCommands({
@@ -1006,6 +1044,13 @@ test("a test whose title is on the next line is keyed by that title", () => {
 
 // --- The GitHub side, against a fake API. ---
 
+const LABEL_STYLES = {
+  [LABEL_CHANGED]: {
+    color: "d93f0b",
+    description: "This PR changes tests or checks (see the bot comment)",
+  },
+  [LABEL_CLEAN]: { color: "0e8a16", description: "This PR changes no tests or checks" },
+};
 const HEAD_SHA = "a".repeat(40);
 const BASE_SHA = "b".repeat(40);
 const MERGE_BASE_SHA = "c".repeat(40);
@@ -1067,8 +1112,19 @@ function fakeGitHub({
         content: Buffer.from(text).toString("base64"),
       });
     }
-    if (method === "GET" && route.startsWith("/labels/")) return reply(labelExists ? 200 : 404, {});
+    if (method === "GET" && route.startsWith("/labels/")) {
+      if (!labelExists) return reply(404, {});
+      const name = decodeURIComponent(route.slice("/labels/".length));
+      // "plain": made by adding it to the pull request, with GitHub's defaults.
+      return reply(
+        200,
+        labelExists === "plain"
+          ? { name, color: "ededed", description: null }
+          : { name, ...LABEL_STYLES[name] }
+      );
+    }
     if (method === "POST" && route === "/labels") return reply(201, {});
+    if (method === "PATCH" && route.startsWith("/labels/")) return reply(200, {});
     if (method === "POST" && route === "/issues/7/labels") return reply(200, []);
     if (method === "DELETE" && route.startsWith("/issues/7/labels/")) return reply(404, {});
     if (method === "GET" && route === "/issues/7/comments") return reply(200, comments);
@@ -1220,6 +1276,20 @@ test("the could-not-check mode labels checks-changed and rewrites the comment", 
     "PATCH /issues/comments/3",
   ]);
   assert.ok(github.commentBody().includes(COULD_NOT_CHECK));
+});
+
+test("a label the workflow's first step created plain gets its colour and description", async () => {
+  const github = fakeGitHub({ files: [], labelExists: "plain" });
+  await markCouldNotCheck({ env, fetchImpl: github.fetchImpl });
+  const patch = github.calls.find(
+    (call) => call.method === "PATCH" && call.route.startsWith("/labels/")
+  );
+  assert.equal(patch.route, "/labels/checks-changed");
+  assert.deepEqual(patch.body, LABEL_STYLES[LABEL_CHANGED]);
+  assert.deepEqual(github.writes().slice(0, 2), [
+    "PATCH /labels/checks-changed",
+    "POST /issues/7/labels checks-changed",
+  ]);
 });
 
 test("run reads every page of files and flags a list GitHub cut short", async () => {

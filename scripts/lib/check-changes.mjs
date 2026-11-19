@@ -28,7 +28,11 @@
 //
 // Limits: the detection reads lines, not meaning. Deleting the assertions
 // inside a test that stays, or making a test pass without testing anything,
-// is not detected. Whatever cannot be read (binary files, diffs GitHub leaves
+// is not detected; nor are marks reached through Reflect.get or computed keys,
+// helpers in non-test code that skip tests through a variable, tables passed
+// to .each as variables, or scripts reached other than by a command line or a
+// relative import under scripts/ (docs/branch-protection.md lists these).
+// Whatever cannot be read (binary files, diffs GitHub leaves
 // out, lines longer than MAX_LINE_LENGTH) counts as a change to the checks.
 
 import path from "node:path";
@@ -44,7 +48,7 @@ export const MAX_LINE_LENGTH = 2000;
 // Each list in the comment shows at most this many entries, then "and N more".
 export const LIST_CAP = 20;
 // GitHub refuses comments over 65,536 characters; stay well under.
-export const MAX_COMMENT_LENGTH = 60000;
+const MAX_COMMENT_LENGTH = 60000;
 
 const CODE_FILE = /\.(?:[cm]?[jt]sx?)$/;
 
@@ -158,8 +162,14 @@ function compileAll(globs) {
 // The value of `key:` in a config: one string, or an array of strings.
 // Returns undefined when the key is absent and null when it is not a literal
 // (a regular expression or a computed value).
+const CONFIG_KEYS = {
+  testDir: /\btestDir\s*:\s*/,
+  testMatch: /\btestMatch\s*:\s*/,
+  testIgnore: /\btestIgnore\s*:\s*/,
+};
+
 function configStrings(text, key) {
-  const match = new RegExp(`\\b${key}\\s*:\\s*`).exec(text);
+  const match = CONFIG_KEYS[key].exec(text);
   if (!match) return undefined;
   const rest = text.slice(match.index + match[0].length);
   const single = /^(?:"([^"\n]*)"|'([^'\n]*)'|`([^`\n$]*)`)/.exec(rest);
@@ -184,6 +194,8 @@ function playwrightGlob(pattern) {
   return pattern.includes("/") || pattern.startsWith("**") ? pattern : `**/${pattern}`;
 }
 
+const DEFAULT_IMPORT = /\bimport\s+([A-Za-z_$][\w$]*)\s+from\s+["']\.\/([^"'\n]+)["']/g;
+
 function playwrightProject(name, configs, seen = new Set()) {
   const text = configs[name];
   if (typeof text !== "string" || seen.has(name)) return null;
@@ -192,12 +204,12 @@ function playwrightProject(name, configs, seen = new Set()) {
   let inherited = null;
   const spread = /\.\.\.\s*([A-Za-z_$][\w$]*)\s*,/.exec(text);
   if (spread) {
-    const from = new RegExp(
-      `import\\s+${spread[1].replace(/\$/g, "\\$")}\\s+from\\s+["']\\./([^"']+)["']`
-    ).exec(text);
-    if (from) {
+    // The default import with that name, matched by comparing names rather
+    // than building a pattern from the config's text.
+    const source = [...text.matchAll(DEFAULT_IMPORT)].find((match) => match[1] === spread[1])?.[2];
+    if (source) {
       const target = Object.keys(configs).find(
-        (candidate) => candidate === from[1] || candidate.replace(/\.[cm]?[jt]s$/, "") === from[1]
+        (candidate) => candidate === source || candidate.replace(/\.[cm]?[jt]s$/, "") === source
       );
       if (target) inherited = playwrightProject(target, configs, seen);
     }
@@ -541,15 +553,17 @@ function namedFiles(text) {
 
 // A file run as a test by `node --test` and the like: its own imports are the
 // code under test, not part of the check.
-const TEST_ARGUMENT = /(?:^|\/)__tests__\/|\.(?:test|spec)\.[cm]?[jt]sx?$/;
+const TEST_ARGUMENT = /(?:(?:^|\/)__tests__\/|\.(?:test|spec)\.[cm]?[jt]sx?$)/;
 
 /**
  * Works out, from main's workflows ({ "ci.yml": text, ... }) and package.json
  * files, which package.json scripts CI runs (directly or through another
  * script's `pnpm`/`npm run`) and which files those commands execute: the code
  * files their command lines name, the scripts the workflows run with node or
- * tsx, and every file under scripts/ those import. Test files are left out:
- * changes to them are read as test changes. `readFile(path)` returns main's
+ * tsx, and every file under scripts/ those import. Test files (`.test.`,
+ * `.spec.`, `__tests__/`) are left out: changes to them are read as test
+ * changes. Test runners named `scripts/test-*` that a command runs stay in.
+ * `readFile(path)` returns main's
  * copy of a file as text, or undefined.
  */
 export function buildCheckCommands({
@@ -613,7 +627,9 @@ export function buildCheckCommands({
       if (found) reach(found);
     }
   }
-  const files = new Set([...reached].filter((file) => !looksLikeTest(file)));
+  // Runners such as scripts/test-foundation-native.mjs stay in: dropping a
+  // suite from a runner turns that suite off.
+  const files = new Set([...reached].filter((file) => !TEST_ARGUMENT.test(file)));
   return { commands, files };
 }
 

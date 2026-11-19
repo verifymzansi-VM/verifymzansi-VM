@@ -216,9 +216,21 @@ async function ensureLabel(api, name) {
   const found = await api("GET", `/labels/${encodeURIComponent(name)}`, undefined, {
     allow: [404],
   });
-  if (found.status !== 404) return;
-  // 422: another run created it in the meantime.
-  await api("POST", "/labels", { name, ...LABELS[name] }, { allow: [422] });
+  const wanted = LABELS[name];
+  if (found.status === 404) {
+    // 422: another run created it in the meantime.
+    await api("POST", "/labels", { name, ...wanted }, { allow: [422] });
+    return;
+  }
+  // The workflow's first step adds the label before this script runs; on a
+  // first run GitHub creates it plain, so give it its colour and description.
+  const label = found.data ?? {};
+  if (
+    String(label.color ?? "").toLowerCase() !== wanted.color ||
+    (label.description ?? "") !== wanted.description
+  ) {
+    await api("PATCH", `/labels/${encodeURIComponent(name)}`, wanted, { allow: [404] });
+  }
 }
 
 async function setVerdictLabel(api, number, label) {

@@ -267,8 +267,22 @@ treat it as changing checks". Whatever it cannot read (binary files, diffs
 GitHub leaves out, lines over 2,000 characters, a file list GitHub cut short)
 counts as changing checks.
 
-It reads lines, not meaning: deleting the assertions inside a test that stays is
-not detected. Reviewers still read test changes.
+It reads lines, not meaning. These are not detected, so reviewers still read
+test changes:
+
+- deleting the assertions inside a test that stays, or making a test pass
+  without testing anything;
+- a mark reached in a way a single line does not show:
+  `Reflect.get(ctx, "skip")()`, a computed key such as `ctx[name]()` or
+  `ctx["sk" + "ip"]()`, or a mark split across lines;
+- a helper in ordinary (non-test) code that skips or focuses tests, such as a
+  `skipUnless(...)` in `src/` that calls `test.skip` through a variable; marks
+  in such code are found only when the test function is named on the line;
+- a table-driven test whose table is a variable (`it.each(rows)`): the table is
+  read only where it is written inline, so emptying `rows` elsewhere is not
+  seen;
+- script files a CI command reaches other than through its command line or a
+  relative import under `scripts/` (dynamic paths, imports from `src/`).
 
 It runs on `pull_request_target`, so the workflow and its script
 (`scripts/check-changed-checks.mjs`, `scripts/lib/check-changes.mjs`) always
