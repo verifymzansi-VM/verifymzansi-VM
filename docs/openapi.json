@@ -417,10 +417,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "description": "CSRF validation or email confirmation required"
-          },
-          "404": {
-            "description": "Location flow disabled"
+            "description": "CSRF validation failed, or the account has no access"
           },
           "429": {
             "description": "Detection cap reached; manual submission remains available"

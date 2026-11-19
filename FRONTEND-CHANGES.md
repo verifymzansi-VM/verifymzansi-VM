@@ -121,6 +121,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 55. Pricing: 'Editing your post' heading | approved by owner 2026-11-19 (no file rows: the group 55 part of 1 existing row) | Pricing: the box with the approved-edits rule is headed 'Editing your post' (was 'How your package works') |
 | 56. Loading screen named for screen readers | approved by owner 2026-11-19 | Nothing visible; screen readers hear one 'Loading' status on the placeholder shown while a page loads |
 | 57. Removed for launch: old staff tools, trial tools, data-use choices, province chip | awaiting owner (removal approved by owner 2026-11-19; with the group 57 part of 16 rows elsewhere) | Staff: the Commercial settings, Free posts & trials, Programmes & contracts and six Intelligence pages answer 'Page not found'. Members: nothing visible changes apart from 'Optional messages.' on the Preferences card; the showroom help page loses 'Local first, never local only' and its 'How we know your province' section, and the privacy notice its 'Showroom location' paragraph |
+| 58. 'Detect province and city' shown at launch | awaiting owner (no file rows: the location step already holds the button behind its switch) | Nothing before launch (its switch stays off). At launch: the verification location step offers 'Detect province and city' again, as in the chosen version; it fills in a suggested province and city, or says to pick them from the list |
 
 Questions for the owner:
 
@@ -2378,6 +2379,29 @@ checks that each removed page and route answers 404.
 | `src/components/admin/admin-sidebar.tsx` | helper | The five menu icons only the removed staff pages used are dropped from the icon list. | Nothing (same look and steps) | keep | awaiting owner | 2026-11-19 | 96918140c1ec |
 | `src/components/immersive/immersive-top-bar.tsx` | wording-behaviour | The province picked in the viewer is no longer also saved in a cookie: only the removed 'province first' showroom read it (row A16). | Nothing (the province filter works as before) | keep | awaiting owner | 2026-11-19 | 910d0f8a714b |
 | `src/components/video-mode/video-mode-viewer.tsx` | wording-behaviour | The province picked in the viewer is no longer also saved in a cookie: only the removed 'province first' showroom read it (row A16). | Nothing (the province filter works as before) | keep | awaiting owner | 2026-11-19 | 3dda9820341b |
+
+### 58. 'Detect province and city' shown at launch
+
+Owner decision 19 November 2026 (row A17): the 'Detect province and city'
+button in the verification location step, hidden in group 22 because its route
+always failed, is built and shown at launch. Its route
+(`/api/verification/location/detect`, outside the checked scope) now runs on
+the live backend: it reads the approximate network location Cloudflare gives
+each request, offers a province and city only when both are on the step's lists,
+and saves nothing. The member still confirms the pair with 'Save location &
+finish'. Until launch its switch `SHOW_LOCATION_DETECTION`
+(`src/lib/hidden-features.ts`) stays off in production, like every hidden
+feature; its launch value is on (`src/lib/launch-config.ts`). No file rows: the
+verification page already holds the button and its line unchanged (the M6.2
+part of its row in group 2).
+
+When shown, the location step has the 'Detect province and city' button and the
+line 'Detection is approximate. You can also select your location manually.',
+as in the chosen version. Pressing it either fills in the province and city with
+'Location suggested. Check your province and city before submitting.', or says
+'We could not detect your province and city. Select them below to continue.'
+when the network gives no South African place on the lists (common on mobile
+networks and VPNs). Proposed: keep. Decision: awaiting owner.
 
 <!-- frontend-ledger:end -->
 

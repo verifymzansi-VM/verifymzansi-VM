@@ -784,15 +784,8 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
-      /** @description CSRF validation or email confirmation required */
+      /** @description CSRF validation failed, or the account has no access */
       403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Location flow disabled */
-      404: {
         headers: {
           [name: string]: unknown;
         };
