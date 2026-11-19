@@ -19,22 +19,21 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261119082834_house_slots.sql",
+    "matchedThroughUpdate": "20261119151152_package_gap_fixes.sql",
     "matchedFingerprints": {
       "column_grants": "11724f805587a82326eae936e0200f0c",
-      "columns": "29f19791c74a8e9c3388e0212c42c270",
-      "constraints": "231cd5c4f92d8e173e2e94bead9c904f",
+      "columns": "ff4ffeec967331e38325adbc4391d27c",
+      "constraints": "f5874f8d8b4a4e29c6f701583824d2c9",
       "event_triggers": "821f7d069c595c075754fad9309136ac",
-      "function_bodies": "20e430461feb515e8abc445873fede13",
-      "function_grants": "27127c1fbb8ccbeed864ea03f1d8ff6f",
-      "function_metadata": "1144235b565ba230d0c6c5d8348292f8",
-      "indexes": "fef7c7e4b884fc5dd5cab2b4596b7e9d",
+      "function_bodies": "de76fd9328706467b5c0803e876a5496",
+      "function_grants": "abfa802fc5389cb3b2071630ee8ab360",
+      "function_metadata": "decd90bc3451af550f29b5e3be81844c",
+      "indexes": "752951f4c9f7f780b6b172c2d96bcf6c",
       "policies": "2c1b773d5ffe29f172271087b1f36e04",
-      "row_level_security": "b9ee8997ce7580ba1b6135afafb02f67",
+      "row_level_security": "2d840ce611f0293dc86a3557f5d995d4",
       "triggers": "2c23652ccf12b049bdf6522850a7fb4b"
     },
     "pendingApplication": [
-      "20261119151152_package_gap_fixes.sql",
       "20261119172135_post_views_and_likes.sql"
     ]
   },
