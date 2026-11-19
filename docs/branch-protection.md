@@ -53,7 +53,11 @@ such a check would block every pull request.
     `private` (`scripts/lib/foundation-replay.mjs`).
   - `foundation-sql-lint`: runs plpgsql_check over every PL/pgSQL function of
     that rebuilt schema in a throwaway local Postgres 17 and compares the result
-    with `database/foundation/lint-baseline.json`.
+    with `database/foundation/lint-baseline.json`. Like `foundation-native`,
+    when a pull request touches none of its inputs (listed in `ci.yml`; a
+    tooling test keeps the list covering every file its scripts import or read)
+    the job ends green without starting Postgres. On `main` it always runs in
+    full.
   - `lint-type-security`: lint, typecheck, OpenAPI/import checks, secrets,
     dependencies and licences.
   - `knip`: dead code and dependencies.
@@ -116,6 +120,29 @@ where the two workflows run on their own and report `foundation-native` and
 never cancelled, so a later merge cannot cancel an earlier commit's gate. A
 failed `main` or scheduled run of any workflow opens or updates one GitHub issue
 (workflow "Failure alert").
+
+## Draft pull requests
+
+To save Actions capacity, the three slowest lanes, `foundation-sql-lint`,
+`foundation-native` and `e2e-foundation`, do not run their work while a pull
+request is a draft. GitHub counts a skipped or green job as a passed required
+check, and a result recorded on the draft would still count after "Ready for
+review" until the new run reports (for `e2e-foundation`, whose job is created
+only after both browser projects finish, about 20 minutes). So on a draft these
+jobs report under another name, ending in `(draft, not run)`, which is never
+required: the required checks show as waiting, and a draft cannot merge anyway.
+
+- **Ready for review** (`ready_for_review` is a trigger of `ci.yml`,
+  `foundation-native.yml` and `e2e-foundation.yml`) starts a full run on the
+  head commit, which reports the required names. A pull request can therefore
+  merge only after those lanes ran on its head while it was not a draft;
+  re-running a draft-time run reports the draft name again and changes nothing.
+- **Label `run-full-ci`** runs the full lanes on a draft. The label is read when
+  a run starts, so after adding it push a commit (or close and reopen the pull
+  request).
+- Pull requests opened ready for review, pushes to `main`, the nightly and
+  manual runs are unchanged. Tooling tests (`scripts/branch-ruleset.test.mjs`)
+  check the draft names, the shared draft condition and the triggers.
 
 ## Switching the required browser check
 

@@ -9,7 +9,10 @@ name: Foundation native
 # touches the suite's inputs; when it does not, the job ends green without
 # starting Docker. (A workflow-level `paths:` filter would leave a required
 # check waiting forever on unrelated pull requests.) Runs on main, nightly and
-# manual runs always run the full suite.
+# manual runs always run the full suite. On a draft pull request (without the
+# run-full-ci label) the suite does not run and the job reports under another
+# name, so the required check waits for the full run that "Ready for review"
+# starts.
 #
 # On main this workflow runs inside the CI run (ci.yml calls it through
 # `workflow_call`), so the deploy, which needs the whole main CI run to
@@ -19,6 +22,10 @@ on:
   workflow_call:
   pull_request:
     branches: [main]
+    # ready_for_review: a draft pull request skips the slowest lanes (see
+    # "Draft pull requests" in docs/branch-protection.md); marking it ready
+    # starts a full run on its head commit.
+    types: [opened, synchronize, reopened, ready_for_review]
   schedule:
     - cron: "40 0 * * *" # Nightly at 00:40 UTC (02:40 in South Africa)
   workflow_dispatch:
@@ -35,7 +42,7 @@ concurrency:
 
 jobs:
   foundation-native:
-    name: foundation-native
+    name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) && 'foundation-native (draft, not run)' || 'foundation-native' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -49,7 +56,13 @@ jobs:
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
+          DRAFT_NOT_RUN: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}
         run: |
+          if [ "$DRAFT_NOT_RUN" = "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Draft pull request: the suite runs once it is marked ready for review (or with the run-full-ci label)."
+            exit 0
+          fi
           if [ "$EVENT_NAME" != "pull_request" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             echo "Full run ($EVENT_NAME)."
