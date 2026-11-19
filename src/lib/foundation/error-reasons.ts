@@ -98,6 +98,7 @@ export const FOUNDATION_ERROR_REASONS = {
   organisation_invalid: ["22023"],
   organisation_slug_taken: ["PT409"],
   organisation_unavailable: ["PT404"],
+  outside_refund_window: ["PT409"],
   own_post: ["22023"],
   ozow_reference_invalid: ["22023"],
   ozow_reference_required: ["22023"],
@@ -152,7 +153,9 @@ export const FOUNDATION_ERROR_REASONS = {
   refund_reference_invalid: ["22023"],
   refund_reference_required: ["22023"],
   refund_reference_used: ["PT409"],
+  renewal_already_started: ["PT409"],
   renewal_not_open: ["PT409"],
+  renewal_queued: ["PT409"],
   request_unavailable: ["PT404"],
   second_person_required: ["42501"],
   self_partner: ["42501"],
@@ -177,6 +180,7 @@ export const FOUNDATION_ERROR_REASONS = {
   staff_review_required: ["42501"],
   staff_same_identity: ["42501"],
   staff_visibility_hold: ["PT423"],
+  support_ticket_archived: ["PT409"],
   transfer_confirmer_same: ["42501"],
   transfer_not_expired: ["PT409"],
   transfer_not_waiting: ["PT409"],
@@ -232,13 +236,7 @@ export const STAFF_SECOND_FACTOR_MESSAGES = [
  * not raise it, the check fails too (remove the entry or ship the update).
  */
 export const FOUNDATION_UPCOMING_ERROR_REASONS = {
-  // <ts>_refund_follow_ups.sql (refund follow-ups, plan B): a refund of a slot
-  // whose renewal is waiting, the new "cancelled before the renewal started"
-  // reason on a slot that is not a renewal yet to start, and a refund through
-  // Ozow after its window.
-  outside_refund_window: { codes: ["PT409"], added: "2026-11-18" },
-  renewal_already_started: { codes: ["PT409"], added: "2026-11-18" },
-  renewal_queued: { codes: ["PT409"], added: "2026-11-18" },
+  // None pending.
 } as const satisfies Record<string, { codes: readonly string[]; added: string }>;
 
 export type FoundationErrorReason =

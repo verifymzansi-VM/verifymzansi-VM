@@ -8,14 +8,12 @@ import { Footer } from "@/components/layout/footer";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { BrandSurface } from "@/components/brand";
 import { Reveal } from "@/components/marketing/reveal";
-import { RetailPricing } from "@/components/billing/retail-pricing";
-import { EnterprisePricing } from "@/components/billing/enterprise-pricing";
+import { PricingOffers } from "@/components/billing/pricing-offers";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { getCommercialSettings } from "@/lib/commercial/settings";
 import { PACKAGES_ON_SALE } from "@/lib/constants/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
-import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
 
 const HERO_POINTS = [
   { icon: ReceiptText, label: "Never renews" },
@@ -39,11 +37,7 @@ async function loadSettings() {
 }
 
 export default async function PricingPage() {
-  const [catalog, settings, onlineMaxCents] = await Promise.all([
-    getCommercialCatalog(),
-    loadSettings(),
-    PACKAGES_ON_SALE ? readOnlinePaymentMaxCents() : null,
-  ]);
+  const [catalog, settings] = await Promise.all([getCommercialCatalog(), loadSettings()]);
   const trustConfig = getTrustPublicConfig();
   // Offers are described for search engines only while they can be bought.
   const jsonLd = catalog.onSale && {
@@ -115,15 +109,15 @@ export default async function PricingPage() {
         >
           <div className="mx-auto mb-7 max-w-2xl text-center">
             <h2 id="plans-title" className="section-title">
-              Plans
+              Posting slots
             </h2>
-            <p className="section-lede mx-auto">One posting slot, paid once.</p>
+            <p className="section-lede mx-auto">A slot keeps one of your posts live.</p>
           </div>
           <Reveal>
-            <RetailPricing
+            <PricingOffers
               offers={catalog.retail}
               onSale={catalog.onSale}
-              trialDays={settings?.trials}
+              showMultiListing={PACKAGES_ON_SALE}
             />
           </Reveal>
         </section>
@@ -172,23 +166,6 @@ export default async function PricingPage() {
             </ul>
           </Reveal>
         </section>
-
-        {/* Multi-listing and sponsor packages are hidden until they are on sale. */}
-        {PACKAGES_ON_SALE ? (
-          <div className="container-page pb-12 sm:pb-16">
-            <Reveal>
-              <EnterprisePricing
-                checkoutEnabled={settings?.features.enterpriseCheckout ?? true}
-                onlineMaxCents={onlineMaxCents}
-                retailFromCents={
-                  catalog.retail.length > 0
-                    ? Math.min(...catalog.retail.map((offer) => offer.priceCents))
-                    : null
-                }
-              />
-            </Reveal>
-          </div>
-        ) : null}
 
         <div className="border-t border-border/60 bg-card/50">
           <div className="container-page py-12 sm:py-16">

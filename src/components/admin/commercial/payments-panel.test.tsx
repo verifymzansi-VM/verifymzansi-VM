@@ -31,6 +31,9 @@ const line = (n: number, status = "open") => ({
 
 let fetch: ReturnType<typeof vi.fn>;
 beforeEach(() => {
+  // Five days after the payments below: inside Ozow's 13 days for a refund.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-18T08:00:00Z"));
   fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { ok: true } }) });
   vi.stubGlobal("fetch", fetch);
   vi.stubGlobal(
@@ -43,6 +46,7 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -167,22 +171,31 @@ describe("staff payments panel", () => {
     expect(screen.getAllByRole("button", { name: "Refund this slot" })).toHaveLength(1);
   });
 
-  it("does not offer 'Cancelled before the renewal started' yet, but names it on a record", () => {
-    const { rerender } = render(<PaymentsPanel canRefund payments={[base]} />);
-    fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
-    const form = screen.getByRole("form", { name: "Refund of this payment" });
-    const offered = within(within(form).getByLabelText("Reason"))
-      .getAllByRole("option")
-      .map((option) => option.getAttribute("value"));
-    expect(offered).toEqual([
+  it("offers 'Cancelled before the renewal started' only on a renewal, and names it on a record", () => {
+    const offered = () => {
+      const form = screen.getByRole("form", { name: "Refund of this payment" });
+      return within(within(form).getByLabelText("Reason"))
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("value"));
+    };
+    const five = [
       "",
       "billing_error",
       "duplicate",
       "our_failure_after_fix_offered",
       "s14_cancellation",
       "breach_credit",
-    ]);
-    // A refund recorded once the database accepts the reason still reads.
+    ];
+    const first = render(<PaymentsPanel canRefund payments={[base]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
+    expect(offered()).toEqual(five);
+    first.unmount();
+    const renewal = { ...base, description: "Renewal: Individual slot — 30 days" };
+    const { rerender } = render(<PaymentsPanel canRefund payments={[renewal]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Record refund" }));
+    expect(offered()).toEqual([...five, "renewal_cancelled_before_start"]);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    // A refund recorded with the reason reads.
     rerender(
       <PaymentsPanel
         canRefund
@@ -204,6 +217,57 @@ describe("staff payments panel", () => {
       />
     );
     expect(screen.getByText(/Cancelled before the renewal started/)).toBeInTheDocument();
+  });
+
+  it("past Ozow's 13 days, a refund is paid back by bank transfer with the bank reference", async () => {
+    // Paid 13 days ago (base is 5 days old): Ozow no longer refunds it.
+    render(
+      <PaymentsPanel
+        canRefund
+        payments={[{ ...base, created_at: "2026-11-05T08:00:00Z", lines: [line(1), line(2)] }]}
+      />
+    );
+    // The device clock is only a hint: it words the line, the database decides.
+    expect(
+      screen.getByText(
+        /Ozow's 13 days for a refund ended 18 Nov 2026: pay it back by bank transfer/
+      )
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Slot paid back by bank transfer" })).toHaveLength(
+      2
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Paid back by bank transfer" }));
+    const form = screen.getByRole("form", { name: "Refund of the whole order" });
+    // Said before the money is paid: the window and the renewal-first rule.
+    expect(form).toHaveTextContent(
+      "Before you pay: Ozow refunds this payment until 18 Nov 2026; pay it back by bank transfer only after that (before then, refund it through Ozow). If a renewal of this slot is waiting, refund the renewal first: this refund is refused while one waits."
+    );
+    fireEvent.change(within(form).getByLabelText("Reason"), {
+      target: { value: "s14_cancellation" },
+    });
+    fireEvent.change(within(form).getByLabelText("Bank reference of the refund transfer"), {
+      target: { value: "FNB refund 0001" },
+    });
+    fireEvent.change(within(form).getByLabelText("Reason (audited)"), {
+      target: { value: "Cancelled within 14 days, paid back by EFT" },
+    });
+    fireEvent.submit(form);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(sent()).toMatchObject({
+      action: "payment.reverse",
+      kind: "refunded",
+      ozowReference: "FNB refund 0001",
+    });
+  });
+
+  it("past Ozow's 13 days, a chargeback keeps Ozow's reference", () => {
+    render(
+      <PaymentsPanel canRefund payments={[{ ...base, created_at: "2026-11-05T08:00:00Z" }]} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Record chargeback" }));
+    const form = screen.getByRole("form", { name: "Chargeback of this payment" });
+    expect(within(form).getByLabelText("Ozow chargeback reference")).toBeInTheDocument();
+    expect(form).not.toHaveTextContent("pay it back by bank transfer");
   });
 
   it("lets another staff member approve a waiting refund, never its requester", async () => {

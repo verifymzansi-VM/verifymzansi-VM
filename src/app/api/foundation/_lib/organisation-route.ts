@@ -39,7 +39,8 @@ export function handleOrganisationRoute<T>(
     | "organisation:apply"
     | "organisation:manage"
     | "organisation:invite"
-    | "partner:attribution",
+    | "partner:attribution"
+    | "contact:reveal",
   mutate: boolean,
   command: (api: FoundationAuthenticatedApi, input: unknown) => Promise<T>,
   includeAccountId = false

@@ -11,7 +11,7 @@ declare actor uuid:=internal.staff_actor('case:claim');result jsonb;rows jsonb;t
 begin
   if p_limit is null or p_limit not between 1 and 100 or p_include_ids is null or cardinality(p_include_ids)>300 then raise exception 'bounded identity queue required' using errcode='22023';end if;
   with ready as(select c.id,c.subject_id,c.version,c.claim_generation,c.claim_nonce,c.claimed_by,c.claim_expires_at,
-      s.id submission_id,s.id_artifact_id,s.selfie_artifact_id,s.created_at,s.risk_score,p.display_name,
+      s.id submission_id,s.id_artifact_id,s.selfie_artifact_id,s.created_at,s.risk_score,internal.profile_public_name(p.display_name) display_name,
       row_number() over(order by s.risk_score desc,s.created_at,c.id) n
       from private.evidence_cases c join private.verification_current_submissions v on v.case_id=c.id
       join private.verification_identity_submissions s on s.id=v.submission_id and s.case_version=c.version

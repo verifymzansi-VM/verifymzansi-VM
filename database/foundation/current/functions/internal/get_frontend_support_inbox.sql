@@ -13,7 +13,9 @@ begin
   can_update:=exists(select 1 from private.staff_roles s join private.staff_capabilities c on c.role=s.role and c.capability='support:update'
     where s.user_id=actor and s.revoked_at is null);
   with scope as (
-    select * from private.support_tickets t where p_ticket is null or t.id=p_ticket
+    select * from private.support_tickets t where (p_ticket is null or t.id=p_ticket)
+      -- Tickets received in the last 12 months, and older ones still open.
+      and (t.status<>'resolved' or t.created_at>=clock_timestamp()-interval '12 months')
   ), rows as (
     select * from scope order by created_at desc,id desc limit 50 offset case when p_ticket is null then (p_page-1)*50 else 0 end
   )

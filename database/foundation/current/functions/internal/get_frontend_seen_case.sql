@@ -28,7 +28,7 @@ begin
   select jsonb_build_object('id',x.id,'ownerId',x.owner_id,'kind','seen','status',x.status,'createdAt',x.created_at,'updatedAt',x.updated_at,
     'decidedAt',x.decided_at,'expiresAt',x.expires_at,'reviewNote',case when private_read then x.review_note end,'reasonCode',x.reason_code,
     'business',jsonb_build_object('id',p.id,'business_name',p.title,'slug',s.slug,'status',p.status,'location_city',city.label,'location_province',prov.label),
-    'owner',jsonb_build_object('displayName',pr.display_name,'legalName',case when private_read then nullif(concat_ws(' ',pr.legal_first_name,pr.legal_last_name),'') end,
+    'owner',jsonb_build_object('displayName',internal.profile_public_name(pr.display_name),'legalName',case when private_read then nullif(concat_ws(' ',pr.legal_first_name,pr.legal_last_name),'') end,
       'idReviewed',internal.frontend_business_identity_reviewed(x.owner_id)),
     'seen',jsonb_build_object('method',x.seen_method,'address',case when private_read then x.visit_address end,
       'slots',case when private_read then x.available_slots end,'assignedTo',x.assigned_to,'scheduledFor',x.scheduled_for,

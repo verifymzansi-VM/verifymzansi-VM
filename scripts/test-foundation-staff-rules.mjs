@@ -568,7 +568,9 @@ try {
       scalar(
         `select string_agg(kind,',' order by created_at,kind) from private.privacy_notice_jobs where request_id='${id}';`
       ).split(","),
-      ["submitted", "extended", "completed"]
+      // The approval and the first export email the requester too
+      // (20261118072601_staff_data_minimisation.sql).
+      ["submitted", "extended", "approved", "exported", "completed"]
     );
     assert.equal(
       scalar(

@@ -12,7 +12,7 @@ begin
     raise exception 'refund or chargeback required' using errcode='22023';
   end if;
   if p_reason_code is null or p_reason_code not in ('billing_error', 'duplicate', 'our_failure_after_fix_offered',
-      's14_cancellation', 'breach_credit') then
+      's14_cancellation', 'breach_credit', 'renewal_cancelled_before_start') then
     raise exception 'valid refund reason code required' using errcode='22023', detail='refund_reason_code_invalid';
   end if;
   if not coalesce(internal.plain_text_valid(p_reason, 5, 500, true), false) then

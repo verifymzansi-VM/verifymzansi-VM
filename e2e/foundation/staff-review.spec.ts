@@ -257,8 +257,11 @@ async function staffCommandOutcome(copy: TestCopy, name: string, body: unknown, 
 
 /** A member's identity case card in the staff identity queue. */
 function identityCard(page: Page, member: VerifiedMember) {
+  // The queue names a member by their public short name ('Naledi R.'), not
+  // their full name (20261118072601_staff_data_minimisation.sql).
   const displayName = queryTestCopy(
-    `select display_name from private.profiles where account_id = '${member.id}';`
+    "select internal.profile_public_name(display_name) from private.profiles " +
+      `where account_id = '${member.id}';`
   );
   expect(displayName.length).toBeGreaterThan(1);
   // The nearest block around the member's name that holds the review buttons.
@@ -959,6 +962,20 @@ test.describe("staff review with an authenticator", () => {
       await expect.poll(() => admin.reply("/api/admin/dsar/decide").length).toBe(1);
       await card.getByRole("button", { name: "Approve request" }).click();
       await expect.poll(() => admin.reply("/api/admin/dsar/decide").length).toBe(2);
+      // The requester is told of the approval by email (queued, not sent here)
+      // and in the bell (20261118072601_staff_data_minimisation.sql).
+      expect(
+        queryTestCopy(
+          "select count(*) from private.privacy_notice_jobs where kind = 'approved' " +
+            `and request_id = '${requestId}';`
+        )
+      ).toBe("1");
+      expect(
+        queryTestCopy(
+          "select count(*) from private.notifications where kind = 'privacy_request_approved' " +
+            `and subject_id = '${requestId}' and account_id = '${poster.id}';`
+        )
+      ).toBe("1");
       await card.getByRole("button", { name: "Complete request" }).click();
       const complete = admin.page.getByRole("dialog", { name: "Complete Data Request" });
       await complete

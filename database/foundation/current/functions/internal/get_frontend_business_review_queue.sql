@@ -12,7 +12,7 @@ begin
   seen:=internal.get_frontend_seen_queue(p_tab);
   with rows as (
     select x.id,x.kind,x.status,x.business_id,x.created_at,x.updated_at,x.decided_at,d.route,d.registration_number,d.renewal,
-      coalesce(p.title,'Business') business_name,coalesce(pr.display_name,'Member') owner_name,
+      coalesce(p.title,'Business') business_name,coalesce(internal.profile_public_name(pr.display_name),'Member') owner_name,
       e.claimed_by=actor and e.claim_expires_at>clock_timestamp() mine,
       exists(select 1 from private.frontend_cipc_exceptions exc where exc.check_id=x.id and exc.official_file=d.official_file and exc.confirmed_at is null) exception_pending,
       exists(select 1 from private.frontend_current_cipc_stickers s where s.registration_number=d.registration_number and s.owner_id<>x.owner_id) conflict

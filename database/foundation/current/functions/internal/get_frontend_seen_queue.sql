@@ -12,7 +12,7 @@ begin
   if p_tab is null or p_tab not in('review','representatives','visits','conflicts','renewals','exceptions','waiting','decided')
     then raise exception 'valid business review queue required' using errcode='22023';end if;
   with cases as (
-    select x.*,p.title as business_name,pr.display_name as owner_name,
+    select x.*,p.title as business_name,internal.profile_public_name(pr.display_name) as owner_name,
       case when x.status='info_requested' then 'waiting' when x.status='pending' then 'visits' else 'decided' end tab,
       e.claimed_by=actor and e.claim_expires_at>clock_timestamp() as mine
     from private.frontend_business_checks x join private.posts p on p.id=x.business_id

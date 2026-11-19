@@ -68,7 +68,7 @@ begin
     'registrationNumber',d.registration_number,'createdAt',x.created_at,'updatedAt',x.updated_at,'decidedAt',x.decided_at,'expiresAt',x.expires_at,
     'reasonCode',x.reason_code,'reviewNote',case when permitted then x.review_note end,
     'business',jsonb_build_object('id',p.id,'business_name',p.title,'slug',s.slug,'status',p.status,'location_city',city.label,'location_province',prov.label),
-    'owner',jsonb_build_object('displayName',pr.display_name,'legalName',case when permitted then nullif(concat_ws(' ',pr.legal_first_name,pr.legal_last_name),'') end,
+    'owner',jsonb_build_object('displayName',internal.profile_public_name(pr.display_name),'legalName',case when permitted then nullif(concat_ws(' ',pr.legal_first_name,pr.legal_last_name),'') end,
       'idReviewed',internal.frontend_business_identity_reviewed(x.owner_id)),
     'parsed',owner_doc.summary,'official',official_doc.summary,
     'office',case when permitted then coalesce(d.office_override,d.registered_office,nullif(official_doc.summary->'registeredOffice','null'::jsonb),nullif(owner_doc.summary->'registeredOffice','null'::jsonb)) end,

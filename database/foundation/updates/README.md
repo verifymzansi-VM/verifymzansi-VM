@@ -77,6 +77,193 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Refund follow-ups and Ozow's refund window, 18 November 2026
+
+`20261118182332_refund_follow_ups.sql` was applied on 18 November 2026 at 21:25
+UTC with the owner's approval, before the website release from its pull request
+(see the applied register). It carries the owner's decisions of 18 November
+(plan B) for staff refunds; members see nothing new:
+
+- **New reason "Cancelled before the renewal started"**
+  (`renewal_cancelled_before_start`). It fits only a refund whose slots are all
+  renewals whose days have not started: the whole payment of a renewal, or one
+  renewed slot of it. Otherwise PT409 `renewal_already_started`, also when a
+  waiting refund with it is approved after the renewal started, and the server
+  does not send such a refund through Ozow then (it fails as `payment_changed`).
+- **The renewal is refunded first.** A refund that would end a period whose slot
+  has a renewal bought and not started is refused (PT409 `renewal_queued`),
+  whether recorded with a reference, sent through Ozow or recorded from the Ozow
+  dashboard. Approving a waiting refund checks it again, and so does the server
+  before it sends a refund through Ozow (that refund then fails as
+  `payment_changed`). Chargebacks are not refused.
+- **A declined record's reference is free again.** The unique reference index
+  and the repeat lookup leave declined records out. The same reference recorded
+  at the same moment for another payment is refused as `ozow_reference_used` or
+  `refund_reference_used`, not as a raw unique violation.
+- **Ozow refunds only within 13 days of the payment** (Ozow says 14; one day
+  less for time zones and Ozow's clock), counted from the payment's `created_at`
+  (`internal.ozow_refund_window()`, the one setting). Asking for or approving a
+  refund through Ozow after that is refused (PT409 `outside_refund_window`); one
+  approved in time but not yet sent fails before anything is sent
+  (`failure_reason` `outside_refund_window`, listed under 'Refunds that need
+  staff', no payment problem alert). Recording a refund already made in the Ozow
+  dashboard is unchanged.
+- **After the 13 days, the money is paid back by bank transfer** and recorded
+  with the existing reference commands and the bank reference (spaces allowed,
+  at least four letters or digits; refusals `refund_reference_*`), also once
+  refunds through Ozow have been used. No new command. A refund recorded with a
+  reference is refused while a refund through Ozow of the same payment is
+  approved or sent (PT409 `refund_in_flight`): Ozow may still pay that one.
+
+Expand only: no API command, argument, grant, return type or result field is
+added, removed or changed; no row is written. Records already waiting or
+approved are judged by the new rules when they are approved or sent (the
+preflight counts them).
+
+**Order: expand website first (done), then this update, then this pull request's
+release.**
+
+1. Pull request #267 ("Website reads the refund follow-ups values before the
+   database has them") is merged and deployed. It reads the new reason and
+   failure reason and words the three new refusals.
+2. This pull request is merged and the update is applied (preflight, update,
+   preflight, fingerprint, below) before its release is deployed, as usual.
+   Check first that the deployed release contains #267.
+3. This pull request's release is deployed. It offers the new reason on renewal
+   payments, shows until when Ozow refunds a payment, and offers "Paid back by
+   bank transfer" next to "Refund through Ozow" (the database decides which is
+   possible; the form says before the money is paid when it is).
+
+Every state in between is safe: with the update applied and the #267 release,
+staff see the new refusals in plain words but are not yet offered the new reason
+or the bank transfer form. This pull request's release with the database before
+the update would offer the new reason (refused there with "Choose why the money
+is returned") and the bank transfer form (refused there for an Ozow payment once
+refunds through Ozow were used), so do not deploy it first.
+
+**Applying.** After this pull request is merged:
+
+1. Run `../preflight/20261118182332_refund_follow_ups.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "refund follow-ups: update not applied; ...". Its
+   counts (waiting for approval, approved refunds through Ozow not sent, those
+   past Ozow's 13 days, those that would end a period while a renewal waits,
+   declined records) are for staff to look at; none stops the update.
+2. Run the update. It waits at most 5 seconds for a lock and stops without
+   changing anything if the refund table is busy; run it again. Run the
+   preflight again: it must read "refund follow-ups: already applied; ...".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is `../rollback/20261118182332_refund_follow_ups.down.sql`
+(only with the owner's decision; prefer a forward fix). It restores the earlier
+bodies, lists and unique index and drops the six new helpers; it refuses once a
+record names the new reason, a refund failed outside the window, or a declined
+reference was recorded again.
+`node --import tsx scripts/test-foundation-refund-follow-ups.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drift and a premature rollback are
+refused; apply, rollback and re-apply return the same fingerprints; and each
+rule above through the production API commands.
+
+## Staff and organisation screens show less personal data, 18 November 2026
+
+`20261118072601_staff_data_minimisation.sql` was applied on 18 November 2026 at
+18:09 UTC with the owner's approval, before the website release from this pull
+request (see the applied register). It narrows what staff and organisation
+administrators see, and tells the person behind a data request when it moves on:
+
+- **Short names in review queues.** The business review queue, the 'seen in
+  person' queue and case, the CIPC case and both ID check queue reads name a
+  member by their public short name ('Thando D.', the public seller card's rule)
+  instead of the full name, which for a verified member is the full legal name.
+  The full legal name is shown only where it already was: a case the staff
+  member holds (claim, assignment or decision) with `evidence:view` (a second
+  factor from the last 15 minutes, recorded in the evidence access log) and the
+  identity context of a claimed ID check. Members see their own name as before.
+- **Data requests.** Who may do each step is unchanged: one staff member with
+  `dsar:manage` (a second factor from the last 15 minutes) records, checks,
+  approves, exports and completes, and every step stays in the request's event
+  log. New: when a request is approved and when its export is first made, the
+  requester is emailed through the existing privacy notice jobs (kinds
+  `approved` and `exported`) and an account named by the request gets a bell
+  notice (`privacy_request_approved`, `privacy_export_made`), once each. A
+  request staff record by hand is linked to its account at the identity check;
+  if it was approved before that, the account gets the approval notice then.
+  Export already needs a verified identity, so its notice always finds the
+  account.
+- **Support inbox.** It lists tickets received in the last 12 months, and older
+  ones only while still open (new or in progress). Resolved tickets older than
+  that are no longer listed (they are not deleted). Who may read it, and the
+  counts of new tickets, are unchanged. Such a ticket can no longer be reopened
+  or changed (`support_ticket_archived`, PT409), so its sender is not shown
+  again.
+- **Organisation dashboard.** It no longer carries applicants' business contacts
+  (`public_contacts` leaves its result) and names co-administrators by their
+  public short name (the viewer's own name as before). The new
+  `api.reveal_organisation_applicant_contact(p_application)` gives the public
+  business contact of one pending application (submitted, or more information
+  requested) at a time; nothing for decided or withdrawn applications. Every
+  reveal, by an organisation administrator or by staff, is recorded in the
+  organisation's append-only event log (`private.organisation_events`: who,
+  when, which application), which the staff audit trail lists as
+  `organisation:applicant_contact_revealed`.
+
+The staff invoice, bank transfer and payment lists are unchanged: the staff rule
+(an authenticator code within 12 hours) applies to them as to every staff read.
+
+Expand only: one new command; no command, argument, grant or return type is
+removed or changed. A later code-only change can stop reading `public_contacts`.
+
+**Order: expand website first, then this pull request and this update.**
+
+1. Pull request #265 ("Website reads the staff data minimisation shapes before
+   the database has them") is merged and deployed. It teaches the live website
+   the two new requester email kinds, the two new bell notice kinds and a
+   dashboard result without `public_contacts`.
+2. This pull request is merged and the update is applied (preflight, update,
+   preflight, fingerprint, below) before its release is deployed, as usual.
+   Check the deployed release first: nothing in the database refuses the update
+   while the website predates step 1, and that website's privacy notice job
+   refuses (and retries) the new email kinds and its strict dashboard reader
+   refuses the new shape.
+3. This pull request's release is deployed.
+
+Every state in between is safe. The expand release with the update applied shows
+no applicant contacts on the organisation dashboard until step 3. This pull
+request's release with the database before the update behaves as today: the
+dashboard shows the contacts it still receives (pending applications only) and
+offers 'Show contact' only when the result has no `public_contacts`. If the
+expand release is ever reverted, run the rollback first.
+
+**Applying.** After step 1 is live and this pull request is merged:
+
+1. Run `../preflight/20261118072601_staff_data_minimisation.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff data minimisation: update not applied; ...". It
+   also counts resolved support tickets older than 12 months (no longer listed).
+2. Run the update. It locks the privacy notice and notification tables without
+   waiting and stops without changing anything if either is busy; run it again.
+   Run the preflight again: it must read "staff data minimisation: already
+   applied; ...".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261118072601_staff_data_minimisation.down.sql` (only with the
+owner's decision; prefer a forward fix). It restores the earlier bodies and
+lists, drops the new command, and deletes the bell notices and requester emails
+of the new kinds to do so; the organisation event log keeps its reveal records.
+`node --import tsx scripts/test-foundation-staff-data-minimisation.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drift and a premature rollback are
+refused; apply, rollback and re-apply return the same fingerprints; and each
+rule above through the production API commands.
+
 ## Account events reach the notification bell, 17 November 2026
 
 `20261117140533_member_notices_in_app.sql` was applied on 18 November 2026 at
@@ -4895,5 +5082,29 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   days or more: 0; expired: 0" (no problem rows); production fingerprint after
   it (fingerprint.sql at 93e69753) matched the full replay (except the known
   schema grant difference)
+- `20261118072601_staff_data_minimisation.sql`: applied 2026-11-18 18:09 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file at cbbeb26c (pull request #264, sha256
+  starting 8e258de44214f5ac) after the expand release (#265) was deployed and
+  before the website release containing it was deployed (#264 merged 18:11 UTC
+  as eb281cf1); preflight (sha256 starting 9d7ffdab) before "staff data
+  minimisation: update not applied; resolved support tickets older than 12
+  months: 0", after "staff data minimisation: already applied; resolved support
+  tickets older than 12 months: 0" (no problem rows); production fingerprint
+  after it (fingerprint.sql at eb281cf1, captured 18:13 UTC) matched the full
+  replay (except the known schema grant difference)
+- `20261118182332_refund_follow_ups.sql`: applied 2026-11-18 21:25 UTC;
+  owner-approved ("Yes, apply and merge"), Supabase SQL editor (browser),
+  preflight + fingerprint checked; from the reviewed file at 5fe2178e (pull
+  request #275, sha256 starting cdb2d9971f492ecd) before the website release
+  containing it was deployed (#275 merged 21:27 UTC as 07418a73); preflight
+  (sha256 starting 2932b94e) before "refund follow-ups: update not applied;
+  waiting for approval: 0; through Ozow not sent: 0; past Ozow's 13 days: 0;
+  while a renewal waits: 0; declined references: 0", after "refund follow-ups:
+  already applied; waiting for approval: 0; through Ozow not sent: 0; past
+  Ozow's 13 days: 0; while a renewal waits: 0; declined references: 0" (no
+  problem rows); production fingerprint after it (fingerprint.sql at 07418a73,
+  captured about 21:29 UTC) matched the full replay (except the known schema
+  grant difference)
 
 <!-- applied-register:end -->
