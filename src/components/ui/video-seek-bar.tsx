@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 /** Height of the seek bar's touch and click area; the visible track stays thin (WCAG 2.5.8). */
 export const SEEK_TARGET_PX = 24;
 /** Movement before a touch picks an axis (the same rule as video mode's swipes). */
-export const SEEK_AXIS_LOCK_PX = 10;
+const SEEK_AXIS_LOCK_PX = 10;
 /** How far one Left or Right arrow press moves playback. */
 export const SEEK_KEY_STEP_SECONDS = 5;
 
