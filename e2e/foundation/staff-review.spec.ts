@@ -576,9 +576,12 @@ test.describe("staff review with an authenticator", () => {
     const counter = page
       .getByRole("link")
       .filter({ has: page.getByText("Identity checks", { exact: true }) });
-    await expect(counter).toContainText(new RegExp(`Identity checks\\s*${listed}(?!\\d)`), {
-      timeout: 20_000,
-    });
+    await expect(counter).toBeVisible({ timeout: 20_000 });
+    await expect
+      .poll(async () => /Identity checks\s*(\d+)/.exec(await counter.innerText())?.[1], {
+        timeout: 20_000,
+      })
+      .toBe(String(listed));
     await page.goto("/admin/verification");
     for (const member of [returned, poster]) {
       const displayName = queryTestCopy(

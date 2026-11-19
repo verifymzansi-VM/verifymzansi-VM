@@ -309,7 +309,11 @@ test.describe("public pages", () => {
     await expect(
       page.getByText(/Showing the first 2.400 results\. Narrow your search to see more\./)
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Next" })).toBeDisabled();
+    await expect(
+      page
+        .getByTestId("mzansi-business-grid-ready")
+        .getByRole("button", { name: "Next", exact: true })
+    ).toBeDisabled();
   });
 
   test("the phone footer and area tabs stay clear of the bottom tab bar", async ({ page }) => {
