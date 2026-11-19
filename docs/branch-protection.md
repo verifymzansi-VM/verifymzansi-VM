@@ -102,14 +102,17 @@ on `main` is never cancelled, so every release commit gets a complete result.
 Every job has a time limit of about one and a half times its usual longest run.
 
 Every CI job that runs on a pull request is required, except
-`Workflow security audit (zizmor, advisory)` (advisory, `continue-on-error`).
-The Lighthouse audit is an advisory step inside `bundle-analysis`. This keeps
-`main` deployable: the deploy needs the whole CI run on `main` to succeed.
-`perf-baseline` and `k6-advisory` run only after a push to `main` and cannot be
-required on pull requests; when no staging address (`STAGING_APP_URL`) is
-configured they show as skipped, not as a success (`Staging address configured`
-decides this in a job-level condition). Later slices add their jobs here and to
-the ruleset file (foundation browser tests, frontend ledger).
+`Workflow security audit (zizmor, advisory)` (advisory, `continue-on-error`) and
+the `(draft, not run)` names that `foundation-sql-lint`, `foundation-native` and
+`e2e-foundation` report under on a draft (see "Draft pull requests"), which must
+never be required. The Lighthouse audit is an advisory step inside
+`bundle-analysis`. This keeps `main` deployable: the deploy needs the whole CI
+run on `main` to succeed. `perf-baseline` and `k6-advisory` run only after a
+push to `main` and cannot be required on pull requests; when no staging address
+(`STAGING_APP_URL`) is configured they show as skipped, not as a success
+(`Staging address configured` decides this in a job-level condition). Later
+slices add their jobs here and to the ruleset file (foundation browser tests,
+frontend ledger).
 
 **Release gate.** On `main`, CI calls the workflows "Foundation native" and "E2E
 foundation" (jobs `Release gate (foundation native)` and
@@ -133,13 +136,18 @@ jobs report under another name, ending in `(draft, not run)`, which is never
 required: the required checks show as waiting, and a draft cannot merge anyway.
 
 - **Ready for review** (`ready_for_review` is a trigger of `ci.yml`,
-  `foundation-native.yml` and `e2e-foundation.yml`) starts a full run on the
-  head commit, which reports the required names. A pull request can therefore
-  merge only after those lanes ran on its head while it was not a draft;
-  re-running a draft-time run reports the draft name again and changes nothing.
-- **Label `run-full-ci`** runs the full lanes on a draft. The label is read when
-  a run starts, so after adding it push a commit (or close and reopen the pull
-  request).
+  `foundation-native.yml` and `e2e-foundation.yml`) starts a new run on the head
+  commit, which reports the required names. In that run `e2e-foundation` always
+  runs in full; `foundation-sql-lint` and `foundation-native` run in full, or
+  end green under their required names when the pull request touches none of
+  their inputs, exactly as for a pull request opened ready for review. So a pull
+  request can merge only on results from a non-draft run on its head; re-running
+  a draft-time run reports the draft names again and changes nothing.
+- **Label `run-full-ci`** makes a draft behave like a ready pull request: the
+  three jobs report their required names, `e2e-foundation` runs in full, and
+  `foundation-sql-lint` and `foundation-native` still end green when no input
+  changed. The label is read from the event that starts a run, so after adding
+  it push a commit (or close and reopen the pull request).
 - Pull requests opened ready for review, pushes to `main`, the nightly and
   manual runs are unchanged. Tooling tests (`scripts/branch-ruleset.test.mjs`)
   check the draft names, the shared draft condition and the triggers.

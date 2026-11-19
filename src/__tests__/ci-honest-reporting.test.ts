@@ -23,6 +23,15 @@ type Step = {
 // Jobs that call another workflow (`uses:`) have no steps of their own.
 type Job = { name?: string; if?: string; needs?: string | string[]; uses?: string; steps: Step[] };
 
+// A draft pull request (without the run-full-ci label) skips the slow lanes,
+// which then report under a name that is never required
+// (docs/branch-protection.md, "Draft pull requests"). The condition starts
+// with the pull_request event, so it can never skip a main or manual run.
+const DRAFT_CONDITION =
+  "github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')";
+const draftRenamed = (check: string) =>
+  `\${{ (${DRAFT_CONDITION}) && '${check} (draft, not run)' || '${check}' }}`;
+
 const ci = parse(readFileSync(".github/workflows/ci.yml", "utf8")) as {
   jobs: Record<string, Job>;
 };
@@ -255,8 +264,10 @@ describe("CI job graph", () => {
     expect(summary?.if).toBe("always()");
     expect(summary?.run).toContain('"$GITHUB_STEP_SUMMARY"');
     // The required aggregate check fails unless every browser project passed.
+    // Outside a draft it reports as e2e-foundation, the required check.
     const aggregate = e2e.jobs["e2e-foundation"];
-    expect(aggregate.name).toBe("e2e-foundation");
+    expect(aggregate.name).toBe(draftRenamed("e2e-foundation"));
+    expect(DRAFT_CONDITION.startsWith("github.event_name == 'pull_request' && ")).toBe(true);
     expect(aggregate.needs).toBe("browser");
     expect(aggregate.if).toBe("${{ !cancelled() }}");
     expect(aggregate.steps.map((step) => step.run ?? "").join("\n")).toContain(
@@ -1171,7 +1182,11 @@ describe("production-matching suites on main and the failure alert", () => {
       // On main they run only inside CI (no separate push run to double up).
       expect(workflow.on.push, file).toBeUndefined();
       expect(workflow.on).toHaveProperty("workflow_call");
-      expect(workflow.on.pull_request, file).toEqual({ branches: ["main"] });
+      // ready_for_review: a draft that becomes ready runs the full suite.
+      expect(workflow.on.pull_request, file).toEqual({
+        branches: ["main"],
+        types: ["opened", "synchronize", "reopened", "ready_for_review"],
+      });
       expect(workflow.concurrency?.["cancel-in-progress"], file).toBe(
         "${{ github.event_name == 'pull_request' }}"
       );
@@ -1200,26 +1215,36 @@ describe("production-matching suites on main and the failure alert", () => {
       for (const group of groups) expect(group, caller).toContain("a".repeat(40));
       expect(evaluate(String(workflow.concurrency?.group), "pull_request")).not.toBe(groups[2]);
       // Nothing inside the called workflow can turn a failure into a pass or
-      // skip the suite: no job condition except the aggregate's, no
-      // continue-on-error anywhere.
+      // skip the suite on main: no job condition except the aggregate's and
+      // the browser projects' draft condition (false for every event but a
+      // pull request), no continue-on-error anywhere.
       for (const [id, called] of Object.entries(workflow.jobs)) {
         expect(JSON.stringify(called), `${file} ${id}`).not.toContain("continue-on-error");
         if (id === "e2e-foundation") expect(called.if).toBe("${{ !cancelled() }}");
+        else if (file === "e2e-foundation.yml" && id === "browser")
+          expect(called.if).toBe(`\${{ !(${DRAFT_CONDITION}) }}`);
         else expect(called.if, `${file} ${id}`).toBeUndefined();
       }
     }
-    // The native suite runs in full for every event except a pull request.
-    const native = load("foundation-native.yml").jobs["foundation-native"].steps;
+    // The native suite runs in full for every event except a pull request. A
+    // draft skips it only in a run that reports under the draft name.
+    const nativeJob = load("foundation-native.yml").jobs["foundation-native"];
+    expect(nativeJob.name).toBe(draftRenamed("foundation-native"));
+    const native = nativeJob.steps;
     const scope = native.find(
       (step) => step.name === "Decide whether the native suite inputs changed"
     );
     expect(scope?.env?.EVENT_NAME).toBe("${{ github.event_name }}");
+    expect(scope?.env?.DRAFT_NOT_RUN).toBe(`\${{ ${DRAFT_CONDITION} }}`);
     expect(scope?.run?.trimStart()).toMatch(
-      /^if \[ "\$EVENT_NAME" != "pull_request" \]; then\n\s+echo "run=true" >> "\$GITHUB_OUTPUT"\n[^\n]*\n\s+exit 0\n\s*fi/
+      /^if \[ "\$DRAFT_NOT_RUN" = "true" \]; then\n\s+echo "run=false" >> "\$GITHUB_OUTPUT"\n[^\n]*\n\s+exit 0\n\s*fi\n\s*if \[ "\$EVENT_NAME" != "pull_request" \]; then\n\s+echo "run=true" >> "\$GITHUB_OUTPUT"\n[^\n]*\n\s+exit 0\n\s*fi/
     );
-    // The aggregate check fails unless every browser project passed.
+    // The aggregate check fails unless every browser project passed; it ends
+    // green without them only in a draft run, which reports another name.
     const aggregate = load("e2e-foundation.yml").jobs["e2e-foundation"];
+    expect(aggregate.name).toBe(draftRenamed("e2e-foundation"));
     expect(aggregate.needs).toBe("browser");
+    expect(aggregate.steps[0].env?.DRAFT_NOT_RUN).toBe(`\${{ ${DRAFT_CONDITION} }}`);
     expect(aggregate.steps[0].env?.RESULT).toBe("${{ needs.browser.result }}");
     expect(aggregate.steps[0].run).toContain('if [ "$RESULT" != "success" ]; then');
     expect(aggregate.steps[0].run).toMatch(/exit 1\n\s*fi/);

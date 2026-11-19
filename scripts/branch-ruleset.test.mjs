@@ -192,6 +192,21 @@ test("draft pull requests never report a required check of the slow lanes", () =
   }
 });
 
+test("the path-filter steps compare the merge commit with its base, renames split", () => {
+  for (const file of [".github/workflows/ci.yml", ".github/workflows/foundation-native.yml"]) {
+    const text = readWorkflow(file);
+    const merge = text.indexOf('if [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -ne 3 ]; then');
+    const diff = text.indexOf(
+      'if ! changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"; then'
+    );
+    assert.ok(merge > 0, `${file}: checks HEAD is the two-parent merge commit`);
+    assert.ok(diff > merge, `${file}: lists the changes only after that check`);
+    // Not the merge commit: run in full.
+    assert.match(text.slice(merge, diff), /echo "run=true" >> "\$GITHUB_OUTPUT"/);
+    assert.doesNotMatch(text, /git diff --name-only HEAD\^1 HEAD/, file);
+  }
+});
+
 test("marking a draft ready for review starts the full slow lanes", () => {
   for (const file of new Set(DRAFT_SKIPPING_LANES.map((lane) => lane.file))) {
     const text = readWorkflow(file);

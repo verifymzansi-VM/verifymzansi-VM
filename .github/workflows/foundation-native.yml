@@ -68,7 +68,16 @@ jobs:
             echo "Full run ($EVENT_NAME)."
             exit 0
           fi
-          if ! changed="$(git diff --name-only HEAD^1 HEAD)"; then
+          # Checked out as the merge commit: parent 1 is the base branch tip.
+          # Anything else cannot be compared safely, so run in full.
+          if [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -ne 3 ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::HEAD is not the pull request merge commit; running the full suite."
+            exit 0
+          fi
+          # --no-renames: a renamed file lists both its old and new path, so
+          # moving an input elsewhere still counts as changing an input.
+          if ! changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             echo "::warning::Could not list the changed files; running the full suite."
             exit 0
