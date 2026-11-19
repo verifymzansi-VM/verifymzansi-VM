@@ -82,9 +82,9 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Multi-listing packages: the small part-one gaps, 19 November 2026
 
-`20261119151152_package_gap_fixes.sql` is not applied yet (`pending` in the
-applied register). Roadmap P4a; the owner's decision D6 of 19 November 2026. It
-needs `20261114154823_slot_packages.sql` and
+`20261119151152_package_gap_fixes.sql` was applied on 19 November 2026 at 18:34
+UTC (see the applied register). Roadmap P4a; the owner's decision D6 of 19
+November 2026. It needs `20261114154823_slot_packages.sql` and
 `20261119025106_package_invoices.sql`, and refuses (55000) unless the six
 functions it replaces have their reviewed bodies (or this update's), the six it
 adds are absent (or this update's) and its table is absent or has the update's
@@ -5598,6 +5598,19 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   slots: 0 (events: 0)"; production fingerprint after it (fingerprint.sql at
   2d761c47, captured about 14:04 UTC) matched the full replay (except the known
   schema grant difference)
-- `20261119151152_package_gap_fixes.sql`: pending
+- `20261119151152_package_gap_fixes.sql`: applied 2026-11-19 18:34 UTC;
+  owner-approved, apply-first, Supabase SQL editor (browser, the owner's
+  signed-in session), preflight + fingerprint checked; update, preflight and
+  fingerprint.sql loaded from the reviewed files at c1a8c0e3 (raw GitHub; pull
+  request #297, merged as 76c59c99) and checked in the browser before running;
+  update sha256 starting ade1f659e7260a07; preflight (sha256 starting 25b94aa9)
+  before "package gap fixes: update not applied; on sale: no; packages: 0;
+  paused posts to put back: 0; unsent package checkouts to refuse: 0; unpaid
+  Individual invoices issued before a package: 0; move record: none (table
+  absent)", after "package gap fixes: already applied; on sale: no; packages: 0;
+  paused posts to put back: 0; unsent package checkouts to refuse: 0; unpaid
+  Individual invoices issued before a package: 0; move record: 0"; production
+  fingerprint after it (fingerprint.sql at c1a8c0e3) matched the full replay
+  (except the known schema grant difference)
 
 <!-- applied-register:end -->
