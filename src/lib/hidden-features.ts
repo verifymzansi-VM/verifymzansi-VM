@@ -60,9 +60,10 @@ export const SHOW_ORGANISATION_REPORT: boolean =
 
 /**
  * "Delete account" on the profile's Account tab, its confirmation dialog, and
- * the route behind it (/api/account/delete). Deleting an account does not work
- * on the live backend yet (SEC-02). While hidden, the tab says to send a data
- * request instead and the route answers 404.
+ * the route behind it (/api/account/delete), which closes the account through
+ * api.close_my_account (M1.6c). Hidden until the owner approves it (frontend
+ * ledger group 43). While hidden, the tab says to send a data request instead
+ * and the route answers 404.
  */
 export const SHOW_ACCOUNT_DELETION: boolean =
   LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_ACCOUNT_DELETION;
