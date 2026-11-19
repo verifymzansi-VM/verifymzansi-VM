@@ -43,7 +43,11 @@ async function readNativeDetail(id: string) {
     const org = await readFrontendStaffOrganisationDetail(api, id);
     if (!org) notFound();
     const [management, showcases, audit] = await Promise.all([
-      readFoundationOrganisationManagementData(api, id, org.public_contacts),
+      // An applicant's contact only while the application is pending: inline
+      // before 20261119065758_privacy_tightening_2, then on request (logged).
+      readFoundationOrganisationManagementData(api, id, org.public_contacts ?? [], {
+        pendingOnly: true,
+      }),
       readFoundationStaffShowcases(api, { organisation_id: id }),
       readRestoredStaffAudit(api, user.id, { page: 1, type: "organisation", target: id }),
     ]);
@@ -90,6 +94,7 @@ async function readNativeDetail(id: string) {
       })),
       report: null,
       openInvites: org.open_invites,
+      revealContacts: org.public_contacts === undefined,
     };
   } catch (error) {
     if (error instanceof FoundationStaffCommandError && error.mfaRequired)
@@ -117,6 +122,7 @@ export default async function OrganisationAdminDetailPage({
     audit,
     report,
     openInvites,
+    revealContacts,
   } = await readNativeDetail(id);
   const parsedReport = parsePerformanceReport(report);
   const seatsLeft = Math.max(0, org.admin_limit - admins.length - openInvites.length);
@@ -216,7 +222,11 @@ export default async function OrganisationAdminDetailPage({
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Affiliation applications</h2>
-        <ApplicationsReview organisationId={org.id} applications={applications} />
+        <ApplicationsReview
+          organisationId={org.id}
+          applications={applications}
+          revealContacts={revealContacts}
+        />
       </section>
 
       <section className="space-y-3">

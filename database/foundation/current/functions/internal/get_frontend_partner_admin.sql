@@ -11,7 +11,8 @@ declare actor uuid:=internal.staff_actor('partner:manage');result jsonb;
 begin
   select jsonb_build_object('actor_id',actor,'default_rate_bps',2000,
     'partners',coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc,x.id desc) from (
-      select p.id,p.account_id,p.code,p.status,p.commission_bps,p.created_at,pr.display_name,
+      select p.id,p.account_id,p.code,p.status,p.commission_bps,p.created_at,
+        internal.profile_public_name(pr.display_name) as display_name,
         (select count(*) from private.account_acquisitions a where a.partner_id=p.id) referrals
       from private.partners p left join private.profiles pr on pr.account_id=p.account_id order by p.created_at desc,p.id desc limit 500)x),'[]'::jsonb),
     'commissions',coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc,x.id desc) from (

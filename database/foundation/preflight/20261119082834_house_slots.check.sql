@@ -6,8 +6,10 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and starts "house slots: update not applied".
 --
--- The summary says whether the three functions the update adds, its table and
--- its three triggers are absent (update not applied), all present with the
+-- The summary says whether the three functions the update adds, the privacy
+-- export it replaces (internal.frontend_privacy_export_data), its table and
+-- its three triggers are absent and the export has its reviewed earlier body
+-- (update not applied), all present with the
 -- update's bodies (already applied), or a mix (unexpected state), and counts:
 -- - "admins": accounts with an active admin role;
 -- - "ready to receive": of those, confirmed active accounts with an accepted
@@ -20,13 +22,14 @@ do $$begin
   set transaction read only;
 end$$;
 with added as (
-  select v.sig, v.after,
+  select v.sig, v.before, v.after,
     coalesce((select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)), 'absent') as body
   from (values
-    ('internal.grant_house_slots(text,integer,integer,text,text)', '4d1d0e822e358b6489f0cdf69a22c564'),
-    ('internal.end_house_slot(uuid,text)', 'e68a50d7a6d0211cb339ce7ad66c26bd'),
-    ('internal.house_slots_on_staff_role_change()', 'f100ded1785d690054ba54e150e33bff')
-  ) v(sig, after)
+    ('internal.grant_house_slots(text,integer,integer,text,text)', 'absent', '4d1d0e822e358b6489f0cdf69a22c564'),
+    ('internal.end_house_slot(uuid,text)', 'absent', '86419d57cc0266fcb6ec5881c62ae5e5'),
+    ('internal.house_slots_on_staff_role_change()', 'absent', 'f100ded1785d690054ba54e150e33bff'),
+    ('internal.frontend_privacy_export_data(uuid)', '0b4cd3f792ffecf94c329277db4da28e', 'e3842fd91a8d4f6b0bfe4cdc5b3030d9')
+  ) v(sig, before, after)
 ),
 others as (
   select v.name,
@@ -44,7 +47,7 @@ others as (
 ),
 state as (
   select
-    (select count(*) from added where body = 'absent') + (select count(*) from others where not present) as absent,
+    (select count(*) from added where body = before) + (select count(*) from others where not present) as absent,
     (select count(*) from added where body = after) + (select count(*) from others where present) as updated,
     (select count(*) from added) + (select count(*) from others) as total
 ),
@@ -52,12 +55,13 @@ admins as (
   select r.user_id from private.staff_roles r where r.role = 'admin' and r.revoked_at is null
 ),
 problems as (
-  select 'problem' as kind, sig || ' is not the update''s body (md5 ' || body || '); do not apply the update' as detail
-    from added where body <> 'absent' and body <> after
+  select 'problem' as kind,
+    sig || ' is neither the reviewed body nor the update''s (md5 ' || body || '); do not apply the update' as detail
+    from added where body <> before and body <> after
   union all
   select 'problem', 'only part of the update is present'
     from state where absent <> total and updated <> total
-      and not exists (select 1 from added where body <> 'absent' and body <> after)
+      and not exists (select 1 from added where body <> before and body <> after)
 )
 select 'summary' as kind,
   'house slots: '

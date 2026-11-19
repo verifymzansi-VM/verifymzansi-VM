@@ -4,8 +4,10 @@
 -- update does not depend on it and touches none of its functions or tables).
 -- Order: apply-first. Nothing in the website uses it: it adds no API command,
 -- argument, grant or result field. It refuses with 55000 unless the three
--- functions it adds are absent (or this update's) and its table and trigger
--- are absent or complete. In one transaction it:
+-- functions it adds are absent (or this update's), the one it replaces
+-- (internal.frontend_privacy_export_data) has its reviewed body (or this
+-- update's) and its table is absent or has this update's shape. In one
+-- transaction it:
 --
 -- 1. Adds the append-only table private.house_slot_events: one row per house
 --    slot granted, extended or ended (the slot, the action, the slot's end
@@ -48,9 +50,20 @@
 --    staff_roles_end_house_slots on private.staff_roles (after a role is
 --    revoked, changed or deleted), whose function
 --    internal.house_slots_on_staff_role_change ends every current house slot
---    of an account that no longer holds an active admin role.
---    It never waits for a post or slot in use: PT409 house_slot_busy refuses
---    the role change, which is retried.
+--    of an account that no longer holds an active admin role. Removing a
+--    role can never fail or wait because of a post: the slot itself is
+--    revoked first (the only row it waits for, never held for long), which at
+--    once stops any activation (internal.activate_post and
+--    internal.entitlement_for_post_eligible need an active slot) and takes
+--    its posts out of public view (private.public_eligible_posts needs an
+--    active slot). Its posts are then released with SKIP LOCKED: a post in
+--    use at that moment keeps its open activation on the revoked slot, out of
+--    public view, until internal.end_house_slot is run again for the slot or
+--    the post's end date passes (internal.run_post_lifecycle expires it).
+-- 4. Replaces internal.frontend_privacy_export_data: a member's export gains
+--    the dataset `house_slot_events` (their slots' grant, extension and end
+--    records: slot, action, end date, time; never the approving administrator
+--    or the reason). Every other dataset is unchanged.
 --
 -- No existing row is changed. Read-only preflight:
 -- ../preflight/20261119082834_house_slots.check.sql. Rollback:
@@ -67,13 +80,16 @@ begin
     select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)),'absent')
     from (values ('internal.grant_house_slots(text,integer,integer,text,text)'),
       ('internal.end_house_slot(uuid,text)'),
-      ('internal.house_slots_on_staff_role_change()')) v(sig)
+      ('internal.house_slots_on_staff_role_change()'),
+      ('internal.frontend_privacy_export_data(uuid)')) v(sig)
   loop
     if shape not in (
+        'internal.frontend_privacy_export_data(uuid) 0b4cd3f792ffecf94c329277db4da28e',
+        'internal.frontend_privacy_export_data(uuid) e3842fd91a8d4f6b0bfe4cdc5b3030d9',
         'internal.grant_house_slots(text,integer,integer,text,text) absent',
         'internal.grant_house_slots(text,integer,integer,text,text) 4d1d0e822e358b6489f0cdf69a22c564',
         'internal.end_house_slot(uuid,text) absent',
-        'internal.end_house_slot(uuid,text) e68a50d7a6d0211cb339ce7ad66c26bd',
+        'internal.end_house_slot(uuid,text) 86419d57cc0266fcb6ec5881c62ae5e5',
         'internal.house_slots_on_staff_role_change() absent',
         'internal.house_slots_on_staff_role_change() f100ded1785d690054ba54e150e33bff') then
       raise exception 'house slots precondition: % is not a reviewed body', shape using errcode='55000';
@@ -118,50 +134,47 @@ drop trigger if exists house_slot_events_no_truncate on private.house_slot_event
 create trigger house_slot_events_no_truncate before truncate on private.house_slot_events
   for each statement execute function internal.append_only_guard();
 
--- 3. Ending a house slot: the slot is revoked, its posts are released
--- (expired, out of search) and the end is recorded. Posts first, then the
--- slot, as internal.release_sponsorship_entitlement locks them, and never
--- waiting: a post or slot in use refuses (PT409 house_slot_busy) and the role
--- change is retried, so it can never deadlock with an activation.
+-- 3. Ending a house slot. The slot is revoked first: the only row this waits
+-- for, never held for long. From then on nothing can activate a post in it
+-- and its posts are out of public view. Its posts are then released (expired,
+-- out of search) with SKIP LOCKED, so this never waits for a post and can
+-- never deadlock with an activation; a post in use at that moment is released
+-- when this runs again for the slot, or expires at its end date. The end is
+-- recorded once. Returns the number of posts released by this call.
 create or replace function internal.end_house_slot(p_entitlement uuid, p_reason text)
  returns integer
  language plpgsql
  set search_path to 'pg_catalog'
 as $function$
-declare v_post_ids uuid[]; v_ends timestamptz;
+declare v_ends timestamptz; v_locked uuid[]; v_post_ids uuid[];
 begin
   if p_entitlement is null or not coalesce(internal.plain_text_valid(p_reason, 5, 500, true), false) then
     raise exception 'house slot and reason required' using errcode='22023';
   end if;
-  begin
-    perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
-      where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p nowait;
-    perform e.id from private.entitlements e where e.id=p_entitlement for update nowait;
-    -- Re-read after the slot lock: an activation may have committed since the
-    -- first post scan. Never wait on a newly found post here.
-    perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
-      where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p nowait;
-  exception when lock_not_available then
-    raise exception 'house slot is busy; retry the operation' using errcode='PT409', detail='house_slot_busy';
-  end;
   update private.entitlements e set status='revoked', revoked_reason='house_slot_ended'
     where e.id=p_entitlement and e.source='staff_grant' and e.status<>'revoked'
       and exists(select 1 from private.house_slot_events h where h.entitlement_id=e.id)
     returning e.ends_at into v_ends;
-  if not found then
+  if found then
+    insert into private.house_slot_events(entitlement_id, action, ends_at, approved_by, reason)
+      values(p_entitlement, 'ended', v_ends, null, p_reason);
+  elsif not exists(select 1 from private.entitlements e where e.id=p_entitlement and e.source='staff_grant'
+      and e.status='revoked' and e.revoked_reason='house_slot_ended') then
     return 0;
   end if;
+  select coalesce(array_agg(x.id), '{}') into v_locked from (select p.id from private.posts p
+      where p.id in(select a.post_id from private.post_activations a
+        where a.entitlement_id=p_entitlement and a.released_at is null)
+      order by p.id for update of p skip locked) x;
   with released as (
     update private.post_activations a set released_at=statement_timestamp(), release_reason='entitlement_ended'
-    where a.entitlement_id=p_entitlement and a.released_at is null returning a.post_id)
-  select coalesce(array_agg(post_id) filter(where post_id is not null), '{}') into v_post_ids from released;
+    where a.entitlement_id=p_entitlement and a.released_at is null and a.post_id=any(v_locked) returning a.post_id)
+  select coalesce(array_agg(post_id), '{}') into v_post_ids from released;
   update private.posts p set status='expired', status_reason='Slot ended', revision=revision+1
     where p.id=any(v_post_ids) and (p.status in('live','pending_moderation')
       or (p.status='paused' and not exists(select 1 from private.frontend_content_holds h
         where h.post_id=p.id and h.released_at is null)));
   update private.post_search_documents set is_visible=false where post_id=any(v_post_ids);
-  insert into private.house_slot_events(entitlement_id, action, ends_at, approved_by, reason)
-    values(p_entitlement, 'ended', v_ends, null, p_reason);
   return cardinality(v_post_ids);
 end;
 $function$;
@@ -307,6 +320,111 @@ $function$;
 alter function internal.grant_house_slots(text,integer,integer,text,text) owner to postgres;
 revoke all on function internal.grant_house_slots(text,integer,integer,text,text) from public;
 revoke all on function internal.grant_house_slots(text,integer,integer,text,text) from anon, authenticated, service_role;
+
+-- 4. A member's privacy export lists their house slot records (the full
+-- function; only the dataset house_slot_events is new).
+CREATE OR REPLACE FUNCTION internal.frontend_privacy_export_data(p_subject uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare entry record;items jsonb;row_count integer;result jsonb:='{}';size_so_far bigint:=0;
+begin
+  for entry in select * from (values
+    ('profile',$q$select account_id,display_name,bio,legal_first_name,legal_last_name,legal_name_locked_at,created_at,updated_at from private.profiles where account_id=$1$q$),
+    ('account',$q$select id,email,email_confirmed_at,phone,phone_confirmed_at,created_at,last_sign_in_at from auth.users where id=$1 and deleted_at is null$q$),
+    ('listing_drafts',$q$select category_key,price_mode,price_cents,price_negotiable,revision,expires_at from private.listing_price_drafts where owner_id=$1$q$),
+    ('posts',$q$select p.id,p.kind,p.area,p.category_key,p.activity_key,p.title,p.description,p.province_id,p.city_id,p.locality_label,
+      p.status,p.status_reason,p.created_at,p.submitted_at,p.published_at,p.visible_until,p.edit_of,
+      l.price_mode,l.price_cents,l.price_negotiable,l.attributes,b.business_type,e.starts_at,e.ends_at,e.timezone,
+      s.slug,d.data presentation,d.contacts contact_details,c.channels
+      from private.posts p left join private.listing_details l on l.post_id=p.id left join private.business_details b on b.post_id=p.id
+      left join private.event_details e on e.post_id=p.id left join private.post_slugs s on s.post_id=p.id
+      left join private.post_presentations d on d.post_id=p.id left join private.post_contacts c on c.post_id=p.id
+      where p.owner_id=$1 order by p.created_at,p.id$q$),
+    ('post_reviews',$q$select m.post_id,m.edit_id,m.decision,m.reason,m.decided_at,m.price_only
+      from private.moderation_log m join private.posts p on p.id=m.post_id where p.owner_id=$1 order by m.decided_at,m.id$q$),
+    ('media_metadata',$q$select id,kind,size_bytes,mime,width,height,state,created_at,deleted_at from private.media_objects where owner_id=$1 order by created_at,id$q$),
+    ('payments',$q$select p.id,p.product_kind,p.target_post_id,p.amount_cents,p.currency,p.status,p.fulfillment_status,p.merchant_reference,
+      p.provider,p.created_at,p.completed_at,coalesce((p.snapshot->>'renewal')::boolean,false) renewal,
+      p.snapshot->'cooling_off_consent' cooling_off_consent,p.snapshot->'renewal_starts' renewal_starts,
+      (select jsonb_agg(jsonb_build_object('line_number',l.line_number,'amount_cents',l.amount_cents,'status',l.status,
+          'renews_entitlement_id',l.renews_entitlement_id,'slot_count',l.slot_count,'reversal_kind',l.reversal_kind,
+          'reversed_at',l.reversed_at)
+        order by l.line_number) from private.payment_lines l where l.payment_id=p.id) lines
+      from private.payments p where p.owner_id=$1 order by p.created_at,p.id$q$),
+    ('invoices',$q$select i.id,i.payment_id,i.invoice_number,i.amount_ex_vat_cents,i.vat_cents,i.total_cents,i.description,i.issued_at
+      from private.invoices i join private.payments p on p.id=i.payment_id where p.owner_id=$1 order by i.issued_at,i.id$q$),
+    ('customer_invoices',$q$select i.invoice_number,i.status,i.description,i.slots,i.unit_price_cents,i.total_cents,i.issued_at,i.due_on,
+      i.buyer_name,i.buyer_address,i.buyer_registration_number,i.buyer_saved_at,i.cooling_off_consent_at,i.cooling_off_consent_version,
+      i.payment_id,i.paid_at,i.voided_at,(select array_agg(l.payment_id order by l.attempt) from private.customer_invoice_payments l
+        where l.invoice_id=i.id) payment_attempts
+      from private.customer_invoices i where i.account_id=$1 order by i.issued_at,i.id$q$),
+    ('bank_transfers',$q$select t.id,t.payment_id,v.duration_days term_days,t.slots,t.amount_received_cents,t.bank_reference,t.cleared_on,
+      t.cooling_off_waiver_confirmed,t.status,t.recorded_at,t.confirmed_at,t.declined_at,t.expired_at
+      from private.invoice_transfers t join private.plan_versions v on v.id=t.plan_version_id where t.account_id=$1 order by t.recorded_at,t.id$q$),
+    ('entitlements',$q$select id,source,area,slot_capacity,activations_per_period,activation_period_days,max_photos,max_videos,starts_at,ends_at,status,revoked_reason,
+      renews_entitlement_id,slot_id,package_id
+      from private.entitlements where owner_id=$1 order by created_at,id$q$),
+    ('house_slot_events',$q$select h.entitlement_id,h.action,h.ends_at,h.recorded_at from private.house_slot_events h
+      join private.entitlements e on e.id=h.entitlement_id where e.owner_id=$1 order by h.recorded_at,h.id$q$),
+    ('slot_packages',$q$select id,term_days,slot_count,created_at from private.slot_packages where owner_id=$1
+      order by created_at,id$q$),
+    ('package_invoice_requests',$q$select r.id,r.term_days,r.slots,r.unit_price_cents,r.total_cents,r.requested_at,r.consent_at,
+      r.consent_version,r.status,r.closed_at,(select i.invoice_number from private.customer_invoices i where i.id=r.invoice_id) invoice_number
+      from private.package_invoice_requests r where r.account_id=$1 order by r.requested_at,r.id$q$),
+    ('post_activations',$q$select post_id,entitlement_id,activated_at,released_at,release_reason,continued
+      from private.post_activations where owner_id=$1 order by activated_at,id$q$),
+    ('event_submissions',$q$select post_id,submitted_at,released_at,release_reason
+      from private.event_submissions where owner_id=$1 order by submitted_at,id$q$),
+    ('introductory_trials',$q$select post_id,trial_entitlement_id,claimed_at,converted_at
+      from private.post_trial_claims where owner_id=$1 order by claimed_at,post_id$q$),
+    ('posting_terms',$q$select version,document_hash,accepted_at from private.posting_terms_acceptances where owner_id=$1 order by accepted_at,version$q$),
+    ('signup_terms',$q$select version,document_hash,method,accepted_at from private.signup_terms_acceptances where account_id=$1$q$),
+    ('communication_choices',$q$select purpose,granted,wording_version,recorded_at from private.communication_choice_events
+      where account_id=$1 order by recorded_at,id$q$),
+    ('verification_cases',$q$select id,kind,status,created_at from private.evidence_cases where subject_id=$1 order by created_at,id$q$),
+    ('verification_reviews',$q$select r.case_id,r.reason,r.decision,r.created_at from private.verification_return_requests r join private.evidence_cases c on c.id=r.case_id
+      where c.subject_id=$1 order by r.created_at,r.id$q$),
+    ('evidence_metadata',$q$select id,case_id,purpose,state,size_bytes,created_at,retain_until,deleted_at
+      from private.evidence_artifacts where owner_id=$1 order by created_at,id$q$),
+    ('phone_verification',$q$select phone,verified_at,contact_changed_at,revoked_at from private.verification_phone_proofs where owner_id=$1 order by verified_at,id$q$),
+    ('locality_verification',$q$select province_id,city_id,assurance,confirmed_at from private.verification_localities where owner_id=$1$q$),
+    ('enquiries_sent',$q$select id,post_id,message,created_at from private.enquiries where sender_account_id=$1 order by created_at,id$q$),
+    ('enquiries_received',$q$select id,post_id,message,status,created_at from private.enquiries where owner_id=$1 order by created_at,id$q$),
+    ('notifications',$q$select id,kind,post_id,created_at,read_at from private.notifications where account_id=$1 order by created_at,id$q$),
+    ('reports_submitted',$q$select id,post_id,coalesce(frontend_reason,category) category,description,status,created_at,resolved_at
+      from private.reports where reporter_id=$1 order by created_at,id$q$),
+    ('moderation_decisions',$q$select id,kind,reason,starts_at,ends_at,active from private.frontend_appealable_actions
+      where account_id=$1 order by starts_at,id$q$),
+    ('appeals',$q$select id,action_id,kind,reason,status,reviewer_rationale,created_at,resolved_at from private.frontend_appeals
+      where appellant_id=$1 order by created_at,id$q$),
+    ('organisation_applications',$q$select id,organisation_id,programme_id,post_id,reason,member_reference,share_representative_name,consented_at,
+      status,info_request,info_response,decision_at,decision_note,created_at from private.organisation_applications where applicant_id=$1 order by created_at,id$q$),
+    ('organisation_affiliations',$q$select a.id,a.organisation_id,a.programme_id,a.post_id,a.affiliation_type,a.status,a.confirmed_at,a.revoked_at,a.revoke_reason
+      from private.organisation_affiliations a join private.posts p on p.id=a.post_id where p.owner_id=$1 order by a.created_at,a.id$q$),
+    ('organisation_roles',$q$select organisation_id,role,created_at from private.organisation_admins where account_id=$1 order by created_at,organisation_id$q$),
+    ('sponsorships',$q$select id,organisation_id,post_id,sponsor_type,status,starts_at,ends_at,ended_at,end_reason
+      from private.organisation_sponsorships where owner_id=$1 order by created_at,id$q$),
+    ('partner_account',$q$select id,code,status,commission_bps,created_at,updated_at from private.partners where account_id=$1 order by created_at,id$q$),
+    ('partner_commissions',$q$select c.id,c.base_cents,c.rate_bps,c.amount_cents,c.status,c.eligible_at,c.approved_at,c.paid_at,c.reversed_at
+      from private.partner_commissions c join private.partners p on p.id=c.partner_id where p.account_id=$1 order by c.created_at,c.id$q$),
+    ('acquisition',$q$select source,campaign,landing_path,referrer_host,first_touch_at,recorded_at from private.account_acquisitions where account_id=$1$q$),
+    ('account_closure',$q$select closed_at,evidence_delete_after from private.account_closures where user_id=$1$q$),
+    ('data_requests',$q$select id,type,description,status,received_at,due_by,extended_due_at,extension_reason,response_summary,completed_at
+      from private.privacy_requests where subject_user_id=$1 order by received_at,id$q$)
+  ) as registry(dataset,statement) loop
+    execute 'select coalesce(jsonb_agg(to_jsonb(x)),''[]''::jsonb),count(*) from ('||entry.statement||' limit 2501)x'
+      into items,row_count using p_subject;
+    size_so_far:=size_so_far+octet_length(items::text);
+    if row_count>2500 or size_so_far>4194304 then raise exception 'privacy export exceeds the direct delivery limit' using errcode='PT413';end if;
+    result:=result||jsonb_build_object(entry.dataset,items);
+  end loop;
+  return result;
+end$function$;
+alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
+revoke all on function internal.frontend_privacy_export_data(uuid) from public;
 
 notify pgrst,'reload schema';
 commit;

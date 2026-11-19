@@ -159,6 +159,25 @@ describe("communication choices", () => {
     });
   });
 
+  it("words the database's refusal to turn a hidden choice on as an invalid change", async () => {
+    // Shown again before the database offers them: the database still refuses
+    // (20261119065758_privacy_tightening_2).
+    hiddenFeature.shown = true;
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "22023",
+        details: "choice_unavailable",
+        message: "this choice is not available",
+      },
+    });
+    const response = await savePreferences(preferences("PATCH", { analytics: true }));
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body).toMatchObject({ reason: "invalid" });
+    expect(JSON.stringify(body)).not.toContain("not available");
+  });
+
   it("passes several choices in one command, turning off as easily as on", async () => {
     await savePreferences(preferences("PATCH", { marketing_email: false, marketing_sms: true }));
     expect(rpc).toHaveBeenCalledExactlyOnceWith("save_my_communication_choices", {

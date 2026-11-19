@@ -3,7 +3,11 @@ import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { FoundationStaffCommandError, staffCommandRefusal } from "@/lib/foundation/staff-command";
-import { decideRestoredCommission, saveRestoredPartner } from "@/lib/foundation/partners";
+import {
+  decideRestoredCommission,
+  PARTNER_MAX_RATE_BPS,
+  saveRestoredPartner,
+} from "@/lib/foundation/partners";
 import { assertStaffRefundApprovable } from "@/lib/foundation/ozow-refunds";
 import {
   activateStaffPaidPayment,
@@ -210,7 +214,7 @@ const schema = z.discriminatedUnion("action", [
           .string()
           .regex(/^[A-Za-z0-9]{4,16}$/)
           .optional(),
-        commissionBps: z.number().int().min(0).max(5000).nullable().optional(),
+        commissionBps: z.number().int().min(0).max(PARTNER_MAX_RATE_BPS).nullable().optional(),
         notes: z.string().max(1000).optional(),
       })
       .strict(),

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { publicPostCoreSchema, validPublicPostCore } from "./public-post-contract";
 import type { FoundationPublicApi } from "./public-api";
 import { foundationBusinessTypeSchema } from "./business-type";
+import { SEARCH_MAX_OFFSET } from "./search-depth";
 
 const key = z.string().regex(/^[a-z][a-z0-9_]{0,79}$/);
 const area = z.enum(["market", "business", "tourism_events"]);
@@ -31,7 +32,7 @@ const request = z
     attributes: z.record(key, z.union([z.boolean(), z.string().max(200), range])).optional(),
     cursor: cursor.optional(),
     limit: z.number().int().min(1).max(48).optional(),
-    offset: z.number().int().min(0).max(500000).optional(),
+    offset: z.number().int().min(0).max(SEARCH_MAX_OFFSET).optional(),
     post_id: z.uuid().optional(),
     business_type: foundationBusinessTypeSchema.optional(),
     event_state: z.enum(["active", "upcoming", "ongoing", "ended", "all"]).optional(),

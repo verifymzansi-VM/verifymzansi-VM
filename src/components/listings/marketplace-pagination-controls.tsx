@@ -1,7 +1,32 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { searchDepthNotice } from "@/lib/foundation/search-depth";
 
 export function MarketplacePaginationControls({
+  page,
+  totalPages,
+  onPageChange,
+  limitedTo = null,
+}: {
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  /** Results the page links reach when there are more (searchPagination). */
+  limitedTo?: number | null;
+}) {
+  return (
+    <>
+      <MarketplacePageLinks page={page} totalPages={totalPages} onPageChange={onPageChange} />
+      {limitedTo !== null && page >= totalPages ? (
+        <p className="text-center text-sm text-muted-foreground" role="status">
+          {searchDepthNotice(limitedTo)}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function MarketplacePageLinks({
   page,
   totalPages,
   onPageChange,

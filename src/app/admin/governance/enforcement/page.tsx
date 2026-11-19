@@ -96,7 +96,10 @@ export default async function GovernanceEnforcementPage() {
                 >
                   <div className="min-w-0 space-y-1">
                     <p className="text-sm font-medium">
-                      {r.display_name || `${r.account_id.slice(0, 8)}…`}{" "}
+                      {/* Short names can repeat; the account reference tells them apart. */}
+                      {r.display_name
+                        ? `${r.display_name} · ${r.account_id.slice(0, 8)}…`
+                        : `${r.account_id.slice(0, 8)}…`}{" "}
                       <Badge variant={r.kind === "ban" ? "destructive" : "secondary"}>
                         {r.kind === "ban" ? "Banned" : "Suspended"}
                       </Badge>{" "}

@@ -67,7 +67,7 @@ begin
 
   if req ? 'offset' then
     if jsonb_typeof(req->'offset') <> 'number' or (req->>'offset') !~ '^[0-9]{1,6}$'
-      or (req->>'offset')::integer > 500000 or req ? 'cursor' then
+      or (req->>'offset')::integer > 4800 or req ? 'cursor' then
       raise exception 'invalid page offset' using errcode='22023';
     end if;
     v_offset := (req->>'offset')::integer;

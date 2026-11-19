@@ -15,7 +15,7 @@ begin
   perform internal.lock_verification_subject(p_account);
   select * into p from private.partners x where x.account_id=p_account for update;
   actor:=internal.staff_actor('partner:manage');
-  if p_commission_bps is not null and p_commission_bps not between 0 and 5000 then
+  if p_commission_bps is not null and p_commission_bps not between 0 and 2000 then
     raise exception 'invalid rate' using errcode='22023',detail='partner_invalid'; end if;
   if p_action='create' then
     if p.id is not null then raise exception 'already a partner' using errcode='PT409',detail='partner_exists'; end if;

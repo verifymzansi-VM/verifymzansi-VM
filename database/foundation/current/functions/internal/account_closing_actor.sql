@@ -18,8 +18,11 @@ begin
   end if;
   select max((a->>'timestamp')::bigint) into signed_in_at
   from jsonb_array_elements(case when jsonb_typeof(claims->'amr') = 'array' then claims->'amr' else '[]'::jsonb end) a
-  where jsonb_typeof(a) = 'object' and a->>'method' is not null and a->>'method' <> 'anonymous'
-    and a->>'timestamp' ~ '^[0-9]{1,12}$';
+  -- Only a sign-in by the member counts: a password or Google (oauth), as
+  -- foundationLatestSignIn in the website; never a stamp in the future.
+  where jsonb_typeof(a) = 'object' and a->>'method' in ('password', 'oauth')
+    and jsonb_typeof(a->'timestamp') = 'number' and a->>'timestamp' ~ '^[0-9]{1,12}$'
+    and (a->>'timestamp')::bigint <= extract(epoch from clock_timestamp())::bigint + 30;
   if signed_in_at is null or signed_in_at < extract(epoch from clock_timestamp() - interval '15 minutes') then
     raise exception 'sign in again to close the account' using errcode = '42501', detail = 'recent_sign_in_required';
   end if;

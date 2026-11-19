@@ -84,9 +84,10 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 `20261119082834_house_slots.sql` is pending (see the applied register). **Order:
 apply-first** (the default): nothing in the website uses it. It adds no API
-command, argument, grant or result field and changes no existing function. It
-refuses (55000) unless the three functions it adds are absent (or this update's)
-and its table is absent or has the update's shape.
+command, argument, grant or result field; the only existing function it changes
+is the privacy export. It refuses (55000) unless the three functions it adds are
+absent (or this update's), the privacy export it replaces has its reviewed body
+(or this update's) and its table is absent or has the update's shape.
 
 - **What a house slot is.** A `staff_grant` slot with exactly the shape of a
   paid Individual slot: any posting area, 1 live post, 4 posts going live per 30
@@ -130,15 +131,77 @@ and its table is absent or has the update's shape.
   an active admin role, `internal.end_house_slot` revokes each current house
   slot (`revoked_reason` `house_slot_ended`), expires its posts (status reason
   "Slot ended"), takes them out of search and records the end ("Admin role
-  removed"). It never waits for a post or slot in use: the role change is
-  refused with PT409 `house_slot_busy` and retried. A slot also ends at its end
-  date, as any slot does. Account erasure revokes it like any other slot.
+  removed"). Removing a role never fails or waits because of a post: the slot is
+  revoked first (the only row waited for, never held for long), which at once
+  stops activations and takes its posts out of public view
+  (`private.public_eligible_posts` needs an active slot); its posts are then
+  released with SKIP LOCKED. A post in use at that moment keeps its activation
+  on the revoked slot, out of public view, until
+  `select internal.end_house_slot('<slot id>', 'Admin role removed');` is run
+  again (owner, SQL editor) or its end date passes (the lifecycle job expires
+  it). A slot also ends at its end date, as any slot does. Account erasure
+  revokes it like any other slot.
+- **Privacy export.** `internal.frontend_privacy_export_data` gains the dataset
+  `house_slot_events` (slot, action, end date, time; never the approving
+  administrator or the reason).
 
 Preflight `../preflight/20261119082834_house_slots.check.sql` (summary "house
 slots: update not applied; admins: N; ready to receive: N; staff-granted slots:
 0; house slots: none (table absent)"); rollback
 `../rollback/20261119082834_house_slots.down.sql` (refuses once a house slot
 event is recorded). Behaviour test `scripts/test-foundation-house-slots.mjs`.
+
+## Privacy tightening 2, 19 November 2026
+
+`20261119065758_privacy_tightening_2.sql` was applied on 19 November 2026 at
+10:48 UTC (see the applied register). **Order: website-first**: the website
+release from the same pull request is merged and deployed first, then the update
+is applied. It refuses (55000) unless the thirteen functions it replaces have
+their reviewed bodies (or this update's), its helper is absent (or this
+update's) and no partner's rate is above 20%. No API command, argument, grant or
+return type changes and no field is added to an existing result; the staff
+organisation detail loses `public_contacts` (hand-reviewed jsonb). **Revert:**
+the website before this pull request requires `public_contacts`, so its staff
+organisation page fails once the update is applied: if the website is reverted
+after apply, run the rollback SQL first.
+
+- **Communication choices.** `internal.save_my_communication_choices` refuses to
+  turn analytics or third-party sharing on (22023 `choice_unavailable`). Turning
+  one off, or saving it unchanged, works as before; members who had one on keep
+  it (the preflight counts them).
+- **ID check counters.** The `kyc` count of `internal.staff_dashboard_overview`
+  and the `kyc` figures of `internal.restored_staff_queues` count only what the
+  ID check queue lists: open, a current submission at the case's version, an
+  active account, not the staff member's own case. The oldest waiting time is
+  the submission's. No case is changed.
+- **Search depth.** `internal.search_posts` (and `internal.search_post_cards`)
+  refuses a page offset above 4,800 (was 500,000), 22023 `invalid page offset`.
+  The website stops page links at 100 pages and never sends a deeper offset.
+- **Partner rates.** At most 20% (2,000 basis points): the check
+  `partners_commission_bps_check` and `internal.staff_save_partner` (22023
+  `partner_invalid`). Recorded commissions keep their rate.
+- **Short names.** `internal.get_frontend_enforcement`,
+  `internal.get_frontend_partner_admin` and `internal.staff_get_organisation`
+  name members by `internal.profile_public_name` ("Thandeka D.").
+- **Staff organisation page.** `internal.get_frontend_staff_organisation_detail`
+  carries no applicant contacts; staff ask for one pending application's contact
+  with `api.reveal_organisation_applicant_contact` (logged in the organisation's
+  event log), as organisation administrators do.
+- **Business checks.** The staff member who decided a CIPC or "seen in person"
+  check (or was assigned to the visit) opens its private details without a claim
+  only until 90 days after the decision (`internal.get_frontend_cipc_case`,
+  `internal.get_frontend_seen_case`, `internal.authorize_frontend_seen_file`,
+  through the new `internal.business_check_reread_open`). After that they see
+  only what every `queue:view` reader sees (a decided check cannot be claimed).
+- **Closing an account.** `internal.account_closing_actor` counts only a
+  password or Google sign-in (`amr` methods `password` and `oauth`) from the
+  last 15 minutes, never a stamp more than 30 seconds in the future.
+
+Preflight `../preflight/20261119065758_privacy_tightening_2.check.sql` (summary
+"privacy tightening 2: update not applied; analytics on: N; third-party sharing
+on: N; partners above 20%: 0; open ID checks with nothing to review: N");
+rollback `../rollback/20261119065758_privacy_tightening_2.down.sql`. Behaviour
+test `scripts/test-foundation-privacy-tightening-2.mjs`.
 
 ## Multi-listing package invoices and "Ask for an invoice", 19 November 2026
 
@@ -5353,6 +5416,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   0; package bank transfers: 0"; production fingerprint after it
   (fingerprint.sql at ca11da3a, captured about 06:45 UTC) matched the full
   replay (except the known schema grant difference)
+- `20261119065758_privacy_tightening_2.sql`: applied 2026-11-19 10:48 UTC;
+  owner-approved, website-first (after the website release of pull request #282,
+  merged as d24f1d65); preflight after "privacy tightening 2: already applied;
+  analytics on: 0; third-party sharing on: 0; partners above 20%: 0; open ID
+  checks with nothing to review: 0"; production fingerprint after it (captured
+  about 10:50 UTC) matched the full replay at 772f770e (except the known schema
+  grant difference)
 - `20261119082834_house_slots.sql`: pending
 
 <!-- applied-register:end -->

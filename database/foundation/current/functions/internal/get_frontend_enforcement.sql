@@ -11,12 +11,14 @@ declare actor uuid:=internal.staff_actor('account:restore');now_at timestamptz:=
 begin
   with active as materialized (
     select x.id,x.decision_id,x.account_id,x.kind,x.reason,x.starts_at,x.ends_at,x.emergency,x.version,
-      coalesce(actor in(x.account_id,x.reporter_id,d.proposed_by,d.approved_by),false) as conflicted,p.display_name
+      coalesce(actor in(x.account_id,x.reporter_id,d.proposed_by,d.approved_by),false) as conflicted,
+      internal.profile_public_name(p.display_name) as display_name
       from private.frontend_account_restrictions x join private.decisions d on d.id=x.decision_id
       left join private.profiles p on p.account_id=x.account_id
       where x.lifted_at is null and (x.ends_at is null or x.ends_at>now_at)
     union all
-    select d.id,d.id,c.subject_id,'ban','Account restricted after an independent review.',d.approved_at,null,false,null,true,p.display_name
+    select d.id,d.id,c.subject_id,'ban','Account restricted after an independent review.',d.approved_at,null,false,null,true,
+      internal.profile_public_name(p.display_name)
       from private.decisions d join private.evidence_cases c on c.id=d.case_id
       left join private.profiles p on p.account_id=c.subject_id
       where d.action='restrict_account' and d.scope_kind='native' and d.status='approved' and not exists(select 1 from private.frontend_account_restrictions y where y.decision_id=d.id and not y.emergency)

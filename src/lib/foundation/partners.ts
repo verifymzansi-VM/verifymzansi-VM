@@ -129,6 +129,11 @@ export async function readFoundationPartnerDashboard(api: FoundationAuthenticate
 
 // ── Staff (partner:manage, recent second factor) ────────────────────────
 
+/** The highest partner rate staff may set: 20% (owner decision, 18 November
+ * 2026; the database refuses more from 20261119065758_privacy_tightening_2).
+ * Reads still accept up to 50% for rates recorded before it. */
+export const PARTNER_MAX_RATE_BPS = 2000;
+
 const partnerChange = z.strictObject({
   account_id: z.uuid(),
   action: z.enum(["create", "activate", "suspend", "set_rate"]),
@@ -136,7 +141,7 @@ const partnerChange = z.strictObject({
     .string()
     .regex(/^[A-Z0-9]{4,16}$/)
     .optional(),
-  commission_bps: z.number().int().min(0).max(5000).optional(),
+  commission_bps: z.number().int().min(0).max(PARTNER_MAX_RATE_BPS).optional(),
   reason: staffReason,
 });
 const partnerResult = z.strictObject({

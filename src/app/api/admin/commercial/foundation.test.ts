@@ -16,6 +16,7 @@ vi.mock("@/lib/foundation/owner-route", async (original) => ({
   handleFoundationOwnerRoute: vi.fn(),
 }));
 vi.mock("@/lib/foundation/partners", () => ({
+  PARTNER_MAX_RATE_BPS: 2000,
   decideRestoredCommission: vi.fn(),
   saveRestoredPartner: vi.fn(),
 }));
@@ -122,6 +123,20 @@ describe("POST /api/admin/commercial on foundation", () => {
         reason,
       })
     ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("refuses a partner rate above 20% before calling the database", async () => {
+    const run = await command();
+    await expect(
+      run(api, {
+        action: "partner.manage",
+        userId: id,
+        operation: "rate",
+        values: { commissionBps: 2001 },
+        reason,
+      })
+    ).rejects.toThrow();
+    expect(saveRestoredPartner).not.toHaveBeenCalled();
   });
 
   it("refuses actions the foundation backend does not offer, and invalid input", async () => {

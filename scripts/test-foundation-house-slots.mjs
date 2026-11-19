@@ -20,10 +20,15 @@
 // approve it) and never touches the free first post, payments, commissions,
 // refunds or invoices; the paid 4-slot count is unchanged; fair use refuses a
 // 5th post going live in 30 days; extending moves the slot's end and the
-// search end; the record is append-only; removing the admin role ends the
-// slots at once (posts expired and out of search; a post in use refuses it
-// without waiting) and the free first post is
-// still there afterwards; and the rollback refuses once a slot was granted.
+// search end, and a mixed grant adds only what is missing; the privacy
+// export lists the record; the record is append-only; removing the admin role
+// (through the staff role command, a role change or a deleted row) ends the
+// slots at once, also while a post is in use (that post leaves public view at
+// once and is released when free); grants only run in read committed and two
+// at once never exceed 15; a removal racing a grant ends what it added; the
+// free first post is still there afterwards; and the rollback refuses once a
+// slot was granted. Races are ordered through pg_stat_activity and a gate
+// table, never through sleeps.
 //
 //   node --import tsx scripts/test-foundation-house-slots.mjs
 //
@@ -52,9 +57,12 @@ const UPDATE = "20261119082834_house_slots.sql";
 const GRANT = "internal.grant_house_slots(text,integer,integer,text,text)";
 const ADDED = {
   [GRANT]: "4d1d0e822e358b6489f0cdf69a22c564",
-  "internal.end_house_slot(uuid,text)": "e68a50d7a6d0211cb339ce7ad66c26bd",
+  "internal.end_house_slot(uuid,text)": "86419d57cc0266fcb6ec5881c62ae5e5",
   "internal.house_slots_on_staff_role_change()": "f100ded1785d690054ba54e150e33bff",
 };
+const EXPORT = "internal.frontend_privacy_export_data(uuid)";
+const EXPORT_BEFORE = "0b4cd3f792ffecf94c329277db4da28e";
+const EXPORT_AFTER = "e3842fd91a8d4f6b0bfe4cdc5b3030d9";
 const NONE = { anon: false, authenticated: false, service_role: false };
 const REASON = "Owner-approved house slot for real offers";
 const NOT_APPLIED =
@@ -89,6 +97,39 @@ try {
       insert into private.post_media(post_id,object_id,purpose,position) values(pid,cover,'cover',0);
       return pid;
     end$$;`);
+  // Deterministic races: a session holds its transaction open until the test
+  // opens its gate; the test waits for sessions by name in pg_stat_activity.
+  q("create table vmtest.gate(name text primary key);");
+  const { session } = psqlSessions(database);
+  const until = async (sql, what) => {
+    for (let i = 0; i < 1200; i++) {
+      if (q(sql) === "t") return;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error(`[${current()}] timed out waiting for ${what}`);
+  };
+  /** Runs `sql` in a transaction of another session named `name`, which stays
+   * open (holding its locks) until open(name); resolves once it holds them. */
+  const hold = async (name, sql) => {
+    const done = session(
+      `begin;\nset local application_name='${name}';\n${sql}\ndo $$begin for i in 1..6000 loop exit when exists(select 1 from vmtest.gate where name='${name}'); perform pg_sleep(0.01); end loop; end$$;\ncommit;`
+    );
+    await until(
+      `select exists(select 1 from pg_stat_activity where application_name='${name}' and query like 'do $$begin for i%');`,
+      `${name} to hold its locks`
+    );
+    return { done };
+  };
+  const open = (name) => q(`insert into vmtest.gate(name) values('${name}');`);
+  /** Starts `sql` in another session named `name`; resolves once it waits for a lock. */
+  const blocked = async (name, sql) => {
+    const done = session(`set application_name='${name}';\n${sql}`);
+    await until(
+      `select exists(select 1 from pg_stat_activity where application_name='${name}' and wait_event_type='Lock');`,
+      `${name} to wait for a lock`
+    );
+    return { done };
+  };
   const moderator = world.staffUser("house-mod", "moderator");
   world.review(moderator, admin2, "house-mod");
   const ready = (person) => {
@@ -154,6 +195,7 @@ try {
   await check("before the update: the three functions and the table are absent", () => {
     for (const signature of Object.keys(ADDED))
       assert.equal(bodyMd5(signature), "missing", signature);
+    assert.equal(bodyMd5(EXPORT), EXPORT_BEFORE);
     assert.equal(q("select to_regclass('private.house_slot_events') is null;"), "t");
   });
   await check("preflight: read only; reads 'not applied'", () => {
@@ -176,7 +218,9 @@ try {
     assert.equal(rows.length, 2, JSON.stringify(rows));
     assert.ok(rows[0][1].startsWith("house slots: unexpected state;"), rows[0][1]);
     assert.ok(
-      rows[1][1].startsWith("internal.end_house_slot(uuid,text) is not the update's body"),
+      rows[1][1].startsWith(
+        "internal.end_house_slot(uuid,text) is neither the reviewed body nor the update's"
+      ),
       rows[1][1]
     );
     assert.match(fails(kit.step.sql, "55000"), /house slots precondition/);
@@ -198,6 +242,7 @@ try {
       assert.equal(bodyMd5(signature), md5, signature);
       assert.deepEqual(grants[signature], NONE, signature);
     }
+    assert.equal(bodyMd5(EXPORT), EXPORT_AFTER);
     fails(member(admin, grantSql(admin, 1, 90, REASON, admin2)), "42501");
     fails(staff(admin2, grantSql(admin, 1, 90, REASON, admin2)), "42501");
     fails(service(grantSql(admin, 1, 90, REASON, admin2)), "42501");
@@ -335,6 +380,22 @@ try {
     // Not one of the 4 paid Individual slots.
     assert.deepEqual([mine.individual.held, mine.individual.pending], [0, 0]);
     assert.match(preflight()[0][1], /; staff-granted slots: 1; house slots: 1 \(events: 1\)$/);
+    // The member's privacy export lists the record, without the approver or reason.
+    const exported = json(`select internal.frontend_privacy_export_data('${admin.id}');`);
+    assert.deepEqual(
+      exported.house_slot_events.map((e) => [e.entitlement_id, e.action]),
+      [[slot, "granted"]]
+    );
+    assert.deepEqual(Object.keys(exported.house_slot_events[0]).sort(), [
+      "action",
+      "ends_at",
+      "entitlement_id",
+      "recorded_at",
+    ]);
+    assert.deepEqual(
+      json(`select internal.frontend_privacy_export_data('${admin2.id}');`).house_slot_events,
+      []
+    );
   });
 
   let first;
@@ -473,63 +534,62 @@ try {
   });
 
   await check(
-    "a role removal never waits for a post in use: it is refused and retried",
+    "removing the admin role through the staff role command ends the slots at once, also while a post is in use",
     async () => {
-      const { session, sessionAfter } = psqlSessions(database);
-      const [holder, removal] = await Promise.all([
-        session(
-          `begin;
-select 1 from private.posts where id='${fourth}' for update;
-select pg_sleep(2);
-commit;`
-        ),
-        sessionAfter(
-          700,
-          `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${admin.id}' and revoked_at is null;`
-        ),
-      ]);
-      assert.equal(holder.status, 0, holder.stderr);
-      assert.notEqual(removal.status, 0);
-      assert.match(removal.stderr, /ERROR:\s+PT409:/, removal.stderr);
-      assert.match(removal.stderr, /house_slot_busy/, removal.stderr);
-      // Nothing changed: the role and every slot are still there.
+      // Another staff member's role change leaves them alone.
+      q(
+        `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${moderator.id}';`
+      );
+      assert.equal(houseSlots(admin).filter((e) => e.status === "active").length, 15);
+      const visible = () =>
+        q(`select exists(select 1 from private.public_eligible_posts where id='${fourth}');`);
+      assert.equal(visible(), "t");
+      // The post is in use in another transaction for the whole removal.
+      const holder = await hold(
+        "house-post-in-use",
+        `select 1 from private.posts where id='${fourth}' for update;`
+      );
+      // An administrator's removal applies at once (a direct removal).
+      const removed = json(
+        staff(
+          admin2,
+          `select api.propose_frontend_staff_role('${admin.email}','member','Synthetic removal of an administrator');`
+        )
+      );
+      assert.equal(removed.status, "applied");
       assert.equal(
         q(
           `select count(*) from private.staff_roles where user_id='${admin.id}' and revoked_at is null;`
         ),
-        "1"
+        "0"
       );
-      assert.equal(houseSlots(admin).filter((e) => e.status === "active").length, 15);
+      assert.deepEqual(
+        houseSlots(admin).map((e) => [e.status, e.revoked_reason]),
+        Array(15).fill(["revoked", "house_slot_ended"])
+      );
+      // The post in use is out of public view at once and can no longer be
+      // activated; it is released once it is free.
+      assert.equal(visible(), "f");
       assert.equal(row(fourth).status, "live");
+      assert.equal(fundedBy(fourth), slot);
+      open("house-post-in-use");
+      assert.equal((await holder.done).status, 0);
+      assert.equal(q(`select internal.end_house_slot('${slot}','Admin role removed');`), "1");
+      assert.equal(q(`select internal.end_house_slot('${slot}','Admin role removed');`), "0");
+      const post = row(fourth);
+      assert.deepEqual([post.status, post.status_reason], ["expired", "Slot ended"]);
+      assert.equal(fundedBy(fourth), "");
+      assert.equal(
+        q(`select is_visible from private.post_search_documents where post_id='${fourth}';`),
+        "f"
+      );
+      const ended = events(admin).filter((e) => e.action === "ended");
+      assert.equal(ended.length, 15, "each end is recorded once");
+      assert.ok(ended.every((e) => e.approved_by === null && e.reason === "Admin role removed"));
+      fails(grantSql(admin, 1, 90, REASON, admin2), "42501", /house_slots_not_admin/);
+      assert.deepEqual(money(admin), NO_MONEY);
     }
   );
-  await check("removing the admin role ends the house slots at once", () => {
-    // Another staff member's role change leaves them alone.
-    q(
-      `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${moderator.id}';`
-    );
-    assert.equal(houseSlots(admin).filter((e) => e.status === "active").length, 15);
-    q(
-      `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${admin.id}' and revoked_at is null;`
-    );
-    const slots = houseSlots(admin);
-    assert.deepEqual(
-      slots.map((e) => [e.status, e.revoked_reason]),
-      Array(15).fill(["revoked", "house_slot_ended"])
-    );
-    const post = row(fourth);
-    assert.deepEqual([post.status, post.status_reason], ["expired", "Slot ended"]);
-    assert.equal(fundedBy(fourth), "");
-    assert.equal(
-      q(`select is_visible from private.post_search_documents where post_id='${fourth}';`),
-      "f"
-    );
-    const ended = events(admin).filter((e) => e.action === "ended");
-    assert.equal(ended.length, 15);
-    assert.ok(ended.every((e) => e.approved_by === null && e.reason === "Admin role removed"));
-    fails(grantSql(admin, 1, 90, REASON, admin2), "42501", /house_slots_not_admin/);
-    assert.deepEqual(money(admin), NO_MONEY);
-  });
   await check("after the house slots end, the free first post is still there", () => {
     const next = draft(admin);
     assert.equal(json(submitSql(admin, next)).status, "pending_moderation");
@@ -550,30 +610,38 @@ commit;`
     q(`delete from private.staff_roles where user_id='${admin4.id}';`);
     assert.ok(houseSlots(admin4).every((e) => e.status === "revoked"));
   });
+  await check("a mixed grant: holding 2 at 90 days, 3 at 30 days adds 1 at 30 days", () => {
+    const admin7 = ready(world.staffUser("house-admin7", "admin"));
+    world.review(admin7, admin2, "house-admin7");
+    assert.equal(grant(admin7, 2, 90).added, 2);
+    const done = grant(admin7, 3, 30);
+    assert.deepEqual([done.added, done.extended, done.slots.length], [1, 0, 3]);
+    assert.deepEqual(
+      json(`select jsonb_agg(round(extract(epoch from ends_at-now())/86400) order by ends_at)
+        from private.entitlements where owner_id='${admin7.id}' and source='staff_grant' and status='active';`),
+      [30, 90, 90]
+    );
+    q(
+      `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${admin7.id}' and revoked_at is null;`
+    );
+  });
   await check("only in read committed: two grants at once never exceed 15", async () => {
     const admin6 = ready(world.staffUser("house-admin6", "admin"));
     world.review(admin6, admin2, "house-admin6");
     for (const level of ["repeatable read", "serializable"])
       fails(
-        `begin isolation level ${level};
-${grantSql(admin6, 15, 90, REASON, admin2)}
-commit;`,
+        `begin isolation level ${level};\n${grantSql(admin6, 15, 90, REASON, admin2)}\ncommit;`,
         "55000",
         /house_slots_isolation/
       );
     assert.deepEqual(houseSlots(admin6), []);
-    const { session, sessionAfter } = psqlSessions(database);
-    const [one, two] = await Promise.all([
-      session(`begin;
-${grantSql(admin6, 15, 90, REASON, admin2)}
-select pg_sleep(2);
-commit;`),
-      sessionAfter(700, grantSql(admin6, 15, 90, REASON, admin2)),
-    ]);
+    const first = await hold("house-grant-1", grantSql(admin6, 15, 90, REASON, admin2));
+    const second = await blocked("house-grant-2", grantSql(admin6, 15, 90, REASON, admin2));
+    open("house-grant-1");
+    const [one, two] = await Promise.all([first.done, second.done]);
     assert.equal(one.status, 0, one.stderr);
     assert.equal(two.status, 0, two.stderr);
     assert.equal(houseSlots(admin6).filter((e) => e.status === "active").length, 15);
-    // Under repeatable read the second grant would have read the old count.
     q(
       `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${admin6.id}' and revoked_at is null;`
     );
@@ -581,14 +649,13 @@ commit;`),
   await check("a role removal racing a grant: the grant's slots end", async () => {
     const admin5 = ready(world.staffUser("house-admin5", "admin"));
     world.review(admin5, admin2, "house-admin5");
-    const { session, sessionAfter } = psqlSessions(database);
-    const [granted, removed] = await Promise.all([
-      session(`begin;\n${grantSql(admin5, 2, 90, REASON, admin2)}\nselect pg_sleep(2);\ncommit;`),
-      sessionAfter(
-        700,
-        `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${admin5.id}' and revoked_at is null;`
-      ),
-    ]);
+    const granting = await hold("house-grant-race", grantSql(admin5, 2, 90, REASON, admin2));
+    const removing = await blocked(
+      "house-removal-race",
+      `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${admin5.id}' and revoked_at is null;`
+    );
+    open("house-grant-race");
+    const [granted, removed] = await Promise.all([granting.done, removing.done]);
     assert.equal(granted.status, 0, granted.stderr);
     assert.equal(removed.status, 0, removed.stderr);
     const slots = houseSlots(admin5);
@@ -632,6 +699,7 @@ commit;`),
     await check("later updates keep the house slots", () => {
       for (const [signature, md5] of Object.entries(ADDED))
         assert.equal(bodyMd5(signature), md5, signature);
+      assert.equal(bodyMd5(EXPORT), EXPORT_AFTER);
     });
   }
 } catch (error) {
