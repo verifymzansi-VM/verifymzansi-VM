@@ -225,8 +225,8 @@ try {
   }
   if (command !== "down") {
     const { status } = await up(fixture);
-    // VERIFYMZANSI_LAUNCH_CONFIG=1: the launch-configuration copy (every
-    // hidden feature on; playwright.launch-config.config.ts).
+    // VERIFYMZANSI_LAUNCH_CONFIG=1: the launch-configuration copy (each
+    // hidden feature at its launch value; playwright.launch-config.config.ts).
     const env = foundationWebsiteEnv(status, {
       launchConfig: process.env.VERIFYMZANSI_LAUNCH_CONFIG === "1",
     });

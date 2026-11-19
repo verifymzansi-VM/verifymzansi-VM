@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import { expect, test, type BrowserContext, type Page, type Request } from "@playwright/test";
 import { E2E_FIXTURE } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { endedWithTest } from "./support/route-teardown";
+import { switchOn } from "./support/switches";
 import {
   browserSessionCookies,
   queryTestCopy,
@@ -286,11 +287,37 @@ test.describe("verification wizard with the camera", () => {
     ).toBeVisible({ timeout: 30_000 });
     expect(reply("/api/verification/upload")).toEqual([200, 200]);
 
+    const detect = page.getByRole("button", { name: /detect province and city/i });
+    if (switchOn("SHOW_LOCATION_DETECTION")) {
+      // Launch lane: the button is offered with its hint. The copy's requests
+      // carry no Cloudflare location, so pressing it suggests nothing: the
+      // member is told to pick from the list, and nothing is saved yet.
+      await expect(detect).toBeVisible();
+      await expect(detect).toBeEnabled();
+      await expect(page.getByText(/detection is approximate/i)).toBeVisible();
+      const detected = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname === "/api/verification/location/detect"
+      );
+      await detect.click();
+      await detected;
+      await expect(
+        page.getByText("We could not detect your province and city. Select them below to continue.")
+      ).toBeVisible();
+      await expect(detect).toBeEnabled();
+      expect(
+        queryTestCopy(
+          `select count(*) from private.verification_localities where owner_id = '${member.id}';`
+        )
+      ).toBe("0");
+    } else {
+      // "Detect province and city" is hidden until it works (src/lib/hidden-features.ts).
+      await expect(detect).toHaveCount(0);
+      await expect(page.getByText(/detection is approximate/i)).toHaveCount(0);
+    }
     await page.locator("#province").selectOption("Gauteng");
     await page.locator("#city").selectOption("Johannesburg");
-    // "Detect province and city" is hidden until it works (src/lib/hidden-features.ts).
-    await expect(page.getByRole("button", { name: /detect province and city/i })).toHaveCount(0);
-    await expect(page.getByText(/detection is approximate/i)).toHaveCount(0);
     await expect(page.locator("#province")).toHaveValue("Gauteng");
     await expect(page.locator("#city")).toHaveValue("Johannesburg");
     await expect(page.locator("#town")).toHaveCount(0);

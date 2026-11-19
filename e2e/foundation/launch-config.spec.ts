@@ -9,8 +9,9 @@ import {
 
 // Launch-configuration smoke (playwright.launch-config.config.ts only): the
 // test copy built with every switch that hides a feature set to its launch
-// value (src/lib/launch-config.ts). Each test opens one page behind a switch
-// as the person who can see it and checks that
+// value (LAUNCH_VALUES, src/lib/launch-config.ts). Each test opens one page
+// behind a switch that is on at launch, as the person who can see it, and
+// checks that
 //   - the page answers without a server error and is not sent elsewhere (a
 //     hidden staff or member page redirects to its home);
 //   - no console error and no uncaught page error happen while it loads;
@@ -121,14 +122,8 @@ const PAGES: Page_[] = [
     open: async (page) => page.getByRole("tab", { name: "Account" }).click(),
     shows: [/Delete account/],
   },
-  {
-    feature: "SHOW_DATA_USE_CHOICES",
-    path: "/dashboard/communication",
-    viewer: "verifiedMember",
-    heading: /.+/,
-    open: async (page) => page.getByRole("tab", { name: "Preferences" }).click(),
-    shows: [/Analytics/, /Third-party sharing/],
-  },
+  // SHOW_DATA_USE_CHOICES stays off at launch (src/lib/launch-config.ts):
+  // account-recovery.spec.ts checks that its switches stay hidden here too.
   {
     feature: "SHOW_STAFF_COMMERCIAL_SETTINGS",
     path: "/admin/commercial",

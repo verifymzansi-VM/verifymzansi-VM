@@ -104,7 +104,8 @@ const NEXT_MANAGED = new Set(["NODE_ENV"]);
 
 /**
  * The launch configuration (playwright.launch-config.config.ts): the build
- * switch that turns every hidden feature on (scripts/lib/launch-config-build.cjs;
+ * switch that sets each hidden feature to its launch value
+ * (LAUNCH_VALUES in src/lib/launch-config.ts; scripts/lib/launch-config-build.cjs;
  * next.config.js accepts it only for this copy) and the runtime switches set
  * to their launch values. Production's own values stay in wrangler.toml.
  * OZOW_API_REFUNDS_ENABLED has no effect with mock Ozow (src/lib/payments/ozow-refunds.ts).
