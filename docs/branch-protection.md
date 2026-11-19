@@ -218,6 +218,109 @@ thresholds are 75%, 64%, 82% and 76%, respectively, selected by
 `src/test/coverage-excluded-suites.ts`; CI runs them in their own lane
 (`unit-coverage-excluded`) and the local blocking lane still runs them.
 
+## Test and check changes label
+
+`.github/workflows/check-changes.yml` labels every pull request into `main`
+`checks-changed` or `checks-clean` and keeps one comment that says in plain
+words whether it:
+
+- deletes test files, or renames or moves them out of the vitest and Playwright
+  include patterns on `main` (for example `.test.ts` to `.test.mts`, or `src/`
+  to `scripts/`);
+- removes test cases (removed and added test cases are counted separately, so
+  swapping real tests for empty ones is reported; a table-driven test's
+  `.each(...)` table is part of it, so emptying the table is reported) or native
+  database checks (`record(...)` calls);
+- adds skip, only, todo, fails or fixme marks, including aliases, bracket calls
+  and context skips such as `ctx.skip()`, `ctx["skip"]()`, `const s = ctx.skip`
+  and `testInfo.fixme()`;
+- changes the files that configure the checks: coverage thresholds and the unit
+  test setup, audit baselines and the dependency audit, rulesets, workflows,
+  code owners and Dependabot, check scripts and every `scripts/lib` file they
+  import, the native database checks and the reviewed access list, lint, type,
+  duplication, Lighthouse and scanner configuration, Playwright configuration,
+  the browser test skip policy, visual baselines, database contract steps,
+  `next.config.js`, and the package manager settings, lockfile and dependency
+  patches;
+- changes a command `main`'s CI runs: every `package.json` script its workflows
+  call with `pnpm <name>` or `pnpm run <name>`, and the scripts those call
+  through `pnpm` or `npm run` (plus any script named like a test or check), or
+  edits a script file those commands execute, found from their command lines and
+  the files under `scripts/` they import (for example
+  `scripts/lint-foundation-sql.mjs`, `scripts/probe-foundation-*.mjs` and
+  `scripts/lib/foundation-native-lock.mjs`);
+- adds dependencies, takes a dependency from outside the registry (`github:`,
+  `npm:` aliases, `file:`, `link:`, `workspace:`, URLs, git) or by dist-tag
+  (`latest`, `next`), adds or changes overrides, changes anything else under
+  `pnpm` or the bundled dependencies, lets more packages run install scripts, or
+  changes `packageManager`. Both `package.json` files, at the head and at the
+  merge base, are read through the GitHub API and compared as parsed JSON.
+
+The comment is rewritten on every push and each list in it is capped. The label
+is for the reviewer and is not a required check.
+
+It fails closed. The label is set to `checks-changed` before anything is read
+(by the job's first step, through the API, before checkout) and moves to
+`checks-clean` only after a clean verdict has been written. A run that errors or
+times out leaves `checks-changed` and the comment "Could not check this PR;
+treat it as changing checks". Whatever it cannot read (binary files, diffs
+GitHub leaves out, lines over 2,000 characters, a file list GitHub cut short)
+counts as changing checks.
+
+It reads lines, not meaning. These are not detected, so reviewers still read
+test changes:
+
+- deleting the assertions inside a test that stays, or making a test pass
+  without testing anything;
+- a mark reached in a way a single line does not show:
+  `Reflect.get(ctx, "skip")()`, a computed key such as `ctx[name]()` or
+  `ctx["sk" + "ip"]()`, or a mark split across lines;
+- a helper in ordinary (non-test) code that skips or focuses tests, such as a
+  `skipUnless(...)` in `src/` that calls `test.skip` through a variable; marks
+  in such code are found only when the test function is named on the line;
+- a table-driven test whose table is a variable (`it.each(rows)`): the table is
+  read only where it is written inline, so emptying `rows` elsewhere is not
+  seen;
+- script files a CI command reaches other than through its command line or a
+  relative import under `scripts/` (dynamic paths, imports from `src/`).
+
+It runs on `pull_request_target`, so the workflow and its script
+(`scripts/check-changed-checks.mjs`, `scripts/lib/check-changes.mjs`) always
+come from `main`. It checks out nothing from the pull request and reads its diff
+only through the GitHub API; the pull request's own text plays no part.
+
+A pull request that changes workflows can still rewrite its own verdict: a
+workflow it adds runs on its own branch with a token that can relabel the pull
+request and edit the comment as the same bot. So when a pull request is flagged
+for changing the CI workflows, the reviewer checks the guard's verdict by hand:
+open the latest "Check changes" run for the pull request's head commit and
+compare its log line with the label and comment.
+
+The detection is tested by `scripts/check-changes.test.mjs`. To see the verdict
+for local work, compare it with the merge base, as the pull request would be:
+
+```bash
+base="$(git fetch -q origin main && git merge-base origin/main HEAD)"
+```
+
+```bash
+git diff "$base" | node scripts/check-changed-checks.mjs --diff -
+```
+
+When the diff changes `package.json`, pass the merge base's copy too, or the
+verdict reports `package.json` as unreadable:
+
+```bash
+git show "$base:package.json" > /tmp/base-package.json
+```
+
+```bash
+git diff "$base" | BASE_PACKAGE_JSON=/tmp/base-package.json node scripts/check-changed-checks.mjs --diff -
+```
+
+A local run reads the test configuration, workflows and scripts from the working
+tree rather than from `main`.
+
 ## Deployment enforcement
 
 `.github/workflows/deploy.yml` requires successful main-push CI for the exact

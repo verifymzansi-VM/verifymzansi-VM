@@ -1,0 +1,16 @@
+diff --git a/src/lib/orders.test.ts b/src/lib/orders.fixture.ts
+similarity index 98%
+rename from src/lib/orders.test.ts
+rename to src/lib/orders.fixture.ts
+index 2222222..3333333 100644
+--- a/src/lib/orders.test.ts
++++ b/src/lib/orders.fixture.ts
+@@ -1,3 +1,3 @@
+-it("keeps the order total", () => {
++export const order = () => {
+   expect(createOrder({ buyer: "a", amount: 5 }).total).toBe(5);
+ });
+diff --git a/src/components/very-large.test.tsx b/src/components/very-large.test.tsx
+index 2222222..3333333 100644
+--- a/src/components/very-large.test.tsx
++++ b/src/components/very-large.test.tsx
