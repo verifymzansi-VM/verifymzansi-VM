@@ -5436,8 +5436,16 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   about 10:50 UTC) matched the full replay at 772f770e (except the known schema
   grant difference)
 - `20261119082834_house_slots.sql`: applied 2026-11-19 14:04 UTC;
-  owner-approved, apply-first (pull request #286, merged as 9742737f);
-  production fingerprint after it matched the full replay (except the known
+  owner-approved, apply-first, Supabase SQL editor (browser, the owner's
+  signed-in session), preflight + fingerprint checked; update, preflight and
+  fingerprint.sql loaded from the reviewed files at 2d761c47 (raw GitHub; pull
+  request #286, merged as 9742737f) and checked in the browser before running;
+  update sha256 starting 11e3f464d93da230; preflight (sha256 starting b816bc6e)
+  before "house slots: update not applied; admins: 2; ready to receive: 1;
+  staff-granted slots: 0; house slots: none (table absent)", after "house slots:
+  already applied; admins: 2; ready to receive: 1; staff-granted slots: 0; house
+  slots: 0 (events: 0)"; production fingerprint after it (fingerprint.sql at
+  2d761c47, captured about 14:04 UTC) matched the full replay (except the known
   schema grant difference)
 
 <!-- applied-register:end -->
