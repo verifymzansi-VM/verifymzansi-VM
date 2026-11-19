@@ -3,14 +3,16 @@ import { describe, expect, it } from "vitest";
 import GlobalLoading from "./loading";
 
 describe("shared route loading fallback", () => {
-  it("is announced as a busy status named 'Loading'", () => {
+  it("announces exactly one status named 'Loading'", () => {
     const { container } = render(<GlobalLoading />);
-    const wrapper = container.firstElementChild;
 
-    expect(wrapper).toHaveAttribute("role", "status");
-    expect(wrapper).toHaveAttribute("aria-busy", "true");
-    expect(wrapper).toHaveAccessibleName("Loading");
-    expect(screen.getAllByRole("status", { name: "Loading" })[0]).toBe(wrapper);
+    // getByRole throws when more than one status exists. A status takes no name
+    // from its content, so its announced text is checked directly.
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent(/^Loading$/);
+    expect(status).toHaveClass("sr-only");
+    expect(status.nextElementSibling?.tagName).toBe("MAIN");
+    expect(container.querySelectorAll('[aria-hidden="true"]')).toHaveLength(6);
   });
 
   it("keeps exactly one main landmark", () => {
