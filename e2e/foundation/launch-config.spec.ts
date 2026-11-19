@@ -35,9 +35,13 @@ type Viewer = "visitor" | PersonKey;
 type Page_ = {
   /** Which switch the page sits behind (src/lib/hidden-features.ts, ...). */
   feature: string;
-  path: string;
+  /** The address, or a function that finds it in the copy (a seeded post). */
+  path: string | (() => string);
   viewer: Viewer;
   heading: RegExp;
+  /** The key heading is visible text rather than a heading element (a post
+   * page opens in the full-screen viewer on wide screens). */
+  headingAsText?: boolean;
   /** The switched-on part: visible text or an accessible name on the page. */
   shows?: RegExp[];
   /** Steps after loading (open a tab) before `shows` is checked. */
@@ -48,11 +52,13 @@ type Page_ = {
 
 const PAGES: Page_[] = [
   {
-    feature: "PRELAUNCH_BANNER_ENABLED (off at launch), SHOW_SPONSOR_OFFER",
+    // The home page's sponsor call to action (SHOW_SPONSOR_OFFER) shows only
+    // when a sponsor exists, and the copy has none; /sponsors and /advertise
+    // carry the same switch.
+    feature: "PRELAUNCH_BANNER_ENABLED (off at launch)",
     path: "/",
     viewer: "visitor",
     heading: /.+/,
-    shows: [/Become a Business Sponsor/],
   },
   {
     feature: "SHOW_PAID_ADDONS, SHOW_SPONSOR_OFFER, PACKAGES_ON_SALE",
@@ -90,12 +96,21 @@ const PAGES: Page_[] = [
     shows: [/You \+ 1 person/],
   },
   {
+    // An area with a seeded post: an empty showroom keeps only the chip's room.
     feature: "SHOW_SHOWROOM_PROVINCE_CHIP",
-    path: "/mzansi-market",
+    path: "/mzansi-business",
     viewer: "visitor",
-    heading: /^mzansi market$/i,
+    heading: /mzansi business/i,
     cookies: { vmz_province: "Gauteng" },
     shows: [/Showing\s+Gauteng\s+first/i],
+  },
+  {
+    feature: "SHOW_ENGAGEMENT_TOTALS",
+    path: () => `/mzansi-business/${seededPostId("Fixture Mzansi Motor Workshop")}`,
+    viewer: "visitor",
+    heading: /Fixture Mzansi Motor Workshop/,
+    headingAsText: true,
+    shows: [/\bviews?\b/i],
   },
   {
     feature: "SHOW_OWNER_METRICS",
@@ -179,6 +194,19 @@ const ROUTES: { feature: string; method: "GET" | "POST"; path: string }[] = [
   },
 ];
 
+function seededPostId(title: string) {
+  const id = readTestCopy().posts.find((post) => post.title === title)?.id;
+  if (!id) throw new Error(`The copy has no seeded post "${title}"`);
+  return id;
+}
+
+/** The test copy serves Realtime over plain ws:// on loopback, which the
+ * site's Content Security Policy (wss:// only) blocks on every signed-in page,
+ * with switches on or off. Production's Realtime address is wss://. Only that
+ * exact message is set aside; it is listed in the launch-config pull request. */
+const LOCAL_REALTIME_CSP =
+  /^Connecting to 'ws:\/\/127\.0\.0\.1:\d+\/realtime\/v1\/websocket\?[^']*' violates the following Content Security Policy directive/;
+
 async function signInAs(context: BrowserContext, viewer: Viewer) {
   if (viewer === "visitor") return;
   const session = await browserSessionCookies(readTestCopy(), viewer);
@@ -219,12 +247,15 @@ test.afterAll(() => {
 
 test.describe("launch configuration: pages behind a switch", () => {
   for (const entry of PAGES) {
-    test(`${entry.path} (${entry.feature})`, async ({ context, page }) => {
+    const label = typeof entry.path === "string" ? entry.path : "seeded post page";
+    test(`${label} (${entry.feature})`, async ({ context, page }) => {
       test.setTimeout(90_000);
+      const path = typeof entry.path === "string" ? entry.path : entry.path();
       const consoleErrors: string[] = [];
       const pageErrors: string[] = [];
       page.on("console", (message) => {
-        if (message.type() === "error") consoleErrors.push(message.text());
+        if (message.type() === "error" && !LOCAL_REALTIME_CSP.test(message.text()))
+          consoleErrors.push(message.text());
       });
       page.on("pageerror", (error) => pageErrors.push(String(error)));
       await signInAs(context, entry.viewer);
@@ -233,17 +264,19 @@ test.describe("launch configuration: pages behind a switch", () => {
           Object.entries(entry.cookies).map(([name, value]) => ({ name, value, url: APP_ORIGIN }))
         );
 
-      const response = await page.goto(entry.path, { waitUntil: "domcontentloaded" });
+      const response = await page.goto(path, { waitUntil: "domcontentloaded" });
       expect(response, "the page answers").not.toBeNull();
       expect.soft(response!.status(), "no server error").toBeLessThan(500);
-      expect
-        .soft(new URL(page.url()).pathname, "not sent elsewhere (hidden pages redirect)")
-        .toBe(entry.path);
       await page.waitForLoadState("networkidle").catch(() => {});
 
-      await expect
-        .soft(page.getByRole("heading", { name: entry.heading }).first(), "key heading")
-        .toBeVisible({ timeout: 15_000 });
+      const heading = entry.headingAsText
+        ? page.getByText(entry.heading).filter({ visible: true })
+        : page.getByRole("heading", { name: entry.heading });
+      await expect.soft(heading.first(), "key heading").toBeVisible({ timeout: 15_000 });
+      // Checked after loading: a hidden page's redirect arrives in the stream.
+      expect
+        .soft(new URL(page.url()).pathname, "not sent elsewhere (hidden pages redirect)")
+        .toBe(path);
       // The pre-launch pop-up is off at launch.
       await expect
         .soft(page.getByRole("dialog", { name: /launching soon/i }), "no pre-launch pop-up")
@@ -251,7 +284,10 @@ test.describe("launch configuration: pages behind a switch", () => {
       if (entry.open) await entry.open(page).catch(() => {});
       for (const shown of entry.shows ?? [])
         await expect
-          .soft(page.getByText(shown).first(), `switched-on part ${shown}`)
+          .soft(
+            page.getByText(shown).filter({ visible: true }).first(),
+            `switched-on part ${shown}`
+          )
           .toBeVisible({ timeout: 15_000 });
 
       const text = await page
