@@ -92,7 +92,7 @@ export default function PrivacyPolicyPage() {
         "• Communication records and payment information handled by Ozow and payment providers",
         "We also collect device/browser info, IP address, and usage data automatically.",
         "Error monitoring: when the site breaks we use Sentry to record what went wrong. For a small share of visits, and for visits where an error happens, it records a replay of the page with all text masked and images blocked.",
-        "View counting: to count views fairly we keep a random browser identifier and a one-way hash of your network address for 90 days. These cannot be turned back into your address and are never shown to post owners, who only see totals.",
+        "View and like counting: your browser gets a random identifier in a cookie (kept for a year). We store only a one-way, keyed hash of it: for views for 48 hours, so each post counts you once a day; for likes for as long as the post is up, so you can undo a like. We do not store your network address for counting. Post owners only see totals.",
       ],
     },
     {

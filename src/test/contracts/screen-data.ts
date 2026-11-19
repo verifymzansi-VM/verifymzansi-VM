@@ -90,6 +90,9 @@ const PUBLIC_REQUIRED = [
 const PUBLIC_OPTIONAL = [
   ...FORM_FIELDS,
   ...BUSINESS_STICKERS,
+  // Totals while SHOW_ENGAGEMENT_TOTALS is on; null while it is off.
+  "view_count",
+  "like_count",
   "subcategory",
   "business_type",
   "price_mode",

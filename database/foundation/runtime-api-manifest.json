@@ -5125,6 +5125,88 @@
         "service_role": false
       },
       "authority": "Current payments:refund capability and recent authenticator proof; the staff member's own current accepted ID review, never an account of their own identity or a customer they referred: closes an open package invoice request (requested or awaiting approval) with an audited reason; nothing is issued."
+    },
+    {
+      "name": "record_post_views",
+      "updates": ["updates/20261119151000_post_views_and_likes.sql"],
+      "arguments": [
+        {
+          "name": "p_post_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        },
+        {
+          "name": "p_device",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_account",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only, with the browser identifier from its own first-party cookie and the GoTrue-verified account or none: counts each of 1 to 20 publicly live posts at most once per browser (and per account when signed in) in 24 hours, never the owner's own view or a view by an account with an active staff role; an inactive account counts as signed out. Stores only keyed hashes under a daily salt (kept 48 hours) and a per-post daily total; returns the posts counted."
+    },
+    {
+      "name": "set_post_like",
+      "updates": ["updates/20261119151000_post_views_and_likes.sql"],
+      "arguments": [
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_device",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_account",
+          "sqlType": "uuid",
+          "optional": true
+        },
+        {
+          "name": "p_liked",
+          "sqlType": "boolean",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only, with the browser identifier from its own first-party cookie and the GoTrue-verified account or none: sets (or toggles) the like of that browser, and of the account when signed in, on a publicly live post (PT404 post_unavailable otherwise); one like per browser and per account; the owner's own like is never stored; at most 600 new likes per post per hour (PT429 like_limit). Stores a keyed hash of the browser identifier and the signed-in account; returns liked, the post's like total and whether it counted."
+    },
+    {
+      "name": "get_post_engagement",
+      "updates": ["updates/20261119151000_post_views_and_likes.sql"],
+      "arguments": [
+        {
+          "name": "p_post_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public: view and like totals of up to 100 publicly listed posts; totals only, never who viewed or liked."
     }
   ]
 }

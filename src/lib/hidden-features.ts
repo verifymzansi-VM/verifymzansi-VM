@@ -16,9 +16,11 @@
 import { LAUNCH_CONFIG_BUILD, LAUNCH_VALUES } from "@/lib/launch-config";
 
 /**
- * View counts, the like button and like totals. The live backend does not
- * store views or likes yet, so every post showed "0 views" and a like undid
- * itself. To be rebuilt after launch on the new backend.
+ * View counts, the like button and like totals. The live backend stores them
+ * from database update 20261119151000_post_views_and_likes.sql; while this is
+ * off, the view and like routes answer 204 without storing anything and no
+ * page reads the totals. On at launch (LAUNCH_VALUES), once the owner approves
+ * showing them (frontend ledger, group "awaiting owner").
  */
 export const SHOW_ENGAGEMENT_TOTALS: boolean =
   LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_ENGAGEMENT_TOTALS;

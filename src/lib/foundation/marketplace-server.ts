@@ -84,6 +84,7 @@ export async function restoredSharePreview(kind: FoundationPublicPostCore["kind"
   const post = await readRestoredPublicDetail(foundationServerPublicApi(), id, {
     kind,
     withContactChannels: false,
+    withEngagement: false,
   });
   if (!post) return null;
   const row = restoredPublicRow(post, post);

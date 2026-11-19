@@ -33,7 +33,13 @@ export async function foundationFeedSlides(refs: FeedRef[]) {
             (channel) => channel === "call" || channel === "whatsapp"
           ),
         };
-        const engagement = { views: 0, likes: 0, viewerHasLiked: false };
+        // Totals while SHOW_ENGAGEMENT_TOTALS is on; the like button reads the
+        // browser's own likes itself.
+        const engagement = {
+          views: post.engagement?.views ?? 0,
+          likes: post.engagement?.likes ?? 0,
+          viewerHasLiked: false,
+        };
         const row = { ...restoredPublicRow(post, post), owner_id: "", category_key: null };
         if (post.kind === "listing") {
           return [refKey(ref), presentListingSlide(row, owner, engagement)];

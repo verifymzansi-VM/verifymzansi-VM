@@ -315,6 +315,17 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 5, ttl: 60 },
     { limit: 15, ttl: 3600 },
   ],
+  // Post views and likes, per network address (src/app/api/engagement/*).
+  // A browser sends views in batches of up to 20, once a post page has been
+  // on screen for 2 seconds; the database dedupes per browser and account.
+  "engagement:view": [
+    { limit: 120, ttl: 60 },
+    { limit: 2000, ttl: 3600 },
+  ],
+  "engagement:like": [
+    { limit: 30, ttl: 60 },
+    { limit: 300, ttl: 3600 },
+  ],
   // Owner enquiry inbox and notifications. Realtime signals replace polling,
   // so reads stay modest per client.
   "inbox:read": [{ limit: 60, ttl: 60 }],

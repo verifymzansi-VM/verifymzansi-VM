@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 import { trackContactAction } from "@/lib/analytics/commercial-events";
+import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf-client";
 
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,29 @@ const CONTENT_TABLES = {
   business: "businesses",
   promotion: "promotions",
 } as const;
+
+/** This browser's note of the posts it liked (only a display hint). */
+const LIKED_KEY = (id: string) => `vmz:liked:${id}`;
+function readLiked(id: string) {
+  try {
+    return localStorage.getItem(LIKED_KEY(id)) === "1";
+  } catch {
+    return false;
+  }
+}
+function rememberLiked(id: string, liked: boolean) {
+  try {
+    if (liked) localStorage.setItem(LIKED_KEY(id), "1");
+    else localStorage.removeItem(LIKED_KEY(id));
+  } catch {
+    // Storage can be blocked (private mode); the heart then starts empty.
+  }
+}
+/** Likes made in another tab of this browser. */
+function subscribeToLikes(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
 
 interface ContentLikeButtonProps {
   targetId: string;
@@ -42,6 +66,13 @@ export function ContentLikeButton({
   } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Pages are the same for everyone, so whether this browser liked the post
+  // comes from its own note of its likes (the server keeps the truth).
+  const rememberedLiked = useSyncExternalStore(
+    subscribeToLikes,
+    () => SHOW_ENGAGEMENT_TOTALS && readLiked(targetId),
+    () => false
+  );
 
   const currentState =
     optimisticState &&
@@ -49,7 +80,7 @@ export function ContentLikeButton({
     optimisticState.targetType === targetType
       ? optimisticState
       : null;
-  const liked = currentState?.liked ?? initialLiked;
+  const liked = currentState?.liked ?? (initialLiked || rememberedLiked);
   const likeCount = currentState?.likeCount ?? initialLikeCount ?? 0;
 
   const displayedLikeCount = Math.min(999, Math.max(0, likeCount ?? 0));
@@ -88,15 +119,12 @@ export function ContentLikeButton({
 
           startTransition(async () => {
             try {
+              await ensureCsrfTokenReady();
               const response = await fetch("/api/engagement/like", {
                 method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  targetId,
-                  targetType,
-                }),
+                headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+                // The state asked for, so a stale heart never undoes a like.
+                body: JSON.stringify({ targetId, targetType, liked: optimisticLiked }),
               });
 
               const payload = (await response.json().catch(() => null)) as {
@@ -111,6 +139,7 @@ export function ContentLikeButton({
               if (payload?.liked) {
                 trackContactAction(CONTENT_TABLES[targetType], targetId, "save", "like");
               }
+              rememberLiked(targetId, Boolean(payload?.liked));
 
               setOptimisticState({
                 targetId,

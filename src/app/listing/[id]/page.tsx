@@ -132,7 +132,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       : null,
     {
       views: listingViewCount,
-      likes: 0,
+      likes: listing.like_count ?? 0,
       viewerHasLiked: false,
       shares: null,
     }

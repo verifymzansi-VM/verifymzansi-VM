@@ -106,7 +106,7 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
     : null;
   const immersiveSlide = presentEventSlide(promotion, safeAdvertiser, linkedBusiness, {
     views: promotionViewCount,
-    likes: 0,
+    likes: promotion.like_count ?? 0,
     viewerHasLiked: false,
     shares: null,
   });

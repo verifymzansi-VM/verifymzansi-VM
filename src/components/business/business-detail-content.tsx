@@ -68,6 +68,7 @@ export interface BusinessDetailRecord {
   business_details: BusinessDetails | null;
   layout_template?: string | null;
   view_count?: number | null;
+  like_count?: number | null;
   // Verification stickers (public view: expired stickers and private street lines removed).
   cipc_verified_at?: string | null;
   cipc_registration_number?: string | null;

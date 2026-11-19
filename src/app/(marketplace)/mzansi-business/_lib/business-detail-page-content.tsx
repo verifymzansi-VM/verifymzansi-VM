@@ -155,7 +155,7 @@ export async function BusinessDetailPageContent({
   const immersiveSlide = !isOwnerPreview
     ? presentBusinessSlide(business, ownerProfile, promotions, {
         views: businessViewCount,
-        likes: 0,
+        likes: business.like_count ?? 0,
         viewerHasLiked: false,
         shares: null,
       })

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resetContentViewQueueForTests, trackContentView } from "./content-views";
+import {
+  resetContentViewQueueForTests,
+  trackContentView,
+  trackContentViewAfterDwell,
+} from "./content-views";
 
 const ID = "00000000-0000-4000-8000-000000000123";
 
@@ -49,6 +53,29 @@ describe("trackContentView", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("sends once more when the server has just issued the browser cookie", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true, counted: [], retry: true }),
+    });
+    const view = trackContentView({ type: "listing", id: ID, source: "page" });
+    await vi.advanceTimersByTimeAsync(1100);
+    await expect(view).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][1].body).toBe(fetchMock.mock.calls[0][1].body);
+  });
+
+  it("asks only once more, even if the cookie still does not stick", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, counted: [], retry: true }),
+    });
+    const view = trackContentView({ type: "listing", id: ID, source: "page" });
+    await vi.advanceTimersByTimeAsync(1100);
+    await expect(view).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("forgets the send after a failure so a later play can retry", async () => {
     fetchMock.mockRejectedValueOnce(new Error("offline"));
     await Promise.all([
@@ -60,5 +87,56 @@ describe("trackContentView", () => {
     await vi.advanceTimersByTimeAsync(1100);
     await expect(retry).resolves.toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("trackContentViewAfterDwell", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    localStorage.clear();
+    resetContentViewQueueForTests();
+    fetchMock.mockReset().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, counted: [ID] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("sends a page view only after two seconds visible", async () => {
+    const counted = vi.fn();
+    trackContentViewAfterDwell({ type: "business", id: ID, source: "page" }, counted);
+    await vi.advanceTimersByTimeAsync(1900);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(counted).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends nothing when the page is left first, and restarts after a hidden tab", async () => {
+    const cancel = trackContentViewAfterDwell({ type: "business", id: ID, source: "page" });
+    await vi.advanceTimersByTimeAsync(1500);
+    cancel();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const visibility = vi.spyOn(document, "visibilityState", "get");
+    trackContentViewAfterDwell({ type: "business", id: ID, source: "page" });
+    await vi.advanceTimersByTimeAsync(1500);
+    visibility.mockReturnValue("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fetchMock).not.toHaveBeenCalled();
+    visibility.mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(3100);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

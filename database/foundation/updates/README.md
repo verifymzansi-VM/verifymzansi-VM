@@ -80,6 +80,90 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Post views and likes, 19 November 2026
+
+`20261119151000_post_views_and_likes.sql` is pending (see the applied register).
+Roadmap P6. **Order: apply-first** (the default): the website release from the
+same pull request names the three new commands, and the deploy preflight probes
+every command in `../runtime-api-manifest.json`, so a deploy without the update
+stops there. The website calls them only while its switch
+`SHOW_ENGAGEMENT_TOTALS` (`src/lib/hidden-features.ts`) is on; it stays off in
+production until the owner approves showing the counters, so applying the update
+changes nothing anyone sees. Earlier releases never call the commands. It adds
+three API commands and five tables; the only existing function it replaces is
+the privacy export (one dataset added, no field removed). It refuses (55000)
+unless its tables and functions are all absent or all present, and the privacy
+export has the house slots body (or this update's).
+
+- **What is stored.** The website gives each browser a random identifier in a
+  first-party cookie (`vmz_viewer`, HttpOnly, one year) and passes it, with the
+  GoTrue-verified account or none, to the two service commands. The database
+  never stores that identifier, a network address or a user agent:
+  - `private.engagement_keys`: one random 32-byte key, made by the update, for
+    like hashes;
+  - `private.post_view_salts`: one random 32-byte salt per day
+    (Africa/Johannesburg); the first counted view of a day makes it and deletes
+    every salt older than yesterday and every view mark older than 48 hours;
+  - `private.post_view_marks`: `sha256(day salt || viewer || post)` and the
+    time, for each view counted (viewer is the browser, and also the account
+    when signed in), kept at most 48 hours;
+  - `private.post_view_days`: views per post per day, the only lasting view data
+    (deleted with the post);
+  - `private.post_likes`: the post, `sha256(like key || browser)`, the account
+    when the like was made signed in, and the time (deleted with the post, and
+    with the Auth user when an account is erased).
+
+  Row level security is on for all five; no API role has table access.
+
+- **Views.** `api.record_post_views(p_post_ids, p_device, p_account)` (service
+  only): 1 to 20 posts (22023 `views_invalid` otherwise). A post counts at most
+  once per viewer in 24 hours: the browser's mark, and the account's when signed
+  in, under today's or yesterday's salt (the account's mark decides, so two
+  browsers of one account count once). Never counted: a post that is not
+  publicly live (search document visible and `private.public_eligible_posts`),
+  the owner's own view (signed in), or any view by an account with an active
+  staff role. An account that is not active counts as signed out. Returns
+  `{"counted": [post ids]}`.
+- **Likes.** `api.set_post_like(p_post_id, p_device, p_account, p_liked)`
+  (service only): sets the browser's like to `p_liked` (null toggles) and
+  returns `{"liked", "likes", "counted"}`. A like by the browser or by the
+  signed-in account counts as liked; unliking removes both, so a person gets one
+  like per post across their browsers and accounts. The owner's own like (signed
+  in) is never stored (`counted: false`). At most 600 new likes per post per
+  hour (PT429 `like_limit`). An unknown or hidden post is PT404
+  `post_unavailable`; a missing post or browser 22023 `like_invalid`. Each
+  browser and account is serialised per post (advisory locks), so two taps at
+  once never store two likes.
+- **Totals.** `api.get_post_engagement(p_post_ids)` (anon and authenticated):
+  for up to 100 publicly listed posts (22023 `engagement_invalid` above that),
+  `{"items": [{"post_id", "views", "likes"}]}`; never who.
+- **Privacy export.** `internal.frontend_privacy_export_data` gains the dataset
+  `post_likes` (post and time of each like made signed in). Likes made signed
+  out cannot be tied to an account and are not exported.
+- **Website limits (not in the database).** Per client: the shared rate limiter
+  actions `engagement:view` and `engagement:like`, keyed by the network address
+  and, separately, by the browser identifier; crawlers and headless browsers
+  (`isAutomatedUserAgent`), prefetches and requests without the cookie are not
+  counted.
+
+Preflight `../preflight/20261119151000_post_views_and_likes.check.sql` (summary
+"post views and likes: update not applied; publicly listed posts: N" before,
+"post views and likes: already applied; likes: N; view days: N; views: N"
+after); rollback `../rollback/20261119151000_post_views_and_likes.down.sql`
+(only with the owner's decision; switch the counters off instead where possible;
+it refuses once a like or a counted view is recorded, and puts back the house
+slots body of the privacy export byte for byte). Behaviour test
+`scripts/test-foundation-post-views-and-likes.mjs` (part of
+`pnpm db:foundation:lifecycle-test`, 19 checks): the preflight before and after,
+read only; drift and a premature rollback refused; apply, rollback and re-apply
+return the same fingerprints; the grants and no table access; one view per
+browser and per account; no owner or staff views; hidden posts never counted;
+bad requests refused; the 24-hour window across the salt change and marks
+forgotten after 48 hours; likes toggled and set per browser and per account; the
+owner's like never stored; an inactive account likes as signed out; hidden and
+unknown posts refused; the per-post like limit; the privacy export; deletion
+with the post and the Auth user; and the rollback refused once data exists.
+
 ## House slots for administrators, 19 November 2026
 
 `20261119082834_house_slots.sql` was applied on 19 November 2026 at 14:04 UTC
@@ -5447,5 +5531,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   slots: 0 (events: 0)"; production fingerprint after it (fingerprint.sql at
   2d761c47, captured about 14:04 UTC) matched the full replay (except the known
   schema grant difference)
+- `20261119151000_post_views_and_likes.sql`: pending
 
 <!-- applied-register:end -->
