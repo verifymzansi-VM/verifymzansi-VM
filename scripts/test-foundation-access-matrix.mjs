@@ -317,6 +317,7 @@ const OWNER_TABLES = [
   // Likes A made signed in, and every like and daily view total of A's posts.
   ["post_likes", `account_id=$1 or ${ownPosts}`],
   ["post_view_days", ownPosts],
+  ["post_engagement_totals", ownPosts],
   ["post_presentations", ownPosts],
   ["post_presentation_media", ownPosts],
   ["post_search_documents", ownPosts],

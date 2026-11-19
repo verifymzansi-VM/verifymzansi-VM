@@ -8,17 +8,17 @@ CREATE OR REPLACE FUNCTION internal.get_post_engagement(p_post_ids uuid[])
  SET search_path TO 'pg_catalog'
 AS $function$
 begin
-  if p_post_ids is null or cardinality(p_post_ids) > 100 or array_position(p_post_ids, null) is not null then
+  if p_post_ids is null or cardinality(p_post_ids) > 50 or array_position(p_post_ids, null) is not null then
     raise exception 'engagement request is invalid' using errcode='22023', detail='engagement_invalid';
   end if;
   return jsonb_build_object('items', coalesce((
     select jsonb_agg(jsonb_build_object('post_id', d.post_id,
-        'views', coalesce((select sum(v.views) from private.post_view_days v where v.post_id = d.post_id), 0),
-        'likes', (select count(*) from private.post_likes l where l.post_id = d.post_id))
-      order by d.post_id)
+        'views', coalesce(t.views, 0), 'likes', coalesce(t.likes, 0)) order by d.post_id)
     from private.post_search_documents d
+    left join private.post_engagement_totals t on t.post_id = d.post_id
     where d.post_id = any(p_post_ids) and d.is_visible
-      and (d.visible_until is null or d.visible_until > statement_timestamp())), '[]'::jsonb));
+      and (d.visible_until is null or d.visible_until > statement_timestamp())
+      and exists(select 1 from private.public_eligible_posts e where e.id = d.post_id)), '[]'::jsonb));
 end;
 $function$;
 alter function internal.get_post_engagement(uuid[]) owner to postgres;

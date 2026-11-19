@@ -13,7 +13,7 @@ const DEVICE = "bbbbbbbb-bbbb-4bbb-8bbb-000000000001";
 const api = <T>(rpc: ReturnType<typeof vi.fn>) => ({ rpc }) as unknown as T;
 
 describe("readFoundationPostEngagement", () => {
-  it("reads totals in batches of 100 and keys them by post", async () => {
+  it("reads totals in batches of 50 and keys them by post", async () => {
     const rpc = vi.fn(async (_name: string, args: { p_post_ids: string[] }) => ({
       data: {
         items: args.p_post_ids
@@ -27,8 +27,8 @@ describe("readFoundationPostEngagement", () => {
       ...ids,
       ids[0]!,
     ]);
-    expect(rpc).toHaveBeenCalledTimes(2);
-    expect(rpc.mock.calls[0]![1].p_post_ids).toHaveLength(100);
+    expect(rpc).toHaveBeenCalledTimes(3);
+    expect(rpc.mock.calls[0]![1].p_post_ids).toHaveLength(50);
     expect(rpc.mock.calls[0]![0]).toBe("get_post_engagement");
     expect(totals.get(id(0))).toEqual({ views: 3, likes: 1 });
     expect(totals.has(id(1))).toBe(false);

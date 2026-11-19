@@ -19,19 +19,19 @@ export type PostEngagement = { views: number; likes: number };
 const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const ids = z.array(z.uuid()).max(500);
 const engagementResult = z.strictObject({
-  items: z.array(z.strictObject({ post_id: z.uuid(), views: count, likes: count })).max(100),
+  items: z.array(z.strictObject({ post_id: z.uuid(), views: count, likes: count })).max(50),
 });
 
 /** Totals of the given posts, by id; posts that are not publicly listed are
- * absent. Reads in batches of 100. */
+ * absent. Reads in batches of 50 (the database limit). */
 export async function readFoundationPostEngagement(
   api: FoundationPublicApi,
   postIds: readonly string[]
 ): Promise<Map<string, PostEngagement>> {
   const unique = [...new Set(ids.parse(postIds))];
   const totals = new Map<string, PostEngagement>();
-  for (let offset = 0; offset < unique.length; offset += 100) {
-    const batch = unique.slice(offset, offset + 100);
+  for (let offset = 0; offset < unique.length; offset += 50) {
+    const batch = unique.slice(offset, offset + 50);
     const { data, error } = await api.rpc(
       "get_post_engagement",
       { p_post_ids: batch },
@@ -62,9 +62,9 @@ function refusal(error: { code?: string } | null): never {
   throw new Error("Post engagement command failed");
 }
 
-const viewsResult = z.strictObject({ counted: z.array(z.uuid()).max(20) });
+const viewsResult = z.strictObject({ counted: z.array(z.uuid()).max(5) });
 
-/** Records one view of each post (1 to 20); returns the posts counted as new
+/** Records one view of each post (1 to 5); returns the posts counted as new
  * views. */
 export async function recordFoundationPostViews(
   api: FoundationServiceApi,
@@ -73,7 +73,7 @@ export async function recordFoundationPostViews(
   const postIds = z
     .array(z.uuid())
     .min(1)
-    .max(20)
+    .max(5)
     .parse([...new Set(input.postIds)]);
   const { data, error } = await api.rpc("record_post_views", {
     p_post_ids: postIds,

@@ -8,10 +8,13 @@ import {
   foundationFeedSlides,
 } from "./feed-read";
 import { readRestoredCollection, restoredPublicRow } from "./marketplace-read";
-import { restoredPublicDetail } from "./marketplace-server";
+import { restoredPublicDetailWithoutTotals } from "./marketplace-server";
 
 vi.mock("./server-public", () => ({ foundationServerPublicApi: vi.fn(() => publicApi) }));
-vi.mock("./marketplace-server", () => ({ restoredPublicDetail: vi.fn() }));
+vi.mock("./marketplace-server", () => ({
+  restoredPublicDetailWithoutTotals: vi.fn(),
+  restoredPostEngagement: vi.fn(async () => new Map()),
+}));
 vi.mock("./marketplace-read", () => ({
   readRestoredCollection: vi.fn(),
   restoredPublicRow: vi.fn(),
@@ -68,7 +71,7 @@ describe("foundationFeedSlides", () => {
     ["t", { kind: "event", area: "tourism_events" }, "event"],
   ] as const)("presents a %s ref that resolves to a %o", async (kind, post, slide) => {
     const ref: FeedRef = { kind, id: uuid(1) };
-    vi.mocked(restoredPublicDetail).mockResolvedValueOnce(detail(post) as never);
+    vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(detail(post) as never);
     const slides = await foundationFeedSlides([ref]);
     expect(slides.get(`${kind}:${ref.id}`)).toEqual({ slide });
   });
@@ -79,7 +82,7 @@ describe("foundationFeedSlides", () => {
     ["p", { kind: "business", area: "tourism_events" }],
     ["t", { kind: "business", area: "business" }],
   ] as const)("gives no slide when a %s ref resolves to a %o", async (kind, post) => {
-    vi.mocked(restoredPublicDetail).mockResolvedValueOnce(detail(post) as never);
+    vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(detail(post) as never);
     const slides = await foundationFeedSlides([{ kind, id: uuid(2) }]);
     expect(slides.get(`${kind}:${uuid(2)}`)).toBeNull();
     expect(presentListingSlide).not.toHaveBeenCalled();
@@ -88,7 +91,7 @@ describe("foundationFeedSlides", () => {
   });
 
   it("gives no slide for a post that is no longer public", async () => {
-    vi.mocked(restoredPublicDetail).mockResolvedValueOnce(null);
+    vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(null);
     const slides = await foundationFeedSlides([{ kind: "l", id: uuid(3) }]);
     expect([...slides]).toEqual([[`l:${uuid(3)}`, null]]);
   });
@@ -99,7 +102,7 @@ describe("foundationFeedSlides", () => {
     [["form"], false],
     [[], false],
   ])("derives the public owner summary from channels %o", async (channels, hasPhone) => {
-    vi.mocked(restoredPublicDetail).mockResolvedValueOnce(
+    vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(
       detail(
         { kind: "listing", area: "market" },
         { contact_channels: channels, seller: { public_name: "Lerato", identity_verified: false } }
@@ -118,7 +121,7 @@ describe("foundationFeedSlides", () => {
   });
 
   it("marks a verified seller as verified", async () => {
-    vi.mocked(restoredPublicDetail).mockResolvedValueOnce(
+    vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(
       detail({ kind: "business", area: "business" }) as never
     );
     await foundationFeedSlides([{ kind: "b", id: uuid(5) }]);
@@ -236,13 +239,13 @@ describe("foundationDirectSequence", () => {
     ["p", { kind: "business", area: "tourism_events" }],
     ["t", { kind: "listing", area: "market" }],
   ] as const)("refuses a %s link that resolves to a %o", async (kind, post) => {
-    vi.mocked(restoredPublicDetail).mockResolvedValueOnce(detail(post) as never);
+    vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(detail(post) as never);
     await expect(foundationDirectSequence({ kind, id: uuid(6) })).resolves.toBeNull();
     expect(readRestoredCollection).not.toHaveBeenCalled();
   });
 
   it("returns null for a post that is not public", async () => {
-    vi.mocked(restoredPublicDetail).mockResolvedValueOnce(null);
+    vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(null);
     await expect(foundationDirectSequence({ kind: "l", id: uuid(7) })).resolves.toBeNull();
   });
 
@@ -251,7 +254,7 @@ describe("foundationDirectSequence", () => {
     [{ kind: "business", area: "business" }, "b", ["businesses"]],
     [{ kind: "event", area: "tourism_events" }, "t", ["businesses", "promotions"]],
   ] as const)("continues a %o in its own section", async (post, kind, collections) => {
-    vi.mocked(restoredPublicDetail).mockResolvedValueOnce(detail(post) as never);
+    vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(detail(post) as never);
     vi.mocked(readRestoredCollection).mockResolvedValue({ rows: [], total: 0 } as never);
     await foundationDirectSequence({ kind, id: uuid(8) });
     expect(vi.mocked(readRestoredCollection).mock.calls.map((call) => call[1])).toEqual(
@@ -262,7 +265,7 @@ describe("foundationDirectSequence", () => {
 
   it("leaves out the opened post and keeps at most 120 others", async () => {
     const opened = uuid(5);
-    vi.mocked(restoredPublicDetail).mockResolvedValueOnce(
+    vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(
       detail({ kind: "listing", area: "market" }) as never
     );
     let page = 0;
@@ -277,7 +280,7 @@ describe("foundationDirectSequence", () => {
 
   it("is exhausted when every other post fits", async () => {
     const opened = uuid(1);
-    vi.mocked(restoredPublicDetail).mockResolvedValueOnce(
+    vi.mocked(restoredPublicDetailWithoutTotals).mockResolvedValueOnce(
       detail({ kind: "listing", area: "market" }) as never
     );
     vi.mocked(readRestoredCollection).mockResolvedValueOnce({

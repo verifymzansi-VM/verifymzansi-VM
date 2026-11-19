@@ -9,13 +9,15 @@ import {
   restoredPublicRow,
   type PublicCollection,
 } from "./marketplace-read";
-import { restoredPublicDetail } from "./marketplace-server";
+import { restoredPostEngagement, restoredPublicDetailWithoutTotals } from "./marketplace-server";
 
 export async function foundationFeedSlides(refs: FeedRef[]) {
+  // One totals read for every slide (SHOW_ENGAGEMENT_TOTALS), not one per post.
+  const totals = await restoredPostEngagement(refs.map((ref) => ref.id));
   return new Map(
     await Promise.all(
       refs.map(async (ref): Promise<[string, FeedSlide | null]> => {
-        const post = await restoredPublicDetail(ref.id);
+        const post = await restoredPublicDetailWithoutTotals(ref.id);
         const accepts =
           post &&
           (ref.kind === "l"
@@ -36,8 +38,8 @@ export async function foundationFeedSlides(refs: FeedRef[]) {
         // Totals while SHOW_ENGAGEMENT_TOTALS is on; the like button reads the
         // browser's own likes itself.
         const engagement = {
-          views: post.engagement?.views ?? 0,
-          likes: post.engagement?.likes ?? 0,
+          views: totals.get(post.id)?.views ?? 0,
+          likes: totals.get(post.id)?.likes ?? 0,
           viewerHasLiked: false,
         };
         const row = { ...restoredPublicRow(post, post), owner_id: "", category_key: null };
@@ -104,7 +106,7 @@ export async function foundationBrowseSequence(browse: FeedBrowse) {
 }
 
 export async function foundationDirectSequence(ref: FeedRef) {
-  const post = await restoredPublicDetail(ref.id);
+  const post = await restoredPublicDetailWithoutTotals(ref.id);
   if (
     !post ||
     (ref.kind === "l" && post.kind !== "listing") ||

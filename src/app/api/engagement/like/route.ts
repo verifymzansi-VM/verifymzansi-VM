@@ -1,8 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { CONTENT_TARGET_TYPES } from "@/lib/engagement";
+import { viewerSigningReady } from "@/lib/engagement-cookie";
 import {
   engagementCaller,
+  engagementClientKey,
   isCountableRequest,
   issueViewerId,
   readViewerId,
@@ -13,7 +15,7 @@ import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
-import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 const log = createLogger("EngagementLikeRoute");
 
@@ -24,16 +26,21 @@ const likeRequest = z.object({
   liked: z.boolean().optional(),
 });
 
+const unavailable = () =>
+  NextResponse.json({ error: "Unable to update like right now." }, { status: 503 });
+
 /**
  * POST /api/engagement/like
  *
- * Anyone can like a publicly live post, signed in or not: one like per
- * browser (the `vmz_viewer` cookie, issued here when missing) and per account
- * when signed in, which the database stores only as a keyed hash of the
- * browser identifier plus the account (api.set_post_like). The owner's own
- * like is never stored. Origin and CSRF checks, crawlers and headless browsers
- * refused, a per-address limit (engagement:like) and a per-post limit in the
- * database. Answers { liked, likeCount, counted }.
+ * Anyone can like a publicly live post. Signed in, the like is the account's
+ * (on any browser); signed out, it is the browser's, identified by the
+ * `vmz_viewer` cookie this website signed (issued here when missing, within
+ * the per-address issuing limit). The database stores the account, or only a
+ * keyed hash of the browser identifier (api.set_post_like); the owner's and
+ * staff's own likes are never stored. Origin and CSRF checks, crawlers and
+ * headless browsers refused, a per-address limit (`engagement:like`) and a
+ * per-post limit in the database. Without the signing secret no like is
+ * stored (503). Answers { liked, likeCount, counted }.
  *
  * While SHOW_ENGAGEMENT_TOTALS is off the route answers 204 No Content without
  * reading the request, calling a database or setting a cookie.
@@ -46,9 +53,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Likes are not available here" }, { status: 403 });
   const parsed = likeRequest.safeParse(await parseJsonRequest(request, { maxBytes: 2048 }));
   if (!parsed.success) return NextResponse.json({ error: "Invalid like request" }, { status: 400 });
+  if (!viewerSigningReady()) {
+    log.error("Like refused: ENGAGEMENT_COOKIE_SECRET is not set");
+    return unavailable();
+  }
 
   const limit = await checkRateLimit({
-    key: getClientRateLimitIdentity(request).key,
+    key: engagementClientKey(request),
     action: "engagement:like",
     degradedMode: "local",
   });
@@ -58,12 +69,18 @@ export async function POST(request: NextRequest) {
       { status: 429, headers: { "Retry-After": String(limit.retryAfter ?? 60) } }
     );
 
-  const existing = readViewerId(request);
-  // A first like from this browser starts its identifier.
-  const device = existing ?? crypto.randomUUID();
+  // A first like from this browser starts its signed identifier.
+  const cookieCarrier = NextResponse.json({});
+  const device = (await readViewerId(request)) ?? (await issueViewerId(request, cookieCarrier));
+  if (!device)
+    return NextResponse.json(
+      { error: "Too many likes from this network; try again later" },
+      { status: 429 }
+    );
   const caller = await engagementCaller(request);
   const finish = async (response: NextResponse) => {
-    if (!existing) issueViewerId(response, device);
+    const issued = cookieCarrier.cookies.getAll();
+    for (const cookie of issued) response.cookies.set(cookie);
     return caller.respond(response);
   };
   try {
@@ -88,8 +105,6 @@ export async function POST(request: NextRequest) {
     log.error("Failed to update like", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
-    return finish(
-      NextResponse.json({ error: "Unable to update like right now." }, { status: 503 })
-    );
+    return finish(unavailable());
   }
 }

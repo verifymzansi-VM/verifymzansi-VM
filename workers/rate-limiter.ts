@@ -317,12 +317,22 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 5, ttl: 60 },
     { limit: 15, ttl: 3600 },
   ],
-  // Post views and likes, per network address (src/app/api/engagement/*).
-  // A browser sends views in batches of up to 20, once a post page has been
-  // on screen for 2 seconds; the database dedupes per browser and account.
+  // Post views and likes (src/app/api/engagement/*), keyed by IPv4 address or
+  // IPv6 /64 network. A view request counts at most 3 posts, each once its
+  // page has been on screen for 2 seconds; the database dedupes per browser.
+  // At these limits one address can add at most 9,000 view marks a day.
   "engagement:view": [
-    { limit: 120, ttl: 60 },
-    { limit: 2000, ttl: 3600 },
+    { limit: 30, ttl: 60 },
+    { limit: 600, ttl: 3600 },
+    { limit: 3000, ttl: 86400 },
+  ],
+  // Per address and post: counted views of one post from one address a day.
+  "engagement:view:post": [{ limit: 50, ttl: 86400 }],
+  // New signed browser identifiers per address (a new visitor, a cleared
+  // cookie); a script cannot mint browsers faster than this.
+  "engagement:viewer": [
+    { limit: 30, ttl: 3600 },
+    { limit: 200, ttl: 86400 },
   ],
   "engagement:like": [
     { limit: 30, ttl: 60 },

@@ -5153,7 +5153,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Website server only, with the browser identifier from its own first-party cookie and the GoTrue-verified account or none: counts each of 1 to 20 publicly live posts at most once per browser (and per account when signed in) in 24 hours, never the owner's own view or a view by an account with an active staff role; an inactive account counts as signed out. Stores only keyed hashes under a daily salt (kept 48 hours) and a per-post daily total; returns the posts counted."
+      "authority": "Website server only, with the browser identifier from its own signed first-party cookie and the GoTrue-verified account or none: counts each of 1 to 5 publicly live posts at most once per browser in 24 hours; never the signed-in owner's own view or a view by an account with an active staff role (an inactive account counts as signed out); at most 3,000 counted views per post per hour, 20,000 per post per day and 300,000 in all per day. Stores only keyed hashes of the browser and post under a daily salt (deleted by the daily retention job within 2 days; salts within 3), never an account, plus per-post daily and total counts; returns the posts counted."
     },
     {
       "name": "set_post_like",
@@ -5187,7 +5187,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Website server only, with the browser identifier from its own first-party cookie and the GoTrue-verified account or none: sets (or toggles) the like of that browser, and of the account when signed in, on a publicly live post (PT404 post_unavailable otherwise); one like per browser and per account; the owner's own like is never stored; at most 600 new likes per post per hour (PT429 like_limit). Stores a keyed hash of the browser identifier and the signed-in account; returns liked, the post's like total and whether it counted."
+      "authority": "Website server only, with the browser identifier from its own signed first-party cookie and the GoTrue-verified account or none: sets (or toggles) the like of the signed-in account, or of the browser when signed out, on a publicly live post (PT404 post_unavailable otherwise); signed in it acts only on the account's like, signed out only on the browser's; the owner's and staff's own likes are never stored, and they may remove the like their browser made signed out; at most 600 new likes per post per hour under the post's lock (PT429 like_limit). Stores the account for a signed-in like, or only a keyed hash of the browser identifier; returns liked, the post's like total and whether it counted."
     },
     {
       "name": "get_post_engagement",
@@ -5206,7 +5206,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Public: view and like totals of up to 100 publicly listed posts; totals only, never who viewed or liked."
+      "authority": "Public: view and like totals of up to 50 publicly live posts (the get_public_post rule); a hidden or unknown post is absent, so the answer never tells them apart; totals only, never who viewed or liked."
     }
   ]
 }

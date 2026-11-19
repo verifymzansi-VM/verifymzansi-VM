@@ -3,38 +3,49 @@
 -- owner has decided so. Prefer a forward fix; to stop showing the counters,
 -- switch SHOW_ENGAGEMENT_TOTALS off instead.
 --
--- It drops the three commands, their internal functions and the five tables,
--- and puts back the privacy export without the post_likes dataset (the body of
--- 20261119082834_house_slots.sql, byte for byte). Revert and deploy the website
--- release first: the rollback removes commands that release calls. It refuses
--- (55000) unless every part of the update is present and the privacy export
--- has this update's body, and once any like or counted view is recorded,
--- since those cannot be restored.
+-- It drops the three commands, their internal functions, the purge and
+-- trigger functions and the six tables, and puts back the earlier bodies of
+-- the privacy export, the retention job and account erasure byte for byte.
+-- Revert and deploy the website release first: the rollback removes commands
+-- that release calls. It refuses (55000) unless every part of the update is
+-- present with this update's bodies, and once any like or counted view is
+-- recorded, since those cannot be restored.
 begin;
 set local lock_timeout='5s';
 
 do $$
+declare shape text;
 begin
   if to_regclass('private.engagement_keys') is null
     or to_regclass('private.post_view_salts') is null
     or to_regclass('private.post_view_marks') is null
     or to_regclass('private.post_view_days') is null
+    or to_regclass('private.post_engagement_totals') is null
     or to_regclass('private.post_likes') is null
     or to_regprocedure('internal.record_post_views(uuid[],uuid,uuid)') is null
     or to_regprocedure('api.record_post_views(uuid[],uuid,uuid)') is null
     or to_regprocedure('internal.set_post_like(uuid,uuid,uuid,boolean)') is null
     or to_regprocedure('api.set_post_like(uuid,uuid,uuid,boolean)') is null
     or to_regprocedure('internal.get_post_engagement(uuid[])') is null
-    or to_regprocedure('api.get_post_engagement(uuid[])') is null then
+    or to_regprocedure('api.get_post_engagement(uuid[])') is null
+    or to_regprocedure('internal.purge_post_engagement()') is null
+    or to_regprocedure('internal.post_likes_count()') is null then
     raise exception 'rollback precondition: post views and likes are not fully present'
       using errcode='55000';
   end if;
-  if (select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p
-      where p.oid=to_regprocedure('internal.frontend_privacy_export_data(uuid)'))
-      is distinct from 'a313d356df1fe2bc35166c19971c14c4' then
-    raise exception 'rollback precondition: the privacy export is not this update''s body'
-      using errcode='55000';
-  end if;
+  for shape in
+    select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p
+        where p.oid=to_regprocedure(v.sig)),'absent')
+    from (values ('internal.frontend_privacy_export_data(uuid)'), ('internal.run_retention(integer)'),
+      ('internal.erase_closed_account(uuid,text)')) v(sig)
+  loop
+    if shape not in (
+        'internal.frontend_privacy_export_data(uuid) 3dfe35ae5e93f0661ecd7dbf710cf45d',
+        'internal.run_retention(integer) 06a3fbfcb5b2d53e2487719174a62cc5',
+        'internal.erase_closed_account(uuid,text) c1352cec14d02d401b58e466c387d747') then
+      raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
+    end if;
+  end loop;
   if exists(select 1 from private.post_likes) or exists(select 1 from private.post_view_days) then
     raise exception 'rollback precondition: likes or views are recorded and would be lost'
       using errcode='55000';
@@ -144,13 +155,161 @@ end$function$;
 alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
 revoke all on function internal.frontend_privacy_export_data(uuid) from public;
 
+CREATE OR REPLACE FUNCTION internal.run_retention(p_limit integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare result jsonb;
+begin
+  if p_limit is null or p_limit not between 1 and 5000 then
+    raise exception 'limit 1 to 5000' using errcode='22023'; end if;
+  perform pg_catalog.set_config('vm.retention','on',true);
+  perform internal.purge_frontend_post_commands(p_limit);perform internal.purge_frontend_post_actions(p_limit); result:=jsonb_build_object(
+    'accounts',internal.run_account_erasures(least(p_limit,20)),
+    'privacy_requests',internal.retention_privacy_requests(p_limit),
+    'inbox',internal.purge_expired_inbox(p_limit),
+    'identity_bans',internal.purge_expired_identity_bans(p_limit),
+    'trial_identities',internal.purge_expired_trial_identities(p_limit),
+    'verification',internal.retention_verification(p_limit),
+    'staff_records',internal.retention_staff_records(p_limit),
+    'commerce',internal.retention_commerce(p_limit),
+    'operations',internal.retention_operations(p_limit));
+  perform pg_catalog.set_config('vm.retention','off',true);
+  return result;
+end;
+$function$;
+alter function internal.run_retention(integer) owner to postgres;
+revoke all on function internal.run_retention(integer) from public;
+grant execute on function internal.run_retention(integer) to service_role;
+
+CREATE OR REPLACE FUNCTION internal.erase_closed_account(p_user uuid, p_by text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare er private.account_erasures; reason text; earlier_retention text; counts jsonb := '{}'::jsonb; n integer;
+begin
+  if p_user is null or p_by is null or p_by not in ('staff', 'sweep') then
+    raise exception 'account and erasing party required' using errcode = '22023';
+  end if;
+  perform internal.lock_evidence_subject(p_user);
+  select * into er from private.account_erasures e where e.user_id = p_user for update;
+  if not found then raise exception 'account is not closed' using errcode = 'PT404', detail = 'account_not_closed'; end if;
+  if er.erased_at is not null or er.erase_after > statement_timestamp() then
+    return internal.account_erasure_state(p_user);
+  end if;
+  reason := internal.account_erasure_hold(p_user);
+  if reason is not null then
+    update private.account_erasures set blocked_at = statement_timestamp(), blocked_reason = reason
+      where user_id = p_user;
+    return internal.account_erasure_state(p_user);
+  end if;
+  earlier_retention := coalesce(pg_catalog.current_setting('vm.retention', true), '');
+  perform pg_catalog.set_config('vm.retention', 'on', true);
+  perform pg_catalog.set_config('vm.erasure', p_user::text, true);
+
+  select count(*) into n from private.enquiries q where q.owner_id = p_user or q.sender_account_id = p_user;
+  counts := counts || jsonb_build_object('enquiries', n);
+  -- Enquiries the account sent, with the other owner's notice and email.
+  with gone as (
+    delete from private.enquiries q where q.sender_account_id = p_user returning q.id
+  ), notices as (
+    delete from private.notifications x using gone where x.kind = 'enquiry_received' and x.subject_id = gone.id
+  )
+  delete from private.outbox_events o using gone where o.kind = 'enquiry_received' and o.subject_id = gone.id;
+  -- Sponsored places first: deleting a place returns its grant.
+  delete from private.organisation_sponsorships s where s.owner_id = p_user;
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('sponsored_places', n);
+  -- Posts, with their edit copies, contacts, media links, search documents,
+  -- received enquiries and everything else that belongs to a post.
+  delete from private.posts p where p.owner_id = p_user;
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('posts', n);
+  delete from private.event_submissions e where e.owner_id = p_user;
+  delete from private.enquiries q where q.owner_id = p_user;
+  delete from private.notifications x where x.account_id = p_user;
+  delete from private.outbox_events o where o.owner_id = p_user;
+  delete from private.profiles x where x.account_id = p_user;
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('profile', n);
+  delete from private.frontend_form_drafts d where d.owner_id = p_user;
+  delete from private.listing_price_drafts d where d.owner_id = p_user;
+  delete from private.intro_trial_requests t where t.owner_id = p_user;
+  delete from private.frontend_business_checks b where b.owner_id = p_user;
+  delete from private.organisation_admins a where a.account_id = p_user;
+  delete from private.organisation_applications a where a.applicant_id = p_user;
+  delete from private.entitlement_members m where m.member_id = p_user or m.added_by = p_user
+    or m.entitlement_id in (select e.id from private.entitlements e where e.owner_id = p_user);
+  delete from private.frontend_post_commands c where c.owner_id = p_user;
+  delete from private.frontend_post_action_receipts r where r.owner_id = p_user;
+  delete from private.account_acquisitions a where a.account_id = p_user;
+  delete from private.communication_choice_events c where c.account_id = p_user;
+  delete from private.signup_terms_acceptances a where a.account_id = p_user;
+  delete from private.posting_terms_acceptances a where a.owner_id = p_user;
+  delete from private.verification_localities l where l.owner_id = p_user;
+  -- Photos and videos nothing kept still uses: queued for deletion from
+  -- storage now (the media cleanup job deletes the objects).
+  update private.media_objects m set state = 'cleanup_required', cleanup_lease_until = null
+    where m.owner_id = p_user and m.state in ('intent', 'ready', 'rejected') and not internal.media_object_in_use(m.id);
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('media_queued', n);
+
+  -- Paid time ends; payment records stay for their tax years, no longer
+  -- linked to the account.
+  update private.entitlements e set status = 'revoked', revoked_reason = 'account_erased'
+    where e.owner_id = p_user and e.status <> 'revoked';
+  update private.trial_identities t set owner_id = null, entitlement_id = null,
+      detached_at = er.closed_at, retain_until = er.closed_at + interval '3 years'
+    where t.owner_id = p_user;
+  update private.post_activations a set owner_id = null where a.owner_id = p_user;
+  update private.entitlements e set owner_id = null where e.owner_id = p_user;
+  update private.payments p set owner_id = null where p.owner_id = p_user;
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('payments_unlinked', n);
+  update private.customer_invoices i set account_id = null where i.account_id = p_user;
+  update private.invoice_transfers t set account_id = null where t.account_id = p_user;
+  update private.payment_refund_requests r set account_id = null where r.account_id = p_user;
+  update private.partner_commissions c set referred_account_id = null where c.referred_account_id = p_user;
+  update private.individual_slot_limits l set account_id = null where l.account_id = p_user;
+  update private.slot_packages k set owner_id = null where k.owner_id = p_user;
+  -- Package invoice requests (20261119025106): an open one is withdrawn (it
+  -- leaves the staff queue), then every one is kept unlinked like its invoice.
+  update private.package_invoice_requests r set status = 'withdrawn', closed_at = statement_timestamp()
+    where r.account_id = p_user and r.status in ('requested', 'awaiting_approval');
+  update private.package_invoice_requests r set account_id = null where r.account_id = p_user;
+
+  perform internal.remove_account_sign_in(p_user);
+  perform pg_catalog.set_config('vm.erasure', '', true);
+  perform pg_catalog.set_config('vm.retention', earlier_retention, true);
+  update private.account_erasures set erased_at = statement_timestamp(), erased_by = p_by, erased_counts = counts,
+      blocked_at = null, blocked_reason = null, auth_checked_at = statement_timestamp()
+    where user_id = p_user;
+  -- Deleting the Auth user never undoes the finished erasure: a failure is
+  -- recorded and the daily check tries again.
+  begin
+    if internal.remove_erased_auth_user(p_user) then
+      update private.account_erasures set auth_removed_at = statement_timestamp() where user_id = p_user;
+    end if;
+  exception when others then
+    update private.account_erasures set blocked_at = statement_timestamp(), blocked_reason = 'error',
+        blocked_detail = sqlstate
+      where user_id = p_user;
+  end;
+  return internal.account_erasure_state(p_user);
+end;
+$function$;
+alter function internal.erase_closed_account(uuid,text) owner to postgres;
+revoke all on function internal.erase_closed_account(uuid,text) from public;
+
 drop function api.record_post_views(uuid[],uuid,uuid);
 drop function internal.record_post_views(uuid[],uuid,uuid);
 drop function api.set_post_like(uuid,uuid,uuid,boolean);
 drop function internal.set_post_like(uuid,uuid,uuid,boolean);
 drop function api.get_post_engagement(uuid[]);
 drop function internal.get_post_engagement(uuid[]);
+drop function internal.purge_post_engagement();
 drop table private.post_likes;
+drop function internal.post_likes_count();
+drop table private.post_engagement_totals;
 drop table private.post_view_days;
 drop table private.post_view_marks;
 drop table private.post_view_salts;

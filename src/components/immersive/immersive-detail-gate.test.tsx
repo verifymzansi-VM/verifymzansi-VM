@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ImmersiveDetailGate } from "./immersive-detail-gate";
 import type { FeedSlide } from "@/lib/feed/types";
 
-const mocks = vi.hoisted(() => ({ fail: false, track: vi.fn().mockResolvedValue(true) }));
+const mocks = vi.hoisted(() => ({ fail: false, track: vi.fn(() => () => {}) }));
 vi.mock("next/dynamic", () => ({
   default: () =>
     function TestViewer() {

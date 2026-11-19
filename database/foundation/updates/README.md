@@ -89,80 +89,97 @@ every command in `../runtime-api-manifest.json`, so a deploy without the update
 stops there. The website calls them only while its switch
 `SHOW_ENGAGEMENT_TOTALS` (`src/lib/hidden-features.ts`) is on; it stays off in
 production until the owner approves showing the counters, so applying the update
-changes nothing anyone sees. Earlier releases never call the commands. It adds
-three API commands and five tables; the only existing function it replaces is
-the privacy export (one dataset added, no field removed). It refuses (55000)
-unless its tables and functions are all absent or all present, and the privacy
-export has the house slots body (or this update's).
+changes nothing anyone sees. It adds three API commands, two internal functions
+and six tables, and replaces three functions with full bodies: the privacy
+export, the retention job and account erasure. It refuses (55000) unless its
+tables and functions are all absent or all present and the three functions have
+their reviewed bodies (or this update's).
 
 - **What is stored.** The website gives each browser a random identifier in a
-  first-party cookie (`vmz_viewer`, HttpOnly, one year) and passes it, with the
-  GoTrue-verified account or none, to the two service commands. The database
-  never stores that identifier, a network address or a user agent:
+  first-party cookie (`vmz_viewer`, HttpOnly, one year), signed with the Worker
+  secret `ENGAGEMENT_COOKIE_SECRET`, so only identifiers it issued are counted.
+  It passes the identifier, with the GoTrue-verified account or none, to the two
+  service commands. The database never stores that identifier, a network address
+  or a user agent:
   - `private.engagement_keys`: one random 32-byte key, made by the update, for
     like hashes;
   - `private.post_view_salts`: one random 32-byte salt per day
-    (Africa/Johannesburg); the first counted view of a day makes it and deletes
-    every salt older than yesterday and every view mark older than 48 hours;
-  - `private.post_view_marks`: `sha256(day salt || viewer || post)` and the
-    time, for each view counted (viewer is the browser, and also the account
-    when signed in), kept at most 48 hours;
-  - `private.post_view_days`: views per post per day, the only lasting view data
-    (deleted with the post);
-  - `private.post_likes`: the post, `sha256(like key || browser)`, the account
-    when the like was made signed in, and the time (deleted with the post, and
-    with the Auth user when an account is erased).
+    (Africa/Johannesburg), with the day's counted views (at most 300,000 a day,
+    so view marks can never fill the database);
+  - `private.post_view_marks`: `sha256(day salt || browser || post)` and the
+    time, one per counted view, never an account;
+  - `private.post_view_days`: views per post per day, with the current hour's
+    count for the caps (deleted with the post);
+  - `private.post_engagement_totals`: each post's total views and likes and its
+    new likes this hour; the public read and the like command read only this row
+    (likes kept by a trigger on `private.post_likes`);
+  - `private.post_likes`: the post and either `sha256(like key || browser)` (a
+    like made signed out) or the account (a like made signed in), never both,
+    and the time. Deleted with the post; a signed-in like also by account
+    erasure, and by the Auth user's deletion.
 
-  Row level security is on for all five; no API role has table access.
+  Row level security is on for all six; no API role has table access.
 
+- **Purge.** `internal.run_retention` (daily, `api.run_retention`) now also runs
+  `internal.purge_post_engagement()` (`"engagement": {salts, marks}`): marks
+  older than 24 hours (the dedupe window), in batches of 10,000 up to 200,000 a
+  run, and salts older than yesterday. A mark is therefore gone within 2 days
+  and a salt within 3, whether or not anyone views a post. A view request only
+  makes the day's salt (and drops salts older than yesterday if the job has not
+  run); it never deletes marks.
 - **Views.** `api.record_post_views(p_post_ids, p_device, p_account)` (service
-  only): 1 to 20 posts (22023 `views_invalid` otherwise). A post counts at most
-  once per viewer in 24 hours: the browser's mark, and the account's when signed
-  in, under today's or yesterday's salt (the account's mark decides, so two
-  browsers of one account count once). Never counted: a post that is not
-  publicly live (search document visible and `private.public_eligible_posts`),
-  the owner's own view (signed in), or any view by an account with an active
-  staff role. An account that is not active counts as signed out. Returns
-  `{"counted": [post ids]}`.
+  only): 1 to 5 posts (22023 `views_invalid` otherwise). A post counts at most
+  once per browser in 24 hours (today's or yesterday's salt). Never counted: a
+  post that is not publicly live (search document visible and
+  `private.public_eligible_posts`), the owner's own view (signed in), or any
+  view by an account with an active staff role; an account that is not active
+  counts as signed out. At most 3,000 counted views per post per hour, 20,000
+  per post per day and 300,000 in all per day; a view over a cap leaves no mark.
+  Returns `{"counted": [post ids]}`.
 - **Likes.** `api.set_post_like(p_post_id, p_device, p_account, p_liked)`
-  (service only): sets the browser's like to `p_liked` (null toggles) and
-  returns `{"liked", "likes", "counted"}`. A like by the browser or by the
-  signed-in account counts as liked; unliking removes both, so a person gets one
-  like per post across their browsers and accounts. The owner's own like (signed
-  in) is never stored (`counted: false`). At most 600 new likes per post per
-  hour (PT429 `like_limit`). An unknown or hidden post is PT404
-  `post_unavailable`; a missing post or browser 22023 `like_invalid`. Each
-  browser and account is serialised per post (advisory locks), so two taps at
-  once never store two likes.
+  (service only): sets (null toggles) the like of the signed-in account, or of
+  the browser when signed out, and returns `{"liked", "likes", "counted"}`.
+  Signed in it acts only on the account's like, signed out only on the
+  browser's, so on a shared browser one person never removes another's like. The
+  owner's and staff's own likes are never stored (`counted: false`); they may
+  remove the like their browser made while signed out. Changes to one post's
+  likes happen one at a time (its totals row is locked), so the limit of 600 new
+  likes per post per hour (PT429 `like_limit`) holds under races. An unknown or
+  hidden post is PT404 `post_unavailable`; a missing post or browser 22023
+  `like_invalid`.
 - **Totals.** `api.get_post_engagement(p_post_ids)` (anon and authenticated):
-  for up to 100 publicly listed posts (22023 `engagement_invalid` above that),
-  `{"items": [{"post_id", "views", "likes"}]}`; never who.
-- **Privacy export.** `internal.frontend_privacy_export_data` gains the dataset
-  `post_likes` (post and time of each like made signed in). Likes made signed
-  out cannot be tied to an account and are not exported.
-- **Website limits (not in the database).** Per client: the shared rate limiter
-  actions `engagement:view` and `engagement:like`, keyed by the network address
-  and, separately, by the browser identifier; crawlers and headless browsers
-  (`isAutomatedUserAgent`), prefetches and requests without the cookie are not
-  counted.
+  for up to 50 ids (22023 `engagement_invalid` above that), each publicly live
+  post as `{"post_id", "views", "likes"}`; a hidden or unknown post is absent,
+  so the answer never tells them apart.
+- **Privacy export.** `internal.frontend_privacy_export_data` gains the datasets
+  `post_likes` (the latest 2,000 likes made signed in) and `post_likes_summary`
+  (their number, first and last), so the export never fails because of likes.
+  Likes made signed out cannot be tied to an account and are not exported.
+- **Account erasure.** `internal.erase_closed_account` also deletes the
+  account's likes.
+- **Known limits.** A view or like by the owner (or staff) while signed out
+  cannot be told apart from anyone else's. One person can have one like signed
+  out per browser and one signed in per account on the same post: a signed-out
+  like is not moved to the account on sign-in, because on a shared browser it
+  may be someone else's.
+- **Website limits (not in the database).** The rate limiter, keyed by IPv4
+  address or IPv6 /64 network: `engagement:view` (requests),
+  `engagement:view:post` (counted views of one post from one address a day),
+  `engagement:viewer` (new signed identifiers) and `engagement:like`. A view
+  request counts at most 3 posts. Crawlers and headless browsers
+  (`isAutomatedUserAgent`), prefetches and requests without a signed identifier
+  are not counted.
 
 Preflight `../preflight/20261119172135_post_views_and_likes.check.sql` (summary
 "post views and likes: update not applied; publicly listed posts: N" before,
-"post views and likes: already applied; likes: N; view days: N; views: N"
-after); rollback `../rollback/20261119172135_post_views_and_likes.down.sql`
-(only with the owner's decision; switch the counters off instead where possible;
-it refuses once a like or a counted view is recorded, and puts back the house
-slots body of the privacy export byte for byte). Behaviour test
+"post views and likes: already applied; likes: N; view days: N; views: N" after;
+a problem row for each replaced function without its reviewed body); rollback
+`../rollback/20261119172135_post_views_and_likes.down.sql` (only with the
+owner's decision; switch the counters off instead where possible; it refuses
+once a like or a counted view is recorded, and puts back the three earlier
+function bodies byte for byte). Behaviour test
 `scripts/test-foundation-post-views-and-likes.mjs` (part of
-`pnpm db:foundation:lifecycle-test`, 19 checks): the preflight before and after,
-read only; drift and a premature rollback refused; apply, rollback and re-apply
-return the same fingerprints; the grants and no table access; one view per
-browser and per account; no owner or staff views; hidden posts never counted;
-bad requests refused; the 24-hour window across the salt change and marks
-forgotten after 48 hours; likes toggled and set per browser and per account; the
-owner's like never stored; an inactive account likes as signed out; hidden and
-unknown posts refused; the per-post like limit; the privacy export; deletion
-with the post and the Auth user; and the rollback refused once data exists.
+`pnpm db:foundation:lifecycle-test`).
 
 ## House slots for administrators, 19 November 2026
 

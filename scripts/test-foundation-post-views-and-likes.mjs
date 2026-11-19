@@ -7,12 +7,14 @@
 // gate. The script runs the update's read-only preflight, checks its refusals,
 // applies it, proves apply -> rollback -> apply returns the same fingerprints,
 // then checks through the production API commands: the grants; one view per
-// browser (and account) per post in 24 hours across the daily salt change;
-// no view by the owner or by staff; marks forgotten after 48 hours; likes
-// toggled and set per browser and per account; the owner's own like never
-// stored; the per-post like limit; only publicly live posts; the public
-// totals; the privacy export; and deletion with the post and the Auth user.
-// Any later updates are applied at the end.
+// browser per post in 24 hours across the daily salt change; no view by the
+// owner or by staff; the per-post hourly and daily view caps; marks and salts
+// deleted by the retention job; likes per browser signed out and per account
+// signed in, never touching each other's; the owner's and staff's likes never
+// stored; the per-post like limit; the totals kept by triggers; only publicly
+// live posts, with hidden and unknown posts answered alike; the privacy
+// export; and deletion with the post and through account erasure. Any later
+// updates are applied at the end.
 //
 //   node --import tsx scripts/test-foundation-post-views-and-likes.mjs
 //
@@ -42,6 +44,7 @@ const TABLES = [
   "private.post_view_salts",
   "private.post_view_marks",
   "private.post_view_days",
+  "private.post_engagement_totals",
   "private.post_likes",
 ];
 
@@ -54,6 +57,8 @@ const {
   q,
   json,
   fails,
+  as,
+  claims,
   member,
   service,
   fingerprint,
@@ -93,6 +98,14 @@ try {
         perform internal.write_post_projection(pid);
       end if;
       return pid;
+    end$$;
+    -- Thirty-one days pass for one closed account.
+    create or replace function vmtest.erasure_due(p_user uuid) returns void language plpgsql as $$
+    begin
+      update private.account_erasures set closed_at=closed_at-interval '31 days',erase_after=erase_after-interval '31 days'
+        where user_id=p_user;
+      update private.account_closures set closed_at=closed_at-interval '31 days',
+        evidence_delete_after=evidence_delete_after-interval '31 days' where user_id=p_user;
     end$$;`);
   const event = (owner, live = true) => q(`select vmtest.event('${owner.id}',${live});`);
   const ids = (list) => `array[${list.map((id) => `'${id}'`).join(",")}]::uuid[]`;
@@ -114,6 +127,15 @@ try {
       Number(row.views),
       Number(row.likes),
     ]);
+  const likesOf = (post) => totals([post])[0][2];
+  const viewsOf = (post) => totals([post])[0][1];
+  /** The like total equals the like rows of every post. */
+  const totalsMatchRows = () =>
+    assert.equal(
+      count(`private.post_engagement_totals t where t.likes<>(select count(*) from private.post_likes l
+        where l.post_id=t.post_id)`),
+      0
+    );
   /** Moves the view clock: today's salt becomes yesterday's and every mark
    * ages by `hours`, as if that much time had passed across midnight. */
   const nextDay = (hours) =>
@@ -158,15 +180,15 @@ try {
     fingerprint,
     preflightRows: preflight,
     appliedSummary: /^post views and likes: already applied; likes: 0; view days: 0; views: 0$/,
-    repeatRollback: false,
   });
 
   const owner = syntheticMember("views-owner");
   const visitor = syntheticMember("views-visitor");
+  const other = syntheticMember("views-other");
   const staffer = syntheticMember("views-staff");
   q(`insert into private.staff_roles(user_id,role) values('${staffer.id}','moderator');`);
   const post = event(owner);
-  const other = event(owner);
+  const second = event(owner);
   const draft = event(owner, false);
 
   await check("grants: views and likes are service only; totals are public", () => {
@@ -177,15 +199,20 @@ try {
       "internal.record_post_views(uuid[],uuid,uuid)",
       "internal.set_post_like(uuid,uuid,uuid,boolean)",
       "internal.get_post_engagement(uuid[])",
+      "internal.purge_post_engagement()",
+      "internal.post_likes_count()",
     ]);
-    const service = { anon: false, authenticated: false, service_role: true };
+    const serviceOnly = { anon: false, authenticated: false, service_role: true };
     const open = { anon: true, authenticated: true, service_role: false };
-    assert.deepEqual(grants["api.record_post_views(uuid[],uuid,uuid)"], service);
-    assert.deepEqual(grants["api.set_post_like(uuid,uuid,uuid,boolean)"], service);
-    assert.deepEqual(grants["internal.record_post_views(uuid[],uuid,uuid)"], service);
-    assert.deepEqual(grants["internal.set_post_like(uuid,uuid,uuid,boolean)"], service);
+    const none = { anon: false, authenticated: false, service_role: false };
+    assert.deepEqual(grants["api.record_post_views(uuid[],uuid,uuid)"], serviceOnly);
+    assert.deepEqual(grants["api.set_post_like(uuid,uuid,uuid,boolean)"], serviceOnly);
+    assert.deepEqual(grants["internal.record_post_views(uuid[],uuid,uuid)"], serviceOnly);
+    assert.deepEqual(grants["internal.set_post_like(uuid,uuid,uuid,boolean)"], serviceOnly);
     assert.deepEqual(grants["api.get_post_engagement(uuid[])"], open);
     assert.deepEqual(grants["internal.get_post_engagement(uuid[])"], open);
+    assert.deepEqual(grants["internal.purge_post_engagement()"], none);
+    assert.deepEqual(grants["internal.post_likes_count()"], none);
     for (const table of TABLES)
       for (const role of ["anon", "authenticated", "service_role"])
         assert.equal(
@@ -206,41 +233,70 @@ try {
 
   await check("one view per browser per post; another browser counts again", () => {
     const device = randomUUID();
-    assert.deepEqual(views([post, post, other], device), [post, other].sort());
+    assert.deepEqual(views([post, post, second], device), [post, second].sort());
     assert.deepEqual(views([post], device), []);
     assert.deepEqual(views([post], randomUUID()), [post]);
     assert.deepEqual(
-      totals([post, other]),
+      totals([post, second]),
       [
         [post, 2, 0],
-        [other, 1, 0],
+        [second, 1, 0],
       ].sort((a, b) => (a[0] < b[0] ? -1 : 1))
     );
   });
-  await check("a signed-in view counts once per account, on any browser", () => {
-    const before = totals([post])[0][1];
-    assert.deepEqual(views([post], randomUUID(), visitor), [post]);
-    assert.deepEqual(views([post], randomUUID(), visitor), []);
-    assert.equal(totals([post])[0][1], before + 1);
+  await check("views are deduped by browser only; no account is hashed into a mark", () => {
+    const before = viewsOf(post);
+    const device = randomUUID();
+    assert.deepEqual(views([post], device, visitor), [post]);
+    assert.deepEqual(views([post], device, null), []);
+    assert.deepEqual(views([post], device, other), []);
+    assert.equal(viewsOf(post), before + 1);
+    const salt = q(
+      `select encode(salt,'hex') from private.post_view_salts order by day desc limit 1;`
+    );
+    const accountMark = q(
+      `select count(*) from private.post_view_marks where mark=sha256(decode('${salt}','hex')||convert_to('account:${visitor.id}|${post}','UTF8'));`
+    );
+    assert.equal(accountMark, "0");
   });
   await check("the owner's and staff views are not counted", () => {
-    const before = totals([post])[0][1];
+    const before = viewsOf(post);
     assert.deepEqual(views([post], randomUUID(), owner), []);
-    assert.deepEqual(views([post, other], randomUUID(), staffer), []);
-    assert.equal(totals([post])[0][1], before);
+    assert.deepEqual(views([post, second], randomUUID(), staffer), []);
+    assert.equal(viewsOf(post), before);
   });
   await check("a post that is not publicly live is never counted", () => {
     assert.deepEqual(views([draft], randomUUID()), []);
     assert.equal(count(`private.post_view_days where post_id='${draft}'`), 0);
-    assert.deepEqual(totals([draft]), []);
   });
   await check("bad view requests are refused", () => {
-    const many = Array.from({ length: 21 }, () => randomUUID());
+    const many = Array.from({ length: 6 }, () => randomUUID());
     fails(service(`select api.record_post_views(${ids(many)},'${randomUUID()}');`), "22023");
     fails(service(`select api.record_post_views(${ids([post])},null);`), "22023");
     fails(service(`select api.record_post_views('{}'::uuid[],'${randomUUID()}');`), "22023");
   });
-  await check("24 hours across the daily salt change; marks forgotten after 48 hours", () => {
+  await check("at most 3,000 counted views per post per hour and 20,000 per day", () => {
+    const capped = event(owner);
+    assert.deepEqual(views([capped], randomUUID()), [capped]);
+    q(`update private.post_view_days set hour_views=3000,views=3000 where post_id='${capped}';`);
+    const marksBefore = count("private.post_view_marks");
+    assert.deepEqual(views([capped], randomUUID()), []);
+    assert.equal(count("private.post_view_marks"), marksBefore, "a capped view leaves no mark");
+    q(
+      `update private.post_view_days set hour_start=hour_start-interval '1 hour' where post_id='${capped}';`
+    );
+    assert.deepEqual(views([capped], randomUUID()), [capped]);
+    q(`update private.post_view_days set views=20000,hour_views=1 where post_id='${capped}';`);
+    assert.deepEqual(views([capped], randomUUID()), []);
+    // The whole site: 300,000 counted views a day.
+    const fresh = event(owner);
+    q(`update private.post_view_salts set views=300000
+      where day=(statement_timestamp() at time zone 'Africa/Johannesburg')::date;`);
+    assert.deepEqual(views([fresh], randomUUID()), []);
+    q(`update private.post_view_salts set views=0;`);
+    assert.deepEqual(views([fresh], randomUUID()), [fresh]);
+  });
+  await check("24 hours across the daily salt change; the retention job forgets old marks", () => {
     const device = randomUUID();
     const fresh = event(owner);
     assert.deepEqual(views([fresh], device), [fresh]);
@@ -251,14 +307,26 @@ try {
     // 25 hours after the first view: counted again.
     q(`update private.post_view_marks set seen_at=seen_at-interval '2 hours';`);
     assert.deepEqual(views([fresh], device), [fresh]);
-    // Next midnight: salts older than yesterday and marks older than 48 hours go.
+    // A view request never deletes marks: only the retention job does.
     q(`insert into private.post_view_marks(mark,seen_at)
-      values(sha256('old'::bytea),statement_timestamp()-interval '49 hours');`);
+      values(sha256('old'::bytea),statement_timestamp()-interval '30 hours');`);
     nextDay(1);
     views([post], randomUUID());
-    assert.equal(count("private.post_view_salts"), 2);
+    assert.equal(count(`private.post_view_marks where mark=sha256('old'::bytea)`), 1);
+    const result = json(service("select api.run_retention(100);"));
+    assert.ok(result.engagement.marks >= 1, JSON.stringify(result.engagement));
     assert.equal(
-      count("private.post_view_marks where seen_at<statement_timestamp()-interval '48 hours'"),
+      count("private.post_view_marks where seen_at<statement_timestamp()-interval '24 hours'"),
+      0
+    );
+    // Without traffic the job still deletes salts older than yesterday.
+    nextDay(1);
+    nextDay(1);
+    json(service("select api.run_retention(100);"));
+    assert.equal(
+      count(
+        "private.post_view_salts where day<(statement_timestamp() at time zone 'Africa/Johannesburg')::date-1"
+      ),
       0
     );
     assert.deepEqual(
@@ -266,49 +334,75 @@ try {
         where attrelid='private.post_view_marks'::regclass and attnum>0 and not attisdropped;`),
       ["mark", "seen_at"]
     );
-    assert.equal(totals([fresh])[0][1], 2);
   });
 
-  await check("a browser likes, toggles and sets its like", () => {
+  await check("a signed-out browser likes, toggles and sets its like", () => {
     const device = randomUUID();
-    assert.deepEqual(like(post, device), { liked: true, likes: 1, counted: true });
-    assert.deepEqual(like(post, device), { liked: false, likes: 0, counted: true });
-    assert.deepEqual(like(post, device, null, true), { liked: true, likes: 1, counted: true });
-    assert.deepEqual(like(post, device, null, true), { liked: true, likes: 1, counted: true });
-    assert.deepEqual(like(post, randomUUID(), null, true), {
+    const base = likesOf(post);
+    assert.deepEqual(like(post, device), { liked: true, likes: base + 1, counted: true });
+    assert.deepEqual(like(post, device), { liked: false, likes: base, counted: true });
+    assert.deepEqual(like(post, device, null, true), {
       liked: true,
-      likes: 2,
+      likes: base + 1,
       counted: true,
     });
-    assert.deepEqual(like(post, device, null, false), { liked: false, likes: 1, counted: true });
-    assert.deepEqual(like(post, device, null, false), { liked: false, likes: 1, counted: true });
-    assert.equal(totals([post])[0][2], 1);
-  });
-  await check("one like per account on any browser; unliking removes it everywhere", () => {
-    const first = randomUUID();
-    const second = randomUUID();
-    const before = totals([other])[0][2];
-    assert.equal(like(other, first, visitor, true).likes, before + 1);
-    // Another browser of the same account sees it liked and adds nothing.
-    assert.deepEqual(like(other, second, visitor, true), {
+    assert.deepEqual(like(post, device, null, true), {
       liked: true,
-      likes: before + 1,
+      likes: base + 1,
       counted: true,
     });
-    // Signed out on the first browser: still liked there.
-    assert.equal(like(other, first, null, true).likes, before + 1);
-    assert.deepEqual(like(other, second, visitor), { liked: false, likes: before, counted: true });
-    assert.equal(count(`private.post_likes where post_id='${other}'`), before);
-  });
-  await check("the owner's own like is never stored", () => {
-    const before = totals([post])[0][2];
-    assert.deepEqual(like(post, randomUUID(), owner), {
+    assert.equal(like(post, randomUUID(), null, true).likes, base + 2);
+    assert.deepEqual(like(post, device, null, false), {
       liked: false,
-      likes: before,
-      counted: false,
+      likes: base + 1,
+      counted: true,
     });
-    assert.equal(totals([post])[0][2], before);
+    assert.equal(likesOf(post), base + 1);
+    totalsMatchRows();
   });
+  await check("signed in acts only on the account's like; signed out only on the browser's", () => {
+    const shared = randomUUID();
+    const base = likesOf(second);
+    // A likes signed out on a shared browser; B signs in there and unlikes.
+    assert.equal(like(second, shared, null, true).likes, base + 1);
+    assert.deepEqual(like(second, shared, visitor, false), {
+      liked: false,
+      likes: base + 1,
+      counted: true,
+    });
+    // B's own like is the account's, on any browser, and stores no browser.
+    assert.equal(like(second, shared, visitor, true).likes, base + 2);
+    assert.equal(like(second, randomUUID(), visitor, true).likes, base + 2);
+    assert.equal(
+      count(`private.post_likes where account_id='${visitor.id}' and device_mark is not null`),
+      0
+    );
+    // A's signed-out like is untouched by B's unlike.
+    assert.equal(like(second, randomUUID(), visitor, false).likes, base + 1);
+    assert.equal(like(second, shared, null).liked, false);
+    totalsMatchRows();
+  });
+  await check(
+    "the owner's and staff likes are never stored; the owner can remove their browser's",
+    () => {
+      const device = randomUUID();
+      const base = likesOf(post);
+      assert.deepEqual(like(post, device, owner), { liked: false, likes: base, counted: false });
+      assert.deepEqual(like(post, device, staffer, true), {
+        liked: false,
+        likes: base,
+        counted: false,
+      });
+      // Liked while signed out, then removed by the signed-in owner.
+      assert.equal(like(post, device, null, true).likes, base + 1);
+      assert.deepEqual(like(post, device, owner, false), {
+        liked: false,
+        likes: base,
+        counted: false,
+      });
+      totalsMatchRows();
+    }
+  );
   await check("an account that is not active likes as a signed-out browser", () => {
     const banned = syntheticMember("views-banned");
     q(`update auth.users set banned_until=now()+interval '1 day' where id='${banned.id}';`);
@@ -317,45 +411,73 @@ try {
     assert.equal(count(`private.post_likes where account_id='${banned.id}'`), 0);
     like(post, device, null, false);
   });
-  await check("likes on hidden or unknown posts and bad requests are refused", () => {
+  await check("hidden and unknown posts: refused alike, absent alike from the totals", () => {
     fails(service(`select api.set_post_like('${draft}','${randomUUID()}');`), "PT404");
     fails(service(`select api.set_post_like('${randomUUID()}','${randomUUID()}');`), "PT404");
     fails(service(`select api.set_post_like('${post}',null);`), "22023");
-    const many = Array.from({ length: 101 }, () => randomUUID());
+    // A post on hold keeps its search document but is not public.
+    const held = event(owner);
+    like(held, randomUUID(), null, true);
+    views([held], randomUUID());
+    q(`insert into private.frontend_content_holds(id,post_id,account_id,actor_id,reason,applied_at)
+      values(gen_random_uuid(),'${held}','${owner.id}','${staffer.id}','Fixture hold for a report',now());`);
+    assert.deepEqual(totals([held, randomUUID(), draft]), []);
+    fails(service(`select api.set_post_like('${held}','${randomUUID()}');`), "PT404");
+    assert.deepEqual(views([held], randomUUID()), []);
+    const many = Array.from({ length: 51 }, () => randomUUID());
     fails(anon(`select api.get_post_engagement(${ids(many)});`), "22023");
   });
-  await check("at most 600 new likes per post per hour", () => {
+  await check("at most 600 new likes per post per hour, counted under the post's lock", () => {
     const busy = event(owner);
-    q(`insert into private.post_likes(post_id,device_mark)
-      select '${busy}',sha256(convert_to('busy'||g::text,'UTF8')) from generate_series(1,600) g;`);
+    like(busy, randomUUID(), null, true);
+    q(`update private.post_engagement_totals set like_hour_count=600 where post_id='${busy}';`);
     fails(service(`select api.set_post_like('${busy}','${randomUUID()}');`), "PT429", /like_limit/);
-    q(
-      `update private.post_likes set created_at=created_at-interval '61 minutes' where post_id='${busy}';`
-    );
-    assert.equal(like(busy, randomUUID()).likes, 601);
+    // Unliking is never limited.
+    q(`update private.post_engagement_totals set like_hour_start=like_hour_start-interval '1 hour'
+      where post_id='${busy}';`);
+    assert.equal(like(busy, randomUUID()).likes, 2);
   });
-  await check("the privacy export lists the account's signed-in likes", () => {
+  await check("the privacy export lists the latest 2,000 signed-in likes and their number", () => {
     const liker = syntheticMember("views-export");
-    like(other, randomUUID(), liker, true);
-    const data = json(`select internal.frontend_privacy_export_data('${liker.id}');`);
+    like(second, randomUUID(), liker, true);
+    let data = json(`select internal.frontend_privacy_export_data('${liker.id}');`);
     assert.deepEqual(
       data.post_likes.map((row) => row.post_id),
-      [other]
+      [second]
     );
     assert.deepEqual(Object.keys(data.post_likes[0]).sort(), ["created_at", "post_id"]);
+    assert.equal(Number(data.post_likes_summary[0].total), 1);
+    q(`insert into private.post_likes(post_id,account_id)
+      select vmtest.event('${owner.id}',false),'${liker.id}' from generate_series(1,2600);`);
+    data = json(`select internal.frontend_privacy_export_data('${liker.id}');`);
+    assert.equal(data.post_likes.length, 2000);
+    assert.equal(Number(data.post_likes_summary[0].total), 2601);
+    totalsMatchRows();
   });
-  await check("views and likes go with the post, a signed-in like with the Auth user", () => {
+  await check("views and likes go with the post; erasure deletes the account's likes", () => {
     const doomed = event(owner);
     views([doomed], randomUUID());
     like(doomed, randomUUID());
-    const liker = syntheticMember("views-erased");
-    like(doomed, randomUUID(), liker, true);
-    q(`delete from auth.users where id='${liker.id}';`);
-    assert.equal(count(`private.post_likes where account_id='${liker.id}'`), 0);
-    assert.equal(count(`private.post_likes where post_id='${doomed}'`), 1);
     q(`delete from private.posts where id='${doomed}';`);
-    assert.equal(count(`private.post_likes where post_id='${doomed}'`), 0);
-    assert.equal(count(`private.post_view_days where post_id='${doomed}'`), 0);
+    for (const table of ["post_likes", "post_view_days", "post_engagement_totals"])
+      assert.equal(count(`private.${table} where post_id='${doomed}'`), 0, table);
+
+    const leaving = syntheticMember("views-erased");
+    const now = Math.floor(Date.now() / 1000);
+    assert.equal(like(post, randomUUID(), leaving, true).liked, true);
+    const before = likesOf(post);
+    json(
+      as(
+        { ...claims(leaving), amr: [{ method: "password", timestamp: now - 60 }] },
+        "select api.close_my_account();"
+      )
+    );
+    q(`select vmtest.erasure_due('${leaving.id}');`);
+    const erased = json(`select internal.erase_closed_account('${leaving.id}','sweep');`);
+    assert.ok(erased.erased_at, JSON.stringify(erased));
+    assert.equal(count(`private.post_likes where account_id='${leaving.id}'`), 0);
+    assert.equal(likesOf(post), before - 1);
+    totalsMatchRows();
   });
   await check("preflight after: counts, and the rollback refuses once data exists", () => {
     const rows = preflight();

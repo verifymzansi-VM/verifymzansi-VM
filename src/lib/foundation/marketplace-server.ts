@@ -78,9 +78,20 @@ export async function restoredPostEngagement(ids: readonly string[]) {
   return readPublicEngagement(foundationServerPublicApi(), ids);
 }
 
-export const restoredPublicDetail = cache(async (id: string) => {
+/** A publicly live post without its view and like totals (the feed reads
+ * those for all its slides at once). */
+export const restoredPublicDetailWithoutTotals = cache(async (id: string) => {
   if (!z.uuid().safeParse(id).success) return null;
-  return readRestoredPublicDetail(foundationServerPublicApi(), id);
+  return readRestoredPublicDetail(foundationServerPublicApi(), id, { withEngagement: false });
+});
+
+/** A publicly live post as its page shows it, with its totals while
+ * SHOW_ENGAGEMENT_TOTALS is on. */
+export const restoredPublicDetail = cache(async (id: string) => {
+  const post = await restoredPublicDetailWithoutTotals(id);
+  if (!post) return null;
+  const engagement = (await restoredPostEngagement([post.id])).get(post.id) ?? null;
+  return { ...post, engagement };
 });
 
 /**

@@ -44,6 +44,9 @@ function localFixtureKey(label) {
  * the copy only (the website refuses keys with fewer than 8 distinct digits). */
 export const LOCAL_PHONE_OTP_KEY = localFixtureKey("phone-otp");
 export const LOCAL_ID_ENCRYPTION_KEY = localFixtureKey("id-encryption");
+/** Synthetic signing secret of the view and like cookie (vmz_viewer) in the
+ * copy only (src/lib/engagement-cookie.ts). */
+export const LOCAL_ENGAGEMENT_COOKIE_SECRET = localFixtureKey("engagement-cookie");
 /** Synthetic secret for the website's payment status-check job route
  * (/api/internal/payments/reconcile), which the checkout browser tests call as
  * the every-10-minutes Worker does. Exists only in the copy. */

@@ -1,57 +1,66 @@
 -- Post view counts and likes (roadmap P6).
 --
--- Views and likes are counted per browser, through the website only: the
--- website gives each browser a random first-party identifier (cookie
--- vmz_viewer) and calls the two service commands below with it. The database
--- never stores that identifier, a network address or a user agent: it keeps
--- only keyed one-way hashes of it, and for views only for 48 hours.
+-- The website gives each browser a random identifier in a first-party cookie
+-- (vmz_viewer), signed by the website so a made-up identifier is never
+-- counted, and passes it, with the GoTrue-verified account or none, to the two
+-- service commands below. The database never stores that identifier, a
+-- network address or a user agent.
 --
--- 1. private.engagement_keys: one random 32-byte key, made here, for the like
---    hashes. No API role reads it.
+-- Tables (row level security on; no API role has table access):
+-- 1. private.engagement_keys: one random 32-byte key, made here, for like
+--    hashes.
 -- 2. private.post_view_salts: one random 32-byte salt per day
---    (Africa/Johannesburg). The first view of a day makes the day's salt and
---    deletes every salt older than yesterday and every view mark older than 48
---    hours, so a mark cannot be linked to a browser after two days.
--- 3. private.post_view_marks: sha256(day salt || viewer || post) for each view
---    counted, with the time. Viewer is the browser, and the account when
---    signed in.
--- 4. private.post_view_days: the number of views of each post per day (the
---    only lasting view data; deleted with the post).
--- 5. private.post_likes: one row per like: the post, sha256(like key ||
---    browser), and the account when the like was made signed in (deleted with
---    the post, and with the Auth user when an account is erased).
+--    (Africa/Johannesburg), with the day's counted views: at most 300,000 a
+--    day are counted, so the marks below can never fill the database.
+-- 3. private.post_view_marks: sha256(day salt || browser || post) and the
+--    time, one per counted view. Never an account. The daily retention job
+--    (api.run_retention) deletes marks older than 24 hours and salts older
+--    than yesterday, so a mark is gone within 2 days and a salt within 3.
+-- 4. private.post_view_days: views per post per day, with the current hour's
+--    count for the caps (the only lasting view data; deleted with the post).
+-- 5. private.post_engagement_totals: one row per post with its total views
+--    and likes (likes kept by triggers on private.post_likes) and the current
+--    hour's new likes; the public read and the like command read this row.
+-- 6. private.post_likes: one row per like: either sha256(like key || browser)
+--    for a like made signed out, or the account for a like made signed in,
+--    never both. Deleted with the post; a signed-in like also with the account
+--    (account erasure deletes it, and the Auth user's deletion cascades).
 --
 -- Commands:
 -- - api.record_post_views(p_post_ids uuid[], p_device uuid, p_account uuid)
---   (service only): 1 to 20 posts. Counts a post at most once per viewer in 24
---   hours (the browser's mark, and the account's when signed in, under
---   today's and yesterday's salt). Never counts a post that is not publicly
---   live, the owner's own view when signed in, or any view by an account with
---   an active staff role. Returns {"counted": [post ids]}.
+--   (service only): 1 to 5 posts (22023 views_invalid). A post counts at most
+--   once per browser in 24 hours (today's or yesterday's salt), never when it
+--   is not publicly live, never the signed-in owner's own view, never any view
+--   by an account with an active staff role (an inactive account counts as
+--   signed out). At most 3,000 counted views per post per hour, 20,000 per
+--   post per day and 300,000 in all per day. Returns {"counted": [post ids]}.
 -- - api.set_post_like(p_post_id uuid, p_device uuid, p_account uuid,
---   p_liked boolean) (service only): sets the browser's like on a publicly
---   live post to p_liked (null toggles) and returns {"liked", "likes",
---   "counted"}. One like per browser per post, and per account when signed in
---   (a like by the browser or the account counts as liked; unliking removes
---   both). The owner's own like (signed in) is never stored ("counted":
---   false). At most 600 new likes per post per hour (PT429 like_limit). An
---   unknown or hidden post is PT404 post_unavailable. An account that is not
---   active is treated as signed out, for views and likes alike.
--- - api.get_post_engagement(p_post_ids uuid[]) (anon and authenticated): for
---   up to 100 posts that are publicly listed, {"items": [{"post_id", "views",
---   "likes"}]}: totals only, never who.
+--   p_liked boolean) (service only): sets (null toggles) the like of the
+--   signed-in account, or of the browser when signed out, on a publicly live
+--   post (PT404 post_unavailable otherwise; 22023 like_invalid). Signed in it
+--   acts only on the account's like, signed out only on the browser's. The
+--   owner's and staff's own likes are never stored ("counted": false); they
+--   may remove the like their browser made while signed out. At most 600 new
+--   likes per post per hour (PT429 like_limit). Changes to one post's likes
+--   happen one at a time (its totals row is locked). Returns {"liked",
+--   "likes", "counted"}.
+-- - api.get_post_engagement(p_post_ids uuid[]) (anon and authenticated): up
+--   to 50 ids (22023 engagement_invalid); for each publicly live post
+--   {"post_id", "views", "likes"}; a hidden or unknown post is simply absent.
 --
--- The privacy export (internal.frontend_privacy_export_data) gains the
--- dataset post_likes: the posts the account liked while signed in, and when.
--- Likes made signed out cannot be tied to an account and are not exported.
+-- Replaced functions (full bodies; each checked against its reviewed body):
+-- - internal.frontend_privacy_export_data: datasets post_likes (the latest
+--   2,000 likes made signed in) and post_likes_summary (their number, first
+--   and last), so the export never fails because of likes.
+-- - internal.run_retention: also runs internal.purge_post_engagement
+--   ("engagement": salts and marks deleted, in batches).
+-- - internal.erase_closed_account: also deletes the account's likes.
 --
--- Expand only: new tables and commands; the only existing function replaced is
--- the privacy export (one dataset added). The website calls the new commands
--- only while its switch SHOW_ENGAGEMENT_TOTALS is on, but the deploy preflight
--- probes every command in runtime-api-manifest.json.
+-- Known limits: a view or like by the owner (or staff) while signed out cannot
+-- be told apart from anyone else's; one person can have one like signed out
+-- per browser and one per account on the same post.
 --
--- ORDER: apply first, then merge (after 20261119082834_house_slots.sql in
--- filename order). Read-only preflight:
+-- ORDER: apply first, then merge. Read-only preflight:
 -- ../preflight/20261119172135_post_views_and_likes.check.sql.
 -- Rollback: ../rollback/20261119172135_post_views_and_likes.down.sql.
 begin;
@@ -59,14 +68,15 @@ begin;
 set local lock_timeout='5s';
 
 -- Precondition: nothing of this update exists yet, or all of it does, and the
--- privacy export has its reviewed body (house slots) or this update's.
+-- three functions it replaces have their reviewed bodies (or this update's).
 do $$
-declare present integer; export_body text;
+declare present integer; shape text;
 begin
   select (to_regclass('private.engagement_keys') is not null)::integer
     + (to_regclass('private.post_view_salts') is not null)::integer
     + (to_regclass('private.post_view_marks') is not null)::integer
     + (to_regclass('private.post_view_days') is not null)::integer
+    + (to_regclass('private.post_engagement_totals') is not null)::integer
     + (to_regclass('private.post_likes') is not null)::integer
     + (to_regprocedure('internal.record_post_views(uuid[],uuid,uuid)') is not null)::integer
     + (to_regprocedure('api.record_post_views(uuid[],uuid,uuid)') is not null)::integer
@@ -74,18 +84,30 @@ begin
     + (to_regprocedure('api.set_post_like(uuid,uuid,uuid,boolean)') is not null)::integer
     + (to_regprocedure('internal.get_post_engagement(uuid[])') is not null)::integer
     + (to_regprocedure('api.get_post_engagement(uuid[])') is not null)::integer
+    + (to_regprocedure('internal.purge_post_engagement()') is not null)::integer
+    + (to_regprocedure('internal.post_likes_count()') is not null)::integer
   into present;
-  if present not in (0, 11) then
-    raise exception 'post views and likes precondition: % of 11 objects exist', present
+  if present not in (0, 14) then
+    raise exception 'post views and likes precondition: % of 14 objects exist', present
       using errcode='55000';
   end if;
-  select coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p
-      where p.oid=to_regprocedure('internal.frontend_privacy_export_data(uuid)')),'absent')
-    into export_body;
-  if export_body not in ('e3842fd91a8d4f6b0bfe4cdc5b3030d9', 'a313d356df1fe2bc35166c19971c14c4') then
-    raise exception 'post views and likes precondition: internal.frontend_privacy_export_data(uuid) % is not a reviewed body',
-      export_body using errcode='55000';
-  end if;
+  for shape in
+    select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p
+        where p.oid=to_regprocedure(v.sig)),'absent')
+    from (values ('internal.frontend_privacy_export_data(uuid)'), ('internal.run_retention(integer)'),
+      ('internal.erase_closed_account(uuid,text)')) v(sig)
+  loop
+    if shape not in (
+        'internal.frontend_privacy_export_data(uuid) e3842fd91a8d4f6b0bfe4cdc5b3030d9',
+        'internal.frontend_privacy_export_data(uuid) 3dfe35ae5e93f0661ecd7dbf710cf45d',
+        'internal.run_retention(integer) 3fc3981961fda5c149c6540e03a5b4c3',
+        'internal.run_retention(integer) 06a3fbfcb5b2d53e2487719174a62cc5',
+        'internal.erase_closed_account(uuid,text) 0110024c386259da47b96caf79555bac',
+        'internal.erase_closed_account(uuid,text) c1352cec14d02d401b58e466c387d747') then
+      raise exception 'post views and likes precondition: % is not a reviewed body', shape
+        using errcode='55000';
+    end if;
+  end loop;
 end$$;
 
 create table if not exists private.engagement_keys (
@@ -107,8 +129,10 @@ insert into private.engagement_keys(id, like_key)
 create table if not exists private.post_view_salts (
   day date not null,
   salt bytea not null,
+  views integer not null default 0,
   created_at timestamptz not null default statement_timestamp(),
   constraint post_view_salts_pkey primary key (day),
+  constraint post_view_salts_views_check check (views >= 0),
   constraint post_view_salts_salt_check check (octet_length(salt) = 32)
 );
 alter table private.post_view_salts owner to postgres;
@@ -130,34 +154,77 @@ create table if not exists private.post_view_days (
   post_id uuid not null,
   day date not null,
   views integer not null,
+  hour_start timestamptz not null,
+  hour_views integer not null,
   constraint post_view_days_pkey primary key (post_id, day),
   constraint post_view_days_post_id_fkey foreign key (post_id) references private.posts(id) on delete cascade,
-  constraint post_view_days_views_check check (views > 0)
+  constraint post_view_days_views_check check (views between 1 and 20000),
+  constraint post_view_days_hour_views_check check (hour_views between 1 and 3000)
 );
 alter table private.post_view_days owner to postgres;
 alter table private.post_view_days enable row level security;
 revoke all on private.post_view_days from public, anon, authenticated, service_role;
 
+create table if not exists private.post_engagement_totals (
+  post_id uuid not null,
+  views bigint not null default 0,
+  likes integer not null default 0,
+  like_hour_start timestamptz,
+  like_hour_count integer not null default 0,
+  constraint post_engagement_totals_pkey primary key (post_id),
+  constraint post_engagement_totals_post_id_fkey foreign key (post_id) references private.posts(id) on delete cascade,
+  constraint post_engagement_totals_counts_check check (views >= 0 and likes >= 0
+    and like_hour_count between 0 and 600)
+);
+alter table private.post_engagement_totals owner to postgres;
+alter table private.post_engagement_totals enable row level security;
+revoke all on private.post_engagement_totals from public, anon, authenticated, service_role;
+
 create table if not exists private.post_likes (
   id uuid not null default gen_random_uuid(),
   post_id uuid not null,
-  device_mark bytea not null,
+  device_mark bytea,
   account_id uuid,
   created_at timestamptz not null default statement_timestamp(),
   constraint post_likes_pkey primary key (id),
   constraint post_likes_post_id_fkey foreign key (post_id) references private.posts(id) on delete cascade,
   constraint post_likes_account_id_fkey foreign key (account_id) references auth.users(id) on delete cascade,
-  constraint post_likes_device_mark_check check (octet_length(device_mark) = 32)
+  constraint post_likes_one_liker_check check (num_nonnulls(device_mark, account_id) = 1),
+  constraint post_likes_device_mark_check check (device_mark is null or octet_length(device_mark) = 32)
 );
 alter table private.post_likes owner to postgres;
 alter table private.post_likes enable row level security;
 revoke all on private.post_likes from public, anon, authenticated, service_role;
-create unique index if not exists post_likes_device_idx on private.post_likes using btree (post_id, device_mark);
+create unique index if not exists post_likes_device_idx on private.post_likes using btree (post_id, device_mark)
+  where device_mark is not null;
 create unique index if not exists post_likes_account_idx on private.post_likes using btree (post_id, account_id)
   where account_id is not null;
-create index if not exists post_likes_post_created_idx on private.post_likes using btree (post_id, created_at);
+create index if not exists post_likes_post_id_idx on private.post_likes using btree (post_id);
 create index if not exists post_likes_account_id_idx on private.post_likes using btree (account_id)
   where account_id is not null;
+
+-- The like total of a post follows its like rows, whatever removes them (the
+-- like command, account erasure, the Auth user's deletion).
+CREATE OR REPLACE FUNCTION internal.post_likes_count()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
+begin
+  if tg_op = 'INSERT' then
+    insert into private.post_engagement_totals as t (post_id, likes) values (new.post_id, 1)
+      on conflict (post_id) do update set likes = t.likes + 1;
+    return new;
+  end if;
+  update private.post_engagement_totals t set likes = greatest(t.likes - 1, 0) where t.post_id = old.post_id;
+  return old;
+end;
+$function$;
+alter function internal.post_likes_count() owner to postgres;
+revoke all on function internal.post_likes_count() from public, anon, authenticated, service_role;
+drop trigger if exists post_likes_count on private.post_likes;
+create trigger post_likes_count after insert or delete on private.post_likes
+  for each row execute function internal.post_likes_count();
 
 CREATE OR REPLACE FUNCTION internal.record_post_views(p_post_ids uuid[], p_device uuid, p_account uuid)
  RETURNS jsonb
@@ -167,10 +234,11 @@ CREATE OR REPLACE FUNCTION internal.record_post_views(p_post_ids uuid[], p_devic
 AS $function$
 declare
   today date := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
+  this_hour timestamptz := date_trunc('hour', statement_timestamp());
   viewer uuid := p_account; salt_today bytea; salt_before bytea; pid uuid; post_owner uuid;
-  bases text[]; primary_mark bytea; counted uuid[] := '{}'::uuid[];
+  new_mark bytea; counted uuid[] := '{}'::uuid[];
 begin
-  if p_post_ids is null or p_device is null or cardinality(p_post_ids) not between 1 and 20
+  if p_post_ids is null or p_device is null or cardinality(p_post_ids) not between 1 and 5
     or array_position(p_post_ids, null) is not null then
     raise exception 'view details are invalid' using errcode='22023', detail='views_invalid';
   end if;
@@ -182,41 +250,49 @@ begin
   if viewer is not null and exists(select 1 from private.staff_roles r where r.user_id=viewer and r.revoked_at is null) then
     return jsonb_build_object('counted', '[]'::jsonb);
   end if;
-  -- The first view of the day makes its salt and forgets the older ones.
+  -- The day's salt. The retention job deletes old salts and marks; this only
+  -- keeps at most two salts if that job has not run.
   insert into private.post_view_salts(day, salt)
     values (today, decode(replace(gen_random_uuid()::text,'-','')||replace(gen_random_uuid()::text,'-',''),'hex'))
     on conflict (day) do nothing;
   if found then
     delete from private.post_view_salts s where s.day < today - 1;
-    delete from private.post_view_marks m where m.seen_at < statement_timestamp() - interval '48 hours';
   end if;
   select s.salt into salt_today from private.post_view_salts s where s.day = today;
+  -- The day's limit for the whole site (a few views over it at most, when
+  -- requests race).
+  if (select s.views from private.post_view_salts s where s.day = today) >= 300000 then
+    return jsonb_build_object('counted', '[]'::jsonb);
+  end if;
   select s.salt into salt_before from private.post_view_salts s where s.day = today - 1;
-  -- The account first when signed in: its mark decides whether the view counts.
-  bases := case when viewer is null then array['device:'||p_device::text]
-    else array['account:'||viewer::text, 'device:'||p_device::text] end;
   for pid in select distinct x from unnest(p_post_ids) x order by 1 loop
     select p.owner_id into post_owner from private.posts p
       join private.post_search_documents d on d.post_id = p.id
       where p.id = pid and d.is_visible and (d.visible_until is null or d.visible_until > statement_timestamp())
         and exists(select 1 from private.public_eligible_posts e where e.id = p.id);
     continue when not found or post_owner = viewer;
-    -- Seen in the last 24 hours, under today's or yesterday's salt.
+    -- Seen by this browser in the last 24 hours, under today's or yesterday's salt.
     continue when exists(select 1 from private.post_view_marks m
       where m.seen_at > statement_timestamp() - interval '24 hours'
-        and m.mark in (select sha256(salt_today || convert_to(b || '|' || pid::text, 'UTF8')) from unnest(bases) b
-          union all
-          select sha256(salt_before || convert_to(b || '|' || pid::text, 'UTF8')) from unnest(bases) b
-          where salt_before is not null));
-    primary_mark := sha256(salt_today || convert_to(bases[1] || '|' || pid::text, 'UTF8'));
-    insert into private.post_view_marks(mark) values (primary_mark) on conflict (mark) do nothing;
+        and m.mark in (sha256(salt_today || convert_to('device:' || p_device::text || '|' || pid::text, 'UTF8')),
+          sha256(coalesce(salt_before, salt_today) || convert_to('device:' || p_device::text || '|' || pid::text, 'UTF8'))));
+    new_mark := sha256(salt_today || convert_to('device:' || p_device::text || '|' || pid::text, 'UTF8'));
+    insert into private.post_view_marks(mark) values (new_mark) on conflict (mark) do nothing;
     -- A view sent twice at once counts once.
     continue when not found;
-    insert into private.post_view_marks(mark)
-      select sha256(salt_today || convert_to(b || '|' || pid::text, 'UTF8')) from unnest(bases[2:]) b
-      on conflict (mark) do nothing;
-    insert into private.post_view_days(post_id, day, views) values (pid, today, 1)
-      on conflict (post_id, day) do update set views = private.post_view_days.views + 1;
+    insert into private.post_view_days as d (post_id, day, views, hour_start, hour_views)
+      values (pid, today, 1, this_hour, 1)
+      on conflict (post_id, day) do update set views = d.views + 1, hour_start = excluded.hour_start,
+        hour_views = case when d.hour_start = excluded.hour_start then d.hour_views + 1 else 1 end
+      where d.views < 20000 and (d.hour_start <> excluded.hour_start or d.hour_views < 3000);
+    if not found then
+      -- Over the post's hourly or daily cap: not counted, and not remembered.
+      delete from private.post_view_marks m where m.mark = new_mark;
+      continue;
+    end if;
+    insert into private.post_engagement_totals as t (post_id, views) values (pid, 1)
+      on conflict (post_id) do update set views = t.views + 1;
+    update private.post_view_salts s set views = s.views + 1 where s.day = today;
     counted := counted || pid;
   end loop;
   return jsonb_build_object('counted', to_jsonb(counted));
@@ -243,7 +319,9 @@ CREATE OR REPLACE FUNCTION internal.set_post_like(p_post_id uuid, p_device uuid,
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare liker uuid := p_account; post_owner uuid; device bytea; is_liked boolean; wanted boolean; total bigint;
+declare
+  liker uuid := p_account; post_owner uuid; device bytea; is_liked boolean; wanted boolean;
+  totals private.post_engagement_totals; this_hour timestamptz := date_trunc('hour', statement_timestamp());
 begin
   if p_post_id is null or p_device is null then
     raise exception 'like details are invalid' using errcode='22023', detail='like_invalid';
@@ -261,32 +339,42 @@ begin
   end if;
   select sha256(k.like_key || convert_to('device|' || p_device::text, 'UTF8')) into device
     from private.engagement_keys k where k.id = 1;
-  -- One change at a time per browser, then per account, on this post.
-  perform pg_advisory_xact_lock(hashtextextended('post_like:' || p_post_id::text || ':' || encode(device, 'hex'), 0));
-  if liker is not null then
-    perform pg_advisory_xact_lock(hashtextextended('post_like:' || p_post_id::text || ':' || liker::text, 0));
+  -- One change at a time per post: its totals row is the lock.
+  insert into private.post_engagement_totals(post_id) values (p_post_id) on conflict (post_id) do nothing;
+  select t.* into totals from private.post_engagement_totals t where t.post_id = p_post_id for update;
+  if liker is not null and (liker = post_owner
+      or exists(select 1 from private.staff_roles r where r.user_id=liker and r.revoked_at is null)) then
+    -- The owner's and staff's own likes are never stored; they may remove the
+    -- like their browser made while signed out.
+    if p_liked is not true then
+      delete from private.post_likes l where l.post_id = p_post_id and l.device_mark = device;
+    end if;
+    return jsonb_build_object('liked', false, 'counted', false, 'likes',
+      (select t.likes from private.post_engagement_totals t where t.post_id = p_post_id));
   end if;
-  is_liked := exists(select 1 from private.post_likes l where l.post_id = p_post_id
-    and (l.device_mark = device or (liker is not null and l.account_id = liker)));
+  -- Signed in: only the account's like; signed out: only this browser's.
+  is_liked := case when liker is not null
+    then exists(select 1 from private.post_likes l where l.post_id = p_post_id and l.account_id = liker)
+    else exists(select 1 from private.post_likes l where l.post_id = p_post_id and l.device_mark = device) end;
   wanted := coalesce(p_liked, not is_liked);
-  if liker is not null and liker = post_owner then
-    -- The owner's own like is never stored.
-    select count(*) into total from private.post_likes l where l.post_id = p_post_id;
-    return jsonb_build_object('liked', is_liked, 'likes', total, 'counted', false);
-  end if;
   if wanted and not is_liked then
-    if (select count(*) from private.post_likes l where l.post_id = p_post_id
-        and l.created_at > statement_timestamp() - interval '1 hour') >= 600 then
+    if totals.like_hour_start = this_hour and totals.like_hour_count >= 600 then
       raise exception 'too many likes on this post; try again later' using errcode='PT429', detail='like_limit';
     end if;
-    insert into private.post_likes(post_id, device_mark, account_id) values (p_post_id, device, liker)
-      on conflict do nothing;
+    insert into private.post_likes(post_id, device_mark, account_id)
+      values (p_post_id, case when liker is null then device end, liker);
+    update private.post_engagement_totals t set like_hour_start = this_hour,
+        like_hour_count = case when t.like_hour_start = this_hour then t.like_hour_count + 1 else 1 end
+      where t.post_id = p_post_id;
   elsif is_liked and not wanted then
-    delete from private.post_likes l where l.post_id = p_post_id
-      and (l.device_mark = device or (liker is not null and l.account_id = liker));
+    if liker is not null then
+      delete from private.post_likes l where l.post_id = p_post_id and l.account_id = liker;
+    else
+      delete from private.post_likes l where l.post_id = p_post_id and l.device_mark = device;
+    end if;
   end if;
-  select count(*) into total from private.post_likes l where l.post_id = p_post_id;
-  return jsonb_build_object('liked', wanted, 'likes', total, 'counted', true);
+  return jsonb_build_object('liked', wanted, 'counted', true, 'likes',
+    (select t.likes from private.post_engagement_totals t where t.post_id = p_post_id));
 end;
 $function$;
 alter function internal.set_post_like(uuid,uuid,uuid,boolean) owner to postgres;
@@ -304,7 +392,9 @@ alter function api.set_post_like(uuid,uuid,uuid,boolean) owner to postgres;
 revoke all on function api.set_post_like(uuid,uuid,uuid,boolean) from public, anon, authenticated, service_role;
 grant execute on function api.set_post_like(uuid,uuid,uuid,boolean) to service_role;
 
--- Public, like the post cards: totals only, never who.
+-- Public, like the post cards: totals only, never who; only for publicly live
+-- posts (the rule of api.get_public_post), so a hidden post and an unknown id
+-- answer the same way.
 CREATE OR REPLACE FUNCTION internal.get_post_engagement(p_post_ids uuid[])
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -312,17 +402,17 @@ CREATE OR REPLACE FUNCTION internal.get_post_engagement(p_post_ids uuid[])
  SET search_path TO 'pg_catalog'
 AS $function$
 begin
-  if p_post_ids is null or cardinality(p_post_ids) > 100 or array_position(p_post_ids, null) is not null then
+  if p_post_ids is null or cardinality(p_post_ids) > 50 or array_position(p_post_ids, null) is not null then
     raise exception 'engagement request is invalid' using errcode='22023', detail='engagement_invalid';
   end if;
   return jsonb_build_object('items', coalesce((
     select jsonb_agg(jsonb_build_object('post_id', d.post_id,
-        'views', coalesce((select sum(v.views) from private.post_view_days v where v.post_id = d.post_id), 0),
-        'likes', (select count(*) from private.post_likes l where l.post_id = d.post_id))
-      order by d.post_id)
+        'views', coalesce(t.views, 0), 'likes', coalesce(t.likes, 0)) order by d.post_id)
     from private.post_search_documents d
+    left join private.post_engagement_totals t on t.post_id = d.post_id
     where d.post_id = any(p_post_ids) and d.is_visible
-      and (d.visible_until is null or d.visible_until > statement_timestamp())), '[]'::jsonb));
+      and (d.visible_until is null or d.visible_until > statement_timestamp())
+      and exists(select 1 from private.public_eligible_posts e where e.id = d.post_id)), '[]'::jsonb));
 end;
 $function$;
 alter function internal.get_post_engagement(uuid[]) owner to postgres;
@@ -343,7 +433,37 @@ revoke all on function api.get_post_engagement(uuid[]) from public, anon, authen
 grant execute on function api.get_post_engagement(uuid[]) to anon;
 grant execute on function api.get_post_engagement(uuid[]) to authenticated;
 
--- The privacy export: the dataset post_likes added before notifications.
+-- Daily, from internal.run_retention: view marks older than 24 hours (the
+-- dedupe window) and salts older than yesterday, in batches of 10,000 marks
+-- (at most 200,000 a run; the rest the next day).
+CREATE OR REPLACE FUNCTION internal.purge_post_engagement()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare
+  today date := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
+  salts integer; marks integer := 0; batch integer; rounds integer := 0;
+begin
+  delete from private.post_view_salts s where s.day < today - 1;
+  get diagnostics salts = row_count;
+  loop
+    delete from private.post_view_marks m where m.mark in (select x.mark from private.post_view_marks x
+      where x.seen_at < statement_timestamp() - interval '24 hours' limit 10000);
+    get diagnostics batch = row_count;
+    marks := marks + batch;
+    rounds := rounds + 1;
+    exit when batch < 10000 or rounds >= 20;
+  end loop;
+  return jsonb_build_object('salts', salts, 'marks', marks);
+end;
+$function$;
+alter function internal.purge_post_engagement() owner to postgres;
+revoke all on function internal.purge_post_engagement() from public, anon, authenticated, service_role;
+
+-- The privacy export: datasets post_likes and post_likes_summary added before
+-- notifications.
 CREATE OR REPLACE FUNCTION internal.frontend_privacy_export_data(p_subject uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -414,7 +534,10 @@ begin
     ('locality_verification',$q$select province_id,city_id,assurance,confirmed_at from private.verification_localities where owner_id=$1$q$),
     ('enquiries_sent',$q$select id,post_id,message,created_at from private.enquiries where sender_account_id=$1 order by created_at,id$q$),
     ('enquiries_received',$q$select id,post_id,message,status,created_at from private.enquiries where owner_id=$1 order by created_at,id$q$),
-    ('post_likes',$q$select post_id,created_at from private.post_likes where account_id=$1 order by created_at,id$q$),
+    ('post_likes',$q$select l.post_id,l.created_at from (select post_id,created_at,id from private.post_likes
+      where account_id=$1 order by created_at desc,id limit 2000) l$q$),
+    ('post_likes_summary',$q$select count(*) total,min(created_at) first_at,max(created_at) last_at
+      from private.post_likes where account_id=$1$q$),
     ('notifications',$q$select id,kind,post_id,created_at,read_at from private.notifications where account_id=$1 order by created_at,id$q$),
     ('reports_submitted',$q$select id,post_id,coalesce(frontend_reason,category) category,description,status,created_at,resolved_at
       from private.reports where reporter_id=$1 order by created_at,id$q$),
@@ -447,6 +570,156 @@ begin
 end$function$;
 alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
 revoke all on function internal.frontend_privacy_export_data(uuid) from public;
+
+-- The retention job: also the view salts and marks ("engagement").
+CREATE OR REPLACE FUNCTION internal.run_retention(p_limit integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare result jsonb;
+begin
+  if p_limit is null or p_limit not between 1 and 5000 then
+    raise exception 'limit 1 to 5000' using errcode='22023'; end if;
+  perform pg_catalog.set_config('vm.retention','on',true);
+  perform internal.purge_frontend_post_commands(p_limit);perform internal.purge_frontend_post_actions(p_limit); result:=jsonb_build_object(
+    'accounts',internal.run_account_erasures(least(p_limit,20)),
+    'privacy_requests',internal.retention_privacy_requests(p_limit),
+    'inbox',internal.purge_expired_inbox(p_limit),
+    'identity_bans',internal.purge_expired_identity_bans(p_limit),
+    'trial_identities',internal.purge_expired_trial_identities(p_limit),
+    'verification',internal.retention_verification(p_limit),
+    'staff_records',internal.retention_staff_records(p_limit),
+    'commerce',internal.retention_commerce(p_limit),
+    'operations',internal.retention_operations(p_limit),
+    'engagement',internal.purge_post_engagement());
+  perform pg_catalog.set_config('vm.retention','off',true);
+  return result;
+end;
+$function$;
+alter function internal.run_retention(integer) owner to postgres;
+revoke all on function internal.run_retention(integer) from public;
+grant execute on function internal.run_retention(integer) to service_role;
+
+-- Account erasure: also the account's likes.
+CREATE OR REPLACE FUNCTION internal.erase_closed_account(p_user uuid, p_by text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare er private.account_erasures; reason text; earlier_retention text; counts jsonb := '{}'::jsonb; n integer;
+begin
+  if p_user is null or p_by is null or p_by not in ('staff', 'sweep') then
+    raise exception 'account and erasing party required' using errcode = '22023';
+  end if;
+  perform internal.lock_evidence_subject(p_user);
+  select * into er from private.account_erasures e where e.user_id = p_user for update;
+  if not found then raise exception 'account is not closed' using errcode = 'PT404', detail = 'account_not_closed'; end if;
+  if er.erased_at is not null or er.erase_after > statement_timestamp() then
+    return internal.account_erasure_state(p_user);
+  end if;
+  reason := internal.account_erasure_hold(p_user);
+  if reason is not null then
+    update private.account_erasures set blocked_at = statement_timestamp(), blocked_reason = reason
+      where user_id = p_user;
+    return internal.account_erasure_state(p_user);
+  end if;
+  earlier_retention := coalesce(pg_catalog.current_setting('vm.retention', true), '');
+  perform pg_catalog.set_config('vm.retention', 'on', true);
+  perform pg_catalog.set_config('vm.erasure', p_user::text, true);
+
+  select count(*) into n from private.enquiries q where q.owner_id = p_user or q.sender_account_id = p_user;
+  counts := counts || jsonb_build_object('enquiries', n);
+  -- Enquiries the account sent, with the other owner's notice and email.
+  with gone as (
+    delete from private.enquiries q where q.sender_account_id = p_user returning q.id
+  ), notices as (
+    delete from private.notifications x using gone where x.kind = 'enquiry_received' and x.subject_id = gone.id
+  )
+  delete from private.outbox_events o using gone where o.kind = 'enquiry_received' and o.subject_id = gone.id;
+  -- Sponsored places first: deleting a place returns its grant.
+  delete from private.organisation_sponsorships s where s.owner_id = p_user;
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('sponsored_places', n);
+  -- Posts, with their edit copies, contacts, media links, search documents,
+  -- received enquiries and everything else that belongs to a post.
+  delete from private.posts p where p.owner_id = p_user;
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('posts', n);
+  delete from private.event_submissions e where e.owner_id = p_user;
+  delete from private.enquiries q where q.owner_id = p_user;
+  delete from private.notifications x where x.account_id = p_user;
+  delete from private.outbox_events o where o.owner_id = p_user;
+  delete from private.profiles x where x.account_id = p_user;
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('profile', n);
+  -- Likes made signed in (20261119172135_post_views_and_likes.sql).
+  delete from private.post_likes l where l.account_id = p_user;
+  delete from private.frontend_form_drafts d where d.owner_id = p_user;
+  delete from private.listing_price_drafts d where d.owner_id = p_user;
+  delete from private.intro_trial_requests t where t.owner_id = p_user;
+  delete from private.frontend_business_checks b where b.owner_id = p_user;
+  delete from private.organisation_admins a where a.account_id = p_user;
+  delete from private.organisation_applications a where a.applicant_id = p_user;
+  delete from private.entitlement_members m where m.member_id = p_user or m.added_by = p_user
+    or m.entitlement_id in (select e.id from private.entitlements e where e.owner_id = p_user);
+  delete from private.frontend_post_commands c where c.owner_id = p_user;
+  delete from private.frontend_post_action_receipts r where r.owner_id = p_user;
+  delete from private.account_acquisitions a where a.account_id = p_user;
+  delete from private.communication_choice_events c where c.account_id = p_user;
+  delete from private.signup_terms_acceptances a where a.account_id = p_user;
+  delete from private.posting_terms_acceptances a where a.owner_id = p_user;
+  delete from private.verification_localities l where l.owner_id = p_user;
+  -- Photos and videos nothing kept still uses: queued for deletion from
+  -- storage now (the media cleanup job deletes the objects).
+  update private.media_objects m set state = 'cleanup_required', cleanup_lease_until = null
+    where m.owner_id = p_user and m.state in ('intent', 'ready', 'rejected') and not internal.media_object_in_use(m.id);
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('media_queued', n);
+
+  -- Paid time ends; payment records stay for their tax years, no longer
+  -- linked to the account.
+  update private.entitlements e set status = 'revoked', revoked_reason = 'account_erased'
+    where e.owner_id = p_user and e.status <> 'revoked';
+  update private.trial_identities t set owner_id = null, entitlement_id = null,
+      detached_at = er.closed_at, retain_until = er.closed_at + interval '3 years'
+    where t.owner_id = p_user;
+  update private.post_activations a set owner_id = null where a.owner_id = p_user;
+  update private.entitlements e set owner_id = null where e.owner_id = p_user;
+  update private.payments p set owner_id = null where p.owner_id = p_user;
+  get diagnostics n = row_count; counts := counts || jsonb_build_object('payments_unlinked', n);
+  update private.customer_invoices i set account_id = null where i.account_id = p_user;
+  update private.invoice_transfers t set account_id = null where t.account_id = p_user;
+  update private.payment_refund_requests r set account_id = null where r.account_id = p_user;
+  update private.partner_commissions c set referred_account_id = null where c.referred_account_id = p_user;
+  update private.individual_slot_limits l set account_id = null where l.account_id = p_user;
+  update private.slot_packages k set owner_id = null where k.owner_id = p_user;
+  -- Package invoice requests (20261119025106): an open one is withdrawn (it
+  -- leaves the staff queue), then every one is kept unlinked like its invoice.
+  update private.package_invoice_requests r set status = 'withdrawn', closed_at = statement_timestamp()
+    where r.account_id = p_user and r.status in ('requested', 'awaiting_approval');
+  update private.package_invoice_requests r set account_id = null where r.account_id = p_user;
+
+  perform internal.remove_account_sign_in(p_user);
+  perform pg_catalog.set_config('vm.erasure', '', true);
+  perform pg_catalog.set_config('vm.retention', earlier_retention, true);
+  update private.account_erasures set erased_at = statement_timestamp(), erased_by = p_by, erased_counts = counts,
+      blocked_at = null, blocked_reason = null, auth_checked_at = statement_timestamp()
+    where user_id = p_user;
+  -- Deleting the Auth user never undoes the finished erasure: a failure is
+  -- recorded and the daily check tries again.
+  begin
+    if internal.remove_erased_auth_user(p_user) then
+      update private.account_erasures set auth_removed_at = statement_timestamp() where user_id = p_user;
+    end if;
+  exception when others then
+    update private.account_erasures set blocked_at = statement_timestamp(), blocked_reason = 'error',
+        blocked_detail = sqlstate
+      where user_id = p_user;
+  end;
+  return internal.account_erasure_state(p_user);
+end;
+$function$;
+alter function internal.erase_closed_account(uuid,text) owner to postgres;
+revoke all on function internal.erase_closed_account(uuid,text) from public;
 
 notify pgrst,'reload schema';
 commit;

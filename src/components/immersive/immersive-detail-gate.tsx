@@ -74,6 +74,9 @@ export function ImmersiveDetailGate({
     () => typeof window !== "undefined" && window.matchMedia(IMMERSIVE_MIN_WIDTH_QUERY).matches
   );
   const fellBack = useRef(false);
+  // Cancels the classic page's pending view when the page is left first.
+  const cancelView = useRef<(() => void) | null>(null);
+  useEffect(() => () => cancelView.current?.(), []);
   const isSuppressed = useCallback(() => desktopAtStart && !fellBack.current, [desktopAtStart]);
   const [mode, setMode] = useState<Mode>("pending");
   const activeHref = useRef(initialSlide.href);
@@ -125,7 +128,8 @@ export function ImmersiveDetailGate({
     classicRef.current?.removeAttribute("hidden");
     setMode("classic");
     // The classic page counts once it has been visible for two seconds.
-    trackContentViewAfterDwell({
+    cancelView.current?.();
+    cancelView.current = trackContentViewAfterDwell({
       type: initialSlide.targetType,
       id: initialSlide.id,
       source: "page",
