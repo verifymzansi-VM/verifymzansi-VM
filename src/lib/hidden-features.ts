@@ -35,8 +35,10 @@ export const SHOW_OWNER_METRICS: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.
 
 /**
  * The "Detect province and city" button in the verification location step.
- * The live backend has no location suggestion, so the button only failed;
- * members pick their province and city from the list (OD-07).
+ * Its route (/api/verification/location/detect) suggests a listed province
+ * and city from Cloudflare's request location and saves nothing. Hidden until
+ * launch (owner decision: shown at launch; frontend ledger group 58);
+ * meanwhile members pick their province and city from the list.
  */
 export const SHOW_LOCATION_DETECTION: boolean =
   LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_LOCATION_DETECTION;

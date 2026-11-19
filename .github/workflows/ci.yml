@@ -159,9 +159,12 @@ jobs:
   foundation-sql-lint:
     name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) && 'foundation-sql-lint (draft, not run)' || 'foundation-sql-lint' }}
     runs-on: ubuntu-latest
-    # The behaviour suites run one after another, each in its own replayed
-    # database: about 9 to 15 minutes on 18 November 2026. 30 minutes leaves
-    # room for that and for the image pull's worst case (about 8.5 minutes).
+    # The behaviour suites, each in its own replayed database, took 12 to 13
+    # of this job's 14 minutes one after another (19 November 2026). They now
+    # run side by side (scripts/test-foundation-suites.mjs): 4 at once on a
+    # 4-core machine took 476 s instead of 1446 s; CI runs 3 at once (see the
+    # step below). 30 minutes leaves room for a slow run and for the image
+    # pull's worst case (about 8.5 minutes).
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -235,7 +238,10 @@ jobs:
         run: pnpm db:foundation:lint
       - name: Post lifecycle and staff rule behaviour on the replayed schema
         if: steps.scope.outputs.run == 'true'
-        run: pnpm db:foundation:lifecycle-test
+        # 3 at once, not the runner's 4: some race tests hold a lock for a fixed
+        # 400-700 ms and expect the other side to be waiting by then, so one
+        # core is left free to keep their timing slack.
+        run: pnpm db:foundation:lifecycle-test --jobs=3
 
   lint-type-security:
     runs-on: ubuntu-latest
