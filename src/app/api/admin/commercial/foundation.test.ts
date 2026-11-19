@@ -16,6 +16,7 @@ vi.mock("@/lib/foundation/owner-route", async (original) => ({
   handleFoundationOwnerRoute: vi.fn(),
 }));
 vi.mock("@/lib/foundation/partners", () => ({
+  PARTNER_MAX_RATE_BPS: 2000,
   decideRestoredCommission: vi.fn(),
   saveRestoredPartner: vi.fn(),
 }));
@@ -124,11 +125,26 @@ describe("POST /api/admin/commercial on foundation", () => {
     ).rejects.toMatchObject({ status: 422 });
   });
 
-  it("refuses actions the foundation backend does not offer, and invalid input", async () => {
+  it("refuses a partner rate above 20% before calling the database", async () => {
     const run = await command();
     await expect(
-      run(api, { action: "trial.override", userId: id, kind: "NONE", reason })
-    ).rejects.toMatchObject({ status: 501 });
+      run(api, {
+        action: "partner.manage",
+        userId: id,
+        operation: "rate",
+        values: { commissionBps: 2001 },
+        reason,
+      })
+    ).rejects.toThrow();
+    expect(saveRestoredPartner).not.toHaveBeenCalled();
+  });
+
+  it("refuses the retired trial, programme and settings actions, and invalid input", async () => {
+    const run = await command();
+    for (const action of ["trial.override", "settings.update", "trial_extension.offer"])
+      await expect(run(api, { action, userId: id, kind: "NONE", reason })).rejects.toMatchObject({
+        name: "ZodError",
+      });
     await expect(run(api, { action: "payment.reverse", paymentId: id, reason })).rejects.toThrow();
   });
 });

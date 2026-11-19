@@ -21,6 +21,12 @@ begin
   current_choices:=internal.communication_choices_dto(actor);
   wanted:=jsonb_strip_nulls(jsonb_build_object('marketing_email', p_marketing_email,
     'marketing_sms', p_marketing_sms, 'analytics', p_analytics, 'third_party_sharing', p_third_party_sharing));
+  -- Analytics and third-party sharing are not offered yet: neither can be
+  -- turned on. Turning one off, or saving it unchanged, still works.
+  if exists(select 1 from jsonb_each(wanted) w where w.key in ('analytics', 'third_party_sharing')
+      and w.value = 'true'::jsonb and w.value is distinct from current_choices -> w.key) then
+    raise exception 'this choice is not available' using errcode='22023', detail='choice_unavailable';
+  end if;
   -- Turning a choice on needs an active account and counts towards the daily
   -- limit; turning one off never does.
   select count(*) into grants from jsonb_each(wanted) w

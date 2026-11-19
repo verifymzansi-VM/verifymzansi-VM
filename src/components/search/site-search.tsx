@@ -7,6 +7,7 @@ import { ArrowRight, FileText, RotateCw, SearchX, SlidersHorizontal } from "luci
 import { BrandSurface } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { searchDepthNotice, searchPagination } from "@/lib/foundation/search-depth";
 import {
   SearchBar,
   isSearchable,
@@ -181,7 +182,8 @@ function SearchResults({
   const preview = view === "preview";
   const isEmpty = !state.loading && !state.error && state.rows.length === 0;
   const rows = preview ? state.rows.slice(0, PREVIEW_SIZE) : state.rows;
-  const pageCount = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
+  const pages = searchPagination(state.total, PAGE_SIZE);
+  const pageCount = Math.max(1, pages.totalPages);
   // The area page carries on with the same words and location.
   const filters = { province, city, org };
   const includeOrg = source.key === "businesses";
@@ -309,12 +311,21 @@ function SearchResults({
           <Button
             variant="outline"
             className="h-11 rounded-full px-5"
-            disabled={page * PAGE_SIZE >= state.total}
+            disabled={page >= pageCount}
             onClick={() => changePage(page + 1)}
           >
             Next
           </Button>
         </nav>
+      ) : null}
+      {!preview &&
+      !state.loading &&
+      !state.error &&
+      pages.limitedTo !== null &&
+      page >= pageCount ? (
+        <p className="mt-3 text-center text-sm text-muted-foreground" role="status">
+          {searchDepthNotice(pages.limitedTo)}
+        </p>
       ) : null}
     </section>
   );

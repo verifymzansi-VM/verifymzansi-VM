@@ -14,6 +14,7 @@ import {
 import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
 import { MOCK_PAYMENT_ORIGIN, MockOzow } from "./support/mock-ozow";
 import { endedWithTest } from "./support/route-teardown";
+import { ADDON_SALES_OPEN } from "./support/switches";
 import {
   browserSessionCookies,
   caughtMailFor,
@@ -47,12 +48,16 @@ import {
 // bank attempt cancelled at the provider, whose notice has not arrived, shows
 // as not paid instead of "Payment pending"; a failed first attempt to open the
 // payment page can be retried later (M3.1); the Urgent add-on step says add-ons
-// open soon and takes no payment (paid add-on sales are paused, M1.9); the
-// receipt email arrives; a paid Urgent add-on shows its label.
+// open soon and takes no payment while paid add-on sales are paused (M1.9),
+// and opens the add-on's payment page once they are open; the receipt email
+// arrives; a paid Urgent add-on shows its label.
 //
-// The copy's website runs with paid add-on sales paused, as production does
-// (ADDON_SALES_ENABLED, src/lib/billing/addon-sales.ts); the plan steps above
-// run on that same server, so pausing add-ons leaves plans working.
+// The ordinary copy's website runs with paid add-on sales paused, as
+// production does (ADDON_SALES_ENABLED, src/lib/billing/addon-sales.ts); the
+// plan steps above run on that same server, so pausing add-ons leaves plans
+// working. The launch lane (playwright.launch-config.config.ts) opens them
+// (ADDON_SALES_OPEN, support/switches.ts), and the add-on step checks that
+// state instead.
 //
 // One step is broken today and is marked test.fail(), pinned to its exact
 // known symptom (characterise, support/known-break.ts); any other outcome
@@ -970,10 +975,12 @@ test.describe("checkout to fulfilment", () => {
     expectNoOutboundSince(mark);
   });
 
-  test("the Urgent add-on step says add-ons open soon and takes no payment", async ({
-    context,
-    page,
-  }) => {
+  // One state per lane (ADDON_SALES_OPEN): paused in the ordinary copy, as in
+  // production; open in the launch lane.
+  const urgentStep = ADDON_SALES_OPEN
+    ? "with add-on sales open, the Urgent add-on step opens its payment page and takes nothing until paid"
+    : "the Urgent add-on step says add-ons open soon and takes no payment";
+  test(urgentStep, async ({ context, page }) => {
     const mark = readOutboundAttempts().length;
     const { outside, failures, reply } = await guard(context);
     await signInBrowser(context, member);
@@ -995,10 +1002,91 @@ test.describe("checkout to fulfilment", () => {
       .filter({ has: page.getByRole("button", { name: URGENT_BUTTON }) });
     await expect(item).toHaveCount(1);
     await item.getByRole("button", { name: URGENT_BUTTON }).click();
+    const path = `/api/businesses/${business.id}/urgent`;
+
+    if (ADDON_SALES_OPEN) {
+      // It starts the add-on's checkout and sends the member to the payment page.
+      await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
+      await expect(page.getByRole("heading", { name: "Mock Ozow test payment" })).toBeVisible();
+      const started = reply(path);
+      expect(started).toEqual([
+        {
+          method: "POST",
+          path,
+          status: 200,
+          body: expect.objectContaining({
+            paymentId: expect.stringMatching(UUID),
+            checkoutUrl: expect.stringContaining(MOCK_PAYMENT_ORIGIN),
+          }),
+        },
+      ]);
+      const addonId = (started[0].body as { paymentId: string }).paymentId;
+      expect(new URL(page.url()).searchParams.get("paymentId")).toBe(addonId);
+      // One pending payment for the 7-day Urgent add-on on this post, at its
+      // catalogue price; nothing is paid or delivered yet.
+      expect(Number(payments())).toBe(Number(before.payments) + 1);
+      expect(paymentRow(addonId)).toEqual({
+        status: "pending",
+        fulfilment: "unfulfilled",
+        kind: "addon",
+        amount: urgent.price_cents,
+        request: `mock-${addonId}`,
+        transaction: "",
+      });
+      expect(
+        queryTestCopy(
+          "select addon_version_id || '|' || target_post_id from private.payments " +
+            `where id = '${addonId}';`
+        )
+      ).toBe(`${urgent.id}|${business.id}`);
+      const windows = () =>
+        queryTestCopy(
+          `select count(*) from private.post_addon_windows where payment_id = '${addonId}';`
+        );
+      expect(windows()).toBe("0");
+      expect(ozow.made).toHaveLength(before.made);
+      expect(ozow.notifications).toHaveLength(before.notifications);
+
+      // Declined at the bank, it closes and delivers nothing, so it holds
+      // nothing for the later steps.
+      await page.getByRole("button", { name: "Decline at the test bank" }).click();
+      await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${addonId}`);
+      expect(paymentRow(addonId)).toMatchObject({ status: "failed", fulfilment: "unfulfilled" });
+      expect(windows()).toBe("0");
+      expect(ozow.made.slice(before.made)).toEqual([
+        { paymentId: addonId, transactionId: expect.stringMatching(UUID), status: "Error" },
+      ]);
+
+      // A plan checkout still cannot carry an add-on.
+      const smuggledOpen = await page.evaluate(
+        async ({ planId, postId }) => {
+          const token = document.cookie.match(/(?:^|; )vm_csrf=([a-f0-9]{64})/)?.[1] ?? "";
+          const response = await fetch("/api/billing/create-checkout", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", "x-csrf-token": token },
+            body: JSON.stringify({ planId, post_id: postId, kind: "urgent" }),
+          });
+          return response.status;
+        },
+        { planId: urgent.id, postId: business.id }
+      );
+      expect(smuggledOpen).toBe(400);
+      expect(Number(payments())).toBe(Number(before.payments) + 1);
+
+      // Nothing was refused as paused, and the server log holds none of the
+      // member's address, password or name.
+      expect(readServerLogEntries(ADDONS_PAUSED_LOG)).toHaveLength(logged);
+      expect(serverLogMentions([member.email, member.password, member.lastName])).toEqual([]);
+      expect(failures).toEqual([]);
+      expect(outside).toEqual([]);
+      expectNoOutboundSince(mark);
+      return;
+    }
+
     // It shows the server's refusal in its usual message, and stays on the page.
     await expect(page.getByText(ADDONS_PAUSED.error, { exact: true })).toBeVisible();
     await expect(page.getByText("Urgent failed", { exact: true })).toBeVisible();
-    const path = `/api/businesses/${business.id}/urgent`;
     await expect.poll(() => reply(path).length).toBe(1);
     expect(reply(path)).toEqual([{ method: "POST", path, status: 403, body: ADDONS_PAUSED }]);
     expect(new URL(page.url()).pathname).toBe("/dashboard/listings");

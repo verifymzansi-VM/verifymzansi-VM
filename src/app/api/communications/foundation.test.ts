@@ -7,17 +7,6 @@ import { createFoundationRouteContext } from "@/lib/foundation/request-route";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { COMMUNICATION_WORDING_VERSION } from "@/lib/foundation/communication-choices";
-import type * as HiddenFeatures from "@/lib/hidden-features";
-
-// Analytics and third-party sharing are hidden until the site uses them
-// (src/lib/hidden-features.ts); some tests switch them on to keep that path checked.
-const hiddenFeature = vi.hoisted(() => ({ shown: false }));
-vi.mock("@/lib/hidden-features", async (importOriginal) => ({
-  ...(await importOriginal<typeof HiddenFeatures>()),
-  get SHOW_DATA_USE_CHOICES() {
-    return hiddenFeature.shown;
-  },
-}));
 
 vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: vi.fn() }));
 vi.mock("@/lib/foundation/runtime-connection", () => ({
@@ -68,7 +57,6 @@ const activity = () => request("/api/communications/email-activity");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  hiddenFeature.shown = false;
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
   authenticate.mockResolvedValue({ rpc });
@@ -126,15 +114,15 @@ describe("communication choices", () => {
   it.each([
     ["analytics", { analytics: true }],
     ["third-party sharing", { third_party_sharing: true }],
-    ["a hidden choice beside a shown one", { marketing_email: true, analytics: true }],
-  ])("refuses to turn on %s while it is hidden", async (_label, body) => {
+    ["a removed choice beside an offered one", { marketing_email: true, analytics: true }],
+  ])("refuses to turn on %s, which is no longer offered", async (_label, body) => {
     const response = await savePreferences(preferences("PATCH", body));
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ reason: "invalid" });
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it("still lets a member turn a hidden choice off", async () => {
+  it("still lets a member turn a removed choice off", async () => {
     const response = await savePreferences(
       preferences("PATCH", { analytics: false, third_party_sharing: false })
     );
@@ -146,16 +134,25 @@ describe("communication choices", () => {
     });
   });
 
-  it("turns the hidden choices on again when they are shown", async () => {
-    hiddenFeature.shown = true;
-    const response = await savePreferences(
-      preferences("PATCH", { analytics: true, third_party_sharing: true })
-    );
-    expect(response.status).toBe(200);
+  it("words the database's choice_unavailable refusal as an invalid change", async () => {
+    // The database also refuses turning a removed choice on
+    // (20261119065758_privacy_tightening_2); its message never reaches the member.
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "22023",
+        details: "choice_unavailable",
+        message: "this choice is not available",
+      },
+    });
+    const response = await savePreferences(preferences("PATCH", { marketing_email: true }));
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body).toMatchObject({ reason: "invalid" });
+    expect(JSON.stringify(body)).not.toContain("not available");
     expect(rpc).toHaveBeenCalledExactlyOnceWith("save_my_communication_choices", {
       p_wording: COMMUNICATION_WORDING_VERSION,
-      p_analytics: true,
-      p_third_party_sharing: true,
+      p_marketing_email: true,
     });
   });
 

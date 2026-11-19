@@ -30,7 +30,14 @@ begin
     'counts',jsonb_build_object(
       'reports',(select count(*) from private.reports r where r.status='open'),
       'content',(select count(*) from private.posts p where p.status='pending_moderation'),
-      'kyc',(select count(*) from private.evidence_cases e where e.status='open' and e.kind='kyc'),
+      -- The ID check queue's own rule (internal.get_frontend_staff_verification_queue):
+      -- open, a current submission at the case's version, an active account.
+      'kyc',(select count(*) from private.evidence_cases e
+      join private.verification_current_submissions v on v.case_id=e.id
+      join private.verification_identity_submissions s on s.id=v.submission_id and s.case_version=e.version
+      where e.kind='kyc' and e.status='open' and e.subject_id<>actor
+        and exists(select 1 from private.profiles p where p.account_id=e.subject_id)
+        and exists(select 1 from private.current_account_access u where u.id=e.subject_id)),
       'business_kyc',(select count(*) from private.evidence_cases e where e.status='open' and e.kind='business'),
       'decisions',(select count(*) from private.decisions d where d.status='proposed')),
     'claims',claims,

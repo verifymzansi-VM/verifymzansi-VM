@@ -1,13 +1,7 @@
 import { hasCapability, type Capability } from "@/lib/auth/roles";
 import type { StaffRole } from "@/types/enums";
 import { nativeCapabilityFor } from "@/lib/auth/native-capabilities";
-import {
-  SHOW_STAFF_COMMERCIAL_SETTINGS,
-  SHOW_STAFF_INTELLIGENCE,
-  SHOW_STAFF_OPERATIONS,
-  SHOW_STAFF_PROGRAMMES,
-  SHOW_STAFF_TRIALS,
-} from "@/lib/hidden-features";
+import { SHOW_STAFF_OPERATIONS } from "@/lib/hidden-features";
 
 /**
  * The admin navigation registry: every admin page, the capability its page
@@ -35,14 +29,9 @@ export type NavIcon =
   | "users"
   | "activity"
   | "scroll"
-  | "chart"
-  | "trending"
-  | "percent"
-  | "award"
   | "landmark"
   | "handshake"
   | "receipt"
-  | "gift"
   | "toggle";
 
 /** Keys of `staff_nav_counts()` shown as badges. */
@@ -64,7 +53,6 @@ export type NavSectionId =
   | "decisions"
   | "compliance"
   | "oversight"
-  | "intelligence"
   | "commercial"
   | "platform";
 
@@ -91,7 +79,6 @@ const NAV_SECTION_LABELS: Record<NavSectionId, string> = {
   decisions: "Decisions",
   compliance: "Compliance",
   oversight: "Oversight",
-  intelligence: "Intelligence",
   commercial: "Commercial",
   platform: "Platform",
 };
@@ -104,7 +91,6 @@ const SECTION_ORDER: NavSectionId[] = [
   "areas",
   "oversight",
   "commercial",
-  "intelligence",
   "platform",
 ];
 
@@ -257,30 +243,6 @@ export const ADMIN_NAV: readonly NavItem[] = [
   },
 
   {
-    href: "/admin/commercial",
-    shown: SHOW_STAFF_COMMERCIAL_SETTINGS,
-    label: "Commercial settings",
-    icon: "percent",
-    section: "commercial",
-    capability: "commercial:manage",
-  },
-  {
-    href: "/admin/trials",
-    shown: SHOW_STAFF_TRIALS,
-    label: "Free posts & trials",
-    icon: "gift",
-    section: "commercial",
-    capability: "trials:manage",
-  },
-  {
-    href: "/admin/programmes",
-    shown: SHOW_STAFF_PROGRAMMES,
-    label: "Programmes & contracts",
-    icon: "award",
-    section: "commercial",
-    capability: "contracts:manage",
-  },
-  {
     href: "/admin/organisations",
     label: "Organisations",
     icon: "landmark",
@@ -302,56 +264,6 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "receipt",
     section: "commercial",
     capability: "payments:view",
-  },
-
-  {
-    href: "/admin/intelligence/users",
-    shown: SHOW_STAFF_INTELLIGENCE,
-    label: "Users & growth",
-    icon: "users",
-    section: "intelligence",
-    capability: "bi:view",
-  },
-  {
-    href: "/admin/intelligence/verification",
-    shown: SHOW_STAFF_INTELLIGENCE,
-    label: "Verification metrics",
-    icon: "shield",
-    section: "intelligence",
-    capability: "bi:view",
-  },
-  {
-    href: "/admin/intelligence/revenue",
-    shown: SHOW_STAFF_INTELLIGENCE,
-    label: "Revenue & costs",
-    icon: "trending",
-    section: "intelligence",
-    capability: "bi:view",
-  },
-  {
-    href: "/admin/intelligence/marketplace",
-    shown: SHOW_STAFF_INTELLIGENCE,
-    label: "Marketplace health",
-    icon: "chart",
-    section: "intelligence",
-    capability: "bi:view",
-  },
-  {
-    href: "/admin/intelligence/trends",
-    shown: SHOW_STAFF_INTELLIGENCE,
-    label: "Trends",
-    icon: "trending",
-    section: "intelligence",
-    capability: "bi:view",
-  },
-  {
-    href: "/admin/intelligence/operations",
-    shown: SHOW_STAFF_INTELLIGENCE,
-    label: "Operations summary",
-    icon: "clock",
-    section: "intelligence",
-    capability: "bi:view",
-    nativeCapability: "queue:view",
   },
 
   {

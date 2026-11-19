@@ -19,7 +19,7 @@ describe("introductory trial card", () => {
     );
     expect(screen.getByText("Your 7-day introductory trial")).toBeInTheDocument();
     expect(screen.getByText(/^Visible until 17 November 2026\./)).toBeInTheDocument();
-    // Renewing is hidden until it works; the plan and posts links stay.
+    // The old trial plan changes are gone; the plan and posts links stay.
     expect(screen.queryByRole("button", { name: /Renew using my paid plan/ })).toBeNull();
     expect(screen.getByRole("link", { name: "Choose a paid plan" })).toHaveAttribute(
       "href",
@@ -44,7 +44,7 @@ describe("introductory trial card", () => {
     rerender(<IntroductoryTrialCard foundationClaim={null} />);
     expect(container).toBeEmptyDOMElement();
   });
-  it("does not offer to switch a pending 30-day trial while trial changes are hidden", () => {
+  it("does not offer to switch or renew a pending 30-day trial", () => {
     render(
       <IntroductoryTrialCard
         foundationClaim={{
