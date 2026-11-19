@@ -246,6 +246,13 @@ const PACKAGE_INVOICE_UNPAID = [
   `Your package invoice is not paid yet. Pay it from Invoices, or email ${BILLING_EMAIL} to cancel it first.`,
   "PACKAGE_INVOICE_UNPAID",
 ] as const;
+/** A package payment, transfer or invoice of the account is being recorded at
+ * this moment (update 20261119151152): nothing changed, the member retries. */
+const PACKAGE_BUSY = [
+  409,
+  "Your package is being updated. Try again in a moment.",
+  "PACKAGE_BUSY",
+] as const;
 /** While a package runs, Individual slots are not bought or renewed (E3). */
 const PACKAGE_ACTIVE = [
   409,
@@ -295,7 +302,18 @@ async function command(
               : error.code === "PT409" && !hasDatabaseReason(error, "package_active")
                 ? null
                 : PACKAGE_CHECKOUT_REFUSALS[error.code ?? ""]
-            : null;
+            : // A package checkout is not sent to Ozow beside a package or an
+              // unpaid package invoice (update 20261119151152): the package
+              // checkout's own words.
+              name === "claim_checkout_request" && error.code === "PT409"
+              ? hasDatabaseReason(error, "package_invoice_unpaid")
+                ? PACKAGE_INVOICE_UNPAID
+                : hasDatabaseReason(error, "package_active")
+                  ? PACKAGE_CHECKOUT_REFUSALS.PT409
+                  : hasDatabaseReason(error, "package_busy")
+                    ? PACKAGE_BUSY
+                    : null
+              : null;
   if (refusal) throw new FoundationBillingCommandError(...refusal);
   if (error)
     throw new FoundationBillingCommandError(

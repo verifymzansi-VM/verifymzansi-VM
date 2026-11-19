@@ -191,6 +191,55 @@ describe("independent steps", () => {
     warn.mockRestore();
   });
 
+  it("emails staff once about a newly stuck package move and keeps the run passing", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const lines = (spy: typeof warn, text: string) =>
+      spy.mock.calls.map(([line]) => String(line)).filter((line) => line.includes(text));
+    const packageMoveAlert = vi.fn(async () => ({ success: true }));
+    const base = rpc.getMockImplementation()!;
+    const sweepReply = (data: Record<string, unknown>) =>
+      rpc.mockImplementation(async (name, args) =>
+        name === "run_slot_renewals" ? { data, error: null } : base(name, args)
+      );
+    // Skipped but not stuck: a warning, no email, the run succeeds.
+    sweepReply({ moved: 0, package_skipped: 2, package_stuck: 0, package_stuck_moves: [] });
+    await expect(run({ packageMoveAlert })).resolves.toMatchObject({ failed: [] });
+    expect(lines(warn, "Package moves skipped this run")).toHaveLength(1);
+    expect(packageMoveAlert).not.toHaveBeenCalled();
+    // Newly stuck: one email with ids only; the run still passes.
+    const move = {
+      package_id: id,
+      post_id: claim,
+      direction: "into_package",
+      tries: 31,
+      first_failed_at: "2026-11-19T10:02:00.000Z",
+      reason: "busy",
+    };
+    sweepReply({ package_skipped: 1, package_stuck: 1, package_stuck_moves: [move] });
+    await expect(run({ packageMoveAlert })).resolves.toMatchObject({ failed: [] });
+    expect(packageMoveAlert).toHaveBeenCalledExactlyOnceWith([move]);
+    expect(lines(errorLog, "Package move stuck")[0]).toContain(claim);
+    // Still stuck but already reported: no second email, the run passes.
+    sweepReply({ package_skipped: 1, package_stuck: 1, package_stuck_moves: [] });
+    await expect(run({ packageMoveAlert })).resolves.toMatchObject({ failed: [] });
+    expect(packageMoveAlert).toHaveBeenCalledOnce();
+    expect(lines(warn, "Package moves stuck").length).toBeGreaterThan(0);
+    // An email that cannot go out fails that one run, with the moves logged.
+    packageMoveAlert.mockResolvedValueOnce({ success: false });
+    sweepReply({ package_stuck: 1, package_stuck_moves: [move] });
+    const error = await run({ packageMoveAlert }).catch((e) => e);
+    expect(error).toBeInstanceOf(OperationJobsIncompleteError);
+    expect(error.failed).toEqual(["package_move_alert"]);
+    expect(lines(errorLog, "Package move alert not emailed")).toHaveLength(1);
+    // An earlier database sends neither count: nothing happens.
+    sweepReply({ moved: 0, package_skipped: 0 });
+    await expect(run({ packageMoveAlert })).resolves.toMatchObject({ failed: [] });
+    expect(packageMoveAlert).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+    errorLog.mockRestore();
+  });
+
   it("does not wait for a slow sweep before sending emails", async () => {
     queue(job());
     const base = rpc.getMockImplementation()!;

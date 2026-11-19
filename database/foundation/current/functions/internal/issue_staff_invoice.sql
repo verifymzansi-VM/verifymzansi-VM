@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION internal.issue_staff_invoice(p_account_email text, p_
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid; buyer uuid; plan private.plan_versions; fingerprint text; prior private.customer_invoices;
-  made private.customer_invoices; issued_on date; year_number integer; next_number integer;
+  made private.customer_invoices; issued_on date; year_number integer; next_number integer; issued timestamptz;
 begin
   actor := internal.staff_actor('payments:refund');
   if length(btrim(coalesce(p_account_email, ''))) not between 3 and 254 or p_term_days is null
@@ -23,6 +23,10 @@ begin
   buyer := internal.invoice_customer_by_email(p_account_email);
   perform internal.assert_staff_payment_actor(actor, buyer);
   perform internal.lock_evidence_subject(buyer);
+  -- The account's package lock (20261119151152): issuing waits for a package
+  -- being delivered to the account and the other way round, so the invoice's
+  -- issue time and E3 below see every package delivered before it.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||buyer::text, 707));
   perform internal.staff_actor('payments:refund'); -- authority after any lock wait
   perform internal.assert_staff_payment_actor(actor, buyer);
   perform internal.assert_staff_not_referrer(actor, buyer);
@@ -52,8 +56,9 @@ begin
       using errcode='PT412', detail='invoice_buyer_unverified';
   end if;
   -- E3 (20261114154823): while the person's Multi-listing package runs (until
-  -- its last 7 days), no Individual slot is sold, whatever the way it is paid.
-  if internal.slot_package_blocks_individual(fingerprint, buyer) then
+  -- its last 7 days), no Individual slot is sold, whatever the way it is paid;
+  -- read at this moment, after the lock (20261119151152).
+  if internal.slot_package_blocks_invoice(fingerprint, buyer, null) then
     raise exception 'Individual slots cannot be sold while the person''s Multi-listing package runs'
       using errcode='PT409', detail='package_active';
   end if;
@@ -71,19 +76,22 @@ begin
     raise exception 'the VAT registration setting changed; invoices need updating first'
       using errcode='PT409', detail='invoice_vat_status_changed';
   end if;
-  issued_on := internal.customer_invoice_day(statement_timestamp());
+  -- Issued now, after the package lock (20261119151152): a bank transfer to
+  -- it is honoured beside a package only if that package started before this.
+  issued := clock_timestamp();
+  issued_on := internal.customer_invoice_day(issued);
   year_number := extract(year from issued_on)::integer;
   insert into private.customer_invoice_numbers as n (invoice_year, last_number) values (year_number, 1)
     on conflict (invoice_year) do update set last_number = n.last_number + 1
     returning n.last_number into next_number;
   insert into private.customer_invoices (invoice_number, invoice_year, sequence_number, account_id, plan_version_id,
-      slots, unit_price_cents, total_cents, description, due_on, issued_by, issue_reason, request_id, seller)
+      slots, unit_price_cents, total_cents, description, due_on, issued_by, issue_reason, request_id, seller, issued_at)
     values ('VM-' || year_number::text || '-' || lpad(next_number::text, 6, '0'), year_number, next_number, buyer, plan.id,
       p_slots, plan.price_cents, plan.price_cents * p_slots,
       case when p_slots = 1 then plan.label else p_slots::text || ' × ' || plan.label end,
       issued_on + p_due_days, actor, btrim(p_reason), p_request_id,
       jsonb_build_object('legal_name', 'Verifymzansi (Pty) Ltd', 'registration_number', '2026/155305/07',
-        'vat_registered', false))
+        'vat_registered', false), issued)
     returning * into made;
   perform internal.staff_actor('payments:refund');
   perform internal.assert_staff_payment_actor(actor, buyer);

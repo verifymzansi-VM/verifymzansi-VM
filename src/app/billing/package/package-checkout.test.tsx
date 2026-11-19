@@ -234,4 +234,30 @@ describe("PackageCheckout (P4a)", () => {
     );
     expect(payButton()).toBeDisabled();
   });
+
+  it("tells a member with unpaid Individual slot invoices that a bank transfer still delivers them (D6)", () => {
+    const { rerender } = render(
+      <PackageCheckout terms={terms} unpaidInvoices={["VM-2026-000187"]} />
+    );
+    expect(screen.getByTestId("package-unpaid-invoices")).toHaveTextContent(
+      "You have an unpaid invoice for Individual slots (VM-2026-000187). If you pay by bank transfer after your package starts, those slots run beside the package until their own end. See Invoices."
+    );
+    expect(screen.getByTestId("package-unpaid-invoices").querySelector("a")).toHaveAttribute(
+      "href",
+      "/billing/invoices"
+    );
+    rerender(
+      <PackageCheckout terms={terms} unpaidInvoices={["VM-2026-000187", "VM-2026-000190"]} />
+    );
+    expect(screen.getByTestId("package-unpaid-invoices")).toHaveTextContent(
+      "You have 2 unpaid invoices for Individual slots (VM-2026-000187, VM-2026-000190)."
+    );
+    // Not while the member cannot buy, and not without unpaid invoices.
+    rerender(
+      <PackageCheckout terms={terms} block="has_package" unpaidInvoices={["VM-2026-000187"]} />
+    );
+    expect(screen.queryByTestId("package-unpaid-invoices")).not.toBeInTheDocument();
+    rerender(<PackageCheckout terms={terms} />);
+    expect(screen.queryByTestId("package-unpaid-invoices")).not.toBeInTheDocument();
+  });
 });
