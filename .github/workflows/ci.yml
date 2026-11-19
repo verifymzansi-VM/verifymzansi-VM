@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # ready_for_review: a draft pull request skips the slowest lanes (see
+    # "Draft pull requests" in docs/branch-protection.md); marking it ready
+    # starts a full run on its head commit.
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 # Read-only by default; jobs that need more ask for it themselves.
@@ -145,8 +149,15 @@ jobs:
   # throwaway network-less Postgres 17 container (the Supabase image that ships
   # plpgsql_check). Fails on any error not reviewed in lint-baseline.json and on
   # more warnings than the baseline.
+  #
+  # Like foundation-native: a first step decides whether the pull request
+  # touches the lint's inputs; when it does not, the job ends green without
+  # pulling the image, so the required check still reports. Runs on main and
+  # manual runs always lint in full. On a draft pull request (without the
+  # run-full-ci label) the job reports under another name, so the required
+  # check waits for the full run that "Ready for review" starts.
   foundation-sql-lint:
-    name: foundation-sql-lint
+    name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) && 'foundation-sql-lint (draft, not run)' || 'foundation-sql-lint' }}
     runs-on: ubuntu-latest
     # The behaviour suites run one after another, each in its own replayed
     # database: about 9 to 15 minutes on 18 November 2026. 30 minutes leaves
@@ -156,19 +167,74 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+          # The merge commit and its first parent (the base), so the scope
+          # step can list exactly what the pull request changes.
+          fetch-depth: 2
+      # Inputs, kept wide on purpose (when in doubt, lint): the database
+      # files, every foundation script and library, the application code the
+      # behaviour suites import (src/lib, src/types), the runbook one suite
+      # reads, the tooling versions and this workflow. A tooling test
+      # (scripts/branch-ruleset.test.mjs) fails when a file the lint scripts
+      # import or read falls outside this list.
+      - name: Decide whether the foundation SQL lint inputs changed
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DRAFT_NOT_RUN: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}
+        run: |
+          if [ "$DRAFT_NOT_RUN" = "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Draft pull request: the lint runs once it is marked ready for review (or with the run-full-ci label)."
+            exit 0
+          fi
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Full run ($EVENT_NAME)."
+            exit 0
+          fi
+          # Checked out as the merge commit: parent 1 is the base branch tip.
+          # Anything else cannot be compared safely, so run in full.
+          if [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -ne 3 ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::HEAD is not the pull request merge commit; running the full lint."
+            exit 0
+          fi
+          # --no-renames: a renamed file lists both its old and new path, so
+          # moving an input elsewhere still counts as changing an input.
+          if ! changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Could not list the changed files; running the full lint."
+            exit 0
+          fi
+          inputs='^(database/|scripts/lib/foundation-|scripts/(lint|replay|test)-foundation-|src/lib/|src/types/|docs/RUNBOOK\.md$|package\.json$|pnpm-lock\.yaml$|\.npmrc$|\.nvmrc$|\.node-version$|tsconfig\.json$|\.github/workflows/ci\.yml$)'
+          matched="$(printf '%s\n' "$changed" | grep -E "$inputs" || true)"
+          if [ -n "$matched" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Foundation SQL lint inputs changed:"
+            printf '%s\n' "$matched"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No foundation SQL lint inputs changed; the lint is skipped and this check passes."
+          fi
+      - if: steps.scope.outputs.run == 'true'
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - if: steps.scope.outputs.run == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
+      - if: steps.scope.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
       # By digest from GHCR with retries, then from ECR Public (same digest),
       # whose anonymous limit on shared runner addresses failed this job.
       - name: Pull the pinned Postgres image
+        if: steps.scope.outputs.run == 'true'
         run: node -e "import('./scripts/lib/foundation-sql-lint.mjs').then((m) => m.pullLintImage())"
       - name: Lint the replayed foundation SQL with plpgsql_check
+        if: steps.scope.outputs.run == 'true'
         run: pnpm db:foundation:lint
       - name: Post lifecycle and staff rule behaviour on the replayed schema
+        if: steps.scope.outputs.run == 'true'
         run: pnpm db:foundation:lifecycle-test
 
   lint-type-security:
