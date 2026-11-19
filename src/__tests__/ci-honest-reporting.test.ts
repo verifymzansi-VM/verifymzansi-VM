@@ -923,6 +923,18 @@ describe("backup and alert scripts, run for real on sample inputs", () => {
       jobs: Record<string, Job>;
     };
     const recheck = "Recheck main immediately before *** changes";
+    type RunOf = [name: string, event: string, status: string, conclusion: string | null];
+    const newerRuns = (...list: RunOf[]) => ({
+      workflow_runs: list.map(([name, event, status, conclusion], index) => ({
+        id: 600 + index,
+        name,
+        event,
+        status,
+        conclusion,
+        head_branch: "main",
+        head_sha: sha("b"),
+      })),
+    });
     const deployJobs = (steps: StepResult[], conclusion = "failure") =>
       jobs(["Staging configured", "success", []], ["deploy", conclusion, steps]);
     const base = {
@@ -935,6 +947,8 @@ describe("backup and alert scripts, run for real on sample inputs", () => {
         [recheck, "failure"],
         ["Deploy to Cloudflare", "skipped"],
       ]),
+      // Runs for the newer main commit b: its CI run is still going.
+      actions_runs: newerRuns(["CI", "push", "in_progress", null]),
     };
     const run = (fixtures: Record<string, unknown> = {}, env: Record<string, string> = {}) =>
       withFixtures(
@@ -962,6 +976,81 @@ describe("backup and alert scripts, run for real on sample inputs", () => {
         expect(result.status, result.log).toBe(0);
         expect(result.log).toContain("No alert");
         expect(result.calls).toBe("");
+      }
+    });
+
+    it("stays quiet only while a newer deploy for the newest main is on its way", () => {
+      for (const runs of [
+        newerRuns(["Deploy", "workflow_run", "queued", null]),
+        newerRuns(["Deploy", "workflow_run", "completed", "failure"]), // alerts by itself
+        newerRuns(["CI", "push", "completed", "success"]),
+        newerRuns(["CI", "pull_request", "completed", "failure"], ["CI", "push", "queued", null]),
+      ]) {
+        const result = run({ actions_runs: runs });
+        expect(result.status, result.log).toBe(0);
+        expect(result.log).toMatch(/which (Deploy|CI) run 60\d is releasing\. No alert/);
+        expect(result.calls).toBe("");
+      }
+    });
+
+    it("matches the deploy steps that stop a release because main moved on", () => {
+      const deploy = parse(readFileSync(".github/workflows/deploy.yml", "utf8")) as {
+        jobs: Record<string, Job>;
+      };
+      const script = runOf(alert.jobs.alert);
+      const prefixes = /grep -Ev '\^\(([^)]+)\)'/.exec(script)![1].split("|");
+      expect(prefixes).toEqual([
+        "Reject stale deployment sources",
+        "Recheck main immediately before",
+      ]);
+      const named = (job: string, prefix: string) =>
+        deploy.jobs[job].steps.filter((step) => step.name?.startsWith(prefix));
+      // Each marker step compares main with the commit being deployed, and
+      // only steps that do so carry a marker name.
+      for (const [job, prefix] of [
+        ["deploy-staging", prefixes[0]],
+        ["deploy", prefixes[0]],
+        ["deploy", prefixes[1]],
+      ]) {
+        const steps = named(job, prefix);
+        expect(steps, `${job}: ${prefix}`).toHaveLength(1);
+        expect(steps[0].run).toContain("git fetch --no-tags origin main");
+        expect(steps[0].run).toMatch(
+          /"\$\(git rev-parse origin\/main\)" !?= "\$DEPLOY_TARGET_SHA"/
+        );
+      }
+      expect(named("deploy-staging", prefixes[1])).toHaveLength(0);
+    });
+
+    it("alerts when main moved on but nothing is releasing the newer main", () => {
+      const other = (field: "head_sha" | "head_branch", value: string) => {
+        const runs = newerRuns(["Deploy", "workflow_run", "in_progress", null]);
+        Object.assign(runs.workflow_runs[0], { [field]: value });
+        return runs;
+      };
+      for (const runs of [
+        { workflow_runs: [] },
+        newerRuns(["CI", "push", "completed", "failure"]),
+        newerRuns(["CI", "push", "completed", "cancelled"]),
+        newerRuns(["CI", "pull_request", "in_progress", null]),
+        newerRuns(["Deploy", "workflow_run", "completed", "skipped"]),
+        newerRuns(["Deploy", "workflow_run", "completed", "cancelled"]),
+        newerRuns(["Security Scan", "push", "in_progress", null]),
+        other("head_sha", sha("c")), // the API ignored the commit filter
+        other("head_branch", "feature"),
+        undefined, // the runs cannot be read
+      ]) {
+        const result = run({ actions_runs: runs });
+        expect(result.status, result.log).toBe(0);
+        expect(result.log).not.toContain("No alert");
+        expect(result.calls).toBe(
+          "comment 157\nassign repos/o/r/issues/157/assignees assignees[]=owner\n"
+        );
+      }
+      // main cannot be read, or reads as something other than a commit.
+      for (const commits_main of [undefined, { sha: "main" }]) {
+        const result = run({ commits_main });
+        expect(result.calls, result.log).toContain("comment 157");
       }
     });
 
