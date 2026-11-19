@@ -91,7 +91,10 @@ import {
 //
 // "Delete my account" (M1.6c, which fixed SEC-02) closes the account through
 // the foundation: the member is signed out everywhere and cannot sign in
-// again; the erasure follows 30 days later. The tests run in order; a failure
+// again; the erasure follows 30 days later. It stays hidden behind
+// SHOW_ACCOUNT_DELETION until the owner approves it, so the full flow runs
+// only in the launch configuration (playwright.launch-config.config.ts); the
+// usual build checks that it is hidden. The tests run in order; a failure
 // skips the rest, so it comes last.
 //
 // Emails: local Auth sends its own emails (reset links) through its SMTP
@@ -1251,6 +1254,24 @@ test.describe("account recovery and self-service", () => {
     // A fresh sign-in: closing needs one from the last 15 minutes.
     await signInBrowser(context, leaver);
     await openProfileTab(page, "Account");
+    if (process.env.VERIFYMZANSI_LAUNCH_CONFIG !== "1") {
+      // Hidden until the owner approves it (SHOW_ACCOUNT_DELETION, on only in
+      // the launch configuration): no Delete button, a line pointing to the
+      // data request form, nothing sent, and the account stays.
+      await expect(page.getByText("To close your account, send us a data request.")).toBeVisible({
+        timeout: 20_000,
+      });
+      await expect(page.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: "data request" })).toHaveAttribute(
+        "href",
+        "/dsar"
+      );
+      expect(guarded.reply(DELETE_PATH)).toEqual([]);
+      expect(await canSignIn(leaver.email, leaver.password)).toBe(true);
+      expectContained(guarded);
+      expectNoProviderSince(mark);
+      return;
+    }
     await page.getByRole("button", { name: "Delete", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Confirm account deletion" });
     // It says what happens before anything can be confirmed.

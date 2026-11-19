@@ -1,28 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { runInNewContext } from "node:vm";
 import { test } from "node:test";
+import { buildNextConfig as buildConfig } from "./lib/next-config-harness.mjs";
 
-const requireReal = createRequire(import.meta.url);
-
-const source = readFileSync("next.config.js", "utf8");
-function buildConfig(env) {
-  const evaluatedModule = { exports: {} };
-  runInNewContext(source, {
-    module: evaluatedModule,
-    process: { env },
-    URL,
-    require: (name) => {
-      if (name === "./package.json") return { version: "synthetic-build" };
-      if (name === "./scripts/lib/next-typecheck-skip.cjs")
-        return requireReal("./lib/next-typecheck-skip.cjs");
-      assert.equal(name, "@sentry/nextjs/config");
-      return { withSentryConfig: (config) => config };
-    },
-  });
-  return evaluatedModule.exports;
-}
 const foundation = {
   NEXT_PUBLIC_SUPABASE_URL: "https://gntzjtuncsyefujajmjy.supabase.co",
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_build_synthetic",

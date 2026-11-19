@@ -11,7 +11,6 @@ import {
   PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS,
   packageTotalCents,
 } from "@/lib/billing/slot-packages";
-import type { EnterpriseCatalogPlan } from "@/lib/commercial/plans";
 import { SHOW_SPONSOR_OFFER } from "@/lib/hidden-features";
 import { cn } from "@/lib/utils";
 import { MultiListingPlans } from "@/components/billing/multi-listing-plans";
@@ -28,8 +27,6 @@ export function EnterprisePricing({
   retailFromCents,
   onlineMaxCents = null,
 }: {
-  /** Kept for callers; the package prices follow the P4a rules (slot-packages.ts). */
-  plans: EnterpriseCatalogPlan[];
   /** Kept for callers; packages are bought on the checkout only while on sale. */
   checkoutEnabled: boolean;
   /** Cheapest retail price, shown on the Individual card; null when no retail offer is live. */

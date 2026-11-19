@@ -224,6 +224,11 @@ export function readDatabaseReasons(files) {
   return { reasons, messages, allMessages, problems };
 }
 
+const UPCOMING_ENTRY =
+  /^([a-z][a-z0-9_]*): \{ codes: \[(?:"[A-Z0-9]{5}"(?:, )?)+\], added: "(\d{4}-\d{2}-\d{2})" \},$/;
+/** How long an upcoming reason may wait for its database update. */
+const UPCOMING_MAX_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const BLOCK = /(\/\/ <database-reasons>[^\n]*\n)([\s\S]*?)(\n\/\/ <\/database-reasons>)/;
 const ENTRY = /^\s*([a-z][a-z0-9_]*): \[((?:"[A-Z0-9]{5}"(?:, )?)*)\],$/;
 
@@ -265,14 +270,26 @@ function parseSharedList(source) {
   const staffSecondFactor = [...staffBlock[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(([, text]) =>
     JSON.parse(`"${text}"`)
   );
-  return { reasons, messages, staffSecondFactor };
+  // Reasons of a database update not applied yet (expand, then contract), each
+  // with the date it was added: `reason: { codes: [...], added: "YYYY-MM-DD" },`.
+  const upcomingBlock =
+    /export const FOUNDATION_UPCOMING_ERROR_REASONS = \{([\s\S]*?)\} as const/.exec(source);
+  const upcoming = [];
+  for (const line of upcomingBlock ? upcomingBlock[1].split("\n") : []) {
+    const text = line.trim();
+    if (text === "" || text.startsWith("//")) continue;
+    const entry = UPCOMING_ENTRY.exec(text);
+    if (!entry) throw new Error(`Unreadable FOUNDATION_UPCOMING_ERROR_REASONS line: ${text}`);
+    upcoming.push({ reason: entry[1], added: entry[2] });
+  }
+  return { reasons, messages, staffSecondFactor, upcoming };
 }
 
 /**
  * Compares the database with the shared list. Returns human-readable failures
  * (empty when they agree).
  */
-function compareReasons(database, shared) {
+function compareReasons(database, shared, today) {
   const failures = [...database.problems];
   const listed = new Map(shared.reasons);
   if (listed.size !== shared.reasons.length) failures.push("The shared list repeats a reason");
@@ -298,6 +315,19 @@ function compareReasons(database, shared) {
       failures.push(
         `The shared list names '${reason}' but no current database function raises it (renamed or removed?)`
       );
+  for (const { reason, added } of shared.upcoming ?? []) {
+    if (database.reasons.has(reason) || listed.has(reason))
+      failures.push(
+        `FOUNDATION_UPCOMING_ERROR_REASONS names '${reason}', which the current database raises now: remove it there (the generated list holds it)`
+      );
+    else if (
+      Number.isNaN(Date.parse(`${added}T00:00:00Z`)) ||
+      today.getTime() - Date.parse(`${added}T00:00:00Z`) > UPCOMING_MAX_DAYS * DAY_MS
+    )
+      failures.push(
+        `FOUNDATION_UPCOMING_ERROR_REASONS has waited for '${reason}' since ${added} (more than ${UPCOMING_MAX_DAYS} days) and the database still does not raise it: remove the entry, or ship the database update that raises it`
+      );
+  }
   for (const message of shared.staffSecondFactor ?? [])
     if (!database.allMessages.has(message))
       failures.push(
@@ -434,7 +464,7 @@ function codeFiles(root) {
  * and raw comparisons in website code. With `write`, the shared list's
  * generated block is rewritten from the database first.
  */
-export function runReasonCheck({ root = process.cwd(), write = false } = {}) {
+export function runReasonCheck({ root = process.cwd(), write = false, today = new Date() } = {}) {
   const database = readDatabaseReasons(currentFunctionFiles(root));
   const listPath = path.join(root, SHARED_LIST);
   let source = readFileSync(listPath, "utf8");
@@ -443,7 +473,7 @@ export function runReasonCheck({ root = process.cwd(), write = false } = {}) {
     if (next !== source) writeFileSync(listPath, next);
     source = next;
   }
-  const failures = compareReasons(database, parseSharedList(source));
+  const failures = compareReasons(database, parseSharedList(source), today);
   const code = CODE_ROOTS.flatMap((dir) => codeFiles(path.join(root, dir))).map((file) => [
     path.relative(root, file).replaceAll("\\", "/"),
     readFileSync(file, "utf8"),

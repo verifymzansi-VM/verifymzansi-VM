@@ -45,7 +45,9 @@ export async function collectQuality(mode: "lint" | "format"): Promise<QualityFi
     const files = [...new Set(enumeration.stdout.split("\0"))].filter(
       (file) =>
         /^(src|scripts|workers)\/.*\.(ts|tsx|js|mjs|cjs|json|css)$/.test(file) ||
-        /^[^/]+\.(js|mjs|cjs|json|md)$/.test(file) ||
+        // FRONTEND-CHANGES.md is in .prettierignore (its tables must not be
+        // re-padded); scripts/check-frontend-freeze.mjs checks it instead.
+        (/^[^/]+\.(js|mjs|cjs|json|md)$/.test(file) && file !== "FRONTEND-CHANGES.md") ||
         /^\.agents\/skills\/(code-review-security-auditor|release-readiness-synthesizer|payment-auditor|kyc-auditor)\/SKILL\.md$/.test(
           file
         ) ||

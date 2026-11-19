@@ -43,6 +43,9 @@ const record = (overrides: Partial<OzowRefundRow> = {}): OzowRefundRow => ({
 
 let fetch: ReturnType<typeof vi.fn>;
 beforeEach(() => {
+  // Five days after the payments below: inside Ozow's 13 days for a refund.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-18T08:00:00Z"));
   fetch = vi.fn().mockResolvedValue({
     ok: true,
     json: async () => ({ data: { status: "sent", answered: true } }),
@@ -58,6 +61,7 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -137,6 +141,80 @@ describe("refunds through Ozow", () => {
       screen.getByRole("button", { name: "Recorded in the Ozow dashboard" })
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Record chargeback" })).toBeInTheDocument();
+  });
+
+  it("says until when Ozow refunds a payment; the clock words it, never hides a way", () => {
+    const view = { api: true, retired: true, refundable: [payment.id], records: [] };
+    const first = render(<PaymentsPanel canRefund payments={[payment]} ozow={view} />);
+    // Paid 13 Nov 08:00 UTC: 13 days later is 26 Nov (South African time).
+    expect(screen.getByText(/Ozow refund possible until 26 Nov 2026/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refund through Ozow" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Paid back by bank transfer" })).toBeInTheDocument();
+    first.unmount();
+    vi.setSystemTime(new Date("2026-11-26T08:00:00Z"));
+    render(<PaymentsPanel canRefund payments={[payment]} ozow={view} />);
+    expect(
+      screen.getByText(
+        /Ozow's 13 days for a refund ended 26 Nov 2026: pay it back by bank transfer/
+      )
+    ).toBeInTheDocument();
+    // The database decides (outside_refund_window), so both ways stay offered.
+    expect(screen.getByRole("button", { name: "Refund through Ozow" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Paid back by bank transfer" })).toBeInTheDocument();
+    // A refund already made in the Ozow dashboard is still recorded.
+    expect(
+      screen.getByRole("button", { name: "Recorded in the Ozow dashboard" })
+    ).toBeInTheDocument();
+  });
+
+  it("offers the renewal reason through Ozow only on a renewal", () => {
+    const view = { api: true, retired: false, refundable: [payment.id], records: [] };
+    render(
+      <PaymentsPanel
+        canRefund
+        payments={[{ ...payment, description: "Renewal: Individual slot, 30 days" }]}
+        ozow={view}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Refund through Ozow" }));
+    const form = screen.getByRole("form", { name: "Refund through Ozow of this payment" });
+    expect(
+      within(within(form).getByLabelText("Reason"))
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("value"))
+    ).toContain("renewal_cancelled_before_start");
+  });
+
+  it("says nothing was sent when an approved refund failed before reaching Ozow", async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { status: "failed", answered: false, sent: false } }),
+    });
+    const waiting = record({ status: "awaiting_approval", sent_at: null, send_attempts: 0 });
+    render(
+      <PaymentsPanel
+        canRefund
+        payments={[
+          {
+            ...payment,
+            refund_request: {
+              id: waiting.id,
+              line_id: null,
+              kind: "refunded",
+              reason_code: "duplicate",
+              amount_cents: 6900,
+              ozow_reference: `vm-refund-${waiting.id}`,
+              requested_at: waiting.requested_at,
+              requested_by_me: false,
+            },
+          },
+        ]}
+        ozow={{ api: true, retired: true, refundable: [payment.id], records: [waiting] }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Approve and send to Ozow" }));
+    expect(await screen.findByText(/Nothing was sent to Ozow/)).toBeInTheDocument();
+    expect(screen.queryByText(/Ozow did not accept/)).toBeNull();
   });
 
   it("offers no refund while one is on its way through Ozow, and shows its state", () => {

@@ -33,6 +33,11 @@ export const REFUND_REASON_CODES = [
   "our_failure_after_fix_offered",
   "s14_cancellation",
   "breach_credit",
+  // From <ts>_refund_follow_ups.sql (plan B, approved 18 Nov 2026): a renewal
+  // refunded before its days started. Read here before that update is
+  // applied; staff are not offered it until the update is live (the current
+  // database refuses it with refund_reason_code_invalid).
+  "renewal_cancelled_before_start",
 ] as const;
 export type RefundReasonCode = (typeof REFUND_REASON_CODES)[number];
 export const refundReasonCode = z.enum(REFUND_REASON_CODES);
@@ -108,6 +113,36 @@ export function readStaffPaymentList(
     })
   );
 }
+
+/**
+ * Refusals of the refund follow-ups update (plan B), shared by the refund
+ * through Ozow (./ozow-refunds.ts) and the refunds recorded with a reference:
+ * a slot whose renewal is waiting is refunded renewal first, the "cancelled
+ * before the renewal started" reason fits only a renewal yet to start, and
+ * Ozow refunds only within its window.
+ */
+export const STAFF_REFUND_FOLLOW_UP_REFUSALS: ReadonlyArray<
+  [FoundationErrorReason, [number, string]]
+> = [
+  [
+    "renewal_queued",
+    [409, "This slot has a renewal waiting. Refund the renewal first, then this period."],
+  ],
+  [
+    "renewal_already_started",
+    [
+      409,
+      "'Cancelled before the renewal started' is only for a renewal whose days have not started. Choose another reason.",
+    ],
+  ],
+  [
+    "outside_refund_window",
+    [
+      409,
+      "Ozow refunds are possible only up to 13 days after the payment. Pay it back by bank transfer and record the bank reference instead.",
+    ],
+  ],
+];
 
 /** Refusals of the payment commands that staff can act on, in plain words. */
 const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new Map([
@@ -185,7 +220,10 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   [
     "cleared_date_invalid",
-    [422, "Enter the date the money cleared: today or in the last 90 days."],
+    [
+      422,
+      "Enter the date the money cleared: today or in the last 90 days, or an earlier date only to record again the money of an expired transfer (same reference, amount and date).",
+    ],
   ],
   [
     "cooling_off_waiver_required",
@@ -227,7 +265,19 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ],
   [
     "transfer_not_waiting",
-    [409, "This bank transfer is no longer waiting for confirmation. Reload the page."],
+    [
+      409,
+      "This bank transfer is no longer waiting for confirmation: it was confirmed or declined, or nobody confirmed it within 14 days and it expired. Reload the page.",
+    ],
+  ],
+  ["transfer_resolved", [409, "This expired bank transfer was already resolved. Reload the page."]],
+  [
+    "transfer_resolver_same",
+    [403, "Another staff member must resolve this bank transfer: you recorded it."],
+  ],
+  [
+    "transfer_not_expired",
+    [409, "Only an expired bank transfer is resolved here. Confirm or decline a waiting one."],
   ],
   [
     "invoice_amount_mismatch",
@@ -253,10 +303,31 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
     [409, "This invoice was already paid. Decline this transfer and return the money."],
   ],
   ["invoice_void", [409, "This invoice was voided. Decline this transfer and return the money."]],
+  // Multi-listing package invoices (update 20261119025106).
+  [
+    "invoice_checkout_open",
+    [
+      409,
+      "The customer has another package payment open at Ozow. Try again when it has closed (paid, cancelled or expired).",
+    ],
+  ],
+  [
+    "packages_not_on_sale",
+    [409, "Multi-listing packages are not on sale. Decline this transfer and return the money."],
+  ],
+  [
+    "package_active",
+    [
+      409,
+      "The customer's Multi-listing package stops this: no Individual slot is sold while it runs, and no second package starts. Decline this transfer and return the money.",
+    ],
+  ],
   [
     "invoice_payment_open",
     [409, "A payment of this invoice is still open at Ozow. Try again when it has closed."],
   ],
+  // Refund follow-ups (<ts>_refund_follow_ups.sql, not applied yet).
+  ...STAFF_REFUND_FOLLOW_UP_REFUSALS,
 ]);
 
 async function settlePaymentCommand<T>(
@@ -419,9 +490,12 @@ export function declineStaffPaymentRefund(
 /** The slot terms a bank transfer can pay for (the Individual slots on sale). */
 export const BANK_TRANSFER_TERMS = [30, 90, 180] as const;
 export type BankTransferTerm = (typeof BANK_TRANSFER_TERMS)[number];
-/** Bank transfers above R50 000 are refused for now (a second staff member's
- * check above that amount is not built yet). The database decides. */
+/** Bank transfers for Individual slots without an invoice above R50 000 are
+ * refused. The database decides. */
 const BANK_TRANSFER_LIMIT_CENTS = 5_000_000;
+/** A recorded transfer to a Multi-listing package invoice can be up to 250
+ * slots for 180 days (R150 000, update 20261119025106). */
+const RECORDED_TRANSFER_LIMIT_CENTS = 15_000_000;
 
 /** A bank reference as the database stores it: spaces collapsed, 4 to 60
  * letters, digits, spaces or . _ : / -, with at least four letters or digits. */
@@ -457,8 +531,9 @@ const staffTransferRecord = z.strictObject({
   similar_records: count,
   customer_name: z.string().max(120).nullable(),
   term_days: term,
-  slots: z.number().int().min(1).max(25),
-  amount_received_cents: cents.max(BANK_TRANSFER_LIMIT_CENTS),
+  // Individual slots 1 to 25; a Multi-listing package invoice 5 to 250.
+  slots: z.number().int().min(1).max(250),
+  amount_received_cents: cents.max(RECORDED_TRANSFER_LIMIT_CENTS),
   bank_reference: z.string().min(4).max(60),
   cleared_on: z.iso.date(),
   reason: z.string().min(5).max(500),
@@ -521,7 +596,7 @@ export function confirmStaffBankTransfer(api: FoundationAuthenticatedApi, transf
       status: z.literal("confirmed"),
       payment_id: z.uuid(),
       commissions: count,
-      slots_started: z.number().int().min(1).max(25).optional(),
+      slots_started: z.number().int().min(1).max(250).optional(),
       ends_at: z.iso.datetime({ offset: true }).optional(),
       repeated: z.boolean(),
     })
@@ -558,6 +633,66 @@ export function readStaffBankTransfersWaiting(api: FoundationAuthenticatedApi) {
       items: z
         .array(staffTransferRecord.extend({ status: z.literal("awaiting_confirmation") }))
         .max(50),
+    })
+  );
+}
+
+const staffExpiredTransfer = staffTransferRecord.extend({
+  status: z.literal("expired"),
+  expired_at: z.iso.datetime({ offset: true }),
+  /** The invoice the transfer was recorded to, if any. */
+  invoice_number: z
+    .string()
+    .regex(/^VM-\d{4}-\d{6}$/)
+    .nullable(),
+});
+export type StaffExpiredTransfer = z.infer<typeof staffExpiredTransfer>;
+
+/** The recorded bank transfers nobody confirmed within 14 days of being
+ * recorded (20261118044440_bank_transfer_expiry.sql) that still need a
+ * follow-up: not recorded again and not naming an invoice since paid or
+ * voided. Oldest first, at most 200, with the full count. Against a database
+ * without that update there are none. */
+export async function readStaffBankTransfersExpired(
+  api: FoundationAuthenticatedApi
+): Promise<{ unresolved: number; items: StaffExpiredTransfer[] }> {
+  const result = await api.rpc("get_staff_expired_invoice_transfers", {}, { get: false });
+  if (result.error?.code === "PGRST202" || result.error?.code === "42883")
+    return { unresolved: 0, items: [] };
+  return settleStaffCommand(
+    Promise.resolve(result),
+    z.strictObject({ unresolved: count, items: z.array(staffExpiredTransfer).max(200) })
+  );
+}
+
+/** How staff followed up an expired transfer that will not be recorded again. */
+export const EXPIRED_TRANSFER_RESOLUTIONS = ["returned", "never_arrived"] as const;
+export type ExpiredTransferResolution = (typeof EXPIRED_TRANSFER_RESOLUTIONS)[number];
+
+/** Records once (audited, with a reason) that the money of an expired
+ * transfer was returned outside VerifyMzansi or never arrived; it then leaves
+ * the follow-up list. Nothing is paid or started. */
+export function resolveStaffExpiredTransfer(
+  api: FoundationAuthenticatedApi,
+  transferId: string,
+  resolution: ExpiredTransferResolution,
+  reason: string
+) {
+  return settlePaymentCommand(
+    api.rpc(
+      "resolve_expired_invoice_transfer",
+      {
+        p_transfer_id: transferId,
+        p_resolution: z.enum(EXPIRED_TRANSFER_RESOLUTIONS).parse(resolution),
+        p_reason: staffReason.parse(reason),
+      },
+      { get: false }
+    ),
+    staffTransferRecord.extend({
+      transfer_id: z.literal(transferId),
+      status: z.literal("expired"),
+      resolution: z.literal(resolution),
+      repeated: z.boolean(),
     })
   );
 }

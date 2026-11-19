@@ -3,7 +3,6 @@ import {
   PLANS,
   LEGACY_PLANS,
   RETAIL_OFFERS,
-  ENTERPRISE_PLANS,
   ADDON_PRICES,
   TRIAL_CONFIG,
   FREE_POST_CONFIG,
@@ -55,14 +54,6 @@ describe("retail pricing ladder", () => {
     ).toBe(3000);
     // A customer who bought the retired 365-day plan still resolves its limits.
     expect(getPlan("MZANSI_MARKET", "year")?.durationDays).toBe(365);
-  });
-
-  it("prices 10-100 multi-listing slots for 90/180 days and quotes above 100", () => {
-    expect(ENTERPRISE_PLANS).toHaveLength(8);
-    expect(ENTERPRISE_PLANS.find((p) => p.planCode === "ENT_10_90D")?.priceCents).toBe(120000);
-    expect(ENTERPRISE_PLANS.find((p) => p.planCode === "ENT_100_180D")?.priceCents).toBe(1600000);
-    expect(ENTERPRISE_PLANS.every((p) => [90, 180].includes(p.durationDays))).toBe(true);
-    expect(ENTERPRISE_PLANS.some((p) => p.slots > 100)).toBe(false);
   });
 
   it("states terms in days, never calendar months", () => {

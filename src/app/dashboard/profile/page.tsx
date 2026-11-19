@@ -59,6 +59,7 @@ import {
   accountClosureDates,
   confirmsAccountClosure,
 } from "@/lib/account/account-closure";
+import { SHOW_ACCOUNT_DELETION } from "@/lib/hidden-features";
 import type { AccountVerificationStatus } from "@/types/enums";
 
 type TabValue = "profile" | "security" | "account";
@@ -1187,133 +1188,149 @@ export default function ProfilePage() {
 
               <Separator />
 
-              {/* Delete account */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-destructive">Delete account</p>
-                  {closedAccount ? (
-                    <p role="status" className="text-xs text-muted-foreground">
-                      Your account is closed.
-                      {closedAccount.eraseAfter &&
-                        ` Erasure is planned for ${formatSaLongDate(closedAccount.eraseAfter)}.`}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Closes your account and erases your data, except records we must keep by law,
-                      such as payments, invoices and ID-check history. See our{" "}
-                      <Link className="underline" href="/privacy#retention">
-                        Privacy Policy
-                      </Link>
-                      .
-                    </p>
-                  )}
-                </div>
-                {!closedAccount && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="h-11 gap-1.5"
-                    onClick={() => {
-                      setDeletePreview(accountClosureDates(new Date()));
-                      setIsDeleteDialogOpen(true);
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </Button>
-                )}
-              </div>
-
-              <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
-                {/* On phones this long dialog sits at the bottom, clear of the
-                    site header (which stays above dialogs), so its title shows. */}
-                <DialogContent className="max-sm:bottom-3 max-sm:top-auto max-sm:max-h-[calc(100dvh-9.5rem)] max-sm:translate-y-0">
-                  <DialogHeader>
-                    <DialogTitle>Confirm account deletion</DialogTitle>
-                    <DialogDescription>
-                      Your account closes as soon as you confirm. You can&apos;t undo this or reopen
-                      the account yourself.
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div className="space-y-2">
-                    <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
-                      <li>Your posts leave the site at once and are deleted with your account.</li>
-                      <li>
-                        As our Terms say, closing your account counts as a request to cancel all
-                        your slots. If you are an individual or sole trader, we work out any credit
-                        for unused days after the 20-business-day notice period, minus a R50 fee; a
-                        30-day slot usually returns nothing. Companies and other buyers that are not
-                        individuals get no credit.
-                      </li>
-                      <li>You are signed out on every device and can&apos;t sign in again.</li>
-                      <li>
-                        Erasing your profile, posts, enquiries, photos and videos is planned for{" "}
-                        {formatSaLongDate(deletePreview.eraseAfter)}, 30 days after closing. If a
-                        payment, refund, invoice, report or legal hold is still open, erasure waits
-                        until it is settled.
-                      </li>
-                      <li>
-                        Payment records and invoices are kept for 5 years for tax, as the law
-                        requires. Some other records, such as ID-check history, are kept as our{" "}
-                        <Link className="underline" href="/privacy#retention">
-                          Privacy Policy
-                        </Link>{" "}
-                        says.
-                      </li>
-                    </ul>
-                    <p className="text-xs text-muted-foreground">
-                      For your safety, this works only within {ACCOUNT_CLOSURE_SIGN_IN_MINUTES}{" "}
-                      minutes of signing in with your password or Google.
-                    </p>
-                    {deleteSignInRequired && (
-                      <p role="alert" className="text-sm">
-                        Your session needs a fresh sign-in.{" "}
-                        <button
-                          type="button"
-                          className="underline"
-                          onClick={handleDeleteSignInAgain}
-                          disabled={isDeleteVerifying}
-                        >
-                          Sign in again
-                        </button>
-                      </p>
+              {/* Delete account: hidden until it works (src/lib/hidden-features.ts). */}
+              {SHOW_ACCOUNT_DELETION ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-destructive">Delete account</p>
+                      {closedAccount ? (
+                        <p role="status" className="text-xs text-muted-foreground">
+                          Your account is closed.
+                          {closedAccount.eraseAfter &&
+                            ` Erasure is planned for ${formatSaLongDate(closedAccount.eraseAfter)}.`}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Closes your account and erases your data, except records we must keep by
+                          law, such as payments, invoices and ID-check history. See our{" "}
+                          <Link className="underline" href="/privacy#retention">
+                            Privacy Policy
+                          </Link>
+                          .
+                        </p>
+                      )}
+                    </div>
+                    {!closedAccount && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="h-11 gap-1.5"
+                        onClick={() => {
+                          setDeletePreview(accountClosureDates(new Date()));
+                          setIsDeleteDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </Button>
                     )}
-                    <p className="text-sm text-muted-foreground">
-                      Type <strong>{ACCOUNT_CLOSURE_WORD}</strong> to continue.
-                    </p>
-                    <Input
-                      value={deleteConfirmation}
-                      onChange={(e) => setDeleteConfirmation(e.target.value)}
-                      placeholder={`Type ${ACCOUNT_CLOSURE_WORD}`}
-                      aria-label={`Type ${ACCOUNT_CLOSURE_WORD} to confirm`}
-                    />
                   </div>
 
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      className="h-11"
-                      onClick={() => handleDeleteDialogOpenChange(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={handleStartDeleteRequest}
-                      disabled={isDeleteVerifying || !confirmsAccountClosure(deleteConfirmation)}
-                      className="h-11 gap-1.5"
-                    >
-                      {isDeleteVerifying ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                      {isDeleteVerifying ? "Verifying…" : "Continue"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                  <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
+                    {/* On phones this long dialog sits at the bottom, clear of the
+                    site header (which stays above dialogs), so its title shows. */}
+                    <DialogContent className="max-sm:bottom-3 max-sm:top-auto max-sm:max-h-[calc(100dvh-9.5rem)] max-sm:translate-y-0">
+                      <DialogHeader>
+                        <DialogTitle>Confirm account deletion</DialogTitle>
+                        <DialogDescription>
+                          Your account closes as soon as you confirm. You can&apos;t undo this or
+                          reopen the account yourself.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-2">
+                        <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
+                          <li>
+                            Your posts leave the site at once and are deleted with your account.
+                          </li>
+                          <li>
+                            As our Terms say, closing your account counts as a request to cancel all
+                            your slots. If you are an individual or sole trader, we work out any
+                            credit for unused days after the 20-business-day notice period, minus a
+                            R50 fee; a 30-day slot usually returns nothing. Companies and other
+                            buyers that are not individuals get no credit.
+                          </li>
+                          <li>You are signed out on every device and can&apos;t sign in again.</li>
+                          <li>
+                            Erasing your profile, posts, enquiries, photos and videos is planned for{" "}
+                            {formatSaLongDate(deletePreview.eraseAfter)}, 30 days after closing. If
+                            a payment, refund, invoice, report or legal hold is still open, erasure
+                            waits until it is settled.
+                          </li>
+                          <li>
+                            Payment records and invoices are kept for 5 years for tax, as the law
+                            requires. Some other records, such as ID-check history, are kept as our{" "}
+                            <Link className="underline" href="/privacy#retention">
+                              Privacy Policy
+                            </Link>{" "}
+                            says.
+                          </li>
+                        </ul>
+                        <p className="text-xs text-muted-foreground">
+                          For your safety, this works only within {ACCOUNT_CLOSURE_SIGN_IN_MINUTES}{" "}
+                          minutes of signing in with your password or Google.
+                        </p>
+                        {deleteSignInRequired && (
+                          <p role="alert" className="text-sm">
+                            Your session needs a fresh sign-in.{" "}
+                            <button
+                              type="button"
+                              className="underline"
+                              onClick={handleDeleteSignInAgain}
+                              disabled={isDeleteVerifying}
+                            >
+                              Sign in again
+                            </button>
+                          </p>
+                        )}
+                        <p className="text-sm text-muted-foreground">
+                          Type <strong>{ACCOUNT_CLOSURE_WORD}</strong> to continue.
+                        </p>
+                        <Input
+                          value={deleteConfirmation}
+                          onChange={(e) => setDeleteConfirmation(e.target.value)}
+                          placeholder={`Type ${ACCOUNT_CLOSURE_WORD}`}
+                          aria-label={`Type ${ACCOUNT_CLOSURE_WORD} to confirm`}
+                        />
+                      </div>
+
+                      <DialogFooter>
+                        <Button
+                          variant="outline"
+                          className="h-11"
+                          onClick={() => handleDeleteDialogOpenChange(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={handleStartDeleteRequest}
+                          disabled={
+                            isDeleteVerifying || !confirmsAccountClosure(deleteConfirmation)
+                          }
+                          className="h-11 gap-1.5"
+                        >
+                          {isDeleteVerifying ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          {isDeleteVerifying ? "Verifying…" : "Continue"}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  To close your account, send us a{" "}
+                  <Link className="underline" href="/dsar">
+                    data request
+                  </Link>
+                  .
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

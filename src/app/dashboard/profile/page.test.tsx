@@ -5,6 +5,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProfilePage from "./page";
 import { useAuthStore } from "@/stores/auth-store";
 import { useNotificationStore } from "@/stores/notification-store";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+
+// "Delete account" is hidden until it works (src/lib/hidden-features.ts); the
+// tests switch it on to keep the code behind the switch checked.
+const hiddenFeature = vi.hoisted(() => ({ shown: true }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_ACCOUNT_DELETION() {
+    return hiddenFeature.shown;
+  },
+}));
 
 const mockPush = vi.fn();
 const mockRefresh = vi.fn();
@@ -257,6 +268,22 @@ describe("ProfilePage", () => {
 
     expect(screen.queryByText("Legal first name")).not.toBeInTheDocument();
     expect(screen.queryByText("Legal surname")).not.toBeInTheDocument();
+  });
+
+  it("while account deletion is hidden, offers a data request instead of Delete", async () => {
+    window.location.hash = "#account";
+    hiddenFeature.shown = false;
+    try {
+      render(<ProfilePage />);
+      await waitFor(() => {
+        expect(screen.getByRole("heading", { name: "My profile" })).toBeInTheDocument();
+      });
+      expect(screen.getByRole("link", { name: "data request" })).toHaveAttribute("href", "/dsar");
+      expect(screen.queryByRole("button", { name: /^Delete$/i })).not.toBeInTheDocument();
+    } finally {
+      hiddenFeature.shown = true;
+      window.location.hash = "";
+    }
   });
 
   it("says plainly what deleting the account does before it can be confirmed", async () => {

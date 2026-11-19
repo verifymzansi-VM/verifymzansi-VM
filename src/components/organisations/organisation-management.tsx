@@ -87,6 +87,41 @@ function useOrganisationAction(organisationId: string) {
   return { act, busy, error };
 }
 
+type RevealedContact = { phone: string | null; email: string | null; website: string | null };
+
+/** "Show contact" for one pending application: the organisation dashboard's
+ * data carries no applicant contacts (owner decision, 18 November 2026). */
+function useApplicantContact(organisationId: string) {
+  const [shown, setShown] = useState<Record<string, RevealedContact>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  async function reveal(applicationId: string) {
+    setBusy(applicationId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/organisations/${organisationId}/applicant-contact`, {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ applicationId }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(body.error ?? "The contact could not be shown.");
+        return;
+      }
+      setShown((current) => ({
+        ...current,
+        [applicationId]: { phone: body.phone, email: body.email, website: body.website },
+      }));
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+  return { shown, reveal, busy, error };
+}
+
 function askReason(prompt: string): string | null {
   const reason = window.prompt(prompt) ?? "";
   return reason.trim().length >= 5 ? reason.trim() : null;
@@ -99,11 +134,15 @@ function askReason(prompt: string): string | null {
 export function ApplicationsReview({
   organisationId,
   applications,
+  revealContacts = false,
 }: {
   organisationId: string;
   applications: OrganisationApplicationRow[];
+  /** Pending applicants' contacts are shown one at a time on request. */
+  revealContacts?: boolean;
 }) {
   const { act, busy, error } = useOrganisationAction(organisationId);
+  const contact = useApplicantContact(organisationId);
   const [filter, setFilter] = useState("submitted");
   const visible = applications.filter((row) => filter === "all" || row.status === filter);
   const counts = (status: string) => applications.filter((row) => row.status === status).length;
@@ -132,9 +171,9 @@ export function ApplicationsReview({
           </Button>
         ))}
       </div>
-      {error ? (
+      {error || contact.error ? (
         <p role="alert" className="text-sm text-destructive">
-          {error}
+          {error ?? contact.error}
         </p>
       ) : null}
       {visible.length === 0 ? (
@@ -188,9 +227,32 @@ export function ApplicationsReview({
                 <div>
                   <dt className="inline text-muted-foreground">Business contact: </dt>
                   <dd className="inline break-all">
-                    {[row.business_phone, row.business_email, row.business_website]
-                      .filter(Boolean)
-                      .join(" · ") || "—"}
+                    {(() => {
+                      const revealed = contact.shown[row.id];
+                      const inline = [row.business_phone, row.business_email, row.business_website]
+                        .filter(Boolean)
+                        .join(" · ");
+                      if (inline) return inline;
+                      if (revealed)
+                        return (
+                          [revealed.phone, revealed.email, revealed.website]
+                            .filter(Boolean)
+                            .join(" · ") || "—"
+                        );
+                      return revealContacts &&
+                        (row.status === "submitted" || row.status === "more_info_required") ? (
+                        <button
+                          type="button"
+                          className="underline"
+                          disabled={contact.busy !== null}
+                          onClick={() => void contact.reveal(row.id)}
+                        >
+                          Show contact
+                        </button>
+                      ) : (
+                        "—"
+                      );
+                    })()}
                   </dd>
                 </div>
                 <div>

@@ -25,6 +25,10 @@ begin
     detached_at = closure.closed_at, retain_until = closure.closed_at + interval '3 years'
   where owner_id = p_user_id;
   get diagnostics trial_fingerprints = row_count;
+  -- 20261119025106: an open package invoice request is withdrawn, so it leaves
+  -- the staff queue and no invoice is issued to a closed account.
+  update private.package_invoice_requests set status = 'withdrawn', closed_at = statement_timestamp()
+    where account_id = p_user_id and status in ('requested', 'awaiting_approval');
   update private.evidence_cases set status = 'closed', claimed_by = null, claim_expires_at = null,claim_nonce=null,
     version=least(version::bigint+1,2147483647)::integer
   where subject_id = p_user_id and status = 'open' and kind in('kyc','business');

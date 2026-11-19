@@ -214,6 +214,76 @@ describe("staff payment adapters", () => {
     });
   });
 
+  it("reads a waiting refund with the old reasons and the refund follow-ups reason, never an unknown one", async () => {
+    const list = (reason_code: string) => ({
+      total: 1,
+      page: 1,
+      needs_attention: 0,
+      awaiting_approval: 1,
+      items: [
+        {
+          ...item,
+          refund_request: {
+            id: other,
+            line_id: null,
+            kind: "refunded",
+            reason_code,
+            amount_cents: 13800,
+            ozow_reference: "OZ-REF-1",
+            requested_at: date,
+            requested_by_me: false,
+          },
+        },
+      ],
+    });
+    const { rpc, api } = fixture({});
+    for (const reason_code of [
+      "billing_error",
+      "duplicate",
+      "our_failure_after_fix_offered",
+      "s14_cancellation",
+      "breach_credit",
+      "renewal_cancelled_before_start",
+    ]) {
+      rpc.mockResolvedValueOnce(ok(list(reason_code)));
+      await expect(readStaffPaymentList(api, 1)).resolves.toMatchObject({
+        items: [{ refund_request: { reason_code } }],
+      });
+    }
+    rpc.mockResolvedValueOnce(ok(list("goodwill")));
+    await expect(readStaffPaymentList(api, 1)).rejects.toMatchObject({ status: 503 });
+  });
+
+  it("words the refund follow-ups refusals for staff", async () => {
+    const { rpc, api } = fixture({});
+    const cases: [string, string][] = [
+      [
+        "renewal_queued",
+        "This slot has a renewal waiting. Refund the renewal first, then this period.",
+      ],
+      [
+        "renewal_already_started",
+        "'Cancelled before the renewal started' is only for a renewal whose days have not started. Choose another reason.",
+      ],
+      [
+        "outside_refund_window",
+        "Ozow refunds are possible only up to 13 days after the payment. Pay it back by bank transfer and record the bank reference instead.",
+      ],
+    ];
+    for (const [details, message] of cases) {
+      rpc.mockResolvedValueOnce(refused("PT409", details));
+      await expect(recordStaffSlotRefund(api, id, refund)).rejects.toMatchObject({
+        status: 409,
+        message,
+      });
+      rpc.mockResolvedValueOnce(refused("PT409", details));
+      await expect(approveStaffPaymentRefund(api, id)).rejects.toMatchObject({
+        status: 409,
+        message,
+      });
+    }
+  });
+
   it("activates with an audited reason and checks the reply", async () => {
     const { rpc, api } = fixture({
       payment_id: id,

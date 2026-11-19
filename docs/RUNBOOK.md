@@ -49,7 +49,7 @@ VS Code.
 
 This keeps Cloudflare MCP aligned with the repo's actual production footprint:
 R2 storage, OTP rate limiting in KV, OpenNext cache Durable Objects, and the
-main Workers/Pages deployment.
+main Workers deployment.
 
 ### Cloudflare MCP Token Policy
 
@@ -57,8 +57,8 @@ Use least-privilege Cloudflare credentials for MCP access.
 
 - Start with read-only access for inspection tasks.
 - Scope access to the resources this repo actually uses: the `verifymzansi`
-  Workers/Pages deployment, the `verifymzansi-public` and `verifymzansi-private`
-  R2 buckets, and the KV namespace bound as `OTP_RATE_LIMITS`.
+  Worker deployment, the `verifymzansi-public` and `verifymzansi-private` R2
+  buckets, and the KV namespace bound as `OTP_RATE_LIMITS`.
 - Add broader permissions only for approved workflows such as observability,
   build inspection, or intentional operational changes.
 - If MCP starts on one machine but not another, compare local Cloudflare or
@@ -68,10 +68,10 @@ Use least-privilege Cloudflare credentials for MCP access.
 
 Use separate tokens by workflow instead of one catch-all token.
 
-- Baseline read-only token: Worker or Pages read access for `verifymzansi`, R2
-  read access for `verifymzansi-public` and `verifymzansi-private`, KV read
-  access for `OTP_RATE_LIMITS`, and read access for Worker binding or Durable
-  Object inspection.
+- Baseline read-only token: Worker read access for `verifymzansi`, R2 read
+  access for `verifymzansi-public` and `verifymzansi-private`, KV read access
+  for `OTP_RATE_LIMITS`, and read access for Worker binding or Durable Object
+  inspection.
 - Optional observability token: Additional read access for logs, analytics, or
   Workers build inspection when needed for troubleshooting.
 - Separate write-capable token: Created only for reviewed maintenance workflows
@@ -193,12 +193,113 @@ Prefer this pattern instead:
 
 ## Secret Rotation
 
+Production is the `verifymzansi` Cloudflare Worker on `verifymzansi.com` (see
+`wrangler.toml`). "Updating a production secret" below depends on the name:
+
+- The Deploy workflow (`.github/workflows/deploy.yml`) installs only the names
+  listed in `scripts/prepare-cloudflare-candidate-secrets.mjs` (passed with
+  `--secrets-file`); that script is the source of truth. Update those in the
+  GitHub `production` environment (see "Where secrets live"), then redeploy.
+- Every other secret is inherited from the current Worker version and is never
+  set by a deploy. Rotate it with `pnpm wrangler secret put <NAME>`. That
+  includes the Ozow secrets (`OZOW_CLIENT_*`, `OZOW_SITE_CODE`,
+  `OZOW_WEBHOOK_SECRET`, the refund keys), `RESEND_API_KEY`,
+  `AFRICASTALKING_API_KEY` and the `R2_*` keys. Changing only the GitHub secret
+  of such a name changes nothing in production.
+
+"Redeploy" below means a new release through the Deploy workflow.
+
+### Where secrets live
+
+- **Cloudflare (Worker secrets)** hold every value the running site needs. The
+  runtime-only keys `KYC_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEY`, `HMAC_SECRET` and
+  `IP_HASH_SECRET` live **only** here; no workflow reads them. Release
+  validation (`validate-launch-env.ts --runtime-secrets-in-cloudflare`) accepts
+  their absence (a value that is present, even blank, must still pass every
+  check). Before every production deploy, `pnpm cloudflare:secrets:check`
+  confirms they exist on the Worker by name; the Cloudflare Candidate upload
+  does not run that check (its inactive version inherits the Worker's secrets).
+- **GitHub environment `production`** (deployment branch: `main` only) holds the
+  values only the Deploy and Cloudflare Candidate workflows read. Each step
+  receives only the values its scripts read
+  (`src/__tests__/workflow-secret-scope.test.ts` pins every step's exact list).
+  Dependency installation, the build (`scripts/build-cloudflare-release.mjs`,
+  which builds with an allowlisted environment and synthetic private values),
+  browser installation and upload steps receive none, and the deploy deletes its
+  temporary secret files right after the last deploy step. Code installed
+  earlier in the same job still runs later beside secrets, so dependency review
+  remains a control.
+
+  <!-- secrets:production -->
+  - Supabase: `FOUNDATION_SUPABASE_URL`, `FOUNDATION_PROJECT_REF`,
+    `FOUNDATION_SUPABASE_PUBLISHABLE_KEY`, `FOUNDATION_SUPABASE_SECRET_KEY`,
+    `FOUNDATION_PHONE_OTP_KEY`
+  - Site and public settings: `APP_URL`, `NEXT_PUBLIC_APP_URL` (if set),
+    `TURNSTILE_SITE_KEY`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (if set),
+    `KYC_PROVIDER`
+  - Providers: `AFRICASTALKING_API_KEY`, `AFRICASTALKING_USERNAME`,
+    `AFRICASTALKING_SENDER_ID`, `OZOW_ENV`, `OZOW_CLIENT_ID`,
+    `OZOW_CLIENT_SECRET`, `OZOW_SITE_CODE`, `OZOW_PAYMENT_OAUTH_SCOPE`,
+    `OZOW_WEBHOOK_SECRET`, `KYC_WEBHOOK_SECRET`, `RESEND_API_KEY`,
+    `TURNSTILE_SECRET_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
+  - Workers and release: `INTERNAL_JOBS_SECRET`, `OPS_JOBS_SECRET`,
+    `HEALTH_DIAGNOSTIC_TOKEN`, `RATE_LIMITER_API_KEY`, `CLOUDFLARE_API_TOKEN`,
+    `DEPLOY_HEALTHCHECK_URL`
+
+  <!-- /secrets:production -->
+
+- **GitHub environment `backup`** (deployment branch: `main` only) holds what
+  only the backup and backup freshness jobs read; the deploy jobs cannot.
+
+  <!-- secrets:backup -->
+  - `SUPABASE_BACKUP_DB_PASSWORD`, `BACKUP_R2_ACCESS_KEY_ID`,
+    `BACKUP_R2_SECRET_ACCESS_KEY`, `HEARTBEAT_URL_DATABASE_BACKUP`
+
+  <!-- /secrets:backup -->
+
+- **GitHub environment `staging`** holds the `STAGING_*` values the staging jobs
+  read (see "Staging copy").
+- **Repository level** keeps every value read by a job outside these
+  environments, or by jobs in more than one of them. Any workflow on any branch
+  can read these, so no production credential belongs here. Do **not** delete
+  them when moving the others:
+
+  <!-- secrets:repository -->
+  - Account identifiers (not credentials): `CLOUDFLARE_ACCOUNT_ID` (production
+    and staging deploys) and `R2_ACCOUNT_ID` (production validation and
+    backups).
+  - Scheduled monitoring (`synthetic-monitoring.yml`) and the deploy:
+    `SITE_MONITOR_API_KEY`, `PRODUCTION_APP_URL`.
+  - Pull-request CI (`ci.yml`): `FOUNDATION_STAGING_SUPABASE_URL`,
+    `FOUNDATION_STAGING_PROJECT_REF`,
+    `FOUNDATION_STAGING_SUPABASE_PUBLISHABLE_KEY`, `STAGING_APP_URL`.
+
+  <!-- /secrets:repository -->
+
+  The test above fails when a workflow change moves a value between these lists
+  without updating them.
+
+How GitHub resolves a name: a job that names an environment reads that
+environment's secret first and falls back to the repository-level secret of the
+same name when the environment has none. A job that names an environment that
+does not exist yet makes GitHub create it, empty and with no protection rules,
+so until the owner configures `production` and `backup` the workflows keep
+reading the repository-level copies exactly as before. Protection starts only
+once the environment is limited to `main` and its listed values are moved into
+it and deleted from the repository level. Move the backup values (and create the
+bucket token) before `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`: until then
+the backup jobs fall back to them at repository level.
+
+Keep the canonical copy of each value in the owner's password manager. GitHub
+secrets cannot be read back; moving one means entering it again.
+
 ### Supabase Keys
 
 1. Go to Supabase Dashboard → Settings → API
 2. Rotate the `service_role` key
-3. Update in Cloudflare Pages environment variables:
-   - `SUPABASE_SERVICE_ROLE_KEY`
+3. Set the new secret key as `FOUNDATION_SUPABASE_SECRET_KEY` in the GitHub
+   `production` environment. The next deploy installs it on the Worker under
+   both `SUPABASE_SERVICE_ROLE_KEY` and `FOUNDATION_SUPABASE_SECRET_KEY`.
 4. Redeploy the application
 5. Verify `/api/health` returns 200
 
@@ -211,7 +312,7 @@ Prefer this pattern instead:
 
 1. Log in to the Ozow merchant or developer portal
 2. Rotate the OAuth client credentials
-3. Update in Cloudflare Pages:
+3. Update the production secrets:
    - `OZOW_CLIENT_ID`
    - `OZOW_CLIENT_SECRET`
    - `OZOW_SITE_CODE`
@@ -234,9 +335,9 @@ The webhook endpoint uses Svix-style signature verification (`svix-id`,
 2. Rotate (or regenerate) the webhook signing secret for the VerifyMzansi
    endpoint — Ozow may expose this via `GET /v1/webhooks/{id}/secret`
 3. Copy the new secret (base64-encoded Svix signing key)
-4. Update `OZOW_WEBHOOK_SECRET` in Cloudflare Pages environment variables:
+4. Update the Worker secret (the Deploy workflow does not install this one):
    ```bash
-   npx wrangler pages secret put OZOW_WEBHOOK_SECRET --project-name verifymzansi
+   pnpm wrangler secret put OZOW_WEBHOOK_SECRET
    ```
 5. Redeploy the application
 6. Send a test webhook from the Ozow dashboard or trigger a small test payment
@@ -254,7 +355,7 @@ The webhook endpoint uses Svix-style signature verification (`svix-id`,
 To register or update the VerifyMzansi webhook endpoint with Ozow:
 
 1. **Endpoint URL:** `https://<DOMAIN>/api/webhooks/ozow`
-   - Production: `https://verifymzansi.co.za/api/webhooks/ozow`
+   - Production: `https://verifymzansi.com/api/webhooks/ozow`
 2. **Method:** POST
 3. **Events to subscribe:** `transaction.complete` (covers successful and failed
    transactions)
@@ -263,8 +364,8 @@ To register or update the VerifyMzansi webhook endpoint with Ozow:
 5. **Setup steps:** a. Log in to the Ozow portal → Webhooks section b. Create
    (or update) a webhook subscription pointing to the endpoint URL c. Select the
    `transaction.complete` event type d. Copy the signing secret provided by Ozow
-   e. Store the secret as `OZOW_WEBHOOK_SECRET` in Cloudflare Pages secrets f.
-   Deploy and verify using the test webhook feature in the portal
+   e. Store the secret as the `OZOW_WEBHOOK_SECRET` production secret f. Deploy
+   and verify using the test webhook feature in the portal
 6. **Verification checklist:**
    - [ ] Webhook returns HTTP 200 for valid signatures
    - [ ] Webhook returns HTTP 403 for missing or invalid signatures
@@ -292,7 +393,7 @@ history against pending verification cases and retry affected events through the
 provider after deployment. Keep manual review active during reconciliation.
 
 1. Rotate the KYC provider webhook signing secret in the provider dashboard.
-2. Update `KYC_WEBHOOK_SECRET` in Cloudflare Pages or Worker secrets.
+2. Update the `KYC_WEBHOOK_SECRET` production secret.
 3. Run `pnpm validate:launch-env` and `pnpm preflight:prod` before deploy.
 4. Redeploy and verify `/api/webhooks/kyc/provider` rejects unsigned or
    invalidly signed requests.
@@ -301,7 +402,7 @@ provider after deployment. Keep manual review active during reconciliation.
 
 1. Go to Cloudflare Dashboard → R2 → Manage R2 API Tokens
 2. Create a new token with the same permissions
-3. Update in Cloudflare Pages:
+3. Update the production secrets:
    - `R2_ACCESS_KEY_ID`
    - `R2_SECRET_ACCESS_KEY`
 4. Redeploy and verify file upload works
@@ -331,7 +432,7 @@ provider after deployment. Keep manual review active during reconciliation.
 
 1. Go to Resend Dashboard → API Keys
 2. Create a new key with the same permissions
-3. Update `RESEND_API_KEY` in Cloudflare Pages
+3. Update the `RESEND_API_KEY` production secret
 4. Redeploy and send a test email
 5. Revoke the old key
 
@@ -339,7 +440,7 @@ provider after deployment. Keep manual review active during reconciliation.
 
 1. Go to Africa's Talking Dashboard → Settings → API Key
 2. Generate a new key
-3. Update `AFRICASTALKING_API_KEY` in Cloudflare Pages
+3. Update the `AFRICASTALKING_API_KEY` production secret
 4. Redeploy and test OTP sending
 5. Deactivate the old key
 
@@ -347,7 +448,7 @@ provider after deployment. Keep manual review active during reconciliation.
 
 1. Go to Cloudflare Dashboard → Turnstile
 2. Rotate the secret key for your site
-3. Update in Cloudflare Pages:
+3. Update the production secrets:
    - `TURNSTILE_SECRET_KEY`
    - `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (if site key changed)
 4. Redeploy and verify CAPTCHA works on login/register pages
@@ -381,13 +482,13 @@ curl -X POST https://verifymzansi.com/api/admin/feature-flags/toggle \
 
 ```bash
 # Enable for 10% of users
-curl -X POST https://verifymzansi.pages.dev/api/admin/feature-flags/toggle \
+curl -X POST https://verifymzansi.com/api/admin/feature-flags/toggle \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{"key": "new_checkout", "mode": "percent", "percent": 10, "reason": "Gradual rollout"}'
 
 # Enable for specific roles only
-curl -X POST https://verifymzansi.pages.dev/api/admin/feature-flags/toggle \
+curl -X POST https://verifymzansi.com/api/admin/feature-flags/toggle \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{"key": "admin_v2", "mode": "allowlist", "allowlist_roles": ["admin", "moderator"], "reason": "Staff testing"}'
@@ -631,7 +732,10 @@ uploads remain manual and inactive; their successful upload is not a release.
 
 Database updates are not part of the deploy. A foundation update is a new file
 in `database/foundation/updates/` that travels in the same pull request as its
-code; the owner applies it after the merge and before that code is deployed
+code. The owner approves the update before either step, and its pull request
+states its order: **apply-first** (the default: apply in production, then merge)
+or **website-first** (merge and deploy, then apply straight after), used when
+the live website's strict readers would reject what the update adds.
 ([AGENTS.md](../AGENTS.md#database-changes)).
 
 Historical: describes the retired source backend. For the 30 September 2026
@@ -937,26 +1041,77 @@ curl https://verifymzansi-payment-cleanup.verifymzansi.workers.dev/
 
 ## Database Backups
 
-`.github/workflows/database-backup.yml` runs every night at 01:30 SAST, and can
-be started by hand from the Actions tab. It dumps roles, schema and data with
-the Supabase CLI, checks the dump, encrypts it to
+`.github/workflows/database-backup.yml` runs twice a day (scheduled for 22:47
+and 10:47 SAST; GitHub usually starts it 3 to 5.5 hours later), and can be
+started by hand from the Actions tab. Two runs keep the gap between stored
+backups near 12 to 14.5 hours, inside the 24-hour recovery point; a single
+failed run leaves a gap of about 24 to 26.5 hours instead of two days. It dumps
+roles, schema and data with the Supabase CLI, checks the dump, encrypts it to
 `.github/backup/database-backup-public-key.asc` and stores it in the private R2
 bucket `verifymzansi-backups` under `database/YYYY/MM/DD/`. R2 deletes copies
 after 35 days.
 
-- **Secret:** `SUPABASE_BACKUP_DB_PASSWORD` (the database password from
-  Supabase > Project Settings > Database). Reset it there if a run reports an
-  authentication failure, then update the secret.
+Each encrypted archive holds:
+
+- `roles.sql`, `schema.sql`, `data.sql`: the application schemas (`api`,
+  `private`, `internal`, `public`, `auth`, `extensions`).
+- `platform-schema.sql`: the Supabase-managed `realtime` and
+  `supabase_migrations` schemas, including the `owner_inbox_receive` policy on
+  `realtime.messages`. `platform-data.sql`: the hosted migration ledger
+  (`supabase_migrations.schema_migrations`). Realtime rows are transient and not
+  kept; `storage` and `vault` are not used by the app and not dumped.
+- `ROW-COUNTS.tsv`: the exact row count of every table whose data is dumped (the
+  schemas above plus `supabase_migrations`), read from the live database just
+  after the dump (`live_rows`) and counted from the dump itself (`dump_rows`).
+  They can differ by rows written during the dump; `not_in_dump` marks tables
+  the CLI leaves out (such as `auth.schema_migrations`). In `api`, `private`,
+  `internal` and `public`, a table that is unreadable, not in the dump, or has
+  more live rows than dumped (an empty dump included) beyond 50 rows or 1%
+  (whichever is larger) is recorded as a problem, so a queue that fills just
+  after the snapshot is not a false alarm.
+- `FINGERPRINT.tsv`: `database/foundation/fingerprint.sql` run read-only on
+  production, comparable with `fingerprint.json` `productionCheck`.
+- `MANIFEST.txt`: dump start and end times, CLI and psql versions, the commit,
+  any part that could not be captured (`problem:` lines) and the sha256 of every
+  file. The queries are in `.github/backup/backup-manifest.sql`; the job log
+  shows only totals, sizes and the fingerprint hashes.
+
+If the platform schemas, row counts or fingerprint cannot be captured (each is
+capped by a timeout: 5 minutes per platform dump, 7 minutes for the counts), or
+the plaintext cannot be shredded, the run still stores the main backup and then
+fails, so the failure alert fires.
+
+- **Credentials** (GitHub environment `backup`, deployment branch `main`):
+  - `SUPABASE_BACKUP_DB_PASSWORD`: the database password (Supabase > Project
+    Settings > Database). Reset it there if a run reports an authentication
+    failure, then update the secret. The connection string is built from it in
+    one step and kept in a private file that only the dump and count steps read.
+  - `BACKUP_R2_ACCESS_KEY_ID` and `BACKUP_R2_SECRET_ACCESS_KEY`: an R2 API token
+    with Object Read & Write limited to the `verifymzansi-backups` bucket, so a
+    leaked backup token cannot touch member media or ID evidence. The backup and
+    the freshness check both use it.
+  - `R2_ACCOUNT_ID` (repository level, shared with production validation).
+  - Transitional only: until the bucket token exists, both jobs use the app's
+    storage key (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`, repository level)
+    and warn on every run. Create the bucket token before moving the app's
+    storage key into the `production` environment, which these jobs cannot read.
 - **Decryption key:** only the owner holds the private key, offline (key
   fingerprint `CBADD845A4EEE95E8ADD376D8DD25F76A198D659`). Without it no backup
   can be restored. Never commit it or store it in GitHub, Cloudflare or
   Supabase.
-- **Failure alerts:** GitHub emails the owner when a scheduled run fails. GitHub
-  pauses schedules in public repositories after 60 days without commits;
-  re-enable the workflow if that happens. A paused or missing run sends no
+- **Failure alerts:** GitHub emails the owner when a scheduled run fails, and
+  the Failure alert workflow opens an issue.
+  `.github/workflows/backup-freshness.yml` runs every 6 hours and fails (opening
+  the same issue) when the newest object under `database/` in the bucket is 27
+  hours old or older (two runs in a row stored nothing; one missed run leaves at
+  most about 26.5 hours) or dated more than 5 minutes in the future, or when the
+  latest commit is 45 days old or older. It lists the bucket with the backup
+  job's credentials (above). GitHub pauses schedules in public repositories
+  after 60 days without commits, the freshness check included; merge a change
+  before then, or re-enable the workflows if that happens. A paused run sends no
   email, so the optional `HEARTBEAT_URL_DATABASE_BACKUP` heartbeat (see
   [Monitoring and Alerts](#monitoring-and-alerts)) is what catches backups that
-  silently stop.
+  silently stop once schedules are paused.
 
 ### Restoring
 
@@ -980,7 +1135,19 @@ after 35 days.
      --file data.sql --dbname "$TARGET_DB_URL"
    ```
 
-4. Point the app at the restored project only after checking accounts, posts and
+   The new project already has its own `realtime` and `supabase_migrations`
+   tables, so do not replay `platform-schema.sql` whole: run only its
+   `CREATE POLICY "owner_inbox_receive" ON "realtime"."messages"` statement
+   (after the foundation functions exist), and load `platform-data.sql` only if
+   the migration history should be carried over.
+
+4. Prove completeness: `select count(*)` on each table should equal the
+   `dump_rows` column of `ROW-COUNTS.tsv`, and
+   `database/foundation/fingerprint.sql`, run after
+   `set search_path to "$user", public;`, should return the rows in
+   `FINGERPRINT.tsv`.
+
+5. Point the app at the restored project only after checking accounts, posts and
    payments. Uploaded media and ID documents live in R2 and are not part of this
    backup.
 
@@ -995,8 +1162,26 @@ until the owner does those steps.
 
 ### What the code does
 
-- **Synthetic Monitoring** (`.github/workflows/synthetic-monitoring.yml`, every
-  30 minutes) checks the public homepage and the authenticated site monitor. A
+- **Failure alert** (`.github/workflows/failure-alert.yml`) opens one issue
+  titled "Automated alert: a main or scheduled workflow run failed", or comments
+  on it while it is open, when a run on main or a scheduled run fails, times out
+  or cannot start, when a scheduled run is cancelled, and when a Deploy is
+  cancelled after its last "main has not moved" check (production may then be
+  half old and half new). The issue is assigned to the repository owner, so
+  GitHub emails each comment to them as a "participating" notification (in
+  GitHub > Settings > Notifications > Participating, keep Email ticked); if the
+  assignment fails, the alert run itself fails. Each workflow comments at most
+  every 6 hours. Close the issue once the cause is fixed.
+- **Main deployed** (`.github/workflows/main-deployed.yml`, hourly) fails when
+  the newest commit on main has not been deployed for 3 hours (CI plus Deploy
+  normally take under an hour). A deploy that stops at "Reject stale deployment
+  sources" or "Recheck main immediately before production changes" because main
+  moved on raises no alert of its own, nor does one cancelled before that check,
+  since the deploy of the newer main follows; this check is the safety net if it
+  does not. A cancelled Deploy run never counts as live.
+- **Synthetic Monitoring** (`.github/workflows/synthetic-monitoring.yml`, asked
+  for twice an hour; GitHub actually starts it about 4 times a day, sometimes 9
+  hours apart) checks the public homepage and the authenticated site monitor. A
   missing setting fails the run; there are no skip-and-pass steps. A Cloudflare
   challenge on the public check is reported as inconclusive, not as a pass.
   Cloudflare's error page on a 503 counts as a failure. Inconclusive runs send
@@ -1275,7 +1460,7 @@ decision.
    ```
 
 3. Set `KYC_PROVIDER=<new-provider>` in environment variables
-4. Add provider API keys to Cloudflare Pages secrets
+4. Add provider API keys as production secrets (see Secret Rotation)
 5. Update the KYC engine to handle automated results alongside manual review
 6. Test thoroughly in staging before enabling in production
 

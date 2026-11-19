@@ -86,9 +86,6 @@ describe("commercial catalogue", () => {
     expect(catalog.onSale).toBe(true);
     expect(catalog.retail.find((offer) => offer.tier === "half_year")?.durationDays).toBe(180);
     expect(catalog.retail.map((offer) => offer.durationDays)).toEqual([30, 90, 180]);
-    // Group 2: 10/25/50/100 slots for 90 and 180 days.
-    expect(catalog.enterprise).toHaveLength(8);
-    expect(catalog.enterprise[0]).toMatchObject({ planCode: "ENT_10_90D", priceCents: 120000 });
   });
 
   it("never lists private or inactive plans", () => {

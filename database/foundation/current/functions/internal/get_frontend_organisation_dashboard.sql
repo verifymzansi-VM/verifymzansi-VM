@@ -24,16 +24,9 @@ begin
     'applications',(select jsonb_build_object('pending',count(*) filter(where a.status='submitted'),
       'moreInfo',count(*) filter(where a.status='more_info_required'),'approved',count(*) filter(where a.status='approved'),
       'declined',count(*) filter(where a.status='declined')) from private.organisation_applications a where a.organisation_id=o.id),
-    'public_contacts',coalesce((select jsonb_agg(jsonb_build_object('application_id',a.id,
-      'phone',p.contacts->>'phone','email',p.data->>'email','website',p.data->>'website')
-      order by a.created_at desc,a.id)
-      from (select x.id,x.post_id,x.created_at from private.organisation_applications x
-        where x.organisation_id=o.id and x.status<>'withdrawn'
-        order by x.created_at desc,x.id limit 200)a
-      join private.public_eligible_posts e on e.id=a.post_id
-      join private.post_presentations p on p.post_id=e.id),'[]'::jsonb),
     'affiliated',(select count(*) from private.organisation_affiliations a where a.organisation_id=o.id and a.status='active'),
-    'admins',coalesce((select jsonb_agg(jsonb_build_object('user_id',a.account_id,'role',a.role,'display_name',p.display_name)
+    'admins',coalesce((select jsonb_agg(jsonb_build_object('user_id',a.account_id,'role',a.role,'display_name',
+        case when a.account_id=actor then p.display_name else internal.profile_public_name(p.display_name) end)
       order by a.created_at,a.account_id) from private.organisation_admins a left join private.profiles p on p.account_id=a.account_id
       where a.organisation_id=o.id),'[]'::jsonb)
   ) into result;

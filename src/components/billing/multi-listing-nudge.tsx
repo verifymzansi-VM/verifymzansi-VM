@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { ArrowRight, Building2 } from "lucide-react";
-import { ENTERPRISE_QUOTE_ABOVE_SLOTS, PACKAGES_ON_SALE } from "@/lib/constants/pricing";
+import { formatPlanPrice, PACKAGES_ON_SALE } from "@/lib/constants/pricing";
+import {
+  PACKAGE_MAX_SLOTS,
+  PACKAGE_MIN_SLOTS,
+  PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS,
+} from "@/lib/billing/slot-packages";
 import { cn } from "@/lib/utils";
 
 const MULTI_LISTING_HREF = "/pricing/multi-listing";
@@ -19,7 +24,9 @@ export function MultiListingNudge({
   className?: string;
 }) {
   const strong = emphasis === "strong";
-  // Hidden while multi-listing is not on sale (posting-v4 does not describe it).
+  // Hidden while multi-listing is not on sale (the Terms in force do not
+  // describe packages). The words follow the package rules on sale today
+  // (P4a): nothing about teams, adding slots later, renewing or invoices.
   if (!PACKAGES_ON_SALE) return null;
   return (
     <aside
@@ -40,8 +47,7 @@ export function MultiListingNudge({
           <span className="block font-semibold text-foreground">
             {strong ? "Need more posts live at once?" : "Listing lots of stock?"}
           </span>
-          Multi-listing keeps 10 to {ENTERPRISE_QUOTE_ABOVE_SLOTS} posts live at the same time for
-          90 or 180 days, at a lower price per post. For dealers, agencies, shops and landlords.
+          {`A Multi-listing package keeps ${PACKAGE_MIN_SLOTS} to ${PACKAGE_MAX_SLOTS} posts live at the same time for 30, 90 or 180 days, at ${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days. For dealers, agencies, shops and landlords.`}
         </p>
       </div>
       <Link

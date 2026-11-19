@@ -28,8 +28,8 @@ vi.mock("@/lib/supabase/admin", () => ({
     throw new Error("No database in unit tests");
   },
 }));
-vi.mock("@/components/billing/retail-pricing", () => ({
-  RetailPricing: () => <div>Plan grid</div>,
+vi.mock("@/components/billing/pricing-offers", () => ({
+  PricingOffers: () => <div>Plan grid</div>,
 }));
 
 describe("public trust pages", () => {

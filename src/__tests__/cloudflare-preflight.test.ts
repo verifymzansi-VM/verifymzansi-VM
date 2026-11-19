@@ -23,6 +23,11 @@ function fixture() {
     path.resolve("scripts/lib/next-typecheck-skip.cjs"),
     path.join(root, "scripts/lib/next-typecheck-skip.cjs")
   );
+  // It also refuses the launch-configuration test build.
+  fs.copyFileSync(
+    path.resolve("scripts/lib/launch-config-build.cjs"),
+    path.join(root, "scripts/lib/launch-config-build.cjs")
+  );
   const classes = ["DOQueueHandler", "DOShardedTagCache", "BucketCachePurge", "RateLimiterDO"];
   const bindings = [
     "NEXT_CACHE_DO_QUEUE",
@@ -48,7 +53,7 @@ function fixture() {
   return root;
 }
 
-function run(root: string, args: string[] = []) {
+function run(root: string, args: string[] = [], env: NodeJS.ProcessEnv = process.env) {
   return spawnSync(
     process.execPath,
     [path.join(root, "scripts/preflight-cloudflare.js"), ...args],
@@ -56,6 +61,7 @@ function run(root: string, args: string[] = []) {
       cwd: root,
       encoding: "utf8",
       timeout: 5000,
+      env,
     }
   );
 }
@@ -82,6 +88,18 @@ it("rejects unknown flags before rewriting local environment or middleware", () 
     "existing-production-override\n"
   );
   expect(fs.existsSync(path.join(root, "src/middleware.ts"))).toBe(false);
+});
+
+it("refuses a production build that asks for the launch-configuration test build", () => {
+  const root = fixture();
+  for (const value of ["1", "true", "0"]) {
+    const result = run(root, [], { ...process.env, VERIFYMZANSI_LAUNCH_CONFIG: value });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("VERIFYMZANSI_LAUNCH_CONFIG is only for builds");
+  }
+  expect(fs.readFileSync(path.join(root, ".env.production.local"), "utf8")).toBe(
+    "existing-production-override\n"
+  );
 });
 
 it("preserves operator production settings while clearing development bypasses", () => {

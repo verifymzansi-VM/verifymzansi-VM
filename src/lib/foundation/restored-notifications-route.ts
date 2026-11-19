@@ -33,6 +33,10 @@ const MEMBER_EVENT_KINDS = [
   "slot_renewal_reminder",
   "invoice_issued",
   "content_restored",
+  // 20261118072601_staff_data_minimisation.sql: a privacy (data) request
+  // naming the account was approved, and its export was made.
+  "privacy_request_approved",
+  "privacy_export_made",
 ] as const;
 const row = foundationNotificationPageSchema.shape.items.element
   .extend({
@@ -136,6 +140,18 @@ function presentedNotification(n: z.infer<typeof row>) {
       "New invoice to pay",
       "An invoice was issued to your account. Open it to see the amount and how to pay.",
       "/billing/invoices",
+      "info",
+    ],
+    privacy_request_approved: [
+      "Your data request was approved",
+      "Your request has been approved. We will email you at the address on the request.",
+      "/dsar",
+      "info",
+    ],
+    privacy_export_made: [
+      "Your data export was made",
+      "The copy of your data you asked for was prepared. It is sent to the email address on your request.",
+      "/dsar",
       "info",
     ],
     content_restored: [

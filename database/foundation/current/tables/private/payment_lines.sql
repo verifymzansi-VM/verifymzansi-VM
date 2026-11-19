@@ -15,7 +15,7 @@ create table private.payment_lines (
   created_at timestamp with time zone default statement_timestamp() not null,
   renews_entitlement_id uuid,
   slot_count integer default 1 not null,
-  constraint payment_lines_amount_cents_check CHECK (amount_cents >= 100 AND amount_cents <= 1000000),
+  constraint payment_lines_amount_cents_check CHECK (amount_cents >= 100 AND amount_cents <= (1000000 * slot_count) AND amount_cents <= 15000000),
   constraint payment_lines_id_payment_key UNIQUE (id, payment_id),
   constraint payment_lines_line_number_check CHECK (line_number >= 1 AND line_number <= 25),
   constraint payment_lines_number_key UNIQUE (payment_id, line_number),

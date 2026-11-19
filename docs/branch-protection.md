@@ -37,9 +37,17 @@ such a check would block every pull request.
 - **Target:** the default branch, `active`, **no bypass actors**, so nobody,
   including an administrator or an agent using an administrator's token, can
   push to `main` directly.
-- **Pull request required,** with **0 required approvals**: the owner opens,
-  reviews and merges from the same account, and GitHub does not let an author
-  approve their own pull request. Merge methods: squash or merge commit.
+- **Pull request required,** with **0 required approvals**: pull requests are
+  opened and merged from the same account, and GitHub does not let an author
+  approve their own pull request. A pull request merges only when its required
+  checks pass and its independent review has no open blocker. The owner merges
+  it, or the coordinator (the one agent session the owner designates) does under
+  the owner's standing approval, given in writing and withdrawable at any time.
+  That approval does not cover a pull request with a pending database update,
+  which merges only after the owner approved the update (and, for an apply-first
+  update, after it is applied in production), nor a frontend change, which still
+  needs the owner's sign-off (`AGENTS.md`). Merge methods: squash or merge
+  commit.
 - **No force pushes, no deletion** of `main`.
 - **Required checks** (GitHub Actions only, `integration_id` 15368):
   - `foundation-replay`: rebuilds the production database schema from
@@ -53,7 +61,11 @@ such a check would block every pull request.
     `private` (`scripts/lib/foundation-replay.mjs`).
   - `foundation-sql-lint`: runs plpgsql_check over every PL/pgSQL function of
     that rebuilt schema in a throwaway local Postgres 17 and compares the result
-    with `database/foundation/lint-baseline.json`.
+    with `database/foundation/lint-baseline.json`. Like `foundation-native`,
+    when a pull request touches none of its inputs (listed in `ci.yml`; a
+    tooling test keeps the list covering every file its scripts import or read)
+    the job ends green without starting Postgres. On `main` it always runs in
+    full.
   - `lint-type-security`: lint, typecheck, OpenAPI/import checks, secrets,
     dependencies and licences.
   - `knip`: dead code and dependencies.
@@ -98,14 +110,17 @@ on `main` is never cancelled, so every release commit gets a complete result.
 Every job has a time limit of about one and a half times its usual longest run.
 
 Every CI job that runs on a pull request is required, except
-`Workflow security audit (zizmor, advisory)` (advisory, `continue-on-error`).
-The Lighthouse audit is an advisory step inside `bundle-analysis`. This keeps
-`main` deployable: the deploy needs the whole CI run on `main` to succeed.
-`perf-baseline` and `k6-advisory` run only after a push to `main` and cannot be
-required on pull requests; when no staging address (`STAGING_APP_URL`) is
-configured they show as skipped, not as a success (`Staging address configured`
-decides this in a job-level condition). Later slices add their jobs here and to
-the ruleset file (foundation browser tests, frontend ledger).
+`Workflow security audit (zizmor, advisory)` (advisory, `continue-on-error`) and
+the `(draft, not run)` names that `foundation-sql-lint`, `foundation-native` and
+`e2e-foundation` report under on a draft (see "Draft pull requests"), which must
+never be required. The Lighthouse audit is an advisory step inside
+`bundle-analysis`. This keeps `main` deployable: the deploy needs the whole CI
+run on `main` to succeed. `perf-baseline` and `k6-advisory` run only after a
+push to `main` and cannot be required on pull requests; when no staging address
+(`STAGING_APP_URL`) is configured they show as skipped, not as a success
+(`Staging address configured` decides this in a job-level condition). Later
+slices add their jobs here and to the ruleset file (foundation browser tests,
+frontend ledger).
 
 **Release gate.** On `main`, CI calls the workflows "Foundation native" and "E2E
 foundation" (jobs `Release gate (foundation native)` and
@@ -116,6 +131,34 @@ where the two workflows run on their own and report `foundation-native` and
 never cancelled, so a later merge cannot cancel an earlier commit's gate. A
 failed `main` or scheduled run of any workflow opens or updates one GitHub issue
 (workflow "Failure alert").
+
+## Draft pull requests
+
+To save Actions capacity, the three slowest lanes, `foundation-sql-lint`,
+`foundation-native` and `e2e-foundation`, do not run their work while a pull
+request is a draft. GitHub counts a skipped or green job as a passed required
+check, and a result recorded on the draft would still count after "Ready for
+review" until the new run reports (for `e2e-foundation`, whose job is created
+only after both browser projects finish, about 20 minutes). So on a draft these
+jobs report under another name, ending in `(draft, not run)`, which is never
+required: the required checks show as waiting, and a draft cannot merge anyway.
+
+- **Ready for review** (`ready_for_review` is a trigger of `ci.yml`,
+  `foundation-native.yml` and `e2e-foundation.yml`) starts a new run on the head
+  commit, which reports the required names. In that run `e2e-foundation` always
+  runs in full; `foundation-sql-lint` and `foundation-native` run in full, or
+  end green under their required names when the pull request touches none of
+  their inputs, exactly as for a pull request opened ready for review. So a pull
+  request can merge only on results from a non-draft run on its head; re-running
+  a draft-time run reports the draft names again and changes nothing.
+- **Label `run-full-ci`** makes a draft behave like a ready pull request: the
+  three jobs report their required names, `e2e-foundation` runs in full, and
+  `foundation-sql-lint` and `foundation-native` still end green when no input
+  changed. The label is read from the event that starts a run, so after adding
+  it push a commit (or close and reopen the pull request).
+- Pull requests opened ready for review, pushes to `main`, the nightly and
+  manual runs are unchanged. Tooling tests (`scripts/branch-ruleset.test.mjs`)
+  check the draft names, the shared draft condition and the triggers.
 
 ## Switching the required browser check
 

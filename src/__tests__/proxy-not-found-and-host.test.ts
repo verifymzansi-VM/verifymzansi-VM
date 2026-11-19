@@ -210,3 +210,44 @@ describe("proxy — real 404 for missing detail pages", () => {
     expect(response.headers.get("set-cookie")).not.toContain("vm_viewer");
   });
 });
+
+describe("proxy — the error page is only a redirect target", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each(["/error", "/error?reason=", "/error?reason=nonsense"])(
+    "answers a bare visit to %s with 404, keeping the page's own design",
+    async (path) => {
+      const response = await routeRequest(request(path));
+      expect(response.status).toBe(404);
+      // Same address: the page still renders, only the status changes.
+      const rewrite = new URL(response.headers.get("x-middleware-rewrite")!);
+      expect(`${rewrite.pathname}${rewrite.search}`).toBe(path);
+      expect(checkFoundationPageAccess).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["forbidden", "unavailable"])(
+    "keeps the site's own redirect to /error?reason=%s working as before",
+    async (reason) => {
+      const response = await routeRequest(request(`/error?reason=${reason}`));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+      expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    }
+  );
+
+  it("leaves the app's own navigation to the page and never rewrites twice", async () => {
+    const appFetch = await routeRequest(
+      request("/error", { headers: { "sec-fetch-dest": "empty", "sec-fetch-mode": "cors" } })
+    );
+    expect(appFetch.status).toBe(200);
+    const rewritten = await routeRequest(request("/error", { headers: { "x-vm-rewritten": "1" } }));
+    expect(rewritten.status).toBe(200);
+    expect(rewritten.headers.get("x-middleware-rewrite")).toBeNull();
+  });
+
+  it("does not touch other addresses that start with /error", async () => {
+    const response = await routeRequest(request("/errors"));
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+  });
+});

@@ -1,13 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { ENTERPRISE_PLANS } from "@/lib/constants/pricing";
 import { EnterprisePricing } from "./enterprise-pricing";
 
 describe("EnterprisePricing", () => {
-  const plans = ENTERPRISE_PLANS.map((plan) => ({ ...plan, planId: null }));
-
   it("offers Individual and Multi-listing, each linking to its full details on the advertise page", () => {
-    render(<EnterprisePricing plans={plans} checkoutEnabled retailFromCents={5000} />);
+    render(<EnterprisePricing checkoutEnabled retailFromCents={5000} />);
 
     expect(screen.getByText("From R50")).toBeInTheDocument();
     // The package rules (P4a): from 5 slots at R100 per slot per 30 days.
@@ -25,9 +22,7 @@ describe("EnterprisePricing", () => {
   });
 
   it("shows the multi-listing prices and no sponsor fee table while the sponsor offer is on hold", () => {
-    const { container } = render(
-      <EnterprisePricing plans={plans} checkoutEnabled retailFromCents={5000} />
-    );
+    const { container } = render(<EnterprisePricing checkoutEnabled retailFromCents={5000} />);
 
     expect(container.querySelector("#programme-prices")).toBeNull();
     expect(container.querySelector("#multi-listing-prices")).not.toBeNull();
@@ -36,7 +31,7 @@ describe("EnterprisePricing", () => {
   });
 
   it("lets people choose a multi-listing package straight to the package checkout", () => {
-    render(<EnterprisePricing plans={plans} checkoutEnabled retailFromCents={5000} />);
+    render(<EnterprisePricing checkoutEnabled retailFromCents={5000} />);
 
     const choose = screen.getByRole("link", { name: /Choose 10 slots for 90 days, R3\s000/ });
     expect(choose).toHaveAttribute("href", "/billing/package?slots=10&days=90");

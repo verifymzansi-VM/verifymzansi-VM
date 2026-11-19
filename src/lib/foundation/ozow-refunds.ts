@@ -10,7 +10,11 @@ import {
 } from "./error-reasons";
 import { staffReason } from "./organisations";
 import { FoundationStaffCommandError, settleStaffCommand } from "./staff-command";
-import { refundReasonCode, type RefundReasonCode } from "./staff-payments";
+import {
+  STAFF_REFUND_FOLLOW_UP_REFUSALS,
+  refundReasonCode,
+  type RefundReasonCode,
+} from "./staff-payments";
 import {
   OzowRefundNotFoundError,
   OzowRefundUnavailableError,
@@ -140,6 +144,8 @@ const REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new Map([
     [403, "You need a current accepted ID review of your own to change payments."],
   ],
   ["staff_same_identity", [403, "Another staff member must handle a payment of your own."]],
+  // Refund follow-ups (<ts>_refund_follow_ups.sql, not applied yet).
+  ...STAFF_REFUND_FOLLOW_UP_REFUSALS,
 ]);
 
 async function settle<T>(
@@ -169,6 +175,9 @@ const factForDatabase = (fact: OzowRefundFact) => ({
   completed_at: fact.completedAt,
 });
 
+// get_staff_refund_context: strict: adding a field here breaks refund approval
+// until the website reads it. Later updates add no fields to it (the 13-day
+// Ozow window is worked out from the payment's created_at in the commands).
 const paymentContext = z
   .strictObject({ ozow_transaction_id: z.uuid().nullable(), amount_cents: cents })
   .nullable();
@@ -352,6 +361,9 @@ const refundRecord = z.strictObject({
       "ozow_invalid",
       "payment_changed",
       "closed_by_staff",
+      // From <ts>_refund_follow_ups.sql: the window for refunds through Ozow
+      // passed before the record was sent (nothing reached Ozow).
+      "outside_refund_window",
     ])
     .nullable(),
   ozow_refund_id: z.uuid().nullable(),

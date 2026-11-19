@@ -11,9 +11,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { FOUNDATION_DIR } from "./foundation-replay.mjs";
 
-/** Same Postgres major and plpgsql_check as Supabase production (CLI 2.120.0 local image). */
-export const LINT_IMAGE =
-  "public.ecr.aws/supabase/postgres:17.11.0.004@sha256:b15d862126dd2dac02da524696ccfde2dcce2ceaee0a58973b2727befe492706"; // secret-scan: allow public image digest
+const LINT_IMAGE_DIGEST = "sha256:b15d862126dd2dac02da524696ccfde2dcce2ceaee0a58973b2727befe492706"; // secret-scan: allow public image digest
+/**
+ * Same Postgres major and plpgsql_check as Supabase production (CLI 2.120.0
+ * local image), from GHCR: ECR Public refuses anonymous pulls from busy
+ * shared CI addresses ("Data limit exceeded"). ECR serves the same index
+ * digest and is the fallback. Both are pulled by digest, so Docker checks
+ * the content whichever registry serves it.
+ */
+export const LINT_IMAGE = `ghcr.io/supabase/postgres:17.11.0.004@${LINT_IMAGE_DIGEST}`;
+export const LINT_IMAGE_FALLBACK = `public.ecr.aws/supabase/postgres:17.11.0.004@${LINT_IMAGE_DIGEST}`;
 export const LINT_BASELINE_FILE = `${FOUNDATION_DIR}/lint-baseline.json`;
 export const LINT_STUBS_FILE = `${FOUNDATION_DIR}/replay/lint-platform-stubs.sql`;
 const CONTAINER_LABEL = "verifymzansi.foundation-sql-lint=1";
@@ -42,13 +49,44 @@ function docker(args, { input, allowFailure = false, timeout = 600_000 } = {}) {
   return result;
 }
 
+const imagePresent = (image) =>
+  spawnSync("docker", ["image", "inspect", image], { stdio: "ignore", windowsHide: true })
+    .status === 0;
+const dockerPull = (image) =>
+  spawnSync("docker", ["pull", image], { stdio: "inherit", timeout: 120_000, windowsHide: true })
+    .status === 0;
+
+/** Pulls LINT_IMAGE, 2 tries of up to 120 s each, then LINT_IMAGE_FALLBACK; returns the one pulled. */
+export async function pullLintImage({
+  pull = dockerPull,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  log = console.log,
+} = {}) {
+  // Worst case, both registries hanging: 4 x 120 s + 2 x 15 s (8.5 minutes); the
+  // 30-minute job leaves about 20 minutes for the lint and the behaviour suites.
+  const tries = 2;
+  for (const image of [LINT_IMAGE, LINT_IMAGE_FALLBACK]) {
+    for (let attempt = 1; attempt <= tries; attempt += 1) {
+      if (pull(image)) return image;
+      log(`Pull ${attempt} of ${tries} of ${image.split("@")[0]} failed.`);
+      if (attempt < tries) await sleep(attempt * 15_000);
+    }
+  }
+  throw new Error(`Could not pull ${LINT_IMAGE} or ${LINT_IMAGE_FALLBACK}.`);
+}
+
+/** The pinned reference this machine has: GHCR's, or ECR's after a fallback pull. */
+export function localLintImage(present = imagePresent) {
+  return !present(LINT_IMAGE) && present(LINT_IMAGE_FALLBACK) ? LINT_IMAGE_FALLBACK : LINT_IMAGE;
+}
+
 /**
  * `docker run` arguments for the lint database: no network (not even a
  * published port), data and init folders in memory, Supabase's own init
  * scripts and the supautils hook disabled (the replay prelude provides the
  * platform roles), and durability off because the database is thrown away.
  */
-export function lintContainerArgs(name, password) {
+export function lintContainerArgs(name, password, image = LINT_IMAGE) {
   return [
     "run",
     "--detach",
@@ -67,7 +105,7 @@ export function lintContainerArgs(name, password) {
     "POSTGRES_USER=postgres",
     "--env",
     `POSTGRES_PASSWORD=${password}`,
-    LINT_IMAGE,
+    image,
     "postgres",
     "-D",
     "/etc/postgresql",
@@ -91,8 +129,11 @@ export function lintContainerArgs(name, password) {
 export async function startLintDatabase({ log = () => {} } = {}) {
   assertLocalDocker();
   const name = `vm-foundation-sql-lint-${randomBytes(4).toString("hex")}`;
-  log(`Starting ${name} from ${LINT_IMAGE.split("@")[0]} ...`);
-  docker(lintContainerArgs(name, randomBytes(18).toString("base64url")), { timeout: 900_000 });
+  const image = localLintImage();
+  log(`Starting ${name} from ${image.split("@")[0]} ...`);
+  docker(lintContainerArgs(name, randomBytes(18).toString("base64url"), image), {
+    timeout: 900_000,
+  });
   const stop = () => docker(["rm", "--force", name], { allowFailure: true, timeout: 60_000 });
   try {
     // The entrypoint's temporary init server listens only on its socket, so a

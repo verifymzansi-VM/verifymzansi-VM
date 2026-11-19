@@ -128,6 +128,10 @@ function notFoundPage(request: NextRequest): NextResponse {
   return NextResponse.next({ status: 404 });
 }
 
+/** The reasons the site's own redirects give the error page (see
+ * src/lib/auth/require-staff.ts and src/lib/foundation/page-access.ts). */
+const ERROR_PAGE_REASONS = new Set(["forbidden", "unavailable"]);
+
 // -- Core routing logic (testable without security headers) ------------------
 
 /**
@@ -175,6 +179,19 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     !isPlaywrightTestMode()
   ) {
     return new NextResponse("Not found", { status: 404 });
+  }
+
+  // The error page is only a redirect target: staff and account checks send a
+  // refused or failed request to /error?reason=forbidden|unavailable. A bare
+  // visit (or an unknown reason) is not a page of the site, so it keeps the
+  // same design but answers a real 404 instead of a misleading 200.
+  if (
+    pathname === "/error" &&
+    isDocumentRequest(request) &&
+    !request.headers.has(REWRITTEN_REQUEST_HEADER) &&
+    !ERROR_PAGE_REASONS.has(request.nextUrl.searchParams.get("reason") ?? "")
+  ) {
+    return notFoundPage(request);
   }
 
   // -- Guard: Supabase not configured ---------------------------------------

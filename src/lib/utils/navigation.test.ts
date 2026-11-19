@@ -26,7 +26,7 @@ describe("sanitizeReturnUrl", () => {
       "/billing",
       // A sponsor administrator signs in from an emailed invitation link.
       "/organisation-invite?token=abc_DEF-123",
-      "/dashboard/affiliations?org=city-of-umhlathuze",
+      "/dashboard/affiliations?org=example-chamber",
     ]) {
       expect(sanitizeReturnUrl(path)).toBe(path);
     }

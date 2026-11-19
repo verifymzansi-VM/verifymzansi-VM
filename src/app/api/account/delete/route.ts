@@ -1,4 +1,5 @@
-import { type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
+import { SHOW_ACCOUNT_DELETION } from "@/lib/hidden-features";
 import { createLogger } from "@/lib/utils/logger";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { accountClosureRefusal, closeMyAccount } from "@/lib/foundation/account-closure";
@@ -16,6 +17,8 @@ const log = createLogger("AccountDelete");
  * always comes from the session.
  */
 export async function POST(request: NextRequest) {
+  // Hidden until it works (src/lib/hidden-features.ts): answers 404.
+  if (!SHOW_ACCOUNT_DELETION) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return handleFoundationOwnerRoute({
     request,
     log,

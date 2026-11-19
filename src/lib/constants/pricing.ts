@@ -2,6 +2,7 @@ import type { MarketplaceArea, PlanTier, RetailPlanTier } from "@/types/enums";
 import { formatRandAmount } from "@/lib/utils/format";
 import { getStablePlanId } from "@/lib/constants/plan-ids";
 import { SHOW_PAID_ADDONS } from "@/lib/hidden-features";
+import { LAUNCH_CONFIG_BUILD } from "@/lib/launch-config";
 
 export const ACTIVE_MARKETPLACE_AREAS = [
   "MZANSI_MARKET",
@@ -102,8 +103,11 @@ export const RETAIL_OFFERS: readonly RetailOffer[] = [
  * (Pricing v2: their prices are published only with a terms version that
  * states them). While false, the pricing, multi-listing and Advertise pages
  * and the posting flow show no multi-listing plans and no sponsor fees.
+ *
+ * False in production; true only in the launch-configuration browser-test
+ * build (src/lib/launch-config.ts).
  */
-export const PACKAGES_ON_SALE = false;
+export const PACKAGES_ON_SALE: boolean = LAUNCH_CONFIG_BUILD;
 
 const RETAIL_FEATURES: PlanDefinition["features"] = {
   maxPhotos: 10,
@@ -145,42 +149,6 @@ export const PLANS: PlanDefinition[] = ACTIVE_MARKETPLACE_AREAS.flatMap((area) =
     compareAtCents: offer.compareAtCents,
     features: { ...RETAIL_FEATURES, [AREA_CAPACITY_KEY[area]]: 1 },
   }))
-);
-
-export interface EnterprisePlanDefinition {
-  planCode: string;
-  slots: number;
-  durationDays: number;
-  label: string;
-  priceCents: number;
-  monthlyActivations: number;
-}
-
-/** Group 2 multi-listing: [live slots, [90-day price, 180-day price]] (Document 03 §3). */
-const ENTERPRISE_PRICE_TABLE: ReadonlyArray<readonly [number, readonly [number, number]]> = [
-  [10, [120000, 215000]],
-  [25, [270000, 485000]],
-  [50, [500000, 900000]],
-  [100, [900000, 1600000]],
-];
-
-const ENTERPRISE_TERMS: readonly number[] = [90, 180];
-
-/** Above 100 live slots is a written quote for a 90- or 180-day term. */
-export const ENTERPRISE_QUOTE_ABOVE_SLOTS = 100;
-/** Named administrators included with every multi-listing plan. */
-export const ENTERPRISE_ADMINS_INCLUDED = 2;
-
-export const ENTERPRISE_PLANS: readonly EnterprisePlanDefinition[] = ENTERPRISE_PRICE_TABLE.flatMap(
-  ([slots, prices]) =>
-    ENTERPRISE_TERMS.map((durationDays, index) => ({
-      planCode: `ENT_${slots}_${durationDays}D`,
-      slots,
-      durationDays,
-      label: `${durationDays} days`,
-      priceCents: prices[index] ?? 0,
-      monthlyActivations: slots * 2,
-    }))
 );
 
 /** Group 3 sponsor programme: total fee by capacity and term (Document 03 §5). */

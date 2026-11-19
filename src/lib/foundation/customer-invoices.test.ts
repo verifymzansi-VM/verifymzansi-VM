@@ -5,6 +5,7 @@ import {
   invoiceRouteRefusal,
   issueStaffInvoice,
   readMyInvoice,
+  readMyInvoiceTransferExpiry,
   recordStaffInvoiceTransfer,
   readMyInvoices,
   readStaffInvoice,
@@ -105,6 +106,37 @@ describe("customer invoice reads", () => {
     };
     const { api } = fixture(ok({ items: [item] }));
     await expect(readMyInvoices(api)).resolves.toEqual([item]);
+  });
+
+  it("reads when the latest bank transfer to the member's invoice expired", async () => {
+    const expiredAt = "2026-11-27T10:01:00.000+00:00";
+    const { rpc, api } = fixture(
+      ok({ invoice_number: "VM-2026-000001", transfer_expired_at: expiredAt }),
+      ok({ invoice_number: "VM-2026-000001", transfer_expired_at: null }),
+      refused("PGRST202"),
+      refused("42883"),
+      refused("PT404", "invoice_unavailable", "invoice not found"),
+      ok({ invoice_number: "VM-2026-000002", transfer_expired_at: null })
+    );
+    await expect(readMyInvoiceTransferExpiry(api, " vm-2026-000001 ")).resolves.toBe(expiredAt);
+    expect(rpc).toHaveBeenCalledWith(
+      "get_my_invoice_transfer_expiry",
+      { p_invoice_number: "VM-2026-000001" },
+      { get: false }
+    );
+    await expect(readMyInvoiceTransferExpiry(api, "VM-2026-000001")).resolves.toBeNull();
+    // A database without the expiry update: nothing to show.
+    await expect(readMyInvoiceTransferExpiry(api, "VM-2026-000001")).resolves.toBeNull();
+    await expect(readMyInvoiceTransferExpiry(api, "VM-2026-000001")).resolves.toBeNull();
+    await expect(readMyInvoiceTransferExpiry(api, "VM-2026-000001")).rejects.toMatchObject({
+      status: 404,
+    });
+    // An answer about another invoice is refused; a malformed number is never sent.
+    await expect(readMyInvoiceTransferExpiry(api, "VM-2026-000001")).rejects.toMatchObject({
+      status: 503,
+    });
+    await expect(readMyInvoiceTransferExpiry(api, "../admin")).resolves.toBeNull();
+    expect(rpc).toHaveBeenCalledTimes(6);
   });
 });
 

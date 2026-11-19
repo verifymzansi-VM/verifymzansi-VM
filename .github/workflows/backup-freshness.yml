@@ -1,0 +1,126 @@
+name: Backup freshness
+
+# Guards the twice-daily database backup (database-backup.yml) against stopping
+# quietly. A failed run here opens the "Failure alert" issue like any other
+# scheduled failure.
+#
+# 1. The newest encrypted backup in the private R2 bucket must be under 27
+#    hours old, and not dated more than 5 minutes in the future (clock
+#    skew). Backups run twice a day and start 3 to 5.5 hours late, so
+#    stored copies are normally 12 to 14.5 hours
+#    apart and one missed run leaves at most about 26.5 hours: this fails
+#    only after two runs in a row stored nothing, long before R2's 35-day
+#    lifecycle can delete the last good copy.
+# 2. GitHub pauses every scheduled workflow in a public repository after 60
+#    days without a commit, this one and the backup included. From day 45 this
+#    fails daily so someone commits (or re-enables the workflows) in time.
+#
+# Lists object names, dates and sizes only; never downloads or decrypts.
+on:
+  schedule:
+    - cron: "23 */6 * * *" # Every 6 hours, off the top of the hour
+  workflow_dispatch:
+
+permissions: {}
+
+# No concurrency group: the checks only read, so overlapping runs are harmless,
+# and a run cancelled by a newer one would raise a failure alert for nothing.
+
+jobs:
+  stored-backup:
+    name: Newest backup is under 27 hours old
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # Reads the backup bucket with the backup job's credentials (database-backup.yml).
+    environment: backup
+    env:
+      BACKUP_BUCKET: verifymzansi-backups
+      MAX_AGE_HOURS: "27"
+    steps:
+      - name: Check the newest object in the backup bucket
+        id: newest-backup
+        env:
+          BACKUP_R2_ACCESS_KEY_ID: ${{ secrets.BACKUP_R2_ACCESS_KEY_ID }}
+          BACKUP_R2_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_R2_SECRET_ACCESS_KEY }}
+          # Transitional: the app's storage key, used only until the backup
+          # bucket's own token exists. It is never placed in the backup
+          # environment, so it stops resolving once removed from the repository.
+          LEGACY_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          LEGACY_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          AWS_DEFAULT_REGION: auto
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          # Clock difference tolerated between R2 and the runner.
+          MAX_FUTURE_SECONDS: "300"
+        run: |
+          # The bucket-scoped token when set; until then the app's storage key
+          # (repository-level only, so it stops resolving once moved), with a
+          # warning on every run.
+          if [ -n "$BACKUP_R2_ACCESS_KEY_ID" ] || [ -n "$BACKUP_R2_SECRET_ACCESS_KEY" ]; then
+            if [ -z "$BACKUP_R2_ACCESS_KEY_ID" ] || [ -z "$BACKUP_R2_SECRET_ACCESS_KEY" ]; then
+              echo "::error::Set both BACKUP_R2_ACCESS_KEY_ID and BACKUP_R2_SECRET_ACCESS_KEY in the backup environment."
+              exit 1
+            fi
+            export AWS_ACCESS_KEY_ID="$BACKUP_R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$BACKUP_R2_SECRET_ACCESS_KEY"
+          elif [ -n "$LEGACY_R2_ACCESS_KEY_ID" ] && [ -n "$LEGACY_R2_SECRET_ACCESS_KEY" ]; then
+            export AWS_ACCESS_KEY_ID="$LEGACY_R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$LEGACY_R2_SECRET_ACCESS_KEY"
+            echo "::warning::Backups still use the app's storage key. Create a token limited to the ${BACKUP_BUCKET} bucket and set BACKUP_R2_ACCESS_KEY_ID and BACKUP_R2_SECRET_ACCESS_KEY in the backup environment."
+          else
+            echo "::error::Set BACKUP_R2_ACCESS_KEY_ID and BACKUP_R2_SECRET_ACCESS_KEY in the backup environment."
+            exit 1
+          fi
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          # One "date<TAB>size" line per object. The CLI fetches every page
+          # (1,000 objects each) and, with text output, prints each page as it
+          # arrives, so the newest object is picked by sorting all lines here,
+          # never inside a per-page query. An empty page prints "None".
+          newest=$(aws s3api list-objects-v2 --bucket "$BACKUP_BUCKET" --prefix database/ \
+              --endpoint-url "$endpoint" --query "Contents[].[LastModified, Size]" --output text \
+            | awk '$1 != "None" && NF >= 2' | LC_ALL=C sort | tail -n 1)
+          read -r modified size <<< "$newest"
+          if [ -z "$modified" ]; then
+            echo "::error title=No database backup stored::The backup bucket has no database backup. Run the Database Backup workflow and check its log."
+            exit 1
+          fi
+          now=$(date -u +%s)
+          stored=$(date -u -d "$modified" +%s)
+          age_seconds=$((now - stored))
+          echo "Newest backup stored ${modified} ($((age_seconds / 3600)) hours ago, ${size} bytes)."
+          if [ "$age_seconds" -lt "$((-MAX_FUTURE_SECONDS))" ]; then
+            echo "::error title=Backup date in the future::The newest backup is dated ${modified}, after the current time. Check the runner and bucket clocks."
+            exit 1
+          fi
+          if [ "$size" -le 0 ]; then
+            echo "::error title=Empty database backup::The newest backup object is empty."
+            exit 1
+          fi
+          if [ "$age_seconds" -ge "$((MAX_AGE_HOURS * 3600))" ]; then
+            echo "::error title=Database backups stopped::No backup stored for $((age_seconds / 3600)) hours (limit ${MAX_AGE_HOURS}). Check the Database Backup runs, and re-enable the workflow if GitHub paused it (docs/RUNBOOK.md, 'Database Backups')."
+            exit 1
+          fi
+
+  schedule-pause:
+    name: Scheduled workflows are not about to pause
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    env:
+      WARN_AFTER_DAYS: "45"
+    steps:
+      - name: Check the date of the latest commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          last=$(gh api "repos/${GH_REPO}/commits?per_page=1" --jq '.[0].commit.committer.date')
+          now=$(date -u +%s)
+          committed=$(date -u -d "$last" +%s)
+          idle_seconds=$((now - committed))
+          idle_days=$((idle_seconds / 86400))
+          echo "Latest commit on the default branch: ${last} (${idle_days} days ago)."
+          if [ "$idle_days" -ge "$WARN_AFTER_DAYS" ]; then
+            echo "::error title=Scheduled workflows pause soon::No commit for ${idle_days} days. GitHub pauses scheduled workflows, including the database backup, after 60 days without one. Merge a change to keep them running (docs/RUNBOOK.md, 'Database Backups')."
+            exit 1
+          fi

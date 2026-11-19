@@ -19,10 +19,18 @@ name: E2E foundation
 # `workflow_call`), so the deploy, which needs the whole main CI run to
 # succeed, waits for it: a red run here holds back the release. Pull requests,
 # the nightly and manual runs start it on its own.
+#
+# On a draft pull request (without the run-full-ci label) the browser projects
+# do not run and the aggregate job reports under another name, so the required
+# `e2e-foundation` check waits for the full run that "Ready for review" starts.
 on:
   workflow_call:
   pull_request:
     branches: [main]
+    # ready_for_review: a draft pull request skips the slowest lanes (see
+    # "Draft pull requests" in docs/branch-protection.md); marking it ready
+    # starts a full run on its head commit.
+    types: [opened, synchronize, reopened, ready_for_review]
   schedule:
     - cron: "10 1 * * *" # Nightly at 01:10 UTC (03:10 in South Africa)
   workflow_dispatch:
@@ -46,6 +54,7 @@ jobs:
   # moved here from the stub suite it is about 10 (e2e/foundation/PORTING.md).
   browser:
     name: e2e-foundation (${{ matrix.project }})
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -120,9 +129,12 @@ jobs:
         run: node --import tsx scripts/foundation-e2e.mjs down
 
   # The single check name for the whole workflow (the required one): green
-  # only when every browser project passed.
+  # only when every browser project passed. A draft run reports under another
+  # name: this job is created only after the browser projects finish, so a
+  # draft-time pass under the required name would still count for that long
+  # after the pull request is marked ready.
   e2e-foundation:
-    name: e2e-foundation
+    name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci')) && 'e2e-foundation (draft, not run)' || 'e2e-foundation' }}
     runs-on: ubuntu-latest
     needs: browser
     if: ${{ !cancelled() }}
@@ -131,7 +143,12 @@ jobs:
       - name: Every browser project passed
         env:
           RESULT: ${{ needs.browser.result }}
+          DRAFT_NOT_RUN: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}
         run: |
+          if [ "$DRAFT_NOT_RUN" = "true" ]; then
+            echo "Draft pull request: the browser tests run once it is marked ready for review (or with the run-full-ci label)."
+            exit 0
+          fi
           echo "Browser projects: $RESULT"
           if [ "$RESULT" != "success" ]; then
             echo "::error::At least one browser project did not pass ($RESULT). Its job summary says whether tests failed or the run timed out."

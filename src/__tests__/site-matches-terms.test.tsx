@@ -6,7 +6,10 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { BillingFaq } from "@/components/billing/billing-faq";
+import { PricingOffers } from "@/components/billing/pricing-offers";
 import { RetailPricing } from "@/components/billing/retail-pricing";
+import { INDIVIDUAL_SLOT_LIMIT, POSTS_PER_SLOT_PER_30_DAYS } from "@/lib/billing/slot-checkout";
+import postingTermsV5 from "@/lib/legal/terms-documents/posting-v5.json";
 import { TrialPolicy } from "@/components/billing/trial-policy";
 import { getPlanFeatureItems, PLANS, RETAIL_OFFERS } from "@/lib/constants/pricing";
 import type { PublicSponsor } from "@/lib/organisations/sponsors";
@@ -27,7 +30,7 @@ const sponsors = vi.hoisted(() => ({ list: [] as unknown[] }));
 vi.mock("@/lib/organisations/sponsors", () => ({
   getPublicSponsors: async () => sponsors.list,
   organisationTypeLabel: () => "Chamber",
-  sponsorArea: () => "uMhlathuze",
+  sponsorArea: () => "Example District",
 }));
 
 const SPONSOR: PublicSponsor = {
@@ -98,6 +101,45 @@ describe("paid add-ons, hidden until they deliver", () => {
   });
 });
 
+describe("the pricing page's offers (Terms: Pricing)", () => {
+  const terms = JSON.stringify(postingTermsV5);
+  const offers = RETAIL_OFFERS.map((offer) => ({
+    ...offer,
+    planIds: { MZANSI_MARKET: "p", MZANSI_BUSINESS: "p", PROMOTIONS_EVENTS: "p" },
+  }));
+
+  it("states only what the Terms say about Individual slots and free events", () => {
+    const { container } = render(<PricingOffers offers={offers} onSale showMultiListing={false} />);
+    const text = container.textContent ?? "";
+
+    // Prices and terms.
+    expect(terms).toContain(
+      "Individual slots cost R69 per slot for each 30 days: R69 for 30 days, R207 for 90 days or R414 for 180 days."
+    );
+    for (const price of ["R69", "R207", "R414"]) expect(text).toContain(price);
+    // How many slots at a time.
+    expect(terms).toContain(
+      `You may hold 1 to ${INDIVIDUAL_SLOT_LIMIT} Individual slots at a time.`
+    );
+    expect(text).toContain(`Hold up to ${INDIVIDUAL_SLOT_LIMIT} slots at a time.`);
+    // Fair use: posts going live per slot per 30 days.
+    expect(terms).toContain(
+      `each paid slot can take at most ${POSTS_PER_SLOT_PER_30_DAYS} posts going live in each 30-day period`
+    );
+    expect(text).toContain(`Up to ${POSTS_PER_SLOT_PER_30_DAYS} posts per 30 days`);
+    // Any section.
+    expect(terms).toContain(
+      "An Individual slot can hold a post in any of the three posting areas."
+    );
+    expect(text).toContain("Market, Business or Tourism");
+    // Free events.
+    expect(terms).toContain("Events are free until the event ends");
+    expect(text).toContain("live until the event ends");
+    // Nothing on hold or not built.
+    expect(text).not.toMatch(/sponsor|Urgent|Boost|Featured|renews automatically|team/i);
+  });
+});
+
 describe("the sponsor offer, on hold", () => {
   it("is not offered on the home page's sponsor section", async () => {
     sponsors.list = [SPONSOR];
@@ -129,9 +171,7 @@ describe("the sponsor offer, on hold", () => {
 describe("links to hidden sections and the hidden pricing package block", () => {
   it("drops the sponsor card and fees, and states the package rules on the multi-listing card", async () => {
     const { EnterprisePricing } = await import("@/components/billing/enterprise-pricing");
-    const { container } = render(
-      <EnterprisePricing plans={[]} checkoutEnabled retailFromCents={6900} />
-    );
+    const { container } = render(<EnterprisePricing checkoutEnabled retailFromCents={6900} />);
     const text = container.textContent ?? "";
     expect(screen.queryByRole("link", { name: /Full details of Business Sponsor/ })).toBeNull();
     expect(container.querySelector("#programme-prices")).toBeNull();
@@ -161,7 +201,6 @@ describe("the hidden Multi-listing package on Advertise", () => {
     vi.doMock("@/lib/commercial/plans", () => ({
       getCommercialCatalog: async () => ({
         retail: [],
-        enterprise: [],
         source: "database",
         onSale: false,
       }),
@@ -182,5 +221,26 @@ describe("the hidden Multi-listing package on Advertise", () => {
     vi.doUnmock("@/lib/constants/pricing");
     vi.doUnmock("@/lib/commercial/plans");
     vi.doUnmock("@/components/brand");
+  });
+});
+
+describe("the hidden multi-listing nudge", () => {
+  it("states only the package rules on sale today (P4a): no team, adding later, renewal or invoice", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/constants/pricing", async (importOriginal) => ({
+      ...(await importOriginal<Record<string, unknown>>()),
+      PACKAGES_ON_SALE: true,
+    }));
+    const { MultiListingNudge } = await import("@/components/billing/multi-listing-nudge");
+    const { container } = render(<MultiListingNudge emphasis="strong" />);
+    const text = container.textContent ?? "";
+
+    expect(text).toMatch(
+      /A Multi-listing package keeps 5 to 250 posts live at the same time for 30, 90 or 180 days, at R100 per slot per 30 days\./
+    );
+    expect(text).not.toMatch(
+      /10 to 100|lower price|administrators|team|later|renew|invoice|quote/i
+    );
+    vi.doUnmock("@/lib/constants/pricing");
   });
 });

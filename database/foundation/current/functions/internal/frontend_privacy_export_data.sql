@@ -40,13 +40,16 @@ begin
         where l.invoice_id=i.id) payment_attempts
       from private.customer_invoices i where i.account_id=$1 order by i.issued_at,i.id$q$),
     ('bank_transfers',$q$select t.id,t.payment_id,v.duration_days term_days,t.slots,t.amount_received_cents,t.bank_reference,t.cleared_on,
-      t.cooling_off_waiver_confirmed,t.status,t.recorded_at,t.confirmed_at,t.declined_at
+      t.cooling_off_waiver_confirmed,t.status,t.recorded_at,t.confirmed_at,t.declined_at,t.expired_at
       from private.invoice_transfers t join private.plan_versions v on v.id=t.plan_version_id where t.account_id=$1 order by t.recorded_at,t.id$q$),
     ('entitlements',$q$select id,source,area,slot_capacity,activations_per_period,activation_period_days,max_photos,max_videos,starts_at,ends_at,status,revoked_reason,
       renews_entitlement_id,slot_id,package_id
       from private.entitlements where owner_id=$1 order by created_at,id$q$),
     ('slot_packages',$q$select id,term_days,slot_count,created_at from private.slot_packages where owner_id=$1
       order by created_at,id$q$),
+    ('package_invoice_requests',$q$select r.id,r.term_days,r.slots,r.unit_price_cents,r.total_cents,r.requested_at,r.consent_at,
+      r.consent_version,r.status,r.closed_at,(select i.invoice_number from private.customer_invoices i where i.id=r.invoice_id) invoice_number
+      from private.package_invoice_requests r where r.account_id=$1 order by r.requested_at,r.id$q$),
     ('post_activations',$q$select post_id,entitlement_id,activated_at,released_at,release_reason,continued
       from private.post_activations where owner_id=$1 order by activated_at,id$q$),
     ('event_submissions',$q$select post_id,submitted_at,released_at,release_reason

@@ -72,7 +72,10 @@ const dashboard = organisation
       approved: count,
       declined: count,
     }),
-    public_contacts: applicationPublicContacts,
+    // Left out since 20261118072601_staff_data_minimisation.sql: a pending
+    // applicant's contact is revealed one at a time
+    // (revealFoundationApplicantContact).
+    public_contacts: applicationPublicContacts.optional(),
     affiliated: count,
     admins: z
       .array(z.strictObject({ user_id: id, role, display_name: z.string().nullable() }))

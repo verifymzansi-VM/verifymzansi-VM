@@ -473,8 +473,11 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     test.setTimeout(150_000);
     const { outside, reply, sentTo } = await guard(context);
     await signInBrowser(context, "admin");
+    // The ID check queue names a member by their public short name
+    // (20261118072601_staff_data_minimisation.sql).
     const displayName = queryTestCopy(
-      `select display_name from private.profiles where account_id = '${member.id}';`
+      "select internal.profile_public_name(display_name) from private.profiles " +
+        `where account_id = '${member.id}';`
     );
     expect(displayName.length).toBeGreaterThan(1);
 

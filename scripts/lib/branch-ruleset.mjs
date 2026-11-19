@@ -67,6 +67,21 @@ export function triggersOnPullRequestToMain(text) {
 }
 
 /**
+ * A job name of the form `${{ (condition) && 'A' || 'B' }}` produces check A
+ * when the condition holds and B otherwise. Returns { condition, whenTrue,
+ * whenFalse }, or null for any other name.
+ */
+export function parseConditionalName(name) {
+  const match = /^\$\{\{\s*\((.+)\)\s*&&\s*'([^']+)'\s*\|\|\s*'([^']+)'\s*\}\}$/.exec(name.trim());
+  return match ? { condition: match[1].trim(), whenTrue: match[2], whenFalse: match[3] } : null;
+}
+
+function conditionalNameAlternatives(name) {
+  const parsed = parseConditionalName(name);
+  return parsed ? [parsed.whenTrue, parsed.whenFalse] : null;
+}
+
+/**
  * Lists the check-run names a workflow produces on a pull request. Jobs whose
  * job-level `if:` mentions `github.event_name == 'push'` (or another non-PR
  * event) are push-only and excluded. Matrix jobs expand to "name (value)" for
@@ -132,7 +147,14 @@ export function pullRequestCheckNames(text) {
       continue;
     }
     const base = job.name ?? job.id;
-    if (job.matrix.length === 0) {
+    const alternatives = conditionalNameAlternatives(base);
+    if (alternatives) {
+      if (job.matrix.length > 0)
+        throw new Error(
+          `Job ${job.id} has a conditional name and a matrix; extend branch-ruleset.mjs first.`
+        );
+      names.push(...alternatives);
+    } else if (job.matrix.length === 0) {
       names.push(base);
     } else if (job.matrix.length === 1) {
       // GitHub names a matrix job by its `name:` with `${{ matrix.<dim> }}`

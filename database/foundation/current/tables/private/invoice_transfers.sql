@@ -21,8 +21,13 @@ create table private.invoice_transfers (
   declined_at timestamp with time zone,
   decline_reason text,
   customer_invoice_id uuid,
+  expired_at timestamp with time zone,
+  resolution text,
+  resolution_reason text,
+  resolved_by uuid,
+  resolved_at timestamp with time zone,
   constraint invoice_transfers_account_id_fkey FOREIGN KEY (account_id) REFERENCES auth.users(id) ON DELETE RESTRICT,
-  constraint invoice_transfers_amount_received_cents_check CHECK (amount_received_cents > 0 AND amount_received_cents <= 5000000),
+  constraint invoice_transfers_amount_received_cents_check CHECK (amount_received_cents > 0 AND amount_received_cents <= 15000000),
   constraint invoice_transfers_bank_reference_check CHECK (bank_reference ~ '^[A-Za-z0-9][A-Za-z0-9 ._:/-]{3,59}$'::text AND bank_reference = btrim(bank_reference) AND bank_reference !~ '  '::text AND length(regexp_replace(bank_reference, '[^A-Za-z0-9]'::text, ''::text, 'g'::text)) >= 4),
   constraint invoice_transfers_confirmed CHECK ((status = 'confirmed'::text) = (confirmed_by IS NOT NULL AND confirmed_at IS NOT NULL AND payment_id IS NOT NULL)),
   constraint invoice_transfers_confirmed_by_fkey FOREIGN KEY (confirmed_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
@@ -32,26 +37,33 @@ create table private.invoice_transfers (
   constraint invoice_transfers_decline_reason_check CHECK (decline_reason IS NULL OR internal.plain_text_valid(decline_reason, 5, 500, true)),
   constraint invoice_transfers_declined CHECK ((status = 'declined'::text) = (declined_by IS NOT NULL AND declined_at IS NOT NULL AND decline_reason IS NOT NULL)),
   constraint invoice_transfers_declined_by_fkey FOREIGN KEY (declined_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
+  constraint invoice_transfers_expired CHECK ((status = 'expired'::text) = (expired_at IS NOT NULL)),
   constraint invoice_transfers_not_own CHECK (recorded_by <> account_id),
   constraint invoice_transfers_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES private.payments(id) ON DELETE RESTRICT,
   constraint invoice_transfers_pkey PRIMARY KEY (id),
   constraint invoice_transfers_plan_version_id_fkey FOREIGN KEY (plan_version_id) REFERENCES private.plan_versions(id) ON DELETE RESTRICT,
   constraint invoice_transfers_reason_check CHECK (internal.plain_text_valid(reason, 5, 500, true)),
   constraint invoice_transfers_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
-  constraint invoice_transfers_slots_check CHECK (slots >= 1 AND slots <= 25),
-  constraint invoice_transfers_status_check CHECK (status = ANY (ARRAY['awaiting_confirmation'::text, 'confirmed'::text, 'declined'::text]))
+  constraint invoice_transfers_resolution_check CHECK (resolution IS NULL OR (resolution = ANY (ARRAY['returned'::text, 'never_arrived'::text]))),
+  constraint invoice_transfers_resolution_reason_check CHECK (resolution_reason IS NULL OR internal.plain_text_valid(resolution_reason, 5, 500, true)),
+  constraint invoice_transfers_resolved CHECK ((resolved_at IS NULL) = (resolved_by IS NULL) AND (resolved_at IS NULL) = (resolution IS NULL) AND (resolved_at IS NULL) = (resolution_reason IS NULL) AND (resolved_at IS NULL OR status = 'expired'::text)),
+  constraint invoice_transfers_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
+  constraint invoice_transfers_slots_check CHECK (slots >= 1 AND slots <= 250),
+  constraint invoice_transfers_status_check CHECK (status = ANY (ARRAY['awaiting_confirmation'::text, 'confirmed'::text, 'declined'::text, 'expired'::text]))
 );
 alter table private.invoice_transfers owner to postgres;
 alter table private.invoice_transfers enable row level security;
 CREATE INDEX invoice_transfers_account_idx ON private.invoice_transfers USING btree (account_id);
 CREATE INDEX invoice_transfers_confirmed_by_idx ON private.invoice_transfers USING btree (confirmed_by) WHERE (confirmed_by IS NOT NULL);
 CREATE INDEX invoice_transfers_customer_invoice_idx ON private.invoice_transfers USING btree (customer_invoice_id) WHERE (customer_invoice_id IS NOT NULL);
-CREATE UNIQUE INDEX invoice_transfers_customer_invoice_open_idx ON private.invoice_transfers USING btree (customer_invoice_id) WHERE ((customer_invoice_id IS NOT NULL) AND (status <> 'declined'::text));
+CREATE UNIQUE INDEX invoice_transfers_customer_invoice_open_idx ON private.invoice_transfers USING btree (customer_invoice_id) WHERE ((customer_invoice_id IS NOT NULL) AND (status <> ALL (ARRAY['declined'::text, 'expired'::text])));
 CREATE INDEX invoice_transfers_declined_by_idx ON private.invoice_transfers USING btree (declined_by) WHERE (declined_by IS NOT NULL);
-CREATE UNIQUE INDEX invoice_transfers_open_reference_idx ON private.invoice_transfers USING btree (upper(regexp_replace(bank_reference, '[^A-Za-z0-9]'::text, ''::text, 'g'::text)), amount_received_cents, cleared_on) WHERE (status <> 'declined'::text);
+CREATE INDEX invoice_transfers_expired_idx ON private.invoice_transfers USING btree (expired_at) WHERE (status = 'expired'::text);
+CREATE UNIQUE INDEX invoice_transfers_open_reference_idx ON private.invoice_transfers USING btree (upper(regexp_replace(bank_reference, '[^A-Za-z0-9]'::text, ''::text, 'g'::text)), amount_received_cents, cleared_on) WHERE (status <> ALL (ARRAY['declined'::text, 'expired'::text]));
 CREATE UNIQUE INDEX invoice_transfers_payment_idx ON private.invoice_transfers USING btree (payment_id) WHERE (payment_id IS NOT NULL);
 CREATE INDEX invoice_transfers_plan_version_idx ON private.invoice_transfers USING btree (plan_version_id);
 CREATE INDEX invoice_transfers_recorded_by_idx ON private.invoice_transfers USING btree (recorded_by);
+CREATE INDEX invoice_transfers_resolved_by_idx ON private.invoice_transfers USING btree (resolved_by) WHERE (resolved_by IS NOT NULL);
 CREATE INDEX invoice_transfers_waiting_idx ON private.invoice_transfers USING btree (recorded_at) WHERE (status = 'awaiting_confirmation'::text);
 CREATE TRIGGER invoice_transfers_customer_invoice BEFORE INSERT ON private.invoice_transfers FOR EACH ROW EXECUTE FUNCTION internal.invoice_transfer_invoice_rule();
 CREATE TRIGGER invoice_transfers_guard BEFORE INSERT OR DELETE OR UPDATE ON private.invoice_transfers FOR EACH ROW EXECUTE FUNCTION internal.invoice_transfer_guard();

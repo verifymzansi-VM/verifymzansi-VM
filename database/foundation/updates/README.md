@@ -24,11 +24,14 @@ Code and database must never disagree, so every change follows this order:
    before merge; the pull request job `staging-database` then fails when staging
    lacks a command the change expects. Until staging is configured that job is
    skipped. It never runs on `main`, so staging cannot block a deploy.
-4. **Merge, then apply to production.** The owner applies the update (or
-   explicitly approves applying it) after the merge and before the code that
-   needs it is deployed. The release preflight compares what production answers
-   with what the commit expects and warns "database behind by N" or "database
-   ahead by N". Afterwards, one pull request records it, changing together:
+4. **Apply in the stated order.** The owner approves the update before either
+   step, and its pull request states its order: **apply-first** (the default:
+   apply in production, then merge) or **website-first** (merge and deploy, then
+   apply straight after), used when the live website's strict readers would
+   reject what the update adds. Merging deploys automatically, so the order
+   matters. The release preflight compares what production answers with what the
+   commit expects and warns "database behind by N" or "database ahead by N".
+   Afterwards, one pull request records it, changing together:
    - its register line, from `pending` to
      `applied YYYY-MM-DD HH:MM UTC; <how it was applied>`;
    - `../fingerprint.json` `productionCheck`: the owner's read-only fingerprint
@@ -77,12 +80,371 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Multi-listing package invoices and "Ask for an invoice", 19 November 2026
+
+`20261119025106_package_invoices.sql` was applied on 19 November 2026 at 06:42
+UTC (see the applied register). Roadmap P4e; the owner's decisions 5, 6 and 12
+of 14 November 2026 (multi-listing gap review) and of 16 November 2026 (an
+invoice first at any amount, paid with Pay now up to the online payment limit or
+by bank transfer). It needs `20261114154823_slot_packages.sql`,
+`20261114041000_customer_invoice_pay_now.sql` and
+`20261118044440_bank_transfer_expiry.sql`, and refuses (55000) unless the nine
+functions it replaces have their reviewed bodies (or this update's) and the
+eighteen it adds are absent (or this update's). It only adds: no API command,
+argument or grant is removed or changed, and no field is added to an existing
+command's answer. **Nothing can be bought after it is applied**: packages stay
+off sale and every new command refuses with PT403 `packages_not_on_sale` until
+the owner switches them on.
+
+- **Wider invoice limits.** `private.customer_invoices` and
+  `private.invoice_transfers` hold up to 250 slots and R150,000 (250 slots for
+  180 days at R600). The Individual commands keep their own limits (1 to 25
+  slots, at most R50,000). A payment line holding more than one slot (a package
+  line) may be up to R150,000 (`payment_lines_amount_cents_check`); a one-slot
+  line stays at most R10,000.
+- **"Ask for an invoice" (member).**
+  `api.request_package_invoice(p_plan_id, p_slots, p_expected_total_cents, p_cooling_off_consent, p_request_id)`:
+  5 to 250 slots of one package term at any amount (22023
+  `package_slots_invalid`), priced here from the catalogue (PT428 when the total
+  shown differs), with an accepted ID review (PT412) and the box ticked (22023
+  `invoice_consent_required`; recorded as `invoice-cooling-off-v1`, the words
+  every invoice uses, with the current posting terms). Refused while the account
+  has a package that has not ended (PT409 `package_active`) or an unpaid package
+  invoice (PT409 `package_invoice_unpaid`). One open request per account (a
+  partial unique index): the same request id returns the first answer
+  (`repeated: true`, another order with it PT409 `invoice_request_conflict`);
+  the same order again keeps the waiting request; another order replaces it
+  (`withdrawn`) while no staff member has prepared it, and is refused once one
+  has (PT409 `package_invoice_request_open`). At most 10 new requests per
+  account in 24 hours (PT429 `package_invoice_requests_limit`).
+  `api.get_my_package_invoice_request()` reads the account's latest request
+  (never another account's, never staff details).
+- **The request record.** New table `private.package_invoice_requests`: the
+  account, term, slots, price and total, the consent, the status (`requested`,
+  `awaiting_approval`, `issued`, `declined`, `withdrawn`), and what staff did
+  (who prepared it with the days to pay and the reason, who approved it, the
+  invoice, who declined it and why). What the member asked never changes; staff
+  details are written once; it moves on once (trigger
+  `package_invoice_requests_guard`, which also checks that an issued request
+  names its own invoice of that order). Closing an account withdraws its open
+  request (`internal.close_account_evidence`), so it leaves the staff queue;
+  erasure withdraws it too and unlinks every request from the account
+  (`internal.erase_closed_account`; the guard allows only that change), as its
+  invoice and payment are unlinked. The retention job
+  (`internal.retention_commerce`, new count `package_invoice_requests`) removes
+  declined and withdrawn requests five tax years after they closed, the period
+  of declined bank transfers; an issued one goes with its invoice. No API role
+  reads it.
+- **Staff.** `api.get_staff_package_invoice_requests()` (`payments:view`): the
+  open requests, oldest first (at most 100), with the customer's account email,
+  public name, whether their ID review is accepted and whether they have a
+  package. `api.issue_staff_package_invoice(p_request_id, p_due_days, p_reason)`
+  (`payments:refund`, recent second factor) issues the customer invoice at the
+  price asked for, with the next `VM-YYYY-NNNNNN` number, the description
+  "Multi-listing package: <n> slots × <days> days" and the issuing staff member,
+  after checking the account, its ID review, the switch, the price still sold
+  (PT409 `invoice_plan_unavailable`), no package (PT409 `package_active`), no
+  other unpaid package invoice and the VAT setting again. **Above R50,000** it
+  only prepares the invoice (`awaiting_approval`, no number taken);
+  `api.approve_staff_package_invoice(p_request_id)`
+  (`payments:confirm_transfer`, admin) issues it, never by the preparer or
+  another account of their identity (42501 `invoice_approver_same`) and only
+  while the preparer still holds `payments:refund` and a current accepted ID
+  review of their own (PT409 `invoice_preparer_inactive`); the preparer is the
+  invoice's issuer.
+  `api.decline_staff_package_invoice_request(p_request_id, p_reason)`
+  (`payments:refund`) closes an open request. Every staff command checks the
+  staff member's own ID review, never their own identity's account and never a
+  customer they referred, again after every lock wait (the customer, then their
+  package, then the row); repeats by the same staff member return the first
+  answer; a closed request is refused (PT409 `package_invoice_request_closed`,
+  PT404 `package_invoice_request_unavailable` for an unknown id). The issued
+  invoice notifies the member as every invoice does.
+- **Paying a package invoice.** As an Individual invoice, as a package:
+  `internal.start_invoice_payment` ("Pay now", only up to the online payment
+  limit, so 13 slots for 30 days today) starts one Ozow payment with one line
+  holding every slot and the package checkout's snapshot, after checking the
+  switch and no package (an unsent package checkout is closed; one open at Ozow
+  refuses with PT409 `invoice_checkout_open`); the existing Ozow notice delivers
+  it as a package (`internal.customer_invoice_payment_guard` accepts that one
+  line as the attempt). `internal.record_staff_invoice_transfer` and
+  `internal.confirm_staff_invoice_payment` (two staff members) record and
+  deliver a bank transfer to it the same way: one line, the grant that opens the
+  package (`internal.issue_slot_line_entitlements`), the invoice record, the
+  receipt event and the partner commission; `slots_started` is the package's
+  number of slots. Both refuse while packages are off sale (PT403
+  `packages_not_on_sale`) or the account has a package (PT409 `package_active`).
+  The Individual slot limit and E3 do not apply to a package. Individual
+  invoices are unchanged, except that confirming any bank transfer now also
+  needs the recorder's own current accepted ID review (PT409
+  `transfer_recorder_inactive`). Refunds work on the package line as for a
+  package bought online.
+- **Online package checkout.** `internal.start_package_checkout` (full body)
+  refuses while a package invoice of the account is unpaid (PT409
+  `package_invoice_unpaid`): it is paid or voided first.
+- **Privacy export.** New dataset `package_invoice_requests` (term, slots,
+  amounts, dates, consent, status, invoice number; never the staff member or the
+  reasons).
+- **Known gap (fix before packages go on sale).** Confirming a bank transfer to
+  a package invoice waits while another package payment of the account is open
+  at Ozow, but an online package checkout that was started and not yet sent to
+  Ozow is neither cancelled nor rechecked. If it is sent and paid afterwards,
+  the payment lands in `needs_reconciliation` beside the package (staff refund
+  it). The fix belongs in `internal.claim_checkout_request`: refuse to send a
+  package checkout while the account has a package or an unpaid package invoice.
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the new commands and the deploy preflight probes every command in
+`../runtime-api-manifest.json`, so a deploy without the update stops there.
+Earlier releases do not call them and keep working with the update applied: no
+package invoice can exist while packages are off sale, so the earlier invoice
+readers (at most 25 slots and R50,000) never meet one. It is recorded after
+`20261118182332_refund_follow_ups.sql`.
+
+**Applying.**
+
+1. Run `../preflight/20261119025106_package_invoices.check.sql` unchanged in the
+   SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "package invoices: update not applied (apply before the
+   website release that uses it is deployed); on sale: no; invoice requests:
+   none (table absent); package invoices: 0; package bank transfers: 0".
+2. Run the update. It waits at most 5 seconds for any lock (it briefly locks
+   `private.customer_invoices`, `private.invoice_transfers` and
+   `private.payment_lines` to widen their rules). Run the preflight again: it
+   must read "package invoices: already applied; on sale: no; invoice requests:
+   0 (open: 0); package invoices: 0; package bank transfers: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is `../rollback/20261119025106_package_invoices.down.sql`
+(only with the owner's decision; prefer a forward fix). Revert and deploy the
+website release first: the rollback removes the commands that release calls. It
+refuses once a package invoice request, a package invoice, a bank transfer for a
+package or a payment line above R10,000 exists; otherwise it puts back the nine
+earlier bodies byte for byte and the earlier limits, and drops the added
+functions and the table.
+
+`node --import tsx scripts/test-foundation-package-invoices.mjs` (part of
+`pnpm db:foundation:lifecycle-test`, 30 checks) proves on the throwaway
+database: the preflight before and after, read only; drifted bodies and a
+premature rollback refused, changing nothing; apply, rollback and re-apply
+return the same fingerprints; the grants; with packages off sale nothing can be
+asked for; the term, slot, total, tick and ID review rules; repeats, the same
+order and a replacing order; the staff queue for `payments:view` only; issuing
+at the price asked for, its repeat, and no second issue or decline; no new
+request while an invoice is unpaid or a package runs; Pay now refused above the
+online limit; a bank transfer confirmed by a second staff member opens a 25-slot
+package (one line, one grant, 100 new posts per 30 days, 90 days, the invoice
+paid, receipt event and invoice record); above R50,000 a prepared invoice takes
+no number until another admin approves it (never the preparer, a moderator, or
+once the preparer lost the role); Pay now within the limit closes an unsent
+online checkout, pays the invoice with one line and opens a 5-slot package; a
+declined request issues nothing; issuing rechecks the switch, the customer's ID
+review and the staff member's identity; a bank transfer is refused while
+packages are off sale; the record's guard; a R10,200 bank transfer and the
+approved R60,000 invoice paid in full (one line each); confirming and approving
+need the recorder's and the preparer's own current ID review; two approvers, and
+an approval and a decline, at the same moment (one wins, at most one invoice);
+the daily request limit; the online package checkout refused while a package
+invoice is unpaid; closure withdraws open requests and erasure unlinks every
+request, invoice and payment; retention of declined and withdrawn requests;
+Individual invoices unchanged; the privacy export; and the rollback refused once
+a request exists.
+
+## Refund follow-ups and Ozow's refund window, 18 November 2026
+
+`20261118182332_refund_follow_ups.sql` was applied on 18 November 2026 at 21:25
+UTC with the owner's approval, before the website release from its pull request
+(see the applied register). It carries the owner's decisions of 18 November
+(plan B) for staff refunds; members see nothing new:
+
+- **New reason "Cancelled before the renewal started"**
+  (`renewal_cancelled_before_start`). It fits only a refund whose slots are all
+  renewals whose days have not started: the whole payment of a renewal, or one
+  renewed slot of it. Otherwise PT409 `renewal_already_started`, also when a
+  waiting refund with it is approved after the renewal started, and the server
+  does not send such a refund through Ozow then (it fails as `payment_changed`).
+- **The renewal is refunded first.** A refund that would end a period whose slot
+  has a renewal bought and not started is refused (PT409 `renewal_queued`),
+  whether recorded with a reference, sent through Ozow or recorded from the Ozow
+  dashboard. Approving a waiting refund checks it again, and so does the server
+  before it sends a refund through Ozow (that refund then fails as
+  `payment_changed`). Chargebacks are not refused.
+- **A declined record's reference is free again.** The unique reference index
+  and the repeat lookup leave declined records out. The same reference recorded
+  at the same moment for another payment is refused as `ozow_reference_used` or
+  `refund_reference_used`, not as a raw unique violation.
+- **Ozow refunds only within 13 days of the payment** (Ozow says 14; one day
+  less for time zones and Ozow's clock), counted from the payment's `created_at`
+  (`internal.ozow_refund_window()`, the one setting). Asking for or approving a
+  refund through Ozow after that is refused (PT409 `outside_refund_window`); one
+  approved in time but not yet sent fails before anything is sent
+  (`failure_reason` `outside_refund_window`, listed under 'Refunds that need
+  staff', no payment problem alert). Recording a refund already made in the Ozow
+  dashboard is unchanged.
+- **After the 13 days, the money is paid back by bank transfer** and recorded
+  with the existing reference commands and the bank reference (spaces allowed,
+  at least four letters or digits; refusals `refund_reference_*`), also once
+  refunds through Ozow have been used. No new command. A refund recorded with a
+  reference is refused while a refund through Ozow of the same payment is
+  approved or sent (PT409 `refund_in_flight`): Ozow may still pay that one.
+
+Expand only: no API command, argument, grant, return type or result field is
+added, removed or changed; no row is written. Records already waiting or
+approved are judged by the new rules when they are approved or sent (the
+preflight counts them).
+
+**Order: expand website first (done), then this update, then this pull request's
+release.**
+
+1. Pull request #267 ("Website reads the refund follow-ups values before the
+   database has them") is merged and deployed. It reads the new reason and
+   failure reason and words the three new refusals.
+2. This pull request is merged and the update is applied (preflight, update,
+   preflight, fingerprint, below) before its release is deployed, as usual.
+   Check first that the deployed release contains #267.
+3. This pull request's release is deployed. It offers the new reason on renewal
+   payments, shows until when Ozow refunds a payment, and offers "Paid back by
+   bank transfer" next to "Refund through Ozow" (the database decides which is
+   possible; the form says before the money is paid when it is).
+
+Every state in between is safe: with the update applied and the #267 release,
+staff see the new refusals in plain words but are not yet offered the new reason
+or the bank transfer form. This pull request's release with the database before
+the update would offer the new reason (refused there with "Choose why the money
+is returned") and the bank transfer form (refused there for an Ozow payment once
+refunds through Ozow were used), so do not deploy it first.
+
+**Applying.** After this pull request is merged:
+
+1. Run `../preflight/20261118182332_refund_follow_ups.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "refund follow-ups: update not applied; ...". Its
+   counts (waiting for approval, approved refunds through Ozow not sent, those
+   past Ozow's 13 days, those that would end a period while a renewal waits,
+   declined records) are for staff to look at; none stops the update.
+2. Run the update. It waits at most 5 seconds for a lock and stops without
+   changing anything if the refund table is busy; run it again. Run the
+   preflight again: it must read "refund follow-ups: already applied; ...".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is `../rollback/20261118182332_refund_follow_ups.down.sql`
+(only with the owner's decision; prefer a forward fix). It restores the earlier
+bodies, lists and unique index and drops the six new helpers; it refuses once a
+record names the new reason, a refund failed outside the window, or a declined
+reference was recorded again.
+`node --import tsx scripts/test-foundation-refund-follow-ups.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drift and a premature rollback are
+refused; apply, rollback and re-apply return the same fingerprints; and each
+rule above through the production API commands.
+
+## Staff and organisation screens show less personal data, 18 November 2026
+
+`20261118072601_staff_data_minimisation.sql` was applied on 18 November 2026 at
+18:09 UTC with the owner's approval, before the website release from this pull
+request (see the applied register). It narrows what staff and organisation
+administrators see, and tells the person behind a data request when it moves on:
+
+- **Short names in review queues.** The business review queue, the 'seen in
+  person' queue and case, the CIPC case and both ID check queue reads name a
+  member by their public short name ('Thando D.', the public seller card's rule)
+  instead of the full name, which for a verified member is the full legal name.
+  The full legal name is shown only where it already was: a case the staff
+  member holds (claim, assignment or decision) with `evidence:view` (a second
+  factor from the last 15 minutes, recorded in the evidence access log) and the
+  identity context of a claimed ID check. Members see their own name as before.
+- **Data requests.** Who may do each step is unchanged: one staff member with
+  `dsar:manage` (a second factor from the last 15 minutes) records, checks,
+  approves, exports and completes, and every step stays in the request's event
+  log. New: when a request is approved and when its export is first made, the
+  requester is emailed through the existing privacy notice jobs (kinds
+  `approved` and `exported`) and an account named by the request gets a bell
+  notice (`privacy_request_approved`, `privacy_export_made`), once each. A
+  request staff record by hand is linked to its account at the identity check;
+  if it was approved before that, the account gets the approval notice then.
+  Export already needs a verified identity, so its notice always finds the
+  account.
+- **Support inbox.** It lists tickets received in the last 12 months, and older
+  ones only while still open (new or in progress). Resolved tickets older than
+  that are no longer listed (they are not deleted). Who may read it, and the
+  counts of new tickets, are unchanged. Such a ticket can no longer be reopened
+  or changed (`support_ticket_archived`, PT409), so its sender is not shown
+  again.
+- **Organisation dashboard.** It no longer carries applicants' business contacts
+  (`public_contacts` leaves its result) and names co-administrators by their
+  public short name (the viewer's own name as before). The new
+  `api.reveal_organisation_applicant_contact(p_application)` gives the public
+  business contact of one pending application (submitted, or more information
+  requested) at a time; nothing for decided or withdrawn applications. Every
+  reveal, by an organisation administrator or by staff, is recorded in the
+  organisation's append-only event log (`private.organisation_events`: who,
+  when, which application), which the staff audit trail lists as
+  `organisation:applicant_contact_revealed`.
+
+The staff invoice, bank transfer and payment lists are unchanged: the staff rule
+(an authenticator code within 12 hours) applies to them as to every staff read.
+
+Expand only: one new command; no command, argument, grant or return type is
+removed or changed. A later code-only change can stop reading `public_contacts`.
+
+**Order: expand website first, then this pull request and this update.**
+
+1. Pull request #265 ("Website reads the staff data minimisation shapes before
+   the database has them") is merged and deployed. It teaches the live website
+   the two new requester email kinds, the two new bell notice kinds and a
+   dashboard result without `public_contacts`.
+2. This pull request is merged and the update is applied (preflight, update,
+   preflight, fingerprint, below) before its release is deployed, as usual.
+   Check the deployed release first: nothing in the database refuses the update
+   while the website predates step 1, and that website's privacy notice job
+   refuses (and retries) the new email kinds and its strict dashboard reader
+   refuses the new shape.
+3. This pull request's release is deployed.
+
+Every state in between is safe. The expand release with the update applied shows
+no applicant contacts on the organisation dashboard until step 3. This pull
+request's release with the database before the update behaves as today: the
+dashboard shows the contacts it still receives (pending applications only) and
+offers 'Show contact' only when the result has no `public_contacts`. If the
+expand release is ever reverted, run the rollback first.
+
+**Applying.** After step 1 is live and this pull request is merged:
+
+1. Run `../preflight/20261118072601_staff_data_minimisation.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff data minimisation: update not applied; ...". It
+   also counts resolved support tickets older than 12 months (no longer listed).
+2. Run the update. It locks the privacy notice and notification tables without
+   waiting and stops without changing anything if either is busy; run it again.
+   Run the preflight again: it must read "staff data minimisation: already
+   applied; ...".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261118072601_staff_data_minimisation.down.sql` (only with the
+owner's decision; prefer a forward fix). It restores the earlier bodies and
+lists, drops the new command, and deletes the bell notices and requester emails
+of the new kinds to do so; the organisation event log keeps its reveal records.
+`node --import tsx scripts/test-foundation-staff-data-minimisation.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drift and a premature rollback are
+refused; apply, rollback and re-apply return the same fingerprints; and each
+rule above through the production API commands.
+
 ## Account events reach the notification bell, 17 November 2026
 
-`20261117140533_member_notices_in_app.sql` is not applied yet. It adds no
-command and changes no API signature, so the website release that uses it also
-works with a database that does not have it: the bell then shows only the
-notices it showed before.
+`20261117140533_member_notices_in_app.sql` was applied on 18 November 2026 at
+02:40 UTC with the owner's approval, after the website release that knows the
+new kinds was deployed (see the applied register).
 
 Until now the bell listed only what was written to `private.notifications`. Many
 account events queued only an email: an accepted ID check (a member who was
@@ -2704,6 +3066,123 @@ When another update merges first, regenerate this pull request's
 `fingerprint.json`, the applied register, the manifests, `error-reasons.ts` and
 `package.json`.
 
+## Sample post hide-list removed, 18 November 2026
+
+`20261118033538_remove_sample_post_hide_list.sql` was applied on 18 November
+2026 at 05:46 UTC with the owner's approval, after the website release from this
+pull request was deployed (see the applied register). It is the contract step of
+`20261117144001_sample_post_hide_list.sql` (applied 18 November 2026, pull
+request 105), recorded in `../contract-steps.json`. The display-only sample
+posts were removed from the website in the same pull request (catalogue,
+`/sample/<slug>` pages, the staff page and the showroom cards), so no release
+calls the hide-list any more.
+
+- **Removed.** `api.set_sample_post_hidden(p_slug, p_hidden)`,
+  `api.get_hidden_sample_posts()`, the internal functions behind them and the
+  table `private.hidden_sample_posts` with any rows it holds (catalogue slugs
+  staff had removed; nothing else refers to them). No other object changes.
+- **Refusal.** It refuses (55000) when only part of the hide-list exists.
+  Running it again once everything is gone changes nothing.
+
+**Order: merge, then apply.** The release from this pull request no longer lists
+the two commands in its runtime manifest. The deploy preflight probes only the
+commands a release lists and its update-order report only warns, so the release
+deploys while production still has them (reported as "database behind by 1").
+Applied before the merge, the deploy preflight of any other release in between
+would find `api.get_hidden_sample_posts` missing and fail.
+
+**Applying.** After the pull request is merged and its website release is
+deployed:
+
+1. Run `../preflight/20261118033538_remove_sample_post_hide_list.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "remove sample post hide list: update not
+   applied; hidden samples: N".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "remove sample post hide list: already applied".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261118033538_remove_sample_post_hide_list.down.sql` (only with
+the owner's decision; prefer a forward fix). It puts back the empty hide-list
+and both commands exactly as the earlier update created them; the deleted rows
+are not restored.
+
+`node --import tsx scripts/test-foundation-remove-sample-post-hide-list.mjs`
+(part of `pnpm db:foundation:lifecycle-test`) proves on the throwaway database:
+the preflight before and after, read only; a partial state and a premature
+rollback are refused, changing nothing; apply, rollback and re-apply return the
+same fingerprints; and afterwards signed-out visitors and members cannot call
+either command.
+
+## Staff remove and restore display-only sample posts, 17 November 2026
+
+`20261117144001_sample_post_hide_list.sql` was applied on 18 November 2026 at
+00:47 UTC (production Postgres log; see the applied register). The website
+feature it served was removed later, and its contract step
+`20261118033538_remove_sample_post_hide_list.sql` removes it (section above).
+The files named below that belonged to the website, and its behaviour test, are
+no longer in the repository; the update, preflight and rollback stay as history.
+
+The website can show a few display-only sample posts (labelled "Sample post ·
+for display only") after the real posts in the showrooms, while
+`SAMPLE_POSTS_ENABLED` is on. Their text and media are a static catalogue in the
+website (`src/lib/sample-posts/catalogue.ts`), not database rows. This update
+lets staff remove one sample, and restore it, without a code change:
+
+- **Hide-list.** `private.hidden_sample_posts` holds one row per removed sample:
+  the catalogue slug, the staff account that removed it (set to null if that
+  account is ever deleted) and when. Row level security is on and no API role
+  has a grant; at most 500 rows.
+- **Staff command.** `api.set_sample_post_hidden(p_slug, p_hidden)`
+  (authenticated) runs `internal.staff_actor('post:moderate')`: the content
+  moderation capability (moderator, governor, admin) with its recent
+  authenticator code rule. `true` adds the slug (one already hidden keeps its
+  first who and when), `false` removes it; both are idempotent and return
+  `{"slug","hidden","hidden_at"}`. A malformed slug is refused with 22023, a
+  501st hidden slug with 54000.
+- **Public read.** `api.get_hidden_sample_posts()` (anon and authenticated, like
+  the price catalogue) returns `{"slugs":[...]}`, sorted: slugs only, never who
+  or when.
+
+Expand only: a new table and two new commands; nothing existing changes. The
+website release from the same pull request leaves out every hidden sample from
+the showrooms and answers `/sample/<slug>` for one with a real 404. When it
+cannot read the hide-list it shows no sample at all (fail closed), so apply this
+update before that release is deployed with samples switched on. With samples
+off (the default) the release never reads it.
+
+**Applying.** After the pull request is merged and before its website release is
+deployed:
+
+1. Run `../preflight/20261117144001_sample_post_hide_list.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "sample post hide list: update not applied".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "sample post hide list: already applied; hidden samples:
+   0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261117144001_sample_post_hide_list.down.sql` (only with the
+owner's decision; prefer a forward fix). Switch samples off first: it drops both
+commands and the hide-list, and the website then shows no sample.
+
+`node --import tsx scripts/test-foundation-sample-post-hide-list.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; a partial state and a premature rollback
+are refused, changing nothing; apply, rollback and re-apply return the same
+fingerprints; staff with `post:moderate` and a recent authenticator code hide
+and restore a slug, idempotently, keeping the first who and when; members,
+signed-out visitors, staff without a recent code and staff without the
+capability are refused, changing nothing; malformed slugs and a 501st slug are
+refused; the public read returns sorted slugs only, to signed-out visitors and
+members; and the grants, owners and settings are as listed.
+
 ## A skipped email is no longer listed as sent, 17 November 2026
 
 `20261117123240_skipped_email_status.sql` was applied on 17 November 2026 at
@@ -2771,6 +3250,150 @@ and with eight attempts), a sent one is listed as sent, an email skipped before
 the update stays listed as sent, failed and outcome-unknown attempts are
 recorded and listed as before, mismatched reasons and a stale lease change
 nothing, and the grants, owners and settings are unchanged.
+
+## Waiting bank transfers expire after 14 days, 17 November 2026
+
+`20261118044440_bank_transfer_expiry.sql` was applied on 18 November 2026 at
+07:40 UTC with the owner's approval, before the website release from this pull
+request (see the applied register).
+
+Owner's decision of 16 November 2026: a bank transfer staff recorded (slice P2b,
+with or without a customer invoice) that is still waiting for a second staff
+member 14 days after it was recorded expires. Until now it could wait for ever,
+and while it waited its invoice could not be paid online, voided or given
+another transfer, and the account could not be erased.
+
+Expand only (no API command, argument or grant is removed or changed; no row is
+written):
+
+- **One rule.** `internal.invoice_transfer_expired(t)`: a transfer has expired
+  when it is marked `expired`, or when it still waits and was recorded 14 days
+  ago or longer (`internal.invoice_transfer_expires_after()`, the one setting).
+  `internal.invoice_transfer_waiting(t)` is "waiting and not expired". Every
+  command and read uses them, so nothing depends on the sweep having run:
+  confirming and declining refuse an expired transfer (PT409
+  `transfer_not_waiting`; the record guard refuses it too); Pay now, voiding an
+  invoice, recording a transfer to an invoice and the account erasure hold wait
+  only for a transfer that is still waiting; the staff waiting list, the
+  invoice's `transfer_waiting` flag (staff and member), the "Possible duplicate"
+  count and the two new reads count an expired transfer as expired.
+- **A fourth state.** `private.invoice_transfers` gains `expired_at` and the
+  status `'expired'` (constraint `invoice_transfers_expired`: expired exactly
+  when `expired_at` is set). `internal.invoice_transfer_guard` lets a waiting
+  record change once to expired, only 14 days or more after it was recorded,
+  with nothing else changed; an expired record never changes again and nothing
+  is deleted.
+- **The sweep records it.** `api.expire_waiting_bank_transfers(p_limit)`
+  (service role only, `p_limit` 1 to 50, so the subtransactions stay within the
+  per-transaction cache) marks every transfer that has waited 14 days (status
+  and time), oldest first, each row in its own subtransaction: a row that cannot
+  be changed is returned in `failures` with its transfer id and SQLSTATE (the
+  job logs them), tried again next run, and never stops the others; every
+  command, read and the audit trail already treat it as expired. Records a staff
+  member holds at that moment are skipped. The website's operation job
+  (`src/lib/foundation/operation-jobs.ts`, run every minute by the ops-jobs
+  worker, like `run_post_lifecycle` and `run_slot_renewals`) calls it with
+  `p_limit` 50 and logs a warning naming the failed rows; until this update is
+  applied it logs "Sweep command missing" at most once an hour per worker
+  instance (Workers logs, context `FoundationOperationJobs`) instead of failing
+  the run.
+- **Recording the money again.** Both record commands first mark expired any
+  waiting record of the same bank credit (or, for an invoice, to the same
+  invoice) that has waited 14 days, so the unique indexes (which, like the
+  commands, leave out declined and expired records) still allow exactly one open
+  record of a credit and of an invoice: the money is never counted twice. A
+  credit that cleared more than 90 days ago is accepted only when it is exactly
+  the credit (bank reference, amount, date cleared) of an expired transfer of
+  the same account, and of the same invoice when that transfer named one. The
+  "Possible duplicate" count includes expired records of the same money, so the
+  second staff member is warned. A waiting transfer holds no slots or payment
+  (an invoice attempt never sent to Ozow was already closed when the transfer
+  was recorded), so nothing else is released.
+- **History and records.** The staff audit trail lists each expiry as
+  `payment:invoice_expired`, with no staff member, the transfer as its target
+  and "Bank transfer <reference> expired: not confirmed within 14 days of being
+  recorded", the way it lists a decline (at the recorded expiry, or while the
+  sweep has not marked it at the moment it passed 14 days), and each resolution
+  as `payment:invoice_expired_resolved` with the staff member. Retention counts
+  an expired record's five tax years from its expiry. The privacy export gives
+  each bank transfer's `expired_at` next to `confirmed_at` and `declined_at`.
+- **Staff follow-up.**
+  `api.resolve_expired_invoice_transfer(p_transfer_id, p_resolution, p_reason)`
+  (payments:confirm_transfer, as confirming) records once, with an audited
+  reason, that the money of an expired transfer was returned outside
+  VerifyMzansi (`returned`) or never arrived (`never_arrived`): new columns
+  `resolution`, `resolution_reason`, `resolved_by`, `resolved_at`, set only on
+  an expired transfer and never changed after; never by the staff member who
+  recorded it (42501 `transfer_resolver_same`, as for confirming). Money so
+  resolved cannot use the old-money exception, and the account erasure hold
+  (`transfer_waiting`) also waits for an expired transfer not yet followed up
+  (`internal.invoice_transfer_follow_up_open`).
+- **Two reads.** `api.get_staff_expired_invoice_transfers()` (payments:view:
+  every expired transfer still to be followed up, that is neither resolved nor
+  with the same money recorded again and confirmed; a paid or voided invoice or
+  a declined new record is not a follow-up; oldest first, at most 200, with the
+  count) and `api.get_my_invoice_transfer_expiry(p_invoice_number)` (the
+  member's own invoice: when its latest transfer expired while the invoice is
+  unpaid, else null; a declined transfer is still not shown). No existing read
+  changes shape, so the strict website adapters of either release keep working.
+
+The website release from the same pull request lists the expired transfers still
+to be followed up on the staff payments page with an "Expired" badge, tells the
+member on the invoice page that the transfer expired and the invoice can be paid
+again, and runs the sweep. No email is sent. Safe in either order: with the
+database first, the earlier website never runs the sweep or the reads, but
+transfers that have waited 14 days count as expired at once (their invoices can
+be paid again) and confirming one shows its "no longer waiting" message; with
+the website first, the release skips the missing sweep (with the warning above)
+and reads (no expiry shown) until the update is applied.
+
+**Applying.** From the moment the update is applied, a transfer that has waited
+14 days or more can never be confirmed. Confirm the genuine ones first.
+
+1. Run `../preflight/20261118044440_bank_transfer_expiry.check.sql` unchanged in
+   the SQL editor. It is read only. Its summary reads "bank transfer expiry:
+   update not applied; waiting: N; waiting 14 days or more: M; expired: 0", and
+   it adds one "problem" row for each of the M transfers ("bank transfer <id>
+   (<reference>, <amount> cents) recorded <date> has waited 14 days or more:
+   confirm or decline it before applying the update").
+2. Staff (two people, as always) confirm each of those whose money is in the
+   bank account and decline the others. Run the preflight again. Continue only
+   when the summary is the only row.
+3. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "bank transfer expiry: already applied; waiting: N;
+   waiting 14 days or more: 0; expired: 0" (a transfer that reached 14 days in
+   between is counted, not listed).
+4. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261118044440_bank_transfer_expiry.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses once any transfer has been
+marked expired (the earlier schema cannot hold that state) and unless the
+thirteen functions have this update's bodies; otherwise it drops the sweep, the
+reads and the resolution command, puts back the earlier bodies, view, indexes
+and status rule byte for byte, drops the rule and the setting, and drops
+`expired_at` and the resolution columns.
+
+`node --import tsx scripts/test-foundation-bank-transfer-expiry.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+read-only preflight with its overdue rows, refusals with a drifted body and a
+premature rollback; apply, rollback and re-apply return the same fingerprints;
+the one rule before the sweep (no confirm or decline, also through the guard;
+the staff lists, the member read, Pay now, voiding and the erasure hold follow
+it); 13 days 23 hours 59 minutes still waits; the sweep marks 14 days or more,
+reruns change nothing, the limit holds and a row that cannot be changed does not
+stop the others; the record guard; recording the money again, once, also when it
+cleared more than 90 days ago (only the exact credit of an expired transfer);
+the invoice takes a new transfer and shows the expiry only to its member; old
+money for another account or invoice is refused; the duplicate count flags
+expired records of the same money; staff resolve an expired transfer once,
+audited; staff see each expired transfer until it is followed up; the audit
+trail; the privacy export; the grants; and the rollback refusal.
+`scripts/test-foundation-access-matrix.mjs` gives another member an invoice
+whose transfer expired, and checks that only the service role runs the sweep and
+only that member reads the expiry.
 
 ## Individual slots at R69, 12 November 2026
 
@@ -4597,6 +5220,78 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   applied; finished emails: 2; marked skipped: 0", after "already applied;
   finished emails: 2; marked skipped: 0"; production fingerprint after it
   matched the full replay (except the known schema grant difference)
-- `20261117140533_member_notices_in_app.sql`: pending
+- `20261117140533_member_notices_in_app.sql`: applied 2026-11-18 02:40 UTC;
+  owner-approved in the Claude Code session that wrote it (the owner chose to
+  apply it from that session, overriding the AGENTS.md rule for this update
+  only), Supabase connector (`execute_sql`), preflight + fingerprint checked;
+  the update's statement is in the production Postgres log at 02:40:27 UTC; from
+  the reviewed file on `main` (sha256 starting 9618f8c4d8772ea7) after the
+  website release of pull requests #249 and #252 was deployed (d87bed25, then
+  41148cc8); preflight before "member notices in app: update not applied
+  (reviewed bodies; ...); new-kind notices: 0" (1 row, no problem rows), after
+  "already applied; new-kind notices: 0", all four triggers enabled
+- `20261117144001_sample_post_hide_list.sql`: applied 2026-11-18 00:47 UTC; the
+  update's statement is in the production Postgres log at 00:47:48 UTC, before
+  pull request #105 was merged (00:48:09 UTC, 41148cc8); how it was applied was
+  not recorded; the deploy of 41148cc8 (01:27 UTC) reported only
+  20261117140533_member_notices_in_app.sql missing; found applied (its table and
+  both commands exist) and recorded from the Claude Code session on 2026-11-18;
+  production fingerprint after both updates matched the full replay (except the
+  known schema grant difference)
+- `20261118033538_remove_sample_post_hide_list.sql`: applied 2026-11-18 05:46
+  UTC; owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; the update's statement is in the production Postgres log at 05:46:14
+  UTC; from the reviewed file at a0576863 (pull request #258, sha256 starting
+  16aacf5f8668154e) after the website release containing it was deployed
+  (5b4a4b08, 05:38 UTC); preflight (sha256 starting cbccf780) before "remove
+  sample post hide list: update not applied; hidden samples: 0", after "remove
+  sample post hide list: already applied" (no problem rows); production
+  fingerprint after it matched the full replay (except the known schema grant
+  difference)
+- `20261118044440_bank_transfer_expiry.sql`: applied 2026-11-18 07:40 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file at c81018cf (pull request #248, sha256
+  starting 4b69a8fd98fcf666) before the website release containing it was
+  deployed; preflight (sha256 starting 62b861fc) before "bank transfer expiry:
+  update not applied; waiting: 0; waiting 14 days or more: 0; expired: 0", after
+  (07:41:14 UTC) "bank transfer expiry: already applied; waiting: 0; waiting 14
+  days or more: 0; expired: 0" (no problem rows); production fingerprint after
+  it (fingerprint.sql at 93e69753) matched the full replay (except the known
+  schema grant difference)
+- `20261118072601_staff_data_minimisation.sql`: applied 2026-11-18 18:09 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file at cbbeb26c (pull request #264, sha256
+  starting 8e258de44214f5ac) after the expand release (#265) was deployed and
+  before the website release containing it was deployed (#264 merged 18:11 UTC
+  as eb281cf1); preflight (sha256 starting 9d7ffdab) before "staff data
+  minimisation: update not applied; resolved support tickets older than 12
+  months: 0", after "staff data minimisation: already applied; resolved support
+  tickets older than 12 months: 0" (no problem rows); production fingerprint
+  after it (fingerprint.sql at eb281cf1, captured 18:13 UTC) matched the full
+  replay (except the known schema grant difference)
+- `20261118182332_refund_follow_ups.sql`: applied 2026-11-18 21:25 UTC;
+  owner-approved ("Yes, apply and merge"), Supabase SQL editor (browser),
+  preflight + fingerprint checked; from the reviewed file at 5fe2178e (pull
+  request #275, sha256 starting cdb2d9971f492ecd) before the website release
+  containing it was deployed (#275 merged 21:27 UTC as 07418a73); preflight
+  (sha256 starting 2932b94e) before "refund follow-ups: update not applied;
+  waiting for approval: 0; through Ozow not sent: 0; past Ozow's 13 days: 0;
+  while a renewal waits: 0; declined references: 0", after "refund follow-ups:
+  already applied; waiting for approval: 0; through Ozow not sent: 0; past
+  Ozow's 13 days: 0; while a renewal waits: 0; declined references: 0" (no
+  problem rows); production fingerprint after it (fingerprint.sql at 07418a73,
+  captured about 21:29 UTC) matched the full replay (except the known schema
+  grant difference)
+- `20261119025106_package_invoices.sql`: applied 2026-11-19 06:42 UTC;
+  owner-approved ("Yes, apply and merge"), Supabase SQL editor (browser),
+  preflight + fingerprint checked; from the reviewed file at ca11da3a (raw
+  GitHub; pull request #277, sha256 starting 23a41e0dc2fdfa86, merged as
+  88248654); preflight (sha256 starting 0031e9a5) before "package invoices:
+  update not applied; on sale: no; invoice requests: none (table absent);
+  package invoices: 0; package bank transfers: 0", after "package invoices:
+  already applied; on sale: no; invoice requests: 0 (open: 0); package invoices:
+  0; package bank transfers: 0"; production fingerprint after it
+  (fingerprint.sql at ca11da3a, captured about 06:45 UTC) matched the full
+  replay (except the known schema grant difference)
 
 <!-- applied-register:end -->

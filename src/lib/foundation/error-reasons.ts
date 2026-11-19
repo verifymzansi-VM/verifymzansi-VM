@@ -65,6 +65,7 @@ export const FOUNDATION_ERROR_REASONS = {
   invoice_account_unavailable: ["PT404"],
   invoice_amount_above_limit: ["PT413"],
   invoice_amount_mismatch: ["PT428"],
+  invoice_approver_same: ["42501"],
   invoice_attempts_exhausted: ["PT429"],
   invoice_billing_invalid: ["22023"],
   invoice_billing_required: ["PT409"],
@@ -78,6 +79,7 @@ export const FOUNDATION_ERROR_REASONS = {
   invoice_payment_invalid: ["22023"],
   invoice_payment_open: ["PT409"],
   invoice_plan_unavailable: ["PT409"],
+  invoice_preparer_inactive: ["PT409"],
   invoice_request_conflict: ["PT409"],
   invoice_revision_changed: ["PT409"],
   invoice_transfer_required: ["PT409"],
@@ -98,6 +100,7 @@ export const FOUNDATION_ERROR_REASONS = {
   organisation_invalid: ["22023"],
   organisation_slug_taken: ["PT409"],
   organisation_unavailable: ["PT404"],
+  outside_refund_window: ["PT409"],
   own_post: ["22023"],
   ozow_reference_invalid: ["22023"],
   ozow_reference_required: ["22023"],
@@ -107,7 +110,12 @@ export const FOUNDATION_ERROR_REASONS = {
   ozow_refund_id_used: ["PT409"],
   ozow_refund_mismatch: ["PT409"],
   package_active: ["PT409"],
+  package_invoice_request_closed: ["PT409"],
+  package_invoice_request_open: ["PT409"],
+  package_invoice_request_unavailable: ["PT404"],
+  package_invoice_requests_limit: ["PT429"],
   package_invoice_required: ["PT413"],
+  package_invoice_unpaid: ["PT409"],
   package_slots_invalid: ["22023"],
   packages_not_on_sale: ["PT403"],
   partner_account_unavailable: ["PT409"],
@@ -152,7 +160,9 @@ export const FOUNDATION_ERROR_REASONS = {
   refund_reference_invalid: ["22023"],
   refund_reference_required: ["22023"],
   refund_reference_used: ["PT409"],
+  renewal_already_started: ["PT409"],
   renewal_not_open: ["PT409"],
+  renewal_queued: ["PT409"],
   request_unavailable: ["PT404"],
   second_person_required: ["42501"],
   self_partner: ["42501"],
@@ -177,9 +187,13 @@ export const FOUNDATION_ERROR_REASONS = {
   staff_review_required: ["42501"],
   staff_same_identity: ["42501"],
   staff_visibility_hold: ["PT423"],
+  support_ticket_archived: ["PT409"],
   transfer_confirmer_same: ["42501"],
+  transfer_not_expired: ["PT409"],
   transfer_not_waiting: ["PT409"],
   transfer_recorder_inactive: ["PT409"],
+  transfer_resolved: ["PT409"],
+  transfer_resolver_same: ["42501"],
   verification_required: ["42501", "PT409"],
 } as const satisfies Record<string, readonly string[]>;
 // </database-reasons>
@@ -218,7 +232,22 @@ export const STAFF_SECOND_FACTOR_MESSAGES = [
   "verified authenticator app required",
 ] as const;
 
-export type FoundationErrorReason = keyof typeof FOUNDATION_ERROR_REASONS;
+/**
+ * Reasons a database update that is not applied yet will raise (expand, then
+ * contract): the website that understands them deploys first, so the live
+ * site never meets a reason it cannot word. They are matched like the
+ * generated list. Once the update is applied and the generated list is
+ * regenerated, the check fails until the reason is removed here, so each
+ * entry lives only as long as its update is pending. `added` is the date the
+ * entry was written (YYYY-MM-DD): 30 days later, if the database still does
+ * not raise it, the check fails too (remove the entry or ship the update).
+ */
+export const FOUNDATION_UPCOMING_ERROR_REASONS = {
+  // None pending.
+} as const satisfies Record<string, { codes: readonly string[]; added: string }>;
+
+export type FoundationErrorReason =
+  keyof typeof FOUNDATION_ERROR_REASONS | keyof typeof FOUNDATION_UPCOMING_ERROR_REASONS;
 type DatabaseError =
   { code?: string | null; details?: string | null; message?: string | null } | null | undefined;
 
@@ -230,7 +259,9 @@ type DatabaseError =
  */
 function databaseReason(error: DatabaseError): FoundationErrorReason | null {
   const details = error?.details;
-  return typeof details === "string" && Object.hasOwn(FOUNDATION_ERROR_REASONS, details)
+  return typeof details === "string" &&
+    (Object.hasOwn(FOUNDATION_ERROR_REASONS, details) ||
+      Object.hasOwn(FOUNDATION_UPCOMING_ERROR_REASONS, details))
     ? (details as FoundationErrorReason)
     : null;
 }

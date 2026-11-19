@@ -26,7 +26,9 @@ import { BILLING_EMAIL } from "../billing/slot-checkout";
 const INVOICE_NUMBER_PATTERN = /^VM-\d{4}-\d{6}$/;
 const invoiceNumber = z.string().regex(INVOICE_NUMBER_PATTERN);
 const instant = z.iso.datetime({ offset: true });
-const cents = z.number().int().positive().max(5_000_000);
+// An invoice total: Individual slots up to R50 000, a Multi-listing package up to
+// 250 slots for 180 days (R150 000, update 20261119025106).
+const cents = z.number().int().positive().max(15_000_000);
 const paymentStatus = z.enum([
   "pending",
   "complete",
@@ -60,7 +62,8 @@ export const customerInvoiceSchema = z.strictObject({
     .nullable(),
   revision: z.number().int().positive(),
   term_days: z.union([z.literal(30), z.literal(90), z.literal(180)]),
-  slots: z.number().int().min(1).max(25),
+  // Individual slots 1 to 25; a package 5 to 250.
+  slots: z.number().int().min(1).max(250),
   unit_price_cents: cents,
   total_cents: cents,
   description: z.string().min(3).max(200),
@@ -196,20 +199,46 @@ const MEMBER_REFUSALS: ReadonlyMap<
     "package_active",
     [
       409,
-      "While your Multi-listing package runs, new posts use its slots: Individual slots cannot be bought until its last 7 days.",
+      "While your Multi-listing package runs, new posts use its slots: Individual slots cannot be bought until its last 7 days, and a second package cannot start.",
     ],
   ],
+  // Multi-listing package invoices (update 20261119025106).
+  ["packages_not_on_sale", [403, "Multi-listing packages are not on sale yet."]],
 ]);
 
-type RpcResult = PromiseLike<{
+export type RpcResult = PromiseLike<{
   data: unknown;
   error: { code?: string; message?: string; details?: string } | null;
 }>;
 
-async function settleMemberCommand<T>(result: RpcResult, schema: z.ZodType<T>): Promise<T> {
+/** How a member invoice command's refusals are worded: by database reason,
+ * by error code (a refusal without a reason), and the outage message. */
+export interface InvoiceMemberWording {
+  reasons: ReadonlyMap<FoundationErrorReason, readonly [FoundationInvoiceError["status"], string]>;
+  codes?: Readonly<Record<string, readonly [FoundationInvoiceError["status"], string]>>;
+  unavailable: string;
+}
+
+const INVOICE_WORDING: InvoiceMemberWording = {
+  reasons: MEMBER_REFUSALS,
+  unavailable: "The invoice could not be loaded. Please try again in a few minutes.",
+};
+
+function settleMemberCommand<T>(result: RpcResult, schema: z.ZodType<T>): Promise<T> {
+  return settleInvoiceMemberCommand(result, schema, INVOICE_WORDING);
+}
+
+/** Settles a member invoice command: its refusals in the member's words, its
+ * answer checked against `schema` (also for package invoices). */
+export async function settleInvoiceMemberCommand<T>(
+  result: RpcResult,
+  schema: z.ZodType<T>,
+  wording: InvoiceMemberWording
+): Promise<T> {
   const { data, error } = await result;
   if (error) {
-    const refusal = lookupDatabaseReason(MEMBER_REFUSALS, error);
+    const refusal =
+      lookupDatabaseReason(wording.reasons, error) ?? wording.codes?.[error.code ?? ""];
     if (refusal) throw new FoundationInvoiceError(refusal[0], refusal[1], "invoice_refused");
     if (
       hasDatabaseMessage(error, "liveSessionRequired") ||
@@ -222,19 +251,13 @@ async function settleMemberCommand<T>(result: RpcResult, schema: z.ZodType<T>): 
       );
     throw new FoundationInvoiceError(
       error.code === "22023" ? 422 : 503,
-      error.code === "22023"
-        ? "Check the details and try again."
-        : "The invoice could not be loaded. Please try again in a few minutes.",
+      error.code === "22023" ? "Check the details and try again." : wording.unavailable,
       error.code === "22023" ? "invoice_invalid" : "invoice_unavailable"
     );
   }
   const parsed = schema.safeParse(data);
   if (!parsed.success)
-    throw new FoundationInvoiceError(
-      503,
-      "The invoice could not be loaded. Please try again in a few minutes.",
-      "invoice_response_invalid"
-    );
+    throw new FoundationInvoiceError(503, wording.unavailable, "invoice_response_invalid");
   return parsed.data;
 }
 
@@ -264,6 +287,31 @@ export async function readMyInvoice(
     if (error instanceof FoundationInvoiceError && error.status === 404) return null;
     throw error;
   }
+}
+
+/**
+ * When the latest bank transfer recorded to the member's own unpaid invoice
+ * expired (nobody confirmed it within 14 days), or null. The invoice can then
+ * be paid again (20261118044440_bank_transfer_expiry.sql); against a database
+ * without that update, null.
+ */
+export async function readMyInvoiceTransferExpiry(
+  api: FoundationAuthenticatedApi,
+  number: string
+): Promise<string | null> {
+  const value = number.trim().toUpperCase();
+  if (!INVOICE_NUMBER_PATTERN.test(value)) return null;
+  const result = await api.rpc(
+    "get_my_invoice_transfer_expiry",
+    { p_invoice_number: value },
+    { get: false }
+  );
+  if (result.error?.code === "PGRST202" || result.error?.code === "42883") return null;
+  const read = await settleMemberCommand(
+    Promise.resolve(result),
+    z.strictObject({ invoice_number: z.literal(value), transfer_expired_at: instant.nullable() })
+  );
+  return read.transfer_expired_at;
 }
 
 export const invoiceBillingInput = z.strictObject({
@@ -307,7 +355,7 @@ const invoiceQuote = z.strictObject({
   amount_cents: z.string().regex(/^[0-9]{1,12}$/),
   currency: z.literal("ZAR"),
   status: z.literal("pending"),
-  slots: z.number().int().min(1).max(25),
+  slots: z.number().int().min(1).max(250),
   reused: z.boolean(),
 });
 
@@ -391,9 +439,11 @@ const STAFF_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new
     "package_active",
     [
       409,
-      "The person's Multi-listing package runs: Individual slots cannot be sold until its last 7 days.",
+      "The person's Multi-listing package runs: Individual slots cannot be sold until its last 7 days, and a second package cannot start.",
     ],
   ],
+  // Multi-listing package invoices (update 20261119025106).
+  ["packages_not_on_sale", [409, "Multi-listing packages are not on sale."]],
   [
     "invoice_vat_status_changed",
     [409, "The VAT registration setting changed. Invoices need updating before one is issued."],
@@ -430,7 +480,10 @@ const STAFF_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new
   ],
   [
     "cleared_date_invalid",
-    [422, "Enter the date the money cleared: today or in the last 90 days."],
+    [
+      422,
+      "Enter the date the money cleared: today or in the last 90 days, or an earlier date only to record again the money of an expired transfer (same reference, amount and date).",
+    ],
   ],
   [
     "cooling_off_waiver_required",

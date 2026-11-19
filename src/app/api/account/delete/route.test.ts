@@ -8,6 +8,7 @@ import { foundationLatestSignIn } from "@/lib/foundation/sign-in-claims";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import type * as HiddenFeatures from "@/lib/hidden-features";
 
 // Through the real owner route (origin, CSRF, limits, session), with only the
 // session context, the limiter and the database call replaced.
@@ -29,6 +30,15 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => {
     throw new Error("Retired backend used");
   }),
+}));
+// The route is hidden until it works (src/lib/hidden-features.ts); these
+// tests switch it on to keep the code behind the switch checked.
+const hiddenFeature = vi.hoisted(() => ({ shown: true }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_ACCOUNT_DELETION() {
+    return hiddenFeature.shown;
+  },
 }));
 
 const account = "22222222-2222-4222-8222-222222222222";
@@ -82,7 +92,19 @@ beforeEach(() => {
       }) as unknown as ReturnType<typeof createFoundationRouteContext>
   );
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  hiddenFeature.shown = true;
+  vi.unstubAllEnvs();
+});
+
+it("answers 404 while account deletion is hidden, before any check or database call", async () => {
+  hiddenFeature.shown = false;
+  const response = await POST(request(confirm));
+  expect(response.status).toBe(404);
+  expect(checkRateLimit).not.toHaveBeenCalled();
+  expect(createFoundationRouteContext).not.toHaveBeenCalled();
+  expect(rpc).not.toHaveBeenCalled();
+});
 
 it("refuses a request from another site or without the CSRF token, before any database call", async () => {
   expect((await POST(request(confirm, { origin: "https://attacker.example" }))).status).toBe(403);
@@ -134,6 +156,27 @@ it("closes the account of a fresh password sign-in and reports the planned dates
   expect(rpc).toHaveBeenCalledWith("close_my_account", {}, { get: false });
   expect(createAdminClient).not.toHaveBeenCalled();
   expect(createClient).not.toHaveBeenCalled();
+});
+
+it("asks for a fresh sign-in when the database refuses the session's sign-in", async () => {
+  // A Google sign-in the route accepts, refused by the database's own check
+  // (internal.account_closing_actor, with or without the narrower rule).
+  amr = [{ method: "oauth", timestamp: now() - 60 }];
+  rpc.mockResolvedValueOnce({
+    data: null,
+    error: {
+      code: "42501",
+      message: "sign in again to close the account",
+      details: "recent_sign_in_required",
+    },
+  });
+  const response = await POST(request(confirm));
+  expect(response.status).toBe(401);
+  expect(await response.json()).toMatchObject({
+    reason: "recent_sign_in_required",
+    code: "reauthentication_required",
+  });
+  expect(rpc).toHaveBeenCalledTimes(1);
 });
 
 it("says the outcome is unknown when the answer is lost after sending", async () => {
