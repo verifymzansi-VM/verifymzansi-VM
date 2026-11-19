@@ -161,9 +161,9 @@ jobs:
     runs-on: ubuntu-latest
     # The behaviour suites, each in its own replayed database, took 12 to 13
     # of this job's 14 minutes one after another (19 November 2026). They now
-    # run up to 4 at once (scripts/test-foundation-suites.mjs). 30 minutes
-    # leaves room for a slow run and for the image pull's worst case (about
-    # 8.5 minutes).
+    # run up to 4 at once (scripts/test-foundation-suites.mjs): on a 4-core
+    # machine 476 s instead of 1446 s. 30 minutes leaves room for a slow run
+    # and for the image pull's worst case (about 8.5 minutes).
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
