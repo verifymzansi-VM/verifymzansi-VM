@@ -1,5 +1,4 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
-import { SHOWROOM_PROVINCE_ALL, SHOWROOM_PROVINCE_COOKIE } from "@/lib/showroom/province-cookie";
 
 /**
  * Picture checks for the frontend the owner chose (commit 0b562f42, restored
@@ -131,12 +130,6 @@ async function openSettledScreen(
   viewport: { width: number; height: number }
 ) {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const url = String(test.info().project.use.baseURL);
-  await page.context().addCookies([
-    // The showroom otherwise guesses the visitor's province from the network,
-    // so a picture taken in South Africa would differ from one taken in CI.
-    { name: SHOWROOM_PROVINCE_COOKIE, value: SHOWROOM_PROVINCE_ALL, url },
-  ]);
   await page.goto(screen.path, { waitUntil: "load" });
   await page.locator(screen.readySelector).first().waitFor({ state: "visible" });
   if (screen.settled) {

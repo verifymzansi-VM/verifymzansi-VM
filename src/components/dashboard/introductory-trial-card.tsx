@@ -1,11 +1,8 @@
 "use client";
-import { useState } from "react";
 import Link from "next/link";
 import { Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatSaLongDate } from "@/lib/utils/format";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { SHOW_TRIAL_PLAN_CHANGES } from "@/lib/hidden-features";
 
 type Claim = {
   id: string;
@@ -22,26 +19,6 @@ const lengths = { short: 7, long: 30 };
  * (null when there is none to show); the card reads nothing itself. */
 export function IntroductoryTrialCard({ foundationClaim }: { foundationClaim: Claim | null }) {
   const claim = foundationClaim;
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-  async function update(action: "renew" | "choose_seven") {
-    if (!claim) return;
-    setBusy(true);
-    try {
-      const res = await fetch("/api/trials", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ claimId: claim.id, action }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Unable to update trial");
-      window.location.reload();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
   if (!claim || claim.converted_at || (!claim.activated_at && claim.released_at)) return null;
   return (
     <section
@@ -76,30 +53,6 @@ export function IntroductoryTrialCard({ foundationClaim }: { foundationClaim: Cl
       </div>
 
       <div className="mt-4 flex flex-col gap-2">
-        {/* Renewing and switching are hidden until they work (src/lib/hidden-features.ts). */}
-        {SHOW_TRIAL_PLAN_CHANGES && (
-          <Button
-            disabled={busy}
-            onClick={() => update("renew")}
-            variant="trust-verified"
-            className="h-11 rounded-full"
-          >
-            Renew using my paid plan
-          </Button>
-        )}
-        {SHOW_TRIAL_PLAN_CHANGES &&
-          !claim.admin_granted &&
-          !claim.activated_at &&
-          claim.duration_days === 30 && (
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => update("choose_seven")}
-              className="h-11 rounded-full"
-            >
-              Switch pending post to {lengths.short} days
-            </Button>
-          )}
         <Button asChild variant="outline" className="h-11 rounded-full">
           <Link href="/billing">Choose a paid plan</Link>
         </Button>
@@ -107,11 +60,6 @@ export function IntroductoryTrialCard({ foundationClaim }: { foundationClaim: Cl
           <Link href="/dashboard/listings">View my posts and results</Link>
         </Button>
       </div>
-      {message && (
-        <p role="alert" className="mt-3 text-sm text-destructive">
-          {message}
-        </p>
-      )}
     </section>
   );
 }

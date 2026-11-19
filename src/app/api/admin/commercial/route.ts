@@ -46,93 +46,8 @@ const log = createLogger("AdminCommercial");
 const reason = z.string().trim().min(5).max(500);
 const uuid = z.uuid();
 const values = z.record(z.string(), z.unknown()).default({});
-const programmeType = z.enum([
-  "STRATEGIC_INDIVIDUAL",
-  "FOUNDING_COMMERCIAL_PARTNER",
-  "ENTERPRISE_CUSTOM",
-]);
-const trialKind = z.enum([
-  "NONE",
-  "PUBLIC_7_DAY",
-  "PUBLIC_30_DAY",
-  "STRATEGIC_INDIVIDUAL",
-  "FOUNDING_COMMERCIAL_PARTNER",
-  "FOUNDING_ORGANISATION",
-  "SPONSORED_ORGANISATION_MEMBER",
-]);
 
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("settings.update"), key: z.string(), value: values, reason }),
-  z.object({
-    action: z.literal("plan.update"),
-    planId: uuid,
-    values: z
-      .object({
-        priceCents: z.number().int().min(100).max(100_000_000).optional(),
-        compareAtCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
-        slotCapacity: z.number().int().min(1).max(100_000).optional(),
-        durationDays: z.number().int().min(1).max(1100).optional(),
-        monthlyActivationLimit: z.number().int().min(1).max(100_000).optional(),
-        promoLabel: z.string().max(30).optional(),
-        active: z.boolean().optional(),
-        public: z.boolean().optional(),
-      })
-      .strict(),
-    reason,
-  }),
-  z.object({
-    action: z.literal("programme.grant"),
-    userId: uuid,
-    type: programmeType,
-    values: z
-      .object({
-        title: z.string().trim().max(160).optional(),
-        durationDays: z.number().int().min(7).max(1100).optional(),
-        slotCapacity: z.number().int().min(1).max(100_000).optional(),
-        activationLimitTotal: z.number().int().min(1).max(100_000).optional(),
-        activationsPerPeriod: z.number().int().min(1).max(100_000).optional(),
-        adminLimit: z.number().int().min(1).max(50).optional(),
-        priceCents: z.number().int().min(0).max(100_000_000).optional(),
-        area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]).optional(),
-        notes: z.string().max(2000).optional(),
-        startsAt: z.iso.datetime().optional(),
-      })
-      .strict(),
-    override: z.boolean().default(false),
-    reason,
-  }),
-  z.object({
-    action: z.literal("contract.manage"),
-    contractId: uuid,
-    operation: z.enum([
-      "extend",
-      "end",
-      "limits",
-      "notes",
-      "add_member",
-      "remove_member",
-      "mark_paid",
-    ]),
-    values,
-    reason,
-  }),
-  z.object({ action: z.literal("trial.override"), userId: uuid, kind: trialKind, reason }),
-  z.object({
-    action: z.literal("event.allowance"),
-    userId: uuid,
-    values: z
-      .object({
-        maxActive: z.number().int().min(1).max(10000).optional(),
-        maxCreatedPer30Days: z.number().int().min(1).max(100000).optional(),
-        notes: z.string().max(1000).optional(),
-        remove: z.boolean().optional(),
-      })
-      .strict()
-      .refine((v) => v.remove || (v.maxActive && v.maxCreatedPer30Days), {
-        message: "Set both limits or remove the allowance",
-      }),
-    reason,
-  }),
   // A refund or chargeback names Ozow's reference and a reason code; an empty
   // reference reaches the command, which refuses it with a plain message.
   z.object({
@@ -269,29 +184,13 @@ const schema = z.discriminatedUnion("action", [
     reason,
   }),
   z.object({ action: z.literal("organisation.revoke_invite"), inviteId: uuid, reason }),
-  z.object({
-    action: z.literal("trial_extension.offer"),
-    targetType: z.enum(["organisation_trial", "founding_contract", "intro_trial_claim"]),
-    targetId: uuid,
-    days: z.number().int().min(1).max(30),
-    kind: z.enum(["consent", "correction"]).default("consent"),
-    reason,
-  }),
-  z.object({
-    action: z.literal("trial_extension.decide"),
-    offerId: uuid,
-    approve: z.boolean(),
-    reason,
-  }),
-  z.object({ action: z.literal("trial_extension.withdraw"), offerId: uuid, reason }),
-  z.object({ action: z.literal("trial_extension.resend"), offerId: uuid }),
 ]);
 
 /**
  * POST /api/admin/commercial
- * Every commercial change (settings, prices, programmes, contracts, trial
- * overrides, refunds, partners, organisations) runs in a SECURITY DEFINER RPC
- * that re-checks the actor's role and writes the audit row atomically.
+ * Every commercial change (payments, refunds, invoices, partners,
+ * organisations) runs in a SECURITY DEFINER RPC that re-checks the actor's
+ * role and writes the audit row atomically.
  */
 export async function POST(request: NextRequest) {
   return handleFoundationOwnerRoute({

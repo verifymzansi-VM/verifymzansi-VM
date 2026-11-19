@@ -78,10 +78,9 @@ describe("admin navigation registry", () => {
     expect(hrefs).not.toContain("/admin/governance/escalations");
     expect(hrefs).not.toContain("/admin/dsar");
     expect(hrefs).not.toContain("/admin/operations");
-    expect(hrefs).not.toContain("/admin/intelligence/users");
   });
 
-  it("gives governors decisions, compliance and oversight, but not analytics or flags", () => {
+  it("gives governors decisions, compliance and oversight, but not payments or flags", () => {
     const hrefs = navFor("governance_controller").flatMap((s) => s.items.map((i) => i.href));
     for (const href of [
       "/admin/governance/escalations",
@@ -93,7 +92,6 @@ describe("admin navigation registry", () => {
     }
     expect(hrefs).not.toContain("/admin/feature-flags");
     expect(hrefs).not.toContain("/admin/payments");
-    expect(hrefs).not.toContain("/admin/intelligence/revenue");
   });
 
   it("gives admins every page that is not hidden", () => {
@@ -111,21 +109,7 @@ describe("admin navigation registry", () => {
     const hrefs = navFor("admin", { kyc_evidence_desk: true }).flatMap((s) =>
       s.items.map((i) => i.href)
     );
-    for (const href of [
-      "/admin/commercial",
-      "/admin/trials",
-      "/admin/programmes",
-      "/admin/operations",
-      "/admin/intelligence/users",
-      "/admin/intelligence/verification",
-      "/admin/intelligence/revenue",
-      "/admin/intelligence/marketplace",
-      "/admin/intelligence/trends",
-      "/admin/intelligence/operations",
-    ]) {
-      expect(hrefs).not.toContain(href);
-    }
-    expect(navFor("admin").map((section) => section.id)).not.toContain("intelligence");
+    expect(hrefs).not.toContain("/admin/operations");
   });
 
   it("uses native assignments instead of expanding the admin presentation role", () => {
@@ -154,7 +138,7 @@ describe("admin navigation registry", () => {
     expect(hrefs).not.toContain("/admin/verification/evidence");
   });
 
-  it("shows native payment access without enabling unrelated intelligence pages", () => {
+  it("shows native payment access without enabling unrelated pages", () => {
     const hrefs = navFor("admin", {}, ["payments:view"]).flatMap((section) =>
       section.items.map((item) => item.href)
     );

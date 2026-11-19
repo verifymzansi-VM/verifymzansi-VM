@@ -36,11 +36,7 @@ import {
   type TourismKind,
 } from "@/lib/feed/browse";
 import type { FeedVertical } from "@/lib/feed/types";
-import {
-  SHOWROOM_PROVINCE_ALL,
-  SHOWROOM_PROVINCE_COOKIE,
-  SHOWROOM_PROVINCE_MAX_AGE_SECONDS,
-} from "@/lib/showroom/province-cookie";
+import { SHOWROOM_PROVINCE_ALL } from "@/lib/showroom/province-cookie";
 import { cn } from "@/lib/utils";
 
 const SECTIONS: { vertical: FeedVertical; short: string; icon: typeof ShoppingBag }[] = [
@@ -63,16 +59,6 @@ function ToolLabel({ children }: { children: ReactNode }) {
 
 const FIELD =
   "h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
-/** The site-wide "show my province first" preference, kept in step with the showrooms. */
-export function rememberProvince(province: string | null) {
-  try {
-    const secure = window.location.protocol === "https:" ? "; secure" : "";
-    document.cookie = `${SHOWROOM_PROVINCE_COOKIE}=${encodeURIComponent(province ?? SHOWROOM_PROVINCE_ALL)}; path=/; max-age=${SHOWROOM_PROVINCE_MAX_AGE_SECONDS}; samesite=lax${secure}`;
-  } catch {
-    // A blocked cookie only means the choice is not remembered.
-  }
-}
 
 export function FilterSheet({
   open,
@@ -442,7 +428,6 @@ export function ImmersiveTopBar({
               onChange={(event) => {
                 const province =
                   event.target.value === SHOWROOM_PROVINCE_ALL ? null : event.target.value;
-                rememberProvince(province);
                 onBrowse({ ...current, province }, "province");
               }}
             >

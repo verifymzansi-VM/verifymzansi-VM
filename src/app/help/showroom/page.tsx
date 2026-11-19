@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Eye, MapPin, PlayCircle, Shuffle, Sparkles, UserX } from "lucide-react";
+import { Eye, PlayCircle, Shuffle, Sparkles, UserX } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
@@ -27,12 +27,6 @@ const ORDER_RULES = [
     name: "New posts get a head start",
     description:
       "For its first 72 hours, a new post is moved forward so people see it while it is fresh.",
-  },
-  {
-    icon: MapPin,
-    name: "Local first, never local only",
-    description:
-      "Visitors see posts from their own province first, mixed with posts from the rest of South Africa, so a post in a small province still reaches the big cities.",
   },
   {
     icon: PlayCircle,

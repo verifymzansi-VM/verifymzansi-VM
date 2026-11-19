@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
  * PATCH /api/communications/preferences
  * Body: one or more of { marketing_email, marketing_sms, analytics,
  * third_party_sharing } as booleans. Each change is recorded with the time
- * and the wording the member saw. While analytics and third_party_sharing are
- * hidden (SHOW_DATA_USE_CHOICES), they can only be turned off.
+ * and the wording the member saw. analytics and third_party_sharing are no
+ * longer offered: they can only be turned off.
  */
 export async function PATCH(request: NextRequest) {
   return handleRestoredCommunicationPreferences(request, "PATCH");

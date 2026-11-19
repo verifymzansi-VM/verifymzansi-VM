@@ -16,12 +16,7 @@ function pageWording() {
 
 it("records a new wording version whenever a switch's wording changes", () => {
   const wording = pageWording();
-  expect(wording.map(([label]) => label)).toEqual([
-    "Marketing email",
-    "Marketing SMS",
-    "Analytics",
-    "Third-party sharing",
-  ]);
+  expect(wording.map(([label]) => label)).toEqual(["Marketing email", "Marketing SMS"]);
   const digest = createHash("sha256").update(JSON.stringify(wording)).digest("base64url");
   // When this fails, the page's wording changed: give the choices a new
   // COMMUNICATION_WORDING_VERSION and record this digest beside it.
