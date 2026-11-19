@@ -17,10 +17,15 @@ name: E2E launch config
 # The build switch is refused for any build other than the local copy
 # (scripts/lib/launch-config-build.cjs, next.config.js and the Cloudflare
 # preflight), so production keeps today's values.
+#
+# It runs about as long as one e2e-foundation project and stays red until the
+# known launch failures are fixed, so it does not run on every push to a pull
+# request: only when a pull request is marked ready for review, when the
+# run-full-ci label is added, on main and by hand.
 on:
   pull_request:
     branches: [main]
-    types: [opened, reopened, synchronize, ready_for_review]
+    types: [ready_for_review, labeled]
   push:
     branches: [main]
   workflow_dispatch:
@@ -28,16 +33,20 @@ on:
 permissions:
   contents: read
 
-# A newer push to a pull request cancels its older run; main runs never cancel.
-concurrency:
-  group: e2e-launch-config-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.sha) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
   launch-config:
     name: launch-config (advisory)
-    # Draft pull requests wait until they are marked ready for review.
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    # A labelled event runs it only for the run-full-ci label.
+    if: >-
+      ${{ github.event_name != 'pull_request' ||
+      github.event.action == 'ready_for_review' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'run-full-ci') }}
+    # Job-level, so a skipped run (another label) never cancels a real one. A
+    # newer run on the same pull request cancels its older run; main runs never
+    # cancel.
+    concurrency:
+      group: e2e-launch-config-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.sha) }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 45

@@ -21,6 +21,10 @@ import {
 // Nothing here changes data, apart from the packages sales switch, which the
 // launch configuration turns on in the copy (and back off at the end).
 //
+// The pre-launch pop-up is not checked here: browser-test builds never show it
+// (PLAYWRIGHT_TEST_MODE, src/app/layout.tsx), so a browser check could not
+// fail. Its launch value (off) is covered by src/lib/launch-config.test.ts.
+//
 // This lane is advisory: it reports what launch day would break. A failure
 // here is a finding for the launch checklist, not a reason to weaken a check.
 
@@ -51,15 +55,6 @@ type Page_ = {
 };
 
 const PAGES: Page_[] = [
-  {
-    // The home page's sponsor call to action (SHOW_SPONSOR_OFFER) shows only
-    // when a sponsor exists, and the copy has none; /sponsors and /advertise
-    // carry the same switch.
-    feature: "PRELAUNCH_BANNER_ENABLED (off at launch)",
-    path: "/",
-    viewer: "visitor",
-    heading: /.+/,
-  },
   {
     feature: "SHOW_PAID_ADDONS, SHOW_SPONSOR_OFFER, PACKAGES_ON_SALE",
     path: "/advertise",
@@ -200,9 +195,10 @@ function seededPostId(title: string) {
   return id;
 }
 
-/** The test copy serves Realtime over plain ws:// on loopback, which the
- * site's Content Security Policy (wss:// only) blocks on every signed-in page,
- * with switches on or off. Production's Realtime address is wss://. Only that
+/** The test copy serves Realtime over an unencrypted loopback WebSocket, which
+ * the site's Content Security Policy (encrypted WebSockets only) blocks on every
+ * signed-in page, with switches on or off. Production's Realtime address is
+ * encrypted. Only that
  * exact message is set aside; it is listed in the launch-config pull request. */
 const LOCAL_REALTIME_CSP =
   /^Connecting to 'ws:\/\/127\.0\.0\.1:\d+\/realtime\/v1\/websocket\?[^']*' violates the following Content Security Policy directive/;
@@ -277,10 +273,6 @@ test.describe("launch configuration: pages behind a switch", () => {
       expect
         .soft(new URL(page.url()).pathname, "not sent elsewhere (hidden pages redirect)")
         .toBe(path);
-      // The pre-launch pop-up is off at launch.
-      await expect
-        .soft(page.getByRole("dialog", { name: /launching soon/i }), "no pre-launch pop-up")
-        .toHaveCount(0);
       if (entry.open) await entry.open(page).catch(() => {});
       for (const shown of entry.shows ?? [])
         await expect
