@@ -236,7 +236,7 @@ describe("the hidden multi-listing nudge", () => {
     const text = container.textContent ?? "";
 
     expect(text).toMatch(
-      /A Multi-listing package keeps 5 or more posts live at the same time for 30, 90 or 180 days, at R100 per slot per 30 days\./
+      /A Multi-listing package keeps 5 to 250 posts live at the same time for 30, 90 or 180 days, at R100 per slot per 30 days\./
     );
     expect(text).not.toMatch(
       /10 to 100|lower price|administrators|team|later|renew|invoice|quote/i

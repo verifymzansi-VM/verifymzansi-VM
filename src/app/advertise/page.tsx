@@ -47,6 +47,7 @@ import { PLAN_SALES_PAUSED_NOTE } from "@/lib/billing/plan-sales";
 import { BILLING_EMAIL } from "@/lib/billing/slot-checkout";
 import {
   PACKAGE_MAX_ONLINE_SLOTS,
+  PACKAGE_MAX_SLOTS,
   PACKAGE_MIN_SLOTS,
   PACKAGE_POSTS_PER_SLOT_PER_30_DAYS,
   PACKAGE_QUICK_SIZES,
@@ -490,7 +491,7 @@ export default async function AdvertisePage() {
         label: `${slots} slots`,
         cells: PACKAGE_TERMS.map((days) => formatPlanPrice(packageTotalCents(slots, days))),
       })),
-      footnote: `${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days, any number from ${PACKAGE_MIN_SLOTS}. Does not renew automatically.`,
+      footnote: `${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days, any number from ${PACKAGE_MIN_SLOTS} to ${PACKAGE_MAX_SLOTS}. Does not renew automatically.`,
     },
     programmes: PACKAGES_ON_SALE
       ? {

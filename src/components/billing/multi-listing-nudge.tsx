@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Building2 } from "lucide-react";
 import { formatPlanPrice, PACKAGES_ON_SALE } from "@/lib/constants/pricing";
 import {
+  PACKAGE_MAX_SLOTS,
   PACKAGE_MIN_SLOTS,
   PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS,
 } from "@/lib/billing/slot-packages";
@@ -46,7 +47,7 @@ export function MultiListingNudge({
           <span className="block font-semibold text-foreground">
             {strong ? "Need more posts live at once?" : "Listing lots of stock?"}
           </span>
-          {`A Multi-listing package keeps ${PACKAGE_MIN_SLOTS} or more posts live at the same time for 30, 90 or 180 days, at ${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days. For dealers, agencies, shops and landlords.`}
+          {`A Multi-listing package keeps ${PACKAGE_MIN_SLOTS} to ${PACKAGE_MAX_SLOTS} posts live at the same time for 30, 90 or 180 days, at ${formatPlanPrice(PACKAGE_SLOT_PRICE_CENTS_PER_30_DAYS)} per slot per 30 days. For dealers, agencies, shops and landlords.`}
         </p>
       </div>
       <Link
