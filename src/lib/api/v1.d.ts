@@ -784,22 +784,22 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
-      /** @description CSRF validation or email confirmation required */
+      /** @description CSRF validation failed, or the account has no access */
       403: {
         headers: {
           [name: string]: unknown;
         };
         content?: never;
       };
-      /** @description Location flow disabled */
-      404: {
+      /** @description Too many detection attempts; manual submission remains available. The shared per-client limit is the bulk control; the per-account cap of 10 is counted per Worker instance only */
+      429: {
         headers: {
           [name: string]: unknown;
         };
         content?: never;
       };
-      /** @description Detection cap reached; manual submission remains available */
-      429: {
+      /** @description Rate limit protection, the session check or the account check is unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };

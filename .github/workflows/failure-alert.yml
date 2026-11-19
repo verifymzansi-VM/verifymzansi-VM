@@ -85,17 +85,32 @@ jobs:
           jobs_url="repos/$GH_REPO/actions/runs/$RUN_ID/attempts/$RUN_ATTEMPT/jobs?per_page=100"
 
           # A deploy that stopped only because main moved on while it waited or
-          # ran is not a fault: the deploy of the newer main follows it. The
+          # ran is not a fault when the newer main has its own release under
+          # way. Deploy marks this case by failing only its "Reject stale
+          # deployment sources ..." or "Recheck main immediately before ..."
+          # steps (matched by prefix: GitHub masks the word "production" in
+          # step names as "***"). The alert stays quiet only when, in addition,
+          # main has moved past this commit and the newest main commit has a
+          # Deploy run started by its CI run (not a manual run, which may be
+          # staging only or an old deploy of a commit main was reset to) that
+          # is not skipped or cancelled, or a CI push run that
+          # is still going or passed (its Deploy run follows; a failed CI run
+          # alerts by itself). Any other failed step, a run that cannot be
+          # read, or a newer main with nothing on the way still alerts. The
           # "Main deployed" check alerts if main is still not live hours later.
-          # Any other failed step, or an unreadable run, still alerts.
           if [ "$WORKFLOW" = "Deploy" ] && [ "$CONCLUSION" = "failure" ]; then
             failed="$(gh api "$jobs_url" \
               --jq '.jobs[] | select(.conclusion == "failure") | if ([.steps[]? | select(.conclusion == "failure")] | length) == 0 then "job \(.name) failed without a failed step" else (.steps[] | select(.conclusion == "failure") | .name) end')" || failed=""
             main="$(gh api "repos/$GH_REPO/commits/main" --jq .sha)" || main=""
-            if [ -n "$failed" ] && [ -n "$main" ] && [ "$main" != "$HEAD_SHA" ] &&
+            if [[ "$main" =~ ^[0-9a-f]{40}$ ]] && [ -n "$failed" ] && [ "$main" != "$HEAD_SHA" ] &&
               ! printf '%s\n' "$failed" | grep -Ev '^(Reject stale deployment sources|Recheck main immediately before)' >/dev/null; then
-              echo "::notice::The deploy of $HEAD_SHA stopped because main moved on to $main; the newer deploy follows. No alert."
-              exit 0
+              newer="$(gh api "repos/$GH_REPO/actions/runs?head_sha=$main&per_page=100" \
+                --jq '[.workflow_runs[] | select(.head_branch == "main" and .head_sha == "'"$main"'") | select((.name == "Deploy" and .event == "workflow_run" and .conclusion != "skipped" and .conclusion != "cancelled") or (.name == "CI" and .event == "push" and (.status != "completed" or .conclusion == "success")))] | (first // empty) | "\(.name) run \(.id)"')" || newer=""
+              if [ -n "$newer" ]; then
+                echo "::notice::The deploy of $HEAD_SHA stopped because main moved on to $main, which $newer is releasing. No alert."
+                exit 0
+              fi
+              echo "Main moved on to $main, but no Deploy or CI run for it was found; alerting."
             fi
           fi
 

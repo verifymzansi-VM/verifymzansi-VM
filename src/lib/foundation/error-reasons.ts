@@ -124,6 +124,7 @@ export const FOUNDATION_ERROR_REASONS = {
   ozow_refund_id_used: ["PT409"],
   ozow_refund_mismatch: ["PT409"],
   package_active: ["PT409"],
+  package_busy: ["PT409"],
   package_invoice_request_closed: ["PT409"],
   package_invoice_request_open: ["PT409"],
   package_invoice_request_unavailable: ["PT404"],

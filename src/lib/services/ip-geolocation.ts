@@ -39,8 +39,16 @@ interface CloudflareRequestCf {
   city?: string;
 }
 
-function readCfFromGlobalScope(): CloudflareRequestCf | null {
-  // OpenNext on Cloudflare exposes the raw request cf object on the context.
+/**
+ * The request-scoped Cloudflare data. On the Worker, OpenNext's runtime
+ * defines this symbol to return `{ env, ctx, cf: request.cf }` for the request
+ * being handled. Anywhere else (next start, next dev, tests) it is unset.
+ *
+ * Deliberately no getCloudflareContext() fallback: outside the Worker that
+ * asks wrangler's platform proxy, whose `cf` describes the machine running the
+ * server (cached in node_modules/.mf/cf.json), not the visitor.
+ */
+function readRequestCf(): CloudflareRequestCf | null {
   const contextSymbol = Symbol.for("__cloudflare-context__");
   const globalScope = globalThis as Record<PropertyKey, unknown>;
   const context = globalScope[contextSymbol] as { cf?: CloudflareRequestCf | null } | undefined;
@@ -48,22 +56,12 @@ function readCfFromGlobalScope(): CloudflareRequestCf | null {
 }
 
 /**
- * Resolve IP geolocation for the current request. Returns null when not
- * running on Cloudflare (local dev, tests) or when no cf data is present.
+ * Resolve IP geolocation for the current request from Cloudflare's request
+ * data. Returns null when not running on the Worker (local server, tests) or
+ * when the request carries no location.
  */
-export async function resolveIpGeolocation(): Promise<IpGeoSignal | null> {
-  let cf = readCfFromGlobalScope();
-
-  if (!cf) {
-    try {
-      const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-      const ctx = await getCloudflareContext({ async: true });
-      cf = (ctx as unknown as { cf?: CloudflareRequestCf | null }).cf ?? null;
-    } catch {
-      // Not in a Cloudflare context (local dev / tests) — no IP geo available.
-      return null;
-    }
-  }
+export function resolveIpGeolocation(): IpGeoSignal | null {
+  const cf = readRequestCf();
 
   if (!cf || (!cf.country && !cf.regionCode && !cf.region)) {
     return null;

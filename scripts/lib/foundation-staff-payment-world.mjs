@@ -162,6 +162,47 @@ export function ozowPurchase({ q, json, member, service }, owner, plan, slots) {
   return quoted.payment_id;
 }
 
+/**
+ * Ozow's page opened for a pending payment, as the website's server does:
+ * the claim (as `service_role`) and, when no request is attached yet, the
+ * attached request with a synthetic Ozow id. Returns the claim's answer.
+ */
+export function ozowOpen({ q, json, service }, owner, paymentId) {
+  const lease = json(service(`select api.claim_checkout_request('${paymentId}','${owner.id}');`));
+  if (lease.checkout_url) return lease;
+  q(
+    service(
+      `select api.complete_checkout_request('${paymentId}','${owner.id}','${lease.claim_token}','req-${paymentId}','https://one.ozow.com/checkout/req-${paymentId}');`
+    )
+  );
+  return lease;
+}
+
+/** The payment opened at Ozow (ozowOpen) and its successful settlement
+ * notice applied for the full amount; returns the notice's answer. */
+export function ozowSettle(kit, owner, paymentId) {
+  ozowOpen(kit, owner, paymentId);
+  return kit.json(ozowNoticeSql(kit, paymentId));
+}
+
+/** The SQL (as `service_role`) of a payment's successful Ozow settlement
+ * notice for the full amount, as the notice handler applies it. */
+export function ozowNoticeSql({ json, service }, paymentId) {
+  const row = json(
+    `select jsonb_build_object('ref',merchant_reference,'amount',amount_cents) from private.payments where id='${paymentId}';`
+  );
+  const event = {
+    payload_sha256: sha(`event-${paymentId}`),
+    merchant_reference: row.ref,
+    provider_request_id: `req-${paymentId}`,
+    provider_transaction_id: `tx-${paymentId}`,
+    status: "complete",
+    amount_cents: Number(row.amount),
+    currency: "ZAR",
+  };
+  return service(`select api.apply_provider_event($e$${JSON.stringify(event)}$e$::jsonb);`);
+}
+
 /** An SQL literal, or null. */
 export const sqlValue = (value) =>
   value === null || value === undefined ? "null" : `'${String(value).replace(/'/g, "''")}'`;
