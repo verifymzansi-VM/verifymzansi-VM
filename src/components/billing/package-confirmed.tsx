@@ -45,7 +45,8 @@ export function PackageConfirmed({ details }: { details: PackageConfirmation }) 
 
         <p className="mt-4 flex items-start gap-2 rounded-2xl bg-muted/60 p-4 text-sm leading-6 text-foreground/85">
           <Info aria-hidden="true" className="mt-1 h-4 w-4 shrink-0" />
-          Nothing renews automatically. We remind you 14 days and 3 days before it ends.
+          {/* Draft n1's reminder sentence comes back with package reminders (P4d). */}
+          Nothing renews automatically.
         </p>
 
         <div className="mt-6 flex flex-col gap-2">

@@ -181,7 +181,9 @@ describe("PaymentStatusPanel", () => {
     expect(screen.getByText("19 Nov 2026, 10:00")).toBeInTheDocument();
     expect(screen.getByText("19 Dec 2026, 10:00 (SA time)")).toBeInTheDocument();
     expect(screen.getByText("Up to 40 every 30 days")).toBeInTheDocument();
-    expect(screen.getByText(/Nothing renews automatically/)).toBeInTheDocument();
+    expect(screen.getByText("Nothing renews automatically.")).toBeInTheDocument();
+    // No reminder is promised until package reminders exist (P4d).
+    expect(screen.queryByText(/remind/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Create a post" })).toHaveAttribute(
       "href",
       "/post/create"
