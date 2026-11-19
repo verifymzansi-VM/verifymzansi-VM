@@ -24,14 +24,6 @@ export const SHOW_ENGAGEMENT_TOTALS: boolean =
   LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_ENGAGEMENT_TOTALS;
 
 /**
- * The "Showing <province> first · Change" chip under the showrooms. The live
- * showroom feed does not order posts by province, so the chip promised
- * something the site did not do.
- */
-export const SHOW_SHOWROOM_PROVINCE_CHIP: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_SHOWROOM_PROVINCE_CHIP;
-
-/**
  * The member "Performance" page (/dashboard/metrics) and the links to it. The
  * page reads statistics the live backend does not record, so it was broken or
  * empty. While hidden, its address leads to the dashboard. To be rebuilt
@@ -48,32 +40,6 @@ export const SHOW_LOCATION_DETECTION: boolean =
   LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_LOCATION_DETECTION;
 
 /**
- * Staff "Commercial settings" page (/admin/commercial) and its menu entry. The
- * page reads prices and settings from tables the live backend does not have,
- * so it only showed an error. While hidden, its address leads to the staff
- * home.
- */
-export const SHOW_STAFF_COMMERCIAL_SETTINGS: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_STAFF_COMMERCIAL_SETTINGS;
-
-/**
- * Staff "Free posts & trials" page (/admin/trials), its menu entry, the
- * "Offer a pilot extension" link on a staff organisation page, and the route
- * the page saves through (/api/admin/trials). They read and change trial
- * records the live backend does not have. While hidden, the page's address
- * leads to the staff home and the route answers 404.
- */
-export const SHOW_STAFF_TRIALS: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_STAFF_TRIALS;
-
-/**
- * Staff "Programmes & contracts" page (/admin/programmes) and its menu entry.
- * The page reads contracts and slot records the live backend does not have.
- * While hidden, its address leads to the staff home.
- */
-export const SHOW_STAFF_PROGRAMMES: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_STAFF_PROGRAMMES;
-
-/**
  * Staff "Operations health" page (/admin/operations), its menu entry, the
  * links to it on the staff home, and its "Retry" route
  * (/api/admin/ops/jobs/retry). They read job, incident and retention records
@@ -82,14 +48,6 @@ export const SHOW_STAFF_PROGRAMMES: boolean =
  */
 export const SHOW_STAFF_OPERATIONS: boolean =
   LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_STAFF_OPERATIONS;
-
-/**
- * The six staff "Intelligence" pages (/admin/intelligence/*) and their menu
- * section. They count rows in tables the live backend does not have. While
- * hidden, their addresses lead to the staff home.
- */
-export const SHOW_STAFF_INTELLIGENCE: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_STAFF_INTELLIGENCE;
 
 /**
  * The "Performance" tab of an organisation's dashboard, with its two "CSV"
@@ -108,24 +66,6 @@ export const SHOW_ORGANISATION_REPORT: boolean =
  */
 export const SHOW_ACCOUNT_DELETION: boolean =
   LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_ACCOUNT_DELETION;
-
-/**
- * "Renew using my paid plan" and "Switch pending post to 7 days" on the
- * dashboard's trial card, and the route behind them (/api/trials). The live
- * backend has no way to change a free week yet. While hidden, the route
- * answers 404.
- */
-export const SHOW_TRIAL_PLAN_CHANGES: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_TRIAL_PLAN_CHANGES;
-
-/**
- * The trial extension offer card on an organisation's dashboard and the route
- * that accepts or declines an offer (/api/trial-extensions/<id>). The live
- * backend has no extension offers yet, so the card never showed. While hidden,
- * the route answers 404.
- */
-export const SHOW_TRIAL_EXTENSION_OFFERS: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_TRIAL_EXTENSION_OFFERS;
 
 /**
  * Paid add-ons (Urgent, Boost, Featured) where they are offered or listed as
@@ -154,15 +94,3 @@ export const SHOW_SPONSOR_OFFER: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.
  * Package teams are not built yet (roadmap P4c), so a package has one person.
  */
 export const SHOW_PACKAGE_TEAMS: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_PACKAGE_TEAMS;
-
-/**
- * The "Analytics" and "Third-party sharing" switches on the Notifications
- * page's Preferences tab (/dashboard/communication). The site does not use
- * usage analytics or third-party processing yet, so the switches asked for a
- * choice that changed nothing (owner decision 2026-11-16). While hidden, the
- * preferences route refuses to turn either one on; turning one off (the safe
- * default) still works, so a member who chose one earlier can withdraw it.
- * Off at launch too (LAUNCH_VALUES): the database refuses turning either one on.
- */
-export const SHOW_DATA_USE_CHOICES: boolean =
-  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_DATA_USE_CHOICES;

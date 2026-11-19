@@ -109,3 +109,29 @@ it("validates the bounded staff directory and refuses a mismatched detail respon
     readFrontendStaffOrganisationDetail(client(detail).api, "00000000-0000-4000-8000-000000000002")
   ).rejects.toMatchObject({ status: 503 });
 });
+
+it("reads the staff detail with or without applicant contacts", async () => {
+  const { readFrontendStaffOrganisationDetail } = await import("./staff-organisations");
+  // From 20261119065758_privacy_tightening_2 the detail carries none; staff
+  // then ask for one pending application's contact.
+  const without = await readFrontendStaffOrganisationDetail(client(row).api, id);
+  expect(without).toEqual(row);
+  expect(without && "public_contacts" in without).toBe(false);
+  const contacts = [
+    {
+      application_id: "00000000-0000-4000-8000-000000000003",
+      phone: "+27820000001",
+      email: null,
+      website: null,
+    },
+  ];
+  await expect(
+    readFrontendStaffOrganisationDetail(client({ ...row, public_contacts: contacts }).api, id)
+  ).resolves.toMatchObject({ public_contacts: contacts });
+  await expect(
+    readFrontendStaffOrganisationDetail(
+      client({ ...row, public_contacts: [{ ...contacts[0], name: "Extra" }] }).api,
+      id
+    )
+  ).rejects.toMatchObject({ status: 503 });
+});

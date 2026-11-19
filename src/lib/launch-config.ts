@@ -29,27 +29,15 @@ export const LAUNCH_CONFIG_BUILD: boolean = process.env.VERIFYMZANSI_LAUNCH_CONF
  */
 export const LAUNCH_VALUES = {
   SHOW_ENGAGEMENT_TOTALS: true,
-  SHOW_SHOWROOM_PROVINCE_CHIP: true,
   SHOW_OWNER_METRICS: true,
   SHOW_LOCATION_DETECTION: true,
-  SHOW_STAFF_COMMERCIAL_SETTINGS: true,
-  SHOW_STAFF_TRIALS: true,
-  SHOW_STAFF_PROGRAMMES: true,
   SHOW_STAFF_OPERATIONS: true,
-  SHOW_STAFF_INTELLIGENCE: true,
   SHOW_ORGANISATION_REPORT: true,
   SHOW_ACCOUNT_DELETION: true,
-  SHOW_TRIAL_PLAN_CHANGES: true,
-  SHOW_TRIAL_EXTENSION_OFFERS: true,
   SHOW_PAID_ADDONS: true,
   SHOW_SPONSOR_OFFER: true,
   SHOW_PACKAGE_TEAMS: true,
-  // Off at launch: the database refuses turning Analytics or Third-party
-  // sharing on (choice_unavailable), so these switches could only fail.
-  SHOW_DATA_USE_CHOICES: false,
   PACKAGES_ON_SALE: true,
   // The pop-up is gone on launch day.
   PRELAUNCH_BANNER_ENABLED: false,
 } as const satisfies Record<string, boolean>;
-
-export type LaunchSwitch = keyof typeof LAUNCH_VALUES;

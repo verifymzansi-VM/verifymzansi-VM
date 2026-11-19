@@ -553,6 +553,49 @@ test.describe("staff review with an authenticator", () => {
     expectNoOutboundSince(mark);
   });
 
+  test("the identity check counter equals the cases the queue lists", async ({ context, page }) => {
+    test.setTimeout(60_000);
+    const { outside, failures } = await guard(context);
+    const adminId = await signInBrowser(context, "admin");
+    // The queue's rule: open, a current submission at the case's version, an
+    // active account and not the staff member's own case
+    // (20261119065758_privacy_tightening_2.sql). An open case with nothing to
+    // review is not counted.
+    const listed = Number(
+      queryTestCopy(
+        "select count(*) from private.evidence_cases e " +
+          "join private.verification_current_submissions v on v.case_id = e.id " +
+          "join private.verification_identity_submissions s on s.id = v.submission_id " +
+          "and s.case_version = e.version " +
+          `where e.kind = 'kyc' and e.status = 'open' and e.subject_id <> '${adminId}' ` +
+          "and exists (select 1 from private.current_account_access u where u.id = e.subject_id);"
+      )
+    );
+    expect(listed).toBeGreaterThanOrEqual(2);
+    await page.goto("/admin");
+    const counter = page
+      .getByRole("link")
+      .filter({ has: page.getByText("Identity checks", { exact: true }) });
+    await expect(counter).toBeVisible({ timeout: 20_000 });
+    await expect
+      .poll(async () => /Identity checks\s*(\d+)/.exec(await counter.innerText())?.[1], {
+        timeout: 20_000,
+      })
+      .toBe(String(listed));
+    await page.goto("/admin/verification");
+    for (const member of [returned, poster]) {
+      const displayName = queryTestCopy(
+        "select internal.profile_public_name(display_name) from private.profiles " +
+          `where account_id = '${member.id}';`
+      );
+      await expect(page.getByText(displayName, { exact: true }).first()).toBeVisible({
+        timeout: 20_000,
+      });
+    }
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+  });
+
   test("an admin sends one member's ID back with a reason", async ({ context, page }) => {
     test.setTimeout(120_000);
     const mark = readOutboundAttempts().length;

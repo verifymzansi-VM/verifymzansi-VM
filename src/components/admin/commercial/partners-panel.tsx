@@ -114,8 +114,8 @@ export function PartnersPanel({
             <input name="code" required pattern="[A-Za-z0-9]{4,16}" className={input} />
           </label>
           <label className="text-sm">
-            Custom rate % (optional)
-            <input name="rate" type="number" min={0} max={50} step="0.5" className={input} />
+            Custom rate % (optional, up to 20%)
+            <input name="rate" type="number" min={0} max={20} step="0.5" className={input} />
           </label>
           <label className="text-sm sm:col-span-4">
             Notes

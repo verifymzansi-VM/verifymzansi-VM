@@ -19,6 +19,8 @@ import {
 //   - it shows no "coming soon" or "not available" placeholder.
 // Each route behind a switch is also called without a session: it must be
 // served (no 404, which is how a hidden route answers) and must not fail.
+// Pages and routes removed for launch must answer 404 even with every switch
+// on, as the staff member who could once open them.
 // Nothing here changes data, apart from the packages sales switch, which the
 // launch configuration turns on in the copy (and back off at the end).
 //
@@ -51,8 +53,6 @@ type Page_ = {
   shows?: RegExp[];
   /** Steps after loading (open a tab) before `shows` is checked. */
   open?: (page: Page) => Promise<void>;
-  /** Cookies set before loading (the visitor's chosen province). */
-  cookies?: Record<string, string>;
 };
 
 const PAGES: Page_[] = [
@@ -92,15 +92,6 @@ const PAGES: Page_[] = [
     shows: [/You \+ 1 person/],
   },
   {
-    // An area with a seeded post: an empty showroom keeps only the chip's room.
-    feature: "SHOW_SHOWROOM_PROVINCE_CHIP",
-    path: "/mzansi-business",
-    viewer: "visitor",
-    heading: /mzansi business/i,
-    cookies: { vmz_province: "Gauteng" },
-    shows: [/Showing\s+Gauteng\s+first/i],
-  },
-  {
     feature: "SHOW_ENGAGEMENT_TOTALS",
     path: () => `/mzansi-business/${seededPostId("Fixture Mzansi Motor Workshop")}`,
     viewer: "visitor",
@@ -122,66 +113,42 @@ const PAGES: Page_[] = [
     open: async (page) => page.getByRole("tab", { name: "Account" }).click(),
     shows: [/Delete account/],
   },
-  // SHOW_DATA_USE_CHOICES stays off at launch (src/lib/launch-config.ts):
-  // account-recovery.spec.ts checks that its switches stay hidden here too.
-  {
-    feature: "SHOW_STAFF_COMMERCIAL_SETTINGS",
-    path: "/admin/commercial",
-    viewer: "admin",
-    heading: /Commercial settings/i,
-  },
-  {
-    feature: "SHOW_STAFF_TRIALS",
-    path: "/admin/trials",
-    viewer: "admin",
-    heading: /Free Posts & Trials/i,
-  },
-  {
-    feature: "SHOW_STAFF_PROGRAMMES",
-    path: "/admin/programmes",
-    viewer: "admin",
-    heading: /Programmes & Contracts/i,
-  },
   {
     feature: "SHOW_STAFF_OPERATIONS",
     path: "/admin/operations",
     viewer: "admin",
     heading: /Operations health/i,
   },
-  ...(
-    [
-      ["users", /Users & growth/i],
-      ["marketplace", /Marketplace health/i],
-      ["operations", /Operations summary/i],
-      ["revenue", /Revenue & costs/i],
-      ["trends", /^Trends$/i],
-      ["verification", /Verification metrics/i],
-    ] as const
-  ).map(([name, heading]): Page_ => ({
-    feature: "SHOW_STAFF_INTELLIGENCE",
-    path: `/admin/intelligence/${name}`,
-    viewer: "admin",
-    heading,
-  })),
 ];
 
 /** Routes behind a switch (they answer 404 while hidden). Called without a
  * session, so nothing is changed: each must be served and must not fail. */
 const ROUTES: { feature: string; method: "GET" | "POST"; path: string }[] = [
   { feature: "SHOW_ACCOUNT_DELETION", method: "POST", path: "/api/account/delete" },
-  { feature: "SHOW_STAFF_TRIALS", method: "POST", path: "/api/admin/trials" },
   { feature: "SHOW_STAFF_OPERATIONS", method: "POST", path: "/api/admin/ops/jobs/retry" },
-  { feature: "SHOW_TRIAL_PLAN_CHANGES", method: "POST", path: "/api/trials" },
-  {
-    feature: "SHOW_TRIAL_EXTENSION_OFFERS",
-    method: "POST",
-    path: "/api/trial-extensions/00000000-0000-4000-8000-000000000000",
-  },
   {
     feature: "SHOW_ORGANISATION_REPORT",
     method: "GET",
     path: "/api/organisations/00000000-0000-4000-8000-000000000000/report",
   },
+];
+
+/** Staff pages removed for launch (old commercial settings, trial, programme
+ * and intelligence tools): each answers 404 to an administrator. */
+const REMOVED_PAGES = [
+  "/admin/commercial",
+  "/admin/trials",
+  "/admin/programmes",
+  ...["users", "verification", "revenue", "marketplace", "trends", "operations"].map(
+    (name) => `/admin/intelligence/${name}`
+  ),
+];
+
+/** Routes removed for launch (old trial tools): each answers 404. */
+const REMOVED_ROUTES = [
+  "/api/admin/trials",
+  "/api/trials",
+  "/api/trial-extensions/00000000-0000-4000-8000-000000000000",
 ];
 
 function seededPostId(title: string) {
@@ -250,10 +217,6 @@ test.describe("launch configuration: pages behind a switch", () => {
       });
       page.on("pageerror", (error) => pageErrors.push(String(error)));
       await signInAs(context, entry.viewer);
-      if (entry.cookies)
-        await context.addCookies(
-          Object.entries(entry.cookies).map(([name, value]) => ({ name, value, url: APP_ORIGIN }))
-        );
 
       const response = await page.goto(path, { waitUntil: "domcontentloaded" });
       expect(response, "the page answers").not.toBeNull();
@@ -306,6 +269,32 @@ test.describe("launch configuration: routes behind a switch", () => {
       } finally {
         await request.dispose();
       }
+    });
+  }
+});
+
+test.describe("launch configuration: removed pages and routes", () => {
+  for (const path of REMOVED_PAGES) {
+    test(`${path} answers 404 to an administrator`, async ({ context, page }) => {
+      await signInAs(context, "admin");
+      const response = await page.goto(path, { waitUntil: "domcontentloaded" });
+      expect(response, "the page answers").not.toBeNull();
+      expect.soft(response!.status(), "removed (404)").toBe(404);
+    });
+  }
+
+  for (const path of REMOVED_ROUTES) {
+    test(`POST ${path} answers 404 to an administrator`, async ({ context }) => {
+      // Signed in, so the staff route guard in front of /api/admin lets the
+      // request through to routing; nothing exists there to change data.
+      await signInAs(context, "admin");
+      const response = await context.request.fetch(`${APP_ORIGIN}${path}`, {
+        method: "POST",
+        headers: { Origin: APP_ORIGIN, "Content-Type": "application/json" },
+        data: {},
+        maxRedirects: 0,
+      });
+      expect.soft(response.status(), "removed (404)").toBe(404);
     });
   }
 });

@@ -6,9 +6,6 @@ import { useState } from "react";
 import {
   Activity,
   AlertTriangle,
-  Award,
-  BadgePercent,
-  BarChart3,
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -17,7 +14,6 @@ import {
   FileText,
   Flag,
   Gavel,
-  Gift,
   Handshake,
   Inbox,
   Landmark,
@@ -29,7 +25,6 @@ import {
   ShoppingBag,
   ToggleLeft,
   TreePalm,
-  TrendingUp,
   Users,
 } from "lucide-react";
 import { BrandShield } from "@/components/shared/brand-shield";
@@ -56,14 +51,9 @@ const ICONS: Record<NavIcon, React.ElementType> = {
   users: Users,
   activity: Activity,
   scroll: ScrollText,
-  chart: BarChart3,
-  trending: TrendingUp,
-  percent: BadgePercent,
-  award: Award,
   landmark: Landmark,
   handshake: Handshake,
   receipt: Receipt,
-  gift: Gift,
   toggle: ToggleLeft,
 };
 

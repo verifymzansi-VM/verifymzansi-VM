@@ -3,20 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
-import { mapCommercialError } from "./errors";
 import { DEFAULT_COMMERCIAL_SETTINGS, resolveCommercialSettings } from "./settings";
 import { buildCommercialCatalog } from "./plans";
-
-describe("commercial error mapping", () => {
-  it("maps database guard codes to member-facing messages", () => {
-    expect(mapCommercialError("SLOT_FULL: All active posting slots")?.status).toBe(409);
-    expect(mapCommercialError("TRIAL_REQUIRED: Select an offer")?.status).toBe(402);
-    expect(mapCommercialError("AFFILIATION_CONSENT_REQUIRED: Consent")?.status).toBe(400);
-    expect(mapCommercialError("Organisation access required")?.status).toBe(403);
-    expect(mapCommercialError("An audit reason is required")?.code).toBe("REASON_REQUIRED");
-    expect(mapCommercialError("some unrelated failure")).toBeNull();
-  });
-});
 
 describe("commercial settings", () => {
   it("merges valid rows over defaults and ignores invalid ones", () => {

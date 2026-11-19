@@ -18,7 +18,7 @@ export type TourismKind = "all" | "stays" | "events";
 
 export interface FeedBrowse {
   vertical: FeedVertical;
-  /** One province only, or null for the whole country (local posts first). */
+  /** One province only, or null for the whole country. */
   province: string | null;
   /** Market listing category, business category, or tourism stay type. */
   category: string | null;

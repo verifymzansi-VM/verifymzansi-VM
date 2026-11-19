@@ -1,5 +1,5 @@
 import { LAUNCH_CONFIG_SETTINGS } from "../../../scripts/lib/foundation-e2e-website.mjs";
-import { LAUNCH_VALUES, type LaunchSwitch } from "../../../src/lib/launch-config";
+import { LAUNCH_VALUES } from "../../../src/lib/launch-config";
 
 // Which state the website under test serves for each switch that hides a
 // feature, from the same values its build uses: the ordinary lane
@@ -11,7 +11,7 @@ import { LAUNCH_VALUES, type LaunchSwitch } from "../../../src/lib/launch-config
 /** True in the launch-configuration lane, whose config sets it for the specs. */
 export const LAUNCH_LANE = process.env.VERIFYMZANSI_LAUNCH_CONFIG === "1";
 
-type HiddenFeatureSwitch = Exclude<LaunchSwitch, "PRELAUNCH_BANNER_ENABLED">;
+type HiddenFeatureSwitch = Exclude<keyof typeof LAUNCH_VALUES, "PRELAUNCH_BANNER_ENABLED">;
 
 /** Whether a hidden feature is on in the build under test: its launch value in
  * the launch lane, off (production's value) otherwise. */

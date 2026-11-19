@@ -7,7 +7,6 @@ import {
   type GoogleMember,
 } from "./support/google-member";
 import { endedWithTest } from "./support/route-teardown";
-import { switchOn } from "./support/switches";
 import {
   browserSessionCookies,
   latestMailTo,
@@ -1197,10 +1196,7 @@ test.describe("account recovery and self-service", () => {
       "aria-checked",
       "false"
     );
-    // Hidden until the site uses them (SHOW_DATA_USE_CHOICES), in both lanes:
-    // the database refuses turning either one on, so the switch's launch value
-    // is off too (support/switches.ts).
-    expect(switchOn("SHOW_DATA_USE_CHOICES"), "data-use choices stay hidden at launch").toBe(false);
+    // Analytics and Third-party sharing are no longer offered.
     for (const name of ["Analytics", "Third-party sharing"])
       await expect(page.getByRole("switch", { name })).toHaveCount(0);
     await choice.click();

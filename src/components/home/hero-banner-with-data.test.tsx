@@ -2,9 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HeroBannerWithData } from "./hero-banner-with-data";
 
-const { mockLoadShowroomItems, mockGetVisitorProvince, showroomCarouselMock } = vi.hoisted(() => ({
+const { mockLoadShowroomItems, showroomCarouselMock } = vi.hoisted(() => ({
   mockLoadShowroomItems: vi.fn(),
-  mockGetVisitorProvince: vi.fn(),
   showroomCarouselMock: vi.fn(({ items }: { items: Array<{ title: string }> }) => (
     <div data-testid="hero-showroom" data-count={items.length}>
       {items.map((item) => (
@@ -15,7 +14,6 @@ const { mockLoadShowroomItems, mockGetVisitorProvince, showroomCarouselMock } = 
 }));
 
 vi.mock("@/lib/showroom/feed", () => ({ loadShowroomItems: mockLoadShowroomItems }));
-vi.mock("@/lib/showroom/visitor-province", () => ({ getVisitorProvince: mockGetVisitorProvince }));
 vi.mock("@/components/showrooms/showroom-card-carousel", () => ({
   ShowroomCardCarousel: showroomCarouselMock,
 }));
@@ -25,9 +23,7 @@ describe("HeroBannerWithData", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the home showroom with the visitor's province", async () => {
-    const visitor = { province: "Gauteng", source: "detected" as const };
-    mockGetVisitorProvince.mockResolvedValue(visitor);
+  it("renders the home showroom", async () => {
     mockLoadShowroomItems.mockResolvedValue([
       { id: "b1", type: "business", href: "/mzansi-business/b1", title: "Local business" },
       { id: "l1", type: "listing", href: "/listing/l1", title: "National listing" },
@@ -38,7 +34,7 @@ describe("HeroBannerWithData", () => {
     expect(mockLoadShowroomItems).toHaveBeenCalledWith("home");
     expect(screen.getByTestId("hero-showroom")).toHaveAttribute("data-count", "2");
     expect(showroomCarouselMock).toHaveBeenCalledWith(
-      expect.objectContaining({ surface: "showroom:home", visitorProvince: visitor }),
+      expect.objectContaining({ surface: "showroom:home" }),
       undefined
     );
   });

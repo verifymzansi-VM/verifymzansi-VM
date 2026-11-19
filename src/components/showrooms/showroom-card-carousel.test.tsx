@@ -265,24 +265,6 @@ describe("ShowroomCardCarousel", () => {
     expect(container.querySelector('[data-showroom-background="responsive"]')).toBeTruthy();
   });
 
-  // Roadmap M2.8: the live feed ignores the province, so the chip and its room are hidden.
-  it("shows no province chip and keeps no room for it, as the skeleton does", () => {
-    const empty = render(
-      <ShowroomCardCarousel items={[]} visitorProvince={{ province: null, source: null }} />
-    );
-    expect(empty.container.querySelector("section + .h-14[aria-hidden='true']")).toBeNull();
-    empty.unmount();
-
-    render(
-      <ShowroomCardCarousel
-        items={mockItems}
-        visitorProvince={{ province: "Gauteng", source: "detected" }}
-      />
-    );
-    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Show posts from a province first")).not.toBeInTheDocument();
-  });
-
   it("announces active slide changes via aria-live", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();

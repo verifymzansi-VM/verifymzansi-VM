@@ -28,7 +28,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("CommunicationHub preferences", () => {
-  it("shows the two marketing switches and hides Analytics and Third-party sharing until they work", async () => {
+  it("shows only the two marketing switches (no Analytics or Third-party sharing)", async () => {
     render(<CommunicationHub />);
     await userEvent.click(screen.getByRole("tab", { name: /Preferences/i }));
 
