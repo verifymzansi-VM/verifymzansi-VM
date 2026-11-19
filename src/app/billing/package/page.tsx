@@ -4,6 +4,7 @@ import { readPackagesOnSale } from "@/lib/foundation/slot-package-offer";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFoundationMySlotPackage } from "@/lib/foundation/billing-runtime";
 import { readOnlinePaymentMaxCents } from "@/lib/foundation/payment-limits";
+import { readMyUnpaidIndividualInvoices } from "@/lib/foundation/customer-invoices";
 import { isPackageTerm, PACKAGE_MAX_SLOTS, PACKAGE_MIN_SLOTS } from "@/lib/billing/slot-packages";
 import { createLogger } from "@/lib/utils/logger";
 import { logDegradedRead } from "@/lib/utils/request-failure";
@@ -28,6 +29,17 @@ async function packageBlock(): Promise<PackageCheckoutBlock | null> {
   }
 }
 
+/** The member's unpaid Individual slot invoices (D6); none when they cannot
+ * be read or nobody is signed in. */
+async function unpaidIndividualInvoices(): Promise<string[]> {
+  try {
+    return await readMyUnpaidIndividualInvoices((await readFoundationServerSession()).api);
+  } catch (error) {
+    logDegradedRead(log, "Invoices unavailable", error);
+    return [];
+  }
+}
+
 /**
  * The Multi-listing checkout (roadmap P4a). Hidden (not found) while packages
  * are not on sale: the owner's switch in the database, off until business
@@ -47,7 +59,11 @@ export default async function PackageCheckoutPage({
       ? typed
       : 25;
   const term = Number(days);
-  const [block, onlineMaxCents] = await Promise.all([packageBlock(), readOnlinePaymentMaxCents()]);
+  const [block, onlineMaxCents, unpaidInvoices] = await Promise.all([
+    packageBlock(),
+    readOnlinePaymentMaxCents(),
+    unpaidIndividualInvoices(),
+  ]);
   return (
     <PackageCheckout
       terms={offer.plans.map((plan) => ({ planId: plan.id, days: plan.term_days }))}
@@ -55,6 +71,7 @@ export default async function PackageCheckoutPage({
       initialDays={isPackageTerm(term) ? term : 30}
       block={block}
       onlineMaxCents={onlineMaxCents}
+      unpaidInvoices={unpaidInvoices}
     />
   );
 }

@@ -1,6 +1,7 @@
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { resolveCurrentUserPaymentStatus } from "@/lib/payments/resolve-payment-status";
+import { readPackageConfirmation } from "@/lib/payments/package-confirmation";
 import PaymentStatusPanel from "./payment-status-panel";
 
 export const metadata = {
@@ -14,7 +15,10 @@ export default async function BillingSuccessPage({
   searchParams: Promise<{ payment?: string }>;
 }) {
   const { payment } = await searchParams;
-  const status = await resolveCurrentUserPaymentStatus(payment);
+  const [status, packageConfirmation] = await Promise.all([
+    resolveCurrentUserPaymentStatus(payment),
+    readPackageConfirmation(payment),
+  ]);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -24,7 +28,12 @@ export default async function BillingSuccessPage({
         id="main-content"
         className="bg-hero-mesh flex flex-1 scroll-mt-24 items-center justify-center py-10 sm:py-16"
       >
-        <PaymentStatusPanel initialStatus={status} paymentId={payment} />
+        <PaymentStatusPanel
+          initialStatus={status}
+          paymentId={payment}
+          packagePayment={packageConfirmation.packagePayment}
+          packageDetails={packageConfirmation.details}
+        />
       </main>
 
       <Footer />

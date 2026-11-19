@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { readPackagesOnSale } from "@/lib/foundation/slot-package-offer";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFoundationMySlotPackage } from "@/lib/foundation/billing-runtime";
+import { readMyUnpaidIndividualInvoices } from "@/lib/foundation/customer-invoices";
 
 vi.mock("next/navigation", () => ({
   notFound: vi.fn(() => {
@@ -14,14 +15,21 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/foundation/slot-package-offer", () => ({ readPackagesOnSale: vi.fn() }));
 vi.mock("@/lib/foundation/server-session", () => ({ readFoundationServerSession: vi.fn() }));
 vi.mock("@/lib/foundation/billing-runtime", () => ({ readFoundationMySlotPackage: vi.fn() }));
+vi.mock("@/lib/foundation/customer-invoices", () => ({
+  readMyUnpaidIndividualInvoices: vi.fn(async () => []),
+}));
 vi.mock("./package-checkout", () => ({
   PackageCheckout: (props: {
     terms: { days: number }[];
     initialSlots: number;
     initialDays: number;
     block: string | null;
+    unpaidInvoices: string[];
   }) => (
-    <p>{`${props.terms.map((t) => t.days).join("/")} ${props.initialSlots}x${props.initialDays} ${props.block ?? "open"}`}</p>
+    <p>
+      {`${props.terms.map((t) => t.days).join("/")} ${props.initialSlots}x${props.initialDays} ${props.block ?? "open"}`}
+      {props.unpaidInvoices.length ? ` unpaid ${props.unpaidInvoices.join(",")}` : ""}
+    </p>
   ),
 }));
 
@@ -71,6 +79,16 @@ describe("the package checkout page (P4a)", () => {
     vi.mocked(readFoundationMySlotPackage).mockResolvedValue(mine as never);
     render(await PackageCheckoutPage(params({})));
     expect(screen.getByText(`30/90/180 25x30 ${block}`)).toBeInTheDocument();
+  });
+
+  it("passes the member's unpaid Individual slot invoices (D6), and none when they cannot be read", async () => {
+    vi.mocked(readPackagesOnSale).mockResolvedValue(offer as never);
+    vi.mocked(readMyUnpaidIndividualInvoices).mockResolvedValueOnce(["VM-2026-000187"]);
+    render(await PackageCheckoutPage(params({})));
+    expect(screen.getByText("30/90/180 25x30 open unpaid VM-2026-000187")).toBeInTheDocument();
+    vi.mocked(readMyUnpaidIndividualInvoices).mockRejectedValueOnce(new Error("unavailable"));
+    render(await PackageCheckoutPage(params({ slots: "10" })));
+    expect(screen.getByText("30/90/180 10x30 open")).toBeInTheDocument();
   });
 
   it("lets a signed-out visitor see the page (they sign in to pay)", async () => {
