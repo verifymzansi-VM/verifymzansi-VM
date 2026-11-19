@@ -5128,7 +5128,7 @@
     },
     {
       "name": "record_post_views",
-      "updates": ["updates/20261119151000_post_views_and_likes.sql"],
+      "updates": ["updates/20261119172135_post_views_and_likes.sql"],
       "arguments": [
         {
           "name": "p_post_ids",
@@ -5157,7 +5157,7 @@
     },
     {
       "name": "set_post_like",
-      "updates": ["updates/20261119151000_post_views_and_likes.sql"],
+      "updates": ["updates/20261119172135_post_views_and_likes.sql"],
       "arguments": [
         {
           "name": "p_post_id",
@@ -5191,7 +5191,7 @@
     },
     {
       "name": "get_post_engagement",
-      "updates": ["updates/20261119151000_post_views_and_likes.sql"],
+      "updates": ["updates/20261119172135_post_views_and_likes.sql"],
       "arguments": [
         {
           "name": "p_post_ids",

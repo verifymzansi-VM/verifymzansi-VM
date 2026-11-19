@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 // Roadmap M2.8: the engagement and analytics beacons called database commands
 // that the live backend does not have. They now answer 204 and touch nothing.
 // The view and like routes store views and likes on the live backend
-// (20261119151000_post_views_and_likes.sql), but only while
+// (20261119172135_post_views_and_likes.sql), but only while
 // SHOW_ENGAGEMENT_TOTALS is on; while it is off (production today, and unit
 // tests) they too answer 204 without reading the request.
 const { databaseClient } = vi.hoisted(() => ({ databaseClient: vi.fn() }));

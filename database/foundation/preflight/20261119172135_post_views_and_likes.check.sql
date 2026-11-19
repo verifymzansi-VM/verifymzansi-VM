@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261119151000_post_views_and_likes.sql.
+-- Read-only preflight for updates/20261119172135_post_views_and_likes.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes

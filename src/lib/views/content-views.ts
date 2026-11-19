@@ -6,7 +6,7 @@
  * page views: the post's own page, or the full-screen viewer on it, visible
  * for 2 seconds (source "page"); video plays on cards are sent but not
  * counted. It counts one view per browser and account, per post, per 24 hours
- * (database update 20261119151000_post_views_and_likes.sql) and is the source
+ * (database update 20261119172135_post_views_and_likes.sql) and is the source
  * of truth; this module only avoids sending what it already sent.
  */
 

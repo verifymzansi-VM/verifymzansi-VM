@@ -52,8 +52,8 @@
 --
 -- ORDER: apply first, then merge (after 20261119082834_house_slots.sql in
 -- filename order). Read-only preflight:
--- ../preflight/20261119151000_post_views_and_likes.check.sql.
--- Rollback: ../rollback/20261119151000_post_views_and_likes.down.sql.
+-- ../preflight/20261119172135_post_views_and_likes.check.sql.
+-- Rollback: ../rollback/20261119172135_post_views_and_likes.down.sql.
 begin;
 -- Never wait more than 5 seconds for anything this update needs.
 set local lock_timeout='5s';

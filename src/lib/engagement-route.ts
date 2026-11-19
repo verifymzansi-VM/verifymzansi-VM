@@ -17,7 +17,7 @@ import { readFoundationRuntimeConnection } from "@/lib/foundation/runtime-connec
  * The browser identifier is a random UUID in the first-party, HttpOnly cookie
  * `vmz_viewer` (one year). It is issued by these routes, never by a page, and
  * the database stores only keyed one-way hashes of it
- * (20261119151000_post_views_and_likes.sql). No network address, user agent or
+ * (20261119172135_post_views_and_likes.sql). No network address, user agent or
  * other device detail is sent to the database.
  */
 

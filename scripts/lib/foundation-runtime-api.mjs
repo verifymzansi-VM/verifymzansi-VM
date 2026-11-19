@@ -7,7 +7,7 @@ const publicBusinessProjections = new Set([
   "get_public_frontend_business_seen",
   "get_public_frontend_business_cipc",
   "get_public_frontend_business_affiliations",
-  // 20261119151000_post_views_and_likes.sql: view and like totals only.
+  // 20261119172135_post_views_and_likes.sql: view and like totals only.
   "get_post_engagement",
 ]);
 // Reviewed public settings (20261117082020_online_payment_limit.sql): no

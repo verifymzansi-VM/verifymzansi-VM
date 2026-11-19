@@ -3,7 +3,7 @@ import { readServerLogEntries, readTestCopy, type TestCopy } from "./support/tes
 import { switchOn } from "./support/switches";
 
 // Roadmap M2.8: counters show only true facts. Post views and likes are stored
-// by the live backend (20261119151000_post_views_and_likes.sql) but shown,
+// by the live backend (20261119172135_post_views_and_likes.sql) but shown,
 // read and recorded only while SHOW_ENGAGEMENT_TOTALS is on (the launch lane).
 // While it is off (the ordinary lane, as production today) post pages show no
 // view count and no like button, and the engagement and analytics beacons

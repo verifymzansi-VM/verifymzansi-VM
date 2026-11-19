@@ -4,7 +4,7 @@ import type { FoundationServiceApi } from "./service-api";
 
 /**
  * Post view counts and likes (database update
- * 20261119151000_post_views_and_likes.sql).
+ * 20261119172135_post_views_and_likes.sql).
  *
  * - readFoundationPostEngagement: public totals of publicly listed posts
  *   (api.get_post_engagement); never who viewed or liked.

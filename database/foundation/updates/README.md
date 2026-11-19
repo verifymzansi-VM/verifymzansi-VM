@@ -82,7 +82,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Post views and likes, 19 November 2026
 
-`20261119151000_post_views_and_likes.sql` is pending (see the applied register).
+`20261119172135_post_views_and_likes.sql` is pending (see the applied register).
 Roadmap P6. **Order: apply-first** (the default): the website release from the
 same pull request names the three new commands, and the deploy preflight probes
 every command in `../runtime-api-manifest.json`, so a deploy without the update
@@ -146,10 +146,10 @@ export has the house slots body (or this update's).
   (`isAutomatedUserAgent`), prefetches and requests without the cookie are not
   counted.
 
-Preflight `../preflight/20261119151000_post_views_and_likes.check.sql` (summary
+Preflight `../preflight/20261119172135_post_views_and_likes.check.sql` (summary
 "post views and likes: update not applied; publicly listed posts: N" before,
 "post views and likes: already applied; likes: N; view days: N; views: N"
-after); rollback `../rollback/20261119151000_post_views_and_likes.down.sql`
+after); rollback `../rollback/20261119172135_post_views_and_likes.down.sql`
 (only with the owner's decision; switch the counters off instead where possible;
 it refuses once a like or a counted view is recorded, and puts back the house
 slots body of the privacy export byte for byte). Behaviour test
@@ -5531,6 +5531,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   slots: 0 (events: 0)"; production fingerprint after it (fingerprint.sql at
   2d761c47, captured about 14:04 UTC) matched the full replay (except the known
   schema grant difference)
-- `20261119151000_post_views_and_likes.sql`: pending
+- `20261119172135_post_views_and_likes.sql`: pending
 
 <!-- applied-register:end -->

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261119151000_post_views_and_likes.sql: post view
+// Behaviour checks for 20261119172135_post_views_and_likes.sql: post view
 // counts and likes, counted per browser through the website's service calls.
 //
 // Replays database/foundation (prelude, candidate.sql, every update before this
@@ -29,7 +29,7 @@ import {
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps } from "./lib/foundation-sql-lint.mjs";
 
-const UPDATE = "20261119151000_post_views_and_likes.sql";
+const UPDATE = "20261119172135_post_views_and_likes.sql";
 const [PREFLIGHT, ROLLBACK] = [
   ["preflight", ".check.sql"],
   ["rollback", ".down.sql"],

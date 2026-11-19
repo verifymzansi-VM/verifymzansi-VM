@@ -1,4 +1,4 @@
--- Reviewed rollback for updates/20261119151000_post_views_and_likes.sql.
+-- Reviewed rollback for updates/20261119172135_post_views_and_likes.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so. Prefer a forward fix; to stop showing the counters,
 -- switch SHOW_ENGAGEMENT_TOTALS off instead.
