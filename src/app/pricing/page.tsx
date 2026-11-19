@@ -125,7 +125,7 @@ export default async function PricingPage() {
         <section aria-labelledby="package-rules-title" className="container-page pb-10 sm:pb-14">
           <div className="mx-auto max-w-3xl rounded-3xl border border-border p-5 sm:p-6">
             <h2 id="package-rules-title" className="font-display text-lg font-bold">
-              How your package works
+              Editing your post
             </h2>
             <p className="mt-3 text-sm text-muted-foreground">{CURRENT_EDIT_RULE}</p>
           </div>
