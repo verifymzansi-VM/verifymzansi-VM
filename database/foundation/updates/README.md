@@ -24,11 +24,14 @@ Code and database must never disagree, so every change follows this order:
    before merge; the pull request job `staging-database` then fails when staging
    lacks a command the change expects. Until staging is configured that job is
    skipped. It never runs on `main`, so staging cannot block a deploy.
-4. **Merge, then apply to production.** The owner applies the update (or
-   explicitly approves applying it) after the merge and before the code that
-   needs it is deployed. The release preflight compares what production answers
-   with what the commit expects and warns "database behind by N" or "database
-   ahead by N". Afterwards, one pull request records it, changing together:
+4. **Apply in the stated order.** The owner approves the update before either
+   step, and its pull request states its order: **apply-first** (the default:
+   apply in production, then merge) or **website-first** (merge and deploy, then
+   apply straight after), used when the live website's strict readers would
+   reject what the update adds. Merging deploys automatically, so the order
+   matters. The release preflight compares what production answers with what the
+   commit expects and warns "database behind by N" or "database ahead by N".
+   Afterwards, one pull request records it, changing together:
    - its register line, from `pending` to
      `applied YYYY-MM-DD HH:MM UTC; <how it was applied>`;
    - `../fingerprint.json` `productionCheck`: the owner's read-only fingerprint

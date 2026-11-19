@@ -46,8 +46,11 @@ baseline. Read `FRONTEND-RESTORE.md` before continuing integration work.
    `desktop-linux` context) and the replay and contract steps in
    `database/foundation/README.md`.
 4. The change travels in the same pull request as the code that needs it. The
-   owner applies it to production (or explicitly approves applying it) after the
-   merge and **before** that code is deployed. The new file starts as `pending`
+   owner approves the update before either step, and its pull request states its
+   order: **apply-first** (the default: apply in production, then merge) or
+   **website-first** (merge and deploy, then apply straight after), used when
+   the live website's strict readers would reject what the update adds. Merging
+   deploys automatically, so the order matters. The new file starts as `pending`
    in the applied register at the end of `database/foundation/updates/README.md`
    (and in `fingerprint.json` `pendingApplication`). Recording the application
    later changes the register line to `applied YYYY-MM-DD HH:MM UTC` together
@@ -61,9 +64,18 @@ baseline. Read `FRONTEND-RESTORE.md` before continuing integration work.
 
 - **A merge into `main` is a production release.** CI runs on `main` and
   `.github/workflows/deploy.yml` deploys automatically when it passes.
-- Never push to `main`. Work on a branch, one change per pull request, and let
-  the owner merge (`docs/branch-protection.md`). Describe security fixes
-  neutrally: the repository is public.
+- Never push to `main`. Work on a branch, one change per pull request
+  (`docs/branch-protection.md`).
+- A pull request merges only when its required checks pass and its independent
+  review has no open blocker. The owner merges it, or the coordinator does under
+  the owner's standing approval.
+- The standing approval does not cover two things. A pull request that carries a
+  pending database update merges only after the owner has approved that update,
+  and for an apply-first update only after it has been applied in production,
+  because merging deploys the code automatically (step 4 of "Database changes").
+  A frontend change still needs the owner's sign-off under "Changing the
+  frontend" and the frontend change ledger.
+- Describe security fixes neutrally: the repository is public.
 - To undo a release, revert its pull request. Database updates are not undone by
   a code rollback.
 
@@ -97,6 +109,9 @@ approval.
 - **Native**: the local Docker test setup for foundation SQL
   (`pnpm test:foundation:native`), not a backend.
 - **Source** or **legacy**: the retired backend.
+- **Coordinator**: the one agent session the owner designates to coordinate
+  work. It may merge pull requests under the owner's standing approval, which
+  the owner gave in writing and can withdraw at any time.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
