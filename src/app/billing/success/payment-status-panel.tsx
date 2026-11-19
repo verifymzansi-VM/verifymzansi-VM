@@ -8,6 +8,9 @@ import {
 } from "@/components/billing/payment-status-result";
 import type { PaymentStatusView } from "@/lib/payments/status-view";
 import { paymentExceptionCopy } from "@/lib/payments/exception-copy";
+import type { PackageConfirmation } from "@/lib/payments/package-confirmation";
+import { PackageConfirmed } from "@/components/billing/package-confirmed";
+import { PackageRefresh } from "./package-refresh";
 
 const PAYMENT_POLL_INTERVAL_MS = 4000;
 const PAYMENT_POLL_MAX_MS = 30 * 60 * 1000;
@@ -70,9 +73,15 @@ function getCopy(status: PaymentStatusView): {
 export default function PaymentStatusPanel({
   initialStatus,
   paymentId,
+  packagePayment = false,
+  packageDetails = null,
 }: {
   initialStatus: PaymentStatusView;
   paymentId?: string;
+  /** The payment bought a Multi-listing package (P4a). */
+  packagePayment?: boolean;
+  /** The package it opened, read once the payment was delivered. */
+  packageDetails?: PackageConfirmation | null;
 }) {
   const [status, setStatus] = useState(initialStatus);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -201,6 +210,9 @@ export default function PaymentStatusPanel({
     };
   }, [paymentId, status]);
 
+  if (status === "complete" && packageDetails && !sessionExpired)
+    return <PackageConfirmed details={packageDetails} />;
+
   return (
     <PaymentStatusResult
       icon={copy.icon}
@@ -232,6 +244,8 @@ export default function PaymentStatusPanel({
           : { href: "/dashboard", label: "Go to dashboard" }
       }
     >
+      {/* A package confirmed while this page was open: read the package it opened. */}
+      {status === "complete" && packagePayment && !sessionExpired ? <PackageRefresh /> : null}
       {status === "pending" && isRefreshing ? (
         <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />

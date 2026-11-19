@@ -220,6 +220,8 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   ],
   "verification:status": [{ limit: 30, ttl: 60 }], // polling-friendly
   "verification:manual-location": [{ limit: 10, ttl: 60 }],
+  // "Detect province and city": a suggestion only, kept apart from manual saving.
+  "verification:location-detect": [{ limit: 10, ttl: 60 }],
   // Business verification (CIPC / Seen stickers). Submissions are keyed per
   // account + business: five a day is ample for honest retries.
   // The preview says whether a file looks like an original CIPC download; a

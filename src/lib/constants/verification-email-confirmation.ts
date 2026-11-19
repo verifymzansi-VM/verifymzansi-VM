@@ -9,13 +9,6 @@ export interface VerificationEmailConfirmationRequiredPayload extends Record<str
   code: typeof VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE;
 }
 
-export function buildVerificationEmailConfirmationRequiredPayload(): VerificationEmailConfirmationRequiredPayload {
-  return {
-    error: VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE,
-    code: VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE,
-  };
-}
-
 export function isVerificationEmailConfirmationRequired(
   payload: unknown
 ): payload is VerificationEmailConfirmationRequiredPayload {

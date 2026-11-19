@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import {
   FoundationInvoiceError,
   invoiceRouteRefusal,
+  PACKAGE_INVOICE_DESCRIPTION,
   issueStaffInvoice,
   readMyInvoice,
   readMyInvoiceTransferExpiry,
   recordStaffInvoiceTransfer,
   readMyInvoices,
+  readMyUnpaidIndividualInvoices,
   readStaffInvoice,
   saveMyInvoiceBilling,
   startMyInvoicePayment,
@@ -106,6 +109,48 @@ describe("customer invoice reads", () => {
     };
     const { api } = fixture(ok({ items: [item] }));
     await expect(readMyInvoices(api)).resolves.toEqual([item]);
+  });
+
+  it("tells package invoices apart by the description the database writes for them", () => {
+    // The member's invoice list has no kind field yet: a package invoice is
+    // known by internal.issue_package_customer_invoice's description. If that
+    // wording changes, this fails before the package checkout's note breaks.
+    const source = readFileSync(
+      "database/foundation/current/functions/internal/issue_package_customer_invoice.sql",
+      "utf8"
+    );
+    expect(source).toContain("'Multi-listing package: ' || r.slots::text || ' slots × '");
+    expect(PACKAGE_INVOICE_DESCRIPTION.test("Multi-listing package: 25 slots × 90 days")).toBe(
+      true
+    );
+    expect(PACKAGE_INVOICE_DESCRIPTION.test("25 × Individual slot, 30 days")).toBe(false);
+  });
+
+  it("lists the numbers of the member's unpaid Individual slot invoices, not package ones", async () => {
+    const item = (number: string, status: string, description: string) => ({
+      invoice_number: number,
+      status,
+      issued_at: invoice.issued_at,
+      due_on: invoice.due_on,
+      description,
+      total_cents: 6900,
+      paid_at: null,
+      payment_status: null,
+    });
+    const { api } = fixture(
+      ok({
+        items: [
+          item("VM-2026-000004", "issued", "Multi-listing package: 25 slots × 90 days"),
+          item("VM-2026-000003", "issued", "Individual slot, 30 days"),
+          item("VM-2026-000002", "void", "Individual slot, 30 days"),
+          item("VM-2026-000001", "issued", "2 × Individual slot, 30 days"),
+        ],
+      })
+    );
+    await expect(readMyUnpaidIndividualInvoices(api)).resolves.toEqual([
+      "VM-2026-000003",
+      "VM-2026-000001",
+    ]);
   });
 
   it("reads when the latest bank transfer to the member's invoice expired", async () => {

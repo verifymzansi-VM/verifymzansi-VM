@@ -271,6 +271,21 @@ export async function readMyInvoices(api: FoundationAuthenticatedApi) {
   ).items;
 }
 
+/** A package invoice's description, as the database writes it
+ * (internal.issue_package_customer_invoice, 20261119025106). */
+export const PACKAGE_INVOICE_DESCRIPTION = /^Multi-listing package: /;
+
+/** The numbers of the member's unpaid Individual slot invoices (not package
+ * invoices), newest first: shown before they buy a package, since a bank
+ * transfer to one still delivers its slots beside the package (D6). */
+export async function readMyUnpaidIndividualInvoices(api: FoundationAuthenticatedApi) {
+  return (await readMyInvoices(api))
+    .filter(
+      (item) => item.status === "issued" && !PACKAGE_INVOICE_DESCRIPTION.test(item.description)
+    )
+    .map((item) => item.invoice_number);
+}
+
 /** One of the member's invoices; null when it is not theirs (or no such number). */
 export async function readMyInvoice(
   api: FoundationAuthenticatedApi,

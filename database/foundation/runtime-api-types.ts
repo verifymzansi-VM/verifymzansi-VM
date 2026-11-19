@@ -177,6 +177,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       };
       get_my_package_invoice_request: { Args: Record<never, never>; Returns: Json };
       get_staff_package_invoice_requests: { Args: Record<never, never>; Returns: Json };
+      get_staff_package_move_failures: { Args: Record<never, never>; Returns: Json };
       issue_staff_package_invoice: {
         Args: { p_request_id: string; p_due_days: number; p_reason: string };
         Returns: Json;

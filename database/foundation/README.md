@@ -59,15 +59,21 @@ are compared with `lint-baseline.json`: errors fail unless listed in
 and fixed entries must be removed, so the baseline only shrinks
 (`pnpm db:foundation:lint -- --write-baseline`).
 
-The same job then runs `pnpm db:foundation:lifecycle-test`: a second throwaway
-container replays this folder up to the post lifecycle guards update, seeds
-synthetic members and posts, applies that update, seeds again before the post
-expiry rules update, applies it and every later one, and checks the post
-lifecycle guards, the expiry rules and their races through the production API
-commands (`updates/README.md`).
+The same job then runs `pnpm db:foundation:lifecycle-test`, which runs the
+behaviour suites below (`scripts/test-foundation-*.mjs`) side by side, each in
+its own throwaway container: up to 4 at once by default (fewer on a machine with
+fewer cores), 3 in CI, and `--jobs=N` sets the number (`--jobs=1` runs them in
+turn). Each suite's output is printed in one piece when it ends, and every suite
+runs even after another fails.
 
-The same command then runs `scripts/test-foundation-staff-rules.mjs`, which
-replays every file into a third throwaway container first and only then checks
+In the first suite, a throwaway container replays this folder up to the post
+lifecycle guards update, seeds synthetic members and posts, applies that update,
+seeds again before the post expiry rules update, applies it and every later one,
+and checks the post lifecycle guards, the expiry rules and their races through
+the production API commands (`updates/README.md`).
+
+The same command also runs `scripts/test-foundation-staff-rules.mjs`, which
+replays every file into its own throwaway container first and only then checks
 staff rules through the production API commands, as members and staff with
 synthetic sessions (staff with a verified authenticator app) or as
 `service_role`: every staff command needs an AAL2 claim (not anonymous, role
@@ -88,7 +94,7 @@ delivery; and the activation limit per period holds with free slots. These
 checks complement the ones in `scripts/test-restored-post-commands.mjs`, which
 still runs on the older prototype fixture with only some of the updates.
 
-The same command ends with `scripts/test-foundation-access-matrix.mjs`, the
+The same command also runs `scripts/test-foundation-access-matrix.mjs`, the
 access matrix of the native suite run on the replayed schema instead of the
 prototype fixture, so it covers every API command an update adds. It checks that
 each command's execute grants equal the manifests and that browsers have no

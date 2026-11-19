@@ -1400,6 +1400,26 @@ update `20261112080000_payment_problem_alerts.sql`; see
   then activate it or refund. Money returned after activation: the plan is still
   active; decide whether to end it. The app Worker logs hold the same payment
   number under `Payment problem`.
+- **Package moves** (a "package move is stuck" email to the payment alert
+  addresses, `PAYMENT_ALERT_EMAILS`; database update
+  `20261119151152_package_gap_fixes.sql`): the minute sweep could not move a
+  post into a Multi-listing package (when its Individual slot ended) or out of
+  one (into a free Individual slot in the package's last 7 days) for over 30
+  minutes, or repeatedly in the package's last day. Each stuck move is emailed
+  once; the operations run keeps passing. The app Worker log line
+  `Package move stuck` lists each one (package, post, direction, tries, first
+  failure, reason); staff see the current ones under "Needs attention" on
+  Payments & Refunds. The sweep keeps trying every minute. `busy` means another
+  transaction kept the post or package locked; `error <SQLSTATE>` means the move
+  itself failed (often a post saved under rules that have since changed). A post
+  the package takes stays live until the package ends even before it moves, but
+  one that never moved then falls into the 3-day grace instead of following the
+  package; fix the cause before then, or tell the member. A run that fails with
+  the step `package_move_alert` could not send that email (no addresses set, or
+  the provider refused); the moves are in the log line
+  `Package move alert not emailed`. `Package moves skipped this run` and
+  `Package moves stuck` alone are warnings: the moves are retried on the next
+  run.
 
 ---
 

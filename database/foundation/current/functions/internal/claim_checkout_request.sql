@@ -16,14 +16,38 @@ begin
   if pay.checkout_url is null and pay.checkout_claim_until>clock_timestamp() then
     raise exception 'checkout is being created' using errcode='PT409'; end if;
   -- A Multi-listing package (20261114154823) reaches Ozow only while packages
-  -- are on sale and the member's ID review is still accepted.
+  -- are on sale and the member's ID review is still accepted; and
+  -- (20261119151152) never while the account has a package that has not
+  -- ended, or a package invoice that is unpaid and that this payment is not
+  -- an attempt of: a checkout started before that invoice was paid by bank
+  -- transfer could otherwise be paid beside the package. The checks run under
+  -- the account's package lock, which a bank transfer's confirmation, Pay now
+  -- and a package delivery hold while they work, taken without waiting (this
+  -- already holds the payment, which a delivery locks before that lock): while
+  -- one of them runs, the member is asked to try again in a moment. These
+  -- three apply only to a payment not sent to Ozow yet: one already open there
+  -- keeps the member's choice to continue, check or cancel it.
   if exists(select 1 from private.plan_versions v where v.id=pay.plan_version_id
       and internal.slot_package_plan(v.plan_code)) then
+    if pay.checkout_url is null and not pg_catalog.pg_try_advisory_xact_lock(
+        pg_catalog.hashtextextended('slot-package:'||pay.owner_id::text, 707)) then
+      raise exception 'your package is being updated; try again in a moment' using errcode='PT409', detail='package_busy';
+    end if;
     if not internal.slot_packages_on_sale() then
       raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
     end if;
     if internal.current_verified_identity(pay.owner_id) is null then
       raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
+    end if;
+    if pay.checkout_url is null and internal.slot_package_open(pay.owner_id) then
+      raise exception 'this account already has a Multi-listing package' using errcode='PT409', detail='package_active';
+    end if;
+    if pay.checkout_url is null and exists(select 1 from private.customer_invoices i
+        join private.plan_versions v on v.id=i.plan_version_id
+        where i.account_id=pay.owner_id and i.status='issued' and internal.slot_package_plan(v.plan_code)
+          and not exists(select 1 from private.customer_invoice_payments l where l.invoice_id=i.id and l.payment_id=pay.id)) then
+      raise exception 'your package invoice is not paid yet; pay it, or ask us to cancel it first'
+        using errcode='PT409', detail='package_invoice_unpaid';
     end if;
   end if;
   -- Final guard (20261117082020): a new Ozow request is never created above
