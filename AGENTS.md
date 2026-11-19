@@ -61,9 +61,13 @@ baseline. Read `FRONTEND-RESTORE.md` before continuing integration work.
 
 - **A merge into `main` is a production release.** CI runs on `main` and
   `.github/workflows/deploy.yml` deploys automatically when it passes.
-- Never push to `main`. Work on a branch, one change per pull request, and let
-  the owner merge (`docs/branch-protection.md`). Describe security fixes
-  neutrally: the repository is public.
+- Never push to `main`. Work on a branch, one change per pull request
+  (`docs/branch-protection.md`).
+- A pull request merges only when its required checks pass and its independent
+  review has no open blocker. The owner merges it, or the coordinator does under
+  the owner's standing approval. Database updates are still applied only with
+  the owner's approval, before the code that needs them is deployed.
+- Describe security fixes neutrally: the repository is public.
 - To undo a release, revert its pull request. Database updates are not undone by
   a code rollback.
 
