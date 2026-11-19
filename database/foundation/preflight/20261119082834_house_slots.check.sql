@@ -7,7 +7,7 @@
 -- summary is the only row and starts "house slots: update not applied".
 --
 -- The summary says whether the three functions the update adds, its table and
--- its two triggers are absent (update not applied), all present with the
+-- its three triggers are absent (update not applied), all present with the
 -- update's bodies (already applied), or a mix (unexpected state), and counts:
 -- - "admins": accounts with an active admin role;
 -- - "ready to receive": of those, confirmed active accounts with an accepted
@@ -23,8 +23,8 @@ with added as (
   select v.sig, v.after,
     coalesce((select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)), 'absent') as body
   from (values
-    ('internal.grant_house_slots(text,integer,integer,text,text)', 'd456341442ebecc2d5a28d2b824d4433'),
-    ('internal.end_house_slot(uuid,text)', 'bbd9eded84273b962814a997daaed2e4'),
+    ('internal.grant_house_slots(text,integer,integer,text,text)', '4d1d0e822e358b6489f0cdf69a22c564'),
+    ('internal.end_house_slot(uuid,text)', 'e68a50d7a6d0211cb339ce7ad66c26bd'),
     ('internal.house_slots_on_staff_role_change()', 'f100ded1785d690054ba54e150e33bff')
   ) v(sig, after)
 ),
@@ -38,6 +38,7 @@ others as (
   from (values
     ('table', 'private.house_slot_events'),
     ('trigger', 'house_slot_events_append_only on private.house_slot_events'),
+    ('trigger', 'house_slot_events_no_truncate on private.house_slot_events'),
     ('trigger', 'staff_roles_end_house_slots on private.staff_roles')
   ) v(kind, name)
 ),

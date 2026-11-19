@@ -115,7 +115,9 @@ and its table is absent or has the update's shape.
   `house_slots_mfa_required` (verified authenticator app),
   `house_slots_self_approval` (the approver must be a different account) and
   `house_slots_approver_invalid` (the approver must be a confirmed, active
-  account with an active admin role and a verified authenticator app).
+  account with an active admin role and a verified authenticator app); 55000
+  `house_slots_isolation` outside a read committed transaction (the SQL editor's
+  default), so two grants at once never exceed 15.
 - **The record.** New append-only table `private.house_slot_events`: one row per
   slot granted, extended or ended, with the slot's end after it, the approving
   administrator (none for an end) and the written reason. Row level security on,
@@ -128,8 +130,9 @@ and its table is absent or has the update's shape.
   an active admin role, `internal.end_house_slot` revokes each current house
   slot (`revoked_reason` `house_slot_ended`), expires its posts (status reason
   "Slot ended"), takes them out of search and records the end ("Admin role
-  removed"). A slot also ends at its end date, as any slot does. Account erasure
-  revokes it like any other slot.
+  removed"). It never waits for a post or slot in use: the role change is
+  refused with PT409 `house_slot_busy` and retried. A slot also ends at its end
+  date, as any slot does. Account erasure revokes it like any other slot.
 
 Preflight `../preflight/20261119082834_house_slots.check.sql` (summary "house
 slots: update not applied; admins: N; ready to receive: N; staff-granted slots:

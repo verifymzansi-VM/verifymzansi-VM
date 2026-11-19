@@ -11,8 +11,17 @@ begin
   if p_entitlement is null or not coalesce(internal.plain_text_valid(p_reason, 5, 500, true), false) then
     raise exception 'house slot and reason required' using errcode='22023';
   end if;
-  perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
-    where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p;
+  begin
+    perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
+      where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p nowait;
+    perform e.id from private.entitlements e where e.id=p_entitlement for update nowait;
+    -- Re-read after the slot lock: an activation may have committed since the
+    -- first post scan. Never wait on a newly found post here.
+    perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
+      where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p nowait;
+  exception when lock_not_available then
+    raise exception 'house slot is busy; retry the operation' using errcode='PT409', detail='house_slot_busy';
+  end;
   update private.entitlements e set status='revoked', revoked_reason='house_slot_ended'
     where e.id=p_entitlement and e.source='staff_grant' and e.status<>'revoked'
       and exists(select 1 from private.house_slot_events h where h.entitlement_id=e.id)

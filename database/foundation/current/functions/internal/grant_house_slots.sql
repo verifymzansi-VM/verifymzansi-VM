@@ -10,6 +10,12 @@ AS $function$
 declare v_recipient uuid; v_approver uuid; v_ends timestamptz; v_held uuid[]; v_slot private.entitlements;
   v_id uuid; v_added integer:=0; v_extended integer:=0;
 begin
+  -- The count of slots already held is read after the staff role lock; only
+  -- read committed sees a grant that committed while this one waited.
+  if pg_catalog.current_setting('transaction_isolation')<>'read committed' then
+    raise exception 'house slots: run this command in a read committed transaction' using errcode='55000',
+      detail='house_slots_isolation';
+  end if;
   if p_slots is null or p_slots<1 or p_slots>15 then
     raise exception 'house slots: choose 1 to 15 slots' using errcode='22023', detail='house_slots_count_invalid';
   end if;

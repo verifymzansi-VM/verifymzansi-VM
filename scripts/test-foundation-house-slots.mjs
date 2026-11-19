@@ -21,7 +21,8 @@
 // refunds or invoices; the paid 4-slot count is unchanged; fair use refuses a
 // 5th post going live in 30 days; extending moves the slot's end and the
 // search end; the record is append-only; removing the admin role ends the
-// slots at once (posts expired and out of search) and the free first post is
+// slots at once (posts expired and out of search; a post in use refuses it
+// without waiting) and the free first post is
 // still there afterwards; and the rollback refuses once a slot was granted.
 //
 //   node --import tsx scripts/test-foundation-house-slots.mjs
@@ -50,8 +51,8 @@ import {
 const UPDATE = "20261119082834_house_slots.sql";
 const GRANT = "internal.grant_house_slots(text,integer,integer,text,text)";
 const ADDED = {
-  [GRANT]: "d456341442ebecc2d5a28d2b824d4433",
-  "internal.end_house_slot(uuid,text)": "bbd9eded84273b962814a997daaed2e4",
+  [GRANT]: "4d1d0e822e358b6489f0cdf69a22c564",
+  "internal.end_house_slot(uuid,text)": "e68a50d7a6d0211cb339ce7ad66c26bd",
   "internal.house_slots_on_staff_role_change()": "f100ded1785d690054ba54e150e33bff",
 };
 const NONE = { anon: false, authenticated: false, service_role: false };
@@ -471,6 +472,37 @@ try {
     );
   });
 
+  await check(
+    "a role removal never waits for a post in use: it is refused and retried",
+    async () => {
+      const { session, sessionAfter } = psqlSessions(database);
+      const [holder, removal] = await Promise.all([
+        session(
+          `begin;
+select 1 from private.posts where id='${fourth}' for update;
+select pg_sleep(2);
+commit;`
+        ),
+        sessionAfter(
+          700,
+          `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${admin.id}' and revoked_at is null;`
+        ),
+      ]);
+      assert.equal(holder.status, 0, holder.stderr);
+      assert.notEqual(removal.status, 0);
+      assert.match(removal.stderr, /ERROR:\s+PT409:/, removal.stderr);
+      assert.match(removal.stderr, /house_slot_busy/, removal.stderr);
+      // Nothing changed: the role and every slot are still there.
+      assert.equal(
+        q(
+          `select count(*) from private.staff_roles where user_id='${admin.id}' and revoked_at is null;`
+        ),
+        "1"
+      );
+      assert.equal(houseSlots(admin).filter((e) => e.status === "active").length, 15);
+      assert.equal(row(fourth).status, "live");
+    }
+  );
   await check("removing the admin role ends the house slots at once", () => {
     // Another staff member's role change leaves them alone.
     q(
@@ -517,6 +549,34 @@ try {
     assert.equal(grant(admin4, 1, 90).added, 1);
     q(`delete from private.staff_roles where user_id='${admin4.id}';`);
     assert.ok(houseSlots(admin4).every((e) => e.status === "revoked"));
+  });
+  await check("only in read committed: two grants at once never exceed 15", async () => {
+    const admin6 = ready(world.staffUser("house-admin6", "admin"));
+    world.review(admin6, admin2, "house-admin6");
+    for (const level of ["repeatable read", "serializable"])
+      fails(
+        `begin isolation level ${level};
+${grantSql(admin6, 15, 90, REASON, admin2)}
+commit;`,
+        "55000",
+        /house_slots_isolation/
+      );
+    assert.deepEqual(houseSlots(admin6), []);
+    const { session, sessionAfter } = psqlSessions(database);
+    const [one, two] = await Promise.all([
+      session(`begin;
+${grantSql(admin6, 15, 90, REASON, admin2)}
+select pg_sleep(2);
+commit;`),
+      sessionAfter(700, grantSql(admin6, 15, 90, REASON, admin2)),
+    ]);
+    assert.equal(one.status, 0, one.stderr);
+    assert.equal(two.status, 0, two.stderr);
+    assert.equal(houseSlots(admin6).filter((e) => e.status === "active").length, 15);
+    // Under repeatable read the second grant would have read the old count.
+    q(
+      `update private.staff_roles set revoked_at=now(),revoked_by='${admin2.id}' where user_id='${admin6.id}' and revoked_at is null;`
+    );
   });
   await check("a role removal racing a grant: the grant's slots end", async () => {
     const admin5 = ready(world.staffUser("house-admin5", "admin"));

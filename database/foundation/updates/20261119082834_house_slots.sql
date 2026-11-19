@@ -30,6 +30,8 @@
 --    active admin role and a verified authenticator app. Both staff role rows
 --    are locked first, so a role removal at the same moment either waits for
 --    the grant (and then ends what it added) or is seen by it.
+--    It refuses (55000 house_slots_isolation) outside a read committed
+--    transaction, so the count it reads after that lock is current.
 --    A house slot is a `staff_grant` entitlement with exactly the shape of a
 --    paid Individual slot: any posting area, 1 live post, 4 posts going live
 --    per 30 days, 10 photos and 1 video, no add-ons; granted_by is the
@@ -47,6 +49,8 @@
 --    revoked, changed or deleted), whose function
 --    internal.house_slots_on_staff_role_change ends every current house slot
 --    of an account that no longer holds an active admin role.
+--    It never waits for a post or slot in use: PT409 house_slot_busy refuses
+--    the role change, which is retried.
 --
 -- No existing row is changed. Read-only preflight:
 -- ../preflight/20261119082834_house_slots.check.sql. Rollback:
@@ -67,9 +71,9 @@ begin
   loop
     if shape not in (
         'internal.grant_house_slots(text,integer,integer,text,text) absent',
-        'internal.grant_house_slots(text,integer,integer,text,text) d456341442ebecc2d5a28d2b824d4433',
+        'internal.grant_house_slots(text,integer,integer,text,text) 4d1d0e822e358b6489f0cdf69a22c564',
         'internal.end_house_slot(uuid,text) absent',
-        'internal.end_house_slot(uuid,text) bbd9eded84273b962814a997daaed2e4',
+        'internal.end_house_slot(uuid,text) e68a50d7a6d0211cb339ce7ad66c26bd',
         'internal.house_slots_on_staff_role_change() absent',
         'internal.house_slots_on_staff_role_change() f100ded1785d690054ba54e150e33bff') then
       raise exception 'house slots precondition: % is not a reviewed body', shape using errcode='55000';
@@ -116,7 +120,9 @@ create trigger house_slot_events_no_truncate before truncate on private.house_sl
 
 -- 3. Ending a house slot: the slot is revoked, its posts are released
 -- (expired, out of search) and the end is recorded. Posts first, then the
--- slot, as internal.release_sponsorship_entitlement locks them.
+-- slot, as internal.release_sponsorship_entitlement locks them, and never
+-- waiting: a post or slot in use refuses (PT409 house_slot_busy) and the role
+-- change is retried, so it can never deadlock with an activation.
 create or replace function internal.end_house_slot(p_entitlement uuid, p_reason text)
  returns integer
  language plpgsql
@@ -127,8 +133,17 @@ begin
   if p_entitlement is null or not coalesce(internal.plain_text_valid(p_reason, 5, 500, true), false) then
     raise exception 'house slot and reason required' using errcode='22023';
   end if;
-  perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
-    where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p;
+  begin
+    perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
+      where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p nowait;
+    perform e.id from private.entitlements e where e.id=p_entitlement for update nowait;
+    -- Re-read after the slot lock: an activation may have committed since the
+    -- first post scan. Never wait on a newly found post here.
+    perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
+      where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p nowait;
+  exception when lock_not_available then
+    raise exception 'house slot is busy; retry the operation' using errcode='PT409', detail='house_slot_busy';
+  end;
   update private.entitlements e set status='revoked', revoked_reason='house_slot_ended'
     where e.id=p_entitlement and e.source='staff_grant' and e.status<>'revoked'
       and exists(select 1 from private.house_slot_events h where h.entitlement_id=e.id)
@@ -196,6 +211,12 @@ as $function$
 declare v_recipient uuid; v_approver uuid; v_ends timestamptz; v_held uuid[]; v_slot private.entitlements;
   v_id uuid; v_added integer:=0; v_extended integer:=0;
 begin
+  -- The count of slots already held is read after the staff role lock; only
+  -- read committed sees a grant that committed while this one waited.
+  if pg_catalog.current_setting('transaction_isolation')<>'read committed' then
+    raise exception 'house slots: run this command in a read committed transaction' using errcode='55000',
+      detail='house_slots_isolation';
+  end if;
   if p_slots is null or p_slots<1 or p_slots>15 then
     raise exception 'house slots: choose 1 to 15 slots' using errcode='22023', detail='house_slots_count_invalid';
   end if;
