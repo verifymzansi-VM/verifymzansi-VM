@@ -116,6 +116,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 49. Pricing by offer | keep (redesign approved by owner 2026-11-18, variant B, picture 01) | Pricing: 'Posting slots' with one 'Every slot includes' strip and three term cards instead of the Market / Business / Tourism & Events picker; free events in their own strip; no tab row while only Individual slots are on sale |
 | 52. Old multi-listing wording and a council mention | awaiting owner (no file rows: the group 52 part of 6 existing rows) | Nothing visible today (all behind switches that are off). When shown: the multi-listing box in the posting flow and on billing states the package rules on sale (5 to 250 posts, 30, 90 or 180 days, R100 per slot per 30 days); no 'Founding pilots' box on Advertise; the empty Business Sponsors box names no council or place |
 | 53. Package invoices and 'Ask for an invoice' (P4e) | awaiting owner (with the P4e part of 3 rows elsewhere) | Nothing while packages are not on sale (the owner's switch). Then: on 'Choose your package' above Ozow's maximum, a tick and an 'Ask for an invoice' button send the request to staff (no email); staff only: a 'Package invoice requests' card on Payments & Refunds to issue, prepare (above R50 000, approved by a second admin) or decline; the invoice then appears under the member's Invoices as today |
+| 56. Loading screen named for screen readers | awaiting owner | Nothing visible; screen readers can find the 'Loading' status on the placeholder shown while a page loads |
 
 Questions for the owner:
 
@@ -2164,6 +2165,18 @@ packages are not on sale (the owner's switch in the database).
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/components/admin/commercial/package-invoice-requests.tsx` | visual | Group 53: staff issue, prepare, approve or decline members' package invoice requests (owner's decision 6). | Staff only, Payments & Refunds: the 'Package invoice requests' card described in group 53. | keep | awaiting owner | 2026-11-19 | 37c1e9aa95f7 |
 | `src/components/admin/commercial/package-invoice-requests.test.tsx` | test | Group 53: checks the card is absent with no open request, issuing, preparing and approving by another admin, and read-only staff. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-19 | ff529e11715f |
+
+### 56. Loading screen named for screen readers
+
+Accessibility fix with no visual change. The grey placeholder shown while any
+page loads was labelled 'Loading' on a plain box, which most screen readers
+ignore. The box is now a status region, so the 'Loading' name is exposed. The
+page keeps its single main area and looks the same.
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/app/loading.tsx` | wording-behaviour | Group 56: the shared loading placeholder gets `role="status"`, so its existing 'Loading' label is read out (a label on a box with no role is ignored by most screen readers). | Nothing visible; screen readers can find the 'Loading' status while a page loads | keep | awaiting owner | 2026-11-19 | 008cf455b9f8 |
+| `src/app/loading.test.tsx` | test | Group 56: checks the placeholder is a busy status named 'Loading' and keeps exactly one main area. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-19 | 6161c5189adc |
 
 <!-- frontend-ledger:end -->
 
