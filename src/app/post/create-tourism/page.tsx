@@ -72,7 +72,7 @@ import {
   uploadRequiredPromotionMedia,
 } from "@/app/post/_lib/promotion-media-upload";
 import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
-import { VIDEO_GUIDANCE, videoLimitSeconds } from "@/lib/media/video-length";
+import { VIDEO_GUIDANCE, videoLimitSeconds, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
@@ -3523,7 +3523,7 @@ function CreateTourismContent() {
                         <MediaUpload
                           id="tourism-videos-input"
                           label="Upload video"
-                          description={`Up to ${maxVideos}. One portrait 9:16 clip works best. ${VIDEO_GUIDANCE}`}
+                          description={`Up to ${maxVideos}. One portrait 9:16 clip works best. ${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
                           error={fieldErrors.videos}
                           maxFiles={maxVideos}
                           maxVideoSeconds={videoLimitSeconds(

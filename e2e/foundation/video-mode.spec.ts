@@ -271,6 +271,30 @@ test("pausing a video brings the post's details back", async ({ page }) => {
   await expect(root).toHaveAttribute("data-chrome", "shown");
 });
 
+test("the video's seek bar is easy to grab and shows the time and length", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/dev/video-mode");
+  await expect(heading(page)).toHaveText(market[0].title);
+  const seek = page.getByRole("slider", { name: "Seek playback" });
+  await expect(seek).toBeVisible();
+  const box = await seek.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(24);
+  // A length is read from the video, so the label never stays at 0:00 / 0:00.
+  await expect(page.getByText(/^\d+:\d{2} \/ \d+:\d{2}$/)).not.toHaveText("0:00 / 0:00");
+  // A tap near the end of the bar seeks there and keeps the same post.
+  await page.evaluate(() => document.querySelector<HTMLVideoElement>("video")?.pause());
+  await page.touchscreen.tap((box?.x ?? 0) + (box?.width ?? 0) * 0.8, (box?.y ?? 0) + 12);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const video = document.querySelector<HTMLVideoElement>("video");
+        return video ? video.currentTime / video.duration : 0;
+      })
+    )
+    .toBeGreaterThan(0.6);
+  await expect(heading(page)).toHaveText(market[0].title);
+});
+
 test("tickets stay in view and are not repeated under More", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dev/video-mode?v=tourism&kind=events");

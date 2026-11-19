@@ -55,7 +55,7 @@ import { ListingDetailContent } from "@/components/listings/listing-detail-conte
 import { createLogger } from "@/lib/utils/logger";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
-import { VIDEO_GUIDANCE } from "@/lib/media/video-length";
+import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
 
 const log = createLogger("EditListingPage");
 const TITLE_MAX = 100;
@@ -822,7 +822,7 @@ export default function EditListingPage() {
                   <MediaUpload
                     id="edit-listing-video-input"
                     label={`Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                    description={VIDEO_GUIDANCE}
+                    description={`${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
                     maxFiles={Math.max(maxVideos, existingVideos.length)}
                     files={newVideoFile}
                     existing={existingVideos.map((url, i) => ({

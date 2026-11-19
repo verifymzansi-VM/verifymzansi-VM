@@ -47,7 +47,11 @@ import {
 } from "@/lib/constants/categories";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
-import { MAX_EVENT_VIDEO_SECONDS, VIDEO_GUIDANCE } from "@/lib/media/video-length";
+import {
+  MAX_EVENT_VIDEO_SECONDS,
+  VIDEO_GUIDANCE,
+  VIDEO_SOUND_OFF_TIP,
+} from "@/lib/media/video-length";
 import { isValidUserEnteredUrl, normalizeUserEnteredUrl } from "@/lib/utils/external-url";
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
@@ -1192,7 +1196,7 @@ export default function EditPromotionPage() {
               <MediaUpload
                 id="edit-event-videos-input"
                 label={`Videos (optional)${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                description={VIDEO_GUIDANCE}
+                description={`${VIDEO_GUIDANCE} ${VIDEO_SOUND_OFF_TIP}`}
                 maxVideoSeconds={MAX_EVENT_VIDEO_SECONDS}
                 maxFiles={effectiveMaxVideos}
                 files={newVideoFiles}

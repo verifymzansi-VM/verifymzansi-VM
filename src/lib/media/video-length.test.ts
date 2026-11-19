@@ -10,6 +10,7 @@ import {
   readVideoBytesSeconds,
   UNREADABLE_VIDEO_LENGTH_MESSAGE,
   VIDEO_GUIDANCE,
+  VIDEO_SOUND_OFF_TIP,
   videoLengthProblem,
   videoLimitSeconds,
 } from "./video-length";
@@ -63,6 +64,12 @@ describe("video length rule (owner decision 11 Nov 2026)", () => {
   it("keeps the owner-approved seller guidance word for word", () => {
     expect(VIDEO_GUIDANCE).toBe(
       "Up to 2 minutes (events: 1 minute), upright, 1080p, not 4K. Buyers decide in the first 15-30 seconds — put the best part first."
+    );
+  });
+
+  it("tells sellers to put key details on screen, because many watch without sound", () => {
+    expect(VIDEO_SOUND_OFF_TIP).toBe(
+      "Many people watch without sound: show key details (price, place, phone number) on screen in the video itself."
     );
   });
 });

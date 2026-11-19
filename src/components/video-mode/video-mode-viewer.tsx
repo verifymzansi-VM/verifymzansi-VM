@@ -35,6 +35,7 @@ import {
 } from "@/components/video-mode/video-mode-rails";
 import { EdgeTab } from "@/components/video-mode/video-mode-edge-tab";
 import { useConstrainedNetwork, VideoModeMedia } from "@/components/video-mode/video-mode-media";
+import { VideoModeSeek } from "@/components/video-mode/video-mode-seek";
 import { useVideoModeFeed, type VideoModePost } from "@/components/video-mode/use-video-mode-feed";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useDwellView } from "@/components/immersive/use-dwell-view";
@@ -1011,6 +1012,9 @@ export function VideoModeViewer({
                 );
               }}
             />
+            {activeMedia?.kind === "video" ? (
+              <VideoModeSeek key={`${activeSlide.key}:${mediaIndex}`} />
+            ) : null}
           </div>
           <MoreSheet
             key={`more:${activeSlide.key}`}

@@ -20,6 +20,10 @@ export const MAX_EVENT_VIDEO_SECONDS = 60;
 export const VIDEO_GUIDANCE =
   "Up to 2 minutes (events: 1 minute), upright, 1080p, not 4K. Buyers decide in the first 15-30 seconds — put the best part first.";
 
+/** Shown with the guidance when a seller picks a post's video (roadmap M10.7). */
+export const VIDEO_SOUND_OFF_TIP =
+  "Many people watch without sound: show key details (price, place, phone number) on screen in the video itself.";
+
 export const UNREADABLE_VIDEO_LENGTH_MESSAGE =
   "We couldn't read this video's length; please export it as MP4";
 

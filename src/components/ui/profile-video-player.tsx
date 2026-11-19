@@ -22,7 +22,9 @@ import {
   VolumeX,
 } from "lucide-react";
 import Image from "next/image";
+import { VideoSeekBar } from "@/components/ui/video-seek-bar";
 import { cn } from "@/lib/utils";
+import { formatVideoProgress } from "@/lib/media/video-time";
 import { getVariantUrl } from "@/lib/utils/media-url";
 import { useGlobalMute } from "@/hooks/use-global-mute";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
@@ -50,14 +52,6 @@ interface ProfileVideoPlayerProps {
 
 function getMediaFitClassName(mediaFit: "contain" | "cover") {
   return mediaFit === "contain" ? "object-contain" : "object-cover";
-}
-
-function formatSeconds(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const total = Math.floor(seconds);
-  const mins = Math.floor(total / 60);
-  const secs = total % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
 export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlayerProps>(
@@ -165,6 +159,12 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
       setDuration(Number.isFinite(video.duration) ? video.duration : 0);
       setCurrentTime(Number.isFinite(video.currentTime) ? video.currentTime : 0);
     }, []);
+
+    // The video can read its length before this page is interactive, and then its
+    // loadedmetadata event has already passed: read the length once on mount.
+    useEffect(() => {
+      if ((localVideoRef.current?.readyState ?? 0) >= 1) handleLoadedMetadata();
+    }, [handleLoadedMetadata, retryKey]);
 
     const handleTimeUpdate = useCallback(() => {
       const video = localVideoRef.current;
@@ -414,16 +414,12 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
               <Maximize2 className="h-4 w-4" />
             </button>
             <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-3 sm:p-4">
-              <input
-                type="range"
-                min={0}
-                max={Math.max(duration, 0)}
-                step={0.1}
-                value={Math.min(currentTime, duration || currentTime)}
-                onChange={(event) => seekTo(Number(event.target.value))}
-                className="mb-2 h-1.5 w-full cursor-pointer accent-brand-red"
-                aria-label="Seek playback"
-                data-carousel-control="true"
+              {/* 24 px to grab; the margins keep the thin track and the buttons where they were. */}
+              <VideoSeekBar
+                currentTime={currentTime}
+                duration={duration}
+                onSeek={seekTo}
+                className="-mb-px mt-[3px] block accent-brand-red"
               />
 
               <div className="flex items-center justify-between gap-2 text-white">
@@ -512,7 +508,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
                     )}
                     data-carousel-control="true"
                   >
-                    {formatSeconds(currentTime)} / {formatSeconds(duration)}
+                    {formatVideoProgress(currentTime, duration)}
                   </span>
                 </div>
               </div>
