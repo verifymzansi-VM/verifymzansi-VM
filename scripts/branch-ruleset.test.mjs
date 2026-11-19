@@ -96,6 +96,12 @@ test("the committed ruleset only requires checks that run on pull requests to ma
   // CI never run on pull requests, so they can never be required.
   for (const name of ["e2e-foundation (chromium)", "e2e-foundation (mobile-chrome)"])
     assert.ok(available.has(name), name);
+  // The WebKit browser lane (e2e-webkit.yml) runs on pull requests but stays
+  // advisory: its workflow is not one whose jobs may be required, so the
+  // ruleset cannot name it.
+  const advisory = "e2e-foundation (mobile-safari, advisory)";
+  assert.ok(!available.has(advisory), `${advisory} must not be requirable`);
+  assert.ok(!requiredContexts(ruleset).includes(advisory), `${advisory} must not be required`);
   for (const name of available) assert.doesNotMatch(name, /\$\{\{|Release gate/, name);
 });
 

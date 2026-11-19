@@ -244,6 +244,10 @@ pnpm supabase:cli -- --env-file=.env.local migration list
   `VERIFYMZANSI_RUNTIME_MODE=e2e` and serves on `http://127.0.0.1:3110`
 - Projects: `chromium` and `mobile-chrome`. CI runs them as the required check
   `e2e-foundation` (workflow "E2E foundation")
+- Also `mobile-safari` (iPhone Safari, WebKit; install it once with
+  `pnpm exec playwright install --with-deps webkit`). CI runs it only as the
+  advisory check `e2e-foundation (mobile-safari, advisory)` (workflow "E2E
+  WebKit (advisory)"), which is not required
 - Delete the copy afterwards with `pnpm foundation:e2e:down`
 - The old stub browser suite (`playwright.config.ts`, `e2e/*.spec.ts`) was
   retired on 2026-11-11 (`e2e/foundation/PORTING.md`)

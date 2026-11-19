@@ -214,6 +214,9 @@ test.describe("staff record a cleared bank transfer", () => {
       page.getByRole("status").filter({ hasText: "It waits for another staff member" })
     ).toBeVisible();
     expect(records()).toBe(`1,${before + 1}`);
+    // The page refreshes its data after recording (router.refresh). Navigating
+    // while that runs was reported as an interrupted navigation in WebKit.
+    await page.waitForLoadState("networkidle");
     // While it waits, the same credit cannot be recorded a second time.
     await page.goto("/admin/payments");
     await page.getByRole("button", { name: "Record a bank transfer" }).click();

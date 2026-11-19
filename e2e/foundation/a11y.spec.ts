@@ -50,16 +50,74 @@ async function expectNoSeriousViolations(page: Page, name: string): Promise<void
   const criticalViolations = results.violations.filter(
     (v) => v.impact === "critical" || v.impact === "serious"
   );
+  // A contrast failure also names the colours axe measured: they show whether
+  // the text is too faint or axe read another background in this browser.
   expect(
-    criticalViolations.map((v) => ({ id: v.id, targets: v.nodes.map((node) => node.target) })),
+    criticalViolations.map((v) => ({
+      id: v.id,
+      targets: v.nodes.map((node) =>
+        v.id === "color-contrast" ? [...node.target, contrastData(node.any)] : node.target
+      ),
+    })),
     `${name} has ${criticalViolations.length} critical/serious a11y violations`
   ).toEqual([]);
+}
+
+/** fgColor, bgColor, contrastRatio and font of an axe color-contrast check. */
+function contrastData(checks: { id: string; data?: unknown }[]) {
+  const data = checks.find((check) => check.id === "color-contrast")?.data as
+    Record<string, unknown> | undefined;
+  if (!data) return "(no data)";
+  return ["fgColor", "bgColor", "contrastRatio", "expectedContrastRatio", "fontSize", "fontWeight"]
+    .map((key) => `${key}=${String(data[key])}`)
+    .join(" ");
 }
 
 async function open(page: Page, path: string) {
   await page.goto(path, { waitUntil: "domcontentloaded" });
   // Let styles and entrance animations settle before axe reads colours.
   await page.waitForLoadState("networkidle").catch(() => {});
+  await revealAndSettle(page);
+}
+
+/**
+ * Content below the fold fades in once it is scrolled into view
+ * (src/components/marketing/reveal.tsx: opacity 0, then a 650 ms transition).
+ * axe reads colours as painted, so text caught mid-fade measured as too faint:
+ * on the iPhone viewport the pricing cards start below the fold, and WebKit
+ * measured their normal text at #e3e3e0 on #f7f7f4 (1.19:1) and muted text at
+ * #8e9691 (2.95:1), while the settled colours pass. So scroll through the page
+ * once, back to the top, and wait until nothing is hidden for a reveal and no
+ * finite animation or transition is still running.
+ */
+async function revealAndSettle(page: Page) {
+  await page.evaluate(async () => {
+    const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+    const step = Math.max(200, Math.floor(window.innerHeight / 2));
+    for (let y = 0; y < document.documentElement.scrollHeight; y += step) {
+      window.scrollTo(0, y);
+      await frame();
+      await frame();
+    }
+    window.scrollTo(0, 0);
+  });
+  await expect.poll(() => page.locator(".reveal-hidden").count()).toBe(0);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            document
+              .getAnimations()
+              .filter(
+                (animation) =>
+                  animation.playState === "running" &&
+                  animation.effect?.getTiming().iterations !== Infinity
+              ).length
+        ),
+      { timeout: 10_000 }
+    )
+    .toBe(0);
 }
 
 /** Submits the empty form until its errors show: a click before the page

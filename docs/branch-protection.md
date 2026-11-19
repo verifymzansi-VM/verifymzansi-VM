@@ -90,7 +90,11 @@ such a check would block every pull request.
     mobile-chrome. Only the aggregate job is required: it passes only when both
     per-project jobs, `e2e-foundation (chromium)` and
     `e2e-foundation (mobile-chrome)`, passed. It replaced the retired stub
-    suite's `e2e-full-matrix` and its `Browser test build` on 2026-11-11.
+    suite's `e2e-full-matrix` and its `Browser test build` on 2026-11-11. The
+    same tests in iPhone Safari (WebKit) run as
+    `e2e-foundation (mobile-safari, advisory)` in their own workflow
+    (`e2e-webkit.yml`): that check is advisory, not required, and not part of
+    the aggregate.
   - `Visual regression (chosen frontend)`: compares the main public screens with
     the approved pictures of the chosen frontend, served from the private local
     foundation test copy, with the browser in the pinned Playwright image
