@@ -1,0 +1,102 @@
+name: E2E launch config
+
+# Browser tests with every switch that hides a feature set to its launch value
+# (playwright.launch-config.config.ts): the same private local test copy as
+# e2e-foundation.yml, built with VERIFYMZANSI_LAUNCH_CONFIG=1, which turns on
+# every src/lib/hidden-features.ts switch and PACKAGES_ON_SALE, turns off the
+# pre-launch pop-up, and opens public registration and add-on sales in the
+# copy. It runs every foundation spec plus e2e/foundation/launch-config.spec.ts
+# in desktop Chromium. Nothing here reaches a hosted project or a real
+# provider, and the job needs no secrets.
+#
+# Advisory: it reports what launch day would break and blocks nothing. The job
+# continues on error (the run stays green, so a red result here never holds a
+# merge or raises the failure alert); read the job's summary and report. It is
+# not a required check and not part of the CI run the deploy waits for.
+#
+# The build switch is refused for any build other than the local copy
+# (scripts/lib/launch-config-build.cjs, next.config.js and the Cloudflare
+# preflight), so production keeps today's values.
+#
+# It runs about as long as one e2e-foundation project and stays red until the
+# known launch failures are fixed, so it does not run on every push to a pull
+# request: only when a pull request is marked ready for review, when the
+# run-full-ci label is added, on main and by hand.
+on:
+  pull_request:
+    branches: [main]
+    types: [ready_for_review, labeled]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  launch-config:
+    name: launch-config (advisory)
+    # A labelled event runs it only for the run-full-ci label.
+    if: >-
+      ${{ github.event_name != 'pull_request' ||
+      github.event.action == 'ready_for_review' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'run-full-ci') }}
+    # Job-level, so a skipped run (another label) never cancels a real one. A
+    # newer run on the same pull request cancels its older run; main runs never
+    # cancel.
+    concurrency:
+      group: e2e-launch-config-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.sha) }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/install-browsers
+      # Same reason as e2e-foundation.yml: keep the copy's fixed ports out of
+      # Linux's ephemeral range.
+      - name: Keep the test copy's ports out of the ephemeral range
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55440-55460
+      - name: Start the test copy (local stack, schema proof, test people)
+        timeout-minutes: 5
+        run: node --import tsx scripts/foundation-e2e.mjs up
+      - name: Build the website for the test copy in the launch configuration
+        timeout-minutes: 10
+        env:
+          VERIFYMZANSI_LAUNCH_CONFIG: "1"
+        run: node --import tsx scripts/foundation-e2e.mjs build
+      - name: Note when the browser tests start
+        run: echo "E2E_TESTS_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+      - name: Browser tests (launch configuration)
+        timeout-minutes: 22
+        env:
+          PLAYWRIGHT_SKIP_BUILD: "1"
+          PLAYWRIGHT_GLOBAL_TIMEOUT_MS: "1200000"
+          PLAYWRIGHT_JSON_REPORT: test-results/launch-config.json
+        run: pnpm exec playwright test --config=playwright.launch-config.config.ts
+      - name: Summarise the browser tests
+        if: always()
+        run: |
+          node scripts/e2e-foundation-summary.mjs test-results/launch-config.json chromium "${E2E_TESTS_STARTED:-}" "Launch configuration browser tests" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Keep the browser report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-launch-config-report
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            playwright-report/launch-config
+            test-results/launch-config
+            test-results/launch-config.json
+      - name: Delete the test copy
+        if: always()
+        run: node --import tsx scripts/foundation-e2e.mjs down

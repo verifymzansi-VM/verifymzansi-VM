@@ -2,6 +2,7 @@ import type { MarketplaceArea, PlanTier, RetailPlanTier } from "@/types/enums";
 import { formatRandAmount } from "@/lib/utils/format";
 import { getStablePlanId } from "@/lib/constants/plan-ids";
 import { SHOW_PAID_ADDONS } from "@/lib/hidden-features";
+import { LAUNCH_CONFIG_BUILD } from "@/lib/launch-config";
 
 export const ACTIVE_MARKETPLACE_AREAS = [
   "MZANSI_MARKET",
@@ -102,8 +103,11 @@ export const RETAIL_OFFERS: readonly RetailOffer[] = [
  * (Pricing v2: their prices are published only with a terms version that
  * states them). While false, the pricing, multi-listing and Advertise pages
  * and the posting flow show no multi-listing plans and no sponsor fees.
+ *
+ * False in production; true only in the launch-configuration browser-test
+ * build (src/lib/launch-config.ts).
  */
-export const PACKAGES_ON_SALE = false;
+export const PACKAGES_ON_SALE: boolean = LAUNCH_CONFIG_BUILD;
 
 const RETAIL_FEATURES: PlanDefinition["features"] = {
   maxPhotos: 10,

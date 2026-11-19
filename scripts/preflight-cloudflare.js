@@ -31,6 +31,8 @@ if (
 const validateOnly = args.has("--validate-only");
 // Production Worker builds always run Next's TypeScript check.
 require("./lib/next-typecheck-skip.cjs").assertNextTypecheckNotSkipped(process.env);
+// Production Worker builds never take the launch-configuration test build.
+require("./lib/launch-config-build.cjs").assertLaunchConfigNotRequested(process.env);
 
 const repoRoot = path.join(__dirname, "..");
 const wranglerTomlPath = path.join(repoRoot, "wrangler.toml");
