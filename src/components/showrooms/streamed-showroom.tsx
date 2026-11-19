@@ -6,7 +6,6 @@ import {
   type ShowroomDecorativeBackground,
 } from "./showroom-section-shell";
 import { loadShowroomItems, type ShowroomSurface } from "@/lib/showroom/feed";
-import { getVisitorProvince } from "@/lib/showroom/visitor-province";
 
 export interface StreamedShowroomProps {
   feed: Exclude<ShowroomSurface, "home">;
@@ -43,14 +42,12 @@ export async function ShowroomWithData({
   emptyMediaUrl,
   emptyItem,
 }: StreamedShowroomProps) {
-  const visitor = await getVisitorProvince();
   const items = await loadShowroomItems(feed);
 
   return (
     <ShowroomCardCarousel
       items={items.length === 0 && emptyItem ? [emptyItem] : items}
       surface={surface}
-      visitorProvince={visitor}
       emptyTitle={emptyTitle}
       emptyDescription={emptyDescription}
       emptyMediaUrl={emptyMediaUrl}

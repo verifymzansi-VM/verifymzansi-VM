@@ -1,11 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readServerLogEntries, readTestCopy, type TestCopy } from "./support/test-copy";
 
-// Roadmap M2.8: counters and chips show only true facts. The live backend does
-// not store views or likes and does not order showrooms by province, so post
-// pages show no view count and no like button, the showroom shows no "Showing
-// <province> first" chip, and the engagement and analytics beacons answer 204
-// without calling the missing database commands (which used to log errors).
+// Roadmap M2.8: counters show only true facts. The live backend does not store
+// views or likes, so post pages show no view count and no like button, and the
+// engagement and analytics beacons answer 204 without calling the missing
+// database commands (which used to log errors).
 
 const BEACONS = [
   "/api/analytics/visit",
@@ -82,14 +81,6 @@ test.describe("counters and chips show only true facts", () => {
       expect(beaconLogLines()).toBe(logLines);
     });
   }
-
-  test("the home showroom has no province chip", async ({ page }) => {
-    await page.goto("/");
-    const showroom = page.locator("section", { has: page.locator("#home-showroom-title") });
-    await expect(showroom.getByText(state.posts[0].title).first()).toBeAttached();
-    await expect(page.getByText(/^Showing (all of South Africa|.+ first)$/)).toHaveCount(0);
-    await expect(page.getByLabel("Show posts from a province first")).toHaveCount(0);
-  });
 
   test("the engagement and analytics routes answer 204 and log nothing", async ({
     request,

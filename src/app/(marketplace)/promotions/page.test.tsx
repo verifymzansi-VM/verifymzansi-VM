@@ -32,18 +32,13 @@ const { mockCreateClient, mockCookies, mockGetOwnerColumn } = vi.hoisted(() => (
   mockGetOwnerColumn: vi.fn(),
 }));
 
-const { carouselSpy, mockLoadShowroomItems, mockGetVisitorProvince } = vi.hoisted(() => ({
+const { carouselSpy, mockLoadShowroomItems } = vi.hoisted(() => ({
   carouselSpy: vi.fn(),
   mockLoadShowroomItems: vi.fn(),
-  mockGetVisitorProvince: vi.fn(),
 }));
 
 vi.mock("@/lib/showroom/feed", () => ({
   loadShowroomItems: mockLoadShowroomItems,
-}));
-
-vi.mock("@/lib/showroom/visitor-province", () => ({
-  getVisitorProvince: mockGetVisitorProvince,
 }));
 
 vi.mock("next/headers", () => ({
@@ -143,13 +138,11 @@ describe("PromotionsPage", () => {
       get: vi.fn().mockReturnValue(undefined),
     });
     mockLoadShowroomItems.mockResolvedValue([]);
-    mockGetVisitorProvince.mockResolvedValue({ province: null, source: null });
   });
 
   it("shows tourism businesses and events from the showroom feed", async () => {
     const supabase = createSupabaseClient({ businesses: [], promotions: [] });
     mockCreateClient.mockResolvedValue(supabase);
-    mockGetVisitorProvince.mockResolvedValue({ province: "Western Cape", source: "detected" });
     const items = [
       { id: "event-1", type: "promotion", href: "/tourism-events/event-1", title: "Event" },
       { id: "lodge-1", type: "business", href: "/tourism-events/lodge-1", title: "Lodge" },
@@ -163,7 +156,6 @@ describe("PromotionsPage", () => {
       expect.objectContaining({
         items,
         surface: "showroom:tourism",
-        visitorProvince: { province: "Western Cape", source: "detected" },
       })
     );
   });

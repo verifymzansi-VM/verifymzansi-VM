@@ -129,21 +129,6 @@ export const DEFAULT_COMMERCIAL_SETTINGS: CommercialSettings = {
   features: { enterpriseCheckout: true, organisationsPublic: true },
 };
 
-export const COMMERCIAL_SETTING_LABELS: Record<CommercialSettingKey, string> = {
-  trials: "Public trial durations and rules",
-  strategic: "Strategic Individual trial",
-  founding_commercial: "Founding Commercial Partner (dealerships)",
-  founding_organisation: "Founding Organisation Programme",
-  retail: "Sponsored member fair use",
-  partner: "Partner commission",
-  media: "Media limits",
-  events: "Free event fair use",
-  showroom: "Programme showroom",
-  sponsors: "Business Sponsors strip and home section",
-  extensions: "Trial extension offers",
-  features: "Feature toggles",
-};
-
 function isCommercialSettingKey(key: string): key is CommercialSettingKey {
   return Object.prototype.hasOwnProperty.call(COMMERCIAL_SETTING_SCHEMAS, key);
 }

@@ -619,7 +619,6 @@ const ADMIN_ROUTE_TARGETS: RouteTarget[] = [
     readySelectors: ["main"],
     titleIncludes: ["Role Management"],
   },
-  // The Intelligence pages are hidden until they work (src/lib/hidden-features.ts).
 ];
 
 const BOUNDARY_CHECKS: BoundaryCheck[] = [

@@ -15,7 +15,7 @@ begin
   select * into x from private.frontend_business_checks where id=p_case and kind='seen';
   if not found then return null;end if;
   select * into ec from private.evidence_cases where id=x.id;
-  if actor<>x.owner_id and (actor=x.assigned_to or actor=x.reviewed_by or
+  if actor<>x.owner_id and ((actor=x.assigned_to or actor=x.reviewed_by) and internal.business_check_reread_open(x.decided_at) or
     (ec.status='open' and ec.claimed_by=actor and ec.claim_expires_at>clock_timestamp())) then
     perform internal.staff_actor('evidence:view');private_read:=true;
   end if;

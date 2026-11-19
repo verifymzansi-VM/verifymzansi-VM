@@ -283,6 +283,39 @@ test.describe("public pages", () => {
       .toBeFalsy();
   });
 
+  test("page links stop at page 100 and the last page asks to narrow the search", async ({
+    page,
+    request,
+  }) => {
+    // A deeper page number serves page 100 (never an error page), and no read
+    // goes past the deepest offset the database serves.
+    for (const path of ["/api/businesses?page=150&limit=24", "/api/promotions?page=10000"]) {
+      const deep = await request.get(path);
+      expect(deep.status(), path).toBe(200);
+      expect(await deep.json(), path).toMatchObject({ page: 100 });
+    }
+    // The fixture holds a handful of posts, so the answer is given many more
+    // results: the grid then offers 100 pages and says so on the last one.
+    await page.route(/\/api\/businesses\?/, async (route) => {
+      const url = new URL(route.request().url());
+      url.searchParams.delete("page");
+      const response = await route.fetch({ url: url.toString() });
+      const body = await response.json();
+      await route.fulfill({ response, json: { ...body, total: 10_000, page: 100 } });
+    });
+    // A typed deeper page shows as the last page.
+    await page.goto("/mzansi-business?page=150", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("mzansi-business-grid-ready")).toBeVisible({ timeout: 20_000 });
+    await expect(
+      page.getByText(/Showing the first 2.400 results\. Narrow your search to see more\./)
+    ).toBeVisible();
+    await expect(
+      page
+        .getByTestId("mzansi-business-grid-ready")
+        .getByRole("button", { name: "Next", exact: true })
+    ).toBeDisabled();
+  });
+
   test("the phone footer and area tabs stay clear of the bottom tab bar", async ({ page }) => {
     test.skip((page.viewportSize()?.width ?? 1280) >= 768, "Mobile-only layout check");
     await page.goto("/mzansi-business");

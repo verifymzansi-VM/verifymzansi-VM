@@ -92,7 +92,6 @@ export default function PrivacyPolicyPage() {
         "• Communication records and payment information handled by Ozow and payment providers",
         "We also collect device/browser info, IP address, and usage data automatically.",
         "Error monitoring: when the site breaks we use Sentry to record what went wrong. For a small share of visits, and for visits where an error happens, it records a replay of the page with all text masked and images blocked.",
-        "Showroom location: when you open a page with a showroom, we estimate your province from your internet connection so we can show local posts first. The network address is used only while the page loads and is not stored. If you pick a province yourself, it is remembered in a cookie on your device.",
         "View counting: to count views fairly we keep a random browser identifier and a one-way hash of your network address for 90 days. These cannot be turned back into your address and are never shown to post owners, who only see totals.",
       ],
     },
