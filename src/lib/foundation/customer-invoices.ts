@@ -26,7 +26,9 @@ import { BILLING_EMAIL } from "../billing/slot-checkout";
 const INVOICE_NUMBER_PATTERN = /^VM-\d{4}-\d{6}$/;
 const invoiceNumber = z.string().regex(INVOICE_NUMBER_PATTERN);
 const instant = z.iso.datetime({ offset: true });
-const cents = z.number().int().positive().max(5_000_000);
+// An invoice total: Individual slots up to R50 000, a Multi-listing package up to
+// 250 slots for 180 days (R150 000, update 20261119025106).
+const cents = z.number().int().positive().max(15_000_000);
 const paymentStatus = z.enum([
   "pending",
   "complete",
@@ -60,7 +62,8 @@ export const customerInvoiceSchema = z.strictObject({
     .nullable(),
   revision: z.number().int().positive(),
   term_days: z.union([z.literal(30), z.literal(90), z.literal(180)]),
-  slots: z.number().int().min(1).max(25),
+  // Individual slots 1 to 25; a package 5 to 250.
+  slots: z.number().int().min(1).max(250),
   unit_price_cents: cents,
   total_cents: cents,
   description: z.string().min(3).max(200),
@@ -196,9 +199,11 @@ const MEMBER_REFUSALS: ReadonlyMap<
     "package_active",
     [
       409,
-      "While your Multi-listing package runs, new posts use its slots: Individual slots cannot be bought until its last 7 days.",
+      "While your Multi-listing package runs, new posts use its slots: Individual slots cannot be bought until its last 7 days, and a second package cannot start.",
     ],
   ],
+  // Multi-listing package invoices (update 20261119025106).
+  ["packages_not_on_sale", [403, "Multi-listing packages are not on sale yet."]],
 ]);
 
 type RpcResult = PromiseLike<{
@@ -332,7 +337,7 @@ const invoiceQuote = z.strictObject({
   amount_cents: z.string().regex(/^[0-9]{1,12}$/),
   currency: z.literal("ZAR"),
   status: z.literal("pending"),
-  slots: z.number().int().min(1).max(25),
+  slots: z.number().int().min(1).max(250),
   reused: z.boolean(),
 });
 
@@ -416,9 +421,11 @@ const STAFF_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new
     "package_active",
     [
       409,
-      "The person's Multi-listing package runs: Individual slots cannot be sold until its last 7 days.",
+      "The person's Multi-listing package runs: Individual slots cannot be sold until its last 7 days, and a second package cannot start.",
     ],
   ],
+  // Multi-listing package invoices (update 20261119025106).
+  ["packages_not_on_sale", [409, "Multi-listing packages are not on sale."]],
   [
     "invoice_vat_status_changed",
     [409, "The VAT registration setting changed. Invoices need updating before one is issued."],

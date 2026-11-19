@@ -303,6 +303,18 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
     [409, "This invoice was already paid. Decline this transfer and return the money."],
   ],
   ["invoice_void", [409, "This invoice was voided. Decline this transfer and return the money."]],
+  // Multi-listing package invoices (update 20261119025106).
+  [
+    "packages_not_on_sale",
+    [409, "Multi-listing packages are not on sale. Decline this transfer and return the money."],
+  ],
+  [
+    "package_active",
+    [
+      409,
+      "The customer's Multi-listing package stops this: no Individual slot is sold while it runs, and no second package starts. Decline this transfer and return the money.",
+    ],
+  ],
   [
     "invoice_payment_open",
     [409, "A payment of this invoice is still open at Ozow. Try again when it has closed."],
@@ -471,9 +483,12 @@ export function declineStaffPaymentRefund(
 /** The slot terms a bank transfer can pay for (the Individual slots on sale). */
 export const BANK_TRANSFER_TERMS = [30, 90, 180] as const;
 export type BankTransferTerm = (typeof BANK_TRANSFER_TERMS)[number];
-/** Bank transfers above R50 000 are refused for now (a second staff member's
- * check above that amount is not built yet). The database decides. */
+/** Bank transfers for Individual slots without an invoice above R50 000 are
+ * refused. The database decides. */
 const BANK_TRANSFER_LIMIT_CENTS = 5_000_000;
+/** A recorded transfer to a Multi-listing package invoice can be up to 250
+ * slots for 180 days (R150 000, update 20261119025106). */
+const RECORDED_TRANSFER_LIMIT_CENTS = 15_000_000;
 
 /** A bank reference as the database stores it: spaces collapsed, 4 to 60
  * letters, digits, spaces or . _ : / -, with at least four letters or digits. */
@@ -509,8 +524,9 @@ const staffTransferRecord = z.strictObject({
   similar_records: count,
   customer_name: z.string().max(120).nullable(),
   term_days: term,
-  slots: z.number().int().min(1).max(25),
-  amount_received_cents: cents.max(BANK_TRANSFER_LIMIT_CENTS),
+  // Individual slots 1 to 25; a Multi-listing package invoice 5 to 250.
+  slots: z.number().int().min(1).max(250),
+  amount_received_cents: cents.max(RECORDED_TRANSFER_LIMIT_CENTS),
   bank_reference: z.string().min(4).max(60),
   cleared_on: z.iso.date(),
   reason: z.string().min(5).max(500),
@@ -573,7 +589,7 @@ export function confirmStaffBankTransfer(api: FoundationAuthenticatedApi, transf
       status: z.literal("confirmed"),
       payment_id: z.uuid(),
       commissions: count,
-      slots_started: z.number().int().min(1).max(25).optional(),
+      slots_started: z.number().int().min(1).max(250).optional(),
       ends_at: z.iso.datetime({ offset: true }).optional(),
       repeated: z.boolean(),
     })

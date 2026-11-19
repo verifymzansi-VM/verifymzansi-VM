@@ -4988,6 +4988,143 @@
         "service_role": false
       },
       "authority": "Administrator of the application's organisation with a current verified identity (or staff organisation:manage): the public business contact (phone, email, website) of one pending application (submitted or more information requested) whose business is live; nothing for decided or withdrawn applications. Each reveal is recorded in the organisation's append-only event log (actor, time, application)."
+    },
+    {
+      "name": "request_package_invoice",
+      "updates": ["updates/20261119025106_package_invoices.sql"],
+      "arguments": [
+        {
+          "name": "p_plan_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_slots",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_expected_total_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_consent",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Signed-in member with a live session and a current accepted ID review, only while Multi-listing packages are on sale (PT403 packages_not_on_sale): asks staff for an invoice for a package of 5 to 250 slots for one package term, at any amount. The price and total come from the catalogue (PT428 when the total shown differs); the member confirms the invoice cooling-off wording (invoice-cooling-off-v1). Refused while the account has a package that has not ended (PT409 package_active) or an unpaid package invoice (PT409 package_invoice_unpaid), or while staff prepare an earlier request (PT409 package_invoice_request_open). One open request per account; the same request id returns the first answer; another order replaces a request no staff member has prepared."
+    },
+    {
+      "name": "get_my_package_invoice_request",
+      "updates": ["updates/20261119025106_package_invoices.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Signed-in member with a live session: the latest package invoice request of their own account (status, term, slots, price, total, dates and the invoice number once issued); never another account's, never the staff member or the staff reasons."
+    },
+    {
+      "name": "get_staff_package_invoice_requests",
+      "updates": ["updates/20261119025106_package_invoices.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payments:view capability and recent authenticator proof: the open package invoice requests (requested, or prepared and awaiting a second staff member's approval), oldest first, at most 100, with the customer's account email, public name, whether their ID review is accepted and whether they have a package, and who prepared an invoice awaiting approval."
+    },
+    {
+      "name": "issue_staff_package_invoice",
+      "updates": ["updates/20261119025106_package_invoices.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_due_days",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payments:refund capability and recent authenticator proof; the staff member's own current accepted ID review, never an account of their own identity or a customer they referred: issues the customer invoice of a requested package (the next VM-YYYY-NNNNNN number, the price asked for, due in 1 to 30 days, an audited reason) after checking the account, its ID review, the sales switch, the price, no package, no other unpaid package invoice and the VAT setting again. Above R50,000 it only prepares it (awaiting_approval, no number) for a second staff member. Repeats by the same staff member return the first answer."
+    },
+    {
+      "name": "approve_staff_package_invoice",
+      "updates": ["updates/20261119025106_package_invoices.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payments:confirm_transfer capability (admin) and recent authenticator proof; the staff member's own current accepted ID review, never the customer, a customer they referred, or the staff member who prepared the invoice or another account of their identity (42501 invoice_approver_same): issues a prepared package invoice above R50,000 after every issue check again, only while the preparer still holds payments:refund (PT409 invoice_preparer_inactive). The same approver repeating gets the first answer."
+    },
+    {
+      "name": "decline_staff_package_invoice_request",
+      "updates": ["updates/20261119025106_package_invoices.sql"],
+      "arguments": [
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payments:refund capability and recent authenticator proof; the staff member's own current accepted ID review, never an account of their own identity or a customer they referred: closes an open package invoice request (requested or awaiting approval) with an audited reason; nothing is issued."
     }
   ]
 }

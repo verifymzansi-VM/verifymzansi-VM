@@ -24,8 +24,15 @@ begin
       or pay.plan_version_id <> inv.plan_version_id or inv.status <> 'issued'
       or pay.merchant_reference is distinct from reference
       or pay.snapshot->>'customer_invoice_id' is distinct from inv.id::text
-      or (select count(*) from private.payment_lines l where l.payment_id = pay.id
-        and l.amount_cents = inv.unit_price_cents) <> inv.slots
+      -- One line per Individual slot at its price, or (a Multi-listing
+      -- package, 20261119025106) one line holding every slot at the total.
+      or (case when exists(select 1 from private.plan_versions v where v.id = inv.plan_version_id
+            and internal.slot_package_plan(v.plan_code))
+          then (select count(*) from private.payment_lines l where l.payment_id = pay.id) <> 1
+            or not exists(select 1 from private.payment_lines l where l.payment_id = pay.id
+              and l.amount_cents = inv.total_cents and l.slot_count = inv.slots)
+          else (select count(*) from private.payment_lines l where l.payment_id = pay.id
+            and l.amount_cents = inv.unit_price_cents) <> inv.slots end)
       or new.attempt <> 1 + (select count(*) from private.customer_invoice_payments x where x.invoice_id = inv.id) then
     raise exception 'an invoice payment attempt is a new Ozow payment of that invoice' using errcode='23514';
   end if;

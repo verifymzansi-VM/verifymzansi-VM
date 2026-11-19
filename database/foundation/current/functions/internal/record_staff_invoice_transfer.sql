@@ -104,8 +104,10 @@ begin
   if not exists(select 1 from private.current_account_access a where a.id = inv.account_id) then
     raise exception 'the customer''s account cannot use slots now' using errcode='PT409', detail='payment_account_unavailable';
   end if;
+  -- An Individual slot invoice, or (P4e) a Multi-listing package invoice.
   select * into plan from private.plan_versions v where v.id = inv.plan_version_id
-    and internal.individual_slot_plan(v.plan_code) and v.price_cents = inv.unit_price_cents;
+    and (internal.individual_slot_plan(v.plan_code) or internal.slot_package_plan(v.plan_code))
+    and v.price_cents = inv.unit_price_cents;
   if not found then
     raise exception 'this invoice''s slot is no longer sold at its price' using errcode='PT409', detail='invoice_plan_unavailable';
   end if;
@@ -114,16 +116,27 @@ begin
     raise exception 'the customer''s ID review must be accepted before slots are recorded'
       using errcode='PT412', detail='invoice_buyer_unverified';
   end if;
-  -- E3 (20261114154823): while the person's Multi-listing package runs (until
-  -- its last 7 days), no Individual slot is sold, whatever the way it is paid.
-  if internal.slot_package_blocks_individual(fingerprint, inv.account_id) then
-    raise exception 'Individual slots cannot be sold while the person''s Multi-listing package runs'
-      using errcode='PT409', detail='package_active';
-  end if;
-  -- An early check of the slot limit; confirmation checks it again.
-  if (internal.individual_slots_counted(fingerprint, inv.account_id, null)->>'held')::integer + inv.slots
-      > internal.individual_slot_limit(fingerprint) then
-    raise exception 'more slots than the person''s limit; raise the limit first' using errcode='PT429', detail='slot_limit_reached';
+  if internal.slot_package_plan(plan.plan_code) then
+    -- An early check of the package rules; confirmation checks them again.
+    if not internal.slot_packages_on_sale() then
+      raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
+    end if;
+    if internal.slot_package_open(inv.account_id) then
+      raise exception 'the customer already has a Multi-listing package; void this invoice'
+        using errcode='PT409', detail='package_active';
+    end if;
+  else
+    -- E3 (20261114154823): while the person's Multi-listing package runs (until
+    -- its last 7 days), no Individual slot is sold, whatever the way it is paid.
+    if internal.slot_package_blocks_individual(fingerprint, inv.account_id) then
+      raise exception 'Individual slots cannot be sold while the person''s Multi-listing package runs'
+        using errcode='PT409', detail='package_active';
+    end if;
+    -- An early check of the slot limit; confirmation checks it again.
+    if (internal.individual_slots_counted(fingerprint, inv.account_id, null)->>'held')::integer + inv.slots
+        > internal.individual_slot_limit(fingerprint) then
+      raise exception 'more slots than the person''s limit; raise the limit first' using errcode='PT429', detail='slot_limit_reached';
+    end if;
   end if;
   -- An attempt never sent to Ozow is closed, so the slot checkout cannot
   -- continue it while the transfer waits.

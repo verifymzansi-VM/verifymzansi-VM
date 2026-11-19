@@ -2,14 +2,14 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { Loader2, LockKeyhole, Minus, Plus } from "lucide-react";
+import { Loader2, LockKeyhole, Minus, Plus, ReceiptText } from "lucide-react";
 import { CheckoutShell } from "@/components/billing/checkout-shell";
 import { Button } from "@/components/ui/button";
 import { formatSaLongDate } from "@/lib/utils/format";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { getFriendlyCheckoutError } from "@/lib/billing/checkout-copy";
 import { formatDurationDays, formatPlanPrice } from "@/lib/constants/pricing";
-import { BILLING_EMAIL } from "@/lib/billing/slot-checkout";
+import { INVOICE_COOLING_OFF_CONSENT } from "@/lib/billing/slot-checkout";
 import {
   PACKAGE_COOLING_OFF_CONSENT,
   PACKAGE_MAX_SLOTS,
@@ -49,12 +49,20 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
+/** An "Ask for an invoice" sent for this order (api.request_package_invoice). */
+interface InvoiceRequested {
+  slots: number;
+  days: PackageTerm;
+  totalCents: number;
+}
+
 /**
  * "Choose your package" (roadmap P4a; the owner's approved draft p4-01/p4-02):
  * the member types the number of slots (5 to 100 online, shortcuts 5, 10, 25,
  * 50 and 100) and picks 30, 90 or 180 days; the total is R100 per slot per 30
  * days. Above Ozow's maximum for one payment (or 100 slots) the package is
- * bought by invoice. The
+ * bought by invoice: the member ticks the invoice's cooling-off box and asks
+ * for it here (P4e); staff issue it and it is paid from Invoices. The
  * database applies every rule again; this page is shown only while packages
  * are on sale.
  */
@@ -89,6 +97,11 @@ export function PackageCheckout({
   const { pendingPayment, setPendingPayment, cancelling, cancelPending } =
     usePendingPayment(setError);
   const pending = useRef(false);
+  // "Ask for an invoice" (P4e): its own box, and one request id per order so
+  // a retried submission is answered once.
+  const [invoiceConsent, setInvoiceConsent] = useState(false);
+  const [invoiceRequested, setInvoiceRequested] = useState<InvoiceRequested | null>(null);
+  const invoiceRequestId = useRef<{ order: string; id: string } | null>(null);
 
   // Back from Ozow through the back/forward cache: never stuck on "Redirecting…".
   useEffect(() => {
@@ -109,6 +122,13 @@ export function PackageCheckout({
   };
   const canPay =
     !block && quote.kind === "online" && consent && state === "idle" && term !== undefined;
+  const canAskInvoice =
+    !block && quote.kind === "invoice" && invoiceConsent && state === "idle" && term !== undefined;
+  const requestedThisOrder =
+    invoiceRequested !== null &&
+    invoiceRequested.slots === slots &&
+    invoiceRequested.days === days &&
+    invoiceRequested.totalCents === totalCents;
   const checkoutHref = `/billing/package?slots=${slots ?? PACKAGE_MIN_SLOTS}&days=${days}`;
 
   async function pay() {
@@ -146,6 +166,45 @@ export function PackageCheckout({
       setError("Secure checkout did not return a redirect URL.");
     } catch {
       setError(getFriendlyCheckoutError(undefined, null, "your package"));
+    }
+    setState("idle");
+    pending.current = false;
+  }
+
+  async function askForInvoice() {
+    if (!canAskInvoice || pending.current || !term || totalCents === null || slots === null) return;
+    pending.current = true;
+    setState("submitting");
+    setError(null);
+    setNeedsSignIn(false);
+    const order = `${term.planId}:${slots}`;
+    if (invoiceRequestId.current?.order !== order)
+      invoiceRequestId.current = { order, id: crypto.randomUUID() };
+    try {
+      const res = await fetch("/api/billing/package-invoice", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          planId: term.planId,
+          slots,
+          expectedTotalCents: totalCents,
+          coolingOffConsent: invoiceConsent,
+          requestId: invoiceRequestId.current.id,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success === true) {
+        setInvoiceRequested({ slots, days, totalCents });
+      } else {
+        setError(
+          typeof data.error === "string"
+            ? data.error
+            : "Your request could not be sent. Please try again in a few minutes."
+        );
+        setNeedsSignIn(res.status === 401);
+      }
+    } catch {
+      setError("Your request could not be sent. Please try again in a few minutes.");
     }
     setState("idle");
     pending.current = false;
@@ -216,6 +275,7 @@ export function PackageCheckout({
                   onChange={(event) => {
                     setText(event.target.value.replace(/[^0-9]/g, "").slice(0, 4));
                     setConsent(false);
+                    setInvoiceConsent(false);
                   }}
                   aria-describedby={`${ids}-slots-help`}
                   aria-invalid={quote.kind !== "online" && quote.kind !== "invoice"}
@@ -242,6 +302,7 @@ export function PackageCheckout({
                     onClick={() => {
                       setText(String(size));
                       setConsent(false);
+                      setInvoiceConsent(false);
                     }}
                     aria-pressed={slots === size}
                     className={cn(
@@ -293,6 +354,7 @@ export function PackageCheckout({
                         onChange={() => {
                           if (isPackageTerm(entry.days)) setDays(entry.days);
                           setConsent(false);
+                          setInvoiceConsent(false);
                         }}
                         className="sr-only"
                       />
@@ -313,7 +375,9 @@ export function PackageCheckout({
             Package details
           </h2>
           <dl className="mt-1 divide-y divide-border/60">
-            <DetailRow label="Starts">On payment</DetailRow>
+            <DetailRow label="Starts">
+              {quote.kind === "invoice" ? "When your invoice is paid" : "On payment"}
+            </DetailRow>
             <DetailRow label="Ends">
               {`${formatDurationDays(days)} later, all slots together (${formatSaLongDate(ends)})`}
             </DetailRow>
@@ -370,23 +434,65 @@ export function PackageCheckout({
               )}
             </div>
           ) : quote.kind === "invoice" ? (
-            <div
-              role="status"
-              data-testid="package-invoice"
-              className="rounded-xl border border-border/80 bg-muted/40 p-3.5 text-sm leading-6 text-foreground/80"
-            >
-              <p>
-                {onlineMaxCents !== null && totalCents !== null && totalCents > onlineMaxCents
-                  ? `Ozow takes payments of up to ${formatPlanPrice(onlineMaxCents)}, so this package is paid by invoice, at the same price.`
-                  : `More than ${PACKAGE_MAX_ONLINE_SLOTS} slots is paid by invoice, at the same price.`}{" "}
-                <a
-                  href={`mailto:${BILLING_EMAIL}?subject=Invoice%20for%20a%20Multi-listing%20package`}
-                  className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
-                >
-                  Ask for an invoice
-                </a>
-              </p>
-            </div>
+            <>
+              <div
+                role="status"
+                data-testid="package-invoice"
+                className="flex items-start gap-3 rounded-xl border border-brand-gold-300/70 bg-brand-gold-50/70 p-3.5 text-sm leading-6 text-foreground/80 dark:border-brand-gold-700/50 dark:bg-brand-gold-950/30"
+              >
+                <ReceiptText
+                  aria-hidden="true"
+                  className="mt-0.5 h-5 w-5 shrink-0 text-brand-gold-700 dark:text-brand-gold-300"
+                />
+                <p>
+                  {requestedThisOrder ? (
+                    <>
+                      {
+                        "Invoice requested. We will let you know when it is ready; then pay it from "
+                      }
+                      <Link
+                        href="/billing/invoices"
+                        className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
+                      >
+                        Invoices
+                      </Link>
+                      .
+                    </>
+                  ) : onlineMaxCents !== null &&
+                    totalCents !== null &&
+                    totalCents > onlineMaxCents ? (
+                    `Ozow takes payments of up to ${formatPlanPrice(onlineMaxCents)}, so this package is paid by invoice, at the same price.`
+                  ) : (
+                    `More than ${PACKAGE_MAX_ONLINE_SLOTS} slots is paid by invoice, at the same price.`
+                  )}
+                </p>
+              </div>
+              {requestedThisOrder ? null : (
+                <div className="flex items-start gap-3 rounded-xl border border-border/80 bg-muted/40 p-3.5">
+                  <input
+                    type="checkbox"
+                    id={`${ids}-invoice-consent`}
+                    checked={invoiceConsent}
+                    onChange={(event) => setInvoiceConsent(event.target.checked)}
+                    className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-input accent-brand-green-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:accent-brand-green-400"
+                  />
+                  <label
+                    htmlFor={`${ids}-invoice-consent`}
+                    className="cursor-pointer text-sm leading-6 text-foreground/80"
+                  >
+                    {INVOICE_COOLING_OFF_CONSENT}{" "}
+                    <Link
+                      href="/terms#refunds"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
+                    >
+                      Refunds
+                    </Link>
+                  </label>
+                </div>
+              )}
+            </>
           ) : quote.kind === "online" ? (
             <div className="flex items-start gap-3 rounded-xl border border-border/80 bg-muted/40 p-3.5">
               <input
@@ -427,6 +533,22 @@ export function PackageCheckout({
             />
           ) : null}
           <div className="flex flex-col gap-1 sm:gap-2">
+            {quote.kind === "invoice" && !requestedThisOrder ? (
+              <Button
+                variant="trust-verified"
+                size="lg"
+                className="h-12 rounded-full"
+                disabled={!canAskInvoice}
+                onClick={askForInvoice}
+              >
+                {state === "idle" ? (
+                  <ReceiptText aria-hidden="true" className="h-4 w-4" />
+                ) : (
+                  <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                )}
+                Ask for an invoice
+              </Button>
+            ) : null}
             {quote.kind !== "invoice" ? (
               <Button
                 variant="trust-verified"
