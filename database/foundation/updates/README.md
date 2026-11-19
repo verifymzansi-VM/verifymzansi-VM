@@ -79,9 +79,10 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Refund follow-ups and Ozow's refund window, 18 November 2026
 
-`20261118182332_refund_follow_ups.sql` is pending (see the applied register). It
-carries the owner's decisions of 18 November (plan B) for staff refunds; members
-see nothing new:
+`20261118182332_refund_follow_ups.sql` was applied on 18 November 2026 at 21:25
+UTC with the owner's approval, before the website release from its pull request
+(see the applied register). It carries the owner's decisions of 18 November
+(plan B) for staff refunds; members see nothing new:
 
 - **New reason "Cancelled before the renewal started"**
   (`renewal_cancelled_before_start`). It fits only a refund whose slots are all
@@ -169,9 +170,10 @@ rule above through the production API commands.
 
 ## Staff and organisation screens show less personal data, 18 November 2026
 
-`20261118072601_staff_data_minimisation.sql` is pending (see the applied
-register). It narrows what staff and organisation administrators see, and tells
-the person behind a data request when it moves on:
+`20261118072601_staff_data_minimisation.sql` was applied on 18 November 2026 at
+18:09 UTC with the owner's approval, before the website release from this pull
+request (see the applied register). It narrows what staff and organisation
+administrators see, and tells the person behind a data request when it moves on:
 
 - **Short names in review queues.** The business review queue, the 'seen in
   person' queue and case, the CIPC case and both ID check queue reads name a
@@ -5080,7 +5082,29 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   days or more: 0; expired: 0" (no problem rows); production fingerprint after
   it (fingerprint.sql at 93e69753) matched the full replay (except the known
   schema grant difference)
-- `20261118072601_staff_data_minimisation.sql`: pending
-- `20261118182332_refund_follow_ups.sql`: pending
+- `20261118072601_staff_data_minimisation.sql`: applied 2026-11-18 18:09 UTC;
+  owner-approved, Supabase SQL editor (browser), preflight + fingerprint
+  checked; from the reviewed file at cbbeb26c (pull request #264, sha256
+  starting 8e258de44214f5ac) after the expand release (#265) was deployed and
+  before the website release containing it was deployed (#264 merged 18:11 UTC
+  as eb281cf1); preflight (sha256 starting 9d7ffdab) before "staff data
+  minimisation: update not applied; resolved support tickets older than 12
+  months: 0", after "staff data minimisation: already applied; resolved support
+  tickets older than 12 months: 0" (no problem rows); production fingerprint
+  after it (fingerprint.sql at eb281cf1, captured 18:13 UTC) matched the full
+  replay (except the known schema grant difference)
+- `20261118182332_refund_follow_ups.sql`: applied 2026-11-18 21:25 UTC;
+  owner-approved ("Yes, apply and merge"), Supabase SQL editor (browser),
+  preflight + fingerprint checked; from the reviewed file at 5fe2178e (pull
+  request #275, sha256 starting cdb2d9971f492ecd) before the website release
+  containing it was deployed (#275 merged 21:27 UTC as 07418a73); preflight
+  (sha256 starting 2932b94e) before "refund follow-ups: update not applied;
+  waiting for approval: 0; through Ozow not sent: 0; past Ozow's 13 days: 0;
+  while a renewal waits: 0; declined references: 0", after "refund follow-ups:
+  already applied; waiting for approval: 0; through Ozow not sent: 0; past
+  Ozow's 13 days: 0; while a renewal waits: 0; declined references: 0" (no
+  problem rows); production fingerprint after it (fingerprint.sql at 07418a73,
+  captured about 21:29 UTC) matched the full replay (except the known schema
+  grant difference)
 
 <!-- applied-register:end -->
