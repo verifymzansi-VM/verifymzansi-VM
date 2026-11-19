@@ -206,15 +206,39 @@ const MEMBER_REFUSALS: ReadonlyMap<
   ["packages_not_on_sale", [403, "Multi-listing packages are not on sale yet."]],
 ]);
 
-type RpcResult = PromiseLike<{
+export type RpcResult = PromiseLike<{
   data: unknown;
   error: { code?: string; message?: string; details?: string } | null;
 }>;
 
-async function settleMemberCommand<T>(result: RpcResult, schema: z.ZodType<T>): Promise<T> {
+/** How a member invoice command's refusals are worded: by database reason,
+ * by error code (a refusal without a reason), and the outage message. */
+export interface InvoiceMemberWording {
+  reasons: ReadonlyMap<FoundationErrorReason, readonly [FoundationInvoiceError["status"], string]>;
+  codes?: Readonly<Record<string, readonly [FoundationInvoiceError["status"], string]>>;
+  unavailable: string;
+}
+
+const INVOICE_WORDING: InvoiceMemberWording = {
+  reasons: MEMBER_REFUSALS,
+  unavailable: "The invoice could not be loaded. Please try again in a few minutes.",
+};
+
+function settleMemberCommand<T>(result: RpcResult, schema: z.ZodType<T>): Promise<T> {
+  return settleInvoiceMemberCommand(result, schema, INVOICE_WORDING);
+}
+
+/** Settles a member invoice command: its refusals in the member's words, its
+ * answer checked against `schema` (also for package invoices). */
+export async function settleInvoiceMemberCommand<T>(
+  result: RpcResult,
+  schema: z.ZodType<T>,
+  wording: InvoiceMemberWording
+): Promise<T> {
   const { data, error } = await result;
   if (error) {
-    const refusal = lookupDatabaseReason(MEMBER_REFUSALS, error);
+    const refusal =
+      lookupDatabaseReason(wording.reasons, error) ?? wording.codes?.[error.code ?? ""];
     if (refusal) throw new FoundationInvoiceError(refusal[0], refusal[1], "invoice_refused");
     if (
       hasDatabaseMessage(error, "liveSessionRequired") ||
@@ -227,19 +251,13 @@ async function settleMemberCommand<T>(result: RpcResult, schema: z.ZodType<T>): 
       );
     throw new FoundationInvoiceError(
       error.code === "22023" ? 422 : 503,
-      error.code === "22023"
-        ? "Check the details and try again."
-        : "The invoice could not be loaded. Please try again in a few minutes.",
+      error.code === "22023" ? "Check the details and try again." : wording.unavailable,
       error.code === "22023" ? "invoice_invalid" : "invoice_unavailable"
     );
   }
   const parsed = schema.safeParse(data);
   if (!parsed.success)
-    throw new FoundationInvoiceError(
-      503,
-      "The invoice could not be loaded. Please try again in a few minutes.",
-      "invoice_response_invalid"
-    );
+    throw new FoundationInvoiceError(503, wording.unavailable, "invoice_response_invalid");
   return parsed.data;
 }
 

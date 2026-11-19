@@ -123,7 +123,7 @@ begin
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 9e52c2ebd9dae698e4b7ee59904d4c46',
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 6f508a66a82ad2a24e4c43c324fd90a3',
         'internal.confirm_staff_invoice_payment(uuid) 0ccc38ab7e5dff36bf27b4047c58b218',
-        'internal.confirm_staff_invoice_payment(uuid) 8f35a1917b7d78eaf669121b79a335c6',
+        'internal.confirm_staff_invoice_payment(uuid) 3daa82e3347ee5e2880279251c9521c2',
         'internal.frontend_privacy_export_data(uuid) 86a879279ebd9dcadf6f3f4fa11e7f44',
         'internal.frontend_privacy_export_data(uuid) 0b4cd3f792ffecf94c329277db4da28e',
         'internal.customer_invoice_payment_guard() 7ad52ae1b3e37ad792d8dca2a275ca96',
@@ -143,7 +143,7 @@ begin
         'internal.package_invoice_request_dto absent',
         'internal.package_invoice_request_dto 16fb4eae547a00d51cf95b55adc16dda',
         'internal.package_invoice_issue_check absent',
-        'internal.package_invoice_issue_check 5348246868e5906853a4d560b3dd44d7',
+        'internal.package_invoice_issue_check e0ae2e35373cba98b3cb385d07871377',
         'internal.issue_package_customer_invoice absent',
         'internal.issue_package_customer_invoice 117d33c9a93c2d965e138a7fdc7930b8',
         'internal.request_package_invoice absent',
@@ -190,10 +190,10 @@ alter table private.invoice_transfers drop constraint if exists invoice_transfer
 alter table private.invoice_transfers drop constraint if exists invoice_transfers_amount_received_cents_check,
   add constraint invoice_transfers_amount_received_cents_check check (amount_received_cents > 0 and amount_received_cents <= 15000000);
 -- A payment line is one slot (at most R10,000) or one package line holding
--- every slot of a package (more than one slot, at most R150,000).
+-- every slot of a package: at most R10,000 per slot it holds and R150,000.
 alter table private.payment_lines drop constraint if exists payment_lines_amount_cents_check,
   add constraint payment_lines_amount_cents_check check (amount_cents >= 100
-    and (amount_cents <= 1000000 or (slot_count > 1 and amount_cents <= 15000000)));
+    and amount_cents <= 1000000 * slot_count and amount_cents <= 15000000);
 
 -- 2. A member's request for a package invoice ("Ask for an invoice").
 create table if not exists private.package_invoice_requests (
@@ -402,6 +402,15 @@ begin
   if internal.slot_package_open(r.account_id) then
     raise exception 'the customer already has a Multi-listing package; decline the request'
       using errcode='PT409', detail='package_active';
+  end if;
+  -- A package payment of the account open at Ozow could still be paid and
+  -- open a package: it is finished or cancelled first.
+  if exists(select 1 from private.payments p join private.plan_versions v on v.id = p.plan_version_id
+      where p.owner_id = r.account_id and p.status = 'pending' and p.target_post_id is null
+        and internal.slot_package_plan(v.plan_code)
+        and (p.checkout_url is not null or p.checkout_claim_until > pg_catalog.clock_timestamp())) then
+    raise exception 'the customer has a package payment open at Ozow; try again when it has closed'
+      using errcode='PT409', detail='invoice_checkout_open';
   end if;
   select i.invoice_number into unpaid from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
     where i.account_id = r.account_id and i.status = 'issued' and internal.slot_package_plan(v.plan_code)
@@ -1314,6 +1323,18 @@ begin
     if internal.slot_package_open(t.account_id) then
       raise exception 'the customer already has a Multi-listing package; decline this transfer and return the money'
         using errcode='PT409', detail='package_active';
+    end if;
+    -- Another package payment of the account open at Ozow (not one of this
+    -- invoice's attempts, checked below) could still be paid and would then
+    -- go to reconciliation: it is finished or cancelled first.
+    if exists(select 1 from private.payments p join private.plan_versions v on v.id = p.plan_version_id
+        where p.owner_id = t.account_id and p.status = 'pending' and p.target_post_id is null
+          and internal.slot_package_plan(v.plan_code)
+          and (p.checkout_url is not null or p.checkout_claim_until > pg_catalog.clock_timestamp())
+          and not exists(select 1 from private.customer_invoice_payments l
+            where l.payment_id = p.id and l.invoice_id = t.customer_invoice_id)) then
+      raise exception 'the customer has another package payment open at Ozow; try again when it has closed'
+        using errcode='PT409', detail='invoice_checkout_open';
     end if;
     if plan.price_cents * t.slots <> t.amount_received_cents then
       raise exception 'the recorded amount is not the order total' using errcode='PT428', detail='invoice_amount_mismatch';

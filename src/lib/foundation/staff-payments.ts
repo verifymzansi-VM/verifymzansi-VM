@@ -305,6 +305,13 @@ const PAYMENT_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = n
   ["invoice_void", [409, "This invoice was voided. Decline this transfer and return the money."]],
   // Multi-listing package invoices (update 20261119025106).
   [
+    "invoice_checkout_open",
+    [
+      409,
+      "The customer has another package payment open at Ozow. Try again when it has closed (paid, cancelled or expired).",
+    ],
+  ],
+  [
     "packages_not_on_sale",
     [409, "Multi-listing packages are not on sale. Decline this transfer and return the money."],
   ],

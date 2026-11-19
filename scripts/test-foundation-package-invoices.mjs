@@ -589,12 +589,18 @@ try {
     assert.equal(grant.lines, 1);
     assert.equal(grant.amount, 1020000);
     assert.equal(grant.package_slots, 34);
-    // A one-slot line still stops at R10,000.
-    fails(
-      `insert into private.payment_lines(payment_id,line_number,plan_version_id,amount_cents)
-         values('${confirmed.payment_id}',2,'${K90.id}',1000100);`,
-      "23514"
-    );
+    // A line stops at R10,000 per slot it holds (and R150,000).
+    for (const [slots, cents] of [
+      [1, 1000100],
+      [2, 2000100],
+      [250, 15000100],
+    ])
+      fails(
+        `insert into private.payment_lines(payment_id,line_number,plan_version_id,amount_cents,slot_count)
+           values('${confirmed.payment_id}',2,'${K90.id}',${cents},${slots});`,
+        "23514",
+        /payment_lines_amount_cents_check/
+      );
   });
 
   await check("the approved R60,000 invoice is paid in full by bank transfer", () => {
@@ -785,6 +791,70 @@ try {
         0
       );
       assert.equal(count("private.package_invoice_requests"), keep);
+    }
+  );
+
+  await check(
+    "a package payment open at Ozow stops issuing and confirming a package invoice",
+    () => {
+      const owner = verified("pkinv-open");
+      const sendToOzow = (paymentId) => {
+        const lease = json(
+          service(`select api.claim_checkout_request('${paymentId}','${owner.id}');`)
+        );
+        q(
+          service(
+            `select api.complete_checkout_request('${paymentId}','${owner.id}','${lease.claim_token}','req-${paymentId}','https://one.ozow.com/checkout/req-${paymentId}');`
+          )
+        );
+      };
+      const cancelAtOzow = (paymentId) => {
+        const row = json(
+          `select jsonb_build_object('ref',merchant_reference,'amount',amount_cents) from private.payments where id='${paymentId}';`
+        );
+        const event = {
+          payload_sha256: sha(`cancel-${paymentId}`),
+          merchant_reference: row.ref,
+          provider_request_id: `req-${paymentId}`,
+          provider_transaction_id: "",
+          status: "cancelled",
+          amount_cents: Number(row.amount),
+          currency: "ZAR",
+        };
+        assert.equal(
+          json(service(`select api.apply_provider_event($e$${JSON.stringify(event)}$e$::jsonb);`))
+            .outcome,
+          "not_paid"
+        );
+      };
+      const startOnline = () =>
+        json(member(owner, `select api.start_package_checkout('${K30.id}',5,50000,true);`))
+          .payment_id;
+      // A 5-slot online checkout open at Ozow: no 120-slot invoice is issued.
+      const first = startOnline();
+      sendToOzow(first);
+      const request = ask(owner, K90, 120);
+      fails(issueSql(admin, request.request_id), "PT409", /invoice_checkout_open/);
+      cancelAtOzow(first);
+      // Another checkout started (not yet sent) before the invoice is issued,
+      // then sent to Ozow while the bank transfer waits: no confirmation.
+      const second = startOnline();
+      const issued = json(issueSql(admin, request.request_id)).invoice;
+      assert.equal(issued.total_cents, 3600000);
+      sendToOzow(second);
+      const recorded = json(transferSql(admin, issued.invoice_number, "FNB PKG OPEN"));
+      fails(confirmSql(admin2, recorded.transfer_id), "PT409", /invoice_checkout_open/);
+      assert.equal(count(`private.slot_packages where owner_id='${owner.id}'`), 0);
+      // Once Ozow closes it, the transfer opens the package; nothing waits for
+      // reconciliation.
+      cancelAtOzow(second);
+      assert.equal(json(confirmSql(admin2, recorded.transfer_id)).slots_started, 120);
+      assert.equal(
+        count(
+          `private.payments where owner_id='${owner.id}' and fulfillment_status='needs_reconciliation'`
+        ),
+        0
+      );
     }
   );
 

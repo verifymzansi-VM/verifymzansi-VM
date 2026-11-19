@@ -28,6 +28,15 @@ begin
     raise exception 'the customer already has a Multi-listing package; decline the request'
       using errcode='PT409', detail='package_active';
   end if;
+  -- A package payment of the account open at Ozow could still be paid and
+  -- open a package: it is finished or cancelled first.
+  if exists(select 1 from private.payments p join private.plan_versions v on v.id = p.plan_version_id
+      where p.owner_id = r.account_id and p.status = 'pending' and p.target_post_id is null
+        and internal.slot_package_plan(v.plan_code)
+        and (p.checkout_url is not null or p.checkout_claim_until > pg_catalog.clock_timestamp())) then
+    raise exception 'the customer has a package payment open at Ozow; try again when it has closed'
+      using errcode='PT409', detail='invoice_checkout_open';
+  end if;
   select i.invoice_number into unpaid from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
     where i.account_id = r.account_id and i.status = 'issued' and internal.slot_package_plan(v.plan_code)
     order by i.issued_at limit 1;

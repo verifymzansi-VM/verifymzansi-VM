@@ -2,14 +2,16 @@ import "server-only";
 
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
-import {
-  hasDatabaseMessage,
-  lookupDatabaseReason,
-  type FoundationErrorReason,
-} from "./error-reasons";
+import { lookupDatabaseReason, type FoundationErrorReason } from "./error-reasons";
 import { staffReason } from "./organisations";
 import { FoundationStaffCommandError, settleStaffCommand } from "./staff-command";
-import { FoundationInvoiceError, staffInvoiceSchema } from "./customer-invoices";
+import {
+  FoundationInvoiceError,
+  settleInvoiceMemberCommand,
+  staffInvoiceSchema,
+  type InvoiceMemberWording,
+  type RpcResult,
+} from "./customer-invoices";
 import { BILLING_EMAIL } from "../billing/slot-checkout";
 import { PACKAGE_MAX_SLOTS, PACKAGE_MIN_SLOTS } from "../billing/slot-packages";
 
@@ -29,7 +31,7 @@ const term = z.union([z.literal(30), z.literal(90), z.literal(180)]);
 const cents = z.number().int().positive().max(15_000_000);
 const INVOICE_NUMBER = /^VM-\d{4}-\d{6}$/;
 
-export const packageInvoiceRequestSchema = z.strictObject({
+const packageInvoiceRequestSchema = z.strictObject({
   request_id: z.uuid(),
   status: z.enum(["requested", "awaiting_approval", "issued", "declined", "withdrawn"]),
   term_days: term,
@@ -40,9 +42,8 @@ export const packageInvoiceRequestSchema = z.strictObject({
   invoice_number: z.string().regex(INVOICE_NUMBER).nullable(),
   closed_at: instant.nullable(),
 });
-export type PackageInvoiceRequest = z.infer<typeof packageInvoiceRequestSchema>;
 
-export const staffPackageInvoiceRequestSchema = packageInvoiceRequestSchema.extend({
+const staffPackageInvoiceRequestSchema = packageInvoiceRequestSchema.extend({
   // Null once the account was erased (the request is kept, unlinked).
   account_id: z.uuid().nullable(),
   customer_email: z.string().max(254).nullable(),
@@ -57,7 +58,6 @@ export const staffPackageInvoiceRequestSchema = packageInvoiceRequestSchema.exte
   prepared_by_name: z.string().max(120).nullable(),
   close_reason: z.string().min(5).max(500).nullable(),
 });
-export type StaffPackageInvoiceRequest = z.infer<typeof staffPackageInvoiceRequestSchema>;
 
 // ---------------------------------------------------------------- member
 
@@ -96,53 +96,20 @@ const MEMBER_REFUSALS: ReadonlyMap<
   ],
 ]);
 
-type RpcResult = PromiseLike<{
-  data: unknown;
-  error: { code?: string; message?: string; details?: string } | null;
-}>;
+const MEMBER_WORDING: InvoiceMemberWording = {
+  reasons: MEMBER_REFUSALS,
+  codes: {
+    PT412: [
+      403,
+      "Your ID review must be accepted before you ask for a package invoice, so you never pay for days you cannot use.",
+    ],
+    PT428: [409, "The price changed. Check the total and try again."],
+  },
+  unavailable: "Your request could not be sent. Please try again in a few minutes.",
+};
 
-async function settleMemberCommand<T>(result: RpcResult, schema: z.ZodType<T>): Promise<T> {
-  const { data, error } = await result;
-  if (error) {
-    const refusal = lookupDatabaseReason(MEMBER_REFUSALS, error);
-    if (refusal) throw new FoundationInvoiceError(refusal[0], refusal[1], "invoice_refused");
-    if (error.code === "PT412")
-      throw new FoundationInvoiceError(
-        403,
-        "Your ID review must be accepted before you ask for a package invoice, so you never pay for days you cannot use.",
-        "invoice_refused"
-      );
-    if (error.code === "PT428")
-      throw new FoundationInvoiceError(
-        409,
-        "The price changed. Check the total and try again.",
-        "invoice_refused"
-      );
-    if (
-      hasDatabaseMessage(error, "liveSessionRequired") ||
-      hasDatabaseMessage(error, "activeMemberRequired")
-    )
-      throw new FoundationInvoiceError(
-        403,
-        "Your account cannot use invoices right now. Sign in again or contact us.",
-        "member_required"
-      );
-    throw new FoundationInvoiceError(
-      error.code === "22023" ? 422 : 503,
-      error.code === "22023"
-        ? "Check the details and try again."
-        : "Your request could not be sent. Please try again in a few minutes.",
-      error.code === "22023" ? "invoice_invalid" : "invoice_unavailable"
-    );
-  }
-  const parsed = schema.safeParse(data);
-  if (!parsed.success)
-    throw new FoundationInvoiceError(
-      503,
-      "Your request could not be confirmed. Please try again in a few minutes.",
-      "invoice_response_invalid"
-    );
-  return parsed.data;
+function settleMemberCommand<T>(result: RpcResult, schema: z.ZodType<T>): Promise<T> {
+  return settleInvoiceMemberCommand(result, schema, MEMBER_WORDING);
 }
 
 export const packageInvoiceRequestInput = z.strictObject({
@@ -217,6 +184,13 @@ const STAFF_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new
   [
     "package_invoice_unpaid",
     [409, "The customer has an unpaid package invoice. Void it first, or decline this request."],
+  ],
+  [
+    "invoice_checkout_open",
+    [
+      409,
+      "The customer has a package payment open at Ozow. Try again when it has closed (paid, cancelled or expired).",
+    ],
   ],
   [
     "payment_account_unavailable",

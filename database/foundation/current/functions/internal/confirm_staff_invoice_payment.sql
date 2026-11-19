@@ -74,6 +74,18 @@ begin
       raise exception 'the customer already has a Multi-listing package; decline this transfer and return the money'
         using errcode='PT409', detail='package_active';
     end if;
+    -- Another package payment of the account open at Ozow (not one of this
+    -- invoice's attempts, checked below) could still be paid and would then
+    -- go to reconciliation: it is finished or cancelled first.
+    if exists(select 1 from private.payments p join private.plan_versions v on v.id = p.plan_version_id
+        where p.owner_id = t.account_id and p.status = 'pending' and p.target_post_id is null
+          and internal.slot_package_plan(v.plan_code)
+          and (p.checkout_url is not null or p.checkout_claim_until > pg_catalog.clock_timestamp())
+          and not exists(select 1 from private.customer_invoice_payments l
+            where l.payment_id = p.id and l.invoice_id = t.customer_invoice_id)) then
+      raise exception 'the customer has another package payment open at Ozow; try again when it has closed'
+        using errcode='PT409', detail='invoice_checkout_open';
+    end if;
     if plan.price_cents * t.slots <> t.amount_received_cents then
       raise exception 'the recorded amount is not the order total' using errcode='PT428', detail='invoice_amount_mismatch';
     end if;

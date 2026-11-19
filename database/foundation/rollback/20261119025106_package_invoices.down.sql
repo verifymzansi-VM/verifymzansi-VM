@@ -45,7 +45,7 @@ begin
     if shape not in (
         'internal.start_invoice_payment(text,bigint,boolean) a43e58e5ebc85179c901428e4f0f805e',
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 6f508a66a82ad2a24e4c43c324fd90a3',
-        'internal.confirm_staff_invoice_payment(uuid) 8f35a1917b7d78eaf669121b79a335c6',
+        'internal.confirm_staff_invoice_payment(uuid) 3daa82e3347ee5e2880279251c9521c2',
         'internal.frontend_privacy_export_data(uuid) 0b4cd3f792ffecf94c329277db4da28e',
         'internal.customer_invoice_payment_guard() 397c6a0239c508923a8215b2953d23d5',
         'internal.start_package_checkout(uuid,integer,bigint,boolean) d5d9713994c8789030bd30c90c4c00b5',
@@ -55,7 +55,7 @@ begin
         'internal.package_invoice_request_guard e41853f9d3e75297df7a4bf00e736792',
         'internal.package_invoice_approval_above_cents b775e7ca727cdf3583b884cf83106404',
         'internal.package_invoice_request_dto 16fb4eae547a00d51cf95b55adc16dda',
-        'internal.package_invoice_issue_check 5348246868e5906853a4d560b3dd44d7',
+        'internal.package_invoice_issue_check e0ae2e35373cba98b3cb385d07871377',
         'internal.issue_package_customer_invoice 117d33c9a93c2d965e138a7fdc7930b8',
         'internal.request_package_invoice beb95771af677d39b775e83197dfd8d1',
         'api.request_package_invoice 096d60996af28df5e8aaa0d5fe51918d',
