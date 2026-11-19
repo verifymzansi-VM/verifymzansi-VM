@@ -60,6 +60,58 @@ describe("GET /api/mock-ozow", () => {
     });
   });
 
+  function requestWithReturnUrl(returnUrl: string): Request {
+    const url = new URL("http://localhost/api/mock-ozow");
+    url.searchParams.set("returnUrl", returnUrl);
+    return new Request(url);
+  }
+
+  it("redirects to a same-site return path", async () => {
+    const res = await GET(requestWithReturnUrl("/billing/success?plan=slot"));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe("http://localhost/billing/success?plan=slot");
+  });
+
+  it("redirects to the production-shaped return url", async () => {
+    const returnUrl = `https://verifymzansi.com/billing/success?payment=${MOCK_PAYMENT_ID}`;
+    const res = await GET(requestWithReturnUrl(returnUrl));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe(returnUrl);
+  });
+
+  it("accepts an encoded slash in a query value", async () => {
+    const res = await GET(requestWithReturnUrl("/billing/success?next=%2Fdashboard"));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe("http://localhost/billing/success?next=%2Fdashboard");
+  });
+
+  it.each([
+    "//evil.com",
+    "/\\evil.com",
+    "/%09/evil.com",
+    "/\t/evil.com",
+    "/%0a/evil.com",
+    "/%0D/evil.com",
+    "/%5cevil.com",
+    "/%5Cevil.com",
+    "javascript:alert(1)",
+    "javascript://verifymzansi.com/%0aalert(1)",
+    "https://evil.com",
+    "http://localhost\\@evil.com",
+  ])("refuses the return url %j", async (returnUrl) => {
+    const res = await GET(requestWithReturnUrl(returnUrl));
+
+    expect(res.status).toBe(400);
+    expect(res.headers.get("location")).toBeNull();
+    await expect(res.json()).resolves.toEqual({
+      error: "Invalid mock payment query",
+      details: { returnUrl: "returnUrl is invalid" },
+    });
+  });
+
   it("accepts localhost and loopback return urls for e2e flows", async () => {
     const localhostRes = await GET(
       new Request("http://localhost/api/mock-ozow?returnUrl=http://localhost:3100/billing/success")
