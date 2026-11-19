@@ -5282,14 +5282,15 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   problem rows); production fingerprint after it (fingerprint.sql at 07418a73,
   captured about 21:29 UTC) matched the full replay (except the known schema
   grant difference)
-- `20261119025106_package_invoices.sql`: applied 2026-11-19 06:42 UTC; Supabase
-  SQL editor (browser), preflight + fingerprint checked; from the reviewed file
-  at ca11da3a (raw GitHub; pull request #277, sha256 starting 23a41e0dc2fdfa86,
-  merged as 88248654); preflight (sha256 starting 0031e9a5) before "package
-  invoices: update not applied; on sale: no; invoice requests: none (table
-  absent); package invoices: 0; package bank transfers: 0", after "package
-  invoices: already applied; on sale: no; invoice requests: 0 (open: 0); package
-  invoices: 0; package bank transfers: 0"; production fingerprint after it
+- `20261119025106_package_invoices.sql`: applied 2026-11-19 06:42 UTC;
+  owner-approved ("Yes, apply and merge"), Supabase SQL editor (browser),
+  preflight + fingerprint checked; from the reviewed file at ca11da3a (raw
+  GitHub; pull request #277, sha256 starting 23a41e0dc2fdfa86, merged as
+  88248654); preflight (sha256 starting 0031e9a5) before "package invoices:
+  update not applied; on sale: no; invoice requests: none (table absent);
+  package invoices: 0; package bank transfers: 0", after "package invoices:
+  already applied; on sale: no; invoice requests: 0 (open: 0); package invoices:
+  0; package bank transfers: 0"; production fingerprint after it
   (fingerprint.sql at ca11da3a, captured about 06:45 UTC) matched the full
   replay (except the known schema grant difference)
 
