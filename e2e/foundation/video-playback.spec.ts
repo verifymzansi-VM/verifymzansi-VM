@@ -274,8 +274,19 @@ test.describe("Video posts", () => {
         expect(await video.evaluate((element: HTMLVideoElement) => element.currentSrc)).toContain(
           videoPath
         );
-        // The browser fetched the video in parts (206), not as one opaque file.
-        await expect.poll(() => mediaReplies.map((reply) => reply.status())).toContain(206);
+        // The media route answered every part the browser asked for with a part
+        // (206). Chromium always asks in parts; WebKit on Linux (GStreamer, not
+        // Safari's own media stack) may fetch this small file whole, answered
+        // 200. Range answers themselves are checked in the first step.
+        await expect
+          .poll(() => mediaReplies.filter((reply) => [200, 206].includes(reply.status())).length)
+          .toBeGreaterThan(0);
+        for (const reply of mediaReplies.filter((answered) => answered.status() !== 0)) {
+          const range = await reply.request().headerValue("range");
+          if (range) expect(reply.status(), `reply to Range: ${range}`).toBe(206);
+        }
+        if (test.info().project.name !== "mobile-safari")
+          expect(mediaReplies.map((reply) => reply.status())).toContain(206);
       });
 
       await test.step("it skips forward", async () => {

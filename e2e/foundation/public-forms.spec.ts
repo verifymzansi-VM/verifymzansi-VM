@@ -71,7 +71,9 @@ test.describe("posting terms", () => {
 });
 
 test.describe("header", () => {
-  test("the mobile menu keeps scrolling, returns focus and resets on desktop", async ({ page }) => {
+  test("the mobile menu keeps scrolling, returns focus and resets on desktop", async ({
+    page,
+  }, testInfo) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const toggle = page.getByTestId("mobile-menu-toggle");
@@ -89,10 +91,19 @@ test.describe("header", () => {
     await toggle.click();
     // Open before the resize, so the desktop breakpoint is what closes it.
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    // The header closes the menu on the breakpoint query's "change" event. An
+    // independent listener on the same query, added here, shows whether the
+    // browser reported that change at all.
+    await page.evaluate(() => {
+      const w = window as Window & { __vmDesktopQuery?: MediaQueryList; __vmDesktopSeen?: boolean };
+      w.__vmDesktopSeen = false;
+      w.__vmDesktopQuery = window.matchMedia("(min-width: 1024px)");
+      w.__vmDesktopQuery.addEventListener("change", () => {
+        w.__vmDesktopSeen = true;
+      });
+    });
     await page.setViewportSize({ width: 1280, height: 900 });
-    // The page must see the desktop width before its breakpoint can close the
-    // menu. Asserted on its own, so a browser whose phone emulation does not
-    // apply the resize to the page's media queries fails here, not below.
+    // The page sees the desktop width.
     await expect
       .poll(() =>
         page.evaluate(
@@ -100,6 +111,29 @@ test.describe("header", () => {
         )
       )
       .toBe("1280 true");
+    const changeReported = await page.evaluate(
+      () =>
+        new Promise<boolean>((resolve) => {
+          const w = window as Window & { __vmDesktopSeen?: boolean };
+          const started = Date.now();
+          const check = () => {
+            if (w.__vmDesktopSeen) resolve(true);
+            else if (Date.now() - started > 3_000) resolve(false);
+            else setTimeout(check, 100);
+          };
+          check();
+        })
+    );
+    // On WebKit runs the page measured 1280 px and the query matched, yet the
+    // menu, which closes only on that event, stayed open on some attempts (the
+    // retry passed). Skipped only when the independent listener saw no event
+    // either, so the browser did not report the change; if it did and the menu
+    // stays open, the header is wrong and this test fails.
+    test.skip(
+      !changeReported && testInfo.project.name === "mobile-safari",
+      "WebKit's phone emulation did not report the media-query change for this resize"
+    );
+    expect(changeReported, "the browser reported the breakpoint change").toBe(true);
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole("navigation", { name: "Mobile navigation" })).toBeHidden();
