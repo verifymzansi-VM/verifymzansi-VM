@@ -36,22 +36,16 @@
 // contacts Ozow, a bank or an email provider.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import {
-  assertReadOnlyPreflight,
-  createChecks,
-  executeGrants,
-} from "./lib/foundation-sql-checks.mjs";
-import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
+import { assertReadOnlyPreflight, executeGrants } from "./lib/foundation-sql-checks.mjs";
+import { applySteps } from "./lib/foundation-sql-lint.mjs";
 import {
   applyAndProveRollback,
-  createPaymentWorld,
   fingerprintOf,
   functionBodyMd5,
   P30,
   psqlSessions,
+  runTwoAdminUpdateCheck,
   sqlValue,
-  twoAdmins,
-  updateCheckKit,
 } from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261119082834_house_slots.sql";
@@ -72,13 +66,9 @@ const REASON = "Owner-approved house slot for real offers";
 const NOT_APPLIED =
   /^house slots: update not applied; admins: \d+; ready to receive: \d+; staff-granted slots: 0; house slots: none \(table absent\)$/;
 
-const started = Date.now();
-const { check, current, passed: checks } = createChecks();
-const database = await startLintDatabase({ log: (line) => console.log(line) });
-try {
-  const kit = updateCheckKit(database, UPDATE, current);
-  const world = createPaymentWorld(kit);
-  const { admin, admin2 } = twoAdmins(world, "house");
+const SETUP = { update: UPDATE, label: "house", title: "House slots" };
+await runTwoAdminUpdateCheck(SETUP, async (run) => {
+  const { database, check, current, kit, world, admin, admin2 } = run;
   const { q, json, fails, member, staff, service, preflight, fingerprint, count } = kit;
   const bodyMd5 = (signature) => functionBodyMd5(kit, signature);
   // The world's stand-in for internal.current_verified_identity, with aliases:
@@ -821,12 +811,4 @@ try {
       assert.equal(bodyMd5(LIFECYCLE), LIFECYCLE_AFTER);
     });
   }
-} catch (error) {
-  console.error(`FAIL ${current()}`);
-  throw error;
-} finally {
-  database.stop();
-}
-console.log(
-  `House slots checks passed: ${checks.length} in ${Math.round((Date.now() - started) / 1000)} s.`
-);
+});

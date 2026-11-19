@@ -235,9 +235,13 @@ export const FOUNDATION_ERROR_MESSAGES = {
  * recognised by this pattern. error-reasons.test.ts fails unless the database
  * messages the pattern matches are exactly STAFF_SECOND_FACTOR_MESSAGES, and
  * the check fails when a listed one is no longer raised, so rewording one of
- * them (or adding a new one) cannot silently change the redirect.
+ * them (or adding a new one) cannot silently change the redirect. A message
+ * that starts with a command's name ("house slots: ...", raised only by
+ * internal.grant_house_slots, which the database owner runs) is about another
+ * account's setup, not the staff session, so the words must come before any
+ * colon.
  */
-export const STAFF_SECOND_FACTOR_PATTERN = /second.factor|authenticator app/;
+export const STAFF_SECOND_FACTOR_PATTERN = /^[^:]*(?:second.factor|authenticator app)/;
 export const STAFF_SECOND_FACTOR_MESSAGES = [
   "recent second-factor verification required",
   "second-factor verification required after role assignment",
