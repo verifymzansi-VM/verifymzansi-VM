@@ -11,6 +11,7 @@ import { GridStateMessage } from "@/components/listings/grid-state-message";
 import { Plus, LayoutGrid, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MarketplacePaginationControls } from "@/components/listings/marketplace-pagination-controls";
+import { searchPagination } from "@/lib/foundation/search-depth";
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { createLogger } from "@/lib/utils/logger";
@@ -359,7 +360,7 @@ export function MzansiMarketGrid() {
     );
   }
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const { totalPages, limitedTo } = searchPagination(totalCount, PAGE_SIZE);
 
   return (
     <div className="space-y-6" data-testid="mzansi-market-grid-ready">
@@ -455,6 +456,7 @@ export function MzansiMarketGrid() {
         <MarketplacePaginationControls
           page={page}
           totalPages={totalPages}
+          limitedTo={limitedTo}
           onPageChange={(nextPage) => {
             triggerHaptic("light");
             setPage(nextPage);

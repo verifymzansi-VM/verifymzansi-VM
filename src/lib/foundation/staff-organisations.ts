@@ -98,7 +98,9 @@ export async function readFrontendStaffOrganisationDetail(
 ) {
   const record = await settleStaffCommand(
     api.rpc("get_frontend_staff_organisation_detail", { p_id: id }, { get: false }),
-    organisation.extend({ public_contacts: applicationPublicContacts }).nullable()
+    // From 20261119065758_privacy_tightening_2 the detail carries no applicant
+    // contacts; staff then ask for one pending application's contact.
+    organisation.extend({ public_contacts: applicationPublicContacts.optional() }).nullable()
   );
   if (record && record.id !== id)
     throw new FoundationStaffCommandError(503, "Organisation details could not be confirmed.");

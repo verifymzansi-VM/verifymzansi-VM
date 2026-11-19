@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { useMarketplaceStore } from "@/stores";
 import { createLogger } from "@/lib/utils/logger";
 import { triggerHaptic } from "@/lib/utils/haptics";
+import { searchPagination } from "@/lib/foundation/search-depth";
 import type { BusinessCategory } from "@/types/enums";
 
 const PAGE_SIZE = 24;
@@ -231,7 +232,7 @@ export function MzansiBusinessGrid() {
     );
   }
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const { totalPages, limitedTo } = searchPagination(totalCount, PAGE_SIZE);
 
   return (
     <div className="space-y-6" data-testid="mzansi-business-grid-ready">
@@ -265,6 +266,7 @@ export function MzansiBusinessGrid() {
         <MarketplacePaginationControls
           page={page}
           totalPages={totalPages}
+          limitedTo={limitedTo}
           onPageChange={(nextPage) => {
             triggerHaptic("light");
             setPage(nextPage);

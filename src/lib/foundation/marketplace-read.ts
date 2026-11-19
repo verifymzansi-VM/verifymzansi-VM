@@ -14,6 +14,7 @@ import {
 import type { FoundationPublicPostCore } from "./public-post-contract";
 import reference from "../domains/taxonomy/reference.json";
 import { buildFoundationPostSearch } from "./post-search";
+import { SEARCH_MAX_OFFSET, searchLastPage } from "./search-depth";
 import { readFoundationPostAffiliations } from "./organisations";
 import { readFoundationPostSponsorships } from "./organisation-sponsorships";
 import {
@@ -218,7 +219,8 @@ const TOURISM_BUSINESS_CATEGORY = "tourism_hospitality";
 const MERGED_SEARCH_DEPTH = 480;
 
 /** Cards of one search scope from `start`, at most `want` of them, in bounded
- * reads of 48. Refuses a card of another kind. */
+ * reads of 48, never from past the deepest offset the database serves.
+ * Refuses a card of another kind. */
 async function readCards(
   api: FoundationPublicApi,
   input: Record<string, unknown>,
@@ -231,6 +233,7 @@ async function readCards(
     if (count >= 200) throw new Error("Public collection is too large to paginate safely");
     const requested = Math.min(48, want - cards.length);
     const offset = start + cards.length;
+    if (offset > SEARCH_MAX_OFFSET) break;
     const result = await searchFoundationPresentedCards(api, {
       ...input,
       offset,
@@ -279,8 +282,10 @@ export async function readRestoredCollection(
   collection: PublicCollection,
   params = new URLSearchParams()
 ) {
-  const page = integer(params, "page", 1, 10000);
   const limit = integer(params, "limit", 24, 50);
+  // Page links stop at the deepest page served (search-depth.ts); a deeper
+  // page number shows that last page, so old or hand-typed links still work.
+  const page = Math.min(integer(params, "page", 1, 10000), searchLastPage(limit));
   const tourism =
     collection === "businesses" && params.get("category") === TOURISM_BUSINESS_CATEGORY;
   const area =

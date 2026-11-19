@@ -14,7 +14,7 @@ begin
   return to_jsonb(o)-'created_by'-'logo_permission_by'||jsonb_build_object(
     'logo_object_key',(select m.object_key from private.media_objects m where m.id=o.logo_object_id),
     'admins',coalesce((select jsonb_agg(jsonb_build_object('account_id',a.account_id,'role',a.role,
-      'display_name',p.display_name,'created_at',a.created_at) order by a.created_at)
+      'display_name',internal.profile_public_name(p.display_name),'created_at',a.created_at) order by a.created_at)
       from private.organisation_admins a left join private.profiles p on p.account_id=a.account_id
       where a.organisation_id=o.id),'[]'),
     'open_invites',coalesce((select jsonb_agg(jsonb_build_object('id',i.id,'email',internal.mask_email(i.email),

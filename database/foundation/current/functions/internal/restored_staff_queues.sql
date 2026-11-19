@@ -14,12 +14,17 @@ begin
     'claimed',(select count(*) from private.queue_claims q join private.reports r2 on r2.id=q.report_id
       where r2.status='open' and q.claim_expires_at>statement_timestamp())) into reports
     from private.reports r where r.status='open';
-  select jsonb_build_object('pending',count(*),'oldest_at',min(e.created_at),
-    'high_risk',count(*) filter(where exists(select 1 from private.verification_current_submissions c
-      join private.verification_identity_submissions s on s.id=c.submission_id
-      where s.case_id=e.id and s.risk_score>50)),
+  -- ID checks: only cases the queue lists (internal.get_frontend_staff_verification_queue):
+  -- open, a current submission at the case's version, an active account.
+  select jsonb_build_object('pending',count(*),'oldest_at',min(s.created_at),
+    'high_risk',count(*) filter(where s.risk_score>50),
     'claimed',count(*) filter(where e.claim_expires_at>statement_timestamp())) into kyc
-    from private.evidence_cases e where e.kind='kyc' and e.status='open';
+    from private.evidence_cases e
+      join private.verification_current_submissions v on v.case_id=e.id
+      join private.verification_identity_submissions s on s.id=v.submission_id and s.case_version=e.version
+      where e.kind='kyc' and e.status='open' and e.subject_id<>actor
+        and exists(select 1 from private.profiles p where p.account_id=e.subject_id)
+        and exists(select 1 from private.current_account_access u where u.id=e.subject_id);
   select jsonb_build_object('pending',count(*),'oldest_at',min(p.submitted_at),
     'claimed',(select count(*) from private.queue_claims q join private.posts p2 on p2.id=q.post_id
       where p2.status='pending_moderation' and q.claim_expires_at>statement_timestamp())) into content

@@ -271,13 +271,6 @@
     },
     {
       "function": "internal.restored_staff_queues()",
-      "level": "warning extra",
-      "sqlstate": "00000",
-      "message": "never read variable \"actor\"",
-      "count": 1
-    },
-    {
-      "function": "internal.restored_staff_queues()",
       "level": "warning",
       "sqlstate": "00000",
       "message": "routine is marked as STABLE, but expression is VOLATILE",
