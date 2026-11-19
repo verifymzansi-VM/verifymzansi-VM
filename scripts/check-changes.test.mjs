@@ -3,9 +3,10 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { markCouldNotCheck, readBaseSuites, run } from "./check-changed-checks.mjs";
+import { markCouldNotCheck, readBaseChecks, readBaseSuites, run } from "./check-changed-checks.mjs";
 import {
   CHECK_SCRIPT_LIBS,
+  buildCheckCommands,
   COULD_NOT_CHECK,
   LABEL_CHANGED,
   LABEL_CLEAN,
@@ -426,9 +427,12 @@ test("new dependencies and changed check commands come from the parsed package.j
   });
   assert.deepEqual(result.newDependencies, ["left-pad", "@scope/new-tool"]);
   assert.deepEqual(result.changedCommands, ["test"]);
+  assert.deepEqual(result.changedSources, [
+    { name: "@scope/new-tool", source: "a workspace package" },
+  ]);
   assert.equal(
     summarySentence(result),
-    "This PR changes 1 test or check command in package.json and adds 2 new dependencies."
+    "This PR changes 1 test or check command in package.json, adds 2 new dependencies and takes 1 dependency from outside the registry."
   );
 });
 
@@ -488,7 +492,7 @@ test("dependency sources, overrides, build permissions and the package manager a
   assert.equal(dependencySource("link:../x"), "a local link");
   assert.equal(dependencySource("../x"), "a local path");
   assert.equal(dependencySource("^1.2.3"), null);
-  assert.equal(dependencySource("workspace:*"), null);
+  assert.equal(dependencySource("workspace:*"), "a workspace package");
   // A new package.json is compared with an empty one.
   assert.deepEqual(comparePackages(null, basePackage).newDependencies.length, 6);
 
@@ -601,6 +605,403 @@ test("a sentence whose parts are lists separates them with semicolons", () => {
     summarySentence(result),
     "This PR deletes 1 test file; removes 2 test cases; changes the coverage thresholds; and changes the audit baselines, the legacy surface baseline, the branch rulesets and the CI workflows."
   );
+});
+
+test("fixtures and diffs with CRLF line endings read the same as LF", () => {
+  const crlf = (text) => text.replace(/\r?\n/g, "\r\n");
+  for (const name of readdirSync(fixtures).filter((file) => file.endsWith(".diff"))) {
+    const lf = fixture(name).replace(/\r\n/g, "\n");
+    assert.deepEqual(filesFromGitDiff(crlf(lf)), filesFromGitDiff(lf), name);
+    assert.ok(!JSON.stringify(filesFromGitDiff(crlf(lf))).includes("\\r"), name);
+  }
+  const result = analyseChanges(filesFromGitDiff(crlf(fixture("deleted-tests.diff"))));
+  assert.deepEqual(result.deletedTestFiles, ["src/lib/money.test.ts"]);
+  assert.equal(result.removedTestCases, 2);
+  assert.equal(analyseChanges(filesFromGitDiff(crlf(fixture("skip-marks.diff")))).skipMarks, 12);
+  // The fixtures are checked out with LF everywhere (.gitattributes).
+  assert.match(
+    readFileSync(path.join(repoRoot, ".gitattributes"), "utf8"),
+    /^scripts\/fixtures\/check-changes\/\*\* text eol=lf$/m
+  );
+});
+
+// A small repository: two workflows, package.json scripts and script files.
+const commandRepo = {
+  workflows: {
+    "ci.yml": [
+      "jobs:",
+      "  lint:",
+      "    steps:",
+      "      - run: pnpm install --frozen-lockfile",
+      "      - run: pnpm db:lint",
+      "      - run: pnpm run test:tooling",
+      "      - run: pnpm exec vitest run",
+      "      - run: node scripts/check-direct.mjs",
+    ].join("\n"),
+    "nightly.yaml": "      - run: pnpm -s run build && npm run native",
+  },
+  packageJsons: [
+    JSON.stringify({
+      scripts: {
+        "db:lint": "node scripts/lint-sql.mjs --strict",
+        "test:tooling": "node --import tsx --test scripts/a.test.mjs scripts/lib/b.test.ts",
+        build: "next build && pnpm run build:extra",
+        "build:extra": "tsx ./scripts/extra.ts --config=playwright.extra.config.ts",
+        native:
+          "node --import tsx scripts/test-native.mjs && node scripts/probe-native-one.mjs && node scripts/probe-native-two.mjs",
+        prebuild: "node scripts/prebuild.mjs",
+        unrelated: "node scripts/unrelated.mjs",
+        dev: "next dev",
+      },
+    }),
+  ],
+  files: {
+    "scripts/lint-sql.mjs": 'import { rules } from "./lib/sql-rules.mjs";\n',
+    "scripts/lib/sql-rules.mjs":
+      'export * from "./shared.mjs";\nimport x from "../../src/lib/app.ts";\n',
+    "scripts/lib/shared.mjs": "export const rules = [];\n",
+    "scripts/a.test.mjs": 'import { tested } from "./lib/under-test.mjs";\n',
+    "scripts/lib/under-test.mjs": "export const tested = 1;\n",
+    "scripts/test-native.mjs": 'import { lock } from "./lib/native-lock.mjs";\n',
+    "scripts/lib/native-lock.mjs": "export const lock = 1;\n",
+    "scripts/probe-native-one.mjs": 'const lock = await import("./lib/native-lock.mjs");\n',
+    "scripts/probe-native-two.mjs": "",
+    "scripts/extra.ts": 'import { a } from "./lib/extra-lib.js";\n',
+    "scripts/lib/extra-lib.ts": "export const a = 1;\n",
+    "scripts/check-direct.mjs": 'const { b } = require("./lib/direct-lib.cjs");\n',
+    "scripts/lib/direct-lib.cjs": "module.exports = {};\n",
+    "scripts/prebuild.mjs": "",
+    "scripts/unrelated.mjs": 'import "./lib/unrelated-lib.mjs";\n',
+  },
+};
+const commandChecks = buildCheckCommands({
+  workflows: commandRepo.workflows,
+  packageJsons: commandRepo.packageJsons,
+  readFile: (file) => commandRepo.files[file],
+});
+
+test("the check commands are the scripts main's workflows run, and the scripts those call", () => {
+  assert.deepEqual([...commandChecks.commands].sort(), [
+    "build",
+    "build:extra",
+    "db:lint",
+    "native",
+    "prebuild",
+    "test:tooling",
+  ]);
+  assert.deepEqual([...commandChecks.files].sort(), [
+    "playwright.extra.config.ts",
+    "scripts/check-direct.mjs",
+    "scripts/extra.ts",
+    "scripts/lib/direct-lib.cjs",
+    "scripts/lib/extra-lib.ts",
+    "scripts/lib/native-lock.mjs",
+    "scripts/lib/shared.mjs",
+    "scripts/lib/sql-rules.mjs",
+    "scripts/lint-sql.mjs",
+    "scripts/prebuild.mjs",
+    "scripts/probe-native-one.mjs",
+    "scripts/probe-native-two.mjs",
+  ]);
+  // Test files are tests (their imports are the code under test), app code is
+  // not followed, and scripts no workflow reaches are not check scripts.
+  for (const file of [
+    "scripts/a.test.mjs",
+    "scripts/lib/under-test.mjs",
+    "scripts/test-native.mjs",
+    "src/lib/app.ts",
+    "scripts/unrelated.mjs",
+    "scripts/lib/unrelated-lib.mjs",
+  ]) {
+    assert.ok(!commandChecks.files.has(file), file);
+  }
+});
+
+test("changes to check commands and to the scripts they run are reported", () => {
+  const base = JSON.parse(commandRepo.packageJsons[0]);
+  const head = structuredClone(base);
+  head.scripts["db:lint"] = "node scripts/lint-sql.mjs";
+  head.scripts.native = "node --import tsx scripts/test-native.mjs";
+  head.scripts.unrelated = "node scripts/unrelated.mjs --fast";
+  head.scripts.dev = "next dev --turbo";
+  const result = analyseChanges(
+    [
+      modified("package.json", "-{}", "+{}"),
+      modified("scripts/lib/native-lock.mjs", "-export const lock = 1;", "+export const lock = 0;"),
+      modified("scripts/probe-native-two.mjs", "+process.exit(0);"),
+      modified("scripts/unrelated.mjs", "+// note"),
+      modified("next.config.js", "+const x = 1;"),
+    ],
+    {
+      packages: { base: JSON.stringify(base), head: JSON.stringify(head) },
+      checks: commandChecks,
+    }
+  );
+  assert.deepEqual(result.changedCommands, ["db:lint", "native"]);
+  assert.deepEqual(result.configFiles, [
+    "scripts/lib/native-lock.mjs",
+    "scripts/probe-native-two.mjs",
+    "next.config.js",
+  ]);
+  assert.deepEqual(result.configGroups, [
+    "the Next.js build configuration",
+    "the scripts the CI commands run",
+  ]);
+  assert.match(summarySentence(result), /changes 2 test or check commands in package\.json/);
+  assert.equal(checkConfigGroup("next.config.js"), "the Next.js build configuration");
+  assert.equal(checkConfigGroup("scripts/probe-native-two.mjs"), null);
+  assert.equal(
+    checkConfigGroup("scripts/probe-native-two.mjs", commandChecks),
+    "the scripts the CI commands run"
+  );
+});
+
+test("main's workflows make the foundation scripts and their libraries check scripts", () => {
+  const real = readBaseChecks(repoRoot);
+  for (const command of ["test:foundation:native", "db:foundation:lint", "db:foundation:replay"]) {
+    assert.ok(real.commands.has(command), command);
+  }
+  for (const file of [
+    "scripts/lint-foundation-sql.mjs",
+    "scripts/replay-foundation-schema.mjs",
+    "scripts/probe-foundation-staff-read.mjs",
+    "scripts/probe-foundation-runtime-repairs.mjs",
+    "scripts/lib/foundation-native-lock.mjs",
+  ]) {
+    assert.ok(real.files.has(file), file);
+  }
+  assert.ok(!real.files.has("scripts/check-changes.test.mjs"));
+  assert.ok(![...real.files].some((file) => file.startsWith("src/")));
+  // A file outside the checkout is never read.
+  assert.equal(
+    buildCheckCommands({
+      packageJsons: [JSON.stringify({ scripts: { lint: "node ../outside.mjs" } })],
+      workflows: { "ci.yml": "run: pnpm lint" },
+      readFile: () => {
+        throw new Error("read");
+      },
+    }).files.size,
+    0
+  );
+});
+
+test("any change under pnpm, to bundled dependencies, and workspace or dist-tag specs is reported", () => {
+  const base = {
+    ...JSON.parse(basePackage),
+    pnpm: {
+      overrides: { "a@1": "1.0.1" },
+      onlyBuiltDependencies: ["esbuild", "sharp"],
+      patchedDependencies: { "next@16.0.0": "patches/next.patch" },
+    },
+    bundleDependencies: ["zod"],
+  };
+  const compare = (change) => {
+    const head = structuredClone(base);
+    change(head);
+    return comparePackages(JSON.stringify(base), JSON.stringify(head));
+  };
+  assert.deepEqual(compare(() => {}).packageSettings, []);
+  assert.deepEqual(
+    compare((head) => {
+      head.pnpm.patchedDependencies["next@16.0.0"] = "patches/other.patch";
+    }).packageSettings,
+    ["pnpm.patchedDependencies"]
+  );
+  assert.deepEqual(
+    compare((head) => {
+      head.pnpm.onlyBuiltDependencies = ["esbuild"];
+    }).packageSettings,
+    ["pnpm.onlyBuiltDependencies"]
+  );
+  // Additions alone are already reported as new install-script permissions.
+  const added = compare((head) => head.pnpm.onlyBuiltDependencies.push("canvas"));
+  assert.deepEqual(added.packageSettings, []);
+  assert.deepEqual(added.newBuiltDependencies, ["canvas"]);
+  assert.deepEqual(
+    compare((head) => {
+      head.pnpm.neverBuiltDependencies = ["x"];
+      head.pnpm.peerDependencyRules = { allowAny: ["*"] };
+      head.pnpm.overrides["a@1"] = "1.0.2";
+    }).packageSettings,
+    ["pnpm.neverBuiltDependencies", "pnpm.peerDependencyRules"]
+  );
+  assert.deepEqual(
+    compare((head) => {
+      head.pnpm = "nonsense";
+    }).packageSettings,
+    ["pnpm"]
+  );
+  assert.deepEqual(
+    compare((head) => {
+      delete head.pnpm;
+    }).packageSettings,
+    ["pnpm.onlyBuiltDependencies", "pnpm.patchedDependencies"]
+  );
+  assert.deepEqual(
+    compare((head) => {
+      head.bundleDependencies = ["zod", "react"];
+      head.bundledDependencies = true;
+    }).packageSettings,
+    ["bundleDependencies", "bundledDependencies"]
+  );
+  const specs = compare((head) => {
+    head.dependencies.react = "latest";
+    head.dependencies.next = "canary";
+    head.devDependencies.vitest = "workspace:^";
+  });
+  assert.deepEqual(specs.changedSources, [
+    { name: "next", source: "a dist-tag" },
+    { name: "react", source: "a dist-tag" },
+    { name: "vitest", source: "a workspace package" },
+  ]);
+  for (const range of ["^1.2.3", "1.x", "x", "X", "*", "", "v1.2.3", ">=1 <2", "1 - 2", "~1"]) {
+    assert.equal(dependencySource(range), null, range);
+  }
+  const result = analyseChanges([modified("package.json", "-{}", "+{}")], {
+    packages: {
+      base: JSON.stringify(base),
+      head: JSON.stringify({ ...base, bundleDependencies: [] }),
+    },
+  });
+  assert.match(summarySentence(result), /changes 1 package manager setting in package\.json/);
+  assert.ok(
+    renderComment(result).includes(
+      "- Package manager setting changed in `package.json`: `bundleDependencies`"
+    )
+  );
+});
+
+test("marks reached with brackets or taken as values are found", () => {
+  const file = "src/lib/a.test.ts";
+  for (const line of [
+    '+  ctx["skip"]();',
+    "+  testInfo['fixme'](true);",
+    '+  test["only"]("x", () => {});',
+    "+  t[`todo`]();",
+    "+const s = ctx.skip;",
+    "+const s = ctx.skip",
+    '+let f = testInfo["fixme"], g = 1;',
+    "+  skipper = t.skip.bind(t);",
+    "+const s = test.info().skip;",
+    "+const { skip } = ctx;",
+    "+const { fixme: later } = testInfo;",
+    '+describe.each([1])("x %i", (n) => { const s = ctx.skip; });',
+  ]) {
+    assert.equal(marksIn(file, line), 1, line);
+  }
+  // In other code, brackets count only with a test function on the line.
+  assert.equal(marksIn("e2e/support/fixtures.ts", '+  test["skip"](true);'), 1);
+  assert.equal(marksIn("src/lib/list.ts", '+const rows = query["skip"](10);'), 0);
+  // Comparisons and arrow functions are not aliases.
+  for (const line of [
+    "+if (mode === ctx.skip) {}",
+    "+const ok = a.skip == b;",
+    "+const f = () => run();",
+    '+const rows = builder["take"](10);',
+  ]) {
+    assert.equal(marksIn(file, line), 0, line);
+  }
+  const adversarial = [
+    "= a".repeat(600),
+    "=a.".repeat(600),
+    '["skip"]'.repeat(240),
+    "= a()".repeat(390),
+    `=${" .x".repeat(600)}`,
+  ];
+  for (const text of adversarial) {
+    const started = performance.now();
+    for (let round = 0; round < 20; round += 1) isSkipMarkLine(text, { testFile: true });
+    assert.ok(performance.now() - started < 500, `slow on ${text.slice(0, 20)}`);
+  }
+});
+
+test("a table-driven test's table is part of its key", () => {
+  const file = "src/lib/a.test.ts";
+  const changes = (...lines) => analyseChanges([modified(file, ...lines)]);
+  // Emptying a one-line table removes the old case.
+  const emptied = changes(
+    "-it.each([1, 2])('adds %i', (n) => {",
+    "+it.each([])('adds %i', (n) => {",
+    "   expect(n).toBeGreaterThan(0);"
+  );
+  assert.equal(emptied.removedTestCases, 1);
+  // A retitled table-driven test keeps its table: neither removed nor added.
+  const retitled = changes(
+    "-it.each([1, 2])('adds %i', (n) => {",
+    "+it.each([1, 2])('sums %i', (n) => {",
+    "   expect(n).toBeGreaterThan(0);"
+  );
+  assert.equal(retitled.removedTestCases, 0);
+  assert.equal(retitled.addedTestCases, 0);
+  // Rows removed under an unchanged opening line, for it, test and describe.
+  for (const opener of ["it.each([", "test.each([", "describe.each(["]) {
+    const rows = changes(
+      ` ${opener}`,
+      "-  [1, 2, 3],",
+      "-  [2, 3, 5],",
+      " ])('adds %i and %i', (a, b, sum) => {",
+      "   expect(a + b).toBe(sum);"
+    );
+    assert.equal(rows.removedTestCases, 1, opener);
+  }
+  // A template-literal table emptied below its opening line.
+  const template = changes(
+    " it.each`",
+    "   a    | b",
+    "-  ${1} | ${2}",
+    " `('adds $a', ({ a, b }) => {});"
+  );
+  assert.equal(template.removedTestCases, 1);
+  // Rows only added to a table remove nothing.
+  const grown = changes(" it.each([", "   [1, 2, 3],", "+  [2, 3, 5],", " ])('adds %i', (a) => {");
+  assert.equal(grown.removedTestCases, 0);
+  assert.equal(grown.addedTestCases, 1);
+  // An unchanged table under an unchanged opener is no change.
+  assert.equal(
+    changes(
+      " it.each([",
+      "   [1, 2],",
+      " ])('adds %i', (a) => {",
+      "-  const x = 1;",
+      "+  const x = 2;"
+    ).removedTestCases,
+    0
+  );
+  // Re-indenting a whole table-driven test moves it.
+  const moved = changes(
+    "-it.each([1])('adds %i', (n) => {",
+    "-});",
+    "+  it.each([1])('adds %i', (n) => {",
+    "+  });"
+  );
+  assert.equal(moved.removedTestCases, 0);
+});
+
+test("a test whose title is on the next line is keyed by that title", () => {
+  assert.equal(testCaseKey("it(", '  "keeps the total",'), 'next:it( "keeps the total",');
+  assert.equal(testCaseKey("it("), "line:it(");
+  const swapped = analyseChanges([
+    modified(
+      "src/lib/a.test.ts",
+      "-it(",
+      '-  "rejects an order without a buyer",',
+      "-  () => {",
+      "-    expect(() => createOrder({})).toThrow();",
+      "-  }",
+      "-);",
+      "+it(",
+      '+  "logs the order",',
+      "+  () => {}",
+      "+);",
+      " const keep = 1;"
+    ),
+  ]);
+  assert.equal(swapped.removedTestCases, 1);
+  assert.equal(swapped.addedTestCases, 1);
+  const reindented = analyseChanges([
+    modified("src/lib/a.test.ts", "-it(", '-  "x",', "+  it(", '+    "x",'),
+  ]);
+  assert.equal(reindented.removedTestCases, 0);
 });
 
 // --- The GitHub side, against a fake API. ---

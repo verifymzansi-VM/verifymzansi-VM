@@ -13,10 +13,14 @@
 //     audit baselines, rulesets, workflows, check scripts and the libraries
 //     they import, lint, type and scanner configuration, browser test
 //     configuration, visual baselines, the database contract steps, the native
-//     database checks, dependency settings) and to the test and check commands;
+//     database checks, dependency settings, the Next.js build configuration),
+//     to the package.json scripts main's workflows run (and the scripts those
+//     call) and to the script files those commands execute;
 //   - new dependencies, dependencies taken from somewhere other than the
-//     registry, new or changed overrides, new install-script permissions and a
-//     changed package manager, from the two package.json files parsed as JSON.
+//     registry (including workspace: and dist-tag specs), new or changed
+//     overrides, any other change under "pnpm" or to the bundled
+//     dependencies, new install-script permissions and a changed package
+//     manager, from the two package.json files parsed as JSON.
 //
 // Everything here is pure: file names, patch text and file contents are data.
 // Nothing is executed, and the pull request's title, description and commit
@@ -26,6 +30,8 @@
 // inside a test that stays, or making a test pass without testing anything,
 // is not detected. Whatever cannot be read (binary files, diffs GitHub leaves
 // out, lines longer than MAX_LINE_LENGTH) counts as a change to the checks.
+
+import path from "node:path";
 
 export const MARKER = "<!-- check-change-guard -->";
 export const LABEL_CHANGED = "checks-changed";
@@ -471,11 +477,144 @@ const CHECK_CONFIG_GROUPS = [
     words: "the database contract steps",
     match: (file) => file === "database/foundation/contract-steps.json",
   },
+  {
+    id: "build-config",
+    words: "the Next.js build configuration",
+    match: (file) => /^next\.config\.[cm]?[jt]s$/.test(file),
+  },
+  {
+    id: "command-scripts",
+    words: "the scripts the CI commands run",
+    match: (file, checks) => Boolean(checks?.files?.has(file)),
+  },
 ];
 
-/** The plain-words name of the check configuration a file belongs to, or null. */
-export function checkConfigGroup(file) {
-  return CHECK_CONFIG_GROUPS.find((group) => group.match(file))?.words ?? null;
+/**
+ * The plain-words name of the check configuration a file belongs to, or null.
+ * `checks` (from buildCheckCommands) adds the scripts main's CI commands run.
+ */
+export function checkConfigGroup(file, checks) {
+  return CHECK_CONFIG_GROUPS.find((group) => group.match(file, checks))?.words ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// The commands main's CI runs, and the script files they execute.
+
+// `pnpm <name>`, `pnpm run <name>`, `npm run <name>` (and yarn), with the
+// usual quiet flags. Names that are not package.json scripts (install, exec)
+// are dropped by the caller.
+const PACKAGE_SCRIPT_CALL =
+  /(?:^|[^\w-])(?:pnpm|npm|yarn)(?:\s+(?:-s|--silent|--if-present))*\s+(?:run\s+(?:(?:-s|--silent|--if-present)\s+)*)?([A-Za-z_][\w:.-]*)/g;
+// A code or shell file named on a command line: `node scripts/x.mjs`,
+// `--config=playwright.x.config.ts`, `tsx ./scripts/y.ts`.
+const COMMAND_FILE =
+  /(?:^|[\s"'=,(])(?:\.\/)?((?:[\w@-][\w@.-]*\/)*[\w@-][\w@.-]*\.(?:[cm]?[jt]sx?|sh))(?=$|[\s"';&|),])/g;
+const RELATIVE_IMPORT =
+  /(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)["'](\.{1,2}\/[^"'\n]+)["']/g;
+const IMPORT_EXTENSIONS = ["", ".mjs", ".js", ".ts", ".cjs", ".mts", ".cts", ".tsx"];
+// At most this many script files are followed, whatever the imports say.
+const MAX_COMMAND_FILES = 3000;
+
+function scriptCommands(packageText) {
+  try {
+    const parsed = JSON.parse(packageText);
+    const scripts = parsed && typeof parsed === "object" ? parsed.scripts : null;
+    if (!scripts || typeof scripts !== "object" || Array.isArray(scripts)) return {};
+    return Object.fromEntries(
+      Object.entries(scripts).filter(([, command]) => typeof command === "string")
+    );
+  } catch {
+    return {};
+  }
+}
+
+function namedFiles(text) {
+  const files = [];
+  for (const match of String(text).matchAll(COMMAND_FILE)) {
+    const file = path.posix.normalize(match[1]);
+    if (!file.startsWith("../") && !file.startsWith("/") && !file.includes("node_modules/")) {
+      files.push(file);
+    }
+  }
+  return files;
+}
+
+// A file run as a test by `node --test` and the like: its own imports are the
+// code under test, not part of the check.
+const TEST_ARGUMENT = /(?:^|\/)__tests__\/|\.(?:test|spec)\.[cm]?[jt]sx?$/;
+
+/**
+ * Works out, from main's workflows ({ "ci.yml": text, ... }) and package.json
+ * files, which package.json scripts CI runs (directly or through another
+ * script's `pnpm`/`npm run`) and which files those commands execute: the code
+ * files their command lines name, the scripts the workflows run with node or
+ * tsx, and every file under scripts/ those import. Test files are left out:
+ * changes to them are read as test changes. `readFile(path)` returns main's
+ * copy of a file as text, or undefined.
+ */
+export function buildCheckCommands({
+  workflows = {},
+  packageJsons = [],
+  readFile = () => undefined,
+} = {}) {
+  const scripts = new Map();
+  for (const text of packageJsons) {
+    if (typeof text !== "string") continue;
+    for (const [name, command] of Object.entries(scriptCommands(text))) {
+      if (!scripts.has(name)) scripts.set(name, new Set());
+      scripts.get(name).add(command);
+    }
+  }
+  const commands = new Set();
+  const queue = [];
+  const addCalls = (text) => {
+    for (const match of String(text).matchAll(PACKAGE_SCRIPT_CALL)) {
+      const name = match[1];
+      for (const candidate of [name, `pre${name}`, `post${name}`]) {
+        if (scripts.has(candidate) && !commands.has(candidate)) {
+          commands.add(candidate);
+          queue.push(candidate);
+        }
+      }
+    }
+  };
+  const workflowTexts = Object.values(workflows).filter((text) => typeof text === "string");
+  for (const text of workflowTexts) addCalls(text);
+  while (queue.length > 0) {
+    for (const command of scripts.get(queue.shift())) addCalls(command);
+  }
+
+  const reached = new Set();
+  const pending = [];
+  const reach = (file) => {
+    if (reached.has(file) || reached.size >= MAX_COMMAND_FILES) return;
+    reached.add(file);
+    pending.push(file);
+  };
+  for (const name of commands) {
+    for (const command of scripts.get(name)) for (const file of namedFiles(command)) reach(file);
+  }
+  for (const text of workflowTexts) {
+    for (const file of namedFiles(text)) if (file.startsWith("scripts/")) reach(file);
+  }
+  while (pending.length > 0) {
+    const file = pending.shift();
+    if (TEST_ARGUMENT.test(file)) continue;
+    const text = readFile(file);
+    if (typeof text !== "string") continue;
+    for (const match of text.matchAll(RELATIVE_IMPORT)) {
+      const target = path.posix.normalize(path.posix.join(path.posix.dirname(file), match[1]));
+      if (!target.startsWith("scripts/")) continue;
+      const stem = target.replace(/\.js$/, "");
+      const found = [
+        ...IMPORT_EXTENSIONS.map((extension) => target + extension),
+        ...(stem === target ? [] : [`${stem}.ts`, `${stem}.tsx`]),
+      ].find((candidate) => typeof readFile(candidate) === "string");
+      if (found) reach(found);
+    }
+  }
+  const files = new Set([...reached].filter((file) => !looksLikeTest(file)));
+  return { commands, files };
 }
 
 // ---------------------------------------------------------------------------
@@ -603,9 +742,71 @@ const ANY_MEMBER_MARK = new RegExp(`\\.\\s*(?:${MARK_WORD_LIST})\\s*\\(`);
 const BARE_MARK_CALL = /(?:^|[^\w.$])(?:skip|fixme)\s*\(/;
 const ALIAS_ASSIGNMENT =
   /(?:^|[^\w.$])(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:it|test|describe|suite|context|specify|bench)\s*(?:[;,)]|$)/;
-const DESTRUCTURE_FROM = /\}\s*=\s*(?:it|test|describe|suite|context|specify|bench)\b/g;
+// `const { skip } = test`, `const { skip } = ctx`: a mark taken out of anything.
+const DESTRUCTURE_FROM = /\}\s*=\s*[A-Za-z_$]/g;
 const MARK_WORD = new RegExp(`\\b(?:${MARK_WORD_LIST})\\b`);
 const NODE_TEST_OPTION = /[{,]\s*(?:skip|todo|only)\s*:(?!\s*(?:false|undefined)\b)/;
+// A mark reached with brackets: `ctx["skip"]()`, `test['only'](`, `t[`todo`]`.
+const BRACKET_MARK = new RegExp(`\\[\\s*(["'\`])(?:${MARK_WORD_LIST})\\1\\s*\\]`);
+const ROOT_WORD = /\b(?:it|test|describe|suite|bench|specify|context)\b/;
+const IDENTIFIER_START = /[A-Za-z_$]/;
+const IDENTIFIER_PART = /[\w$]/;
+
+// `const s = ctx.skip`, `s = testInfo["fixme"]`, `const s = t.skip.bind(t)`:
+// a mark taken as a value to call later. Reads each `= a.b["c"].d` chain once,
+// left to right, so it stays linear in the line.
+function aliasesMark(text) {
+  for (let index = text.indexOf("="); index !== -1; index = text.indexOf("=", index + 1)) {
+    const before = text[index - 1];
+    const after = text[index + 1];
+    if (after === "=" || after === ">" || "=!<>+-*/%&|^?".includes(before ?? "")) continue;
+    let cursor = index + 1;
+    while (cursor < text.length && /\s/.test(text[cursor])) cursor += 1;
+    if (!IDENTIFIER_START.test(text[cursor] ?? "")) continue;
+    const members = [];
+    while (cursor < text.length && IDENTIFIER_PART.test(text[cursor])) cursor += 1;
+    for (;;) {
+      let next = cursor;
+      while (next < text.length && /\s/.test(text[next])) next += 1;
+      if (text.startsWith("()", next)) {
+        cursor = next + 2;
+        continue;
+      }
+      if (text[next] === ".") {
+        next += 1;
+        while (next < text.length && /\s/.test(text[next])) next += 1;
+        const start = next;
+        while (next < text.length && IDENTIFIER_PART.test(text[next])) next += 1;
+        if (next === start) break;
+        members.push(text.slice(start, next));
+        cursor = next;
+        continue;
+      }
+      const bracket = /^\[\s*(["'`])([\w$]+)\1\s*\]/.exec(text.slice(next, next + 80));
+      if (bracket) {
+        members.push(bracket[2]);
+        cursor = next + bracket[0].length;
+        continue;
+      }
+      break;
+    }
+    let bound = false;
+    while (["bind", "call", "apply"].includes(members.at(-1))) {
+      members.pop();
+      bound = true;
+    }
+    if (members.length > 0 && MARK_NAMES.has(members.at(-1))) {
+      let rest = cursor;
+      while (rest < text.length && /\s/.test(text[rest])) rest += 1;
+      // Called right away (`= ctx.skip(`) it is caught as a call; a value that
+      // ends there (end of line, `;`, `,`, a closing bracket, `||`, `??`) or
+      // is bound (`.bind(ctx)`) is an alias. `= a.skip == b` is a comparison.
+      if (bound || rest === text.length || ";,)}]|".includes(text[rest])) return true;
+      if (text.startsWith("??", rest)) return true;
+    }
+  }
+  return false;
+}
 
 function hasMarkChain(text) {
   for (const match of text.matchAll(MEMBER_CHAIN)) {
@@ -634,12 +835,16 @@ export function isSkipMarkLine(text, { testFile = false } = {}) {
   if (hasMarkChain(text) || PREFIX_MARK.test(text) || NODE_TEST_CONTEXT_MARK.test(text)) {
     return true;
   }
+  // `test["skip"](...)` outside test files too (in support code it is a mark
+  // whenever a test function is named on the line).
+  if (BRACKET_MARK.test(text) && (testFile || ROOT_WORD.test(text))) return true;
   if (!testFile) return false;
   return (
     ANY_MEMBER_MARK.test(text) ||
     BARE_MARK_CALL.test(text) ||
     ALIAS_ASSIGNMENT.test(text) ||
     destructuresMark(text) ||
+    aliasesMark(text) ||
     NODE_TEST_OPTION.test(text)
   );
 }
@@ -691,15 +896,23 @@ function readQuoted(text, start) {
   return text.slice(start + 1, index);
 }
 
-/** The test case a line starts, as a key to match it by (its title), or null. */
-export function testCaseKey(text) {
+/**
+ * The test case a line starts, as a key to match it by (its title), or null.
+ * When the title is on the next line, `nextText` (that line, on the same side
+ * of the diff) is part of the key.
+ */
+export function testCaseKey(text, nextText) {
   if (text.length > MAX_LINE_LENGTH) return null;
   const head = TEST_CASE_HEAD.exec(text);
   if (!head) return null;
   const rest = text.slice(head.index + head[0].length);
   const first = rest.trimStart();
   const offset = rest.length - first.length;
-  if (first === "") return `line:${text.trim()}`;
+  if (first === "") {
+    return typeof nextText === "string"
+      ? `next:${text.trim()} ${nextText.trim()}`
+      : `line:${text.trim()}`;
+  }
   if (first[0] === '"' || first[0] === "'" || first[0] === "`") {
     return `title:${readQuoted(rest, offset)}`;
   }
@@ -710,11 +923,93 @@ export function testCaseKey(text) {
   return null;
 }
 
-const EACH_CALL = /^\s*(?:it|test)(?:\.[a-z]+)*\.each\s*[(`]/;
+// A table-driven test or suite: `it.each(...)`, `test.concurrent.each`...`,
+// `describe.each(...)`.
+const EACH_CALL = /^\s*(?:await\s+)?(?:it|test|specify|describe|suite)(?:\.[a-z]+)*\.each\s*[(`]/;
+// How far a table is read: its lines and characters.
+const MAX_TABLE_LINES = 400;
+const MAX_TABLE_LENGTH = 40_000;
 
-function caseKey(line) {
+// The lines on one side of the diff: the old side is context and removed
+// lines, the new side context and added lines.
+function onSide(line, side) {
+  return line.kind === "context" || line.kind === (side === "old" ? "remove" : "add");
+}
+
+function nextOnSide(lines, index, side) {
+  for (let next = index + 1; next < lines.length; next += 1) {
+    if (lines[next].kind === "hunk") return null;
+    if (onSide(lines[next], side)) return lines[next];
+  }
+  return null;
+}
+
+// The `.each(...)` (or `.each`...``) argument of a table-driven test, from
+// the opening line on through the lines of the same side until the brackets
+// close: the table's text, so emptying or changing it changes the key. A
+// table that does not close inside the hunk is read as far as the hunk goes.
+function eachTable(lines, index, side) {
+  const at = /\.each\s*([(`])/.exec(lines[index].text);
+  if (!at) return "";
+  const template = at[1] === "`";
+  const parts = [];
+  let depth = 0;
+  let quote = template ? "`" : null;
+  let length = 0;
+  let current = index;
+  // A template table starts after its backtick; a call at its parenthesis.
+  let position = at.index + at[0].length - (template ? 0 : 1);
+  // Only the table's own text counts, from `.each` to its closing bracket, so a
+  // retitled test keeps its table.
+  let from = at.index;
+  for (let count = 0; count < MAX_TABLE_LINES && length < MAX_TABLE_LENGTH; count += 1) {
+    const text = lines[current].text;
+    length += text.length;
+    const close = (cursor) => {
+      parts.push(text.slice(from, cursor + 1).trim());
+      return parts.join("\n");
+    };
+    for (let cursor = position; cursor < text.length; cursor += 1) {
+      const char = text[cursor];
+      if (quote) {
+        if (char === "\\") cursor += 1;
+        else if (char === quote) {
+          quote = null;
+          if (template && depth === 0) return close(cursor);
+        }
+      } else if (char === '"' || char === "'" || char === "`") {
+        quote = char;
+      } else if (char === "(" || char === "[" || char === "{") {
+        depth += 1;
+      } else if ((char === ")" || char === "]" || char === "}") && --depth <= 0) {
+        return close(cursor);
+      }
+    }
+    parts.push(text.slice(from).trim());
+    from = 0;
+    // Plain strings end with their line; template literals go on.
+    if (quote === '"' || quote === "'") quote = null;
+    position = 0;
+    let next = current + 1;
+    while (next < lines.length && lines[next].kind !== "hunk" && !onSide(lines[next], side)) {
+      next += 1;
+    }
+    if (next >= lines.length || lines[next].kind === "hunk") break;
+    current = next;
+  }
+  return parts.join("\n");
+}
+
+function caseKey(lines, index) {
+  const line = lines[index];
   if (line.comment) return null;
-  return testCaseKey(line.text) ?? (EACH_CALL.test(line.text) ? `line:${line.text.trim()}` : null);
+  const side = line.kind === "remove" ? "old" : "new";
+  const isTable = EACH_CALL.test(line.text);
+  const key =
+    testCaseKey(line.text, nextOnSide(lines, index, side)?.text) ??
+    (isTable ? `line:${line.text.trim()}` : null);
+  if (!key || !isTable) return key;
+  return `${key}\ntable:${eachTable(lines, index, side)}`;
 }
 
 // An added test case whose body is empty on its own line, such as
@@ -732,10 +1027,33 @@ function testCaseChanges(lines) {
   const removed = [];
   const added = [];
   const retitled = new Set();
+  const keys = new Map();
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
+    if (line.kind === "context") {
+      // An unchanged `.each(` line whose table changed below it: the old table's
+      // cases are removed and the new table's added.
+      if (EACH_CALL.test(line.text) && line.text.length <= MAX_LINE_LENGTH) {
+        const before = eachTable(lines, index, "old");
+        const after = eachTable(lines, index, "new");
+        if (before !== after) {
+          // Rows only added (every old line still there, in order): no removal.
+          const afterRows = after.split("\n");
+          let found = 0;
+          for (const row of before.split("\n")) {
+            found = afterRows.indexOf(row, found);
+            if (found === -1) break;
+            found += 1;
+          }
+          if (found === -1) removed.push({ line: { ...line }, key: `table:${before}` });
+          added.push({ line: { ...line }, key: `table:${after}` });
+        }
+      }
+      continue;
+    }
     if (line.kind !== "add" && line.kind !== "remove") continue;
-    const key = caseKey(line);
+    const key = caseKey(lines, index);
+    keys.set(line, key);
     if (key) (line.kind === "remove" ? removed : added).push({ line, key });
   }
   // Runs of changed lines.
@@ -752,12 +1070,15 @@ function testCaseChanges(lines) {
     const run = lines.slice(start, end);
     const lastRemoved = run.filter((line) => line.kind === "remove").at(-1);
     const firstAdded = run.find((line) => line.kind === "add");
+    // A table-driven test is retitled in place only when its table stays.
+    const table = (line) => /\ntable:([\s\S]*)$/.exec(keys.get(line) ?? "")?.[1] ?? null;
     if (
       lastRemoved &&
       firstAdded &&
       lines[end]?.kind === "context" &&
-      caseKey(lastRemoved) &&
-      caseKey(firstAdded) &&
+      keys.get(lastRemoved) &&
+      keys.get(firstAdded) &&
+      table(lastRemoved) === table(firstAdded) &&
       !EMPTY_BODY.test(firstAdded.text) &&
       run.indexOf(firstAdded) === run.indexOf(lastRemoved) + 1
     ) {
@@ -859,8 +1180,13 @@ export function dependencySource(spec) {
   if (/^file:/i.test(value)) return "a local file";
   if (/^link:/i.test(value)) return "a local link";
   if (/^(?:\.{1,2}\/|\/|~\/)/.test(value)) return "a local path";
+  if (/^workspace:/i.test(value)) return "a workspace package";
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return "a URL";
   if (/^(?:[\w.-]+\/[\w.-]+)(?:#.*)?$/.test(value) && !value.startsWith("@")) return "GitHub";
+  // A dist-tag (`latest`, `next`, `canary`) is whatever the tag points at when
+  // the lockfile is next written. Version ranges start with a digit, an
+  // operator, `v1`, `x` or `*`.
+  if (/^[A-Za-z][\w.-]*$/.test(value) && !/^(?:v\d|[xX](?:$|\.))/.test(value)) return "a dist-tag";
   return null;
 }
 
@@ -871,9 +1197,10 @@ function same(left, right) {
 /**
  * Compares the merge base's and the head's package.json, parsed as JSON.
  * `null` text means the file does not exist on that side. Returns null when
- * either side cannot be parsed.
+ * either side cannot be parsed. `checkCommands` names the scripts main's CI
+ * runs (buildCheckCommands); scripts whose names look like checks count too.
  */
-export function comparePackages(baseText, headText) {
+export function comparePackages(baseText, headText, { checkCommands = new Set() } = {}) {
   const base = parsePackage(baseText);
   const head = parsePackage(headText);
   if (!base || !head) return null;
@@ -914,13 +1241,46 @@ export function comparePackages(baseText, headText) {
     : [];
   const newBuilt = builtAfter.filter((name) => !builtBefore.has(name)).map(String);
 
+  // Any other difference under "pnpm" (patched dependencies, allowed or
+  // ignored builds, peer rules, settings) and in the bundled dependencies.
+  // Overrides are listed one by one above; onlyBuiltDependencies is listed
+  // here unless its only change is the additions already reported.
+  const packageSettings = [];
+  const pnpmBefore = base.pnpm;
+  const pnpmAfter = head.pnpm;
+  const isObject = (value) => value && typeof value === "object" && !Array.isArray(value);
+  if (!same(pnpmBefore, pnpmAfter)) {
+    if (!isObject(pnpmBefore ?? {}) || !isObject(pnpmAfter ?? {})) {
+      packageSettings.push("pnpm");
+    } else {
+      const before = pnpmBefore ?? {};
+      const after = pnpmAfter ?? {};
+      for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+        if (key === "overrides" && isObject(before[key] ?? {}) && isObject(after[key] ?? {})) {
+          continue;
+        }
+        if (same(before[key], after[key])) continue;
+        if (key === "onlyBuiltDependencies" && Array.isArray(after[key])) {
+          const onlyAdded = same(
+            after[key].filter((name) => builtBefore.has(name)),
+            Array.isArray(before[key]) ? before[key] : []
+          );
+          if (onlyAdded && newBuilt.length > 0) continue;
+        }
+        packageSettings.push(`pnpm.${key}`);
+      }
+    }
+  }
+  for (const key of ["bundleDependencies", "bundledDependencies"]) {
+    if (!same(base[key], head[key])) packageSettings.push(key);
+  }
+
   const scriptsBefore = objectAt(base, "scripts");
   const scriptsAfter = objectAt(head, "scripts");
   const changedCommands = [];
   for (const name of new Set([...Object.keys(scriptsBefore), ...Object.keys(scriptsAfter)])) {
-    if (CHECK_COMMAND_NAME.test(name) && !same(scriptsBefore[name], scriptsAfter[name])) {
-      changedCommands.push(name);
-    }
+    const isCheck = checkCommands.has(name) || CHECK_COMMAND_NAME.test(name);
+    if (isCheck && !same(scriptsBefore[name], scriptsAfter[name])) changedCommands.push(name);
   }
 
   return {
@@ -928,6 +1288,7 @@ export function comparePackages(baseText, headText) {
     changedSources,
     overrides,
     newBuiltDependencies: [...new Set(newBuilt)],
+    packageSettings,
     packageManagerChanged: !same(base.packageManager, head.packageManager),
     changedCommands,
   };
@@ -944,6 +1305,7 @@ export function comparePackages(baseText, headText) {
  *   complete?: boolean,
  *   packages?: { base: string | null, head: string | null },
  *   suites?: ReturnType<typeof buildTestSuites>,
+ *   checks?: ReturnType<typeof buildCheckCommands>,
  * }} [options]
  *   complete: false when the file list was cut short (GitHub lists at most
  *   3000 files), so the verdict cannot be clean.
@@ -952,6 +1314,9 @@ export function comparePackages(baseText, headText) {
  *   reported as unreadable.
  *   suites: which files run as tests, from buildTestSuites. Without it, only
  *   file names are used.
+ *   checks: the commands main's CI runs and the files they execute, from
+ *   buildCheckCommands. Without it, only command names that look like checks
+ *   and the fixed list of check files are used.
  */
 export function analyseChanges(files, options = {}) {
   const result = {
@@ -971,12 +1336,14 @@ export function analyseChanges(files, options = {}) {
     changedSources: [],
     overrides: [],
     newBuiltDependencies: [],
+    packageSettings: [],
     packageManagerChanged: false,
     unreadable: [],
     longLines: [],
     incomplete: options.complete === false,
   };
   const suites = options.suites ?? null;
+  const checks = options.checks ?? null;
   const isTestFile = (file) => looksLikeTest(file) || (suites ? runsAsTest(file, suites) : false);
   const runs = (file) => (suites ? runsAsTest(file, suites) : looksLikeTest(file));
   const isTestRelated = (file) =>
@@ -1043,7 +1410,7 @@ export function analyseChanges(files, options = {}) {
     }
 
     for (const candidate of previous ? [name, previous] : [name]) {
-      const group = CHECK_CONFIG_GROUPS.find((entry) => entry.match(candidate));
+      const group = CHECK_CONFIG_GROUPS.find((entry) => entry.match(candidate, checks));
       if (!group) continue;
       groups.add(group.id);
       if (!result.configFiles.includes(candidate)) result.configFiles.push(candidate);
@@ -1054,7 +1421,9 @@ export function analyseChanges(files, options = {}) {
 
     if (name === "package.json" || previous === "package.json") {
       const packages = options.packages;
-      const compared = packages ? comparePackages(packages.base, packages.head) : null;
+      const compared = packages
+        ? comparePackages(packages.base, packages.head, { checkCommands: checks?.commands })
+        : null;
       if (!compared) {
         flagUnreadable("package.json");
       } else {
@@ -1063,6 +1432,7 @@ export function analyseChanges(files, options = {}) {
         result.changedSources = compared.changedSources;
         result.overrides = compared.overrides;
         result.newBuiltDependencies = compared.newBuiltDependencies;
+        result.packageSettings = compared.packageSettings;
         result.packageManagerChanged = compared.packageManagerChanged;
       }
     }
@@ -1087,6 +1457,7 @@ export function hasFindings(result) {
     result.changedSources.length > 0 ||
     result.overrides.length > 0 ||
     result.newBuiltDependencies.length > 0 ||
+    result.packageSettings.length > 0 ||
     result.packageManagerChanged ||
     result.unreadable.length > 0 ||
     result.longLines.length > 0 ||
@@ -1170,6 +1541,11 @@ export function summarySentence(result) {
   if (result.newBuiltDependencies.length > 0) {
     parts.push(
       `lets ${plural(result.newBuiltDependencies.length, "more package")} run install scripts`
+    );
+  }
+  if (result.packageSettings.length > 0) {
+    parts.push(
+      `changes ${plural(result.packageSettings.length, "package manager setting")} in package.json`
     );
   }
   if (result.packageManagerChanged) parts.push("changes the package manager version");
@@ -1262,6 +1638,12 @@ export function renderComment(result, { headSha } = {}) {
       ),
       "packages allowed to run install scripts"
     ),
+    ...capped(
+      result.packageSettings.map(
+        (key) => `- Package manager setting changed in \`package.json\`: ${codeName(key)}`
+      ),
+      "package manager settings"
+    ),
     ...(result.packageManagerChanged ? ["- `packageManager` changed in `package.json`"] : []),
     ...capped(
       result.unreadable.map((file) => `- Diff too large to read, check by hand: ${codeName(file)}`),
@@ -1318,7 +1700,7 @@ export function renderFailureComment() {
 
 /**
  * Splits `git diff` output into API-shaped file entries, for fixtures and for
- * running the guard locally (`git diff origin/main... | node scripts/check-changed-checks.mjs --diff -`).
+ * running the guard locally (see "Test and check changes label" in docs/branch-protection.md).
  */
 export function filesFromGitDiff(text) {
   const files = [];
@@ -1329,7 +1711,8 @@ export function filesFromGitDiff(text) {
     if (patchLines && patchLines.length > 0) current.patch = patchLines.join("\n");
     files.push(current);
   };
-  for (const raw of text.split("\n")) {
+  // A diff saved on Windows may end its lines with CRLF.
+  for (const raw of text.split("\n").map((line) => line.replace(/\r$/, ""))) {
     const start = /^diff --git a\/(.+) b\/(.+)$/.exec(raw);
     if (start) {
       finish();

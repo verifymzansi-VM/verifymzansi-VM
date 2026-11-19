@@ -17,13 +17,15 @@
 //
 //   PR_NUMBER=123 GITHUB_REPOSITORY=owner/repo GITHUB_TOKEN=... node scripts/check-changed-checks.mjs
 //   PR_NUMBER=123 ... node scripts/check-changed-checks.mjs --could-not-check
-//   git diff origin/main... | node scripts/check-changed-checks.mjs --diff -   (local, prints only)
+//   git diff "$(git merge-base origin/main HEAD)" | node scripts/check-changed-checks.mjs --diff -
+//     (local, prints only; see "Test and check changes label" in docs/branch-protection.md)
 //
 // Environment (CI): GITHUB_TOKEN, GITHUB_REPOSITORY, PR_NUMBER, optional
 // GITHUB_API_URL and BASE_DIR (main's checkout, holding package.json,
-// vitest.config.ts and the Playwright configs; default the working directory).
-// Local --diff runs also read BASE_PACKAGE_JSON and HEAD_PACKAGE_JSON (default
-// ./package.json) when the diff changes package.json.
+// vitest.config.ts, the Playwright configs, the workflows and the scripts;
+// default the working directory). Local --diff runs also read
+// BASE_PACKAGE_JSON (the merge base's package.json) and HEAD_PACKAGE_JSON
+// (default ./package.json) when the diff changes package.json.
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -32,6 +34,7 @@ import {
   LABEL_CLEAN,
   MARKER,
   analyseChanges,
+  buildCheckCommands,
   buildTestSuites,
   filesFromGitDiff,
   renderComment,
@@ -85,6 +88,36 @@ export function readBaseSuites(baseDir, extraPackageJsons = []) {
     vitestConfig: readText(path.join(baseDir, "vitest.config.ts")),
     playwrightConfigs,
     packageJsons: [readText(path.join(baseDir, "package.json")), ...extraPackageJsons],
+  });
+}
+
+/**
+ * The commands main's workflows run and the files they execute, read as text
+ * from main's checkout (its .github/workflows, package.json and scripts).
+ */
+export function readBaseChecks(baseDir, extraPackageJsons = []) {
+  const workflowDir = path.join(baseDir, ".github", "workflows");
+  const workflows = {};
+  let names = [];
+  try {
+    names = readdirSync(workflowDir).filter((name) => /\.ya?ml$/.test(name));
+  } catch {
+    names = [];
+  }
+  for (const name of names) {
+    const text = readText(path.join(workflowDir, name));
+    if (text !== undefined) workflows[name] = text;
+  }
+  const root = path.resolve(baseDir);
+  return buildCheckCommands({
+    workflows,
+    packageJsons: [readText(path.join(baseDir, "package.json")), ...extraPackageJsons],
+    // Only files inside main's checkout, by repository path.
+    readFile: (file) => {
+      const resolved = path.resolve(root, file);
+      if (!resolved.startsWith(root + path.sep)) return undefined;
+      return readText(resolved);
+    },
   });
 }
 
@@ -238,8 +271,10 @@ async function analysePullRequest(api, number, baseDir) {
     (file) => file?.filename === "package.json" || file?.previous_filename === "package.json"
   );
   const packages = touchesPackage ? await fetchPackages(api, pull) : undefined;
-  const suites = readBaseSuites(baseDir, packages?.head ? [packages.head] : []);
-  const result = analyseChanges(files, { complete, packages, suites });
+  const extra = packages?.head ? [packages.head] : [];
+  const suites = readBaseSuites(baseDir, extra);
+  const checks = readBaseChecks(baseDir, extra);
+  const result = analyseChanges(files, { complete, packages, suites, checks });
   return { result, headSha: pull?.head?.sha };
 }
 
@@ -286,9 +321,11 @@ function runLocal(source) {
   const packages = base
     ? { base: readText(base) ?? null, head: readText(head) ?? null }
     : undefined;
+  const extra = packages?.head ? [packages.head] : [];
   const result = analyseChanges(files, {
     packages,
-    suites: readBaseSuites(".", packages?.head ? [packages.head] : []),
+    suites: readBaseSuites(".", extra),
+    checks: readBaseChecks(".", extra),
   });
   process.stdout.write(`Label: ${verdictLabel(result)}\n\n${renderComment(result)}`);
 }
