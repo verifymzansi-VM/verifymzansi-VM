@@ -1,0 +1,22 @@
+{
+  "name": "demo",
+  "private": true,
+  "engines": {
+    "node": "^22.19.0"
+  },
+  "scripts": {
+    "build": "next build",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "next": "16.0.0",
+    "react": "19.0.0",
+    "zod": "4.0.0"
+  },
+  "devDependencies": {
+    "eslint": "9.0.0",
+    "typescript": "5.9.0",
+    "vitest": "4.0.0"
+  }
+}

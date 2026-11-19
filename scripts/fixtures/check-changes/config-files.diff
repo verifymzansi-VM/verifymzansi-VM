@@ -1,0 +1,87 @@
+diff --git a/scripts/audit-baselines/lint.json b/scripts/audit-baselines/lint.json
+index 1111111..2222222 100644
+--- a/scripts/audit-baselines/lint.json
++++ b/scripts/audit-baselines/lint.json
+@@ -1,1 +1,1 @@
+-{"findings": []}
++{"findings": ["new"]}
+diff --git a/scripts/legacy-surface-baseline.json b/scripts/legacy-surface-baseline.json
+index 1111111..2222222 100644
+--- a/scripts/legacy-surface-baseline.json
++++ b/scripts/legacy-surface-baseline.json
+@@ -1,1 +1,1 @@
+-[]
++["src/app/old/page.tsx"]
+diff --git a/.github/rulesets/protect-main.json b/.github/rulesets/protect-main.json
+index 1111111..2222222 100644
+--- a/.github/rulesets/protect-main.json
++++ b/.github/rulesets/protect-main.json
+@@ -1,1 +1,1 @@
+-{"context": "foundation-replay"}
++{}
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 1111111..2222222 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1,1 +1,1 @@
+-    timeout-minutes: 10
++    timeout-minutes: 20
+diff --git a/scripts/check-quality.ts b/scripts/check-quality.ts
+index 1111111..2222222 100644
+--- a/scripts/check-quality.ts
++++ b/scripts/check-quality.ts
+@@ -1,1 +1,1 @@
+-const strict = true;
++const strict = false;
+diff --git a/knip.jsonc b/knip.jsonc
+index 1111111..2222222 100644
+--- a/knip.jsonc
++++ b/knip.jsonc
+@@ -1,1 +1,1 @@
+-  "entry": []
++  "entry": ["scripts/**"]
+diff --git a/.semgrepignore b/.semgrepignore
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/.semgrepignore
+@@ -0,0 +1,1 @@
++src/
+diff --git a/.gitleaks.toml b/.gitleaks.toml
+index 1111111..2222222 100644
+--- a/.gitleaks.toml
++++ b/.gitleaks.toml
+@@ -1,1 +1,2 @@
+ [allowlist]
++paths = ["src/"]
+diff --git a/eslint.config.mjs b/eslint.config.mjs
+index 1111111..2222222 100644
+--- a/eslint.config.mjs
++++ b/eslint.config.mjs
+@@ -1,1 +1,1 @@
+-      "no-console": "error",
++      "no-console": "off",
+diff --git a/playwright.foundation.config.ts b/playwright.foundation.config.ts
+index 1111111..2222222 100644
+--- a/playwright.foundation.config.ts
++++ b/playwright.foundation.config.ts
+@@ -1,1 +1,1 @@
+-  retries: 0,
++  retries: 5,
+diff --git a/e2e/support/skip-policy.ts b/e2e/support/skip-policy.ts
+index 1111111..2222222 100644
+--- a/e2e/support/skip-policy.ts
++++ b/e2e/support/skip-policy.ts
+@@ -1,1 +1,2 @@
+ export const DOCUMENTED_SKIPS = [
++  { reason: "Flaky", why: "Fails sometimes." },
+diff --git a/e2e/foundation/visual-regression.spec.ts-snapshots/home-chromium-linux.png b/e2e/foundation/visual-regression.spec.ts-snapshots/home-chromium-linux.png
+index 1111111..2222222 100644
+Binary files a/e2e/foundation/visual-regression.spec.ts-snapshots/home-chromium-linux.png and b/e2e/foundation/visual-regression.spec.ts-snapshots/home-chromium-linux.png differ
+diff --git a/database/foundation/contract-steps.json b/database/foundation/contract-steps.json
+index 1111111..2222222 100644
+--- a/database/foundation/contract-steps.json
++++ b/database/foundation/contract-steps.json
+@@ -1,1 +1,1 @@
+-[]
++[{"step": 1}]

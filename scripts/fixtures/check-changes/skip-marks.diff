@@ -1,0 +1,55 @@
+diff --git a/src/lib/orders.test.ts b/src/lib/orders.test.ts
+index 2222222..3333333 100644
+--- a/src/lib/orders.test.ts
++++ b/src/lib/orders.test.ts
+@@ -1,12 +1,24 @@
+-describe.skip("legacy orders", () => {
++  describe.skip("legacy orders", () => {
++it.skip("rejects an order without a buyer", () => {});
++test.only("keeps the order total", () => {});
++it.todo("refunds an order");
++it.fails("charges twice", () => {});
++it.skipIf(process.env.CI)("talks to the network", () => {});
++describe.only("totals", () => {});
++xit("old behaviour", () => {});
++fdescribe("focused", () => {});
++// it.skip("a comment is not a mark", () => {});
++/**
++ * test.only("neither is a doc comment line")
++ */
+ it("still runs", () => {});
+diff --git a/e2e/foundation/checkout.spec.ts b/e2e/foundation/checkout.spec.ts
+index 6666666..7777777 100644
+--- a/e2e/foundation/checkout.spec.ts
++++ b/e2e/foundation/checkout.spec.ts
+@@ -3,6 +3,10 @@ import { test, expect } from "@playwright/test";
+ test("pays for a slot", async ({ page }) => {
++  test.skip(isMobile, "flaky on phones");
++  test.fixme(true, "payment provider is down");
++  test.fail();
++  test.describe.configure({ mode: "serial" });
+   await page.goto("/checkout");
+ });
+diff --git a/scripts/frontend-freeze.test.mjs b/scripts/frontend-freeze.test.mjs
+index 8888888..9999999 100644
+--- a/scripts/frontend-freeze.test.mjs
++++ b/scripts/frontend-freeze.test.mjs
+@@ -20,3 +20,5 @@ import test from "node:test";
++test("reads the ledger", { skip: true }, () => {});
++test("writes the ledger", { skip: false }, () => {});
+ test("parses rows", () => {});
+diff --git a/src/lib/search/query.ts b/src/lib/search/query.ts
+index aaaaaaa..bbbbbbb 100644
+--- a/src/lib/search/query.ts
++++ b/src/lib/search/query.ts
+@@ -1,3 +1,5 @@
++const page = { skip: 10, take: 20 };
++const rows = builder.skip(10).take(20);
+ export function search() {}
+diff --git a/docs/testing.md b/docs/testing.md
+index ccccccc..ddddddd 100644
+--- a/docs/testing.md
++++ b/docs/testing.md
+@@ -1,2 +1,3 @@
+ # Testing
++Use it.skip("...") only with a linked issue.

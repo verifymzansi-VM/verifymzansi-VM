@@ -17,3 +17,6 @@ patches/*.patch text eol=lf
 /src/lib/constants/verification.ts text eol=lf
 /src/types/enums.ts text eol=lf
 /workers/companion-bindings.d.ts text eol=lf
+
+# The check-change guard's fixtures are git diffs and JSON read byte for byte.
+scripts/fixtures/check-changes/** text eol=lf
