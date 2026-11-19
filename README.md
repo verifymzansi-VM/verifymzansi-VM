@@ -574,9 +574,9 @@ What happens after a merge (`.github/workflows/deploy.yml`):
 
 A manual run of the Deploy workflow (Actions → Deploy → Run workflow) releases
 the current `main` commit and also requires its successful CI run. Database
-updates are not part of the deploy: the owner applies them (or approves applying
-them) before the pull request with the code that needs them is merged
-([AGENTS.md](AGENTS.md#database-changes)).
+updates are not part of the deploy: the owner approves each one, and its pull
+request states whether it is applied before the merge (the default) or straight
+after the deploy ([AGENTS.md](AGENTS.md#database-changes)).
 
 ## Startup Failures
 

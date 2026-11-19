@@ -731,8 +731,10 @@ uploads remain manual and inactive; their successful upload is not a release.
 
 Database updates are not part of the deploy. A foundation update is a new file
 in `database/foundation/updates/` that travels in the same pull request as its
-code; the owner applies it (or approves applying it) before that pull request
-merges, because the merge deploys the code
+code. The owner approves the update before either step, and its pull request
+states its order: **apply-first** (the default: apply in production, then merge)
+or **website-first** (merge and deploy, then apply straight after), used when
+the live website's strict readers would reject what the update adds.
 ([AGENTS.md](../AGENTS.md#database-changes)).
 
 Historical: describes the retired source backend. For the 30 September 2026

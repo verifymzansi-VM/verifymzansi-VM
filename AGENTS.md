@@ -46,9 +46,11 @@ baseline. Read `FRONTEND-RESTORE.md` before continuing integration work.
    `desktop-linux` context) and the replay and contract steps in
    `database/foundation/README.md`.
 4. The change travels in the same pull request as the code that needs it. The
-   owner applies it to production (or explicitly approves applying it)
-   **before** that pull request merges: merging deploys the code automatically,
-   so the update must already be in production. The new file starts as `pending`
+   owner approves the update before either step, and its pull request states its
+   order: **apply-first** (the default: apply in production, then merge) or
+   **website-first** (merge and deploy, then apply straight after), used when
+   the live website's strict readers would reject what the update adds. Merging
+   deploys automatically, so the order matters. The new file starts as `pending`
    in the applied register at the end of `database/foundation/updates/README.md`
    (and in `fingerprint.json` `pendingApplication`). Recording the application
    later changes the register line to `applied YYYY-MM-DD HH:MM UTC` together
@@ -68,11 +70,11 @@ baseline. Read `FRONTEND-RESTORE.md` before continuing integration work.
   review has no open blocker. The owner merges it, or the coordinator does under
   the owner's standing approval.
 - The standing approval does not cover two things. A pull request that carries a
-  pending database update merges only after the owner has approved that update
-  and it has been applied in production, because merging deploys the code
-  automatically (step 4 of "Database changes"). A frontend change still needs
-  the owner's sign-off under "Changing the frontend" and the frontend change
-  ledger.
+  pending database update merges only after the owner has approved that update,
+  and for an apply-first update only after it has been applied in production,
+  because merging deploys the code automatically (step 4 of "Database changes").
+  A frontend change still needs the owner's sign-off under "Changing the
+  frontend" and the frontend change ledger.
 - Describe security fixes neutrally: the repository is public.
 - To undo a release, revert its pull request. Database updates are not undone by
   a code rollback.
