@@ -177,6 +177,26 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         };
         Returns: Json;
       };
+      get_my_package_add_offer: { Args: Record<never, never>; Returns: Json };
+      start_package_add_checkout: {
+        Args: {
+          p_package_id: string;
+          p_slots: number;
+          p_expected_total_cents: number;
+          p_cooling_off_consent: boolean;
+        };
+        Returns: Json;
+      };
+      request_package_add_invoice: {
+        Args: {
+          p_package_id: string;
+          p_slots: number;
+          p_expected_total_cents: number;
+          p_cooling_off_consent: boolean;
+          p_request_id: string;
+        };
+        Returns: Json;
+      };
       get_my_package_invoice_request: { Args: Record<never, never>; Returns: Json };
       get_staff_package_invoice_requests: { Args: Record<never, never>; Returns: Json };
       get_staff_package_move_failures: { Args: Record<never, never>; Returns: Json };

@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION internal.start_invoice_payment(p_invoice_number text,
 AS $function$
 declare actor uuid := internal.price_draft_actor(); inv private.customer_invoices; plan private.plan_versions;
   latest private.payments; other private.payments; pay private.payments; fingerprint text; counted jsonb;
-  attempts integer; consent jsonb := internal.customer_invoice_consent(); is_package boolean;
+  attempts integer; consent jsonb := internal.customer_invoice_consent(); is_package boolean; add_package uuid;
 begin
   if p_expected_total_cents is null then
     raise exception 'invoice total required' using errcode='22023';
@@ -30,10 +30,14 @@ begin
     raise exception 'the invoice total is % cents', inv.total_cents using errcode='PT428', detail='invoice_amount_mismatch';
   end if;
   -- An Individual slot invoice, or (P4e) a Multi-listing package invoice: the
-  -- term must still be sold at the invoice's price.
-  select * into plan from private.plan_versions v where v.id = inv.plan_version_id and v.retired_at is null
-    and ((v.is_public and internal.individual_slot_plan(v.plan_code)) or internal.slot_package_plan(v.plan_code))
-    and v.price_cents = inv.unit_price_cents;
+  -- term must still be sold at the invoice's price; or (20261120120000) an
+  -- added-slots invoice, at the price asked for (D1).
+  add_package := internal.package_add_invoice_package(inv.id);
+  select * into plan from private.plan_versions v where v.id = inv.plan_version_id
+    and ((v.retired_at is null
+        and ((v.is_public and internal.individual_slot_plan(v.plan_code)) or internal.slot_package_plan(v.plan_code))
+        and v.price_cents = inv.unit_price_cents)
+      or (add_package is not null and internal.slot_package_plan(v.plan_code)));
   if not found then
     raise exception 'this invoice can no longer be paid online; ask for a new one'
       using errcode='PT409', detail='invoice_plan_unavailable';
@@ -46,13 +50,19 @@ begin
   if is_package then
     -- A package is sold only while packages are on sale, and to an account
     -- with no package that has not ended (as the package checkout); this
-    -- account, then its package, as the package checkout locks them.
+    -- account, then its package, as the package checkout locks them. Added
+    -- slots only while the package they were asked for still runs, with room.
     if not internal.slot_packages_on_sale() then
       raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
     end if;
     perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text, 707));
     perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||actor::text, 707));
-    if internal.slot_package_open(actor) then
+    if add_package is not null then
+      if not internal.slot_package_add_ok(actor, add_package, inv.slots) then
+        raise exception 'the package these slots were for has ended; this invoice can no longer be paid'
+          using errcode='PT409', detail='package_ended';
+      end if;
+    elsif internal.slot_package_open(actor) then
       raise exception 'this account already has a Multi-listing package' using errcode='PT409', detail='package_active';
     end if;
   else
@@ -170,7 +180,10 @@ begin
           'customer_invoice_id', inv.id, 'customer_invoice_number', inv.invoice_number, 'attempt', attempts + 1,
           'cooling_off_consent', jsonb_build_object('method', 'invoice', 'accepted_at', inv.cooling_off_consent_at,
             'version', inv.cooling_off_consent_version, 'wording', consent->>'wording',
-            'terms_version', (select c.version from private.posting_terms_current c where c.singleton))),
+            'terms_version', (select c.version from private.posting_terms_current c where c.singleton)))
+          -- Added slots (20261120120000): delivered into the package asked for.
+          || case when add_package is null then '{}'::jsonb else jsonb_build_object('category', 'slot_package_add',
+            'package_id', add_package, 'unit_price_cents', inv.unit_price_cents) end,
         case when attempts = 0 then inv.invoice_number else inv.invoice_number || '-' || (attempts + 1)::text end)
       returning * into pay;
     insert into private.payment_lines (payment_id, line_number, plan_version_id, amount_cents, slot_count)

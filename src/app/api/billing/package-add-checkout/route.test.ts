@@ -1,0 +1,23 @@
+/** @vitest-environment node */
+import { expect, it, vi } from "vitest";
+import { NextRequest, NextResponse } from "next/server";
+import { POST } from "./route";
+import { handleFoundationBillingRoute } from "@/lib/foundation/billing-route";
+
+vi.mock("@/lib/foundation/billing-route", () => ({ handleFoundationBillingRoute: vi.fn() }));
+
+// The shared billing handler owns sign-in, CSRF, rate limits, the sales switch
+// and validation for this route; those are tested in
+// src/lib/foundation/billing-route.package.test.ts.
+it("hands the request to the foundation billing handler as an add checkout", async () => {
+  const answer = NextResponse.json({ ok: true });
+  vi.mocked(handleFoundationBillingRoute).mockResolvedValueOnce(answer);
+  const request = new NextRequest("https://verifymzansi.com/api/billing/package-add-checkout", {
+    method: "POST",
+  });
+  expect(await POST(request)).toBe(answer);
+  expect(handleFoundationBillingRoute).toHaveBeenCalledExactlyOnceWith(
+    request,
+    "package-add-checkout"
+  );
+});

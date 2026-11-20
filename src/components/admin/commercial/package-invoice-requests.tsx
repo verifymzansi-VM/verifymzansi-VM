@@ -28,6 +28,11 @@ export type StaffPackageInvoiceRequestRow = {
   due_days: number | null;
   prepared_by_me: boolean;
   prepared_by_name: string | null;
+  /** Slots added to the customer's running package (P4b), priced for
+   * `days_left` whole days and ending with it (`package_ends_at`). */
+  kind?: "add";
+  days_left?: number;
+  package_ends_at?: string | null;
 };
 
 const requestedDate = new Intl.DateTimeFormat("en-ZA", {
@@ -50,8 +55,19 @@ function RequestRow({
   const { run, busy, message } = useCommercialAction();
   const [open, setOpen] = useState<"issue" | "decline" | null>(null);
   const who = request.customer_name ?? request.customer_email ?? "this customer";
-  const order = `${request.slots} slots × ${request.term_days} days`;
+  const add = request.kind === "add";
+  const order = add
+    ? `Add ${request.slots} ${request.slots === 1 ? "slot" : "slots"} × ${request.days_left} days left`
+    : `${request.slots} slots × ${request.term_days} days`;
   const waiting = request.status === "awaiting_approval";
+  // A new package is refused while the customer has one; an add needs it running.
+  const blocked = !request.identity_accepted
+    ? "The customer's ID review is not accepted: no invoice can be issued."
+    : add && !request.package_open
+      ? "The customer's package has ended: decline this request."
+      : !add && request.package_open
+        ? "The customer already has a Multi-listing package: decline this request."
+        : null;
 
   return (
     <li className="space-y-2 rounded-lg border p-3 text-sm" data-testid="package-invoice-request">
@@ -74,13 +90,7 @@ function RequestRow({
             ? ` · above ${formatPlanPrice(approvalAboveCents)}: a second admin approves it before it is issued`
             : ""}
       </p>
-      {!request.identity_accepted || request.package_open ? (
-        <p className="font-medium text-destructive">
-          {!request.identity_accepted
-            ? "The customer's ID review is not accepted: no invoice can be issued."
-            : "The customer already has a Multi-listing package: decline this request."}
-        </p>
-      ) : null}
+      {blocked ? <p className="font-medium text-destructive">{blocked}</p> : null}
       <ActionMessage message={message} />
       <div className="flex flex-wrap gap-2">
         {canIssue && request.status === "requested" ? (

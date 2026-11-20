@@ -24,10 +24,10 @@ begin
   -- What the member asked for never changes; staff details are written once.
   if (new.id, new.account_id, new.member_request_id, new.plan_version_id, new.term_days, new.slots,
       new.unit_price_cents, new.total_cents, new.requested_at, new.consent_at, new.consent_version,
-      new.consent_terms_version)
+      new.consent_terms_version, new.kind, new.package_id, new.days_left)
     is distinct from (old.id, old.account_id, old.member_request_id, old.plan_version_id, old.term_days, old.slots,
       old.unit_price_cents, old.total_cents, old.requested_at, old.consent_at, old.consent_version,
-      old.consent_terms_version)
+      old.consent_terms_version, old.kind, old.package_id, old.days_left)
     or (old.prepared_by is not null and (new.prepared_by, new.prepared_at, new.due_days, new.staff_reason)
       is distinct from (old.prepared_by, old.prepared_at, old.due_days, old.staff_reason)) then
     raise exception 'a package invoice request keeps what was asked and prepared' using errcode='23514';

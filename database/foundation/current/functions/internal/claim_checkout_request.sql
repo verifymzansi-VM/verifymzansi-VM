@@ -39,7 +39,28 @@ begin
     if internal.current_verified_identity(pay.owner_id) is null then
       raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
     end if;
-    if pay.checkout_url is null and internal.slot_package_open(pay.owner_id) then
+    if pay.snapshot->>'category' = 'slot_package_add' then
+      -- Slots added part-way (20261120120000): sent only for the running
+      -- package they were priced for, with room. An online order holds its
+      -- price 30 minutes and needs 7 or more whole days left; an invoice's
+      -- Pay now keeps the invoice's price.
+      if pay.checkout_url is null then
+        if not internal.slot_package_add_ok(pay.owner_id, (pay.snapshot->>'package_id')::uuid,
+            (pay.snapshot->>'slot_capacity')::integer) then
+          raise exception 'the package these slots were for has ended' using errcode='PT409', detail='package_ended';
+        end if;
+        if pay.snapshot->>'customer_invoice_id' is null then
+          if pay.created_at <= clock_timestamp() - interval '30 minutes' then
+            raise exception 'the price of these slots was held for 30 minutes; start again'
+              using errcode='PT409', detail='package_add_price_expired';
+          end if;
+          if coalesce((select q.days_left from internal.slot_package_add_quote(pay.owner_id) q), 0) < 7 then
+            raise exception 'slots can be added while 7 or more days of the package are left'
+              using errcode='PT409', detail='package_add_too_late';
+          end if;
+        end if;
+      end if;
+    elsif pay.checkout_url is null and internal.slot_package_open(pay.owner_id) then
       raise exception 'this account already has a Multi-listing package' using errcode='PT409', detail='package_active';
     end if;
     if pay.checkout_url is null and exists(select 1 from private.customer_invoices i

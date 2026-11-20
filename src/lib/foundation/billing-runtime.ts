@@ -47,7 +47,9 @@ type BillingRpcName =
   | "start_slot_renewal_checkout"
   | "get_my_slots_v2"
   | "start_package_checkout"
-  | "get_my_slot_package";
+  | "get_my_slot_package"
+  | "get_my_package_add_offer"
+  | "start_package_add_checkout";
 type BillingRpc = {
   rpc: (
     name: BillingRpcName,
@@ -240,6 +242,41 @@ const PACKAGE_CHECKOUT_REFUSALS: Readonly<
     "PACKAGE_ACTIVE",
   ],
 };
+/** The add checkout's refusals (api.start_package_add_checkout, P4b). */
+const PACKAGE_ADD_CHECKOUT_REFUSALS: Readonly<
+  Record<string, readonly [status: 400 | 403 | 409, message: string, code: string]>
+> = {
+  PT403: [403, "Multi-listing packages are not on sale yet.", "PACKAGES_NOT_ON_SALE"],
+  PT412: [
+    403,
+    "Your ID review must be accepted before you add slots, so you never pay for days you cannot use.",
+    "ID_REVIEW_REQUIRED",
+  ],
+  PT413: [
+    400,
+    "More than 100 slots in all, or above what Ozow accepts in one payment, is paid by invoice. Ask for an invoice instead.",
+    "INVOICE_REQUIRED",
+  ],
+  PT428: [409, "The price changed. Check the total and try again.", "PRICE_CHANGED"],
+};
+/** The package the slots were for has ended (P4b). */
+const PACKAGE_ENDED = [
+  409,
+  "Your package has ended, so slots cannot be added to it. Its slots are on My slots.",
+  "PACKAGE_ENDED",
+] as const;
+/** Fewer than 7 whole days of the package are left (P4b). */
+const PACKAGE_ADD_TOO_LATE = [
+  409,
+  "Slots can be added while 7 or more days of your package are left.",
+  "PACKAGE_ADD_TOO_LATE",
+] as const;
+/** An add's price holds 30 minutes before it is sent to Ozow (P4b). */
+const PACKAGE_ADD_PRICE_EXPIRED = [
+  409,
+  "The price of these slots was held for 30 minutes. Check the total and pay again.",
+  "PRICE_CHANGED",
+] as const;
 /** A package invoice of the account is unpaid (update 20261119025106). */
 const PACKAGE_INVOICE_UNPAID = [
   409,
@@ -276,6 +313,17 @@ export class FoundationPaymentCheckError extends FoundationBillingError {
     super(503, message);
   }
 }
+/** An add's refusal in the member's words (P4b); null when it is not one. */
+function packageAddRefusal(error: { code?: string; details?: string | null }) {
+  if (error.code === "PT409") {
+    if (hasDatabaseReason(error, "package_ended")) return PACKAGE_ENDED;
+    if (hasDatabaseReason(error, "package_add_too_late")) return PACKAGE_ADD_TOO_LATE;
+    if (hasDatabaseReason(error, "package_add_price_expired")) return PACKAGE_ADD_PRICE_EXPIRED;
+    if (hasDatabaseReason(error, "package_invoice_unpaid")) return PACKAGE_INVOICE_UNPAID;
+    return null;
+  }
+  return PACKAGE_ADD_CHECKOUT_REFUSALS[error.code ?? ""] ?? null;
+}
 const addonSalesPaused = () =>
   new FoundationBillingError(403, ADDON_SALES_PAUSED_MESSAGE, ADDON_SALES_PAUSED_CODE);
 async function command(
@@ -302,18 +350,21 @@ async function command(
               : error.code === "PT409" && !hasDatabaseReason(error, "package_active")
                 ? null
                 : PACKAGE_CHECKOUT_REFUSALS[error.code ?? ""]
-            : // A package checkout is not sent to Ozow beside a package or an
-              // unpaid package invoice (update 20261119151152): the package
-              // checkout's own words.
-              name === "claim_checkout_request" && error.code === "PT409"
-              ? hasDatabaseReason(error, "package_invoice_unpaid")
-                ? PACKAGE_INVOICE_UNPAID
-                : hasDatabaseReason(error, "package_active")
-                  ? PACKAGE_CHECKOUT_REFUSALS.PT409
-                  : hasDatabaseReason(error, "package_busy")
-                    ? PACKAGE_BUSY
-                    : null
-              : null;
+            : name === "start_package_add_checkout"
+              ? packageAddRefusal(error)
+              : // A package checkout is not sent to Ozow beside a package or an
+                // unpaid package invoice (update 20261119151152), nor an add
+                // whose package ended, has fewer than 7 days left or whose
+                // price is older than 30 minutes (P4b): the checkout's words.
+                name === "claim_checkout_request" && error.code === "PT409"
+                ? hasDatabaseReason(error, "package_invoice_unpaid")
+                  ? PACKAGE_INVOICE_UNPAID
+                  : hasDatabaseReason(error, "package_active")
+                    ? PACKAGE_CHECKOUT_REFUSALS.PT409
+                    : hasDatabaseReason(error, "package_busy")
+                      ? PACKAGE_BUSY
+                      : (packageAddRefusal(error) ?? null)
+                : null;
   if (refusal) throw new FoundationBillingCommandError(...refusal);
   if (error)
     throw new FoundationBillingCommandError(
@@ -635,6 +686,102 @@ export async function readFoundationMySlotPackage(
   api: FoundationAuthenticatedApi
 ): Promise<FoundationMySlotPackage> {
   return mySlotPackageSchema.parse(await command(api, "get_my_slot_package"));
+}
+
+const packageAddRequestSchema = z.strictObject({
+  request_id: z.uuid(),
+  status: z.enum(["requested", "awaiting_approval", "issued", "declined", "withdrawn"]),
+  term_days: z.union([z.literal(30), z.literal(90), z.literal(180)]),
+  slots: z.number().int().min(1).max(250),
+  unit_price_cents: z.number().int().positive().max(1_000_000),
+  total_cents: z.number().int().positive().max(15_000_000),
+  requested_at: instant,
+  invoice_number: z
+    .string()
+    .regex(/^VM-\d{4}-\d{6}$/)
+    .nullable(),
+  closed_at: instant.nullable(),
+  kind: z.literal("add"),
+  days_left: z.number().int().min(10).max(179),
+  package_ends_at: instant.nullable(),
+});
+const packageAddOfferSchema = z.strictObject({
+  on_sale: z.boolean(),
+  verified: z.boolean(),
+  online_limit_cents: cents,
+  package: z
+    .strictObject({
+      id: z.uuid(),
+      term_days: z.union([z.literal(30), z.literal(90), z.literal(180)]),
+      places: z.number().int().min(0).max(1000),
+      ends_at: instant,
+      days_left: z.number().int().min(0).max(180),
+      // Null while the package's term is not sold.
+      unit_price_cents: cents.nullable(),
+      max_slots: z.number().int().min(0).max(250),
+      max_online_slots: z.number().int().min(0).max(100),
+      online_open: z.boolean(),
+      invoice_open: z.boolean(),
+      invoice_unpaid: z.boolean(),
+      request: packageAddRequestSchema.nullable(),
+      adds: z
+        .array(
+          z.strictObject({
+            payment_id: z.uuid(),
+            slots: z.number().int().min(1).max(250),
+            paid_at: instant,
+          })
+        )
+        .max(20),
+    })
+    .nullable(),
+});
+export type FoundationPackageAddOffer = z.infer<typeof packageAddOfferSchema>;
+/** The member's running package as "Add slots" shows it (P4b,
+ * api.get_my_package_add_offer): its slots, end, whole days left, the price of
+ * one added slot for them, the most that can still be added, which ways are
+ * open and the slots already added. The database prices and checks again. */
+export async function readFoundationPackageAddOffer(
+  api: FoundationAuthenticatedApi
+): Promise<FoundationPackageAddOffer> {
+  return packageAddOfferSchema.parse(await command(api, "get_my_package_add_offer"));
+}
+
+/** Slots added to the member's running package, paid online (P4b). */
+export interface FoundationPackageAddOrder {
+  packageId: string;
+  slots: number;
+  expectedTotalCents: number;
+  coolingOffConsent: boolean;
+}
+const packageAddOrderSchema = z.strictObject({
+  packageId: z.uuid(),
+  slots: z.number().int().min(1).max(100),
+  expectedTotalCents: z.number().int().positive().max(1_000_000),
+  coolingOffConsent: z.literal(true),
+});
+
+/** SQL owns the sales switch, the price for the days left, the consent record,
+ * the ID review, the 7-day rule, 100 slots in all online, the online payment
+ * limit and the package itself; a total other than the one shown is refused. */
+export async function startFoundationPackageAddCheckout(
+  api: FoundationAuthenticatedApi,
+  ownerId: string,
+  order: FoundationPackageAddOrder,
+  appUrl: string,
+  service = createFoundationServiceApi()
+) {
+  const app = checkoutApp(appUrl);
+  const value = packageAddOrderSchema.parse(order);
+  const quote = quoteSchema.parse(
+    await command(api, "start_package_add_checkout", {
+      p_package_id: value.packageId,
+      p_slots: value.slots,
+      p_expected_total_cents: value.expectedTotalCents,
+      p_cooling_off_consent: value.coolingOffConsent,
+    })
+  );
+  return openFoundationCheckout(quote, ownerId, app, service);
 }
 
 function checkoutApp(appUrl: string) {

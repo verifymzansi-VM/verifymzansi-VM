@@ -79,7 +79,7 @@ begin
         -- A Multi-listing package (20261114154823): one package per account
         -- at a time.
         perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||pay.owner_id::text, 707));
-        if internal.slot_package_open(pay.owner_id) then
+        if snap->>'category' is distinct from 'slot_package_add' and internal.slot_package_open(pay.owner_id) then
           raise exception 'the account already has a package; refund this payment, or activate it once that package has ended'
             using errcode='PT409', detail='package_active';
         end if;
@@ -89,6 +89,14 @@ begin
         end if;
         if internal.current_verified_identity(pay.owner_id) is null then
           raise exception 'the member''s ID review is not accepted; refund this payment' using errcode='PT412';
+        end if;
+        -- Slots added part-way (P4b): only to the package they were bought for
+        -- while it still runs and has room.
+        if snap->>'category' = 'slot_package_add' and not internal.slot_package_add_ok(pay.owner_id,
+            (snap->>'package_id')::uuid,
+            (select l.slot_count from private.payment_lines l where l.payment_id = pay.id and l.line_number = 1)) then
+          raise exception 'the package these slots were added to has ended or has no room; refund this payment in full'
+            using errcode='PT409', detail='package_ended';
         end if;
       else
         -- Within the person's Individual slot limit (every account of the

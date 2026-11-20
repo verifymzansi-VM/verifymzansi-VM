@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION internal.package_invoice_issue_check(r private.packag
  LANGUAGE plpgsql
  SET search_path TO 'pg_catalog'
 AS $function$
-declare plan private.plan_versions; unpaid text;
+declare plan private.plan_versions; unpaid text; q record;
 begin
   if not exists(select 1 from private.current_account_access a where a.id = r.account_id) then
     raise exception 'the customer''s account cannot use slots now' using errcode='PT409', detail='payment_account_unavailable';
@@ -18,15 +18,39 @@ begin
   if not internal.slot_packages_on_sale() then
     raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
   end if;
-  select * into plan from private.plan_versions v where v.id = r.plan_version_id and v.retired_at is null
-    and internal.slot_package_plan(v.plan_code) and v.price_cents = r.unit_price_cents;
-  if not found then
-    raise exception 'this package term is no longer sold at the price asked for; decline the request'
-      using errcode='PT409', detail='invoice_plan_unavailable';
-  end if;
-  if internal.slot_package_open(r.account_id) then
-    raise exception 'the customer already has a Multi-listing package; decline the request'
-      using errcode='PT409', detail='package_active';
+  if r.kind = 'add' then
+    -- Slots added part-way (20261120120000): at the price asked for (D1),
+    -- only while the package runs with 7 or more whole days left and room.
+    select * into plan from private.plan_versions v where v.id = r.plan_version_id
+      and internal.slot_package_plan(v.plan_code);
+    if not found then
+      raise exception 'this package term is no longer sold; decline the request'
+        using errcode='PT409', detail='invoice_plan_unavailable';
+    end if;
+    select x.* into q from internal.slot_package_add_quote(r.account_id) x;
+    if q.package_id is distinct from r.package_id then
+      raise exception 'the customer''s package has ended; decline the request'
+        using errcode='PT409', detail='package_ended';
+    end if;
+    if q.days_left < 7 then
+      raise exception 'fewer than 7 days of the customer''s package are left; decline the request'
+        using errcode='PT409', detail='package_add_too_late';
+    end if;
+    if q.places + r.slots > 250 then
+      raise exception 'the package would hold more than 250 slots; decline the request'
+        using errcode='PT409', detail='package_slots_invalid';
+    end if;
+  else
+    select * into plan from private.plan_versions v where v.id = r.plan_version_id and v.retired_at is null
+      and internal.slot_package_plan(v.plan_code) and v.price_cents = r.unit_price_cents;
+    if not found then
+      raise exception 'this package term is no longer sold at the price asked for; decline the request'
+        using errcode='PT409', detail='invoice_plan_unavailable';
+    end if;
+    if internal.slot_package_open(r.account_id) then
+      raise exception 'the customer already has a Multi-listing package; decline the request'
+        using errcode='PT409', detail='package_active';
+    end if;
   end if;
   -- A package payment of the account open at Ozow could still be paid and
   -- open a package: it is finished or cancelled first.

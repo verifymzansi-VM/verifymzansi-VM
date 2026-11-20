@@ -13,7 +13,11 @@ import {
   type RpcResult,
 } from "./customer-invoices";
 import { BILLING_EMAIL } from "../billing/slot-checkout";
-import { PACKAGE_MAX_SLOTS, PACKAGE_MIN_SLOTS } from "../billing/slot-packages";
+import {
+  PACKAGE_ADD_MIN_INVOICE_DAYS,
+  PACKAGE_MAX_SLOTS,
+  PACKAGE_MIN_SLOTS,
+} from "../billing/slot-packages";
 
 /**
  * Multi-listing package invoices (roadmap P4e, update 20261119025106): a member
@@ -31,19 +35,38 @@ const term = z.union([z.literal(30), z.literal(90), z.literal(180)]);
 const cents = z.number().int().positive().max(15_000_000);
 const INVOICE_NUMBER = /^VM-\d{4}-\d{6}$/;
 
-const packageInvoiceRequestSchema = z.strictObject({
+const requestFields = {
   request_id: z.uuid(),
   status: z.enum(["requested", "awaiting_approval", "issued", "declined", "withdrawn"]),
   term_days: term,
-  slots: z.number().int().min(PACKAGE_MIN_SLOTS).max(PACKAGE_MAX_SLOTS),
   unit_price_cents: cents,
   total_cents: cents,
   requested_at: instant,
   invoice_number: z.string().regex(INVOICE_NUMBER).nullable(),
   closed_at: instant.nullable(),
-});
+};
+/** Slots added to the member's running package (P4b, update 20261120120000):
+ * 1 or more, priced for the whole days left (`days_left`), ending with the
+ * package (`package_ends_at`, null once it has no running slot). */
+const addFields = {
+  slots: z.number().int().min(1).max(PACKAGE_MAX_SLOTS),
+  kind: z.literal("add"),
+  days_left: z.number().int().min(10).max(179),
+  package_ends_at: instant.nullable(),
+};
+const packageSlots = z.number().int().min(PACKAGE_MIN_SLOTS).max(PACKAGE_MAX_SLOTS);
+/** A request for a new package (5 to 250 slots) or an add, with `extra`
+ * fields (which replace the request's own of the same name). */
+function requestSchema<T extends z.ZodRawShape, E extends z.ZodRawShape>(base: T, extra: E) {
+  return z.union([
+    z.strictObject({ ...base, slots: packageSlots, ...extra }),
+    z.strictObject({ ...base, ...addFields, ...extra }),
+  ]);
+}
+const packageInvoiceRequestSchema = requestSchema(requestFields, {});
+export type PackageInvoiceRequest = z.infer<typeof packageInvoiceRequestSchema>;
 
-const staffPackageInvoiceRequestSchema = packageInvoiceRequestSchema.extend({
+const staffRequestFields = {
   // Null once the account was erased (the request is kept, unlinked).
   account_id: z.uuid().nullable(),
   customer_email: z.string().max(254).nullable(),
@@ -57,7 +80,10 @@ const staffPackageInvoiceRequestSchema = packageInvoiceRequestSchema.extend({
   prepared_by_me: z.boolean(),
   prepared_by_name: z.string().max(120).nullable(),
   close_reason: z.string().min(5).max(500).nullable(),
-});
+};
+const staffBase = { ...requestFields, ...staffRequestFields };
+const staffPackageInvoiceRequestSchema = requestSchema(staffBase, {});
+export type StaffPackageInvoiceRequest = z.infer<typeof staffPackageInvoiceRequestSchema>;
 
 // ---------------------------------------------------------------- member
 
@@ -108,6 +134,30 @@ const MEMBER_WORDING: InvoiceMemberWording = {
   unavailable: "Your request could not be sent. Please try again in a few minutes.",
 };
 
+/** An add's refusals (P4b): its own words where they differ. */
+const ADD_WORDING: InvoiceMemberWording = {
+  ...MEMBER_WORDING,
+  reasons: new Map([
+    ...MEMBER_REFUSALS,
+    [
+      "package_slots_invalid",
+      [422, `A package holds at most ${PACKAGE_MAX_SLOTS} slots. Add fewer slots.`],
+    ],
+    [
+      "package_ended",
+      [409, "Your package has ended, so slots cannot be added to it. Its slots are on My slots."],
+    ],
+    [
+      "package_add_invoice_too_late",
+      [
+        409,
+        `Slots are added by invoice while ${PACKAGE_ADD_MIN_INVOICE_DAYS} or more days of your package are left.`,
+      ],
+    ],
+    ["invoice_plan_unavailable", [409, "Slots cannot be added to this package now."]],
+  ]),
+};
+
 function settleMemberCommand<T>(result: RpcResult, schema: z.ZodType<T>): Promise<T> {
   return settleInvoiceMemberCommand(result, schema, MEMBER_WORDING);
 }
@@ -149,7 +199,49 @@ export async function requestPackageInvoice(
       },
       { get: false }
     ),
-    packageInvoiceRequestSchema.extend({ repeated: z.boolean() })
+    requestSchema(requestFields, { repeated: z.boolean() })
+  );
+}
+
+export const packageAddInvoiceRequestInput = z.strictObject({
+  packageId: z.uuid(),
+  slots: z.number().int().min(1).max(PACKAGE_MAX_SLOTS),
+  expectedTotalCents: cents,
+  coolingOffConsent: z.boolean(),
+  requestId: z.uuid(),
+});
+export type PackageAddInvoiceRequestInput = z.infer<typeof packageAddInvoiceRequestInput>;
+
+/**
+ * "Ask for an invoice" for slots added to the member's running package (P4b,
+ * D1): only while 10 or more days are left; the price of this moment is kept
+ * on the invoice. The database prices and checks every rule again.
+ */
+export async function requestPackageAddInvoice(
+  api: FoundationAuthenticatedApi,
+  input: PackageAddInvoiceRequestInput
+) {
+  const value = packageAddInvoiceRequestInput.parse(input);
+  if (value.coolingOffConsent !== true)
+    throw new FoundationInvoiceError(
+      422,
+      "Tick the box to confirm that your slots start as soon as the invoice is paid.",
+      "invoice_refused"
+    );
+  return settleInvoiceMemberCommand(
+    api.rpc(
+      "request_package_add_invoice",
+      {
+        p_package_id: value.packageId,
+        p_slots: value.slots,
+        p_expected_total_cents: value.expectedTotalCents,
+        p_cooling_off_consent: true,
+        p_request_id: value.requestId,
+      },
+      { get: false }
+    ),
+    z.strictObject({ ...requestFields, ...addFields, repeated: z.boolean() }),
+    ADD_WORDING
   );
 }
 
@@ -184,6 +276,16 @@ const STAFF_REFUSALS: ReadonlyMap<FoundationErrorReason, [number, string]> = new
   [
     "package_invoice_unpaid",
     [409, "The customer has an unpaid package invoice. Void it first, or decline this request."],
+  ],
+  // Added slots (P4b): only while the package runs with 7 or more days left and room.
+  ["package_ended", [409, "The customer's package has ended. Decline the request."]],
+  [
+    "package_add_too_late",
+    [409, "Fewer than 7 days of the customer's package are left. Decline the request."],
+  ],
+  [
+    "package_slots_invalid",
+    [409, `The package would hold more than ${PACKAGE_MAX_SLOTS} slots. Decline the request.`],
   ],
   [
     "invoice_checkout_open",
@@ -242,7 +344,7 @@ export function readStaffPackageInvoiceRequests(api: FoundationAuthenticatedApi)
   );
 }
 
-const staffIssueResult = staffPackageInvoiceRequestSchema.extend({
+const staffIssueResult = requestSchema(staffBase, {
   invoice: staffInvoiceSchema.nullable(),
   repeated: z.boolean(),
 });
@@ -282,7 +384,11 @@ export function approveStaffPackageInvoice(api: FoundationAuthenticatedApi, requ
       { p_request_id: z.uuid().parse(requestId).toLowerCase() },
       { get: false }
     ),
-    staffIssueResult.extend({ status: z.literal("issued"), invoice: staffInvoiceSchema })
+    requestSchema(staffBase, {
+      status: z.literal("issued"),
+      invoice: staffInvoiceSchema,
+      repeated: z.boolean(),
+    })
   );
 }
 
@@ -301,9 +407,6 @@ export function declineStaffPackageInvoiceRequest(
       },
       { get: false }
     ),
-    staffPackageInvoiceRequestSchema.extend({
-      status: z.literal("declined"),
-      repeated: z.boolean(),
-    })
+    requestSchema(staffBase, { status: z.literal("declined"), repeated: z.boolean() })
   );
 }

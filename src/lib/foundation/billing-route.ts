@@ -30,6 +30,7 @@ import {
   readFoundationPayment,
   reconcileFoundationPayment,
   startFoundationCheckout,
+  startFoundationPackageAddCheckout,
   startFoundationPackageCheckout,
   startFoundationSlotCheckout,
   startFoundationSlotRenewalCheckout,
@@ -38,6 +39,7 @@ import {
 type Operation =
   | "checkout"
   | "package-checkout"
+  | "package-add-checkout"
   | "payment-status"
   | "cancel-pending"
   | "overview"
@@ -210,6 +212,43 @@ export async function handleFoundationBillingRoute(
         caller.accountId,
         {
           planId: plan.id,
+          slots: value.slots,
+          expectedTotalCents: value.expectedTotalCents,
+          coolingOffConsent: true,
+        },
+        process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com"
+      );
+      return context.respond(NextResponse.json({ ...result, account_id: caller.accountId }));
+    }
+    if (operation === "package-add-checkout") {
+      // Adding slots part-way (P4b): only while the owner's sales switch is
+      // on; the database prices the days left and checks everything again.
+      const offer = await readFoundationSlotPackageOffer(createFoundationServiceApi());
+      if (!offer.on_sale)
+        throw new FoundationBillingError(
+          403,
+          "Multi-listing packages are not on sale yet.",
+          "PACKAGES_NOT_ON_SALE"
+        );
+      const value = z
+        .strictObject({
+          packageId: z.uuid(),
+          slots: z.number().int().min(1).max(100),
+          expectedTotalCents: z.number().int().positive().max(1_000_000),
+          coolingOffConsent: z.boolean().optional(),
+        })
+        .parse(input);
+      if (value.coolingOffConsent !== true)
+        throw new FoundationBillingError(
+          400,
+          "Tick the box to confirm that your added slots start now.",
+          "CONSENT_REQUIRED"
+        );
+      const result = await startFoundationPackageAddCheckout(
+        caller.api,
+        caller.accountId,
+        {
+          packageId: value.packageId,
           slots: value.slots,
           expectedTotalCents: value.expectedTotalCents,
           coolingOffConsent: true,

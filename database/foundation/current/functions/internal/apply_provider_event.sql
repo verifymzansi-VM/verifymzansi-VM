@@ -96,8 +96,16 @@ begin
         -- is still accepted. Otherwise the money goes to reconciliation:
         -- staff refund it (or activate it once it can be delivered).
         perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||pay.owner_id::text, 707));
-        fulfillable := not internal.slot_package_open(pay.owner_id) and internal.slot_packages_on_sale()
-          and internal.current_verified_identity(pay.owner_id) is not null;
+        if snap->>'category' = 'slot_package_add' then
+          -- Slots added part-way (P4b): only to the package they were bought
+          -- for while it still runs and has room; otherwise reconciliation,
+          -- and staff refund it in full.
+          fulfillable := internal.slot_package_add_ok(pay.owner_id, (snap->>'package_id')::uuid,
+            (select l.slot_count from private.payment_lines l where l.payment_id = pay.id and l.line_number = 1));
+        else
+          fulfillable := not internal.slot_package_open(pay.owner_id) and internal.slot_packages_on_sale()
+            and internal.current_verified_identity(pay.owner_id) is not null;
+        end if;
       elsif line_count > 0 and fulfillable then
         -- Slots are delivered only within the person's limit (every account
         -- of the identity, each slot once); otherwise the money goes to
