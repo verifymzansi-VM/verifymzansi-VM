@@ -49,28 +49,28 @@
       "fingerprint": "5e5623672e80b927048d8553487d5442"
     },
     "columns": {
-      "items": 1402,
-      "fingerprint": "76f6d518eb11a7dbb4a1a2fe7252957d"
+      "items": 1403,
+      "fingerprint": "385c765e7c5e6614da28ae563392c466"
     },
     "constraints": {
-      "items": 1248,
-      "fingerprint": "e1ab75fa27d84621d829801460d825a6"
+      "items": 1249,
+      "fingerprint": "014793b2a0323e6a1d852f1cc726abba"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1076,
-      "fingerprint": "887873177e5f3df94ddbb7ffa6b23e87"
+      "items": 1079,
+      "fingerprint": "daab32290473f781872d50dbe4ba6534"
     },
     "function_grants": {
-      "items": 776,
-      "fingerprint": "f8e62b67cf333a39ebc64eb4315b6d28"
+      "items": 778,
+      "fingerprint": "e003f826dfc18560b5c2ce8599fe16be"
     },
     "function_metadata": {
-      "items": 1076,
-      "fingerprint": "ff556610f223ca6d4db2b532ed84c94f"
+      "items": 1079,
+      "fingerprint": "4605edb4d31e00bda8cf4de6d1d036d4"
     },
     "indexes": {
       "items": 570,

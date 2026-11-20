@@ -1,7 +1,7 @@
 -- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
 -- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
 
-CREATE OR REPLACE FUNCTION internal.reserve_handoff_verification_upload(p_grant_sha256 text, p_request uuid, p_purpose text, p_digest text, p_browser_liveness_passed boolean DEFAULT NULL::boolean)
+CREATE OR REPLACE FUNCTION internal.reserve_handoff_verification_upload(p_grant_sha256 text, p_signed_in uuid, p_request uuid, p_purpose text, p_digest text, p_browser_liveness_passed boolean DEFAULT NULL::boolean)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -14,7 +14,7 @@ begin
     or p_digest is null or p_digest !~ '^[a-f0-9]{64}$'
     or (p_purpose='selfie')<>(p_browser_liveness_passed is not null) then
     raise exception 'upload request required' using errcode='22023'; end if;
-  h:=internal.capture_handoff_by_grant(p_grant_sha256);
+  h:=internal.capture_handoff_by_grant(p_grant_sha256,p_signed_in);
   select * into old from private.frontend_verification_uploads where owner_id=h.owner_id and request_id=p_request;
   if found then
     if old.request_digest<>p_digest or old.purpose<>p_purpose or old.case_id<>h.case_id
@@ -26,6 +26,10 @@ begin
       'identity',case when old.purpose='id_front' and old.completed_at is null then
         jsonb_build_object('fingerprint',h.fingerprint,'encrypted_number',h.encrypted_number) end);
   end if;
+  -- Both photos of this link are in: nothing more is taken through it.
+  if not (internal.capture_handoff_state(h)->>'needs_id')::boolean
+    and not (internal.capture_handoff_state(h)->>'needs_selfie')::boolean then
+    raise exception 'this phone link has both photos' using errcode='PT409',detail='handoff_done'; end if;
   if p_purpose='id_front' and h.fingerprint is null then
     raise exception 'ID details required' using errcode='PT409',detail='handoff_needs_id'; end if;
   perform c.id from private.evidence_cases c where c.id=h.case_id and c.subject_id=h.owner_id
@@ -49,6 +53,6 @@ begin
       jsonb_build_object('fingerprint',h.fingerprint,'encrypted_number',h.encrypted_number) end);
 end;
 $function$;
-alter function internal.reserve_handoff_verification_upload(text,uuid,text,text,boolean) owner to postgres;
-revoke all on function internal.reserve_handoff_verification_upload(text,uuid,text,text,boolean) from public;
-grant execute on function internal.reserve_handoff_verification_upload(text,uuid,text,text,boolean) to service_role;
+alter function internal.reserve_handoff_verification_upload(text,uuid,uuid,text,text,boolean) owner to postgres;
+revoke all on function internal.reserve_handoff_verification_upload(text,uuid,uuid,text,text,boolean) from public;
+grant execute on function internal.reserve_handoff_verification_upload(text,uuid,uuid,text,text,boolean) to service_role;

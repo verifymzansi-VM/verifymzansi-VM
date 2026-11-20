@@ -5439,8 +5439,8 @@
           "optional": true
         },
         {
-          "name": "p_identity",
-          "sqlType": "jsonb",
+          "name": "p_with_id",
+          "sqlType": "boolean",
           "optional": true
         }
       ],
@@ -5451,7 +5451,36 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current member with a live session: stores a Continue on your phone link (SHA-256 of a website-made single-use token) for their own open identity case and this session, valid 15 minutes, with the typed legal names (saved as the ID upload saves them) and the encrypted ID number receipt; only the newest link of an account works; at most 5 an hour; without ID details only when an ID photo of the case is already uploaded. Refused once the identity is accepted or under independent review."
+      "authority": "Current member with a live session: stores a Continue on your phone link (SHA-256 of a website-made single-use token) for their own open identity case and this session, valid 15 minutes, with the typed legal names (saved as the ID upload saves them); only the newest link of an account works; at most 5 an hour. Never takes an ID number receipt: with p_with_id the link works only after the website server attaches one (attach_capture_handoff_identity); without it, only when an ID photo of the case is already uploaded. Refused once the identity is accepted or under independent review."
+    },
+    {
+      "name": "attach_capture_handoff_identity",
+      "updates": ["updates/20261120131212_camera_capture_handoff.sql"],
+      "arguments": [
+        {
+          "name": "p_owner",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_token_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_identity",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only: attaches the encrypted ID number receipt the server made from the typed, checked ID number to that owner's new, unopened, unexpired link that waits for one; members can never supply a receipt."
     },
     {
       "name": "redeem_capture_handoff",
@@ -5470,25 +5499,6 @@
         {
           "name": "p_signed_in",
           "sqlType": "uuid",
-          "optional": true
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": false,
-        "service_role": true
-      },
-      "authority": "Website server only, when a phone opens a link: uses the link once (unknown, used, expired, replaced, signed-out computer, account without access or closed case all give the same refusal) and binds the SHA-256 of a capture grant the website gives that phone; refuses a phone signed in as another account without using the link. Returns the owner id (server only), the short public name, the expiry and which photos are still needed."
-    },
-    {
-      "name": "capture_handoff_context",
-      "updates": ["updates/20261120131212_camera_capture_handoff.sql"],
-      "arguments": [
-        {
-          "name": "p_grant_sha256",
-          "sqlType": "text",
           "optional": false
         }
       ],
@@ -5499,7 +5509,31 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Website server only: for a phone capture grant whose link still works, the owner id (server only), the short public name, the expiry and which photos are still needed; nothing else."
+      "authority": "Website server only, when a phone opens a link: the phone must be signed in as the account that made the link (the website passes its GoTrue-verified account; none or another account is refused without using the link). Uses the link once (unknown, used, expired, replaced, signed-out computer, account without access or closed case all give the same refusal) and binds the SHA-256 of a capture grant the website gives that phone. Returns the owner id (server only), the short public name, the expiry and which photos are still needed."
+    },
+    {
+      "name": "capture_handoff_context",
+      "updates": ["updates/20261120131212_camera_capture_handoff.sql"],
+      "arguments": [
+        {
+          "name": "p_grant_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_signed_in",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only: for a phone capture grant whose link still works and whose phone is signed in as the link owner, the owner id (server only), the short public name, the expiry and which photos are still needed; nothing else."
     },
     {
       "name": "reserve_handoff_verification_upload",
@@ -5508,6 +5542,11 @@
         {
           "name": "p_grant_sha256",
           "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_signed_in",
+          "sqlType": "uuid",
           "optional": false
         },
         {
@@ -5538,7 +5577,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Website server only, for a phone capture grant whose link still works: reserves an ID photo or selfie upload for that link's case only, on the computer's session, with the same case, pairing and unfinished-upload rules as reserve_frontend_verification_upload; the selfie is stored as taken with the camera (browser-reported review context, not a proof). Returns the encrypted ID number receipt for an ID photo so the server can complete it."
+      "authority": "Website server only, for a phone capture grant whose link still works and whose phone is signed in as the link owner: reserves an ID photo or selfie upload for that link's case only, on the computer's session, with the same case, pairing and unfinished-upload rules as reserve_frontend_verification_upload; the selfie is stored as taken with the camera (browser-reported review context, not a proof). Refused once the link has both photos. Returns the encrypted ID number receipt for an ID photo so the server can complete it."
     }
   ]
 }

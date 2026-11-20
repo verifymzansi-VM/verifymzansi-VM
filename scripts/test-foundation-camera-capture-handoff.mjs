@@ -40,10 +40,11 @@ const [PREFLIGHT, ROLLBACK] = [
 );
 const RECORD = "internal.record_my_selfie_capture(uuid,text,boolean)";
 const RETENTION = "internal.run_retention(integer)";
-const START = "start_capture_handoff(text,text,text,jsonb)";
+const START = "start_capture_handoff(text,text,text,boolean)";
+const ATTACH = "attach_capture_handoff_identity(uuid,text,jsonb)";
 const REDEEM = "redeem_capture_handoff(text,text,uuid)";
-const CONTEXT = "capture_handoff_context(text)";
-const RESERVE = "reserve_handoff_verification_upload(text,uuid,text,text,boolean)";
+const CONTEXT = "capture_handoff_context(text,uuid)";
+const RESERVE = "reserve_handoff_verification_upload(text,uuid,uuid,text,text,boolean)";
 
 const {
   started,
@@ -100,39 +101,56 @@ try {
     );
   const recordSql = (owner, request, method, passed) =>
     member(owner, `select api.record_my_selfie_capture('${request}','${method}',${passed});`);
-  const startSql = (
-    owner,
-    token,
-    identity = identityReceipt(),
-    names = ["Thando Sipho", "Dlamini"]
-  ) =>
+  // Whose link each token and grant is: the phone is signed in as that
+  // account unless a check says otherwise.
+  const tokenOwner = new Map();
+  const grantOwner = new Map();
+  /** The member's own start: names and "with ID" (never a receipt). */
+  const startSql = (owner, token, withId = true, names = ["Thando Sipho", "Dlamini"]) =>
+    tokenOwner.set(token, owner.id) &&
     member(
       owner,
-      identity
-        ? `select api.start_capture_handoff('${sha(token)}','${names[0]}','${names[1]}',${sqlJsonb(identity)});`
+      withId
+        ? `select api.start_capture_handoff('${sha(token)}','${names[0]}','${names[1]}',true);`
         : `select api.start_capture_handoff('${sha(token)}');`
     );
-  const redeemSql = (token, grant, signedIn = null) =>
+  /** The website's server attaching the receipt it made from the typed number. */
+  const attachSql = (owner, token, identity) =>
     service(
-      `select api.redeem_capture_handoff('${sha(token)}','${sha(grant)}',${signedIn ? `'${signedIn}'` : "null"});`
+      `select api.attach_capture_handoff_identity('${owner.id}','${sha(token)}',${sqlJsonb(identity)});`
     );
-  const contextSql = (grant) => service(`select api.capture_handoff_context('${sha(grant)}');`);
+  /** A link as the website makes it: the member's start, then the server's receipt. */
+  const startLink = (owner, token, identity = identityReceipt()) => {
+    const made = json(startSql(owner, token, Boolean(identity)));
+    if (identity) assert.deepEqual(json(attachSql(owner, token, identity)), { attached: true });
+    return made;
+  };
+  const uuidOrNull = (id) => (id ? `'${id}'` : "null");
+  const redeemSql = (token, grant, signedIn = tokenOwner.get(token)) => {
+    if (signedIn) grantOwner.set(grant, signedIn);
+    return service(
+      `select api.redeem_capture_handoff('${sha(token)}','${sha(grant)}',${uuidOrNull(signedIn)});`
+    );
+  };
+  const contextSql = (grant, signedIn = grantOwner.get(grant)) =>
+    service(`select api.capture_handoff_context('${sha(grant)}',${uuidOrNull(signedIn)});`);
   const reserveSql = (
     grant,
     request,
     purpose,
     passed = purpose === "selfie" ? true : null,
-    digest = hex(32)
+    digest = hex(32),
+    signedIn = grantOwner.get(grant)
   ) =>
     service(
-      `select api.reserve_handoff_verification_upload('${sha(grant)}','${request}','${purpose}','${digest}',${passed});`
+      `select api.reserve_handoff_verification_upload('${sha(grant)}',${uuidOrNull(signedIn)},'${request}','${purpose}','${digest}',${passed});`
     );
   /** A member with a link made on the computer and opened on the phone. */
   const linked = (label, identity = identityReceipt()) => {
     const owner = syntheticMember(label);
     const token = `token-${randomUUID()}`;
     const grant = `grant-${randomUUID()}`;
-    json(startSql(owner, token, identity));
+    startLink(owner, token, identity);
     const state = json(redeemSql(token, grant));
     return { owner, token, grant, identity, state };
   };
@@ -174,7 +192,7 @@ try {
       {
         rollback: ROLLBACK,
         updateSql: step.sql,
-        signatures: [RECORD, RETENTION],
+        signatures: [RETENTION],
         drift: /camera capture handoff drift/,
       }
     )
@@ -191,29 +209,16 @@ try {
       /^camera capture handoff: already applied; selfies said to be uploaded files: 1; phone links: 0$/,
   });
 
-  await check("a selfie said to be an uploaded file is refused; earlier answers stay", () => {
-    const owner = syntheticMember("camera-only");
+  await check("the selfie capture report is unchanged (its refusal comes later)", () => {
+    assert.equal(bodyMd5(RECORD), "4ad4bbe1cfe3f8276dfd73e113c34f2f");
+    const owner = syntheticMember("record-unchanged");
     complete(owner, reserve(owner, "id_front").request, "id_front");
     const selfie = reserve(owner, "selfie");
-    const stderr = fails(
-      recordSql(owner, selfie.request, "file_upload", false),
-      "PT409",
-      /camera required/
-    );
-    assert.equal(/^DETAIL:\s+(\S+)/m.exec(stderr)?.[1], "camera_required", stderr);
-    // The closed set is still checked first.
-    fails(
-      recordSql(owner, selfie.request, "screen", false),
-      "22023",
-      /browser capture report invalid/
-    );
-    assert.deepEqual(json(recordSql(owner, selfie.request, "camera", true)), { recorded: true });
-    assert.equal(
-      q(
-        `select count(*) from private.frontend_verification_uploads where capture_method='file_upload';`
-      ),
-      "1"
-    );
+    // The website refuses this before it is recorded; the database still
+    // takes it until the later contract update.
+    assert.deepEqual(json(recordSql(owner, selfie.request, "file_upload", false)), {
+      recorded: true,
+    });
   });
 
   let main;
@@ -221,7 +226,7 @@ try {
     const owner = syntheticMember("handoff");
     const token = `token-${randomUUID()}`;
     const identity = identityReceipt();
-    const made = json(startSql(owner, token, identity));
+    const made = startLink(owner, token, identity);
     assert.equal(made.needs_id, true);
     const stored = row(owner);
     assert.equal(stored.token_sha256, sha(token));
@@ -266,19 +271,36 @@ try {
         /names and ID details come together/
       );
       fails(
-        member(owner, `select api.start_capture_handoff('${sha("y")}','Thando','Dlamini',null);`),
+        member(owner, `select api.start_capture_handoff('${sha("y")}','Thando','Dlamini',false);`),
         "22023",
         /names and ID details come together/
       );
+      // A member can never hand the database an ID number receipt: the start
+      // takes none, and only the server attaches one (break test A1).
       fails(
-        startSql(owner, "z", { ...identityReceipt(), extra: 1 }),
-        "22023",
-        /encrypted identity receipt required/
+        member(
+          owner,
+          `select api.start_capture_handoff('${sha("z")}','Thando','Dlamini',${sqlJsonb(identityReceipt())});`
+        ),
+        "42883"
       );
+      json(startSql(owner, "z"));
+      for (const sql of [
+        attachSql(owner, "z", identityReceipt()).replace("set role service_role;", ""),
+      ]) {
+        fails(anon(sql), "42501");
+        fails(member(owner, sql), "42501");
+      }
+      // The server's receipt must be well formed and for that owner's waiting link.
+      fails(attachSql(owner, "z", { ...identityReceipt(), extra: 1 }), "22023", /receipt required/);
+      fails(attachSql(syntheticMember("not-owner"), "z", identityReceipt()), "PT409");
+      // A link waiting for the server's receipt cannot be opened without it.
+      fails(redeemSql("z", `grant-${randomUUID()}`), "PT409", /expired or already used/);
       // Without ID details, an ID photo of the open case must already be there.
-      const stderr = fails(startSql(owner, "no-id", null), "PT409", /ID details required/);
+      const stderr = fails(startSql(owner, "no-id", false), "PT409", /ID details required/);
       assert.equal(/^DETAIL:\s+(\S+)/m.exec(stderr)?.[1], "handoff_needs_id");
-      for (let i = 0; i < 5; i += 1) json(startSql(owner, `rate-${i}`));
+      // The link "z" above counts too: 4 more reach the limit of 5 an hour.
+      for (let i = 0; i < 4; i += 1) startLink(owner, `rate-${i}`);
       const limited = fails(startSql(owner, "rate-6"), "PT429", /too many phone links/);
       assert.equal(/^DETAIL:\s+(\S+)/m.exec(limited)?.[1], "handoff_rate_limited");
       // A reused token is refused.
@@ -296,44 +318,55 @@ try {
       );
     }
   );
-  await check(
-    "the phone opens the link once; a phone signed in as another account is refused",
-    () => {
-      const grant = `grant-${randomUUID()}`;
-      const stranger = syntheticMember("stranger");
-      const other = fails(redeemSql(main.token, grant, stranger.id), "42501", /another account/);
-      assert.equal(/^DETAIL:\s+(\S+)/m.exec(other)?.[1], "handoff_other_account");
-      assert.equal(row(main.owner).used_at, null, "the refused phone did not use the link");
-      const state = json(redeemSql(main.token, grant, main.owner.id));
-      assert.deepEqual(Object.keys(state).sort(), [
-        "expires_at",
-        "needs_id",
-        "needs_selfie",
-        "owner_id",
-        "public_name",
-      ]);
-      assert.equal(state.owner_id, main.owner.id);
-      assert.equal(state.public_name, "Fixture h.");
-      assert.equal(state.needs_id, true);
-      assert.equal(state.needs_selfie, true);
-      assert.equal(row(main.owner).grant_sha256, sha(grant));
-      const used = fails(
-        redeemSql(main.token, `grant-${randomUUID()}`),
-        "PT409",
-        /expired or already used/
-      );
-      assert.equal(/^DETAIL:\s+(\S+)/m.exec(used)?.[1], "handoff_unavailable");
-      fails(
-        redeemSql(`unknown-${randomUUID()}`, `grant-${randomUUID()}`),
-        "PT409",
-        /expired or already used/
-      );
-      fails(redeemSql(main.token, main.token), "22023");
-      assert.deepEqual(json(contextSql(grant)), state);
-      fails(contextSql(`grant-${randomUUID()}`), "PT409", /expired or replaced/);
-      main.grant = grant;
+  await check("the phone opens the link once, signed in as the same account only", () => {
+    const grant = `grant-${randomUUID()}`;
+    const stranger = syntheticMember("stranger");
+    // A signed-out phone is asked to sign in, before the link is even looked up.
+    for (const token of [main.token, `unknown-${randomUUID()}`]) {
+      const signedOut = fails(redeemSql(token, grant, null), "42501", /sign in/);
+      assert.equal(/^DETAIL:\s+(\S+)/m.exec(signedOut)?.[1], "handoff_sign_in_required");
     }
-  );
+    const other = fails(redeemSql(main.token, grant, stranger.id), "42501", /another account/);
+    assert.equal(/^DETAIL:\s+(\S+)/m.exec(other)?.[1], "handoff_other_account");
+    assert.equal(row(main.owner).used_at, null, "the refused phone did not use the link");
+    const state = json(redeemSql(main.token, grant, main.owner.id));
+    assert.deepEqual(Object.keys(state).sort(), [
+      "expires_at",
+      "needs_id",
+      "needs_selfie",
+      "owner_id",
+      "public_name",
+    ]);
+    assert.equal(state.owner_id, main.owner.id);
+    assert.equal(state.public_name, "Fixture h.");
+    assert.equal(state.needs_id, true);
+    assert.equal(state.needs_selfie, true);
+    assert.equal(row(main.owner).grant_sha256, sha(grant));
+    const used = fails(
+      redeemSql(main.token, `grant-${randomUUID()}`),
+      "PT409",
+      /expired or already used/
+    );
+    assert.equal(/^DETAIL:\s+(\S+)/m.exec(used)?.[1], "handoff_unavailable");
+    fails(
+      redeemSql(`unknown-${randomUUID()}`, `grant-${randomUUID()}`, main.owner.id),
+      "PT409",
+      /expired or already used/
+    );
+    fails(redeemSql(main.token, main.token), "22023");
+    assert.deepEqual(json(contextSql(grant)), state);
+    fails(contextSql(`grant-${randomUUID()}`, main.owner.id), "PT409", /expired or replaced/);
+    // The grant works only for that same signed-in account.
+    fails(contextSql(grant, null), "42501", /sign in/);
+    fails(contextSql(grant, stranger.id), "42501", /another account/);
+    fails(
+      reserveSql(grant, randomUUID(), "id_front", null, hex(32), stranger.id),
+      "42501",
+      /another account/
+    );
+    fails(reserveSql(grant, randomUUID(), "id_front", null, hex(32), null), "42501", /sign in/);
+    main.grant = grant;
+  });
   await check("the phone uploads the ID photo and the selfie for that case only", () => {
     const id = randomUUID();
     const digest = hex(32);
@@ -378,11 +411,19 @@ try {
       "1"
     );
     assert.equal(json(contextSql(main.grant)).needs_selfie, false);
+    // Both photos are in: the link takes nothing more.
+    const done = fails(
+      reserveSql(main.grant, randomUUID(), "selfie", true),
+      "PT409",
+      /both photos/
+    );
+    assert.equal(/^DETAIL:\s+(\S+)/m.exec(done)?.[1], "handoff_done");
+    fails(reserveSql(main.grant, randomUUID(), "id_front"), "PT409", /both photos/);
   });
   await check("a link stops working when expired, replaced or signed out on the computer", () => {
     // Expired before it was opened.
     const late = syntheticMember("late");
-    json(startSql(late, "late-token"));
+    startLink(late, "late-token");
     age(late, "15 minutes");
     fails(redeemSql("late-token", "late-grant"), "PT409", /expired or already used/);
     // Expired after it was opened.
@@ -392,11 +433,11 @@ try {
     fails(reserveSql(opened.grant, randomUUID(), "id_front"), "PT409", /expired or replaced/);
     // Replaced by a newer link: both the unopened and the opened one stop.
     const replaced = linked("replaced");
-    json(startSql(replaced.owner, `newer-${randomUUID()}`));
+    startLink(replaced.owner, `newer-${randomUUID()}`);
     fails(contextSql(replaced.grant), "PT409", /expired or replaced/);
     const unopened = syntheticMember("unopened");
-    json(startSql(unopened, "first-token"));
-    json(startSql(unopened, "second-token"));
+    startLink(unopened, "first-token");
+    startLink(unopened, "second-token");
     fails(redeemSql("first-token", "first-grant"), "PT409");
     json(redeemSql("second-token", "second-grant"));
     // The computer signs out.
@@ -412,11 +453,36 @@ try {
     );
     fails(contextSql(closed.grant), "PT409", /expired or replaced/);
   });
+  await check("a grant reaches only its own case, and not a decided one", () => {
+    const a = linked("grant-a");
+    const b = linked("grant-b");
+    // B's request id reused with A's grant makes A's own upload in A's case.
+    const shared = randomUUID();
+    const fromB = json(reserveSql(b.grant, shared, "id_front"));
+    const fromA = json(reserveSql(a.grant, shared, "id_front"));
+    assert.notEqual(fromA.artifact_id, fromB.artifact_id);
+    assert.equal(
+      q(
+        `select owner_id from private.frontend_verification_uploads where artifact_id='${fromA.artifact_id}';`
+      ),
+      a.owner.id
+    );
+    // A token used as a grant, or A's grant for B, opens nothing.
+    fails(contextSql(b.token, b.owner.id), "PT409");
+    fails(contextSql(b.grant, a.owner.id), "42501", /another account/);
+    // A decided case takes no more photos.
+    const decided = linked("grant-decided");
+    q(`set session_replication_role=replica;
+      update private.evidence_cases set status='decided'
+        where id=(select case_id from private.capture_handoffs where owner_id='${decided.owner.id}');`);
+    fails(contextSql(decided.grant), "PT409", /expired or replaced/);
+    fails(reserveSql(decided.grant, randomUUID(), "id_front"), "PT409", /expired or replaced/);
+  });
   await check("a selfie-only link follows an ID photo taken on the computer", () => {
     const owner = syntheticMember("selfie-only");
     const id = reserve(owner, "id_front");
     complete(owner, id.request, "id_front");
-    const made = json(startSql(owner, "selfie-token", null));
+    const made = startLink(owner, "selfie-token", null);
     assert.equal(made.needs_id, false);
     const state = json(redeemSql("selfie-token", "selfie-grant"));
     assert.equal(state.needs_id, false);
@@ -435,6 +501,8 @@ try {
     const grants = executeGrants(json, [
       `api.${START}`,
       `internal.${START}`,
+      `api.${ATTACH}`,
+      `internal.${ATTACH}`,
       `api.${REDEEM}`,
       `internal.${REDEEM}`,
       `api.${CONTEXT}`,
@@ -442,7 +510,8 @@ try {
       `api.${RESERVE}`,
       `internal.${RESERVE}`,
       "internal.purge_capture_handoffs(integer)",
-      "internal.capture_handoff_by_grant(text)",
+      "internal.capture_handoff_by_grant(text,uuid)",
+      "internal.capture_handoff_signed_in(private.capture_handoffs,uuid)",
       "internal.capture_handoff_prior_id(uuid,uuid)",
     ]);
     const memberOnly = { anon: false, authenticated: true, service_role: false };
@@ -451,6 +520,8 @@ try {
     assert.deepEqual(grants, {
       [`api.${START}`]: memberOnly,
       [`internal.${START}`]: memberOnly,
+      [`api.${ATTACH}`]: server,
+      [`internal.${ATTACH}`]: server,
       [`api.${REDEEM}`]: server,
       [`internal.${REDEEM}`]: server,
       [`api.${CONTEXT}`]: server,
@@ -458,12 +529,13 @@ try {
       [`api.${RESERVE}`]: server,
       [`internal.${RESERVE}`]: server,
       "internal.purge_capture_handoffs(integer)": nobody,
-      "internal.capture_handoff_by_grant(text)": nobody,
+      "internal.capture_handoff_by_grant(text,uuid)": nobody,
+      "internal.capture_handoff_signed_in(private.capture_handoffs,uuid)": nobody,
       "internal.capture_handoff_prior_id(uuid,uuid)": nobody,
     });
     for (const sql of [
       redeemSql("t", "g").replace("set role service_role;", ""),
-      `select api.capture_handoff_context('${sha("g")}');`,
+      `select api.capture_handoff_context('${sha("g")}','${main.owner.id}');`,
     ]) {
       fails(anon(sql), "42501");
       fails(member(main.owner, sql), "42501");
@@ -483,10 +555,10 @@ try {
   await check("links go one day after they expired", () => {
     const before = Number(q(`select count(*) from private.capture_handoffs;`));
     const old = syntheticMember("old-link");
-    json(startSql(old, "old-token"));
+    startLink(old, "old-token");
     age(old, "1 day 16 minutes");
     const recent = syntheticMember("recent-link");
-    json(startSql(recent, "recent-token"));
+    startLink(recent, "recent-token");
     age(recent, "1 day 14 minutes");
     const result = json(service(`select api.run_retention(100);`));
     assert.ok(result.capture_handoffs >= 1, JSON.stringify(result));

@@ -14,10 +14,6 @@ begin
   if p_request is null or p_capture_method is null or p_capture_method not in('camera','file_upload')
     or p_browser_liveness_passed is null or (p_browser_liveness_passed and p_capture_method<>'camera') then
     raise exception 'browser capture report invalid' using errcode='22023'; end if;
-  -- Photos are taken with the camera only (20261120131212). This refuses a
-  -- browser that says otherwise; it cannot prove the opposite.
-  if p_capture_method<>'camera' then
-    raise exception 'camera required' using errcode='PT409',detail='camera_required'; end if;
   perform internal.lock_verification_subject(actor);
   select u.* into r from private.frontend_verification_uploads u where u.owner_id=actor and u.request_id=p_request for update;
   if not found or r.purpose<>'selfie' then raise exception 'selfie upload request required' using errcode='22023'; end if;

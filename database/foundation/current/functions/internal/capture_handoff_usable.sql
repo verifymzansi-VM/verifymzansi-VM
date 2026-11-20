@@ -9,6 +9,7 @@ CREATE OR REPLACE FUNCTION internal.capture_handoff_usable(p_handoff private.cap
 AS $function$
   select p_handoff.token_sha256 is not null
     and (p_handoff.used_at is not null)=p_used
+    and (not p_handoff.expects_id or p_handoff.fingerprint is not null)
     and p_handoff.expires_at>clock_timestamp()
     and not exists(select 1 from private.capture_handoffs n where n.owner_id=p_handoff.owner_id
       and n.created_at>p_handoff.created_at)

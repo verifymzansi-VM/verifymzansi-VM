@@ -699,7 +699,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
           p_token_sha256: string;
           p_first_name?: string;
           p_last_name?: string;
-          p_identity?: Json;
+          p_with_id?: boolean;
         };
         Returns: Json;
       };
@@ -868,14 +868,22 @@ export type FoundationRuntimeServiceDatabase = {
         };
         Returns: Json;
       };
-      redeem_capture_handoff: {
-        Args: { p_token_sha256: string; p_grant_sha256: string; p_signed_in?: string };
+      attach_capture_handoff_identity: {
+        Args: { p_owner: string; p_token_sha256: string; p_identity: Json };
         Returns: Json;
       };
-      capture_handoff_context: { Args: { p_grant_sha256: string }; Returns: Json };
+      redeem_capture_handoff: {
+        Args: { p_token_sha256: string; p_grant_sha256: string; p_signed_in: string };
+        Returns: Json;
+      };
+      capture_handoff_context: {
+        Args: { p_grant_sha256: string; p_signed_in: string };
+        Returns: Json;
+      };
       reserve_handoff_verification_upload: {
         Args: {
           p_grant_sha256: string;
+          p_signed_in: string;
           p_request: string;
           p_purpose: string;
           p_digest: string;

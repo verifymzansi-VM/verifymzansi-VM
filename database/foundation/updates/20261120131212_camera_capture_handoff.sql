@@ -14,45 +14,51 @@
 --    commands store), so the phone never sees or types the ID number. Only the
 --    newest link of an account works: making a new one retires the earlier
 --    ones. No API role has table access.
--- 2. api.start_capture_handoff(token_sha256, first_name, last_name, identity)
+-- 2. api.start_capture_handoff(token_sha256, first_name, last_name, with_id)
 --    (authenticated, live session): saves the typed legal names as the ID
 --    upload does, opens the identity case, and stores the link. At most 5
---    links an hour per account (PT429, detail handoff_rate_limited). Without
---    names and ID details the phone may only take the selfie, so an ID photo
---    of the open case must already be uploaded (PT409, detail
---    handoff_needs_id).
+--    links an hour per account (PT429, detail handoff_rate_limited). A member
+--    never supplies an ID number receipt: with with_id the link waits for one
+--    and works only once api.attach_capture_handoff_identity(owner, token,
+--    identity) (service only) has attached the receipt the website's server
+--    made from the typed ID number. Without names and ID details the phone may
+--    only take the selfie, so an ID photo of the open case must already be
+--    uploaded (PT409, detail handoff_needs_id).
 -- 3. api.redeem_capture_handoff(token_sha256, grant_sha256, signed_in)
 --    (service only, called by the website when the phone opens the link):
---    single use. Refused (PT409, detail handoff_unavailable) when the link is
---    unknown, used, expired, replaced, its computer session has ended, the
+--    single use. The phone must be signed in as the account that made the
+--    link (owner decision): the website passes the phone's GoTrue-verified
+--    account. No account: 42501, detail handoff_sign_in_required; another
+--    account: 42501, detail handoff_other_account; both without using up the
+--    link. Otherwise refused (PT409, detail handoff_unavailable) when the link
+--    is unknown, used, expired, replaced, its computer session has ended, the
 --    account has lost access or the case was closed, accepted or sent for
---    independent review. A phone signed in as another account is refused
---    (42501, detail handoff_other_account) without using up the link.
--- 4. api.capture_handoff_context(grant_sha256) (service only): what the phone
---    may still do (the account's short public name, whether the ID photo and
---    the selfie are still needed, the expiry). Nothing else is read.
--- 5. api.reserve_handoff_verification_upload(grant_sha256, request, purpose,
---    digest, browser_liveness_passed) (service only): reserves an ID photo or
---    selfie upload for the link's case only, exactly as
---    api.reserve_frontend_verification_upload does for a signed-in member, on
---    the computer's session (so signing out on the computer stops the phone).
---    The phone's selfie is stored as taken with the camera. The website then
---    completes the upload with the existing service commands
+--    independent review.
+-- 4. api.capture_handoff_context(grant_sha256, signed_in) (service only): what
+--    the phone may still do (the account's short public name, whether the ID
+--    photo and the selfie are still needed, the expiry), only for the signed-in
+--    owner. Nothing else is read.
+-- 5. api.reserve_handoff_verification_upload(grant_sha256, signed_in, request,
+--    purpose, digest, browser_liveness_passed) (service only, signed-in owner
+--    only): reserves an ID photo or selfie upload for the link's case only,
+--    exactly as api.reserve_frontend_verification_upload does for a signed-in
+--    member, on the computer's session (so signing out on the computer stops
+--    the phone). Refused once the link has both photos (PT409, detail
+--    handoff_done). The phone's selfie is stored as taken with the camera
+--    (browser-reported review context, not a proof: a modified browser or a
+--    virtual camera can send any image; staff still review every case). The
+--    website then completes the upload with the existing service commands
 --    (frontend_verification_upload_context, complete_frontend_verification_upload).
--- 6. internal.record_my_selfie_capture (same signature, grants and owner): a
---    browser that says the selfie was an uploaded file is refused (PT409
---    'camera required', detail camera_required). Rows stored earlier keep
---    their answer; the table's check constraint is unchanged.
---    None of this proves that a picture came from a live camera: a modified
---    browser or a virtual camera can send any image. Staff still review every
---    case, and the capture method stays review context, not a proof.
--- 7. Retention: internal.purge_capture_handoffs deletes links one day after
+-- 6. Retention: internal.purge_capture_handoffs deletes links one day after
 --    they expired (with the ID number receipt they hold); internal.run_retention
 --    (same signature) runs it as 'capture_handoffs'.
 --
--- New commands only (expand); no command loses an argument or a grant. A
--- website release without the matching code never calls them. ORDER:
--- apply first, then merge.
+-- New commands only (expand); no existing command changes. A website release
+-- without the matching code never calls them. The website refuses selfies the
+-- browser says were uploaded files; the same refusal in
+-- internal.record_my_selfie_capture comes in a later contract update, after
+-- this website release is deployed (here it would break the live page between
+-- applying and deploying). ORDER: apply first, then merge.
 -- Read-only preflight: ../preflight/20261120131212_camera_capture_handoff.check.sql.
 -- Rollback: ../rollback/20261120131212_camera_capture_handoff.down.sql.
 begin;
@@ -66,18 +72,14 @@ declare present integer;
 begin
   select (to_regclass('private.capture_handoffs') is not null)::integer
     + (to_regprocedure('internal.purge_capture_handoffs(integer)') is not null)::integer
-    + (to_regprocedure('api.start_capture_handoff(text,text,text,jsonb)') is not null)::integer
+    + (to_regprocedure('api.start_capture_handoff(text,text,text,boolean)') is not null)::integer
+    + (to_regprocedure('api.attach_capture_handoff_identity(uuid,text,jsonb)') is not null)::integer
     + (to_regprocedure('api.redeem_capture_handoff(text,text,uuid)') is not null)::integer
-    + (to_regprocedure('api.capture_handoff_context(text)') is not null)::integer
-    + (to_regprocedure('api.reserve_handoff_verification_upload(text,uuid,text,text,boolean)') is not null)::integer
+    + (to_regprocedure('api.capture_handoff_context(text,uuid)') is not null)::integer
+    + (to_regprocedure('api.reserve_handoff_verification_upload(text,uuid,uuid,text,text,boolean)') is not null)::integer
   into present;
-  if present not in (0, 6) then
-    raise exception 'camera capture handoff precondition: % of 6 objects exist', present using errcode='55000';
-  end if;
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
-      where oid=to_regprocedure('internal.record_my_selfie_capture(uuid,text,boolean)'))
-      not in ('4ad4bbe1cfe3f8276dfd73e113c34f2f', '1db19e6a9ca63abea8bc055dbaaaa228') then
-    raise exception 'camera capture handoff drift: internal.record_my_selfie_capture is not the reviewed body' using errcode='55000';
+  if present not in (0, 7) then
+    raise exception 'camera capture handoff precondition: % of 7 objects exist', present using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
       where oid=to_regprocedure('internal.run_retention(integer)'))
@@ -98,6 +100,7 @@ create table if not exists private.capture_handoffs (
   grant_sha256 text,
   fingerprint text,
   encrypted_number jsonb,
+  expects_id boolean not null default false,
   constraint capture_handoffs_pkey primary key (token_sha256),
   constraint capture_handoffs_grant_key unique (grant_sha256),
   constraint capture_handoffs_token_check check (token_sha256 ~ '^[a-f0-9]{64}$'),
@@ -105,6 +108,7 @@ create table if not exists private.capture_handoffs (
   constraint capture_handoffs_expiry_check check (expires_at = created_at + interval '15 minutes'),
   constraint capture_handoffs_used_check check (grant_sha256 is null or used_at is not null),
   constraint capture_handoffs_identity_check check ((fingerprint is null) = (encrypted_number is null)),
+  constraint capture_handoffs_expects_id_check check (fingerprint is null or expects_id),
   constraint capture_handoffs_fingerprint_check check (fingerprint ~ '^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$'),
   constraint capture_handoffs_encrypted_number_check check (encrypted_number is null
     or (jsonb_typeof(encrypted_number) = 'object'
@@ -185,6 +189,7 @@ CREATE OR REPLACE FUNCTION internal.capture_handoff_usable(p_handoff private.cap
 AS $function$
   select p_handoff.token_sha256 is not null
     and (p_handoff.used_at is not null)=p_used
+    and (not p_handoff.expects_id or p_handoff.fingerprint is not null)
     and p_handoff.expires_at>clock_timestamp()
     and not exists(select 1 from private.capture_handoffs n where n.owner_id=p_handoff.owner_id
       and n.created_at>p_handoff.created_at)
@@ -201,8 +206,25 @@ $function$;
 alter function internal.capture_handoff_usable(private.capture_handoffs, boolean) owner to postgres;
 revoke all on function internal.capture_handoff_usable(private.capture_handoffs, boolean) from public, anon, authenticated, service_role;
 
--- The link behind a phone's capture grant, locked, or PT409 handoff_unavailable.
-CREATE OR REPLACE FUNCTION internal.capture_handoff_by_grant(p_grant_sha256 text)
+-- The phone must be signed in as the link's owner (owner decision).
+CREATE OR REPLACE FUNCTION internal.capture_handoff_signed_in(p_handoff private.capture_handoffs, p_signed_in uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
+begin
+  if p_signed_in is null then
+    raise exception 'sign in on this phone with the same account' using errcode='42501',detail='handoff_sign_in_required'; end if;
+  if p_signed_in<>p_handoff.owner_id then
+    raise exception 'signed in as another account' using errcode='42501',detail='handoff_other_account'; end if;
+end;
+$function$;
+alter function internal.capture_handoff_signed_in(private.capture_handoffs, uuid) owner to postgres;
+revoke all on function internal.capture_handoff_signed_in(private.capture_handoffs, uuid) from public, anon, authenticated, service_role;
+
+-- The link behind a phone's capture grant, locked, for its signed-in owner;
+-- else PT409 handoff_unavailable (or 42501 for the wrong or no account).
+CREATE OR REPLACE FUNCTION internal.capture_handoff_by_grant(p_grant_sha256 text, p_signed_in uuid)
  RETURNS private.capture_handoffs
  LANGUAGE plpgsql
  SET search_path TO 'pg_catalog'
@@ -211,6 +233,8 @@ declare h private.capture_handoffs; owner uuid;
 begin
   if p_grant_sha256 is null or p_grant_sha256 !~ '^[a-f0-9]{64}$' then
     raise exception 'capture grant required' using errcode='22023'; end if;
+  if p_signed_in is null then
+    raise exception 'sign in on this phone with the same account' using errcode='42501',detail='handoff_sign_in_required'; end if;
   select x.owner_id into owner from private.capture_handoffs x where x.grant_sha256=p_grant_sha256;
   if owner is not null then
     perform internal.lock_verification_subject(owner);
@@ -218,14 +242,17 @@ begin
   end if;
   if h.token_sha256 is null or not internal.capture_handoff_usable(h,true) then
     raise exception 'phone link expired or replaced' using errcode='PT409',detail='handoff_unavailable'; end if;
+  perform internal.capture_handoff_signed_in(h,p_signed_in);
   return h;
 end;
 $function$;
-alter function internal.capture_handoff_by_grant(text) owner to postgres;
-revoke all on function internal.capture_handoff_by_grant(text) from public, anon, authenticated, service_role;
+alter function internal.capture_handoff_by_grant(text, uuid) owner to postgres;
+revoke all on function internal.capture_handoff_by_grant(text, uuid) from public, anon, authenticated, service_role;
 
--- 2. The computer makes a link.
-CREATE OR REPLACE FUNCTION internal.start_capture_handoff(p_token_sha256 text, p_first_name text DEFAULT NULL::text, p_last_name text DEFAULT NULL::text, p_identity jsonb DEFAULT NULL::jsonb)
+-- 2. The computer makes a link. A member never hands the database an ID
+-- number receipt: with p_with_id the link waits for one, which only the
+-- website's server attaches (step 2b) after checking the typed ID number.
+CREATE OR REPLACE FUNCTION internal.start_capture_handoff(p_token_sha256 text, p_first_name text DEFAULT NULL::text, p_last_name text DEFAULT NULL::text, p_with_id boolean DEFAULT false)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -236,25 +263,8 @@ declare actor uuid:=internal.price_draft_actor(); opened jsonb; profile private.
 begin
   if p_token_sha256 is null or p_token_sha256 !~ '^[a-f0-9]{64}$' then
     raise exception 'phone link token required' using errcode='22023'; end if;
-  if (p_first_name is null)<>(p_last_name is null) or (p_identity is null)<>(p_first_name is null) then
+  if p_with_id is null or (p_first_name is null)<>(p_last_name is null) or (p_first_name is not null)<>p_with_id then
     raise exception 'names and ID details come together' using errcode='22023'; end if;
-  if p_identity is not null and (jsonb_typeof(p_identity)<>'object'
-      or p_identity-array['fingerprint','encrypted_number']<>'{}'::jsonb
-      or not(p_identity ?& array['fingerprint','encrypted_number'])
-      or jsonb_typeof(p_identity->'fingerprint') is distinct from 'string'
-      or p_identity->>'fingerprint' !~ '^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$'
-      or jsonb_typeof(p_identity->'encrypted_number') is distinct from 'object'
-      or (p_identity->'encrypted_number')-array['ciphertext','iv','tag','key_id']<>'{}'::jsonb
-      or not(p_identity->'encrypted_number' ?& array['ciphertext','iv','tag','key_id'])
-      or jsonb_typeof(p_identity->'encrypted_number'->'ciphertext') is distinct from 'string'
-      or jsonb_typeof(p_identity->'encrypted_number'->'iv') is distinct from 'string'
-      or jsonb_typeof(p_identity->'encrypted_number'->'tag') is distinct from 'string'
-      or jsonb_typeof(p_identity->'encrypted_number'->'key_id') is distinct from 'string'
-      or p_identity->'encrypted_number'->>'ciphertext' !~ '^[a-f0-9]{26}$'
-      or p_identity->'encrypted_number'->>'iv' !~ '^[a-f0-9]{24}$'
-      or p_identity->'encrypted_number'->>'tag' !~ '^[a-f0-9]{32}$'
-      or p_identity->'encrypted_number'->>'key_id' is distinct from 'identity-number-v1') then
-    raise exception 'encrypted identity receipt required' using errcode='22023'; end if;
   perform internal.lock_verification_subject(actor);
   actor:=internal.price_draft_actor();
   if (select count(*) from private.capture_handoffs x where x.owner_id=actor
@@ -271,35 +281,88 @@ begin
   opened:=internal.open_verification_case();
   if (opened->>'read_only')::boolean then
     raise exception 'identity is accepted or under independent review' using errcode='PT409'; end if;
-  if p_identity is null and internal.capture_handoff_prior_id(actor,(opened->>'case_id')::uuid) is null then
+  if not p_with_id and internal.capture_handoff_prior_id(actor,(opened->>'case_id')::uuid) is null then
     raise exception 'ID details required' using errcode='PT409',detail='handoff_needs_id'; end if;
   made:=clock_timestamp();
-  insert into private.capture_handoffs(token_sha256,owner_id,case_id,session_id,created_at,expires_at,
-      fingerprint,encrypted_number)
+  insert into private.capture_handoffs(token_sha256,owner_id,case_id,session_id,created_at,expires_at,expects_id)
     values(p_token_sha256,actor,(opened->>'case_id')::uuid,(auth.jwt()->>'session_id')::uuid,made,
-      made+interval '15 minutes',p_identity->>'fingerprint',p_identity->'encrypted_number')
+      made+interval '15 minutes',p_with_id)
     returning * into h;
   perform internal.price_draft_actor();
-  return jsonb_build_object('expires_at',h.expires_at,'needs_id',h.fingerprint is not null);
+  return jsonb_build_object('expires_at',h.expires_at,'needs_id',h.expects_id);
 end;
 $function$;
-alter function internal.start_capture_handoff(text,text,text,jsonb) owner to postgres;
-revoke all on function internal.start_capture_handoff(text,text,text,jsonb) from public, anon, authenticated, service_role;
-grant execute on function internal.start_capture_handoff(text,text,text,jsonb) to authenticated;
+alter function internal.start_capture_handoff(text,text,text,boolean) owner to postgres;
+revoke all on function internal.start_capture_handoff(text,text,text,boolean) from public, anon, authenticated, service_role;
+grant execute on function internal.start_capture_handoff(text,text,text,boolean) to authenticated;
 
-CREATE OR REPLACE FUNCTION api.start_capture_handoff(p_token_sha256 text, p_first_name text DEFAULT NULL::text, p_last_name text DEFAULT NULL::text, p_identity jsonb DEFAULT NULL::jsonb)
+CREATE OR REPLACE FUNCTION api.start_capture_handoff(p_token_sha256 text, p_first_name text DEFAULT NULL::text, p_last_name text DEFAULT NULL::text, p_with_id boolean DEFAULT false)
  RETURNS jsonb
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.start_capture_handoff(p_token_sha256,p_first_name,p_last_name,p_identity);
+  select internal.start_capture_handoff(p_token_sha256,p_first_name,p_last_name,p_with_id);
 $function$;
-alter function api.start_capture_handoff(text,text,text,jsonb) owner to postgres;
-revoke all on function api.start_capture_handoff(text,text,text,jsonb) from public, anon, authenticated, service_role;
-grant execute on function api.start_capture_handoff(text,text,text,jsonb) to authenticated;
+alter function api.start_capture_handoff(text,text,text,boolean) owner to postgres;
+revoke all on function api.start_capture_handoff(text,text,text,boolean) from public, anon, authenticated, service_role;
+grant execute on function api.start_capture_handoff(text,text,text,boolean) to authenticated;
+
+-- 2b. The website's server attaches the encrypted ID number receipt it made
+-- from the typed ID number (checksum and 18+ checked) to the new link. Only
+-- an unopened, unexpired link of that owner that waits for one.
+CREATE OR REPLACE FUNCTION internal.attach_capture_handoff_identity(p_owner uuid, p_token_sha256 text, p_identity jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+begin
+  if p_owner is null or p_token_sha256 is null or p_token_sha256 !~ '^[a-f0-9]{64}$' then
+    raise exception 'phone link required' using errcode='22023'; end if;
+  if p_identity is null or jsonb_typeof(p_identity)<>'object'
+      or p_identity-array['fingerprint','encrypted_number']<>'{}'::jsonb
+      or not(p_identity ?& array['fingerprint','encrypted_number'])
+      or jsonb_typeof(p_identity->'fingerprint') is distinct from 'string'
+      or p_identity->>'fingerprint' !~ '^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$'
+      or jsonb_typeof(p_identity->'encrypted_number') is distinct from 'object'
+      or (p_identity->'encrypted_number')-array['ciphertext','iv','tag','key_id']<>'{}'::jsonb
+      or not(p_identity->'encrypted_number' ?& array['ciphertext','iv','tag','key_id'])
+      or jsonb_typeof(p_identity->'encrypted_number'->'ciphertext') is distinct from 'string'
+      or jsonb_typeof(p_identity->'encrypted_number'->'iv') is distinct from 'string'
+      or jsonb_typeof(p_identity->'encrypted_number'->'tag') is distinct from 'string'
+      or jsonb_typeof(p_identity->'encrypted_number'->'key_id') is distinct from 'string'
+      or p_identity->'encrypted_number'->>'ciphertext' !~ '^[a-f0-9]{26}$'
+      or p_identity->'encrypted_number'->>'iv' !~ '^[a-f0-9]{24}$'
+      or p_identity->'encrypted_number'->>'tag' !~ '^[a-f0-9]{32}$'
+      or p_identity->'encrypted_number'->>'key_id' is distinct from 'identity-number-v1' then
+    raise exception 'encrypted identity receipt required' using errcode='22023'; end if;
+  perform internal.lock_verification_subject(p_owner);
+  update private.capture_handoffs h set fingerprint=p_identity->>'fingerprint',
+      encrypted_number=p_identity->'encrypted_number'
+    where h.token_sha256=p_token_sha256 and h.owner_id=p_owner and h.expects_id
+      and h.fingerprint is null and h.used_at is null and h.expires_at>clock_timestamp();
+  if not found then
+    raise exception 'phone link expired or already used' using errcode='PT409',detail='handoff_unavailable'; end if;
+  return jsonb_build_object('attached',true);
+end;
+$function$;
+alter function internal.attach_capture_handoff_identity(uuid,text,jsonb) owner to postgres;
+revoke all on function internal.attach_capture_handoff_identity(uuid,text,jsonb) from public, anon, authenticated, service_role;
+grant execute on function internal.attach_capture_handoff_identity(uuid,text,jsonb) to service_role;
+
+CREATE OR REPLACE FUNCTION api.attach_capture_handoff_identity(p_owner uuid, p_token_sha256 text, p_identity jsonb)
+ RETURNS jsonb
+ LANGUAGE sql
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select internal.attach_capture_handoff_identity(p_owner,p_token_sha256,p_identity);
+$function$;
+alter function api.attach_capture_handoff_identity(uuid,text,jsonb) owner to postgres;
+revoke all on function api.attach_capture_handoff_identity(uuid,text,jsonb) from public, anon, authenticated, service_role;
+grant execute on function api.attach_capture_handoff_identity(uuid,text,jsonb) to service_role;
 
 -- 3. The phone opens the link (once).
-CREATE OR REPLACE FUNCTION internal.redeem_capture_handoff(p_token_sha256 text, p_grant_sha256 text, p_signed_in uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION internal.redeem_capture_handoff(p_token_sha256 text, p_grant_sha256 text, p_signed_in uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -310,6 +373,9 @@ begin
   if p_token_sha256 is null or p_token_sha256 !~ '^[a-f0-9]{64}$'
     or p_grant_sha256 is null or p_grant_sha256 !~ '^[a-f0-9]{64}$' or p_grant_sha256=p_token_sha256 then
     raise exception 'phone link token and capture grant required' using errcode='22023'; end if;
+  -- Asked before the link is looked up: a signed-out phone learns nothing.
+  if p_signed_in is null then
+    raise exception 'sign in on this phone with the same account' using errcode='42501',detail='handoff_sign_in_required'; end if;
   select x.owner_id into owner from private.capture_handoffs x where x.token_sha256=p_token_sha256;
   if owner is not null then
     perform internal.lock_verification_subject(owner);
@@ -317,8 +383,7 @@ begin
   end if;
   if h.token_sha256 is null or not internal.capture_handoff_usable(h,false) then
     raise exception 'phone link expired or already used' using errcode='PT409',detail='handoff_unavailable'; end if;
-  if p_signed_in is not null and p_signed_in<>h.owner_id then
-    raise exception 'signed in as another account' using errcode='42501',detail='handoff_other_account'; end if;
+  perform internal.capture_handoff_signed_in(h,p_signed_in);
   update private.capture_handoffs set used_at=clock_timestamp(),grant_sha256=p_grant_sha256
     where token_sha256=p_token_sha256 returning * into h;
   return internal.capture_handoff_state(h);
@@ -328,7 +393,7 @@ alter function internal.redeem_capture_handoff(text,text,uuid) owner to postgres
 revoke all on function internal.redeem_capture_handoff(text,text,uuid) from public, anon, authenticated, service_role;
 grant execute on function internal.redeem_capture_handoff(text,text,uuid) to service_role;
 
-CREATE OR REPLACE FUNCTION api.redeem_capture_handoff(p_token_sha256 text, p_grant_sha256 text, p_signed_in uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION api.redeem_capture_handoff(p_token_sha256 text, p_grant_sha256 text, p_signed_in uuid)
  RETURNS jsonb
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
@@ -340,33 +405,33 @@ revoke all on function api.redeem_capture_handoff(text,text,uuid) from public, a
 grant execute on function api.redeem_capture_handoff(text,text,uuid) to service_role;
 
 -- 4. What the phone may still do.
-CREATE OR REPLACE FUNCTION internal.capture_handoff_context(p_grant_sha256 text)
+CREATE OR REPLACE FUNCTION internal.capture_handoff_context(p_grant_sha256 text, p_signed_in uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
 begin
-  return internal.capture_handoff_state(internal.capture_handoff_by_grant(p_grant_sha256));
+  return internal.capture_handoff_state(internal.capture_handoff_by_grant(p_grant_sha256,p_signed_in));
 end;
 $function$;
-alter function internal.capture_handoff_context(text) owner to postgres;
-revoke all on function internal.capture_handoff_context(text) from public, anon, authenticated, service_role;
-grant execute on function internal.capture_handoff_context(text) to service_role;
+alter function internal.capture_handoff_context(text, uuid) owner to postgres;
+revoke all on function internal.capture_handoff_context(text, uuid) from public, anon, authenticated, service_role;
+grant execute on function internal.capture_handoff_context(text, uuid) to service_role;
 
-CREATE OR REPLACE FUNCTION api.capture_handoff_context(p_grant_sha256 text)
+CREATE OR REPLACE FUNCTION api.capture_handoff_context(p_grant_sha256 text, p_signed_in uuid)
  RETURNS jsonb
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.capture_handoff_context(p_grant_sha256);
+  select internal.capture_handoff_context(p_grant_sha256,p_signed_in);
 $function$;
-alter function api.capture_handoff_context(text) owner to postgres;
-revoke all on function api.capture_handoff_context(text) from public, anon, authenticated, service_role;
-grant execute on function api.capture_handoff_context(text) to service_role;
+alter function api.capture_handoff_context(text, uuid) owner to postgres;
+revoke all on function api.capture_handoff_context(text, uuid) from public, anon, authenticated, service_role;
+grant execute on function api.capture_handoff_context(text, uuid) to service_role;
 
 -- 5. The phone reserves an upload for the link's case.
-CREATE OR REPLACE FUNCTION internal.reserve_handoff_verification_upload(p_grant_sha256 text, p_request uuid, p_purpose text, p_digest text, p_browser_liveness_passed boolean DEFAULT NULL::boolean)
+CREATE OR REPLACE FUNCTION internal.reserve_handoff_verification_upload(p_grant_sha256 text, p_signed_in uuid, p_request uuid, p_purpose text, p_digest text, p_browser_liveness_passed boolean DEFAULT NULL::boolean)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -379,7 +444,7 @@ begin
     or p_digest is null or p_digest !~ '^[a-f0-9]{64}$'
     or (p_purpose='selfie')<>(p_browser_liveness_passed is not null) then
     raise exception 'upload request required' using errcode='22023'; end if;
-  h:=internal.capture_handoff_by_grant(p_grant_sha256);
+  h:=internal.capture_handoff_by_grant(p_grant_sha256,p_signed_in);
   select * into old from private.frontend_verification_uploads where owner_id=h.owner_id and request_id=p_request;
   if found then
     if old.request_digest<>p_digest or old.purpose<>p_purpose or old.case_id<>h.case_id
@@ -391,6 +456,10 @@ begin
       'identity',case when old.purpose='id_front' and old.completed_at is null then
         jsonb_build_object('fingerprint',h.fingerprint,'encrypted_number',h.encrypted_number) end);
   end if;
+  -- Both photos of this link are in: nothing more is taken through it.
+  if not (internal.capture_handoff_state(h)->>'needs_id')::boolean
+    and not (internal.capture_handoff_state(h)->>'needs_selfie')::boolean then
+    raise exception 'this phone link has both photos' using errcode='PT409',detail='handoff_done'; end if;
   if p_purpose='id_front' and h.fingerprint is null then
     raise exception 'ID details required' using errcode='PT409',detail='handoff_needs_id'; end if;
   perform c.id from private.evidence_cases c where c.id=h.case_id and c.subject_id=h.owner_id
@@ -414,55 +483,22 @@ begin
       jsonb_build_object('fingerprint',h.fingerprint,'encrypted_number',h.encrypted_number) end);
 end;
 $function$;
-alter function internal.reserve_handoff_verification_upload(text,uuid,text,text,boolean) owner to postgres;
-revoke all on function internal.reserve_handoff_verification_upload(text,uuid,text,text,boolean) from public, anon, authenticated, service_role;
-grant execute on function internal.reserve_handoff_verification_upload(text,uuid,text,text,boolean) to service_role;
+alter function internal.reserve_handoff_verification_upload(text,uuid,uuid,text,text,boolean) owner to postgres;
+revoke all on function internal.reserve_handoff_verification_upload(text,uuid,uuid,text,text,boolean) from public, anon, authenticated, service_role;
+grant execute on function internal.reserve_handoff_verification_upload(text,uuid,uuid,text,text,boolean) to service_role;
 
-CREATE OR REPLACE FUNCTION api.reserve_handoff_verification_upload(p_grant_sha256 text, p_request uuid, p_purpose text, p_digest text, p_browser_liveness_passed boolean DEFAULT NULL::boolean)
+CREATE OR REPLACE FUNCTION api.reserve_handoff_verification_upload(p_grant_sha256 text, p_signed_in uuid, p_request uuid, p_purpose text, p_digest text, p_browser_liveness_passed boolean DEFAULT NULL::boolean)
  RETURNS jsonb
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.reserve_handoff_verification_upload(p_grant_sha256,p_request,p_purpose,p_digest,p_browser_liveness_passed);
+  select internal.reserve_handoff_verification_upload(p_grant_sha256,p_signed_in,p_request,p_purpose,p_digest,p_browser_liveness_passed);
 $function$;
-alter function api.reserve_handoff_verification_upload(text,uuid,text,text,boolean) owner to postgres;
-revoke all on function api.reserve_handoff_verification_upload(text,uuid,text,text,boolean) from public, anon, authenticated, service_role;
-grant execute on function api.reserve_handoff_verification_upload(text,uuid,text,text,boolean) to service_role;
+alter function api.reserve_handoff_verification_upload(text,uuid,uuid,text,text,boolean) owner to postgres;
+revoke all on function api.reserve_handoff_verification_upload(text,uuid,uuid,text,text,boolean) from public, anon, authenticated, service_role;
+grant execute on function api.reserve_handoff_verification_upload(text,uuid,uuid,text,text,boolean) to service_role;
 
--- 6. A selfie the browser says was an uploaded file is refused.
-CREATE OR REPLACE FUNCTION internal.record_my_selfie_capture(p_request uuid, p_capture_method text, p_browser_liveness_passed boolean)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'pg_catalog'
-AS $function$
-declare actor uuid:=internal.price_draft_actor(); r private.frontend_verification_uploads;
-begin
-  -- How the browser says the selfie was taken: review context for staff, never
-  -- authority. Both values, from the closed set.
-  if p_request is null or p_capture_method is null or p_capture_method not in('camera','file_upload')
-    or p_browser_liveness_passed is null or (p_browser_liveness_passed and p_capture_method<>'camera') then
-    raise exception 'browser capture report invalid' using errcode='22023'; end if;
-  -- Photos are taken with the camera only (20261120131212). This refuses a
-  -- browser that says otherwise; it cannot prove the opposite.
-  if p_capture_method<>'camera' then
-    raise exception 'camera required' using errcode='PT409',detail='camera_required'; end if;
-  perform internal.lock_verification_subject(actor);
-  select u.* into r from private.frontend_verification_uploads u where u.owner_id=actor and u.request_id=p_request for update;
-  if not found or r.purpose<>'selfie' then raise exception 'selfie upload request required' using errcode='22023'; end if;
-  -- A completed upload keeps the answer it was completed with.
-  if r.completed_at is not null then return jsonb_build_object('recorded',false); end if;
-  if r.expires_at<=clock_timestamp() then raise exception 'upload request changed or expired' using errcode='PT409'; end if;
-  update private.frontend_verification_uploads set capture_method=p_capture_method,browser_liveness_passed=p_browser_liveness_passed
-    where owner_id=actor and request_id=p_request;
-  perform internal.price_draft_actor();
-  return jsonb_build_object('recorded',true);
-end$function$;
-alter function internal.record_my_selfie_capture(uuid,text,boolean) owner to postgres;
-revoke all on function internal.record_my_selfie_capture(uuid,text,boolean) from public;
-grant execute on function internal.record_my_selfie_capture(uuid,text,boolean) to authenticated;
-
--- 7. Retention.
+-- 6. Retention.
 CREATE OR REPLACE FUNCTION internal.purge_capture_handoffs(p_limit integer)
  RETURNS integer
  LANGUAGE plpgsql
