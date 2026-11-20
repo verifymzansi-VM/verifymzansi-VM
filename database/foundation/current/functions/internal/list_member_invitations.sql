@@ -14,11 +14,13 @@ begin
         'email', m.email,
         'invited_at', m.invited_at,
         'expires_at', m.expires_at,
+        'claimed_at', m.claimed_at,
         'revoked_at', m.revoked_at,
         'status', case when m.revoked_at is not null then 'revoked'
+          when m.claimed_at is not null then 'used'
           when m.expires_at <= statement_timestamp() then 'expired' else 'open' end,
         'registered', exists (select 1 from auth.users u
-          where u.email = m.email and u.deleted_at is null))
+          where u.id = m.claimed_by and u.deleted_at is null))
       order by m.invited_at desc, m.email)
     from (select * from private.member_invitations
       order by invited_at desc, email limit 500) m), '[]'::jsonb));

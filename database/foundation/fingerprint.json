@@ -45,52 +45,52 @@
   "lastUpdate": "20261120040242_signup_mode_member_invitations.sql",
   "categories": {
     "column_grants": {
-      "items": 8,
-      "fingerprint": "e8b4f45b1e6131cb33700e78c6b703a4"
+      "items": 10,
+      "fingerprint": "5e5623672e80b927048d8553487d5442"
     },
     "columns": {
-      "items": 1377,
-      "fingerprint": "195683f985cf9c30d5ef9f265ec0642a"
+      "items": 1386,
+      "fingerprint": "05d6ca1b96cb2cebb61ed4073d3c13dc"
     },
     "constraints": {
-      "items": 1224,
-      "fingerprint": "0e757e3e0a60bc9d78afc4836e9de627"
+      "items": 1232,
+      "fingerprint": "b119057eb02aeba3221a26a360ee8400"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1043,
-      "fingerprint": "22d59e381c23a19add2df720bca860e9"
+      "items": 1047,
+      "fingerprint": "5c3def0c782f1394c368b82605540e16"
     },
     "function_grants": {
-      "items": 757,
-      "fingerprint": "085f1f34fb063d63db2571d999c62165"
+      "items": 760,
+      "fingerprint": "f2ebe5d9eaae171c5e33705a94d4c452"
     },
     "function_metadata": {
-      "items": 1043,
-      "fingerprint": "99e4ae3d1232e7271c3029bfc93b292c"
+      "items": 1047,
+      "fingerprint": "a194ea692e4f4fed2ace970ae4cde789"
     },
     "indexes": {
-      "items": 557,
-      "fingerprint": "bf62706bf2a83f092dccf559287a4d33"
+      "items": 563,
+      "fingerprint": "21f57b8b094110645d5e1bfaa3872cbc"
     },
     "policies": {
       "items": 4,
       "fingerprint": "085a305fbc41d38d34eb40c3748c0793"
     },
     "row_level_security": {
-      "items": 155,
-      "fingerprint": "091843b4567ed64fcdac356c55d3fb26"
+      "items": 156,
+      "fingerprint": "f331be87d37ad3301590d082731ecb57"
     },
     "schema_grants": {
       "items": 7,
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 132,
-      "fingerprint": "6f0f6489c214661b0b4f057d1f60a849"
+      "items": 135,
+      "fingerprint": "65058802bf34f0c23a74244cc78f24c4"
     }
   }
 }

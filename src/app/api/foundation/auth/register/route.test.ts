@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "./route";
-import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { isPwnedPassword } from "@/lib/security/pwned-passwords";
 import { readFoundationSignupMode } from "@/lib/foundation/signup-mode";
 
@@ -15,7 +15,7 @@ vi.mock("@/lib/security/pwned-passwords", () => ({
 vi.mock("@/lib/foundation/signup-mode", () => ({ readFoundationSignupMode: vi.fn() }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: vi.fn(),
-  getClientRateLimitIdentity: () => ({ key: "registration-client" }),
+  getClientRateLimitIdentity: vi.fn(() => ({ key: "registration-client" })),
 }));
 
 const project = "gntzjtuncsyefujajmjy";
@@ -281,4 +281,42 @@ it("never reads the sign-up mode for a refused request", async () => {
   const response = await POST(registerRequest({ ...submission, acceptTerms: false }));
   expect(response.status).toBe(400);
   expect(readFoundationSignupMode).not.toHaveBeenCalled();
+});
+it("refuses a sign-up without a CAPTCHA token before it counts against any limit", async () => {
+  for (const turnstileToken of [undefined, "", "   ", 7]) {
+    const response = await POST(registerRequest({ ...submission, turnstileToken }));
+    expect(response.status).toBe(400);
+  }
+  const junk = new NextRequest("https://verifymzansi.com/api/foundation/auth/register", {
+    method: "POST",
+    body: "not json",
+    headers: {
+      origin: "https://verifymzansi.com",
+      "content-type": "application/json",
+      cookie: `vm_csrf=${csrf}`,
+      "x-csrf-token": csrf,
+    },
+  });
+  expect((await POST(junk)).status).toBe(400);
+  expect(checkRateLimit).not.toHaveBeenCalled();
+  expect(fetcher).not.toHaveBeenCalled();
+});
+it("counts an IPv6 sign-up per /64 and, more loosely, per /48", async () => {
+  vi.mocked(getClientRateLimitIdentity).mockReturnValue({
+    key: "2001:db8:1:2::9",
+    source: "cf-connecting-ip",
+    ip: "2001:db8:1:2::9",
+  });
+  expect((await POST(registerRequest())).status).toBe(200);
+  expect(vi.mocked(checkRateLimit).mock.calls.map(([options]) => options)).toEqual([
+    { key: "v6:2001:db8:1:2::/64", action: "auth:register", degradedMode: "block" },
+    { key: "v6:2001:db8:1::/48", action: "auth:register:network", degradedMode: "block" },
+  ]);
+  // The looser network bucket refuses too.
+  vi.mocked(checkRateLimit)
+    .mockResolvedValueOnce({ limited: false })
+    .mockResolvedValueOnce({ limited: true, retryAfter: 120 });
+  const limited = await POST(registerRequest());
+  expect(limited.status).toBe(429);
+  expect(limited.headers.get("Retry-After")).toBe("120");
 });

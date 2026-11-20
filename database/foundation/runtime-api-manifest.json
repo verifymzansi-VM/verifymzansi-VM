@@ -5261,7 +5261,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current member:invite capability (admin role; 12-hour authenticator rule): adds or renews a member invitation that admits one sign-up for 30 days in either sign-up mode; never grants a staff role (administrator invitations are a separate owner-only list); at most 200 per staff member in 24 hours."
+      "authority": "Current member:invite capability (admin role; 12-hour authenticator rule): adds or renews a member invitation that admits one sign-up for 30 days in either sign-up mode; refuses an address that already has an account (staff may learn that it has one); never grants a staff role (administrator invitations are a separate owner-only list); at most 200 invitations and renewals per staff member in 24 hours, counted from that staff member's own recorded events."
     },
     {
       "name": "revoke_member_invitation",
@@ -5293,7 +5293,26 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current member:invite capability: the latest 500 member invitations with their status (open, expired, revoked) and whether an account with that address exists; never who invited, never administrator invitations."
+      "authority": "Current member:invite capability: the latest 500 member invitations with their status (open, used, expired, revoked), when each was used and whether the account that used it still exists; never who invited, never administrator invitations."
+    },
+    {
+      "name": "check_email_domain",
+      "updates": ["updates/20261120040242_signup_mode_member_invitations.sql"],
+      "arguments": [
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Any signed-in account: whether an email address may be used while sign-up is open (false only in open mode for a malformed, reserved, numeric or blocked domain, the same rule as the sign-up hook); always true while sign-up is by invitation. Used by the website's email change; says nothing about any account."
     }
   ]
 }

@@ -10,13 +10,19 @@ AS $function$
 declare
   actor uuid := internal.staff_actor('member:invite');
   clean text := lower(btrim(p_email));
+  revoked boolean;
 begin
   if clean is null or char_length(clean) not between 3 and 254 then
     raise exception 'member_invitation_email_invalid' using errcode = '22023';
   end if;
   update private.member_invitations m set revoked_by = actor, revoked_at = statement_timestamp()
   where m.email = clean and m.revoked_at is null;
-  return jsonb_build_object('email', clean, 'revoked', found);
+  revoked := found;
+  if revoked then
+    insert into private.member_invitation_events(email, action, actor_id)
+      values (clean, 'revoke', actor);
+  end if;
+  return jsonb_build_object('email', clean, 'revoked', revoked);
 end;
 $function$;
 alter function internal.revoke_member_invitation(text) owner to postgres;

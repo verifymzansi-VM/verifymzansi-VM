@@ -302,9 +302,11 @@ const OWNER_TABLES = [
   ["outbox_events", "owner_id=$1"],
   ["owner_admin_invitations", ownEmail],
   // Member invitations and sign-up mode changes
-  // (20261120040242_signup_mode_member_invitations): A's own invitation, or
-  // one A invited or revoked as staff; a mode change A was named for.
-  ["member_invitations", `${ownEmail} or invited_by=$1 or revoked_by=$1`],
+  // (20261120040242_signup_mode_member_invitations): A's own invitation or
+  // the one A used, or one A invited or revoked as staff, with its history;
+  // a mode change A was named for.
+  ["member_invitations", `${ownEmail} or invited_by=$1 or claimed_by=$1 or revoked_by=$1`],
+  ["member_invitation_events", `${ownEmail} or actor_id=$1`],
   ["signup_mode_events", "changed_by=$1"],
   ["partner_events", "partner_id in (select id from private.partners where account_id=$1)"],
   ["payment_activations", ownPayments],

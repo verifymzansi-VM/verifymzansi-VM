@@ -673,6 +673,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       invite_member: { Args: { p_email: string }; Returns: Json };
       revoke_member_invitation: { Args: { p_email: string }; Returns: Json };
       list_member_invitations: { Args: Record<never, never>; Returns: Json };
+      check_email_domain: { Args: { p_email: string }; Returns: Json };
     };
   };
 };

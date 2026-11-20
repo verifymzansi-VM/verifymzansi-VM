@@ -23,6 +23,10 @@ with objects as (
     ('private.signup_settings', to_regclass('private.signup_settings') is not null),
     ('private.signup_mode_events', to_regclass('private.signup_mode_events') is not null),
     ('private.member_invitations', to_regclass('private.member_invitations') is not null),
+    ('private.member_invitation_events', to_regclass('private.member_invitation_events') is not null),
+    ('private.owner_admin_invitations.signed_up_by', exists (select 1 from pg_attribute a
+      where a.attrelid = 'private.owner_admin_invitations'::regclass
+        and a.attname = 'signed_up_by' and not a.attisdropped)),
     ('private.signup_blocked_domains', to_regclass('private.signup_blocked_domains') is not null),
     ('internal.signup_settings_guard()', to_regprocedure('internal.signup_settings_guard()') is not null),
     ('internal.set_signup_mode(text,text,text)',
@@ -39,7 +43,13 @@ with objects as (
       to_regprocedure('internal.list_member_invitations()') is not null),
     ('api.list_member_invitations()', to_regprocedure('api.list_member_invitations()') is not null),
     ('internal.purge_member_invitations(integer)',
-      to_regprocedure('internal.purge_member_invitations(integer)') is not null)
+      to_regprocedure('internal.purge_member_invitations(integer)') is not null),
+    ('internal.claim_signup_invitations()',
+      to_regprocedure('internal.claim_signup_invitations()') is not null),
+    ('internal.signup_email_domain_refused(text)',
+      to_regprocedure('internal.signup_email_domain_refused(text)') is not null),
+    ('internal.check_email_domain(text)', to_regprocedure('internal.check_email_domain(text)') is not null),
+    ('api.check_email_domain(text)', to_regprocedure('api.check_email_domain(text)') is not null)
   ) v(name, present)
 ),
 state as (
@@ -50,9 +60,13 @@ bodies as (
       where p.oid = to_regprocedure(v.sig)), 'absent') as body, v.reviewed, v.updated
   from (values
     ('internal.acceptance_signup_guard(jsonb)', '6afecd39f7374ea9f67f2c39d56d3c9b',
-      '0dd79427b2bd0772a041efeadef893d0'),
+      'ec177bcab50484d29df3782844624b0f'),
     ('internal.run_retention(integer)', '06a3fbfcb5b2d53e2487719174a62cc5',
-      '95dda89b3f540a74110a0ca1eba02e66')
+      '95dda89b3f540a74110a0ca1eba02e66'),
+    ('internal.claim_owner_admin_invitation()', 'a2313942c8eb9e5cb0f9be64f64ca025',
+      '7bb53811b07c4cde91df59201627a7b7'),
+    ('internal.erase_closed_account(uuid,text)', 'c1352cec14d02d401b58e466c387d747',
+      '1e8253098e47fd6773f8b9298cc9f722')
   ) v(sig, reviewed, updated)
 ),
 admin_invitations as (

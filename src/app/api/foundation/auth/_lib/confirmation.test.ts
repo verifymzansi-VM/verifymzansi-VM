@@ -661,6 +661,15 @@ it("google landing and refusal reasons never come from untrusted text", () => {
       })
     )
   ).toBe("/login?error=registration_closed#");
+  expect(
+    googleRefusalPath(
+      query({
+        oauth: "google",
+        error: "access_denied",
+        error_description: "Registration is not available for this email address",
+      })
+    )
+  ).toBe("/login?error=registration_unavailable#");
   expect(googleRefusalPath(query({ oauth: "google", error: "server_error" }))).toBeNull();
   expect(googleRefusalPath(query({ error: "access_denied" }))).toBeNull();
   expect(googleRefusalPath(query({ oauth: "google" }))).toBeNull();

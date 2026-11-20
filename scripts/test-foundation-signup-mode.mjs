@@ -58,6 +58,8 @@ const {
   fails,
   member,
   staff,
+  as,
+  claims,
   service,
   fingerprint,
   preflightRows: preflight,
@@ -81,6 +83,14 @@ try {
       insert into auth.mfa_factors(user_id,factor_type,status) values((m->>'id')::uuid,'totp','verified');
       insert into private.staff_roles(user_id,role) values((m->>'id')::uuid,p_role);
       return m;
+    end$$;
+    -- Thirty-one days pass for one closed account.
+    create function vmtest.erasure_due(p_user uuid) returns void language plpgsql as $$
+    begin
+      update private.account_erasures set closed_at=closed_at-interval '31 days',erase_after=erase_after-interval '31 days'
+        where user_id=p_user;
+      update private.account_closures set closed_at=closed_at-interval '31 days',
+        evidence_delete_after=evidence_delete_after-interval '31 days' where user_id=p_user;
     end$$;`);
   const account = (email) => json(`select vmtest.account(${lit(email)});`);
   const staffAccount = (email, role) => json(`select vmtest.staff(${lit(email)},${lit(role)});`);
@@ -94,14 +104,17 @@ try {
   const owner = staffAccount("owner-admin@example.invalid", "admin");
   const moderator = staffAccount("moderator@example.invalid", "moderator");
   const plain = account("plain-member@example.invalid");
-  q(`insert into private.owner_admin_invitations(email) values ('future-admin@example.invalid');`);
+  q(`insert into private.owner_admin_invitations(email) values ('future-admin@example.invalid'),
+      ('existing-admin@example.invalid');`);
+  // An administrator invitation already used to sign up before the update.
+  const existingAdmin = account("existing-admin@example.invalid");
 
   // ------------------------------------------------------------ before
   await check("before the update: preflight reads 'not applied' and is read only", () => {
     assert.deepEqual(preflight(), [
       [
         "summary",
-        "signup mode and member invitations: update not applied; administrator invitations not yet used: 1",
+        "signup mode and member invitations: update not applied; administrator invitations not yet used: 2",
       ],
     ]);
     assertReadOnlyPreflight(database, PREFLIGHT);
@@ -127,9 +140,9 @@ try {
     q(`create table private.member_invitations(email text primary key);`);
     assert.equal(
       preflight()[0][1],
-      "signup mode and member invitations: unexpected state; administrator invitations not yet used: 1"
+      "signup mode and member invitations: unexpected state; administrator invitations not yet used: 2"
     );
-    assert.match(fails(step.sql, "55000"), /signup mode precondition: 1 of 15/);
+    assert.match(fails(step.sql, "55000"), /signup mode precondition: 1 of 21/);
     q(`drop table private.member_invitations;`);
     assert.equal(fingerprint(), before);
   });
@@ -143,12 +156,25 @@ try {
       fingerprint,
       preflightRows: preflight,
       appliedSummary:
-        /^signup mode and member invitations: already applied; mode: invite_only; mode changes recorded: 0; member invitations open: 0; blocked domains: 15; administrator invitations not yet used: 1$/,
+        /^signup mode and member invitations: already applied; mode: invite_only; mode changes recorded: 0; member invitations open: 0; blocked domains: 15; administrator invitations not yet used: 2$/,
     })
   );
   // Production grants this when the hook is switched on in the dashboard
   // (replay/hosted-auth-hook-grants.sql).
   q("grant usage on schema internal to supabase_auth_admin;");
+
+  await check("an administrator invitation used before the update counts as signed up", () => {
+    assert.equal(
+      q(
+        `select signed_up_by from private.owner_admin_invitations where email='existing-admin@example.invalid';`
+      ),
+      existingAdmin.id
+    );
+    assert.equal(
+      q(`select count(*) from private.owner_admin_invitations where signed_up_at is not null;`),
+      "1"
+    );
+  });
 
   // ------------------------------------------------------------- hook
   await check("invite only (the default): only invited addresses are admitted", () => {
@@ -197,6 +223,19 @@ try {
       "42501"
     );
     fails("set role supabase_auth_admin;\nselect * from private.signup_mode_events;", "42501");
+    fails(
+      "set role supabase_auth_admin;\nselect * from private.member_invitation_events;",
+      "42501"
+    );
+    fails(
+      "set role supabase_auth_admin;\nselect claimed_by from private.member_invitations limit 1;",
+      "42501"
+    );
+    fails(
+      "set role supabase_auth_admin;\nselect signed_up_by from private.owner_admin_invitations limit 1;",
+      "42501"
+    );
+    assert.equal(hook("existing-admin@example.invalid").error.http_code, 403);
   });
 
   // ---------------------------------------------------- owner-only mode
@@ -403,6 +442,23 @@ try {
     ])
       fails(staff(owner, invite(owner, bad)), "22023", /member_invitation_email_invalid/);
     fails(staff(owner, "select api.invite_member(null);"), "22023");
+    // An address that already has an account is refused, whatever its case.
+    for (const existing of ["plain-member@example.invalid", "PLAIN-Member@example.invalid"])
+      fails(
+        staff(owner, `select api.invite_member(${lit(existing)});`),
+        "PT409",
+        /This person already has an account\./
+      );
+    assert.match(
+      fails(staff(owner, "select api.invite_member('plain-member@example.invalid');"), "PT409"),
+      /member_invitation_account_exists/
+    );
+    assert.equal(
+      q(
+        `select count(*) from private.member_invitations where email='plain-member@example.invalid';`
+      ),
+      "0"
+    );
     assert.deepEqual(hook("new.person@example.co.za"), {});
     assert.deepEqual(
       json(staff(owner, "select api.revoke_member_invitation('NEW.PERSON@example.co.za');")),
@@ -430,6 +486,7 @@ try {
     const list = json(staff(owner, "select api.list_member_invitations();")).items;
     const byEmail = Object.fromEntries(list.map((item) => [item.email, item]));
     assert.deepEqual(Object.keys(list[0]).sort(), [
+      "claimed_at",
       "email",
       "expires_at",
       "invited_at",
@@ -437,8 +494,10 @@ try {
       "revoked_at",
       "status",
     ]);
-    assert.equal(byEmail["invited-member@example.invalid"].status, "open");
+    assert.equal(byEmail["invited-member@example.invalid"].status, "used");
     assert.equal(byEmail["invited-member@example.invalid"].registered, true);
+    assert.ok(byEmail["invited-member@example.invalid"].claimed_at);
+    assert.equal(byEmail["new.person@example.co.za"].status, "open");
     assert.equal(byEmail["revoked-member@example.invalid"].status, "revoked");
     assert.equal(byEmail["new.person@example.co.za"].registered, false);
     q(`update private.member_invitations set invited_at=now()-interval '31 days',expires_at=now()-interval '1 day'
@@ -453,25 +512,56 @@ try {
     fails(member(plain, "select api.list_member_invitations();"), "42501");
   });
 
-  await check("at most 200 invitations per staff member in 24 hours", () => {
-    q(`insert into private.member_invitations(email,invited_by)
-      select 'bulk-'||g||'@example.co.za','${owner.id}' from generate_series(1,197) g;`);
-    // Three earlier ones today (new.person and old-member, renewed) plus 197.
-    assert.equal(
-      q(`select count(*) from private.member_invitations where invited_by='${owner.id}';`),
-      "199"
+  await check("every invitation, renewal and revocation is recorded, append-only", () => {
+    assert.deepEqual(
+      json(`select jsonb_agg(jsonb_build_object('email',email,'action',action,'by',actor_id) order by created_at,action)
+        from private.member_invitation_events;`),
+      [
+        { email: "new.person@example.co.za", action: "invite", by: owner.id },
+        { email: "new.person@example.co.za", action: "revoke", by: owner.id },
+        { email: "new.person@example.co.za", action: "renew", by: owner.id },
+        { email: "old-member@example.invalid", action: "renew", by: owner.id },
+      ]
     );
-    json(staff(owner, "select api.invite_member('number-200@example.co.za');"));
-    fails(
-      staff(owner, "select api.invite_member('number-201@example.co.za');"),
-      "54000",
-      /member_invitation_limit/
-    );
-    // Another admin is not held back by the first one's invitations.
-    const second = staffAccount("second-admin@example.invalid", "admin");
-    json(staff(second, "select api.invite_member('number-201@example.co.za');"));
-    q("delete from private.member_invitations where email like 'bulk-%';");
+    fails("update private.member_invitation_events set action='invite';", "23514");
+    fails("delete from private.member_invitation_events;", "23514");
+    fails("truncate private.member_invitation_events;", "23514");
   });
+
+  await check(
+    "at most 200 invitations per staff member in 24 hours, counted from their events",
+    () => {
+      // Three today (an invitation and two renewals) plus 196.
+      q(`insert into private.member_invitation_events(email,action,actor_id)
+      select 'bulk-'||g||'@example.co.za','invite','${owner.id}' from generate_series(1,196) g;`);
+      json(staff(owner, "select api.invite_member('number-200@example.co.za');"));
+      fails(
+        staff(owner, "select api.invite_member('number-201@example.co.za');"),
+        "54000",
+        /member_invitation_limit/
+      );
+      // Another admin is not held back by the first one's invitations, and
+      // renewing the first one's invitation does not free the first one's count.
+      const second = staffAccount("second-admin@example.invalid", "admin");
+      json(staff(second, "select api.invite_member('number-201@example.co.za');"));
+      json(staff(second, "select api.invite_member('number-200@example.co.za');"));
+      assert.equal(
+        q(
+          `select invited_by from private.member_invitations where email='number-200@example.co.za';`
+        ),
+        second.id
+      );
+      fails(
+        staff(owner, "select api.invite_member('number-202@example.co.za');"),
+        "54000",
+        /member_invitation_limit/
+      );
+      // The synthetic events go again (as only the retention job may), so the
+      // later checks start below the limit.
+      q(`begin; select set_config('vm.retention','on',true);
+        delete from private.member_invitation_events where email like 'bulk-%'; commit;`);
+    }
+  );
 
   await check(
     "a member invitation never makes an administrator; an administrator invitation still does",
@@ -498,9 +588,109 @@ try {
         "admin"
       );
       // Neither command ever touches the administrator list.
-      assert.equal(q("select count(*) from private.owner_admin_invitations;"), "1");
+      assert.equal(q("select count(*) from private.owner_admin_invitations;"), "2");
     }
   );
+
+  await check("an invitation admits one sign-up: not again after an email change", () => {
+    json(staff(owner, "select api.invite_member('once@example.co.za');"));
+    assert.deepEqual(hook("once@example.co.za"), {});
+    const once = account("once@example.co.za");
+    assert.equal(
+      q(`select claimed_by from private.member_invitations where email='once@example.co.za';`),
+      once.id
+    );
+    assert.deepEqual(hook("once@example.co.za"), CLOSED);
+    q(`update auth.users set email='moved-away@example.co.za' where id='${once.id}';`);
+    assert.deepEqual(hook("once@example.co.za"), CLOSED);
+    const item = json(staff(owner, "select api.list_member_invitations();")).items.find(
+      (i) => i.email === "once@example.co.za"
+    );
+    assert.equal(item.status, "used");
+    assert.equal(item.registered, true);
+    // Only a staff renewal makes it usable again.
+    json(staff(owner, "select api.invite_member('once@example.co.za');"));
+    assert.deepEqual(hook("once@example.co.za"), {});
+  });
+
+  await check("an invitation admits one sign-up: not again after the account is erased", () => {
+    json(staff(owner, "select api.invite_member('gone@example.co.za');"));
+    const gone = account("gone@example.co.za");
+    assert.deepEqual(hook("gone@example.co.za"), CLOSED);
+    json(
+      as(
+        {
+          ...claims(gone),
+          amr: [{ method: "password", timestamp: Math.floor(Date.now() / 1000) - 60 }],
+        },
+        "select api.close_my_account();"
+      )
+    );
+    q(`select vmtest.erasure_due('${gone.id}');`);
+    const erased = json(`select internal.erase_closed_account('${gone.id}','sweep');`);
+    assert.ok(erased.erased_at, JSON.stringify(erased));
+    // The person's invitation and its history are gone with them.
+    assert.equal(
+      q(`select count(*) from private.member_invitations where email='gone@example.co.za';`),
+      "0"
+    );
+    assert.equal(
+      q(`select count(*) from private.member_invitation_events where email='gone@example.co.za';`),
+      "0"
+    );
+    assert.deepEqual(hook("gone@example.co.za"), CLOSED);
+  });
+
+  await check(
+    "an administrator invitation admits one sign-up and is claimed only by that account",
+    () => {
+      q(
+        `insert into private.owner_admin_invitations(email) values ('admin-once@example.invalid');`
+      );
+      const first = account("admin-once@example.invalid");
+      assert.deepEqual(hook("admin-once@example.invalid"), CLOSED);
+      // The first account moves away and another takes the address: the other
+      // account enrolling an authenticator app is not made an administrator.
+      q(`update auth.users set email='admin-moved@example.invalid' where id='${first.id}';`);
+      assert.deepEqual(hook("admin-once@example.invalid"), CLOSED);
+      const other = account("other-person@example.invalid");
+      q(`update auth.users set email='admin-once@example.invalid' where id='${other.id}';
+      insert into auth.mfa_factors(user_id,factor_type,status) values('${other.id}','totp','verified');`);
+      assert.equal(q(`select count(*) from private.staff_roles where user_id='${other.id}';`), "0");
+      assert.equal(
+        q(
+          `select claimed_at is null from private.owner_admin_invitations where email='admin-once@example.invalid';`
+        ),
+        "t"
+      );
+      // The account that signed up with it claims it once its address is back.
+      q(`update auth.users set email='other-moved@example.invalid' where id='${other.id}';
+      update auth.users set email='admin-once@example.invalid' where id='${first.id}';
+      insert into auth.mfa_factors(user_id,factor_type,status) values('${first.id}','totp','verified');`);
+      assert.equal(
+        q(
+          `select role from private.staff_roles where user_id='${first.id}' and revoked_at is null;`
+        ),
+        "admin"
+      );
+    }
+  );
+
+  await check("the email domain check follows the sign-up mode", () => {
+    const allowed = (email) =>
+      json(member(plain, `select api.check_email_domain(${lit(email)});`)).allowed;
+    assert.equal(allowed("x@mailinator.com"), true);
+    q("select internal.set_signup_mode('open','Launch day','owner-admin@example.invalid');");
+    assert.equal(allowed("x@mailinator.com"), false);
+    assert.equal(allowed("x@foo.test"), false);
+    assert.equal(allowed("person@gmail.com"), true);
+    fails("set role anon;\nselect api.check_email_domain('x@gmail.com');", "42501");
+    fails(member(plain, "select api.check_email_domain(null);"), "22023");
+    q(
+      "select internal.set_signup_mode('invite_only','Back to invitations','owner-admin@example.invalid');"
+    );
+    assert.equal(allowed("x@mailinator.com"), true);
+  });
 
   await check("retention deletes member invitations 30 days after expiry or revocation", () => {
     q(`update private.member_invitations set invited_at=now()-interval '70 days',expires_at=now()-interval '40 days'
@@ -509,6 +699,8 @@ try {
       insert into private.member_invitations(email,invited_at,expires_at)
         values('recently-expired@example.co.za',now()-interval '40 days',now()-interval '10 days');`);
     fails("select internal.purge_member_invitations(0);", "22023");
+    q(`insert into private.member_invitation_events(email,action,actor_id,created_at)
+      values('ancient@example.co.za','invite','${owner.id}',now()-interval '13 months');`);
     const result = json(service("select api.run_retention(100);"));
     assert.equal(result.member_invitations, 2);
     assert.equal(
@@ -521,6 +713,12 @@ try {
         where email in ('recently-expired@example.co.za','invited-member@example.invalid');`),
       "2"
     );
+    assert.equal(
+      q(
+        `select count(*) from private.member_invitation_events where email='ancient@example.co.za';`
+      ),
+      "0"
+    );
     assert.ok(bodyMd5("internal.purge_member_invitations(integer)") !== "missing");
   });
 
@@ -529,7 +727,9 @@ try {
     applySteps(database, later);
     await check("later updates keep the sign-up hook and member invitations", () => {
       assert.deepEqual(hook("someone@gmail.com"), CLOSED);
-      assert.deepEqual(hook("invited-member@example.invalid"), {});
+      assert.deepEqual(hook("invited-member@example.invalid"), CLOSED);
+      assert.deepEqual(hook("recently-expired@example.co.za"), CLOSED);
+      assert.deepEqual(hook("number-201@example.co.za"), {});
     });
   }
 } catch (error) {

@@ -107,12 +107,20 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 3, ttl: 3600 }, // 3 per hour
     { limit: 10, ttl: 86400 }, // 10 per day
   ],
-  // Keyed by IPv4 address or IPv6 /48 network (clientNetworkKey), so cheap
-  // accounts cannot be made in bulk from one host once sign-up is open.
+  // Sign-up attempts that carry a CAPTCHA token, keyed by IPv4 address or
+  // IPv6 /64 (clientSignupKeys); this limits how many accounts one address
+  // can try to create, alongside the CAPTCHA itself.
   "auth:register": [
     { limit: 10, ttl: 600 }, // 10 per 10 minutes
     { limit: 30, ttl: 3600 }, // 30 per hour
     { limit: 100, ttl: 86400 }, // 100 per day
+  ],
+  // The same attempts keyed by IPv6 /48, ten times looser, so one host cannot
+  // rotate through the /64s of its block.
+  "auth:register:network": [
+    { limit: 100, ttl: 600 },
+    { limit: 300, ttl: 3600 },
+    { limit: 1000, ttl: 86400 },
   ],
   "auth:change-password": [
     { limit: 5, ttl: 60 }, // 5 per minute

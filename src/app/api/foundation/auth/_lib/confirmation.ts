@@ -43,13 +43,18 @@ export function googleLandingPath(next: string, createdAt: string | null, now = 
 /** Fixed text of the sign-up guard (internal.acceptance_signup_guard) while
  * registration is by invitation only (the database's sign-up mode). */
 const REGISTRATION_CLOSED_TEXT = "registration is not open yet";
+/** Fixed text of the same guard while sign-up is open, for an address whose
+ * email domain it refuses (malformed, reserved or blocked). */
+const REGISTRATION_UNAVAILABLE_TEXT = "registration is not available for this email address";
 
-/** Why Auth sent a Google sign-in back without a code, as one of two fixed
+/** Why Auth sent a Google sign-in back without a code, as one of three fixed
  * login-page reasons. Nothing from the query is echoed back to the page. */
 export function googleRefusalPath(query: URLSearchParams): string | null {
   if (query.get("oauth") !== "google" || !query.has("error")) return null;
   if (query.get("error_description")?.toLowerCase().includes(REGISTRATION_CLOSED_TEXT))
     return "/login?error=registration_closed#";
+  if (query.get("error_description")?.toLowerCase().includes(REGISTRATION_UNAVAILABLE_TEXT))
+    return "/login?error=registration_unavailable#";
   if (query.get("error") === "access_denied") return "/login?error=google_cancelled#";
   return null;
 }

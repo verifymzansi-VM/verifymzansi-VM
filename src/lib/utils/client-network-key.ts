@@ -50,12 +50,29 @@ function clientAddress(request: Request): ClientAddress {
 }
 
 /**
+ * Sign-up's two limiter keys: `address`, the IPv4 address or the IPv6 /64
+ * (one host or home network), with the per-client limits; and `network`, the
+ * IPv6 /48 (null for IPv4), with looser limits, so a host cannot rotate
+ * through the /64s of its block. Without an address, `address` is the
+ * request's fallback identity (getClientRateLimitIdentity).
+ */
+export function clientSignupKeys(request: Request): { address: string; network: string | null } {
+  const client = clientAddress(request);
+  if (client.family === "v4") return { address: `v4:${client.address}`, network: null };
+  if (client.family === "v6")
+    return {
+      address: `v6:${client.groups.slice(0, 4).join(":")}::/64`,
+      network: `v6:${client.groups.slice(0, 3).join(":")}::/48`,
+    };
+  return { address: client.key, network: null };
+}
+
+/**
  * The limiter key of a client's network: its IPv4 address, or the /48 network
  * of its IPv6 address (the block one site usually holds, so a host cannot
  * spread over its /64s); an IPv4-mapped IPv6 address is its IPv4 address.
  * Without an address, the request's fallback identity
- * (getClientRateLimitIdentity). Used by the view, like and identifier limits
- * and by sign-up.
+ * (getClientRateLimitIdentity). Used by the view, like and identifier limits.
  */
 export function clientNetworkKey(request: Request): string {
   const client = clientAddress(request);

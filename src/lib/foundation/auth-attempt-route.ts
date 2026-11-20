@@ -6,10 +6,18 @@ import { readFoundationRuntimeConnection } from "@/lib/foundation/runtime-connec
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
-import { clientNetworkKey } from "@/lib/utils/client-network-key";
+import { clientSignupKeys } from "@/lib/utils/client-network-key";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("FoundationAuth");
+
+/** Whether a sign-up body carries a CAPTCHA token (both registration forms
+ * send it as `turnstileToken`); its validity is Auth's to check. */
+function hasCaptchaToken(input: unknown) {
+  if (typeof input !== "object" || input === null) return false;
+  const token = (input as { turnstileToken?: unknown }).turnstileToken;
+  return typeof token === "string" && token.trim().length > 0;
+}
 
 export function foundationAuthPrivateResponse(response: NextResponse) {
   response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate, max-age=0");
@@ -53,27 +61,39 @@ export async function handleFoundationAuthAttempt<T>({
     if (!enabled || process.env.FOUNDATION_PASSWORD_AUTH_MODE !== "native-captcha")
       return unavailable();
     const connection = readFoundationRuntimeConnection();
-    // Sign-up counts per network (an IPv4 address or an IPv6 /48), so one
-    // host cannot create accounts from many addresses of its own block.
-    const limit = await checkRateLimit({
-      key:
-        action === "auth:register"
-          ? clientNetworkKey(request)
-          : getClientRateLimitIdentity(request).key,
-      action,
-      degradedMode: "block",
-    });
-    if (limit.degraded || limit.limited)
-      return foundationAuthPrivateResponse(
-        NextResponse.json(
-          { error: limit.degraded ? unavailableMessage : "Too many attempts; try again shortly" },
-          {
-            status: limit.degraded ? 503 : 429,
-            headers: { "Retry-After": String(limit.retryAfter ?? 60) },
-          }
-        )
-      );
-    const input = await parseJsonRequest(request, { maxBytes: 4096 });
+    let input: unknown;
+    let limits: { key: string; action: string }[];
+    if (action === "auth:register") {
+      // Sign-up counts only well-formed attempts: a request without a
+      // CAPTCHA token is refused before it spends anyone's limit, so junk
+      // cannot lock out a shared network. It counts per IPv4 address or IPv6
+      // /64, and more loosely per IPv6 /48 (clientSignupKeys).
+      input = await parseJsonRequest(request, { maxBytes: 4096 });
+      if (!hasCaptchaToken(input))
+        return foundationAuthPrivateResponse(
+          NextResponse.json(
+            { error: "Check the registration details and complete the CAPTCHA" },
+            { status: 400 }
+          )
+        );
+      const keys = clientSignupKeys(request);
+      limits = [{ key: keys.address, action }];
+      if (keys.network) limits.push({ key: keys.network, action: "auth:register:network" });
+    } else limits = [{ key: getClientRateLimitIdentity(request).key, action }];
+    for (const bucket of limits) {
+      const limit = await checkRateLimit({ ...bucket, degradedMode: "block" });
+      if (limit.degraded || limit.limited)
+        return foundationAuthPrivateResponse(
+          NextResponse.json(
+            { error: limit.degraded ? unavailableMessage : "Too many attempts; try again shortly" },
+            {
+              status: limit.degraded ? 503 : 429,
+              headers: { "Retry-After": String(limit.retryAfter ?? 60) },
+            }
+          )
+        );
+    }
+    if (action !== "auth:register") input = await parseJsonRequest(request, { maxBytes: 4096 });
     const writes: Parameters<FoundationAuthCookies["setAll"]>[0] = [];
     const result = await operation(connection, input, {
       getAll: () => request.cookies.getAll(),

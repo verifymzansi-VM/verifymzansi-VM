@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { createFoundationPublicApi } from "./public-api";
 
 /**
@@ -27,4 +28,18 @@ export async function readFoundationSignupMode(
   } catch {
     return null;
   }
+}
+
+const emailDomainResult = z.strictObject({ allowed: z.boolean() });
+
+/** Whether `email` may be used (api.check_email_domain): false only while
+ * sign-up is open and the sign-up hook's domain rule refuses its domain
+ * (malformed, reserved or blocked). Throws when the answer cannot be read. */
+export async function checkFoundationEmailDomain(
+  api: FoundationAuthenticatedApi,
+  email: string
+): Promise<boolean> {
+  const { data, error } = await api.rpc("check_email_domain", { p_email: email }, { get: false });
+  if (error) throw new Error("Email domain check failed");
+  return emailDomainResult.parse(data).allowed;
 }

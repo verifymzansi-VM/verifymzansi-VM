@@ -83,12 +83,14 @@ preflight then reports the database ahead, and a forward fix is preferred.
 ## Sign-up mode in the database, and member invitations, 20 November 2026
 
 `20261120040242_signup_mode_member_invitations.sql` is pending (see the applied
-register). **Order: apply-first** (the default). The website release from the
-same pull request reads the new `api.get_signup_mode` and falls back to
-`FOUNDATION_REGISTRATION_INVITE_ONLY` when it cannot, so either order is safe.
-It refuses (55000) unless its fifteen objects are all absent or all present and
-the two functions it replaces (`internal.acceptance_signup_guard`,
-`internal.run_retention`) have their reviewed bodies (or this update's).
+register). **Order: apply-first** (the default): the website release from the
+same pull request names `api.get_signup_mode` and `api.check_email_domain`, and
+the deploy preflight probes every command in `../runtime-api-manifest.json`, so
+a deploy before the update is applied stops there. It refuses (55000) unless its
+21 objects are all absent or all present and the four functions it replaces
+(`internal.acceptance_signup_guard`, `internal.run_retention`,
+`internal.claim_owner_admin_invitation`, `internal.erase_closed_account`) have
+their reviewed bodies (or this update's).
 
 - **Sign-up mode.** New one-row table `private.signup_settings`: `invite_only`
   (the default, and what the hook assumes if the row is missing) or `open`. It
@@ -106,40 +108,72 @@ the two functions it replaces (`internal.acceptance_signup_guard`,
   app. Setting the current mode again records nothing.
 - **The record.** New append-only table `private.signup_mode_events`: from, to,
   the administrator account named, the reason and the time. No API role has
-  access; updates, deletes and truncation are refused.
+  access; updates, deletes and truncation are refused. It has no retention
+  period: it is the record of who opened or closed sign-up. Its account key is
+  `ON DELETE RESTRICT`, like the staff role rows of the same administrators, so
+  account erasure keeps that administrator's Auth user (erasure already keeps
+  staff accounts).
 - **Reading the mode.** `api.get_signup_mode()` (anon and authenticated):
   `{"mode"}` only. The website words its uniform registration reply from it.
 - **Member invitations, apart from administrator invitations.** New table
   `private.member_invitations` (address, who invited it or none for the owner's
-  SQL editor, when, expiry 30 days later, revocation). A member invitation
-  admits one sign-up in either mode and never grants a staff role; only
-  `private.owner_admin_invitations` (unchanged, owner only) makes an
-  administrator. Staff commands (authenticated, capability `member:invite`,
+  SQL editor, when, expiry 30 days later, the account that used it and when,
+  revocation). A member invitation admits ONE sign-up in either mode and never
+  grants a staff role; only `private.owner_admin_invitations` (owner only) makes
+  an administrator. Staff commands (authenticated, capability `member:invite`,
   admin role only, the 12-hour authenticator rule): `api.invite_member(p_email)`
-  (adds, or renews for 30 days; 22023 `member_invitation_email_invalid`; 54000
-  `member_invitation_limit` over 200 per staff member in 24 hours),
-  `api.revoke_member_invitation(p_email)` (idempotent) and
+  (adds, or renews for 30 days, which makes a used invitation usable again;
+  22023 `member_invitation_email_invalid`; PT409
+  `member_invitation_account_exists` ("This person already has an account.") for
+  an address that already has an account (owner decision, 20 November); 54000
+  `member_invitation_limit` over 200 invitations and renewals per staff member
+  in 24 hours), `api.revoke_member_invitation(p_email)` (idempotent) and
   `api.list_member_invitations()` (latest 500: address, dates, status `open`,
-  `expired` or `revoked`, and whether an account with that address exists; never
-  who invited). Until a staff screen exists, the owner can also invite in the
-  SQL editor:
+  `used`, `expired` or `revoked`, and whether the account that used it still
+  exists; never who invited). Until a staff screen exists, the owner can also
+  invite in the SQL editor:
   `insert into private.member_invitations(email) values ('person@example.com');`.
+- **Invitation history.** New append-only table
+  `private.member_invitation_events`: one row per invitation, renewal or
+  revocation made with the commands (address, action, staff account, time). No
+  API role has access. The daily limit counts these rows, so renewing someone
+  else's invitation never moves anyone's count. Kept 12 months (the retention
+  job), and deleted with the person's invitation when their account is erased.
+- **One sign-up per invitation.** New trigger `claim_signup_invitations` on
+  `auth.users` (after insert): the new account marks the matching open member
+  invitation used (`claimed_by`, `claimed_at`) and the matching administrator
+  invitation signed up (new columns `signed_up_by`, `signed_up_at` on
+  `private.owner_admin_invitations`, filled when the update is applied for
+  invitations whose address already has an account). The hook admits neither
+  again, so changing the account's email or erasing it does not let the same
+  address sign up a second time. An administrator invitation still becomes an
+  administrator role when the account enrols an authenticator app
+  (`internal.claim_owner_admin_invitation`, unchanged except that an invitation
+  already signed up is claimed only by the account that signed up with it).
 - **The sign-up hook** (`internal.acceptance_signup_guard`, same invoker rights
   and the same "Registration is not open yet" refusal) admits an unrevoked
-  administrator invitation or an unrevoked, unexpired member invitation in
-  either mode. Otherwise `invite_only` refuses as before, and `open` admits
-  everyone except an address whose domain is malformed, numeric or an address
-  literal, ends in a reserved name (test, example, invalid, localhost, local,
-  internal, onion, arpa, lan, home, corp, intranet), is example.com/.net/.org,
-  or is (under) a domain in the new table `private.signup_blocked_domains`
-  (seeded with 15 well-known disposable-address services; the owner adds rows in
-  the SQL editor). Those get "Registration is not available for this email
-  address" (403); the website still gives its one uniform reply. The hook may
-  read only the mode, the invitation address, expiry and revocation, and the
-  blocked domain (column grants and `supabase_auth_admin` select policies).
-- **Retention.** `internal.run_retention` also runs
+  administrator invitation not yet signed up, or an unrevoked, unused, unexpired
+  member invitation, in either mode. Otherwise `invite_only` refuses as before,
+  and `open` admits everyone except an address the domain rule
+  `internal.signup_email_domain_refused` refuses: a malformed, numeric or
+  address-literal domain, a reserved name (test, example, invalid, localhost,
+  local, internal, onion, arpa, lan, home, corp, intranet),
+  example.com/.net/.org, or (under) a domain in the new table
+  `private.signup_blocked_domains` (seeded with 15 well-known disposable-address
+  services; the owner adds rows in the SQL editor). Those get "Registration is
+  not available for this email address" (403); the website still gives its one
+  uniform reply, and a Google sign-up gets a plain login-page message. The hook
+  may read only the mode, the invitation address, expiry, use and revocation,
+  the administrator invitation's sign-up time and the blocked domain (column
+  grants and `supabase_auth_admin` select policies).
+- **Email change.** `api.check_email_domain(p_email)` (authenticated):
+  `{"allowed"}`, false only while sign-up is open and the domain rule refuses
+  the address. The website's email change refuses such an address.
+- **Retention and erasure.** `internal.run_retention` also runs
   `internal.purge_member_invitations` (`"member_invitations"`: invitations
-  deleted 30 days after they expired or were revoked).
+  deleted 30 days after they expired or were revoked; history older than 12
+  months). `internal.erase_closed_account` also deletes the person's member
+  invitations (the one they used and any for their address) and that history.
 
 **Opening sign-up at launch (item 60)** is one owner call in the SQL editor,
 with the hosted "Before user created" hook left switched on (switching it off
@@ -159,8 +193,8 @@ Preflight `../preflight/20261120040242_signup_mode_member_invitations.check.sql`
 (summary "signup mode and member invitations: update not applied; administrator
 invitations not yet used: N"); rollback
 `../rollback/20261120040242_signup_mode_member_invitations.down.sql` (refuses
-once a mode change is recorded; member invitations are lost). Behaviour test
-`scripts/test-foundation-signup-mode.mjs`.
+once a mode change is recorded; member invitations and their history are lost).
+Behaviour test `scripts/test-foundation-signup-mode.mjs`.
 
 ## Post views and likes, 19 November 2026
 

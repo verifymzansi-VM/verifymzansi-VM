@@ -17,6 +17,12 @@ begin
     where coalesce(x.revoked_at, x.expires_at) < statement_timestamp() - interval '30 days'
     order by x.invited_at limit p_limit);
   get diagnostics n = row_count;
+  -- Events are append-only; the retention job (vm.retention on) may delete
+  -- those older than 12 months.
+  delete from private.member_invitation_events e where e.id in (
+    select x.id from private.member_invitation_events x
+    where x.created_at < statement_timestamp() - interval '12 months'
+    order by x.created_at limit p_limit);
   return n;
 end;
 $function$;
