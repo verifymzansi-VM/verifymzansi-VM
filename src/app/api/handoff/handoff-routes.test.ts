@@ -6,6 +6,15 @@ import { POST as start } from "../verification/handoff/route";
 import { POST as open } from "./open/route";
 import { GET as state } from "./state/route";
 import { POST as upload } from "./upload/route";
+import { POST as phoneToken } from "./capture-token/route";
+import { POST as memberToken } from "../verification/capture-token/route";
+import { handoffLink } from "@/lib/foundation/capture-handoff";
+import {
+  checkCaptureToken,
+  grantChannel,
+  issueCaptureToken,
+  sessionChannel,
+} from "@/lib/foundation/capture-token";
 import { createFoundationRouteContext } from "@/lib/foundation/request-route";
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
@@ -28,6 +37,10 @@ vi.mock("@/lib/utils/encryption", () => ({
   encryptData: vi.fn(async (b) => b),
   decryptData: vi.fn(async (b) => b),
 }));
+vi.mock("@/lib/foundation/capture-handoff", async (original) => {
+  const real = await original<{ handoffLink: (origin: string, token: string) => string }>();
+  return { ...real, handoffLink: vi.fn(real.handoffLink) };
+});
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: vi.fn(),
   getClientRateLimitIdentity: () => ({ key: "fixture-ip" }),
@@ -83,14 +96,18 @@ const form = (fields: Record<string, string>, file: File = cameraJpegFile(), coo
     body: data,
   });
 };
-const grantCookie = `vm_capture_grant=${grant}`;
+// Over HTTPS the grant cookie carries the __Secure- prefix.
+const grantCookie = `__Secure-vm_capture_grant=${grant}`;
+const session = "66666666-6666-4666-8666-666666666666";
+const phoneTokenFor = (kind: "id_front" | "selfie", now = Date.now(), accountId = owner) =>
+  issueCaptureToken({ accountId, kind, channel: grantChannel(sha(grant)) }, now);
 
 beforeEach(() => {
   vi.clearAllMocks();
   signedIn = owner;
   vi.stubEnv("HMAC_SECRET", "0123456789abcdef".repeat(4));
   vi.stubEnv("ID_ENCRYPTION_KEY", "fedcba9876543210".repeat(4));
-  vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
+  vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false, retryAfter: 0 });
   vi.mocked(cleanEvidence).mockResolvedValue(Buffer.from("clean-fixture"));
   vi.mocked(putImmutableR2Bytes).mockImplementation(async (_b, _k, bytes) => bytes);
@@ -104,23 +121,25 @@ beforeEach(() => {
         ? handoffState()
         : name === "reserve_handoff_verification_upload"
           ? { artifact_id: artifact, completed: false, identity }
-          : name === "frontend_verification_upload_context"
-            ? {
-                completed: false,
-                artifact_id: artifact,
-                purpose: "id_front",
-                case_id: caseId,
-                object_key: `evidence/${caseId}/${artifact}`,
-                fingerprint: null,
-                document_sha256: null,
-              }
-            : { completed: true, artifact_id: artifact, purpose: "id_front" },
+          : name === "attach_capture_handoff_identity"
+            ? { attached: true }
+            : name === "frontend_verification_upload_context"
+              ? {
+                  completed: false,
+                  artifact_id: artifact,
+                  purpose: "id_front",
+                  case_id: caseId,
+                  object_key: `evidence/${caseId}/${artifact}`,
+                  fingerprint: null,
+                  document_sha256: null,
+                }
+              : { completed: true, artifact_id: artifact, purpose: "id_front" },
     error: null,
   }));
   vi.mocked(createFoundationRouteContext).mockReturnValue({
     authenticateCaller: async () => {
       if (!signedIn) throw new FoundationSessionError(401);
-      return { api: { rpc }, accountId: signedIn };
+      return { api: { rpc }, accountId: signedIn, sessionId: session };
     },
     respond: async (r: NextResponse) => r,
   } as unknown as ReturnType<typeof createFoundationRouteContext>);
@@ -131,7 +150,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("the computer makes a link", () => {
-  it("stores only the token's SHA-256 and answers a server-drawn QR code", async () => {
+  it("never sends the ID number receipt with the member: the server attaches it", async () => {
     const res = await start(
       json("/api/verification/handoff", {
         idNumber: "8001015009087",
@@ -145,11 +164,26 @@ describe("the computer makes a link", () => {
     expect(body).not.toHaveProperty("link");
     const [name, args] = rpc.mock.calls[0];
     expect(name).toBe("start_capture_handoff");
-    expect(args.p_token_sha256).toMatch(/^[a-f0-9]{64}$/);
-    expect(args.p_first_name).toBe("Thando Sipho");
-    expect(args.p_identity.encrypted_number.key_id).toBe("identity-number-v1");
+    expect(args).toEqual({
+      p_token_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      p_first_name: "Thando Sipho",
+      p_last_name: "Dlamini",
+      p_with_id: true,
+    });
+    const attach = serviceRpc.mock.calls.find((c) => c[0] === "attach_capture_handoff_identity")!;
+    expect(attach[1]).toEqual({
+      p_owner: owner,
+      p_token_sha256: args.p_token_sha256,
+      p_identity: expect.objectContaining({
+        encrypted_number: expect.objectContaining({ key_id: "identity-number-v1" }),
+      }),
+    });
     // The ID number itself never reaches the database.
-    expect(JSON.stringify(args)).not.toContain("8001015009087");
+    expect(JSON.stringify([...rpc.mock.calls, ...serviceRpc.mock.calls])).not.toContain(
+      "8001015009087"
+    );
+    // Without a configured address, the link uses this request's own origin.
+    expect(vi.mocked(handoffLink).mock.calls[0][0]).toBe("https://verifymzansi.com");
   });
 
   it("needs a signed-in member, valid details and a same-site request", async () => {
@@ -170,7 +204,7 @@ describe("the computer makes a link", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it("explains the database's limit and a missing ID photo", async () => {
+  it("explains the limit, a missing ID photo and an account that cannot act", async () => {
     rpc.mockResolvedValueOnce({
       data: null,
       error: { code: "PT429", details: "handoff_rate_limited" },
@@ -183,41 +217,51 @@ describe("the computer makes a link", () => {
     const res = await start(json("/api/verification/handoff", {}));
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe("handoff_needs_id");
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "42501" } });
+    const inactive = await start(json("/api/verification/handoff", {}));
+    expect(inactive.status).toBe(403);
+    expect((await inactive.json()).error).toMatch(/confirm your email/i);
   });
 });
 
-describe("the phone opens the link", () => {
-  it("uses the token once and keeps a capture grant in an HttpOnly cookie for its own routes", async () => {
+describe("the phone opens the link, signed in as the same account", () => {
+  it("asks a signed-out phone to sign in, without using the link", async () => {
     signedIn = null;
     const res = await open(json("/api/handoff/open", { token }));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
     expect(await res.json()).toEqual({
-      publicName: "Thando D.",
-      expiresAt: expect.any(String),
-      needsId: true,
-      needsSelfie: true,
+      error: "Sign in on your phone with the same account, then take the photos.",
+      code: "handoff_sign_in_required",
     });
+    expect(serviceRpc).not.toHaveBeenCalled();
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("uses the token once for the signed-in owner and keeps a __Secure- grant cookie", async () => {
+    const res = await open(json("/api/handoff/open", { token }));
+    expect(res.status).toBe(200);
     const [name, args] = serviceRpc.mock.calls[0];
     expect(name).toBe("redeem_capture_handoff");
-    expect(args.p_token_sha256).toBe(sha(token));
-    expect(args.p_grant_sha256).toMatch(/^[a-f0-9]{64}$/);
-    expect(args).not.toHaveProperty("p_signed_in");
+    expect(args).toEqual({
+      p_token_sha256: sha(token),
+      p_grant_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      p_signed_in: owner,
+    });
     const cookie = res.headers.get("set-cookie") ?? "";
-    expect(cookie).toMatch(/^vm_capture_grant=[A-Za-z0-9_-]{43};/);
+    expect(cookie).toMatch(/^__Secure-vm_capture_grant=[A-Za-z0-9_-]{43};/);
     expect(cookie).toMatch(/Path=\/api\/handoff/);
     expect(cookie).toMatch(/HttpOnly/i);
+    expect(cookie).toMatch(/Secure/);
     expect(cookie).toMatch(/SameSite=strict/i);
-    // Until the link expires (about 14 minutes here), never longer than 15.
     const maxAge = Number(/Max-Age=(\d+)/i.exec(cookie)?.[1]);
     expect(maxAge).toBeGreaterThan(800);
     expect(maxAge).toBeLessThanOrEqual(900);
-    // The grant is not the token, and only its hash went to the database.
     const value = /vm_capture_grant=([^;]+)/.exec(cookie)![1];
     expect(value).not.toBe(token);
     expect(args.p_grant_sha256).toBe(sha(value));
   });
 
-  it("names the signed-in account so the database can refuse another one", async () => {
+  it("refuses a phone signed in as another account, and a failed sign-in check", async () => {
     signedIn = stranger;
     serviceRpc.mockResolvedValueOnce({
       data: null,
@@ -228,9 +272,18 @@ describe("the phone opens the link", () => {
     expect(res.status).toBe(403);
     expect((await res.json()).code).toBe("handoff_other_account");
     expect(res.headers.get("set-cookie")).toBeNull();
+    vi.mocked(createFoundationRouteContext).mockReturnValueOnce({
+      authenticateCaller: async () => {
+        throw new FoundationSessionError(503);
+      },
+      respond: async (r: NextResponse) => r,
+    } as unknown as ReturnType<typeof createFoundationRouteContext>);
+    const unchecked = await open(json("/api/handoff/open", { token }));
+    expect(unchecked.status).toBe(503);
+    expect((await unchecked.json()).error).toMatch(/couldn't check your sign-in/i);
   });
 
-  it("refuses a used, expired or malformed link without a cookie", async () => {
+  it("refuses a used, malformed or oversized request without a cookie", async () => {
     serviceRpc.mockResolvedValueOnce({
       data: null,
       error: { code: "PT409", details: "handoff_unavailable" },
@@ -239,38 +292,79 @@ describe("the phone opens the link", () => {
     expect(used.status).toBe(409);
     expect(used.headers.get("set-cookie")).toBeNull();
     for (const body of [{ token: "123456" }, { token, extra: 1 }, {}]) {
-      const res = await open(json("/api/handoff/open", body));
-      expect(res.status).toBe(409);
+      expect((await open(json("/api/handoff/open", body))).status).toBe(409);
     }
+    expect((await open(json("/api/handoff/open", { token: "x".repeat(10_000) }))).status).toBe(413);
     expect(serviceRpc).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("the phone's state and uploads", () => {
-  it("answer only for a capture grant", async () => {
-    const none = await state(new NextRequest("https://verifymzansi.com/api/handoff/state"));
-    expect(none.status).toBe(409);
-    const res = await state(
+describe("the phone's state, capture tokens and photos", () => {
+  it("answer only the signed-in owner holding a grant", async () => {
+    expect(
+      (await state(new NextRequest("https://verifymzansi.com/api/handoff/state"))).status
+    ).toBe(409);
+    const withGrant = () =>
       new NextRequest("https://verifymzansi.com/api/handoff/state", {
         headers: { cookie: grantCookie },
-      })
-    );
+      });
+    signedIn = null;
+    expect((await state(withGrant())).status).toBe(401);
+    signedIn = owner;
+    const res = await state(withGrant());
     expect(res.status).toBe(200);
     expect(serviceRpc).toHaveBeenCalledWith("capture_handoff_context", {
       p_grant_sha256: sha(grant),
+      p_signed_in: owner,
     });
     expect(JSON.stringify(await res.json())).not.toContain(owner);
-    const noGrant = await upload(
-      form({ docType: "id_document", uploadRequestId: receipt, captureMethod: "camera" })
-    );
-    expect(noGrant.status).toBe(409);
-    expect(serviceRpc).toHaveBeenCalledTimes(1);
   });
 
-  it("store an ID photo for the link's case with the computer's identity receipt", async () => {
+  it("issue capture tokens bound to the phone's grant, and to the member's session", async () => {
+    const phone = await phoneToken(
+      json("/api/handoff/capture-token", { kind: "id_front" }, grantCookie)
+    );
+    expect(phone.status).toBe(200);
+    const issued = (await phone.json()).token;
+    expect(
+      checkCaptureToken(issued, {
+        accountId: owner,
+        kind: "id_front",
+        channel: grantChannel(sha(grant)),
+      })
+    ).toBe("ok");
+    signedIn = null;
+    expect(
+      (await phoneToken(json("/api/handoff/capture-token", { kind: "id_front" }, grantCookie)))
+        .status
+    ).toBe(401);
+    signedIn = owner;
+    expect(
+      (await phoneToken(json("/api/handoff/capture-token", { kind: "id_front" }))).status
+    ).toBe(409);
+    const member = await memberToken(json("/api/verification/capture-token", { kind: "selfie" }));
+    expect(member.status).toBe(200);
+    expect(
+      checkCaptureToken((await member.json()).token, {
+        accountId: owner,
+        kind: "selfie",
+        channel: sessionChannel(session),
+      })
+    ).toBe("ok");
+    expect(
+      (await memberToken(json("/api/verification/capture-token", { kind: "video" }))).status
+    ).toBe(400);
+  });
+
+  it("store an ID photo for the link's case with the server's identity receipt", async () => {
     const res = await upload(
       form(
-        { docType: "id_document", uploadRequestId: receipt, captureMethod: "camera" },
+        {
+          docType: "id_document",
+          uploadRequestId: receipt,
+          captureMethod: "camera",
+          captureToken: phoneTokenFor("id_front"),
+        },
         cameraJpegFile(),
         grantCookie
       )
@@ -281,6 +375,7 @@ describe("the phone's state and uploads", () => {
     )!;
     expect(reserve[1]).toMatchObject({
       p_grant_sha256: sha(grant),
+      p_signed_in: owner,
       p_request: receipt,
       p_purpose: "id_front",
       p_digest: expect.stringMatching(/^[a-f0-9]{64}$/),
@@ -293,17 +388,47 @@ describe("the phone's state and uploads", () => {
     expect(completed.p_identity).toEqual(identity);
   });
 
-  it("refuse photos not taken with the page's camera, before reserving", async () => {
-    for (const [fields, file] of [
-      [{ captureMethod: "file_upload" }, cameraJpegFile()],
-      [{ captureMethod: "camera" }, cameraJpegFile({ exif: true })],
-      [{ captureMethod: "camera" }, new File(["x"], "x.png", { type: "image/png" })],
-    ] as const) {
+  it("refuse photos without a fresh capture token for this grant, or not from the camera", async () => {
+    const old = Date.now() - 11 * 60_000;
+    const refused: [Record<string, string>, File, string][] = [
+      [{ captureMethod: "camera" }, cameraJpegFile(), "camera_required"],
+      [
+        { captureMethod: "camera", captureToken: phoneTokenFor("selfie") },
+        cameraJpegFile(),
+        "camera_required",
+      ],
+      [
+        { captureMethod: "camera", captureToken: phoneTokenFor("id_front", Date.now(), stranger) },
+        cameraJpegFile(),
+        "camera_required",
+      ],
+      [
+        { captureMethod: "camera", captureToken: phoneTokenFor("id_front", old) },
+        cameraJpegFile(),
+        "capture_expired",
+      ],
+      [
+        { captureMethod: "file_upload", captureToken: phoneTokenFor("id_front") },
+        cameraJpegFile(),
+        "camera_required",
+      ],
+      [
+        { captureMethod: "camera", captureToken: phoneTokenFor("id_front") },
+        cameraJpegFile({ exif: true }),
+        "camera_required",
+      ],
+      [
+        { captureMethod: "camera", captureToken: phoneTokenFor("id_front") },
+        new File(["x"], "x.png", { type: "image/png" }),
+        "camera_required",
+      ],
+    ];
+    for (const [fields, file, code] of refused) {
       const res = await upload(
         form({ docType: "id_document", uploadRequestId: receipt, ...fields }, file, grantCookie)
       );
       expect(res.status).toBe(409);
-      expect((await res.json()).code).toBe("camera_required");
+      expect((await res.json()).code).toBe(code);
     }
     expect(serviceRpc.mock.calls.some((c) => c[0] === "reserve_handoff_verification_upload")).toBe(
       false
@@ -311,19 +436,19 @@ describe("the phone's state and uploads", () => {
     expect(putImmutableR2Bytes).not.toHaveBeenCalled();
   });
 
-  it("refuse identity fields and a forged owner", async () => {
-    const res = await upload(
-      form(
-        {
-          docType: "id_document",
-          uploadRequestId: receipt,
-          captureMethod: "camera",
-          owner_id: stranger,
-        },
-        cameraJpegFile(),
-        grantCookie
-      )
-    );
-    expect(res.status).toBe(400);
+  it("refuse a signed-out phone, a missing grant, identity fields and a forged owner", async () => {
+    const fields = {
+      docType: "id_document",
+      uploadRequestId: receipt,
+      captureMethod: "camera",
+      captureToken: phoneTokenFor("id_front"),
+    };
+    expect((await upload(form(fields))).status).toBe(409);
+    signedIn = null;
+    expect((await upload(form(fields, cameraJpegFile(), grantCookie))).status).toBe(401);
+    signedIn = owner;
+    expect(
+      (await upload(form({ ...fields, owner_id: stranger }, cameraJpegFile(), grantCookie))).status
+    ).toBe(400);
   });
 });

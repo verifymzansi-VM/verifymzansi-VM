@@ -12,6 +12,8 @@
 
 /** The ID photo's long edge must be at least this many pixels to be readable. */
 export const MIN_ID_LONG_EDGE = 1000;
+/** The selfie's long edge must be at least this many pixels for a face comparison. */
+export const MIN_SELFIE_LONG_EDGE = 480;
 
 export type CameraPhotoProblem = "not_jpeg" | "has_exif" | "too_small" | "unreadable";
 
@@ -19,13 +21,19 @@ const SOF_MARKERS = new Set([
   0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
 ]);
 
-/** Width and height from a JPEG's frame header, and whether it has an EXIF block. */
+/**
+ * Width and height from a JPEG's frame header, and whether it carries an APP1
+ * block (EXIF or XMP metadata, which the page's canvas JPEG never has). Every
+ * segment up to the start of the image data is read, wherever the frame
+ * header sits.
+ */
 export function readJpegFacts(
   bytes: Uint8Array
-): { width: number; height: number; exif: boolean } | null {
+): { width: number; height: number; metadata: boolean } | null {
   if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) return null;
   let offset = 2;
-  let exif = false;
+  let metadata = false;
+  let size: { width: number; height: number } | null = null;
   while (offset + 4 <= bytes.length) {
     if (bytes[offset] !== 0xff) return null;
     const marker = bytes[offset + 1];
@@ -39,29 +47,19 @@ export function readJpegFacts(
       offset += 2;
       continue;
     }
+    // Start of scan: the image data follows; every header has been seen.
+    if (marker === 0xda) return size ? { ...size, metadata } : null;
     const length = (bytes[offset + 2] << 8) | bytes[offset + 3];
     if (length < 2 || offset + 2 + length > bytes.length) return null;
     const start = offset + 4;
-    if (
-      marker === 0xe1 &&
-      length >= 8 &&
-      bytes[start] === 0x45 && // E
-      bytes[start + 1] === 0x78 && // x
-      bytes[start + 2] === 0x69 && // i
-      bytes[start + 3] === 0x66 && // f
-      bytes[start + 4] === 0 &&
-      bytes[start + 5] === 0
-    )
-      exif = true;
+    if (marker === 0xe1) metadata = true;
     if (SOF_MARKERS.has(marker)) {
-      if (length < 7) return null;
+      if (length < 7 || size) return null;
       const height = (bytes[start + 1] << 8) | bytes[start + 2];
       const width = (bytes[start + 3] << 8) | bytes[start + 4];
       if (!width || !height) return null;
-      return { width, height, exif };
+      size = { width, height };
     }
-    // Start of scan: no frame header was found before the image data.
-    if (marker === 0xda) return null;
     offset += 2 + length;
   }
   return null;
@@ -76,14 +74,19 @@ export function cameraPhotoProblem(
     return "not_jpeg";
   const facts = readJpegFacts(bytes);
   if (!facts) return "unreadable";
-  if (facts.exif) return "has_exif";
-  if (purpose === "id_front" && Math.max(facts.width, facts.height) < MIN_ID_LONG_EDGE)
+  if (facts.metadata) return "has_exif";
+  const longEdge = Math.max(facts.width, facts.height);
+  if (longEdge < (purpose === "id_front" ? MIN_ID_LONG_EDGE : MIN_SELFIE_LONG_EDGE))
     return "too_small";
   return null;
 }
 
 /** What the member is told for each refusal. */
-export const CAMERA_PHOTO_MESSAGES: Record<CameraPhotoProblem | "camera_required", string> = {
+export const CAMERA_PHOTO_MESSAGES: Record<
+  CameraPhotoProblem | "camera_required" | "capture_expired",
+  string
+> = {
+  capture_expired: "That photo is more than 10 minutes old. Please take it again.",
   camera_required:
     "Take the photo with your camera on this page. Photos from your gallery or files can't be used.",
   not_jpeg:
@@ -91,6 +94,5 @@ export const CAMERA_PHOTO_MESSAGES: Record<CameraPhotoProblem | "camera_required
   has_exif:
     "Take the photo with your camera on this page. Photos from your gallery or files can't be used.",
   unreadable: "We couldn't read that photo. Please take it again.",
-  too_small:
-    "This camera's picture is too small to read your ID. Continue on your phone to take a sharper photo.",
+  too_small: "This camera's picture is too small. Continue on your phone to take a sharper photo.",
 };

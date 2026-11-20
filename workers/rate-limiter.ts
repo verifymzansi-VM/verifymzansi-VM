@@ -236,6 +236,8 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 30, ttl: 3600 },
   ],
   "verification:handoff-open": [{ limit: 20, ttl: 600 }],
+  // One token per camera start (ID photo, selfie, retakes).
+  "verification:capture-token": [{ limit: 30, ttl: 600 }],
   "verification:manual-location": [{ limit: 10, ttl: 60 }],
   // "Detect province and city": a suggestion only, kept apart from manual saving.
   "verification:location-detect": [{ limit: 10, ttl: 60 }],

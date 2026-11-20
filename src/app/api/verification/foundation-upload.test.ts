@@ -8,6 +8,7 @@ import { putImmutableR2Bytes } from "@/lib/services/storage";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { cleanEvidence } from "@/lib/foundation/verification-runtime";
 import { cameraJpegFile } from "@/test/fixtures/camera-jpeg";
+import { issueCaptureToken, sessionChannel } from "@/lib/foundation/capture-token";
 vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: vi.fn() }));
 vi.mock("@/lib/foundation/runtime-connection", () => ({
   readFoundationRuntimeConnection: () => ({}),
@@ -36,6 +37,14 @@ const owner = "11111111-1111-4111-8111-111111111111",
 const purpose = () => (selfie ? "selfie" : "id_front");
 let selfie = false,
   completed = false;
+const session = "66666666-6666-4666-8666-666666666666";
+/** A capture token as the page gets one when its camera starts. */
+const tokenFor = (
+  kind: "id_front" | "selfie" = purpose(),
+  accountId = owner,
+  channel = sessionChannel(session),
+  now = Date.now()
+) => issueCaptureToken({ accountId, kind, channel }, now);
 /** `extra` adds or replaces form fields; a null value leaves that field out. */
 function request(
   extra: Record<string, string | null> = {},
@@ -48,6 +57,7 @@ function request(
     docType: selfie ? "selfie" : "id_document",
     uploadRequestId: receipt,
     captureMethod: "camera",
+    captureToken: tokenFor(),
     ...(!selfie
       ? {
           idNumber: "8001015009087",
@@ -98,7 +108,7 @@ beforeEach(() => {
     error: null,
   }));
   vi.mocked(createFoundationRouteContext).mockReturnValue({
-    authenticateCaller: async () => ({ api: { rpc }, accountId: owner }),
+    authenticateCaller: async () => ({ api: { rpc }, accountId: owner, sessionId: session }),
     respond: async (r: NextResponse) => r,
   } as unknown as ReturnType<typeof createFoundationRouteContext>);
   vi.mocked(createFoundationServiceApi).mockReturnValue({
@@ -210,20 +220,33 @@ it("refuses photos the page did not take with its camera, before reserving or st
   expect(cleanEvidence).not.toHaveBeenCalled();
   expect(putImmutableR2Bytes).not.toHaveBeenCalled();
 });
-it("answers camera_required when the database refuses an uploaded-file selfie", async () => {
-  selfie = true;
-  rpc.mockImplementation(async (name: string) =>
-    name === "record_my_selfie_capture"
-      ? {
-          data: null,
-          error: { code: "PT409", message: "camera required", details: "camera_required" },
-        }
-      : { data: { artifact_id: artifact, completed: false }, error: null }
-  );
-  const res = await POST(request());
-  expect(res.status).toBe(409);
-  expect((await res.json()).code).toBe("camera_required");
+it("needs the capture token from when the camera started: recent, this account, kind and session", async () => {
+  for (const asSelfie of [false, true]) {
+    selfie = asSelfie;
+    const other = "77777777-7777-4777-8777-777777777777";
+    const refused: [string | null, string][] = [
+      [null, "camera_required"],
+      ["v1.id_front.1700000000.forged", "camera_required"],
+      [tokenFor(purpose(), other), "camera_required"],
+      [tokenFor(asSelfie ? "id_front" : "selfie"), "camera_required"],
+      [tokenFor(purpose(), owner, sessionChannel(other)), "camera_required"],
+      [
+        tokenFor(purpose(), owner, sessionChannel(session), Date.now() - 11 * 60_000),
+        "capture_expired",
+      ],
+    ];
+    for (const [token, code] of refused) {
+      const res = await POST(request({ captureToken: token }));
+      expect(res.status).toBe(409);
+      expect((await res.json()).code).toBe(code);
+    }
+  }
+  expect(rpc).not.toHaveBeenCalled();
   expect(putImmutableR2Bytes).not.toHaveBeenCalled();
+  // Nine minutes old is still in time.
+  selfie = false;
+  const late = tokenFor("id_front", owner, sessionChannel(session), Date.now() - 9 * 60_000);
+  expect((await POST(request({ captureToken: late }))).status).toBe(200);
 });
 it("refuses the upload when the report cannot be recorded, before storing evidence", async () => {
   selfie = true;

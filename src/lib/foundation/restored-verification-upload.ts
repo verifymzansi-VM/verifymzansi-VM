@@ -28,7 +28,7 @@ import { readBoundedRequestFormData, RequestBodyTooLargeError } from "../utils/r
 import { createLogger } from "../utils/logger";
 import { logRequestFailure } from "../utils/request-failure";
 import { foundationNoStore } from "@/lib/foundation/owner-route";
-import { hasDatabaseReason } from "./error-reasons";
+import { checkCaptureToken, sessionChannel, type CaptureBinding } from "./capture-token";
 const log = createLogger("RestoredIdentityUpload");
 const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 const doneSchema = z.object({
@@ -71,12 +71,23 @@ export function rpcFailure(error: { code?: string }): never {
   );
 }
 
-/** A refusal for a photo the page did not take with the camera (409, code camera_required). */
+/** A refusal for a photo the page did not take with the camera (409, code
+ * camera_required; capture_expired when its capture token is too old). */
 export class CameraRequiredError extends Error {
   override name = "CameraRequiredError";
+  readonly code: "camera_required" | "capture_expired";
   constructor(readonly problem: keyof typeof CAMERA_PHOTO_MESSAGES = "camera_required") {
     super(CAMERA_PHOTO_MESSAGES[problem]);
+    this.code = problem === "capture_expired" ? "capture_expired" : "camera_required";
   }
+}
+
+/** Refuses a photo whose capture token (issued when the camera started) is
+ * missing, forged, for another account, kind or channel, or older than 10 minutes. */
+export function assertCaptureToken(token: FormDataEntryValue | null, binding: CaptureBinding) {
+  const result = checkCaptureToken(token, binding);
+  if (result === "expired") throw new CameraRequiredError("capture_expired");
+  if (result !== "ok") throw new CameraRequiredError();
 }
 
 /**
@@ -296,6 +307,7 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
       "idDocumentType",
       "captureMethod",
       "livenessPassed",
+      "captureToken",
     ];
     if ([...form.keys()].some((key) => !allowed.includes(key) || form.getAll(key).length !== 1))
       return reply(400, "Choose one document and check your details");
@@ -332,6 +344,11 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
     // upload). This refuses what the page never sends; it cannot prove a live
     // camera.
     await assertCameraPhoto(file, form.get("captureMethod"), purpose);
+    assertCaptureToken(form.get("captureToken"), {
+      accountId: caller.accountId,
+      kind: purpose,
+      channel: sessionChannel(caller.sessionId),
+    });
     const bytes = await cleanEvidence(file, selfie);
     // The digest binds every authoritative field and the original file, including
     // metadata stripped during normalization. It is not an identity fingerprint.
@@ -370,8 +387,6 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
               p_capture_method: capture.captureMethod,
               p_browser_liveness_passed: capture.browserLivenessPassed,
             });
-            if (recorded.error && hasDatabaseReason(recorded.error, "camera_required"))
-              throw new CameraRequiredError();
             if (recorded.error) rpcFailure(recorded.error);
           }
         : undefined,
@@ -393,9 +408,9 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
           : "Verification is temporarily unavailable"
       );
     if (error instanceof CameraRequiredError)
-      return reply(409, error.message, undefined, "camera_required");
+      return reply(409, error.message, undefined, error.code);
     if (error instanceof RequestBodyTooLargeError)
-      return reply(413, "Choose a file smaller than 5 MB");
+      return reply(413, "This photo is too large. Please take it again.");
     if (error instanceof FoundationVerificationError) return reply(error.status, error.message);
     return reply(
       503,
