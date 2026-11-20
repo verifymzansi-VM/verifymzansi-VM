@@ -18,6 +18,9 @@ const resources = new Set<Resource>([
   "notifications",
 ]);
 const pending = new WeakMap<Client, Map<string, ReturnType<typeof load>>>();
+/** Facade -> the native client it wraps, so explicit reads and proxied
+ * `.from()` reads share one in-flight request. */
+const natives = new WeakMap<object, Client>();
 async function load(client: Client, owner: string) {
   const { data, error } = await client.auth.getUser();
   if (error || !data.user || data.user.id !== owner) throw new Error("Profile account changed");
@@ -28,7 +31,8 @@ async function load(client: Client, owner: string) {
   if (!account || account.account_id !== owner) throw new Error("Profile account changed");
   return { snapshot, profile: presentedDashboardProfile(snapshot, account, data.user) };
 }
-function read(client: Client, owner: string) {
+function read(facadeOrClient: Client, owner: string) {
+  const client = natives.get(facadeOrClient) ?? facadeOrClient;
   let requests = pending.get(client);
   if (!requests) {
     requests = new Map();
@@ -165,6 +169,32 @@ export function restoredProfileQuery(client: Client, resource: Resource = "accou
   };
   return query;
 }
+/** The signed-in member's own profile, as the existing screens present it, from
+ * the same closed self-only reads. Null when it cannot be read or the account
+ * changed (the screens then keep their empty fields, as before). */
+export async function readRestoredOwnProfile(client: Client, owner: string) {
+  try {
+    return (await read(client, owner)).profile;
+  } catch {
+    return null;
+  }
+}
+
+/** The member's own verification steps derived from the canonical facts,
+ * optionally limited to the given statuses. Null when they cannot be read. */
+export async function readRestoredVerificationSteps(
+  client: Client,
+  owner: string,
+  statuses?: readonly string[]
+) {
+  try {
+    const rows = dashboardVerificationSteps((await read(client, owner)).snapshot);
+    return statuses ? rows.filter((row) => statuses.includes(row.status)) : rows;
+  } catch {
+    return null;
+  }
+}
+
 const facades = new WeakMap<object, SupabaseClient>();
 export function getRestoredFoundationBrowserClient(): SupabaseClient {
   const native = getFoundationBrowserClient();
@@ -182,5 +212,6 @@ export function getRestoredFoundationBrowserClient(): SupabaseClient {
     },
   });
   facades.set(native, facade);
+  natives.set(facade, native as unknown as Client);
   return facade;
 }

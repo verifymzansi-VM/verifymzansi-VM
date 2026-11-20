@@ -38,14 +38,17 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { clearClientAccountState, signOutBrowserSession } from "@/hooks/use-auth";
-import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
+import {
+  getRestoredFoundationBrowserClient as createClient,
+  readRestoredOwnProfile,
+  readRestoredVerificationSteps,
+} from "@/lib/foundation/restored-browser-client";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { profileUpdateSchema } from "@/lib/validations/profile";
 import { PASSWORD_MIN_LENGTH } from "@/lib/validations/shared";
 import { ACCOUNT_PHONE_IN_USE_ERROR, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 import { formatSaLongDate, formatSaShortDate } from "@/lib/utils/format";
-import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import {
   checkCooldown,
   PHONE_CHANGE_COOLDOWN_MS,
@@ -189,19 +192,14 @@ export default function ProfilePage() {
         return;
       }
 
-      const [{ data: profile }, { data: verificationSteps }] = await Promise.all([
-        supabase
-          .from(ACCOUNT_PROFILE_TABLE)
-          .select(
-            "display_name, legal_first_name, legal_last_name, bio, location_province, location_city, phone, account_verification_status, avatar_url, legal_name_locked_at, location_verified_at, contact_last_phone_change_at, contact_last_email_change_at, revision"
-          )
-          .eq("user_id", user.id)
-          .maybeSingle(),
-        supabase
-          .from("verification_steps")
-          .select("step_type, status, reviewed_at")
-          .eq("user_id", user.id)
-          .in("status", ["approved", "pending", "rejected", "needs_resubmission"]),
+      const [profile, verificationSteps] = await Promise.all([
+        readRestoredOwnProfile(supabase, user.id),
+        readRestoredVerificationSteps(supabase, user.id, [
+          "approved",
+          "pending",
+          "rejected",
+          "needs_resubmission",
+        ]),
       ]);
 
       const verificationSummary = summarizeVerification(

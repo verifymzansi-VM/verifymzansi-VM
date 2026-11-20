@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { restoredProfileQuery } from "./restored-browser-client";
+import {
+  readRestoredOwnProfile,
+  readRestoredVerificationSteps,
+  restoredProfileQuery,
+} from "./restored-browser-client";
 import { fetchFoundationAccountSession } from "./account-session-client";
 vi.mock("./account-session-client", () => ({ fetchFoundationAccountSession: vi.fn() }));
 const owner = "00000000-0000-4000-8000-000000000001";
@@ -181,4 +185,48 @@ it("refuses inconsistent verification facts instead of manufacturing approved st
     .eq("user_id", owner);
   expect(result.error).toBeTruthy();
   expect(result.data).toBeNull();
+});
+it("reads the member's own profile and steps explicitly, matching the query form", async () => {
+  const verifiedPhone = {
+    ...dashboard,
+    verification: { ...dashboard.verification, phone_verified: true },
+    profile_facts: { ...dashboard.profile_facts, phone_verified_at: "2026-11-04T09:00:00Z" },
+  };
+  rpc.mockImplementation(async (name: string) => ({
+    data: name === "get_my_dashboard" ? verifiedPhone : identity,
+    error: null,
+  }));
+  const [profile, query, steps, approved, none] = await Promise.all([
+    readRestoredOwnProfile(client, owner),
+    restoredProfileQuery(client).eq("user_id", owner).maybeSingle(),
+    readRestoredVerificationSteps(client, owner),
+    readRestoredVerificationSteps(client, owner, ["approved", "pending"]),
+    readRestoredVerificationSteps(client, owner, ["rejected"]),
+  ]);
+  expect(profile).toEqual(query.data);
+  expect(profile).toMatchObject({ user_id: owner, display_name: "Synthetic Member" });
+  expect(steps).toEqual([
+    { step_type: "phone", status: "approved", reviewed_at: "2026-11-04T09:00:00Z" },
+  ]);
+  expect(approved).toEqual(steps);
+  expect(none).toEqual([]);
+  // One in-flight dashboard read serves every caller.
+  expect(rpc.mock.calls.filter(([name]) => name === "get_my_dashboard")).toHaveLength(1);
+});
+it("returns null instead of another account's or inconsistent data", async () => {
+  vi.mocked(fetchFoundationAccountSession).mockResolvedValue({
+    ...account,
+    account_id: "00000000-0000-4000-8000-000000000002",
+  });
+  expect(await readRestoredOwnProfile(client, owner)).toBeNull();
+  expect(await readRestoredOwnProfile(client, "00000000-0000-4000-8000-000000000002")).toBeNull();
+  vi.mocked(fetchFoundationAccountSession).mockResolvedValue(account);
+  rpc.mockImplementation(async (name: string) => ({
+    data:
+      name === "get_my_dashboard"
+        ? { ...dashboard, verification: { ...dashboard.verification, verified: true } }
+        : identity,
+    error: null,
+  }));
+  expect(await readRestoredVerificationSteps(client, owner)).toBeNull();
 });

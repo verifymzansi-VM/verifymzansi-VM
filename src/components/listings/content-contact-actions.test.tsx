@@ -12,6 +12,7 @@ vi.mock("@/lib/foundation/restored-browser-client", () => ({
   getRestoredFoundationBrowserClient: () => ({
     auth: { getUser: async () => ({ data: { user: null } }) },
   }),
+  readRestoredOwnProfile: async () => null,
 }));
 
 vi.mock("@/components/ui/turnstile-widget", () => ({
