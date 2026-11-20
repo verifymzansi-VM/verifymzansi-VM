@@ -10,9 +10,13 @@ import { expect, test, type Page } from "@playwright/test";
 // - the site header has none (Register and + Post are tinted, not filled);
 // - in the page's main content, no two of them fit on one screen (the top of
 //   one and the bottom of the next are less than a viewport height apart);
-// - the footer has at most one (the closing band's gold "Post for free").
+// - the footer has at most one (the closing band's gold "Post for free");
+// - where that footer button is the page's main button (Home), the page's main
+//   content has no filled button at all.
 // Selected states (tabs, current page, pressed filters) and disabled buttons
-// are not actions and are not counted. Runs on the desktop (1280 px) and phone
+// are not actions and are not counted. Red is not a main-button colour here:
+// the Safety Centre's red "Call SAPS 10111" stays filled as an emergency
+// exception (owner, 20 November 2026). Runs on the desktop (1280 px) and phone
 // (Pixel 7) projects.
 
 type Filled = { label: string; region: "main" | "header" | "footer"; top: number; bottom: number };
@@ -28,8 +32,10 @@ const FILLED_RGB: ReadonlyArray<readonly [number, number, number]> = [
   [236, 141, 12],
 ];
 
-const PAGES: ReadonlyArray<{ path: string; main?: RegExp }> = [
-  { path: "/", main: /^Post for free/ },
+/** `main`: the page's main button; `mainIn: "footer"` when it is the footer band's. */
+const PAGES: ReadonlyArray<{ path: string; main?: RegExp; mainIn?: "main" | "footer" }> = [
+  // Home: the About section's "Post for free" is outlined; the footer band's gold one is the main one.
+  { path: "/", main: /^Post for free/, mainIn: "footer" },
   { path: "/pricing", main: /^Post for free$/ },
   { path: "/advertise", main: /^Post for free$/ },
   // No marketplace post is seeded, so the empty box's button is the main one.
@@ -104,7 +110,7 @@ async function filledButtons(page: Page): Promise<Filled[]> {
 test.use({ serviceWorkers: "block" });
 
 test.describe("One main button per screen (group 66)", () => {
-  for (const { path, main } of PAGES) {
+  for (const { path, main, mainIn = "main" } of PAGES) {
     test(`${path} has one filled main button per screen`, async ({ page }) => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       await expect(page.locator("main").first()).toBeVisible();
@@ -132,10 +138,15 @@ test.describe("One main button per screen (group 66)", () => {
 
       // The check sees the page's main button, so it is not passing by missing colours.
       if (main) {
+        const region = mainIn === "footer" ? footer : inMain;
         expect(
-          inMain.some((item) => main.test(item.label)),
-          `expected ${main} as a filled button; found ${describe(inMain) || "none"}`
+          region.some((item) => main.test(item.label)),
+          `expected ${main} as a filled button in the ${mainIn}; found ${describe(region) || "none"}`
         ).toBe(true);
+      }
+      // The footer's button is the main one, so the page body has none of its own.
+      if (mainIn === "footer") {
+        expect(inMain, `filled buttons in the page body: ${describe(inMain)}`).toEqual([]);
       }
     });
   }

@@ -11,7 +11,7 @@ import {
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { BrandShield, BrandShieldAlert } from "@/components/shared/brand-shield";
-import { brandOutlineButtonClassName } from "@/components/brand";
+import { brandGoldButtonClassName, brandOutlineButtonClassName } from "@/components/brand";
 import { EmergencyCallLinks } from "@/components/safety/emergency-call-links";
 import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
 import { Button } from "@/components/ui/button";
@@ -75,7 +75,7 @@ export default function SafetyCentrePage() {
           breadcrumbs={[{ label: "Safety Centre" }]}
           actions={
             <>
-              <Button asChild variant="trust-verified" size="lg">
+              <Button asChild variant="trust-gold" size="lg" className={brandGoldButtonClassName}>
                 <Link href="/contact?topic=fraud_report">Report a problem</Link>
               </Button>
               <Button asChild variant="outline" size="lg" className={brandOutlineButtonClassName}>
@@ -205,6 +205,8 @@ export default function SafetyCentrePage() {
                   </p>
                 </div>
               </div>
+              {/* Emergency exception to one main button per screen: the red
+                  "Call SAPS 10111" stays filled even below the gold hero button. */}
               <EmergencyCallLinks />
             </div>
           </section>

@@ -48,10 +48,12 @@ export function HomeAboutSection() {
               events. Discover, connect and do business with confidence.
             </p>
           </div>
+          {/* Outlined: the footer band's gold "Post for free" is Home's one main button. */}
           <Button
             asChild
             size="lg"
-            className="home-link-arrow btn-shine h-12 w-full shrink-0 rounded-full bg-brand-green-700 px-7 text-base font-semibold text-white hover:bg-brand-green-800 dark:bg-brand-green-700 dark:text-white dark:hover:bg-brand-green-800 sm:w-auto"
+            variant="outline"
+            className="home-link-arrow h-12 w-full shrink-0 rounded-full px-7 text-base font-semibold sm:w-auto"
           >
             <Link href="/post/create" prefetch={false}>
               Post for free
