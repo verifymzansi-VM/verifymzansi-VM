@@ -188,6 +188,19 @@ test("the reviewed public engagement read accepts only its empty items answer", 
       (error) => error.code === "ERR_ASSERTION"
     );
 });
+test("the reviewed public sign-up mode accepts only its one-word answer", async () => {
+  const input = publicRead("get_signup_mode", []);
+  for (const mode of ["invite_only", "open"])
+    assert.equal(
+      await verifyFoundationRuntimeApi(connection, async () => Response.json({ mode }), input),
+      1
+    );
+  for (const answer of [{ mode: "public" }, { mode: "open", extra: 1 }, [], {}, null])
+    await assert.rejects(
+      verifyFoundationRuntimeApi(connection, async () => Response.json(answer), input),
+      /projection probe failed/
+    );
+});
 test("the reviewed public payment limit accepts only its one-number answer", async () => {
   const input = publicRead("get_payment_limits", []);
   assert.equal(

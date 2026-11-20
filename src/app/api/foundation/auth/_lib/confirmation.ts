@@ -41,7 +41,7 @@ export function googleLandingPath(next: string, createdAt: string | null, now = 
 }
 
 /** Fixed text of the sign-up guard (internal.acceptance_signup_guard) while
- * registration is by invitation only. */
+ * registration is by invitation only (the database's sign-up mode). */
 const REGISTRATION_CLOSED_TEXT = "registration is not open yet";
 
 /** Why Auth sent a Google sign-in back without a code, as one of two fixed

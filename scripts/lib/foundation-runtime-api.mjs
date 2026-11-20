@@ -35,6 +35,16 @@ const publicSettingReads = new Map([
       Number.isSafeInteger(data.online_max_cents) &&
       data.online_max_cents > 0,
   ],
+  // 20261120040242_signup_mode_member_invitations.sql: the sign-up mode only.
+  [
+    "get_signup_mode",
+    (data) =>
+      data !== null &&
+      typeof data === "object" &&
+      !Array.isArray(data) &&
+      Object.keys(data).join() === "mode" &&
+      ["invite_only", "open"].includes(data.mode),
+  ],
 ]);
 function validateRuntimeAudience(fn) {
   assert.deepEqual(Object.keys(fn.execute).sort(), ["anon", "authenticated", "service_role"]);

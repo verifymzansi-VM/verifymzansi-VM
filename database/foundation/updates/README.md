@@ -80,6 +80,88 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Sign-up mode in the database, and member invitations, 20 November 2026
+
+`20261120040242_signup_mode_member_invitations.sql` is pending (see the applied
+register). **Order: apply-first** (the default). The website release from the
+same pull request reads the new `api.get_signup_mode` and falls back to
+`FOUNDATION_REGISTRATION_INVITE_ONLY` when it cannot, so either order is safe.
+It refuses (55000) unless its fifteen objects are all absent or all present and
+the two functions it replaces (`internal.acceptance_signup_guard`,
+`internal.run_retention`) have their reviewed bodies (or this update's).
+
+- **Sign-up mode.** New one-row table `private.signup_settings`: `invite_only`
+  (the default, and what the hook assumes if the row is missing) or `open`. It
+  starts as `invite_only`, so nothing changes for visitors when the update is
+  applied. Updates are refused unless they come from `internal.set_signup_mode`
+  (trigger `signup_settings_guard`); deletes and truncation are refused.
+- **Only the database owner changes it.**
+  `internal.set_signup_mode(p_mode, p_reason, p_changed_by_email)` is executable
+  by no API role (like `internal.bootstrap_first_administrator` and
+  `internal.grant_house_slots`): no website, browser or staff session can reach
+  it; the owner runs it in the Supabase SQL editor. Refusals: 22023
+  `signup_mode_invalid`, `signup_mode_reason_required` (5 to 500 characters of
+  plain text); 42501 `signup_mode_changer_invalid` unless the named account is
+  confirmed, active, holds an active admin role and has a verified authenticator
+  app. Setting the current mode again records nothing.
+- **The record.** New append-only table `private.signup_mode_events`: from, to,
+  the administrator account named, the reason and the time. No API role has
+  access; updates, deletes and truncation are refused.
+- **Reading the mode.** `api.get_signup_mode()` (anon and authenticated):
+  `{"mode"}` only. The website words its uniform registration reply from it.
+- **Member invitations, apart from administrator invitations.** New table
+  `private.member_invitations` (address, who invited it or none for the owner's
+  SQL editor, when, expiry 30 days later, revocation). A member invitation
+  admits one sign-up in either mode and never grants a staff role; only
+  `private.owner_admin_invitations` (unchanged, owner only) makes an
+  administrator. Staff commands (authenticated, capability `member:invite`,
+  admin role only, the 12-hour authenticator rule): `api.invite_member(p_email)`
+  (adds, or renews for 30 days; 22023 `member_invitation_email_invalid`; 54000
+  `member_invitation_limit` over 200 per staff member in 24 hours),
+  `api.revoke_member_invitation(p_email)` (idempotent) and
+  `api.list_member_invitations()` (latest 500: address, dates, status `open`,
+  `expired` or `revoked`, and whether an account with that address exists; never
+  who invited). Until a staff screen exists, the owner can also invite in the
+  SQL editor:
+  `insert into private.member_invitations(email) values ('person@example.com');`.
+- **The sign-up hook** (`internal.acceptance_signup_guard`, same invoker rights
+  and the same "Registration is not open yet" refusal) admits an unrevoked
+  administrator invitation or an unrevoked, unexpired member invitation in
+  either mode. Otherwise `invite_only` refuses as before, and `open` admits
+  everyone except an address whose domain is malformed, numeric or an address
+  literal, ends in a reserved name (test, example, invalid, localhost, local,
+  internal, onion, arpa, lan, home, corp, intranet), is example.com/.net/.org,
+  or is (under) a domain in the new table `private.signup_blocked_domains`
+  (seeded with 15 well-known disposable-address services; the owner adds rows in
+  the SQL editor). Those get "Registration is not available for this email
+  address" (403); the website still gives its one uniform reply. The hook may
+  read only the mode, the invitation address, expiry and revocation, and the
+  blocked domain (column grants and `supabase_auth_admin` select policies).
+- **Retention.** `internal.run_retention` also runs
+  `internal.purge_member_invitations` (`"member_invitations"`: invitations
+  deleted 30 days after they expired or were revoked).
+
+**Opening sign-up at launch (item 60)** is one owner call in the SQL editor,
+with the hosted "Before user created" hook left switched on (switching it off
+would also drop the domain check):
+
+```sql
+select internal.set_signup_mode('open', '<reason>', '<owner admin email>');
+```
+
+Before applying, read the preflight's "administrator invitations not yet used":
+each of those addresses becomes an administrator when its account enrols an
+authenticator app. Revoke any meant for an ordinary member
+(`update private.owner_admin_invitations set revoked_at = now() where email = '...';`)
+and invite that person as a member instead.
+
+Preflight `../preflight/20261120040242_signup_mode_member_invitations.check.sql`
+(summary "signup mode and member invitations: update not applied; administrator
+invitations not yet used: N"); rollback
+`../rollback/20261120040242_signup_mode_member_invitations.down.sql` (refuses
+once a mode change is recorded; member invitations are lost). Behaviour test
+`scripts/test-foundation-signup-mode.mjs`.
+
 ## Post views and likes, 19 November 2026
 
 `20261119172135_post_views_and_likes.sql` was applied on 20 November 2026 at
@@ -5602,5 +5684,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   "post views and likes: already applied; likes: 0; view days: 0; views: 0";
   production fingerprint after it (fingerprint.sql at a71f9a5c) matched the full
   replay (except the known schema grant difference)
+- `20261120040242_signup_mode_member_invitations.sql`: pending
 
 <!-- applied-register:end -->

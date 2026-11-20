@@ -4,11 +4,15 @@ import { NextRequest } from "next/server";
 import { POST } from "./route";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { isPwnedPassword } from "@/lib/security/pwned-passwords";
+import { readFoundationSignupMode } from "@/lib/foundation/signup-mode";
 
 vi.mock("@/lib/security/pwned-passwords", () => ({
   isPwnedPassword: vi.fn(),
   PWNED_PASSWORD_ERROR: "Choose a password absent from known breaches",
 }));
+// The database's sign-up mode (api.get_signup_mode); null: not readable, so
+// FOUNDATION_REGISTRATION_INVITE_ONLY decides.
+vi.mock("@/lib/foundation/signup-mode", () => ({ readFoundationSignupMode: vi.fn() }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: vi.fn(),
   getClientRateLimitIdentity: () => ({ key: "registration-client" }),
@@ -52,6 +56,7 @@ beforeEach(() => {
     vi.stubEnv(key, value);
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
   vi.mocked(isPwnedPassword).mockResolvedValue(false);
+  vi.mocked(readFoundationSignupMode).mockResolvedValue(null);
   fetcher.mockImplementation(async () =>
     Response.json({
       id: "00000000-0000-4000-8000-000000000008",
@@ -249,4 +254,31 @@ it("answers a sign-up the invitation guard refuses exactly like any other addres
     inviteOnly: true,
     message: expect.stringContaining("by invitation only"),
   });
+});
+it("words the uniform reply from the database's sign-up mode before the environment switch", async () => {
+  vi.stubEnv("FOUNDATION_REGISTRATION_INVITE_ONLY", "false");
+  vi.mocked(readFoundationSignupMode).mockResolvedValue("invite_only");
+  const closed = await POST(registerRequest());
+  expect(await closed.json()).toEqual({
+    ok: true,
+    inviteOnly: true,
+    message: expect.stringContaining("by invitation only"),
+  });
+  expect(readFoundationSignupMode).toHaveBeenCalledWith(
+    expect.objectContaining({ publishableKey: publicKey })
+  );
+
+  vi.stubEnv("FOUNDATION_REGISTRATION_INVITE_ONLY", "true");
+  vi.mocked(readFoundationSignupMode).mockResolvedValue("open");
+  const open = await POST(registerRequest());
+  expect(await open.json()).toEqual({
+    ok: true,
+    inviteOnly: false,
+    message: "If registration is available for this email, check your inbox to continue.",
+  });
+});
+it("never reads the sign-up mode for a refused request", async () => {
+  const response = await POST(registerRequest({ ...submission, acceptTerms: false }));
+  expect(response.status).toBe(400);
+  expect(readFoundationSignupMode).not.toHaveBeenCalled();
 });

@@ -6,6 +6,7 @@ import { readFoundationRuntimeConnection } from "@/lib/foundation/runtime-connec
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
+import { clientNetworkKey } from "@/lib/utils/client-network-key";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("FoundationAuth");
@@ -52,8 +53,13 @@ export async function handleFoundationAuthAttempt<T>({
     if (!enabled || process.env.FOUNDATION_PASSWORD_AUTH_MODE !== "native-captcha")
       return unavailable();
     const connection = readFoundationRuntimeConnection();
+    // Sign-up counts per network (an IPv4 address or an IPv6 /48), so one
+    // host cannot create accounts from many addresses of its own block.
     const limit = await checkRateLimit({
-      key: getClientRateLimitIdentity(request).key,
+      key:
+        action === "auth:register"
+          ? clientNetworkKey(request)
+          : getClientRateLimitIdentity(request).key,
       action,
       degradedMode: "block",
     });

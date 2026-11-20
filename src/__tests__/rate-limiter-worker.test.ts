@@ -347,6 +347,7 @@ describe("rate-limiter worker", () => {
     expect(res.status).toBe(200);
     expect(kvStore.get("auth:register:203.0.113.5:600")).toBe("1");
     expect(kvStore.get("auth:register:203.0.113.5:3600")).toBe("1");
+    expect(kvStore.get("auth:register:203.0.113.5:86400")).toBe("1");
   });
 
   it("applies the dedicated OTP tiers to the otp:send action", async () => {
