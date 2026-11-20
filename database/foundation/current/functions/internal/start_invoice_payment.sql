@@ -30,7 +30,7 @@ begin
     raise exception 'the invoice total is % cents', inv.total_cents using errcode='PT428', detail='invoice_amount_mismatch';
   end if;
   -- An Individual slot invoice, or (P4e) a Multi-listing package invoice: the
-  -- term must still be sold at the invoice's price; or (20261120120000) an
+  -- term must still be sold at the invoice's price; or (20261120045404) an
   -- added-slots invoice, at the price asked for (D1).
   add_package := internal.package_add_invoice_package(inv.id);
   select * into plan from private.plan_versions v where v.id = inv.plan_version_id
@@ -181,7 +181,7 @@ begin
           'cooling_off_consent', jsonb_build_object('method', 'invoice', 'accepted_at', inv.cooling_off_consent_at,
             'version', inv.cooling_off_consent_version, 'wording', consent->>'wording',
             'terms_version', (select c.version from private.posting_terms_current c where c.singleton)))
-          -- Added slots (20261120120000): delivered into the package asked for.
+          -- Added slots (20261120045404): delivered into the package asked for.
           || case when add_package is null then '{}'::jsonb else jsonb_build_object('category', 'slot_package_add',
             'package_id', add_package, 'unit_price_cents', inv.unit_price_cents) end,
         case when attempts = 0 then inv.invoice_number else inv.invoice_number || '-' || (attempts + 1)::text end)

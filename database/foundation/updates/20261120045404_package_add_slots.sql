@@ -74,8 +74,8 @@
 --    internal.slot_package_keep_posts); the reversal ends only the others, as
 --    before. It never stops a refund or chargeback.
 --
--- Read-only preflight: ../preflight/20261120120000_package_add_slots.check.sql.
--- Rollback: ../rollback/20261120120000_package_add_slots.down.sql.
+-- Read-only preflight: ../preflight/20261120045404_package_add_slots.check.sql.
+-- Rollback: ../rollback/20261120045404_package_add_slots.down.sql.
 begin;
 -- Never wait more than 5 seconds for anything this update needs.
 set local lock_timeout='5s';
@@ -142,23 +142,23 @@ begin
         'internal.activate_staff_paid_payment(uuid,text) 324f8855e844937190754f70c03fcd2e',
         'internal.activate_staff_paid_payment(uuid,text) 369ef2cc3b3a3139cfe83a3e7edb74eb',
         'internal.claim_checkout_request(uuid,uuid) 4922a976d1652603d491349a40f4f7da',
-        'internal.claim_checkout_request(uuid,uuid) 23a75688b539655a3b7b955b56e0f5c1',
+        'internal.claim_checkout_request(uuid,uuid) d8affaf6a98880da473f7707c8a1de4a',
         'internal.slot_package_grant_revoked() 3d22cd9389fa075274e8ba14343e9aea',
-        'internal.slot_package_grant_revoked() 1d4e4dfc94b5c505744305fa438b8407',
+        'internal.slot_package_grant_revoked() bf7e9466fba7aae9f5b3b67cd24daffb',
         'internal.package_invoice_request_guard() e41853f9d3e75297df7a4bf00e736792',
         'internal.package_invoice_request_guard() 10402007d059149a498cc3eb64b6b232',
         'internal.package_invoice_request_dto(private.package_invoice_requests,uuid) 16fb4eae547a00d51cf95b55adc16dda',
-        'internal.package_invoice_request_dto(private.package_invoice_requests,uuid) 889d747b2d07a6844b6fd8099c6c6b3a',
+        'internal.package_invoice_request_dto(private.package_invoice_requests,uuid) d9f8aad4e141beee2e957664cb564908',
         'internal.package_invoice_issue_check(private.package_invoice_requests) e0ae2e35373cba98b3cb385d07871377',
-        'internal.package_invoice_issue_check(private.package_invoice_requests) 8e585cee1134a39750cbd118996f54d3',
+        'internal.package_invoice_issue_check(private.package_invoice_requests) 25ff4d2cd9f12123d0f238ffcfaf558f',
         'internal.issue_package_customer_invoice(private.package_invoice_requests,private.plan_versions,uuid,integer,text) 117d33c9a93c2d965e138a7fdc7930b8',
-        'internal.issue_package_customer_invoice(private.package_invoice_requests,private.plan_versions,uuid,integer,text) 1d9473aaf5a26599a035fe3ababc50ba',
+        'internal.issue_package_customer_invoice(private.package_invoice_requests,private.plan_versions,uuid,integer,text) 6495b7bce4bc6572b59ad585f8352411',
         'internal.start_invoice_payment(text,bigint,boolean) a43e58e5ebc85179c901428e4f0f805e',
-        'internal.start_invoice_payment(text,bigint,boolean) 6a26f67c21889cd670afac9c5b6c2c0d',
+        'internal.start_invoice_payment(text,bigint,boolean) 3637cefdf51809d67891104e041d71da',
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) e37a32a916640c9a16f5924818b9b735',
-        'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 33be10f5c6b2b1b70a8f53ca37b11d1b',
+        'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 0f3f117b8bed207a401030c3bfb429df',
         'internal.confirm_staff_invoice_payment(uuid) c9adba77f7b7ac7c6366083956e53454',
-        'internal.confirm_staff_invoice_payment(uuid) 0399d1ef0a0ff5e31a33d93ededd93ee'
+        'internal.confirm_staff_invoice_payment(uuid) ff40d1c2cf36149d535a4fdb7d99f1bf'
       ) then
       raise exception 'package add slots precondition: % is not a reviewed body', shape using errcode='55000';
     end if;
@@ -1083,7 +1083,7 @@ begin
       raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
     end if;
     if pay.snapshot->>'category' = 'slot_package_add' then
-      -- Slots added part-way (20261120120000): sent only for the running
+      -- Slots added part-way (20261120045404): sent only for the running
       -- package they were priced for, with room. An online order holds its
       -- price 30 minutes and needs 7 or more whole days left; an invoice's
       -- Pay now keeps the invoice's price.
@@ -1148,7 +1148,7 @@ CREATE OR REPLACE FUNCTION internal.slot_package_grant_revoked()
  SET search_path TO 'pg_catalog'
 AS $function$
 begin
-  -- 20261120120000: the posts in the revoked grant that still fit in the
+  -- 20261120045404: the posts in the revoked grant that still fit in the
   -- package's other running grants stay in it (the reversal then ends only the
   -- others); this never stops the refund or chargeback.
   begin
@@ -1239,7 +1239,7 @@ AS $function$
     'unit_price_cents', r.unit_price_cents, 'total_cents', r.total_cents, 'requested_at', r.requested_at,
     'invoice_number', (select i.invoice_number from private.customer_invoices i where i.id = r.invoice_id),
     'closed_at', r.closed_at)
-  -- 20261120120000: an added-slots request says so, with the days it was
+  -- 20261120045404: an added-slots request says so, with the days it was
   -- priced for and its package's current end (a new package's is unchanged).
   || case when r.kind = 'add' then jsonb_build_object('kind', 'add', 'days_left', r.days_left,
     'package_ends_at', (select max(e.ends_at) from private.entitlements e
@@ -1278,7 +1278,7 @@ begin
     raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
   end if;
   if r.kind = 'add' then
-    -- Slots added part-way (20261120120000): at the price asked for (D1),
+    -- Slots added part-way (20261120045404): at the price asked for (D1),
     -- only while the package runs with 7 or more whole days left and room.
     select * into plan from private.plan_versions v where v.id = r.plan_version_id
       and internal.slot_package_plan(v.plan_code);
@@ -1356,7 +1356,7 @@ begin
       slots, unit_price_cents, total_cents, description, due_on, issued_by, issue_reason, request_id, seller)
     values ('VM-' || year_number::text || '-' || lpad(next_number::text, 6, '0'), year_number, next_number, r.account_id,
       p_plan.id, r.slots,
-      -- 20261120120000: added slots at the price asked for (D1).
+      -- 20261120045404: added slots at the price asked for (D1).
       case when r.kind = 'add' then r.unit_price_cents else p_plan.price_cents end,
       case when r.kind = 'add' then r.total_cents else p_plan.price_cents * r.slots end,
       case when r.kind = 'add'
@@ -1404,7 +1404,7 @@ begin
     raise exception 'the invoice total is % cents', inv.total_cents using errcode='PT428', detail='invoice_amount_mismatch';
   end if;
   -- An Individual slot invoice, or (P4e) a Multi-listing package invoice: the
-  -- term must still be sold at the invoice's price; or (20261120120000) an
+  -- term must still be sold at the invoice's price; or (20261120045404) an
   -- added-slots invoice, at the price asked for (D1).
   add_package := internal.package_add_invoice_package(inv.id);
   select * into plan from private.plan_versions v where v.id = inv.plan_version_id
@@ -1555,7 +1555,7 @@ begin
           'cooling_off_consent', jsonb_build_object('method', 'invoice', 'accepted_at', inv.cooling_off_consent_at,
             'version', inv.cooling_off_consent_version, 'wording', consent->>'wording',
             'terms_version', (select c.version from private.posting_terms_current c where c.singleton)))
-          -- Added slots (20261120120000): delivered into the package asked for.
+          -- Added slots (20261120045404): delivered into the package asked for.
           || case when add_package is null then '{}'::jsonb else jsonb_build_object('category', 'slot_package_add',
             'package_id', add_package, 'unit_price_cents', inv.unit_price_cents) end,
         case when attempts = 0 then inv.invoice_number else inv.invoice_number || '-' || (attempts + 1)::text end)
@@ -1698,7 +1698,7 @@ begin
     raise exception 'the customer''s account cannot use slots now' using errcode='PT409', detail='payment_account_unavailable';
   end if;
   -- An Individual slot invoice, or (P4e) a Multi-listing package invoice; or
-  -- (20261120120000) an added-slots invoice, at the price asked for (D1).
+  -- (20261120045404) an added-slots invoice, at the price asked for (D1).
   add_package := internal.package_add_invoice_package(inv.id);
   select * into plan from private.plan_versions v where v.id = inv.plan_version_id
     and (((internal.individual_slot_plan(v.plan_code) or internal.slot_package_plan(v.plan_code))
@@ -1825,7 +1825,7 @@ begin
   -- A Multi-listing package (P4e) is paid by bank transfer only against its
   -- invoice (record_staff_invoice_payment records Individual slots only).
   is_package := internal.slot_package_plan(plan.plan_code) and t.customer_invoice_id is not null;
-  -- 20261120120000: an added-slots invoice adds them to the package it names.
+  -- 20261120045404: an added-slots invoice adds them to the package it names.
   add_package := internal.package_add_invoice_package(t.customer_invoice_id);
   if is_package then
     -- One package per account at a time, only while packages are on sale (as
@@ -1921,7 +1921,7 @@ begin
           'cooling_off_consent', jsonb_build_object('method', 'written', 'recorded_by_staff_at', t.recorded_at,
             'terms_version', (select c.version from private.posting_terms_current c where c.singleton),
             'wording', 'My slots start as soon as this invoice is paid; the 7-day cooling-off does not apply because the service starts immediately'))
-          -- Added slots (20261120120000): delivered into the package asked for.
+          -- Added slots (20261120045404): delivered into the package asked for.
           || case when add_package is null then '{}'::jsonb else jsonb_build_object('category', 'slot_package_add',
             'package_id', add_package, 'unit_price_cents', inv.unit_price_cents) end,
         'invoice', 'complete', 'fulfilled', statement_timestamp(), statement_timestamp())

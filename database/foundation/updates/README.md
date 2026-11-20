@@ -82,7 +82,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Add slots part-way through a Multi-listing package, 20 November 2026
 
-`20261120120000_package_add_slots.sql` is **pending** (see the applied
+`20261120045404_package_add_slots.sql` is **pending** (see the applied
 register). Roadmap P4b; the owner's decision D1 of 19 November 2026. It needs
 `20261114154823_slot_packages.sql`, `20261119025106_package_invoices.sql` and
 `20261119151152_package_gap_fixes.sql`, and refuses (55000) unless the twelve
@@ -152,7 +152,7 @@ fields) cannot exist while packages are off sale.
 
 **Applying.**
 
-1. Run `../preflight/20261120120000_package_add_slots.check.sql` unchanged in
+1. Run `../preflight/20261120045404_package_add_slots.check.sql` unchanged in
    the SQL editor. It is read only. Continue only if its result is the single
    "summary" row reading "package add slots: update not applied; on sale: no;
    packages running: 0; package invoice requests: 0; added-slots requests: none
@@ -166,7 +166,7 @@ fields) cannot exist while packages are off sale.
    compare with `../fingerprint.json`; once it matches, record it as described
    above.
 
-The reviewed rollback is `../rollback/20261120120000_package_add_slots.down.sql`
+The reviewed rollback is `../rollback/20261120045404_package_add_slots.down.sql`
 (only with the owner's decision; prefer a forward fix). Revert and deploy the
 website release first. It refuses once an added-slots request or payment exists;
 otherwise it puts back the twelve earlier bodies byte for byte, drops the added
@@ -5708,6 +5708,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   "post views and likes: already applied; likes: 0; view days: 0; views: 0";
   production fingerprint after it (fingerprint.sql at a71f9a5c) matched the full
   replay (except the known schema grant difference)
-- `20261120120000_package_add_slots.sql`: pending
+- `20261120045404_package_add_slots.sql`: pending
 
 <!-- applied-register:end -->

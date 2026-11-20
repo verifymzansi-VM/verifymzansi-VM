@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261120120000_package_add_slots.sql.
+-- Read-only preflight for updates/20261120045404_package_add_slots.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes
@@ -40,15 +40,15 @@ with added as (
     ('internal.issue_slot_line_entitlements(uuid)', '3d167ce1ce2bcc4a84480b8ed7888e0a', 'b81aadc5fd06b47c33fc96b81d49b586'),
     ('internal.apply_provider_event(jsonb)', '7f33edbb6bcafaecb519eef80c9b3633', '3a7487b374df1d1334d007111fd1d97f'),
     ('internal.activate_staff_paid_payment(uuid,text)', '324f8855e844937190754f70c03fcd2e', '369ef2cc3b3a3139cfe83a3e7edb74eb'),
-    ('internal.claim_checkout_request(uuid,uuid)', '4922a976d1652603d491349a40f4f7da', '23a75688b539655a3b7b955b56e0f5c1'),
-    ('internal.slot_package_grant_revoked()', '3d22cd9389fa075274e8ba14343e9aea', '1d4e4dfc94b5c505744305fa438b8407'),
+    ('internal.claim_checkout_request(uuid,uuid)', '4922a976d1652603d491349a40f4f7da', 'd8affaf6a98880da473f7707c8a1de4a'),
+    ('internal.slot_package_grant_revoked()', '3d22cd9389fa075274e8ba14343e9aea', 'bf7e9466fba7aae9f5b3b67cd24daffb'),
     ('internal.package_invoice_request_guard()', 'e41853f9d3e75297df7a4bf00e736792', '10402007d059149a498cc3eb64b6b232'),
-    ('internal.package_invoice_request_dto(private.package_invoice_requests,uuid)', '16fb4eae547a00d51cf95b55adc16dda', '889d747b2d07a6844b6fd8099c6c6b3a'),
-    ('internal.package_invoice_issue_check(private.package_invoice_requests)', 'e0ae2e35373cba98b3cb385d07871377', '8e585cee1134a39750cbd118996f54d3'),
-    ('internal.issue_package_customer_invoice(private.package_invoice_requests,private.plan_versions,uuid,integer,text)', '117d33c9a93c2d965e138a7fdc7930b8', '1d9473aaf5a26599a035fe3ababc50ba'),
-    ('internal.start_invoice_payment(text,bigint,boolean)', 'a43e58e5ebc85179c901428e4f0f805e', '6a26f67c21889cd670afac9c5b6c2c0d'),
-    ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)', 'e37a32a916640c9a16f5924818b9b735', '33be10f5c6b2b1b70a8f53ca37b11d1b'),
-    ('internal.confirm_staff_invoice_payment(uuid)', 'c9adba77f7b7ac7c6366083956e53454', '0399d1ef0a0ff5e31a33d93ededd93ee')
+    ('internal.package_invoice_request_dto(private.package_invoice_requests,uuid)', '16fb4eae547a00d51cf95b55adc16dda', 'd9f8aad4e141beee2e957664cb564908'),
+    ('internal.package_invoice_issue_check(private.package_invoice_requests)', 'e0ae2e35373cba98b3cb385d07871377', '25ff4d2cd9f12123d0f238ffcfaf558f'),
+    ('internal.issue_package_customer_invoice(private.package_invoice_requests,private.plan_versions,uuid,integer,text)', '117d33c9a93c2d965e138a7fdc7930b8', '6495b7bce4bc6572b59ad585f8352411'),
+    ('internal.start_invoice_payment(text,bigint,boolean)', 'a43e58e5ebc85179c901428e4f0f805e', '3637cefdf51809d67891104e041d71da'),
+    ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)', 'e37a32a916640c9a16f5924818b9b735', '0f3f117b8bed207a401030c3bfb429df'),
+    ('internal.confirm_staff_invoice_payment(uuid)', 'c9adba77f7b7ac7c6366083956e53454', 'ff40d1c2cf36149d535a4fdb7d99f1bf')
   ) v(sig, before, after)
 ),
 others as (

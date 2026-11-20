@@ -105,7 +105,7 @@ begin
     raise exception 'the customer''s account cannot use slots now' using errcode='PT409', detail='payment_account_unavailable';
   end if;
   -- An Individual slot invoice, or (P4e) a Multi-listing package invoice; or
-  -- (20261120120000) an added-slots invoice, at the price asked for (D1).
+  -- (20261120045404) an added-slots invoice, at the price asked for (D1).
   add_package := internal.package_add_invoice_package(inv.id);
   select * into plan from private.plan_versions v where v.id = inv.plan_version_id
     and (((internal.individual_slot_plan(v.plan_code) or internal.slot_package_plan(v.plan_code))

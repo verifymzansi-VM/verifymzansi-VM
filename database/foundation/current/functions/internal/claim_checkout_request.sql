@@ -40,7 +40,7 @@ begin
       raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
     end if;
     if pay.snapshot->>'category' = 'slot_package_add' then
-      -- Slots added part-way (20261120120000): sent only for the running
+      -- Slots added part-way (20261120045404): sent only for the running
       -- package they were priced for, with room. An online order holds its
       -- price 30 minutes and needs 7 or more whole days left; an invoice's
       -- Pay now keeps the invoice's price.

@@ -10,7 +10,7 @@ AS $function$
     'unit_price_cents', r.unit_price_cents, 'total_cents', r.total_cents, 'requested_at', r.requested_at,
     'invoice_number', (select i.invoice_number from private.customer_invoices i where i.id = r.invoice_id),
     'closed_at', r.closed_at)
-  -- 20261120120000: an added-slots request says so, with the days it was
+  -- 20261120045404: an added-slots request says so, with the days it was
   -- priced for and its package's current end (a new package's is unchanged).
   || case when r.kind = 'add' then jsonb_build_object('kind', 'add', 'days_left', r.days_left,
     'package_ends_at', (select max(e.ends_at) from private.entitlements e

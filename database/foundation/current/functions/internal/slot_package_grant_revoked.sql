@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION internal.slot_package_grant_revoked()
  SET search_path TO 'pg_catalog'
 AS $function$
 begin
-  -- 20261120120000: the posts in the revoked grant that still fit in the
+  -- 20261120045404: the posts in the revoked grant that still fit in the
   -- package's other running grants stay in it (the reversal then ends only the
   -- others); this never stops the refund or chargeback.
   begin

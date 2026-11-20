@@ -1,4 +1,4 @@
--- Reviewed rollback for updates/20261120120000_package_add_slots.sql.
+-- Reviewed rollback for updates/20261120045404_package_add_slots.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so. Prefer a forward fix. Revert and deploy the website
 -- release first: the rollback removes api.get_my_package_add_offer,
@@ -70,15 +70,15 @@ begin
         'internal.issue_slot_line_entitlements(uuid) b81aadc5fd06b47c33fc96b81d49b586',
         'internal.apply_provider_event(jsonb) 3a7487b374df1d1334d007111fd1d97f',
         'internal.activate_staff_paid_payment(uuid,text) 369ef2cc3b3a3139cfe83a3e7edb74eb',
-        'internal.claim_checkout_request(uuid,uuid) 23a75688b539655a3b7b955b56e0f5c1',
-        'internal.slot_package_grant_revoked() 1d4e4dfc94b5c505744305fa438b8407',
+        'internal.claim_checkout_request(uuid,uuid) d8affaf6a98880da473f7707c8a1de4a',
+        'internal.slot_package_grant_revoked() bf7e9466fba7aae9f5b3b67cd24daffb',
         'internal.package_invoice_request_guard() 10402007d059149a498cc3eb64b6b232',
-        'internal.package_invoice_request_dto(private.package_invoice_requests,uuid) 889d747b2d07a6844b6fd8099c6c6b3a',
-        'internal.package_invoice_issue_check(private.package_invoice_requests) 8e585cee1134a39750cbd118996f54d3',
-        'internal.issue_package_customer_invoice(private.package_invoice_requests,private.plan_versions,uuid,integer,text) 1d9473aaf5a26599a035fe3ababc50ba',
-        'internal.start_invoice_payment(text,bigint,boolean) 6a26f67c21889cd670afac9c5b6c2c0d',
-        'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 33be10f5c6b2b1b70a8f53ca37b11d1b',
-        'internal.confirm_staff_invoice_payment(uuid) 0399d1ef0a0ff5e31a33d93ededd93ee'
+        'internal.package_invoice_request_dto(private.package_invoice_requests,uuid) d9f8aad4e141beee2e957664cb564908',
+        'internal.package_invoice_issue_check(private.package_invoice_requests) 25ff4d2cd9f12123d0f238ffcfaf558f',
+        'internal.issue_package_customer_invoice(private.package_invoice_requests,private.plan_versions,uuid,integer,text) 6495b7bce4bc6572b59ad585f8352411',
+        'internal.start_invoice_payment(text,bigint,boolean) 3637cefdf51809d67891104e041d71da',
+        'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 0f3f117b8bed207a401030c3bfb429df',
+        'internal.confirm_staff_invoice_payment(uuid) ff40d1c2cf36149d535a4fdb7d99f1bf'
         ) then
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
     end if;

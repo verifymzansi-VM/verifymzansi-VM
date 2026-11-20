@@ -17,7 +17,7 @@ begin
       slots, unit_price_cents, total_cents, description, due_on, issued_by, issue_reason, request_id, seller)
     values ('VM-' || year_number::text || '-' || lpad(next_number::text, 6, '0'), year_number, next_number, r.account_id,
       p_plan.id, r.slots,
-      -- 20261120120000: added slots at the price asked for (D1).
+      -- 20261120045404: added slots at the price asked for (D1).
       case when r.kind = 'add' then r.unit_price_cents else p_plan.price_cents end,
       case when r.kind = 'add' then r.total_cents else p_plan.price_cents * r.slots end,
       case when r.kind = 'add'

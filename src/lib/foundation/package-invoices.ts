@@ -45,7 +45,7 @@ const requestFields = {
   invoice_number: z.string().regex(INVOICE_NUMBER).nullable(),
   closed_at: instant.nullable(),
 };
-/** Slots added to the member's running package (P4b, update 20261120120000):
+/** Slots added to the member's running package (P4b, update 20261120045404):
  * 1 or more, priced for the whole days left (`days_left`), ending with the
  * package (`package_ends_at`, null once it has no running slot). */
 const addFields = {
@@ -64,7 +64,6 @@ function requestSchema<T extends z.ZodRawShape, E extends z.ZodRawShape>(base: T
   ]);
 }
 const packageInvoiceRequestSchema = requestSchema(requestFields, {});
-export type PackageInvoiceRequest = z.infer<typeof packageInvoiceRequestSchema>;
 
 const staffRequestFields = {
   // Null once the account was erased (the request is kept, unlinked).
@@ -83,7 +82,6 @@ const staffRequestFields = {
 };
 const staffBase = { ...requestFields, ...staffRequestFields };
 const staffPackageInvoiceRequestSchema = requestSchema(staffBase, {});
-export type StaffPackageInvoiceRequest = z.infer<typeof staffPackageInvoiceRequestSchema>;
 
 // ---------------------------------------------------------------- member
 

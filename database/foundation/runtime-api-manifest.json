@@ -5233,7 +5233,7 @@
     },
     {
       "name": "get_my_package_add_offer",
-      "updates": ["updates/20261120120000_package_add_slots.sql"],
+      "updates": ["updates/20261120045404_package_add_slots.sql"],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
@@ -5246,7 +5246,7 @@
     },
     {
       "name": "start_package_add_checkout",
-      "updates": ["updates/20261120120000_package_add_slots.sql"],
+      "updates": ["updates/20261120045404_package_add_slots.sql"],
       "arguments": [
         {
           "name": "p_package_id",
@@ -5280,7 +5280,7 @@
     },
     {
       "name": "request_package_add_invoice",
-      "updates": ["updates/20261120120000_package_add_slots.sql"],
+      "updates": ["updates/20261120045404_package_add_slots.sql"],
       "arguments": [
         {
           "name": "p_package_id",

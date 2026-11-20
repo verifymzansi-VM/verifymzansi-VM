@@ -2557,7 +2557,7 @@ Decision: approved by owner 2026-11-19.
 
 ### 62. Add slots part-way through a package (Pricing v2 P4b)
 
-Database update 20261120120000_package_add_slots (apply first). The owner's
+Database update 20261120045404_package_add_slots (apply first). The owner's
 decision D1 of 19 November 2026; approved drafts p4-03 (Add slots) and p4-04
 (too late); draft n2 (by invoice) and the add variant of draft n1 are new.
 Members see nothing new while Multi-listing packages are not on sale (the

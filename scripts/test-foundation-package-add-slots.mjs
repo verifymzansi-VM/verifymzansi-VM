@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261120120000_package_add_slots.sql: slots added
+// Behaviour checks for 20261120045404_package_add_slots.sql: slots added
 // part-way through a Multi-listing package (roadmap P4b; the owner's
 // decision D1).
 //
@@ -47,7 +47,7 @@ import {
   sqlValue,
 } from "./lib/foundation-staff-payment-world.mjs";
 
-const UPDATE = "20261120120000_package_add_slots.sql";
+const UPDATE = "20261120045404_package_add_slots.sql";
 /** The Multi-listing package terms (20261114154823_slot_packages.sql). */
 const K30 = { id: "5b0f4c1e-2a7d-4c43-9b51-7e0d3f6a9c11", days: 30, cents: 10000 };
 const COMMANDS = [

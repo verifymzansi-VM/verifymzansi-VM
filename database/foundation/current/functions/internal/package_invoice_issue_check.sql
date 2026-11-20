@@ -19,7 +19,7 @@ begin
     raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
   end if;
   if r.kind = 'add' then
-    -- Slots added part-way (20261120120000): at the price asked for (D1),
+    -- Slots added part-way (20261120045404): at the price asked for (D1),
     -- only while the package runs with 7 or more whole days left and room.
     select * into plan from private.plan_versions v where v.id = r.plan_version_id
       and internal.slot_package_plan(v.plan_code);

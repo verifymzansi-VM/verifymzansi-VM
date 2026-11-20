@@ -62,7 +62,7 @@ begin
   -- A Multi-listing package (P4e) is paid by bank transfer only against its
   -- invoice (record_staff_invoice_payment records Individual slots only).
   is_package := internal.slot_package_plan(plan.plan_code) and t.customer_invoice_id is not null;
-  -- 20261120120000: an added-slots invoice adds them to the package it names.
+  -- 20261120045404: an added-slots invoice adds them to the package it names.
   add_package := internal.package_add_invoice_package(t.customer_invoice_id);
   if is_package then
     -- One package per account at a time, only while packages are on sale (as
@@ -158,7 +158,7 @@ begin
           'cooling_off_consent', jsonb_build_object('method', 'written', 'recorded_by_staff_at', t.recorded_at,
             'terms_version', (select c.version from private.posting_terms_current c where c.singleton),
             'wording', 'My slots start as soon as this invoice is paid; the 7-day cooling-off does not apply because the service starts immediately'))
-          -- Added slots (20261120120000): delivered into the package asked for.
+          -- Added slots (20261120045404): delivered into the package asked for.
           || case when add_package is null then '{}'::jsonb else jsonb_build_object('category', 'slot_package_add',
             'package_id', add_package, 'unit_price_cents', inv.unit_price_cents) end,
         'invoice', 'complete', 'fulfilled', statement_timestamp(), statement_timestamp())
