@@ -80,61 +80,76 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
-## Access exports leave the database only with the member's notice, 20 November 2026
+## Access exports leave the database only with a notice to the member, 20 November 2026
 
 `20261120191500_privacy_export_confirm.sql` is pending (see the applied
 register). Until now `api.export_frontend_privacy_request` built a data (access)
 export and, in the same call, recorded the `exported` event, queued the
-requester's "an export was made" email and added the `privacy_export_made`
-notice to the member's bell. The website checks the export only after that call
-returns, so an export it then refused ("Nothing was exported") had already told
-the member one was made, and every retry added another `exported` event.
+requester's "an export was made" email and, for the first export only, added the
+`privacy_export_made` notice to the member's bell. The website checks the export
+only after that call returns, so an export it then refused ("Nothing was
+exported") had already told the member one was made, and later exports told the
+member nothing.
 
-This is the expand step: two new staff commands; the old command is unchanged
-and keeps working for the website deployed now. A later update removes it
-(contract step, with a `../contract-steps.json` entry) once no deployed website
-calls it.
+This is the expand step: two new staff commands, and the old command kept (same
+signature) until a later update removes it (contract step, with a
+`../contract-steps.json` entry) once no deployed website calls it.
 
-- **`api.prepare_frontend_privacy_export(p_case, p_revision)`** returns no
-  personal data: the request's reference and dates, a new `export_id`, each
-  dataset's name and row count, and the SHA-256 `digest` of the datasets. Same
+- **Which requests:** a verified access request at the represented revision, in
+  progress, or completed within the last 30 days and not minimised. At most 5
+  confirmed exports per request (old command's included), PT429.
+- **`api.prepare_frontend_privacy_export(p_case, p_revision)`** answers no
+  personal data, digest or counts: the reference, dates, a new `export_id` and
+  the dataset names. It keeps the export's SHA-256 digest in an
+  `export_prepared` event (staff audit) and tells the member nothing. Same staff
   rules as the old command (dsar:manage with a second factor from the last 15
-  minutes, a verified access request at the represented revision, never the
-  requester or the data subject, PT413 for an oversized export), and at most 10
-  preparations per staff member and request per hour (PT429). It records only an
-  `export_prepared` event with the digest (staff audit). No email, notice or
-  `exported` event.
+  minutes, never the requester or the data subject). An export too large for a
+  direct download is answered `{refused: "too_large"}` and recorded as
+  `export_refused`. At most 10 builds per staff member and request per hour,
+  refused builds included (PT429).
 - **`api.confirm_frontend_privacy_export(p_case, p_revision, p_export)`** is the
-  only way to the data. Only the staff member who prepared that export, at the
-  same request revision, within 15 minutes, and only once. It builds the export
-  again and refuses it (PT409 "export changed since it was prepared") unless the
-  digest matches; staff then prepare again. In the same transaction that returns
-  the data it records the `exported` event (with the export id), queues the
-  email (once per request, as before) and, when that email job is new and the
-  request names an account, adds the notice. A second confirmation of the same
-  export, even at the same moment, is refused (PT409 "export already confirmed")
+  only way to the data: the staff member who prepared that export (and still not
+  the requester or the data subject), same revision, within 15 minutes, once. It
+  builds the export again; if it changed or is too large it answers
+  `{refused: "changed" | "too_large"}`, records `export_refused` (the build
+  counts toward the hourly limit, and that export id is spent). Otherwise, in
+  the same transaction that returns the data, it records `exported` (with the
+  export id), queues the email (once per request, as before) and adds a notice
+  to the account the request names, for every confirmed export. A second
+  confirmation of the same export, even at the same moment, is refused (PT409)
   and changes nothing.
+- **The old command** keeps its signature, grants and owner, now with a notice
+  on every export and at most 10 exports per staff member and request per hour.
+- **Retention:** `internal.retention_privacy_requests` (run daily by
+  `api.run_retention`) also clears the digest of prepared exports never
+  confirmed, a day after they expired, and reports `export_digests_cleared`.
 - **The website** checks the prepared dataset names (exactly one set in
-  `src/lib/foundation/privacy-export-datasets.ts`), then confirms, checks that
-  the confirmed rows match the prepared counts, and hands the file over (without
-  the export id). Any refusal answers "Nothing was exported".
+  `src/lib/foundation/privacy-export-datasets.ts`, read from the raw object's
+  own keys), confirms, and hands the file over without the export id. Every
+  refusal says "Nothing was exported"; a failure after the confirmation may have
+  been committed (no database error code, or an answer that fails the final
+  check) says "The export may have been recorded. Check the request history
+  before trying again."
 - **Event log:** `private.privacy_request_events` gains `export_id` and
-  `export_digest` (both nullable) and the action `export_prepared`. An
-  `export_prepared` row always has both, an `exported` row may have an export id
-  (the old command's have none) and never a digest, other actions neither; a
-  unique index allows one row per export id and action.
+  `export_digest` (both nullable) and the actions `export_prepared` and
+  `export_refused`, with a check (`export_prepared`: an export id, and a digest
+  until retention clears it; `export_refused`: an export id, no digest;
+  `exported`: an optional export id, no digest; others: neither) and a unique
+  index (one row per export id and action).
 
 ORDER: apply first, then merge (the website in this pull request calls the new
-commands; the website deployed now does not).
+commands; the website deployed now keeps working with the old command).
 
 **Applying.**
 
 1. Run `../preflight/20261120191500_privacy_export_confirm.check.sql` unchanged
-   in the SQL editor. It is read only and compares definitions (function body
-   md5, column types, `pg_get_indexdef`, the check's `pg_get_constraintdef`).
-   Continue only if its result is the single "summary" row reading "privacy
-   export confirm: update not applied; exports recorded: N; export emails
-   waiting: M".
+   in the SQL editor. It is read only and compares definitions: function bodies
+   (md5, including `internal.notify_account`, which the update relies on), the
+   new functions' security definer, search path, owner and execute grants, the
+   column types, the index (unique, valid, `pg_get_indexdef`) and the check
+   (`pg_get_constraintdef`). Continue only if its result is the single "summary"
+   row reading "privacy export confirm: update not applied; exports recorded: N;
+   export emails waiting: M".
 2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
    again: it must read "privacy export confirm: already applied; exports
    recorded: N; export emails waiting: M; prepared: 0; confirmed: 0" (larger
@@ -145,11 +160,13 @@ commands; the website deployed now does not).
 
 **Rollback** (`../rollback/20261120191500_privacy_export_confirm.down.sql`):
 only after the website that calls the new commands has been reverted. It refuses
-if the old export command is missing or changed, if none of the update's objects
-exist, or if a new command that exists is not the update's body; it runs when
-only some objects exist. It drops the two commands, the index, the check and
-both columns, deletes the `export_prepared` events and restores the action list;
-`exported` events stay.
+if the old command or the privacy retention is neither its body before the
+update nor the update's, if none of the update's objects exist, or if a new
+command that exists is not the update's body; it runs when only some objects
+exist. It drops the two commands, puts back the old command and the retention
+byte for byte, deletes the `export_prepared` and `export_refused` events, drops
+the index, the check and both columns and restores the action list; `exported`
+events and members' notices stay.
 
 ## A daily limit on SMS codes for the whole site, 20 November 2026
 

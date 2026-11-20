@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION internal.retention_privacy_requests(p_limit integer)
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare minimised integer; purged integer;
+declare minimised integer; purged integer; cleared integer;
 begin
   with closed as (
     select r.id, coalesce(r.completed_at,
@@ -35,7 +35,17 @@ begin
       and coalesce(x.completed_at, x.minimised_at) < statement_timestamp() - interval '5 years'
     order by x.minimised_at limit p_limit for update skip locked);
   get diagnostics purged = row_count;
-  return jsonb_build_object('minimised', minimised, 'purged', purged);
+  -- The digest of a prepared access export that was never confirmed, a day
+  -- after the export expired (15 minutes after it was prepared).
+  update private.privacy_request_events e set export_digest = null
+  where e.id in (select p.id from private.privacy_request_events p
+    where p.action = 'export_prepared' and p.export_digest is not null
+      and p.occurred_at < statement_timestamp() - interval '1 day 15 minutes'
+      and not exists (select 1 from private.privacy_request_events x
+        where x.export_id = p.export_id and x.action = 'exported')
+    order by p.occurred_at limit p_limit);
+  get diagnostics cleared = row_count;
+  return jsonb_build_object('minimised', minimised, 'purged', purged, 'export_digests_cleared', cleared);
 end;
 $function$;
 alter function internal.retention_privacy_requests(integer) owner to postgres;

@@ -11,35 +11,52 @@ declare actor uuid:=internal.staff_actor('dsar:manage');r private.privacy_reques
   prepared private.privacy_request_events;done private.privacy_request_events;data jsonb;
 begin
   if p_export is null then raise exception 'export id required' using errcode='22023';end if;
-  select * into r from private.privacy_requests where id=p_case for share;
-  if not found or r.revision is distinct from p_revision or r.type<>'access' or r.status not in('in_progress','completed') or not r.identity_verified
+  -- The row lock makes confirmations of one request (and the limit on them)
+  -- happen one at a time.
+  select * into r from private.privacy_requests where id=p_case for no key update;
+  if not found or r.revision is distinct from p_revision or r.type<>'access' or not r.identity_verified
+      or not (r.status='in_progress' or (r.status='completed' and r.completed_at>clock_timestamp()-interval '30 days'
+        and r.minimised_at is null))
     then raise exception 'represented verified access request required' using errcode='PT409';end if;
   actor:=internal.staff_actor('dsar:manage');
+  if actor=r.subject_user_id or exists(select 1 from auth.users u where u.id=actor and lower(u.email)=lower(r.requester_email))
+    then raise exception 'another staff member must export your request' using errcode='42501';end if;
   select * into prepared from private.privacy_request_events e
     where e.export_id=p_export and e.action='export_prepared' and e.request_id=r.id;
   if not found or prepared.actor_id is distinct from actor or prepared.represented_revision<>r.revision
     then raise exception 'prepared export required' using errcode='PT409';end if;
   if exists(select 1 from private.privacy_request_events e where e.export_id=p_export and e.action='exported')
     then raise exception 'export already confirmed' using errcode='PT409';end if;
+  if exists(select 1 from private.privacy_request_events e where e.export_id=p_export and e.action='export_refused')
+    then raise exception 'prepared export refused' using errcode='PT409';end if;
   if prepared.occurred_at<clock_timestamp()-interval '15 minutes'
     then raise exception 'prepared export expired' using errcode='PT409';end if;
-  -- Built again before anything is recorded (the notice below would change
-  -- the notifications dataset); it must be exactly what was prepared.
-  data:=case when r.subject_user_id is null then '{}'::jsonb else internal.frontend_privacy_export_data(r.subject_user_id) end;
-  if encode(sha256(convert_to(data::text,'UTF8')),'hex') is distinct from prepared.export_digest
-    then raise exception 'export changed since it was prepared' using errcode='PT409';end if;
+  if (select count(*) from private.privacy_request_events e where e.request_id=r.id and e.action='exported')>=5
+    then raise exception 'export limit for this request reached' using errcode='PT429';end if;
+  -- Built again before anything is recorded (the notice below changes the
+  -- notifications dataset); it must be exactly what was prepared.
+  begin
+    data:=case when r.subject_user_id is null then '{}'::jsonb else internal.frontend_privacy_export_data(r.subject_user_id) end;
+  exception when sqlstate 'PT413' then data:=null;
+  end;
   perform internal.staff_actor('dsar:manage');
-  -- A concurrent confirmation of the same export waits here for the first
-  -- and then finds its row: it is refused and returns nothing.
+  if data is null or encode(sha256(convert_to(data::text,'UTF8')),'hex') is distinct from prepared.export_digest then
+    -- Recorded (not raised): the build counts toward the hourly limit and
+    -- this export id cannot be confirmed any more.
+    insert into private.privacy_request_events(request_id,actor_id,action,represented_revision,export_id)
+      values(r.id,actor,'export_refused',r.revision,p_export);
+    return jsonb_build_object('request_id',r.id,'export_id',p_export,
+      'refused',case when data is null then 'too_large' else 'changed' end);
+  end if;
   insert into private.privacy_request_events(request_id,actor_id,action,represented_revision,export_id)
     values(r.id,actor,'exported',r.revision,p_export)
     on conflict (export_id,action) where export_id is not null do nothing
     returning * into done;
   if done.id is null then raise exception 'export already confirmed' using errcode='PT409';end if;
-  -- The requester is told once that an export was made (email), and the
-  -- account the request names in its bell.
+  -- The requester is emailed once per request that an export was made; the
+  -- account the request names gets a notice for every export.
   insert into private.privacy_notice_jobs(request_id,kind) values(r.id,'exported') on conflict(request_id,kind) do nothing;
-  if found and r.subject_user_id is not null then
+  if r.subject_user_id is not null then
     perform internal.notify_account(r.subject_user_id,'privacy_export_made',r.id,null,null);
   end if;
   return jsonb_build_object('request_id',r.id,'export_id',p_export,'reference','DSAR-'||upper(left(r.id::text,8)),

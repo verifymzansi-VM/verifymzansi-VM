@@ -6,11 +6,13 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and reads "update not applied".
 --
--- The summary says whether the old export command is the reviewed body and
--- none of the update's objects exist (update not applied), or every object is
--- the update's exact definition (already applied): the four new functions
--- (body md5), the two columns (name and type), the unique index
--- (pg_get_indexdef) and the export check (pg_get_constraintdef md5). It counts:
+-- The summary says whether the functions the update relies on or replaces are
+-- their reviewed bodies and none of the update's objects exist (update not
+-- applied), or every object is the update's exact definition (already
+-- applied): function bodies (md5; internal.notify_account unchanged), the new
+-- functions' security definer, search path, owner and execute grants, the two
+-- columns (name and type), the unique index (unique, valid, pg_get_indexdef)
+-- and the export check (pg_get_constraintdef md5). It counts:
 -- - "exports recorded": 'exported' events (the old command's and confirmed
 --   ones);
 -- - "export emails waiting": 'exported' email jobs not yet delivered;
@@ -23,13 +25,17 @@ with bodies as (
   select v.sig, v.reviewed, v.updated,
     (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)) as body
   from (values
+    ('internal.notify_account(uuid,text,uuid,uuid,uuid)',
+      '12f90f293a02f6fe022b32ee5736d7dc', '12f90f293a02f6fe022b32ee5736d7dc'),
     ('internal.export_frontend_privacy_request(uuid,integer)',
-      '939737e433fcf800d5e98a3dd1569e5d', '939737e433fcf800d5e98a3dd1569e5d'),
+      '939737e433fcf800d5e98a3dd1569e5d', '8da19ec4f773a51f9b67fdf02996be3c'),
+    ('internal.retention_privacy_requests(integer)',
+      'ae00ab54c00fd3f6f64ac6b8061ba929', '65ca200080c2e6d9cf57ebc20bed96f7'),
     ('api.export_frontend_privacy_request(uuid,integer)',
       '251a62d1bb6d474172d02a2867b2556a', '251a62d1bb6d474172d02a2867b2556a'),
-    ('internal.prepare_frontend_privacy_export(uuid,integer)', null, 'a7a7c1431e6da1c18eda98b7e18245fd'),
+    ('internal.prepare_frontend_privacy_export(uuid,integer)', null, '321e0c77d2b5c4b6399ee9a9aafe1932'),
     ('api.prepare_frontend_privacy_export(uuid,integer)', null, '001f2fc46398c56fd2ac6d7b3bf2cf11'),
-    ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)', null, 'f5fc946f1870f6516592dacf42ce90e1'),
+    ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '8e6432f134027e6b71dd1a7d58b73c4e'),
     ('api.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '438d948a6a90a8fefd9c6bf49df8c99f')
   ) v(sig, reviewed, updated)
 ),
@@ -44,18 +50,29 @@ objects as (
       when 'column export_digest' then (select format_type(a.atttypid, a.atttypmod) || ' ' || a.attnotnull
         from pg_attribute a where a.attrelid = 'private.privacy_request_events'::regclass
           and a.attname = 'export_digest' and not a.attisdropped)
-      when 'index privacy_events_export_idx' then (select i.indisunique || ' ' || pg_get_indexdef(i.indexrelid)
+      when 'index privacy_events_export_idx' then (select i.indisunique || ' ' || i.indisvalid || ' ' || pg_get_indexdef(i.indexrelid)
         from pg_index i where i.indexrelid = to_regclass('private.privacy_events_export_idx'))
       when 'check privacy_request_events_export_check' then (select md5(pg_get_constraintdef(c.oid))
         from pg_constraint c where c.conrelid = 'private.privacy_request_events'::regclass
           and c.conname = 'privacy_request_events_export_check')
+      else (select p.prosecdef::text || ' ' || coalesce(array_to_string(p.proconfig, ','), '') || ' '
+          || p.proowner::regrole::text || ' ' || has_function_privilege('anon', p.oid, 'execute')::text || ' '
+          || has_function_privilege('authenticated', p.oid, 'execute')::text || ' '
+          || has_function_privilege('service_role', p.oid, 'execute')::text
+        from pg_proc p where p.oid = to_regprocedure(substr(v.name, 10)))
     end as current
   from (values
     ('column export_id', 'uuid false'),
     ('column export_digest', 'text false'),
     ('index privacy_events_export_idx',
-      'true CREATE UNIQUE INDEX privacy_events_export_idx ON private.privacy_request_events USING btree (export_id, action) WHERE (export_id IS NOT NULL)'),
-    ('check privacy_request_events_export_check', '83e9c28122ad3bd5cc71b593251093c6')
+      'true true CREATE UNIQUE INDEX privacy_events_export_idx ON private.privacy_request_events USING btree (export_id, action) WHERE (export_id IS NOT NULL)'),
+    ('check privacy_request_events_export_check', 'ad76579f0398a3fa9bfda5d352b54e03'),
+    -- Security definer, search path, owner and execute for anon,
+    -- authenticated and service_role.
+    ('settings internal.prepare_frontend_privacy_export(uuid,integer)', 'true search_path=pg_catalog postgres false true false'),
+    ('settings api.prepare_frontend_privacy_export(uuid,integer)', 'false search_path=pg_catalog postgres false true false'),
+    ('settings internal.confirm_frontend_privacy_export(uuid,integer,uuid)', 'true search_path=pg_catalog postgres false true false'),
+    ('settings api.confirm_frontend_privacy_export(uuid,integer,uuid)', 'false search_path=pg_catalog postgres false true false')
   ) v(name, updated)
 ),
 actions as (
@@ -65,8 +82,8 @@ actions as (
         and c.conname = 'privacy_request_events_action_check') as current,
     array['assigned','completed','erasure_ordered','exported','extended','identity_verified','recorded',
       'rejected','started','submitted','unassigned']::text[] as reviewed,
-    array['assigned','completed','erasure_ordered','export_prepared','exported','extended','identity_verified',
-      'recorded','rejected','started','submitted','unassigned']::text[] as updated
+    array['assigned','completed','erasure_ordered','export_prepared','export_refused','exported','extended',
+      'identity_verified','recorded','rejected','started','submitted','unassigned']::text[] as updated
 ),
 verdict as (
   select
