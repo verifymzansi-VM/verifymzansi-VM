@@ -13,7 +13,7 @@ set local lock_timeout='5s';
 do $$begin
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
       where oid=to_regprocedure('internal.create_verification_phone_challenge(uuid,text,text)'))
-      is distinct from '97060ddadb6f5f73796c9a5c3fcd0b4b'
+      is distinct from '635dd87998cdbdb31dcb4fb20e8ef202'
     or to_regclass('private.sms_code_days') is null then
     raise exception 'rollback precondition: the sms daily limit update is not applied' using errcode='55000';
   end if;

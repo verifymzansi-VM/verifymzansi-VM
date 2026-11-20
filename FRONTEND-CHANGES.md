@@ -127,7 +127,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 61. Real view counts and likes (P6) | awaiting owner (with the group 61 part of 11 rows elsewhere) | Nothing today (switch off). When the owner switches SHOW_ENGAGEMENT_TOTALS on: 'N views' and the heart with its count are back as on 27 October, with real numbers; anyone can like (signed in, per account; signed out, per browser; tap again to unlike); a signed-out visitor's first counted view or like may show Cloudflare's 'Verify you are human' box bottom-right, only when Cloudflare needs a click; a signed-out like from a browser seen for the first time counts after 10 minutes (the visitor sees it at once); a view counts after 2 seconds on the post's page, once a day per visitor, never the owner's or staff's own; the privacy notice and PAIA manual describe what is stored |
 | 63. Sign-up mode in the database (item 7) | approved by owner 2026-11-20 (no file rows: the group 63 part of 2 rows in group 2) | Nothing while sign-up is by invitation (today). Once the owner opens sign-up: a Google sign-up refused for a blocked or reserved email domain shows 'This email can't be used to register' on the sign-in page, and the profile page's email change refuses such an address with 'This email address can't be used. Use a different address.' |
 | 64. Toasts clear of form buttons on phones | approved by owner 2026-11-20 (with the group 64 part of 1 row elsewhere) | Phones (narrower than 768 px): a toast shows at the top of the screen instead of near the bottom, where it covered the button tapped next ('Verify', 'Update password'); while it shows (about 5 seconds) it covers the header (logo, search, menu). Tablets and desktops: same place and look (bottom right). Every screen size: a tap on the empty space around a toast now reaches the page |
-| 67. Daily limit on SMS codes: message (no file rows: server message only) | awaiting owner | 'Verify your phone number' and 'Complete your profile': when the site's daily limit on SMS codes is reached, 'Send code' shows 'We can't send codes right now. Please try again later.' under the number instead of sending a code (until midnight, South African time). Nothing changes otherwise |
+| 67. Daily limit on SMS codes: message (no file rows: server message only) | approved by owner 2026-11-20 | 'Verify your phone number' and 'Complete your profile': when the site's daily limit on SMS codes is reached, 'Send code' shows 'We can't send codes right now. Please try again later.' under the number instead of sending a code (until midnight, South African time). Nothing changes otherwise |
 
 Questions for the owner:
 
@@ -2619,8 +2619,7 @@ Decision: approved by owner 2026-11-20.
 Server message only: no file in the checked scope changes, so this group has no
 file rows. Launch checklist item 12 (launch assurance LA-A15) adds a limit on
 SMS verification codes for the whole site per South African day (database update
-`20261120074411_sms_daily_limit.sql`, 500 codes a day to start; the owner
-decides the value). When it is reached, asking for a code on 'Verify your phone
+`20261120074411_sms_daily_limit.sql`, 500 codes a day, approved by the owner). When it is reached, asking for a code on 'Verify your phone
 number' (`/verification`) or 'Complete your profile' sends no SMS and shows,
 where the send errors already appear under the number:
 
@@ -2632,7 +2631,8 @@ before the limit still works. Text outside the checked scope: the message in
 `src/lib/utils/phone.ts` (`PHONE_CODES_UNAVAILABLE`), returned by
 `src/app/api/foundation/phone/_lib/handle.ts` with status 503.
 
-Decision: awaiting owner.
+Decision: approved by owner 2026-11-20 (the limit of 500 and the wording as
+written).
 
 <!-- frontend-ledger:end -->
 

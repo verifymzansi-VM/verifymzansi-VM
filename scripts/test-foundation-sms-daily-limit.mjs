@@ -3,7 +3,8 @@
 // on SMS codes per South African day. At the limit no challenge is stored (so
 // the website sends no SMS) and the member's open code keeps working; refused
 // requests use no place; concurrent requests never pass the limit; staff get
-// a cost alarm at 70% and at the limit; the setting is one cost allowance row.
+// a cost alarm at 70% and at the limit; the setting is one cost allowance row
+// (without it the 500 fallback still holds, with no alarm).
 //
 // Replays database/foundation (prelude, candidate.sql, every update before this
 // one) into the throwaway, network-less Postgres 17 container of the SQL lint
@@ -28,6 +29,7 @@ import {
   assertReadOnlyPreflight,
   executeGrants,
   openUpdateCheck,
+  sqlLiteral,
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps } from "./lib/foundation-sql-lint.mjs";
 
@@ -302,6 +304,32 @@ try {
     setLimit(5000000000);
     assert.equal(q(`select ${LIMIT_FN};`), "1000000");
     setLimit(500);
+  });
+  await check("without the setting row the 500 fallback holds, with no alarm", () => {
+    const row = q(
+      `select row_to_json(a)::text from private.cost_allowances a where metric='sms_codes_day';`
+    );
+    // A cost alarm needs its allowance row, so its alarms go first.
+    q(`delete from private.cost_alarms where metric='sms_codes_day';
+      delete from private.cost_allowances where metric='sms_codes_day';`);
+    assert.equal(q(`select ${LIMIT_FN};`), "500");
+    // The 350th code (70% of 500) and the 500th are stored; the 501st is
+    // refused with the member's message, not a failure.
+    resetDay(349);
+    const [member, phone] = fresh("no-row");
+    assert.ok(create(member, phone).challenge_id);
+    assert.equal(counted(), 350);
+    resetDay(499);
+    assert.ok(create(member, phone).challenge_id);
+    assert.equal(counted(), 500);
+    overLimit(createSql(member, phone));
+    const [other, otherPhone] = fresh("no-row-other");
+    overLimit(createSql(other, otherPhone));
+    assert.equal(counted(), 500);
+    assert.deepEqual(alarms(), []);
+    q(`insert into private.cost_allowances select * from json_populate_record(null::private.cost_allowances,
+      ${sqlLiteral(row)}::json);`);
+    assert.equal(q(`select ${LIMIT_FN};`), "500");
   });
   await check("no API role can read the counts or run the helper", () => {
     for (const role of ["anon", "authenticated", "service_role"])

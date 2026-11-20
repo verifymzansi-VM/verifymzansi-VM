@@ -117,7 +117,8 @@ limit is counted in the database for the whole site.
   reviewed update or the owner in the SQL editor runs
   `update private.cost_allowances set free_quantity=<n> where metric='sms_codes_day';`
   It takes effect on the next request. A value lowered below the day's count
-  refuses at once but raises no alarm that day.
+  refuses at once but raises no alarm that day. If the row is deleted the limit
+  of 500 still holds, but no alarm is raised (a cost alarm needs its row).
 
 No API command changes, so the order does not matter: a website release without
 the matching code shows its generic "Phone verification could not be completed"
@@ -157,8 +158,10 @@ at once; at the limit, requests refused for another reason still get that reason
 and none is counted; the warning alarm at 70% and the critical one at the limit,
 once a day; 20 requests at the same moment, waiting on the day's row together,
 store exactly the 5 codes the limit leaves; a new day starts at zero and keeps
-the previous day's count; the setting's fallback and bounds; and no API role can
-read the counts or run the helper.
+the previous day's count; the setting's fallback and bounds; with the setting
+row deleted, the 350th and 500th codes are stored and the 501st is refused with
+`sms_daily_limit`, with no alarm; and no API role can read the counts or run the
+helper.
 
 ## Sign-up mode in the database, and member invitations, 20 November 2026
 

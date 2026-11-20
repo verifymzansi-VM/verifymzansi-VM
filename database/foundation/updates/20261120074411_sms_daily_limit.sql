@@ -24,6 +24,8 @@
 -- 3. internal.sms_daily_limit(): that value as a whole number (at most
 --    1,000,000), or 500 when the row is missing or empty. No API role can run
 --    it. STABLE, not IMMUTABLE, so a changed value is read on the next call.
+--    With the row missing the limit still holds; only the alarms of point 4
+--    are skipped (a cost alarm needs its allowance row).
 -- 4. internal.create_verification_phone_challenge (same signature, grants and
 --    owner) counts the code after every existing refusal (account, number,
 --    own number, change rules, phone_banned, phone_in_use), so a refused
@@ -37,7 +39,8 @@
 --    count reaching 70% of the limit raises a staff cost alarm 'warning', and
 --    reaching the limit a 'critical' one (internal.engagement_valve_alarms,
 --    at most once each a day), shown under open alarms on the staff cost
---    page. The count resets at midnight South African time.
+--    page (only while the 'sms_codes_day' row exists). The count resets at
+--    midnight South African time.
 --
 -- Known limit: a limit lowered below the day's count refuses at once but
 -- raises no alarm that day (no code reaches the limit).
@@ -70,7 +73,7 @@ begin
       is distinct from '3661274c4f3c00f87490dd4be0809820'
     and (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
       where oid=to_regprocedure('internal.create_verification_phone_challenge(uuid,text,text)'))
-      is distinct from '97060ddadb6f5f73796c9a5c3fcd0b4b' then
+      is distinct from '635dd87998cdbdb31dcb4fb20e8ef202' then
     raise exception 'sms daily limit drift: internal.create_verification_phone_challenge is not the reviewed body' using errcode='55000';
   end if;
 end$$;
@@ -151,8 +154,12 @@ begin
     returning d.sent into sent_today;
   if sent_today is null then
     raise exception 'daily SMS code limit reached' using errcode='PT429', detail='sms_daily_limit'; end if;
-  -- Staff cost alarms at 70% of the limit (warning) and at the limit (critical).
-  perform internal.engagement_valve_alarms('sms_codes_day', day_limit, sent_today-1, sent_today);
+  -- Staff cost alarms at 70% of the limit (warning) and at the limit
+  -- (critical). A cost alarm needs its allowance row: without the row the
+  -- fallback limit still holds and no alarm is raised.
+  if exists(select 1 from private.cost_allowances a where a.metric='sms_codes_day') then
+    perform internal.engagement_valve_alarms('sms_codes_day', day_limit, sent_today-1, sent_today);
+  end if;
   -- New delivery invalidates older pending challenges for this subject.
   update private.verification_phone_challenges set expires_at=greatest(created_at+interval '1 microsecond',clock_timestamp())
     where owner_id=p_owner and verified_at is null and expires_at>clock_timestamp();

@@ -41,8 +41,12 @@ begin
     returning d.sent into sent_today;
   if sent_today is null then
     raise exception 'daily SMS code limit reached' using errcode='PT429', detail='sms_daily_limit'; end if;
-  -- Staff cost alarms at 70% of the limit (warning) and at the limit (critical).
-  perform internal.engagement_valve_alarms('sms_codes_day', day_limit, sent_today-1, sent_today);
+  -- Staff cost alarms at 70% of the limit (warning) and at the limit
+  -- (critical). A cost alarm needs its allowance row: without the row the
+  -- fallback limit still holds and no alarm is raised.
+  if exists(select 1 from private.cost_allowances a where a.metric='sms_codes_day') then
+    perform internal.engagement_valve_alarms('sms_codes_day', day_limit, sent_today-1, sent_today);
+  end if;
   -- New delivery invalidates older pending challenges for this subject.
   update private.verification_phone_challenges set expires_at=greatest(created_at+interval '1 microsecond',clock_timestamp())
     where owner_id=p_owner and verified_at is null and expires_at>clock_timestamp();

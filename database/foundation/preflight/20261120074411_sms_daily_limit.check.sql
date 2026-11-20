@@ -21,7 +21,7 @@ with bodies as (
     (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)) as body
   from (values
     ('internal.create_verification_phone_challenge(uuid,text,text)',
-      '3661274c4f3c00f87490dd4be0809820', '97060ddadb6f5f73796c9a5c3fcd0b4b'),
+      '3661274c4f3c00f87490dd4be0809820', '635dd87998cdbdb31dcb4fb20e8ef202'),
     ('internal.sms_daily_limit()', null, 'ddff17b83ea8ab070423ea21ca7436f2')
   ) v(sig, reviewed, updated)
 ),
