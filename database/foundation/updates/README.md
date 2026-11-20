@@ -82,19 +82,19 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Post views and likes, 19 November 2026
 
-`20261119172135_post_views_and_likes.sql` is pending (see the applied register).
-Roadmap P6. **Order: apply-first** (the default): the website release from the
-same pull request names the three new commands, and the deploy preflight probes
-every command in `../runtime-api-manifest.json`, so a deploy without the update
-stops there. The website calls them only while its switch
-`SHOW_ENGAGEMENT_TOTALS` (`src/lib/hidden-features.ts`) is on; it stays off in
-production until the owner approves showing the counters, so applying the update
-changes nothing anyone sees. It adds three API commands, four internal
-functions, six tables and two cost allowances (the safety valves below), and
-replaces three functions with full bodies: the privacy export, the retention job
-and account erasure. It refuses (55000) unless its tables and functions are all
-absent or all present and the three functions have their reviewed bodies (or
-this update's).
+`20261119172135_post_views_and_likes.sql` was applied on 20 November 2026 at
+00:15 UTC (see the applied register). Roadmap P6. **Order: apply-first** (the
+default): the website release from the same pull request names the three new
+commands, and the deploy preflight probes every command in
+`../runtime-api-manifest.json`, so a deploy without the update stops there. The
+website calls them only while its switch `SHOW_ENGAGEMENT_TOTALS`
+(`src/lib/hidden-features.ts`) is on; it stays off in production until the owner
+approves showing the counters, so applying the update changes nothing anyone
+sees. It adds three API commands, four internal functions, six tables and two
+cost allowances (the safety valves below), and replaces three functions with
+full bodies: the privacy export, the retention job and account erasure. It
+refuses (55000) unless its tables and functions are all absent or all present
+and the three functions have their reviewed bodies (or this update's).
 
 - **What is stored.** The website gives each browser a random identifier in a
   first-party cookie (`vmz_viewer`, HttpOnly, one year), signed with the Worker
@@ -5592,6 +5592,15 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   Individual invoices issued before a package: 0; move record: 0"; production
   fingerprint after it (fingerprint.sql at c1a8c0e3) matched the full replay
   (except the known schema grant difference)
-- `20261119172135_post_views_and_likes.sql`: pending
+- `20261119172135_post_views_and_likes.sql`: applied 2026-11-20 00:15 UTC;
+  owner-approved, apply-first, Supabase SQL editor (browser, the owner's
+  signed-in session), preflight + fingerprint checked; update, preflight and
+  fingerprint.sql loaded from the reviewed files at a71f9a5c (raw GitHub; pull
+  request #296, merged as 3f27fa11) and checked in the browser before running;
+  update sha256 starting 3f25cd6e; preflight (sha256 starting 30e654e9) before
+  "post views and likes: update not applied; publicly listed posts: 0", after
+  "post views and likes: already applied; likes: 0; view days: 0; views: 0";
+  production fingerprint after it (fingerprint.sql at a71f9a5c) matched the full
+  replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
