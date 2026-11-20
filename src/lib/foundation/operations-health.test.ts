@@ -20,7 +20,7 @@ function reply() {
       stuck: 1,
       items: [{ kind: "post_expired", attempts: 8, queued_at: AT, last_error: "delivery_failed" }],
     },
-    notices: { stuck: 0, items: [] },
+    notices: { stuck: 0, undeliverable: 1, items: [] },
     payments: {
       problems: 1,
       not_activated: 0,

@@ -12,10 +12,12 @@ begin
     raise exception 'scheduled job required' using errcode='22023';
   end if;
   -- At most one write per job every 20 seconds; a later run moves the time on.
-  if not exists(select 1 from private.scheduled_job_runs r
-      where r.job=p_job and r.last_run_at>=clock_timestamp()-interval '20 seconds') then
+  -- Never later than now: a time in the future is pulled back to now.
+  if not exists(select 1 from private.scheduled_job_runs r where r.job=p_job
+      and r.last_run_at between clock_timestamp()-interval '20 seconds' and clock_timestamp()) then
     insert into private.scheduled_job_runs as r (job,last_run_at) values (p_job,clock_timestamp())
-    on conflict (job) do update set last_run_at=greatest(r.last_run_at,excluded.last_run_at);
+    on conflict (job) do update
+      set last_run_at=least(greatest(r.last_run_at,excluded.last_run_at),clock_timestamp());
   end if;
   return p_result;
 end

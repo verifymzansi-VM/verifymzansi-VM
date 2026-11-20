@@ -14,7 +14,9 @@ begin
     'generated_at', now_at,
     'jobs', (select coalesce(jsonb_agg(jsonb_build_object('job', c.job, 'every', c.every,
         'last_run_at', r.last_run_at,
-        'late', r.last_run_at is null or r.last_run_at < now_at - c.late_after)
+        -- A time in the future (written by hand) is not trusted: late.
+        'late', r.last_run_at is null or r.last_run_at < now_at - c.late_after
+          or r.last_run_at > clock_timestamp())
         order by c.ord), '[]'::jsonb)
       from internal.scheduled_job_catalogue() c
         left join private.scheduled_job_runs r on r.job = c.job),
@@ -30,14 +32,31 @@ begin
               from private.outbox_events o where o.processed_at is null
                 and (o.delivery_attempts >= 8 or o.created_at < now_at - interval '1 day')
               order by o.created_at, o.id limit 50) x))),
-    'notices', (select jsonb_build_object(
-        'stuck', (select count(*) from private.privacy_notice_jobs j where j.delivered_at is null
-          and (j.attempts >= 8 or j.created_at < now_at - interval '1 day')),
+    -- Notices the notice job can still send (internal.claim_frontend_privacy_notice's
+    -- own rule: the request is not minimised, and it was checked by hand, or
+    -- belongs to an erased account, or its address is the account's confirmed
+    -- one) are stuck after the last of 8 attempts or a day after queuing; the
+    -- others can never be sent and are only counted.
+    'notices', (with waiting as (
+        select j.id, j.kind, j.attempts, j.created_at,
+          r.minimised_at is null
+            and (r.identity_check = 'manual'
+              or exists(select 1 from private.account_erasure_requests l where l.request_id = r.id)
+              or exists(select 1 from auth.users u where u.id = r.subject_user_id
+                and u.email_confirmed_at is not null and not u.is_anonymous and u.deleted_at is null
+                and lower(u.email) = lower(r.requester_email))) as deliverable
+        from private.privacy_notice_jobs j join private.privacy_requests r on r.id = j.request_id
+        where j.delivered_at is null)
+      select jsonb_build_object(
+        'stuck', count(*) filter (where w.deliverable
+          and (w.attempts >= 8 or w.created_at < now_at - interval '1 day')),
+        'undeliverable', count(*) filter (where not w.deliverable),
         'items', (select coalesce(jsonb_agg(jsonb_build_object('kind', x.kind, 'attempts', x.attempts,
             'queued_at', x.created_at) order by x.created_at, x.id), '[]'::jsonb)
-          from (select j.id, j.kind, j.attempts, j.created_at from private.privacy_notice_jobs j
-              where j.delivered_at is null and (j.attempts >= 8 or j.created_at < now_at - interval '1 day')
-              order by j.created_at, j.id limit 50) x))),
+          from (select w2.id, w2.kind, w2.attempts, w2.created_at from waiting w2
+              where w2.deliverable and (w2.attempts >= 8 or w2.created_at < now_at - interval '1 day')
+              order by w2.created_at, w2.id limit 50) x))
+      from waiting w),
     'payments', (select jsonb_build_object(
         'problems', (select count(*) from private.payment_problems p
           where p.last_seen_at > now_at - interval '7 days'),

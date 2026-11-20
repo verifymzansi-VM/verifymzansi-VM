@@ -39,9 +39,11 @@ const [PREFLIGHT, ROLLBACK] = [
   readFileSync(`database/foundation/${folder}/${UPDATE.replace(/\.sql$/, suffix)}`, "utf8")
 );
 const READ = "api.get_staff_operations_health()";
+const RECORD = "api.record_scheduled_job_run(text)";
 const HELPERS = [
   "internal.get_staff_operations_health()",
   "internal.note_scheduled_job_run(text,anyelement)",
+  "internal.record_scheduled_job_run(text)",
   "internal.scheduled_job_catalogue()",
 ];
 const ALL_KINDS = [
@@ -113,14 +115,22 @@ const JOBS = [
     "evidence_cleanup",
   ],
   ["api.claim_media_cleanup(integer)", "select api.claim_media_cleanup(100);", "media_cleanup"],
-  [
-    "api.expire_stale_checkouts(integer)",
-    "select api.expire_stale_checkouts(100);",
-    "payment_checks",
-  ],
-  ["api.reconcile_ozow_refunds(jsonb)", "select api.reconcile_ozow_refunds('[]');", "refund_check"],
 ];
 const JOB_SIGNATURES = JOBS.map(([signature]) => signature);
+/** The two payment jobs: their commands are untouched; the website records a
+ * run with api.record_scheduled_job_run only after the whole run succeeded. */
+const WEBSITE_JOBS = ["payment_checks", "refund_check"];
+const UNTOUCHED = [
+  ["api.expire_stale_checkouts(integer)", "select api.expire_stale_checkouts(100);"],
+  ["api.reconcile_ozow_refunds(jsonb)", "select api.reconcile_ozow_refunds('[]');"],
+];
+/** Every job, in catalogue order: the 15 commands, then the 2 website jobs. */
+const ALL_JOBS = [...JOBS.map(([, , job]) => job), ...WEBSITE_JOBS];
+const recordSql = (job) => `select api.record_scheduled_job_run('${job}');`;
+const runEveryJob = (runJob) => {
+  for (const [, sql] of JOBS) runJob(sql);
+  for (const job of WEBSITE_JOBS) runJob(recordSql(job));
+};
 const SERVICE_ONLY = { anon: false, authenticated: false, service_role: true };
 
 const {
@@ -162,6 +172,7 @@ try {
 
   // ------------------------------------------------------------ before
   const reviewed = Object.fromEntries(JOB_SIGNATURES.map((s) => [s, bodyMd5(s)]));
+  const untouched = Object.fromEntries(UNTOUCHED.map(([s]) => [s, bodyMd5(s)]));
   const grants = executeGrants(json, JOB_SIGNATURES);
   await check("before the update: the job commands are service-only and record nothing", () => {
     for (const signature of JOB_SIGNATURES) assert.deepEqual(grants[signature], SERVICE_ONLY);
@@ -217,12 +228,35 @@ try {
     assert.deepEqual(executeGrants(json, JOB_SIGNATURES), grants);
     applySteps(database, [step]);
     assert.deepEqual(Object.fromEntries(JOB_SIGNATURES.map((s) => [s, bodyMd5(s)])), after);
+    // The two payment job commands are not touched by the update.
+    assert.deepEqual(Object.fromEntries(UNTOUCHED.map(([s]) => [s, bodyMd5(s)])), untouched);
+  });
+
+  await check("the rollback refuses once a later change touched what it undoes", () => {
+    const before = fingerprint();
+    const target = "api.sweep_sponsorships(integer)";
+    const live = q(`select pg_get_functiondef('${target}'::regprocedure);`);
+    q(
+      `do $$begin execute replace(pg_get_functiondef('${target}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
+    );
+    assert.match(fails(ROLLBACK, "55000"), /changed since the update: api\.sweep_sponsorships/);
+    q(`${live};`);
+    // A later function that also records runs would lose its helper.
+    q(`create function internal.vmtest_other_job() returns integer language sql
+      as $f$ select internal.note_scheduled_job_run('retention', 1) $f$;`);
+    assert.match(
+      fails(ROLLBACK, "55000"),
+      /other functions call internal\.note_scheduled_job_run: internal\.vmtest_other_job\(\)/
+    );
+    q(`drop function internal.vmtest_other_job();`);
+    assert.equal(fingerprint(), before);
   });
 
   await check("grants: job commands unchanged, the read for signed-in staff only", () => {
     assert.deepEqual(executeGrants(json, JOB_SIGNATURES), grants);
-    assert.deepEqual(executeGrants(json, [READ]), {
+    assert.deepEqual(executeGrants(json, [READ, RECORD]), {
       [READ]: { anon: false, authenticated: true, service_role: false },
+      [RECORD]: SERVICE_ONLY,
     });
     assert.deepEqual(executeGrants(json, HELPERS), {
       "internal.get_staff_operations_health()": {
@@ -231,6 +265,7 @@ try {
         service_role: false,
       },
       "internal.note_scheduled_job_run(text,anyelement)": SERVICE_ONLY,
+      "internal.record_scheduled_job_run(text)": SERVICE_ONLY,
       "internal.scheduled_job_catalogue()": {
         anon: false,
         authenticated: false,
@@ -269,6 +304,15 @@ try {
         `${job} records only itself`
       );
     }
+    assert.equal(Object.keys(runs()).length, 15);
+    // The payment job commands record nothing: the website records those runs
+    // only after the whole run succeeded.
+    for (const [, sql] of UNTOUCHED) runJob(sql);
+    assert.equal(Object.keys(runs()).length, 15);
+    for (const job of WEBSITE_JOBS) {
+      runJob(recordSql(job));
+      assert.ok(runs()[job], `${job} recorded by the website`);
+    }
     assert.equal(Object.keys(runs()).length, 17);
     assert.equal(runJob("select api.approve_due_commissions(20);"), "0");
     assert.equal(runJob("select api.claim_media_cleanup(100);"), "[]");
@@ -283,6 +327,8 @@ try {
     fails(service("select api.sweep_sponsorships(0);"), "22023", /limit 1 to 1000/);
     fails(service("select api.run_retention(0);"), "22023", /limit 1 to 5000/);
     fails(service(`select api.reconcile_ozow_refunds('{}');`), "22023");
+    runJob("select api.reconcile_ozow_refunds('[]');");
+    runJob("select api.expire_stale_checkouts(100);");
     assert.deepEqual(runs(), {});
   });
   await check("at most one write a job every 20 seconds; a later run moves the time on", () => {
@@ -307,11 +353,38 @@ try {
       "22023",
       /scheduled job required/
     );
+    for (const job of ["retention", "sponsorships", "anything_else"])
+      fails(service(recordSql(job)), "22023", /scheduled job recorded by the website required/);
+    fails(service("select api.record_scheduled_job_run(null);"), "22023");
     for (const sql of [
       "select api.run_retention(100);",
       "select internal.note_scheduled_job_run('retention',1);",
+      recordSql("payment_checks"),
     ])
       fails(member(someone, sql), "42501");
+    fails(`set role anon;\n${recordSql("refund_check")}`, "42501");
+  });
+  await check("never a time later than now: a future time shows late, then is pulled back", () => {
+    runJob("select api.sweep_sponsorships(100);");
+    q(`update private.scheduled_job_runs set last_run_at=clock_timestamp()+interval '1 hour'
+      where job='sponsorships';`);
+    assert.equal(lateOf("sponsorships"), true);
+    runJob("select api.sweep_sponsorships(100);");
+    assert.equal(
+      q(`select last_run_at<=clock_timestamp() and last_run_at>clock_timestamp()-interval '1 minute'
+        from private.scheduled_job_runs where job='sponsorships';`),
+      "t"
+    );
+    assert.equal(lateOf("sponsorships"), false);
+    q(`update private.scheduled_job_runs set last_run_at=clock_timestamp()+interval '1 hour'
+      where job='refund_check';`);
+    runJob(recordSql("refund_check"));
+    assert.equal(
+      q(
+        `select last_run_at<=clock_timestamp() from private.scheduled_job_runs where job='refund_check';`
+      ),
+      "t"
+    );
   });
 
   // ------------------------------------------------------------- read
@@ -320,15 +393,20 @@ try {
     const empty = read();
     assert.deepEqual(
       empty.jobs.map((j) => j.job),
-      JOBS.map(([, , job]) => job)
+      ALL_JOBS
     );
     assert.ok(empty.jobs.every((j) => j.late === true && j.last_run_at === null));
     assert.deepEqual(
       [...new Set(empty.jobs.map((j) => j.every))],
       ["minute", "5_minutes", "10_minutes", "day"]
     );
-    for (const [, sql] of JOBS) runJob(sql);
+    runEveryJob(runJob);
     assert.ok(read().jobs.every((j) => j.late === false && j.last_run_at !== null));
+    // A payment run that failed is never recorded, so it turns late.
+    q(`delete from private.scheduled_job_runs where job='payment_checks';`);
+    runJob("select api.expire_stale_checkouts(100);");
+    assert.equal(lateOf("payment_checks"), true);
+    runJob(recordSql("payment_checks"));
     for (const [job, fresh, stale] of [
       ["sponsorships", "9 minutes", "11 minutes"],
       ["commissions", "9 minutes", "11 minutes"],
@@ -346,14 +424,22 @@ try {
   // Stuck work written as the database owner, triggers (and foreign keys) off.
   const ids = json(`select jsonb_build_object('owner',gen_random_uuid(),'subject',gen_random_uuid(),
     'payment',gen_random_uuid(),'request',gen_random_uuid(),'closed',gen_random_uuid(),
-    'held',gen_random_uuid(),'case',gen_random_uuid());`);
+    'held',gen_random_uuid(),'case',gen_random_uuid(),'minimised',gen_random_uuid(),
+    'gone',gen_random_uuid());`);
   q(`set session_replication_role=replica;
     insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key,created_at,delivery_attempts,delivery_error,processed_at) values
       ('enquiry_received','${ids.subject}','${ids.owner}','ops-final',now()-interval '3 hours',8,'delivery_failed',null),
       ('post_expired','${ids.subject}','${ids.owner}','ops-old',now()-interval '2 days',1,null,null),
       ('trial_started','${ids.subject}','${ids.owner}','ops-fresh',now()-interval '5 minutes',2,'delivery_failed',null),
       ('post_deleted','${ids.subject}','${ids.owner}','ops-sent',now()-interval '3 days',8,null,now());
+    insert into private.privacy_requests(id,type,requester_email,description,identity_check,received_at,due_by,legal_basis,minimised_at,subject_user_id) values
+      ('${ids.request}','access','ops-manual@example.invalid','Fixture request','manual',now()-interval '3 days',now()+interval '27 days','POPIA s23',null,null),
+      ('${ids.minimised}','access','ops-minimised@example.invalid','Fixture request','manual',now()-interval '3 days',now()+interval '27 days','POPIA s23',now(),null),
+      ('${ids.gone}','access','ops-gone@example.invalid','Fixture request','session',now()-interval '3 days',now()+interval '27 days','POPIA s23',null,'${ids.owner}');
     insert into private.privacy_notice_jobs(request_id,kind,created_at,attempts) values
+      ('${ids.minimised}','submitted',now()-interval '2 days',3),
+      ('${ids.gone}','submitted',now()-interval '2 days',3),
+      ('${ids.gone}','approved',now()-interval '1 hour',1),
       ('${ids.request}','submitted',now()-interval '2 days',3),
       ('${ids.request}','approved',now()-interval '1 hour',8),
       ('${ids.request}','completed',now()-interval '1 hour',1);
@@ -412,6 +498,9 @@ try {
         ]
       );
       assert.equal(health.notices.stuck, 2);
+      // The minimised request's notice and the two of a request whose account
+      // is gone can never be sent: counted apart, never listed.
+      assert.equal(health.notices.undeliverable, 3);
       assert.equal(health.payments.problems, 1);
       assert.equal(health.payments.not_activated, 0);
       assert.deepEqual(
@@ -487,7 +576,7 @@ try {
     applySteps(database, later);
     await check("later updates keep the job records and the read", () => {
       q(`delete from private.scheduled_job_runs;`);
-      for (const [, sql] of JOBS) runJob(sql);
+      runEveryJob(runJob);
       assert.equal(Object.keys(runs()).length, 17);
       assert.equal(read().jobs.length, 17);
     });

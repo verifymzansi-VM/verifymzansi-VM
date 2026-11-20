@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.reconcile_ozow_refunds(p_refunds jsonb)
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.note_scheduled_job_run('refund_check', internal.reconcile_ozow_refunds(p_refunds));
+  select internal.reconcile_ozow_refunds(p_refunds);
 $function$;
 alter function api.reconcile_ozow_refunds(jsonb) owner to postgres;
 revoke all on function api.reconcile_ozow_refunds(jsonb) from public;

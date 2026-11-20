@@ -189,6 +189,12 @@ export default async function OperationsHealthPage() {
             Privacy request notices not sent after the last of 8 tries, or still not sent a day
             after they were queued.
           </p>
+          {notices.undeliverable > 0 && (
+            <p className="text-sm font-medium text-destructive">
+              {notices.undeliverable} {notices.undeliverable === 1 ? "notice" : "notices"} can never
+              be sent: the request was minimised or the account&apos;s email address is gone.
+            </p>
+          )}
           {!notices.items.length ? (
             <p className="text-sm text-muted-foreground">None. Notices are going out.</p>
           ) : (

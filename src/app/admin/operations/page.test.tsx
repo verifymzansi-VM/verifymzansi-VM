@@ -51,7 +51,7 @@ function healthy(): OperationsHealth {
       late: false,
     })),
     emails: { waiting: 0, stuck: 0, items: [] },
-    notices: { stuck: 0, items: [] },
+    notices: { stuck: 0, undeliverable: 0, items: [] },
     payments: { problems: 0, not_activated: 0, items: [] },
     deletions: {
       accounts_blocked: 0,
@@ -102,6 +102,7 @@ describe("OperationsHealthPage", () => {
     expect(screen.queryByText("Late")).toBeNull();
     expect(screen.getByText("None. Emails are going out.")).toBeVisible();
     expect(screen.getByText("None. Notices are going out.")).toBeVisible();
+    expect(screen.queryByText(/can never be sent/)).toBeNull();
     expect(screen.getByText("None in the past 7 days.")).toBeVisible();
     expect(screen.getByText("None. Closed accounts are being deleted on time.")).toBeVisible();
     expect(screen.getByText("No open incidents.")).toBeVisible();
@@ -119,7 +120,11 @@ describe("OperationsHealthPage", () => {
         { kind: "enquiry_received", attempts: 8, queued_at: AT, last_error: "delivery_failed" },
       ],
     };
-    health.notices = { stuck: 1, items: [{ kind: "submitted", attempts: 3, queued_at: AT }] };
+    health.notices = {
+      stuck: 1,
+      undeliverable: 2,
+      items: [{ kind: "submitted", attempts: 3, queued_at: AT }],
+    };
     health.payments = {
       problems: 1,
       not_activated: 2,
@@ -158,6 +163,7 @@ describe("OperationsHealthPage", () => {
     expect(screen.getByText("enquiry received")).toBeVisible();
     expect(screen.getByText("delivery failed")).toBeVisible();
     expect(screen.getByText("submitted notice")).toBeVisible();
+    expect(screen.getByText(/2 notices can never be sent/)).toBeVisible();
     expect(screen.getByText("2 paid payments were not activated.")).toBeVisible();
     expect(screen.getByText("amount mismatch")).toBeVisible();
     expect(screen.getByText(/Payment abcdef12 · notice · seen 3 times/)).toBeVisible();

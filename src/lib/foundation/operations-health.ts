@@ -9,7 +9,7 @@ import { settleStaffCommand } from "./staff-command";
  * (api.get_staff_operations_health, 20261120163500_staff_operations_health.sql):
  * staff with `audit:view` and a recent authenticator code. Every scheduled job
  * with its last run and whether it is late; stuck emails and privacy request
- * notices; payment problems of the past 7 days; account deletions held back,
+ * notices (and how many notices can never be sent); payment problems of the past 7 days; account deletions held back,
  * file deletions and ID evidence past its deletion date; open cost alarms.
  * Counts are complete; each list has at most 50 rows. No account id, name,
  * email, phone or message text.
@@ -68,6 +68,9 @@ const operationsHealthSchema = z.strictObject({
   }),
   notices: z.strictObject({
     stuck: count,
+    // Notices the notice job can never send (the request was minimised, or
+    // the account's address is gone or no longer confirmed); never listed.
+    undeliverable: count,
     items: list(z.strictObject({ kind: code, attempts: count, queued_at: instant })),
   }),
   payments: z.strictObject({

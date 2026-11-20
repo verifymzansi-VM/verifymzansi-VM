@@ -34,12 +34,12 @@ with bodies as (
     ('api.purge_frontend_form_drafts(integer)', '13c798a36d3441ec17ad532a16b7eb98', 'a41ca813762071f9b0b963d54cf3155a'),
     ('api.claim_evidence_cleanup(integer)', '9837e370cf687084e2e2f492ed6f9053', '9d3d5b7f73ee0100006f71657ff6f79c'),
     ('api.claim_media_cleanup(integer)', '4f8aa155ea7c2a35333d2dce7fe8d10d', '5b146b7b0c1f348bf1713c0f23bfd901'),
-    ('api.expire_stale_checkouts(integer)', '463872f511505e0b3ba84e0781814af0', '2181f3dbdaa4dd1d3ab5134d53e96c69'),
-    ('api.reconcile_ozow_refunds(jsonb)', 'ea40cc8571dab987fcb5b49d9f27ba53', 'f70c65e80b017e9df3e2f6dc07c6988d'),
     -- Added by the update.
     ('internal.scheduled_job_catalogue()', null, '249bf575fc434934aafe0f0a68ea30dc'),
-    ('internal.note_scheduled_job_run(text,anyelement)', null, 'cf02ac7a82119f984b4b5ad5e7a4ee9e'),
-    ('internal.get_staff_operations_health()', null, 'bb96b9129c3eb205845d031a37e8b18c'),
+    ('internal.note_scheduled_job_run(text,anyelement)', null, '783b802513659a9ad0723c5ad59e1ee5'),
+    ('internal.record_scheduled_job_run(text)', null, '677e30342cfe57d26c45dc58ce7b5ee8'),
+    ('api.record_scheduled_job_run(text)', null, '030f074f26e1e23c13a00e3e30f0fbd8'),
+    ('internal.get_staff_operations_health()', null, 'c7be6d6d742cbb8cdac138b0db778bb5'),
     ('api.get_staff_operations_health()', null, '0d522526c382954f585b476ecdb25fac')
   ) v(sig, reviewed, updated)
 ),

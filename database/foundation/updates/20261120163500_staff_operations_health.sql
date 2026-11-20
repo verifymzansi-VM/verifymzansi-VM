@@ -27,10 +27,12 @@
 --    and returns `result` unchanged. It refuses a job outside the catalogue.
 --    At most one write per job every 20 seconds (a later call in that window
 --    reads the row and writes nothing), so the email claims, which run several
---    times a minute, do not rewrite the row each time. Executable by
---    service_role only (the job commands run as service_role).
--- 4. The seventeen service-only job commands keep their signature, return
---    type, owner and grants; each now passes its result through
+--    times a minute, do not rewrite the row each time. It never stores a time
+--    later than now: a stored time in the future (written by hand) is pulled
+--    back to now on the next run, and the read shows it as late meanwhile.
+--    Executable by service_role only (the job commands run as service_role).
+-- 4. Fifteen service-only job commands keep their signature, return type,
+--    owner and grants; each now passes its result through
 --    internal.note_scheduled_job_run. The record is written in the same
 --    transaction as the job's work, after it: a command that fails records
 --    nothing.
@@ -49,10 +51,14 @@
 --      api.purge_frontend_form_drafts   -> form_drafts
 --      api.claim_evidence_cleanup       -> evidence_cleanup
 --      api.claim_media_cleanup          -> media_cleanup
---      api.expire_stale_checkouts       -> payment_checks
---      api.reconcile_ozow_refunds       -> refund_check
 --    Only the api wrappers change; the internal functions they call (for
 --    example internal.run_retention) are untouched.
+--    The two payment jobs run several steps in the website, so one command
+--    finishing does not mean the run succeeded. For them the website calls
+--    the new service-only command api.record_scheduled_job_run(job) after the
+--    whole run succeeded: payment_checks (the 10-minute payment status check,
+--    no payment failed) and refund_check (the daily refund check, Ozow's list
+--    read in full). It accepts only those two jobs (22023 otherwise).
 -- 5. New staff read api.get_staff_operations_health() (internal twin
 --    internal.get_staff_operations_health()): staff with audit:view (governor
 --    and admin, with a recent authenticator code, like every staff command).
@@ -64,7 +70,10 @@
 --      queue (waiting), with at most 50 stuck ones (kind, attempts, queued
 --      time, error code);
 --    - notices: privacy request notices in the same state (stuck), at most 50
---      (kind, attempts, queued time);
+--      (kind, attempts, queued time), counting only notices the notice job can
+--      still send; notices it can never send (the request was minimised, or
+--      the account's address is gone or no longer confirmed) are counted
+--      apart (undeliverable);
 --    - payments: payment problems seen in the past 7 days and paid payments
 --      that could not be activated, with at most 50 problems (an 8-character
 --      payment reference, reason, source, first and last seen, how often,
@@ -98,10 +107,12 @@ begin
     + (to_regprocedure('internal.scheduled_job_catalogue()') is not null)::integer
     + (to_regprocedure('internal.note_scheduled_job_run(text,anyelement)') is not null)::integer
     + (to_regprocedure('internal.get_staff_operations_health()') is not null)::integer
+    + (to_regprocedure('internal.record_scheduled_job_run(text)') is not null)::integer
+    + (to_regprocedure('api.record_scheduled_job_run(text)') is not null)::integer
     + (to_regprocedure('api.get_staff_operations_health()') is not null)::integer
   into present;
-  if present not in (0, 5) then
-    raise exception 'operations health precondition: % of 5 objects exist', present using errcode='55000';
+  if present not in (0, 7) then
+    raise exception 'operations health precondition: % of 7 objects exist', present using errcode='55000';
   end if;
   select string_agg(v.sig, ', ' order by v.sig) into drift
   from (values
@@ -119,9 +130,7 @@ begin
     ('api.run_retention(integer)', '149599bb34980837be83753e3b622e01', 'af45cfe715c12bc7e772a7ef3ecf3475'),
     ('api.purge_frontend_form_drafts(integer)', '13c798a36d3441ec17ad532a16b7eb98', 'a41ca813762071f9b0b963d54cf3155a'),
     ('api.claim_evidence_cleanup(integer)', '9837e370cf687084e2e2f492ed6f9053', '9d3d5b7f73ee0100006f71657ff6f79c'),
-    ('api.claim_media_cleanup(integer)', '4f8aa155ea7c2a35333d2dce7fe8d10d', '5b146b7b0c1f348bf1713c0f23bfd901'),
-    ('api.expire_stale_checkouts(integer)', '463872f511505e0b3ba84e0781814af0', '2181f3dbdaa4dd1d3ab5134d53e96c69'),
-    ('api.reconcile_ozow_refunds(jsonb)', 'ea40cc8571dab987fcb5b49d9f27ba53', 'f70c65e80b017e9df3e2f6dc07c6988d')
+    ('api.claim_media_cleanup(integer)', '4f8aa155ea7c2a35333d2dce7fe8d10d', '5b146b7b0c1f348bf1713c0f23bfd901')
   ) v(sig, reviewed, updated)
   where (select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig))
     is distinct from v.reviewed
@@ -185,10 +194,12 @@ begin
     raise exception 'scheduled job required' using errcode='22023';
   end if;
   -- At most one write per job every 20 seconds; a later run moves the time on.
-  if not exists(select 1 from private.scheduled_job_runs r
-      where r.job=p_job and r.last_run_at>=clock_timestamp()-interval '20 seconds') then
+  -- Never later than now: a time in the future is pulled back to now.
+  if not exists(select 1 from private.scheduled_job_runs r where r.job=p_job
+      and r.last_run_at between clock_timestamp()-interval '20 seconds' and clock_timestamp()) then
     insert into private.scheduled_job_runs as r (job,last_run_at) values (p_job,clock_timestamp())
-    on conflict (job) do update set last_run_at=greatest(r.last_run_at,excluded.last_run_at);
+    on conflict (job) do update
+      set last_run_at=least(greatest(r.last_run_at,excluded.last_run_at),clock_timestamp());
   end if;
   return p_result;
 end
@@ -362,27 +373,34 @@ alter function api.claim_media_cleanup(integer) owner to postgres;
 revoke all on function api.claim_media_cleanup(integer) from public;
 grant execute on function api.claim_media_cleanup(integer) to service_role;
 
-CREATE OR REPLACE FUNCTION api.expire_stale_checkouts(p_limit integer)
- RETURNS integer
- LANGUAGE sql
+CREATE OR REPLACE FUNCTION internal.record_scheduled_job_run(p_job text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.note_scheduled_job_run('payment_checks', internal.expire_stale_checkouts(p_limit));
+begin
+  -- Only the jobs whose success the website decides.
+  if p_job is null or p_job not in ('payment_checks', 'refund_check') then
+    raise exception 'scheduled job recorded by the website required' using errcode='22023';
+  end if;
+  return internal.note_scheduled_job_run(p_job, true);
+end
 $function$;
-alter function api.expire_stale_checkouts(integer) owner to postgres;
-revoke all on function api.expire_stale_checkouts(integer) from public;
-grant execute on function api.expire_stale_checkouts(integer) to service_role;
+alter function internal.record_scheduled_job_run(text) owner to postgres;
+revoke all on function internal.record_scheduled_job_run(text) from public,anon,authenticated,service_role;
+grant execute on function internal.record_scheduled_job_run(text) to service_role;
 
-CREATE OR REPLACE FUNCTION api.reconcile_ozow_refunds(p_refunds jsonb)
- RETURNS jsonb
+CREATE OR REPLACE FUNCTION api.record_scheduled_job_run(p_job text)
+ RETURNS boolean
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.note_scheduled_job_run('refund_check', internal.reconcile_ozow_refunds(p_refunds));
+  select internal.record_scheduled_job_run(p_job);
 $function$;
-alter function api.reconcile_ozow_refunds(jsonb) owner to postgres;
-revoke all on function api.reconcile_ozow_refunds(jsonb) from public;
-grant execute on function api.reconcile_ozow_refunds(jsonb) to service_role;
+alter function api.record_scheduled_job_run(text) owner to postgres;
+revoke all on function api.record_scheduled_job_run(text) from public,anon,authenticated,service_role;
+grant execute on function api.record_scheduled_job_run(text) to service_role;
 
 CREATE OR REPLACE FUNCTION internal.get_staff_operations_health()
  RETURNS jsonb
@@ -397,7 +415,9 @@ begin
     'generated_at', now_at,
     'jobs', (select coalesce(jsonb_agg(jsonb_build_object('job', c.job, 'every', c.every,
         'last_run_at', r.last_run_at,
-        'late', r.last_run_at is null or r.last_run_at < now_at - c.late_after)
+        -- A time in the future (written by hand) is not trusted: late.
+        'late', r.last_run_at is null or r.last_run_at < now_at - c.late_after
+          or r.last_run_at > clock_timestamp())
         order by c.ord), '[]'::jsonb)
       from internal.scheduled_job_catalogue() c
         left join private.scheduled_job_runs r on r.job = c.job),
@@ -413,14 +433,31 @@ begin
               from private.outbox_events o where o.processed_at is null
                 and (o.delivery_attempts >= 8 or o.created_at < now_at - interval '1 day')
               order by o.created_at, o.id limit 50) x))),
-    'notices', (select jsonb_build_object(
-        'stuck', (select count(*) from private.privacy_notice_jobs j where j.delivered_at is null
-          and (j.attempts >= 8 or j.created_at < now_at - interval '1 day')),
+    -- Notices the notice job can still send (internal.claim_frontend_privacy_notice's
+    -- own rule: the request is not minimised, and it was checked by hand, or
+    -- belongs to an erased account, or its address is the account's confirmed
+    -- one) are stuck after the last of 8 attempts or a day after queuing; the
+    -- others can never be sent and are only counted.
+    'notices', (with waiting as (
+        select j.id, j.kind, j.attempts, j.created_at,
+          r.minimised_at is null
+            and (r.identity_check = 'manual'
+              or exists(select 1 from private.account_erasure_requests l where l.request_id = r.id)
+              or exists(select 1 from auth.users u where u.id = r.subject_user_id
+                and u.email_confirmed_at is not null and not u.is_anonymous and u.deleted_at is null
+                and lower(u.email) = lower(r.requester_email))) as deliverable
+        from private.privacy_notice_jobs j join private.privacy_requests r on r.id = j.request_id
+        where j.delivered_at is null)
+      select jsonb_build_object(
+        'stuck', count(*) filter (where w.deliverable
+          and (w.attempts >= 8 or w.created_at < now_at - interval '1 day')),
+        'undeliverable', count(*) filter (where not w.deliverable),
         'items', (select coalesce(jsonb_agg(jsonb_build_object('kind', x.kind, 'attempts', x.attempts,
             'queued_at', x.created_at) order by x.created_at, x.id), '[]'::jsonb)
-          from (select j.id, j.kind, j.attempts, j.created_at from private.privacy_notice_jobs j
-              where j.delivered_at is null and (j.attempts >= 8 or j.created_at < now_at - interval '1 day')
-              order by j.created_at, j.id limit 50) x))),
+          from (select w2.id, w2.kind, w2.attempts, w2.created_at from waiting w2
+              where w2.deliverable and (w2.attempts >= 8 or w2.created_at < now_at - interval '1 day')
+              order by w2.created_at, w2.id limit 50) x))
+      from waiting w),
     'payments', (select jsonb_build_object(
         'problems', (select count(*) from private.payment_problems p
           where p.last_seen_at > now_at - interval '7 days'),

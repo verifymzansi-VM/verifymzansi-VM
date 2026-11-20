@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.expire_stale_checkouts(p_limit integer)
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.note_scheduled_job_run('payment_checks', internal.expire_stale_checkouts(p_limit));
+  select internal.expire_stale_checkouts(p_limit);
 $function$;
 alter function api.expire_stale_checkouts(integer) owner to postgres;
 revoke all on function api.expire_stale_checkouts(integer) from public;

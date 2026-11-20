@@ -61,16 +61,16 @@
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1067,
-      "fingerprint": "a0f10805e7b4316b26db52bf5b0a32f0"
+      "items": 1069,
+      "fingerprint": "d49ad4f3183fc9d6b05c57dce79b7ffd"
     },
     "function_grants": {
-      "items": 771,
-      "fingerprint": "af8be9e29f0e37c2c3905c5aa462b953"
+      "items": 773,
+      "fingerprint": "45756ac434f25a23a4c6732f6908a65e"
     },
     "function_metadata": {
-      "items": 1067,
-      "fingerprint": "5ff66bf7370d0c8aab03d777e8698443"
+      "items": 1069,
+      "fingerprint": "17f1cc75bc32ca094462ec7e8350de0d"
     },
     "indexes": {
       "items": 566,
