@@ -47,8 +47,7 @@ pnpm preflight:prod:edge
 Failure triage map:
 
 - `pnpm validate:launch-env` failure: fix missing or placeholder secrets first
-  (`KYC_WEBHOOK_SECRET`, `OZOW_*`, `AFRICASTALKING_SENDER_ID`, `RESEND_API_KEY`,
-  Turnstile keys).
+  (`OZOW_*`, `AFRICASTALKING_SENDER_ID`, `RESEND_API_KEY`, Turnstile keys).
 - `pnpm preflight:prod` failure: inspect whether failure is config
   (`Launch env`, `Production secrets`, `Ozow`) or connectivity
   (`Supabase schema`, `R2`) before retrying.
@@ -69,7 +68,7 @@ Failure triage map:
   `CLOUDFLARE_API_TOKEN` for the shell/CI job. The token must be able to read
   Workers deployments and version bindings for the VerifyMzansi account.
 - `pnpm cloudflare:secrets:check` failure: add missing Worker secrets (for
-  example `KYC_WEBHOOK_SECRET`) and remove forbidden production bypass secrets
+  example `OZOW_WEBHOOK_SECRET`) and remove forbidden production bypass secrets
   before any deploy promotion.
 - `pnpm test:launch:flows` failure: prioritize the billing route tests and DSAR
   flow regressions before non-critical e2e suites.
@@ -103,9 +102,8 @@ deployed Cloudflare/Wrangler runtime secrets:
 - `OZOW_WEBHOOK_SECRET`
 - Optional `OZOW_API_BASE_URL` only when explicitly required. In production, it
   must be `https://one.ozow.com`.
-- `KYC_PROVIDER` set to `manual` for human review launch mode, or to a real
-  signed provider; production launch validation blocks `stub`
-- `KYC_WEBHOOK_SECRET` for signed provider callbacks only
+- `KYC_PROVIDER` set to `manual` for human review launch mode; production launch
+  validation blocks `stub`
 - Temporary audit exception: the remaining `uuid` moderate advisory is accepted
   until 2026-05-28, owned by VerifyMzansi engineering. It is transitive through
   Sentry/Resend/Svix, and the vulnerable v3/v5/v6 buffer APIs are not called
@@ -129,10 +127,6 @@ Turnstile release gate:
 - Do not authorize localhost, staging sandboxes, or arbitrary preview hostnames
   on the production widget
 
-`ENABLE_DEV_KYC_WEBHOOK_BYPASS` is local-development-only and must never be set
-outside explicit localhost development. Production startup validation now treats
-it the same as other dev bypass flags.
-
 ## 3. Data and Billing Checks
 
 - Confirm Ozow is in production mode and can receive callbacks at
@@ -150,11 +144,9 @@ it the same as other dev bypass flags.
   not trigger fulfillment.
 - Run `pnpm test:launch:flows` before release to exercise the bundled billing,
   OTP, and DSAR launch paths in one command.
-- Confirm the KYC provider webhook secret is configured before enabling live
-  provider callbacks at `/api/webhooks/kyc/provider`.
-- Confirm `KYC_PROVIDER` is set to `manual` for human review launch mode or the
-  live signed provider. Production launch validation blocks `stub`, even when
-  `KYC_WEBHOOK_SECRET` is present.
+- Confirm `KYC_PROVIDER` is set to `manual` for human review launch mode.
+  Production launch validation blocks `stub`. (The old KYC provider webhook was
+  removed on 20 November 2026; see the runbook.)
 - Confirm Africa's Talking sender approval is complete for the live sender ID.
 - Confirm Resend domain verification is complete for the production sender
   domain.

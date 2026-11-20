@@ -14,7 +14,7 @@ import { PromotionDetailContent } from "@/components/listings/promotion-detail-c
 import { normalizeOwnerRecord, readOwnerId } from "@/lib/account/compat";
 import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
 import { presentEventSlide } from "@/lib/feed/presenters";
-import { createClient } from "@/lib/supabase/server";
+import { readFoundationPublicViewer } from "@/lib/foundation/server-session";
 import { toPublicVerification } from "@/lib/business-verification/public";
 
 export async function generatePromotionDetailMetadata(id: string): Promise<Metadata> {
@@ -36,7 +36,6 @@ export async function generatePromotionDetailMetadata(id: string): Promise<Metad
 }
 
 export async function PromotionDetailPageContent({ id }: { id: string }) {
-  const supabase = await createClient();
   const rawPromotion = await restoredEventDetail(id);
 
   const promotion = rawPromotion ? normalizeOwnerRecord(rawPromotion) : null;
@@ -61,9 +60,8 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
     ? await restoredEventHostBusiness(promotion.business_id)
     : null;
   const linkedBusiness = linkedBusinessRow ? toPublicVerification(linkedBusinessRow) : null;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // A public page: a visitor without a usable session is shown it signed out.
+  const user = await readFoundationPublicViewer();
   const promotionViewCount = promotion.view_count ?? 0;
 
   const locationName = [promotion.location_city, promotion.location_province]

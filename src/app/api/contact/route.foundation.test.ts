@@ -43,7 +43,6 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: oldBackend("createClient
 vi.mock("@/lib/services/email", () => ({
   sendContactFormNotification: oldBackend("sendContactFormNotification"),
 }));
-vi.mock("@/lib/services/audit", () => ({ logAuditEvent: oldBackend("logAuditEvent") }));
 
 const account = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 const post = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";

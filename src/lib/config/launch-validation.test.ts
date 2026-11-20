@@ -19,7 +19,6 @@ const BASE_ENV: EnvSource = {
   OZOW_CLIENT_SECRET: "client-secret-value", // secret-scan: allow deterministic fixture
   OZOW_SITE_CODE: "site-code",
   OZOW_WEBHOOK_SECRET: "webhook-secret-value", // secret-scan: allow deterministic fixture
-  KYC_WEBHOOK_SECRET: "kyc-webhook-secret-value", // secret-scan: allow deterministic fixture
   RESEND_API_KEY: "re_test_1234567890",
   R2_ACCOUNT_ID: "cloudflare-account-id",
   R2_ACCESS_KEY_ID: "cloudflare-access-key",
@@ -30,7 +29,7 @@ const BASE_ENV: EnvSource = {
   IP_HASH_SECRET: "p".repeat(32),
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAAA_test_site_key",
   TURNSTILE_SECRET_KEY: "0x4AAAAAAA_test_secret_key", // secret-scan: allow deterministic fixture
-  KYC_PROVIDER: "smileid",
+  KYC_PROVIDER: "manual",
   NODE_ENV: "production",
 };
 
@@ -103,11 +102,11 @@ describe("launch validation", () => {
     );
   });
 
-  it("fails production mode when the local KYC webhook bypass is enabled", () => {
+  it("fails production mode when the local Turnstile bypass is enabled", () => {
     const summary = validateLaunchConfiguration(
       {
         ...BASE_ENV,
-        ENABLE_DEV_KYC_WEBHOOK_BYPASS: "true",
+        ENABLE_DEV_TURNSTILE_BYPASS: "true",
       },
       { mode: "production" }
     );
@@ -156,7 +155,6 @@ describe("launch validation", () => {
     const summary = validateLaunchConfiguration(
       {
         ...BASE_ENV,
-        KYC_WEBHOOK_SECRET: undefined,
         KYC_PROVIDER: "stub",
       },
       { mode: "production" }
@@ -171,11 +169,10 @@ describe("launch validation", () => {
     );
   });
 
-  it("accepts production manual KYC without a webhook secret", () => {
+  it("accepts production manual KYC", () => {
     const summary = validateLaunchConfiguration(
       {
         ...BASE_ENV,
-        KYC_WEBHOOK_SECRET: undefined,
         KYC_PROVIDER: "manual",
       },
       { mode: "production" }
@@ -191,28 +188,24 @@ describe("launch validation", () => {
     );
   });
 
-  it("fails production mode when non-stub provider is enabled without KYC webhook secret", () => {
+  it("warns, without failing, when KYC_PROVIDER names a provider with no integration", () => {
     const summary = validateLaunchConfiguration(
       {
         ...BASE_ENV,
-        KYC_WEBHOOK_SECRET: undefined,
         KYC_PROVIDER: "smileid",
       },
       { mode: "production" }
     );
 
-    expect(summary.isValid).toBe(false);
-    expect(summary.errors).toContainEqual(
+    expect(summary.isValid).toBe(true);
+    expect(summary.warnings).toContainEqual(
       expect.objectContaining({
-        name: "Launch env",
-        detail: expect.stringContaining("KYC_WEBHOOK_SECRET"),
+        name: "KYC provider",
+        status: "warn",
+        detail: "KYC_PROVIDER=smileid has no integration; submissions go to human review",
       })
     );
-    expect(summary.errors).toContainEqual(
-      expect.objectContaining({
-        name: "KYC webhook",
-      })
-    );
+    expect(JSON.stringify(summary)).not.toContain("KYC_WEBHOOK_SECRET");
   });
 
   it("warns in development mode when OZOW_API_BASE_URL is not an approved Ozow host", () => {

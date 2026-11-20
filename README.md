@@ -261,8 +261,8 @@ pnpm supabase:cli -- --env-file=.env.local migration list
 - `AFRICASTALKING_SENDER_ID`, `IP_HASH_SECRET`, Ozow credentials, Turnstile, R2,
   Resend, and encryption keys must all be populated
 - `KYC_PROVIDER=manual` is the launch mode for human review. `KYC_PROVIDER=stub`
-  is allowed for local development only. Signed third-party KYC providers
-  require a populated `KYC_WEBHOOK_SECRET`.
+  is allowed for local development only. No third-party KYC provider is
+  connected: identity checks are reviewed by staff.
 - If `OZOW_API_BASE_URL` is set, it must target an official Ozow HTTPS host.
   Production accepts only `https://one.ozow.com`.
 - If you set `RATE_LIMITER_API_KEY`, you must also set `OTP_RATE_LIMITER_URL`

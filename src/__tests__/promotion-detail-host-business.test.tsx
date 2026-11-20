@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PromotionDetailPageContent } from "@/app/(marketplace)/_lib/promotion-detail-page-content";
-import { createClient } from "@/lib/supabase/server";
+import { readFoundationPublicViewer } from "@/lib/foundation/server-session";
 import {
   restoredEventDetail,
   restoredEventHostBusiness,
@@ -19,11 +19,9 @@ const { legacyFrom, captured } = vi.hoisted(() => ({
   captured: { linkedBusiness: undefined as unknown },
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({
-    auth: { getUser: async () => ({ data: { user: null } }) },
-    from: legacyFrom,
-  })),
+vi.mock("@/lib/supabase/server", () => ({ createClient: legacyFrom }));
+vi.mock("@/lib/foundation/server-session", () => ({
+  readFoundationPublicViewer: vi.fn(async () => null),
 }));
 vi.mock("@/lib/supabase/admin", () => ({
   tryCreateAdminClient: vi.fn(() => {
@@ -117,7 +115,8 @@ describe("event page host business (foundation backend)", () => {
       seen_method: null,
     });
     expect(legacyFrom).not.toHaveBeenCalled();
-    expect(createClient).toHaveBeenCalled();
+    // The signed-in check asks the live backend; a visitor is simply signed out.
+    expect(readFoundationPublicViewer).toHaveBeenCalledOnce();
   });
 
   it("renders the event without a host card when the business is not live or a read failed", async () => {

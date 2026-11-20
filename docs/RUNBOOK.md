@@ -240,8 +240,8 @@ Production is the `verifymzansi` Cloudflare Worker on `verifymzansi.com` (see
   - Providers: `AFRICASTALKING_API_KEY`, `AFRICASTALKING_USERNAME`,
     `AFRICASTALKING_SENDER_ID`, `OZOW_ENV`, `OZOW_CLIENT_ID`,
     `OZOW_CLIENT_SECRET`, `OZOW_SITE_CODE`, `OZOW_PAYMENT_OAUTH_SCOPE`,
-    `OZOW_WEBHOOK_SECRET`, `KYC_WEBHOOK_SECRET`, `RESEND_API_KEY`,
-    `TURNSTILE_SECRET_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
+    `OZOW_WEBHOOK_SECRET`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`,
+    `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
   - Workers and release: `INTERNAL_JOBS_SECRET`, `OPS_JOBS_SECRET`,
     `HEALTH_DIAGNOSTIC_TOKEN`, `RATE_LIMITER_API_KEY`, `CLOUDFLARE_API_TOKEN`,
     `DEPLOY_HEALTHCHECK_URL`
@@ -375,28 +375,13 @@ To register or update the VerifyMzansi webhook endpoint with Ozow:
 
 ### KYC Provider Webhook Secret
 
-Historical: describes the retired source backend. Before deploying the callback
-handler, `20260930170000_atomic_kyc_provider_webhook.sql` was applied through
-the source backend's backed-up migration command (`supabase:db:push:safe`, since
-removed). Foundation database updates follow
-[AGENTS.md](../AGENTS.md#database-changes). The service-only
-`apply_kyc_provider_webhook` RPC commits provider evidence, pending-step risk
-and audit in one transaction. Missing migrations or failed writes return HTTP
-500 so the provider retries; duplicates return HTTP 200 without replaying risk
-changes. Staff-decided steps and uploads replaced in the verification session
-are preserved. Callback bodies are limited to 256 KiB and HMAC signatures must
-be exactly 64 hexadecimal characters.
-
-This migration does not replay callbacks previously acknowledged by the old
-handler. If a real asynchronous provider was used, reconcile its delivery
-history against pending verification cases and retry affected events through the
-provider after deployment. Keep manual review active during reconciliation.
-
-1. Rotate the KYC provider webhook signing secret in the provider dashboard.
-2. Update the `KYC_WEBHOOK_SECRET` production secret.
-3. Run `pnpm validate:launch-env` and `pnpm preflight:prod` before deploy.
-4. Redeploy and verify `/api/webhooks/kyc/provider` rejects unsigned or
-   invalidly signed requests.
+Removed (owner decision, 20 November 2026). The old provider callback,
+`/api/webhooks/kyc/provider`, only wrote to the retired source backend and was
+deleted together with its `KYC_WEBHOOK_SECRET` and
+`ENABLE_DEV_KYC_WEBHOOK_BYPASS` settings. Identity checks are reviewed by staff
+on the live backend. A provider integration (Didit) will be built fresh, with
+its own route and secret. The `KYC_WEBHOOK_SECRET` value left in the GitHub
+`production` environment and on the Worker is no longer read and can be deleted.
 
 ### R2 (Cloudflare Storage) Keys
 

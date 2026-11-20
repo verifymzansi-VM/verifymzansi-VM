@@ -10,9 +10,7 @@ import { BrandSurface } from "@/components/brand";
 import { Reveal } from "@/components/marketing/reveal";
 import { PricingOffers } from "@/components/billing/pricing-offers";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
-import { getCommercialSettings } from "@/lib/commercial/settings";
 import { PACKAGES_ON_SALE } from "@/lib/constants/pricing";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
 
 const HERO_POINTS = [
@@ -28,16 +26,9 @@ export const metadata = {
     "VerifyMzansi pricing: your first post is free and events are free. Individual slots cost R69 for 30 days, R207 for 90 days or R414 for 180 days, in any section.",
 };
 
-async function loadSettings() {
-  try {
-    return await getCommercialSettings(createAdminClient() as never);
-  } catch {
-    return null;
-  }
-}
-
 export default async function PricingPage() {
-  const [catalog, settings] = await Promise.all([getCommercialCatalog(), loadSettings()]);
+  // The trial policy shows its fixed defaults (DEFAULT_COMMERCIAL_SETTINGS.trials).
+  const catalog = await getCommercialCatalog();
   const trustConfig = getTrustPublicConfig();
   // Offers are described for search engines only while they can be bought.
   const jsonLd = catalog.onSale && {
@@ -98,7 +89,7 @@ export default async function PricingPage() {
                 ))}
               </ul>
             </div>
-            <TrialPolicy trials={settings?.trials} className="w-full lg:ml-auto lg:max-w-md" />
+            <TrialPolicy className="w-full lg:ml-auto lg:max-w-md" />
           </div>
         </BrandSurface>
 
@@ -171,7 +162,6 @@ export default async function PricingPage() {
           <div className="container-page py-12 sm:py-16">
             <Reveal>
               <BillingFaq
-                trials={settings?.trials}
                 merchantName={trustConfig.ozowMerchantName}
                 vatStatus={trustConfig.vatStatus}
               />

@@ -3,7 +3,6 @@ import path from "node:path";
 import { OzowTransactionEventSchema } from "../src/test/contracts/ozow";
 import {
   EmailProviderResponseSchema,
-  KycWebhookPayloadSchema,
   SmsProviderResponseSchema,
 } from "../src/test/contracts/webhooks";
 
@@ -25,16 +24,6 @@ const CASES: ContractCase[] = [
     name: "Ozow official thin transaction event",
     file: path.join("ozow", "thin.json"),
     validate: (value) => OzowTransactionEventSchema.safeParse(value),
-  },
-  {
-    name: "KYC webhook approved",
-    file: path.join("kyc", "provider-approved.json"),
-    validate: (value) => KycWebhookPayloadSchema.safeParse(value),
-  },
-  {
-    name: "KYC webhook rejected",
-    file: path.join("kyc", "provider-rejected.json"),
-    validate: (value) => KycWebhookPayloadSchema.safeParse(value),
   },
   {
     name: "Africa's Talking success",
@@ -80,14 +69,6 @@ async function main(): Promise<void> {
   }
 
   // Negative checks to ensure schema strictness on critical fields.
-  const invalidKyc = readJson(path.join("kyc", "provider-approved.json")) as {
-    status?: string;
-  };
-  invalidKyc.status = "unknown";
-  if (KycWebhookPayloadSchema.safeParse(invalidKyc).success) {
-    failures.push("KYC negative case: invalid status should fail");
-  }
-
   const invalidSms = readJson(path.join("sms", "africastalking-success.json")) as {
     SMSMessageData?: { Recipients?: unknown[]; Message?: string };
   };

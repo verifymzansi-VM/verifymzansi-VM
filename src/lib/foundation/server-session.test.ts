@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { cookies } from "next/headers";
 import { readFoundationRequestCaller, FoundationSessionError } from "./request-api";
 import { readFoundationAccountContext, FoundationAccountContextError } from "./account-context";
-import { readFoundationServerSession } from "./server-session";
+import { readFoundationPublicViewer, readFoundationServerSession } from "./server-session";
 import type { User } from "@supabase/supabase-js";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 
@@ -84,4 +84,31 @@ it("keeps a revoked or suspended account forbidden", async () => {
     new FoundationAccountContextError("forbidden")
   );
   await expect(readFoundationServerSession()).rejects.toMatchObject({ status: 403 });
+});
+it("gives a public page the signed-in user", async () => {
+  await expect(readFoundationPublicViewer()).resolves.toBe(user);
+});
+it.each([
+  [
+    "no session",
+    () => vi.mocked(readFoundationRequestCaller).mockRejectedValue(new FoundationSessionError(401)),
+  ],
+  [
+    "a refused account",
+    () =>
+      vi
+        .mocked(readFoundationAccountContext)
+        .mockRejectedValue(new FoundationAccountContextError("forbidden")),
+  ],
+  [
+    "an unavailable session check",
+    () => vi.mocked(readFoundationRequestCaller).mockRejectedValue(new FoundationSessionError(503)),
+  ],
+  [
+    "an unavailable account read",
+    () => vi.mocked(readFoundationAccountContext).mockRejectedValue(new Error("network")),
+  ],
+] as const)("shows a public page signed out on %s", async (_name, refuse) => {
+  refuse();
+  await expect(readFoundationPublicViewer()).resolves.toBeNull();
 });

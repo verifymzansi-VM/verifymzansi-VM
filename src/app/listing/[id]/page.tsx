@@ -4,7 +4,7 @@ import { readRestoredCollection } from "@/lib/foundation/marketplace-read";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import { notFound } from "next/navigation";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
-import { createClient } from "@/lib/supabase/server";
+import { readFoundationPublicViewer } from "@/lib/foundation/server-session";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
@@ -44,12 +44,8 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
 
 export default async function ListingDetailPage({ params }: ListingDetailPageProps) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  // Check if visitor is authenticated
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // A public page: a visitor without a usable session is shown it signed out.
+  const user = await readFoundationPublicViewer();
 
   // Fetch listing
   const rawListing = await restoredListingDetail(id);

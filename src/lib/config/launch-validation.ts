@@ -23,7 +23,6 @@ const DEV_ONLY_FLAGS = [
   "ENABLE_DEV_PAYMENT_BYPASS",
   "ENABLE_MOCK_OZOW",
   "DEV_EXPOSE_OTP",
-  "ENABLE_DEV_KYC_WEBHOOK_BYPASS",
   "ENABLE_TEST_POSTING_BYPASS",
   "NEXT_PUBLIC_ENABLE_TEST_POSTING_BYPASS",
   "ENABLE_DEV_TURNSTILE_BYPASS",
@@ -31,11 +30,6 @@ const DEV_ONLY_FLAGS = [
 
 function getConfiguredKycProvider(env: EnvSource): string {
   return hasValue(env.KYC_PROVIDER) ? env.KYC_PROVIDER.trim().toLowerCase() : "stub";
-}
-
-function requiresKycWebhookSecret(mode: LaunchValidationMode, env: EnvSource): boolean {
-  const provider = getConfiguredKycProvider(env);
-  return mode === "production" && provider !== "stub" && provider !== "manual";
 }
 
 /**
@@ -253,15 +247,8 @@ function addCheck(
   checks.push({ name, status, detail });
 }
 
-function getRequiredLaunchEnvKeys(
-  mode: LaunchValidationMode,
-  env: EnvSource = process.env
-): string[] {
-  const required = [...REQUIRED_BY_MODE[mode]];
-  if (requiresKycWebhookSecret(mode, env)) {
-    required.push("KYC_WEBHOOK_SECRET");
-  }
-  return required;
+function getRequiredLaunchEnvKeys(mode: LaunchValidationMode): string[] {
+  return [...REQUIRED_BY_MODE[mode]];
 }
 
 export function resolveLaunchValidationMode(env: EnvSource = process.env): LaunchValidationMode {
@@ -291,7 +278,7 @@ export function validateLaunchConfiguration(
       ? CLOUDFLARE_RUNTIME_ONLY_SECRETS.filter((key) => env[key] === undefined)
       : []
   );
-  const requiredKeys = getRequiredLaunchEnvKeys(mode, env);
+  const requiredKeys = getRequiredLaunchEnvKeys(mode);
   const missingRequired = requiredKeys.filter(
     (key) => !hasValue(env[key]) && !heldInCloudflare.has(key)
   );
@@ -421,7 +408,6 @@ export function validateLaunchConfiguration(
   const ozowPaymentScope = hasValue(env.OZOW_PAYMENT_OAUTH_SCOPE)
     ? env.OZOW_PAYMENT_OAUTH_SCOPE.trim()
     : DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE;
-  const kycWebhookSecretRequired = requiresKycWebhookSecret(mode, env);
   const kycProvider = getConfiguredKycProvider(env);
   if (mode === "production") {
     if (
@@ -494,14 +480,13 @@ export function validateLaunchConfiguration(
     );
   }
 
-  const kycWebhookSecret = env.KYC_WEBHOOK_SECRET;
   if (mode === "production") {
     if (kycProvider === "stub") {
       addCheck(
         checks,
         "KYC provider",
         "fail",
-        "KYC_PROVIDER=stub is not allowed in production; use KYC_PROVIDER=manual or configure a signed provider integration"
+        "KYC_PROVIDER=stub is not allowed in production; use KYC_PROVIDER=manual"
       );
     } else if (kycProvider === "manual") {
       addCheck(
@@ -510,42 +495,13 @@ export function validateLaunchConfiguration(
         "pass",
         "KYC_PROVIDER=manual routes submissions to human review"
       );
-    } else if (kycWebhookSecretRequired) {
-      if (!hasValue(kycWebhookSecret)) {
-        addCheck(
-          checks,
-          "KYC webhook",
-          "fail",
-          `KYC_WEBHOOK_SECRET is required when KYC_PROVIDER=${kycProvider}`
-        );
-      } else if (isPlaceholderValue(kycWebhookSecret)) {
-        addCheck(
-          checks,
-          "KYC webhook",
-          "fail",
-          "KYC_WEBHOOK_SECRET still contains a placeholder value"
-        );
-      } else {
-        addCheck(
-          checks,
-          "KYC webhook",
-          "pass",
-          `Signed callbacks enabled (provider=${kycProvider})`
-        );
-      }
-    } else if (hasValue(kycWebhookSecret)) {
-      addCheck(
-        checks,
-        "KYC webhook",
-        "pass",
-        `Secret configured while KYC_PROVIDER=${kycProvider}`
-      );
     } else {
+      // No provider integration is built: identity checks go to staff review.
       addCheck(
         checks,
-        "KYC webhook",
-        "pass",
-        `KYC_PROVIDER=${kycProvider}, signed provider callbacks are not enabled`
+        "KYC provider",
+        "warn",
+        `KYC_PROVIDER=${kycProvider} has no integration; submissions go to human review`
       );
     }
   }
@@ -679,10 +635,7 @@ export function validateLaunchConfiguration(
   }
 
   if (mode === "production") {
-    const secretKeys = kycWebhookSecretRequired
-      ? ([...PRODUCTION_SECRET_KEYS, "KYC_WEBHOOK_SECRET"] as const)
-      : PRODUCTION_SECRET_KEYS;
-    const placeholderSecrets = secretKeys.filter(
+    const placeholderSecrets = PRODUCTION_SECRET_KEYS.filter(
       (key) => !heldInCloudflare.has(key) && isPlaceholderValue(env[key])
     );
     if (placeholderSecrets.length > 0) {
