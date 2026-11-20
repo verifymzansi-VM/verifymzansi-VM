@@ -86,16 +86,15 @@ preflight then reports the database ahead, and a forward fix is preferred.
 register). Roadmap P4b; the owner's decision D1 of 19 November 2026. It needs
 `20261114154823_slot_packages.sql`, `20261119025106_package_invoices.sql` and
 `20261119151152_package_gap_fixes.sql`, and refuses (55000) unless the seventeen
-functions it replaces have their reviewed bodies (or this update's), the
-fourteen it adds are absent (or this update's) and
-`private.package_invoice_requests` has no column `kind` (or this update's). It
-only adds: three member commands and one service sweep, four columns, a foreign
-key and two rules on the request table (and a wider slots rule), and a void rule
-on `private.customer_invoices` that also allows the database's own void of an
-ended package's add invoice; no API command, argument or grant is removed or
-changed. **Nothing can be added after it is applied**: packages stay off sale
-and every new command refuses with PT403 `packages_not_on_sale` until the owner
-switches them on (launch item 60).
+functions it replaces have their reviewed bodies (or this update's), the fifteen
+it adds are absent (or this update's) and `private.package_invoice_requests` has
+no column `kind` (or this update's). It only adds: three member commands and one
+service sweep, four columns, a foreign key and two rules on the request table
+(and a wider slots rule), and a void rule on `private.customer_invoices` that
+also allows the database's own void of an ended package's add invoice; no API
+command, argument or grant is removed or changed. **Nothing can be added after
+it is applied**: packages stay off sale and every new command refuses with PT403
+`packages_not_on_sale` until the owner switches them on (launch item 60).
 
 - **The price.** Added slots end with the package, always, and start on payment.
   One added slot costs the package term's catalogue price for the whole 24-hour
@@ -136,16 +135,18 @@ switches them on (launch item 60).
   for an add). The request records the days invoiced (`invoiced_days`); the
   staff queue shows the days priced, the days left now and the package's end;
   the invoice gains `days_added` and `package_ends_at`. A new package's request,
-  read and checkout never take an add request or an add order for theirs. An
-  unpaid add invoice of a package that has ended blocks no other package order
-  (`internal.package_invoice_blocking`) and is voided by the website's minute
-  operations job (`api.void_ended_package_add_invoices`, service only, no staff
-  member, one fixed reason; an invoice with a payment open at Ozow or a transfer
-  waiting is left for staff). The privacy export lists each request's kind,
-  package and days. `api.get_my_package_add_offer()` gives the member's running
-  package, the days left, one slot's price, the most that can be added, which
-  ways are open, an unpaid package invoice, their latest add request and the
-  adds so far.
+  read and checkout never take an add request or an add order for theirs (the
+  checkout closes any add order still pending, even one open at Ozow: its
+  package has ended). An unpaid add invoice of a package that has ended blocks
+  no other package order (`internal.package_invoice_blocking`) and is voided by
+  the website's minute operations job (`api.void_ended_package_add_invoices`,
+  service only, no staff member, one fixed reason, which the trigger
+  `customer_invoices_system_void` refuses on any other invoice; an invoice with
+  a payment open at Ozow or a transfer waiting is left for staff). The privacy
+  export lists each request's kind, package and days.
+  `api.get_my_package_add_offer()` gives the member's running package, the days
+  left, one slot's price, the most that can be added, which ways are open, an
+  unpaid package invoice, their latest add request and the adds so far.
 - **Delivery and late money.** Every way an add is paid (the Ozow notice, staff
   activation, Pay now, a bank transfer) delivers it only to the package it was
   bought for while that package runs and has room
@@ -195,7 +196,8 @@ The reviewed rollback is `../rollback/20261120045404_package_add_slots.down.sql`
 website release first. It refuses once an added-slots request or payment exists
 or an invoice was voided by the database; otherwise it puts back the seventeen
 earlier bodies byte for byte, drops the added functions, the four columns, the
-foreign key and its index, and restores the earlier slots and void rules.
+foreign key and its index and the void trigger, and restores the earlier slots
+and void rules.
 
 `node --import tsx scripts/test-foundation-package-add-slots.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the

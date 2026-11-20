@@ -72,5 +72,6 @@ CREATE INDEX customer_invoices_plan_version_idx ON private.customer_invoices USI
 CREATE INDEX customer_invoices_recent_idx ON private.customer_invoices USING btree (issued_at DESC, id DESC);
 CREATE INDEX customer_invoices_voided_by_idx ON private.customer_invoices USING btree (voided_by) WHERE (voided_by IS NOT NULL);
 CREATE TRIGGER customer_invoices_guard BEFORE INSERT OR DELETE OR UPDATE ON private.customer_invoices FOR EACH ROW EXECUTE FUNCTION internal.customer_invoice_guard();
+CREATE TRIGGER customer_invoices_system_void BEFORE UPDATE OF status ON private.customer_invoices FOR EACH ROW WHEN (new.status = 'void'::text AND new.voided_by IS NULL) EXECUTE FUNCTION internal.customer_invoice_system_void_guard();
 CREATE TRIGGER notify_invoice_issued AFTER INSERT ON private.customer_invoices FOR EACH ROW EXECUTE FUNCTION internal.notify_invoice_issued();
 revoke all on private.customer_invoices from public;

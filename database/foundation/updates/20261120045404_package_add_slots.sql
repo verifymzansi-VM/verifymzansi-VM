@@ -9,7 +9,7 @@
 -- or grant is removed or changed, and no field is added to an answer the
 -- website reads strictly except for an added-slots invoice request or
 -- invoice, which cannot exist while packages are off sale. It refuses with
--- 55000 unless the fourteen functions it adds are absent (or this update's),
+-- 55000 unless the fifteen functions it adds are absent (or this update's),
 -- the seventeen it replaces have their reviewed bodies (or this update's) and
 -- private.package_invoice_requests has no column `kind` (or this update's).
 -- Packages stay off sale (private.slot_package_sales is not touched): every
@@ -69,7 +69,8 @@
 --    (internal.package_invoice_blocking) and is voided by the minute
 --    operations job (api.void_ended_package_add_invoices, service only; the
 --    void rule of private.customer_invoices allows that one fixed reason
---    without a staff member). The privacy export
+--    without a staff member, and the new trigger customer_invoices_system_void
+--    only on an added-slots invoice). The privacy export
 --    (internal.frontend_privacy_export_data, replaced) lists each request's
 --    kind, package and days.
 -- 4. Delivers an add, however it is paid, only while the package it was
@@ -135,6 +136,7 @@ begin
       ('internal.package_invoice_blocking(uuid,uuid)'),
       ('internal.void_ended_package_add_invoices(integer)'),
       ('api.void_ended_package_add_invoices(integer)'),
+      ('internal.customer_invoice_system_void_guard()'),
       ('internal.customer_invoice_dto(private.customer_invoices,uuid)'),
       ('internal.request_package_invoice(uuid,integer,bigint,boolean,uuid)'),
       ('internal.get_my_package_invoice_request()'),
@@ -171,6 +173,8 @@ begin
         'internal.void_ended_package_add_invoices(integer) 01d78539331e4875d06cd138089531e7',
         'api.void_ended_package_add_invoices(integer) absent',
         'api.void_ended_package_add_invoices(integer) ff2882aa42979545ada32c671ff1a408',
+        'internal.customer_invoice_system_void_guard() absent',
+        'internal.customer_invoice_system_void_guard() a1d39d5a6c7b1d3eb7ca85bdf8b9533b',
         'internal.issue_slot_line_entitlements(uuid) 3d167ce1ce2bcc4a84480b8ed7888e0a',
         'internal.issue_slot_line_entitlements(uuid) b81aadc5fd06b47c33fc96b81d49b586',
         'internal.apply_provider_event(jsonb) 7f33edbb6bcafaecb519eef80c9b3633',
@@ -202,7 +206,7 @@ begin
         'internal.get_my_package_invoice_request() f46514db5c5524de116f099e0794a89b',
         'internal.get_my_package_invoice_request() d3f564bbfb6271560c72f0aaf1af047a',
         'internal.start_package_checkout(uuid,integer,bigint,boolean) d5d9713994c8789030bd30c90c4c00b5',
-        'internal.start_package_checkout(uuid,integer,bigint,boolean) 26868efedb8522c1e933278ed52dfaad',
+        'internal.start_package_checkout(uuid,integer,bigint,boolean) d59ca8b68dabb4c35d04d5945a90cd1b',
         'internal.frontend_privacy_export_data(uuid) 3dfe35ae5e93f0661ecd7dbf710cf45d',
         'internal.frontend_privacy_export_data(uuid) e543b105fe264d5a683b5c570bf68cb5'
       ) then
@@ -419,6 +423,29 @@ $$;
 alter function api.void_ended_package_add_invoices(integer) owner to postgres;
 revoke all on function api.void_ended_package_add_invoices(integer) from public;
 grant execute on function api.void_ended_package_add_invoices(integer) to service_role;
+
+-- 2b. A void without a staff member (the sweep's fixed reason, which the void
+-- rule allows) only for an added-slots invoice: any other invoice is voided
+-- by a staff member (internal.void_staff_invoice).
+create or replace function internal.customer_invoice_system_void_guard()
+ returns trigger
+ language plpgsql
+ set search_path to 'pg_catalog'
+as $$
+begin
+  if not exists(select 1 from private.package_invoice_requests r where r.invoice_id = new.id and r.kind = 'add') then
+    raise exception 'only an added-slots invoice is voided without a staff member' using errcode='23514';
+  end if;
+  return new;
+end;
+$$;
+alter function internal.customer_invoice_system_void_guard() owner to postgres;
+revoke all on function internal.customer_invoice_system_void_guard() from public;
+
+drop trigger if exists customer_invoices_system_void on private.customer_invoices;
+create trigger customer_invoices_system_void before update of status on private.customer_invoices
+  for each row when (new.status = 'void' and new.voided_by is null)
+  execute function internal.customer_invoice_system_void_guard();
 
 -- 5. A package grant was revoked (a refund or chargeback of its line): the
 -- posts in it that still fit in the package's other running grants stay in the
@@ -2449,10 +2476,17 @@ begin
     raise exception 'your package invoice is not paid yet; pay it, or ask us to cancel it first'
       using errcode='PT409', detail='package_invoice_unpaid';
   end if;
-  -- (20261120045404: an added-slots order is never continued as a new
-  -- package; one left unsent is closed below as any other package order.)
+  -- (20261120045404: an added-slots order is never continued, nor returned,
+  -- as a new package. No package of the account runs here, so any still
+  -- pending is for a package that has ended: it is closed, also one sent to
+  -- Ozow; if that one is paid anyway it goes to reconciliation and is
+  -- refunded.)
+  update private.payments p set status='cancelled', status_changed_at=clock_timestamp()
+    where p.owner_id=actor and p.status='pending' and p.target_post_id is null
+      and p.snapshot->>'category'='slot_package_add';
   select p.* into pay from private.payments p join private.plan_versions v on v.id=p.plan_version_id
     where p.owner_id=actor and p.status='pending' and p.target_post_id is null and internal.slot_package_plan(v.plan_code)
+      and p.snapshot->>'category' is distinct from 'slot_package_add'
     order by p.created_at desc, p.id limit 1
     for update of p;
   if found then

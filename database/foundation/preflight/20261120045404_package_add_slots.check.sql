@@ -6,9 +6,9 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and starts "package add slots: update not applied".
 --
--- The summary says whether the fourteen functions the update adds, its four
+-- The summary says whether the fifteen functions the update adds, its four
 -- columns, three constraints and one index of private.package_invoice_requests
--- and its void rule of private.customer_invoices are absent and the seventeen
+-- and its void rule and trigger of private.customer_invoices are absent and the seventeen
 -- functions it replaces have their reviewed earlier bodies
 -- (update not applied), all present with the update's bodies (already
 -- applied), or a mix (unexpected state), and counts:
@@ -43,6 +43,7 @@ with added as (
     ('internal.package_invoice_blocking(uuid,uuid)', 'absent', '460577dbfc512edb1f9a6576dc8b2d73'),
     ('internal.void_ended_package_add_invoices(integer)', 'absent', '01d78539331e4875d06cd138089531e7'),
     ('api.void_ended_package_add_invoices(integer)', 'absent', 'ff2882aa42979545ada32c671ff1a408'),
+    ('internal.customer_invoice_system_void_guard()', 'absent', 'a1d39d5a6c7b1d3eb7ca85bdf8b9533b'),
     ('internal.issue_slot_line_entitlements(uuid)', '3d167ce1ce2bcc4a84480b8ed7888e0a', 'b81aadc5fd06b47c33fc96b81d49b586'),
     ('internal.apply_provider_event(jsonb)', '7f33edbb6bcafaecb519eef80c9b3633', '3a7487b374df1d1334d007111fd1d97f'),
     ('internal.activate_staff_paid_payment(uuid,text)', '324f8855e844937190754f70c03fcd2e', '369ef2cc3b3a3139cfe83a3e7edb74eb'),
@@ -58,7 +59,7 @@ with added as (
     ('internal.customer_invoice_dto(private.customer_invoices,uuid)', '27604995d3de7e7a5794c1bf220b3213', 'b322c8309ff009f5ef969862b4b77d89'),
     ('internal.request_package_invoice(uuid,integer,bigint,boolean,uuid)', 'beb95771af677d39b775e83197dfd8d1', 'f64d310d8ca3a549840db98df6f083f9'),
     ('internal.get_my_package_invoice_request()', 'f46514db5c5524de116f099e0794a89b', 'd3f564bbfb6271560c72f0aaf1af047a'),
-    ('internal.start_package_checkout(uuid,integer,bigint,boolean)', 'd5d9713994c8789030bd30c90c4c00b5', '26868efedb8522c1e933278ed52dfaad'),
+    ('internal.start_package_checkout(uuid,integer,bigint,boolean)', 'd5d9713994c8789030bd30c90c4c00b5', 'd59ca8b68dabb4c35d04d5945a90cd1b'),
     ('internal.frontend_privacy_export_data(uuid)', '3dfe35ae5e93f0661ecd7dbf710cf45d', 'e543b105fe264d5a683b5c570bf68cb5')
   ) v(sig, before, after)
 ),
@@ -81,7 +82,9 @@ others as (
       and c.conname = 'package_invoice_requests_package_id_fkey')),
     (to_regclass('private.package_invoice_requests_package_idx') is not null),
     (exists(select 1 from pg_constraint c where c.conrelid = 'private.customer_invoices'::regclass
-      and c.conname = 'customer_invoices_void' and pg_get_constraintdef(c.oid) like '%ended before the invoice was paid%'))
+      and c.conname = 'customer_invoices_void' and pg_get_constraintdef(c.oid) like '%ended before the invoice was paid%')),
+    (exists(select 1 from pg_trigger t where t.tgrelid = 'private.customer_invoices'::regclass
+      and t.tgname = 'customer_invoices_system_void'))
   ) v(present)
 ),
 state as (

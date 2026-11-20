@@ -5,7 +5,7 @@
 -- api.start_package_add_checkout and api.request_package_add_invoice, which
 -- that release's "Add slots" page calls.
 --
--- It refuses (55000) unless the fourteen added functions and the seventeen
+-- It refuses (55000) unless the fifteen added functions and the seventeen
 -- replaced ones have this update's bodies (a later update changed one: undo
 -- that update first), while any other function refers to an added function
 -- (undo that update first), once an added-slots invoice request or an
@@ -34,7 +34,8 @@ declare shape text; dependants text;
 begin
   for shape in
     select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)),'absent')
-    from (values ('api.void_ended_package_add_invoices(integer)'),
+    from (values ('internal.customer_invoice_system_void_guard()'),
+      ('api.void_ended_package_add_invoices(integer)'),
       ('internal.void_ended_package_add_invoices(integer)'),
       ('internal.package_invoice_blocking(uuid,uuid)'),
       ('api.request_package_add_invoice(uuid,integer,bigint,boolean,uuid)'),
@@ -82,6 +83,7 @@ begin
         'internal.package_invoice_blocking(uuid,uuid) 460577dbfc512edb1f9a6576dc8b2d73',
         'internal.void_ended_package_add_invoices(integer) 01d78539331e4875d06cd138089531e7',
         'api.void_ended_package_add_invoices(integer) ff2882aa42979545ada32c671ff1a408',
+        'internal.customer_invoice_system_void_guard() a1d39d5a6c7b1d3eb7ca85bdf8b9533b',
         'internal.issue_slot_line_entitlements(uuid) b81aadc5fd06b47c33fc96b81d49b586',
         'internal.apply_provider_event(jsonb) 3a7487b374df1d1334d007111fd1d97f',
         'internal.activate_staff_paid_payment(uuid,text) 369ef2cc3b3a3139cfe83a3e7edb74eb',
@@ -97,7 +99,7 @@ begin
         'internal.customer_invoice_dto(private.customer_invoices,uuid) b322c8309ff009f5ef969862b4b77d89',
         'internal.request_package_invoice(uuid,integer,bigint,boolean,uuid) f64d310d8ca3a549840db98df6f083f9',
         'internal.get_my_package_invoice_request() d3f564bbfb6271560c72f0aaf1af047a',
-        'internal.start_package_checkout(uuid,integer,bigint,boolean) 26868efedb8522c1e933278ed52dfaad',
+        'internal.start_package_checkout(uuid,integer,bigint,boolean) d59ca8b68dabb4c35d04d5945a90cd1b',
         'internal.frontend_privacy_export_data(uuid) e543b105fe264d5a683b5c570bf68cb5'
         ) then
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
@@ -125,6 +127,7 @@ begin
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname in ('api', 'internal', 'private', 'public')
     and p.oid not in (select to_regprocedure(s) from unnest(array[
+      'internal.customer_invoice_system_void_guard()',
       'api.void_ended_package_add_invoices(integer)',
       'internal.void_ended_package_add_invoices(integer)',
       'internal.package_invoice_blocking(uuid,uuid)',
@@ -160,7 +163,8 @@ begin
       or p.prosrc ilike '%slot_package_add_ok%' or p.prosrc ilike '%package_add_invoice_package%'
       or p.prosrc ilike '%slot_package_keep_posts%' or p.prosrc ilike '%get_my_package_add_offer%'
       or p.prosrc ilike '%start_package_add_checkout%' or p.prosrc ilike '%request_package_add_invoice%'
-      or p.prosrc ilike '%package_invoice_blocking%' or p.prosrc ilike '%void_ended_package_add_invoices%');
+      or p.prosrc ilike '%package_invoice_blocking%' or p.prosrc ilike '%void_ended_package_add_invoices%'
+      or p.prosrc ilike '%customer_invoice_system_void_guard%');
   if dependants is not null then
     raise exception 'rollback precondition: % refer to this update''s functions; undo that update first', dependants
       using errcode='55000';
@@ -1773,7 +1777,9 @@ end$function$;
 alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
 revoke all on function internal.frontend_privacy_export_data(uuid) from public;
 
--- The added functions.
+-- The added trigger and functions.
+drop trigger customer_invoices_system_void on private.customer_invoices;
+drop function internal.customer_invoice_system_void_guard();
 drop function api.void_ended_package_add_invoices(integer);
 drop function internal.void_ended_package_add_invoices(integer);
 drop function internal.package_invoice_blocking(uuid,uuid);

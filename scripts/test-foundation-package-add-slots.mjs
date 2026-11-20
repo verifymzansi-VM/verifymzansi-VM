@@ -563,6 +563,29 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
       // Once voided, the sweep leaves it alone.
       assert.equal(json(service("select api.void_ended_package_add_invoices(50);")).voided, 0);
       fails(member(vusi, "select api.void_ended_package_add_invoices(50);"), "42501");
+      // The fixed reason without a staff member is refused on any other
+      // invoice, even for the table's owner.
+      const lwazi = verified("adds-lwazi");
+      const asked = json(
+        member(
+          lwazi,
+          `select api.request_package_invoice('${K30.id}',5,${K30.cents * 5},true,'${randomUUID()}');`
+        )
+      );
+      const other = issue(asked.request_id).invoice;
+      fails(
+        `update private.customer_invoices set status='void', voided_at=now(),
+          void_reason='The package these slots were added to ended before the invoice was paid'
+          where invoice_number='${other.invoice_number}';`,
+        "23514",
+        /only an added-slots invoice is voided without a staff member/
+      );
+      assert.equal(
+        scalar(
+          `select status from private.customer_invoices where invoice_number='${other.invoice_number}';`
+        ),
+        "issued"
+      );
     }
   );
 
@@ -644,6 +667,22 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
           `select snapshot->>'category' from private.payments where id='${fresh.payment_id}';`
         ),
         "slot_package"
+      );
+      // An add order already open at Ozow when its package ended: never
+      // returned as the new package's order; it is closed.
+      const thuli = packageHolder("adds-thuli").owner;
+      const open = add(thuli, offer(thuli).package.id, 5);
+      ozowOpen(kit, thuli, open.payment_id);
+      travel(thuli, "21 days");
+      const next = json(
+        member(thuli, `select api.start_package_checkout('${K30.id}',5,${K30.cents * 5},true);`)
+      );
+      assert.notEqual(next.payment_id, open.payment_id);
+      assert.equal(next.reused, false);
+      assert.equal(Number(next.amount_cents), K30.cents * 5);
+      assert.equal(
+        scalar(`select status from private.payments where id='${open.payment_id}';`),
+        "cancelled"
       );
     }
   );
