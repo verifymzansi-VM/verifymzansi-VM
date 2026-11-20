@@ -113,7 +113,16 @@ it("does not send an unready staff account into the admin area", async () => {
   const location = new URL(response.headers.get("location")!);
   expect(location.pathname).toBe("/staff/two-step");
   expect(location.searchParams.get("next")).toBe("/admin/moderation");
-  expect((await checkFoundationPageAccess(request("/api/admin/users"), false)).status).toBe(403);
+  const api = await checkFoundationPageAccess(request("/api/admin/users"), false);
+  expect(api.status).toBe(403);
+  // Staff screens read this answer and send the person to the two-step page.
+  expect(await api.json()).toEqual({
+    error: "Verify with your authenticator app to continue.",
+    code: "mfa_required",
+    verifyUrl: "/staff/two-step",
+    redirectUrl: "/staff/two-step",
+  });
+  privateResponse(api);
   expect(
     (await checkFoundationPageAccess(request("/staff/two-step"), false)).headers.get(
       "x-middleware-next"
