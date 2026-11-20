@@ -63,6 +63,8 @@ const EXPORT_LATER = [
   EXPORT_AFTER,
   // 20261119172135_post_views_and_likes.sql
   "3dfe35ae5e93f0661ecd7dbf710cf45d",
+  // 20261120045404_package_add_slots.sql (the request's kind, package and days)
+  "e543b105fe264d5a683b5c570bf68cb5",
 ];
 const LIFECYCLE = "internal.run_post_lifecycle(integer)";
 const LIFECYCLE_BEFORE = "cb5770e3e71e9e6ed31d1eff3e06e3fc";

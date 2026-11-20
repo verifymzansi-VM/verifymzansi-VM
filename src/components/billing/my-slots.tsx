@@ -79,7 +79,9 @@ export function MySlots({
       : [];
   return (
     <div className="space-y-5">
-      {pkg ? <MySlotPackage slotPackage={pkg} now={now} /> : null}
+      {pkg ? (
+        <MySlotPackage slotPackage={pkg} now={now} onSale={slotPackage?.on_sale === true} />
+      ) : null}
       {pkg ? (
         <h2 className="font-display text-lg font-bold text-foreground">Individual slots</h2>
       ) : null}

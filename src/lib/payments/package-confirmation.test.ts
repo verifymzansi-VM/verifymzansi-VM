@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   readFoundationPayment: vi.fn(),
   readFoundationMySlotPackage: vi.fn(),
   readFoundationMySlots: vi.fn(),
+  readFoundationPackageAddOffer: vi.fn(),
   readPackagesOnSale: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
@@ -15,6 +16,7 @@ vi.mock("@/lib/foundation/billing-runtime", () => ({
   readFoundationPayment: mocks.readFoundationPayment,
   readFoundationMySlotPackage: mocks.readFoundationMySlotPackage,
   readFoundationMySlots: mocks.readFoundationMySlots,
+  readFoundationPackageAddOffer: mocks.readFoundationPackageAddOffer,
 }));
 vi.mock("@/lib/foundation/slot-package-offer", () => ({
   readPackagesOnSale: mocks.readPackagesOnSale,
@@ -48,6 +50,20 @@ describe("readPackageConfirmation", () => {
     mocks.readFoundationPayment.mockResolvedValue(payment());
     mocks.readFoundationMySlotPackage.mockResolvedValue({ package: held });
     mocks.readFoundationMySlots.mockResolvedValue({ individual: { held: 2 } });
+    mocks.readFoundationPackageAddOffer.mockResolvedValue({ package: { adds: [] } });
+  });
+
+  it("says how many slots an add payment added (P4b), and leaves it out when unreadable", async () => {
+    mocks.readFoundationPackageAddOffer.mockResolvedValue({
+      package: { adds: [{ payment_id: PAYMENT_ID, slots: 5, paid_at: held.starts_at }] },
+    });
+    await expect(readPackageConfirmation(PAYMENT_ID)).resolves.toMatchObject({
+      details: { slots: 10, addedSlots: 5 },
+    });
+    mocks.readFoundationPackageAddOffer.mockRejectedValue(new Error("unavailable"));
+    const result = await readPackageConfirmation(PAYMENT_ID);
+    expect(result.packagePayment).toBe(true);
+    expect(result.details).not.toHaveProperty("addedSlots");
   });
 
   it("reads the package a delivered package payment opened", async () => {

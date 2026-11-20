@@ -18,6 +18,26 @@ describe("the customer invoice document", () => {
     expect(doc).toHaveTextContent("Billing details not added yet.");
   });
 
+  it("says the days added and the package's end on an added-slots invoice (P4b)", () => {
+    render(
+      <InvoiceDocument
+        invoice={{
+          ...FIXTURE_INVOICE,
+          days_added: 30,
+          package_ends_at: "2026-12-24T08:00:00+00:00",
+        }}
+        sellerAddress={null}
+        bank={null}
+      />
+    );
+    expect(
+      screen.getByText(
+        "30 days added. The slots run from the day this invoice is paid until the package ends on 24 December 2026."
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Each slot runs/)).toBeNull();
+  });
+
   it("shows the seller's address and the bank transfer section only when set", () => {
     const { rerender } = render(
       <InvoiceDocument invoice={FIXTURE_INVOICE} sellerAddress={null} bank={null} />

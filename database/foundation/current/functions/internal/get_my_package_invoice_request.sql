@@ -9,7 +9,9 @@ CREATE OR REPLACE FUNCTION internal.get_my_package_invoice_request()
 AS $function$
 declare actor uuid := internal.price_draft_actor(); latest private.package_invoice_requests;
 begin
-  select * into latest from private.package_invoice_requests r where r.account_id = actor
+  -- (20261120045404: a request for a new package; added-slots requests are
+  -- read with api.get_my_package_add_offer.)
+  select * into latest from private.package_invoice_requests r where r.account_id = actor and r.kind = 'package'
     order by r.requested_at desc, r.id desc limit 1;
   perform internal.price_draft_actor();
   return jsonb_build_object('request', case when latest.id is null then null

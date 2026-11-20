@@ -126,12 +126,18 @@ const SWEEPS = [
   // (20261118044440_bank_transfer_expiry.sql).
   // At most 50 rows a run: each is its own subtransaction in the database.
   ["expire_waiting_bank_transfers", { p_limit: 50 }],
+  // Voids unpaid added-slots invoices whose package has ended
+  // (20261120045404_package_add_slots.sql). Each row is its own subtransaction.
+  ["void_ended_package_add_invoices", { p_limit: 50 }],
 ] as const;
 // Sweeps an earlier database does not have yet: until their update is
 // applied, the missing command does not fail the run, but a warning is logged
 // (at most once an hour per sweep and worker instance) so it shows in the
 // Workers logs instead of passing silently.
-const LATER_SWEEPS: ReadonlySet<string> = new Set(["expire_waiting_bank_transfers"]);
+const LATER_SWEEPS: ReadonlySet<string> = new Set([
+  "expire_waiting_bank_transfers",
+  "void_ended_package_add_invoices",
+]);
 export const MISSING_SWEEP_WARNING_MS = 60 * 60 * 1000;
 const missingSweepWarnedAt = new Map<string, number>();
 const missingCommand = (error: { code?: string } | null) =>

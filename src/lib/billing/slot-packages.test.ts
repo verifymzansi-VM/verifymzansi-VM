@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   isPackageTerm,
+  packageAddInvoiceDueOn,
+  packageAddQuote,
   packageOnlineMaxSlots,
   packageQuote,
   packageTotalCents,
@@ -55,5 +57,42 @@ describe("Multi-listing package rules (P4a)", () => {
   it("knows the terms", () => {
     expect(isPackageTerm(90)).toBe(true);
     expect(isPackageTerm(60)).toBe(false);
+  });
+});
+
+describe("Adding slots part-way (P4b)", () => {
+  // 25 slots, 38 whole days left: one added slot costs R126.67.
+  const offer = {
+    unitPriceCents: 12_667,
+    places: 25,
+    maxSlots: 225,
+    onlineOpen: true,
+    invoiceOpen: true,
+  };
+  it("costs n times one slot's price for the days left", () => {
+    expect(packageAddQuote(5, offer, 130_000)).toEqual({ kind: "online", totalCents: 63_335 });
+    expect(packageAddQuote(1, offer, null)).toEqual({ kind: "online", totalCents: 12_667 });
+  });
+  it("goes by invoice above Ozow's maximum or 100 slots in all", () => {
+    expect(packageAddQuote(20, offer, 130_000)).toEqual({ kind: "invoice", totalCents: 253_340 });
+    expect(packageAddQuote(76, { ...offer, unitPriceCents: 100 }, null)).toEqual({
+      kind: "invoice",
+      totalCents: 7_600,
+    });
+    expect(packageAddQuote(75, { ...offer, unitPriceCents: 100 }, null).kind).toBe("online");
+  });
+  it("refuses nothing typed, zero, and more than the package can hold", () => {
+    expect(packageAddQuote(null, offer, null)).toEqual({ kind: "invalid" });
+    expect(packageAddQuote(0, offer, null)).toEqual({ kind: "invalid" });
+    expect(packageAddQuote(226, offer, null)).toEqual({ kind: "too_large", maxSlots: 225 });
+  });
+  it("dues an added-slots invoice 3 days after issue, or on the package's last day if sooner", () => {
+    const now = new Date("2026-11-20T22:30:00Z"); // 21 November in South Africa
+    expect(packageAddInvoiceDueOn("2026-12-24T08:00:00Z", now)).toBe("2026-11-24");
+    expect(packageAddInvoiceDueOn("2026-11-22T21:00:00Z", now)).toBe("2026-11-22");
+  });
+  it("is closed when that way is not open any more", () => {
+    expect(packageAddQuote(20, { ...offer, invoiceOpen: false }, 130_000).kind).toBe("closed");
+    expect(packageAddQuote(2, { ...offer, onlineOpen: false }, 130_000).kind).toBe("closed");
   });
 });

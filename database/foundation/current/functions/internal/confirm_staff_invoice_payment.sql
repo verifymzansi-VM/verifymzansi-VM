@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION internal.confirm_staff_invoice_payment(p_transfer_id 
 AS $function$
 declare actor uuid; t private.invoice_transfers; plan private.plan_versions; pay private.payments;
   fingerprint text; made integer := 0; commissions integer := 0; vat bigint; inv private.customer_invoices;
-  is_package boolean;
+  is_package boolean; add_package uuid;
 begin
   actor := internal.staff_actor('payments:confirm_transfer');
   t := internal.lock_invoice_transfer_for_review(p_transfer_id, actor);
@@ -62,6 +62,8 @@ begin
   -- A Multi-listing package (P4e) is paid by bank transfer only against its
   -- invoice (record_staff_invoice_payment records Individual slots only).
   is_package := internal.slot_package_plan(plan.plan_code) and t.customer_invoice_id is not null;
+  -- 20261120045404: an added-slots invoice adds them to the package it names.
+  add_package := internal.package_add_invoice_package(t.customer_invoice_id);
   if is_package then
     -- One package per account at a time, only while packages are on sale (as
     -- an Ozow payment of a package is delivered).
@@ -70,7 +72,14 @@ begin
       raise exception 'Multi-listing packages are not on sale; decline this transfer and return the money'
         using errcode='PT403', detail='packages_not_on_sale';
     end if;
-    if internal.slot_package_open(t.account_id) then
+    if add_package is not null then
+      -- Added slots only while the package still runs, with room; money that
+      -- arrives after it ended is returned in full (D1).
+      if not internal.slot_package_add_ok(t.account_id, add_package, t.slots) then
+        raise exception 'the customer''s package has ended (or has no room); decline this transfer and return the money in full'
+          using errcode='PT409', detail='package_ended';
+      end if;
+    elsif internal.slot_package_open(t.account_id) then
       raise exception 'the customer already has a Multi-listing package; decline this transfer and return the money'
         using errcode='PT409', detail='package_active';
     end if;
@@ -86,7 +95,9 @@ begin
       raise exception 'the customer has another package payment open at Ozow; try again when it has closed'
         using errcode='PT409', detail='invoice_checkout_open';
     end if;
-    if plan.price_cents * t.slots <> t.amount_received_cents then
+    if (case when add_package is not null
+          then (select i.total_cents from private.customer_invoices i where i.id = t.customer_invoice_id)
+          else plan.price_cents * t.slots end) is distinct from t.amount_received_cents then
       raise exception 'the recorded amount is not the order total' using errcode='PT428', detail='invoice_amount_mismatch';
     end if;
   else
@@ -146,7 +157,10 @@ begin
           'customer_invoice_id', inv.id, 'customer_invoice_number', inv.invoice_number,
           'cooling_off_consent', jsonb_build_object('method', 'written', 'recorded_by_staff_at', t.recorded_at,
             'terms_version', (select c.version from private.posting_terms_current c where c.singleton),
-            'wording', 'My slots start as soon as this invoice is paid; the 7-day cooling-off does not apply because the service starts immediately')),
+            'wording', 'My slots start as soon as this invoice is paid; the 7-day cooling-off does not apply because the service starts immediately'))
+          -- Added slots (20261120045404): delivered into the package asked for.
+          || case when add_package is null then '{}'::jsonb else jsonb_build_object('category', 'slot_package_add',
+            'package_id', add_package, 'unit_price_cents', inv.unit_price_cents) end,
         'invoice', 'complete', 'fulfilled', statement_timestamp(), statement_timestamp())
       returning * into pay;
     insert into private.payment_lines (payment_id, line_number, plan_version_id, amount_cents, slot_count)
@@ -215,7 +229,9 @@ begin
   end if;
   perform internal.assert_staff_payment_actor(actor, t.account_id);
   return internal.invoice_transfer_dto(t, actor) || jsonb_build_object('commissions', commissions,
-    'slots_started', made, 'ends_at', statement_timestamp() + make_interval(days => plan.duration_days),
+    'slots_started', made, 'ends_at', case when add_package is not null
+      then (select max(e.ends_at) from private.entitlements e where e.payment_id = pay.id)
+      else statement_timestamp() + make_interval(days => plan.duration_days) end,
     'repeated', false);
 end;
 $function$;
