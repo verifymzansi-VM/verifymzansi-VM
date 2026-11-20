@@ -189,7 +189,8 @@ describe("full-screen selfie session", () => {
         expect(onCapture).toHaveBeenCalledWith(expect.objectContaining({ type: "image/jpeg" }), {
           livenessPassed: true,
         });
-        expect(drawImage).toHaveBeenCalledWith(video, 0, 0);
+        // The original pixels, at most 1,280 px on the long edge.
+        expect(drawImage).toHaveBeenCalledWith(video, 0, 0, 720, 960);
         expect(screen.getByRole("img", { name: "Captured photo" })).toBeVisible();
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       } else {
@@ -406,8 +407,12 @@ describe("CameraCapture", () => {
     await clickOpenCamera();
 
     await waitFor(() => {
-      expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
+      expect(screen.getByText(/your camera is blocked for verifymzansi/i)).toBeInTheDocument();
     });
+    // Per-browser steps, including in-app browsers.
+    expect(screen.getByText("Android (Chrome)")).toBeInTheDocument();
+    expect(screen.getByText("iPhone (Safari)")).toBeInTheDocument();
+    expect(screen.getByText(/inside whatsapp, facebook or instagram/i)).toBeInTheDocument();
   });
 
   it("shows blocked-for-site guidance when permission state is denied", async () => {
@@ -425,12 +430,12 @@ describe("CameraCapture", () => {
     await clickOpenCamera();
 
     await waitFor(() => {
-      expect(screen.getByText(/camera is blocked for this site/i)).toBeInTheDocument();
+      expect(screen.getByText(/your camera is blocked for verifymzansi/i)).toBeInTheDocument();
     });
 
     expect(query).toHaveBeenCalled();
     expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/may not show the camera prompt again/i)).toBeInTheDocument();
+    expect(screen.getByText(/photos from your gallery can't be used/i)).toBeInTheDocument();
   });
 
   it("falls back to denied guidance when permission query fails", async () => {
@@ -448,7 +453,7 @@ describe("CameraCapture", () => {
     await clickOpenCamera();
 
     await waitFor(() => {
-      expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
+      expect(screen.getByText(/your camera is blocked for verifymzansi/i)).toBeInTheDocument();
     });
 
     expect(query).toHaveBeenCalled();
@@ -476,7 +481,7 @@ describe("CameraCapture", () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
+        expect(screen.getByText(/your camera is blocked for verifymzansi/i)).toBeInTheDocument();
       },
       { timeout: 2_000 }
     );
@@ -497,7 +502,8 @@ describe("CameraCapture", () => {
     await clickOpenCamera();
 
     await waitFor(() => {
-      expect(screen.getByText(/camera took too long to start/i)).toBeInTheDocument();
+      expect(screen.getByText(/your camera didn't start/i)).toBeInTheDocument();
+      expect(screen.getByText(/close other apps or tabs using the camera/i)).toBeInTheDocument();
     });
   });
 
@@ -512,7 +518,7 @@ describe("CameraCapture", () => {
     await clickOpenCamera();
 
     await waitFor(() => {
-      expect(screen.getByText(/no camera found/i)).toBeInTheDocument();
+      expect(screen.getByText(/close other apps or tabs using the camera/i)).toBeInTheDocument();
     });
     expect(mockGetUserMedia).toHaveBeenCalledTimes(1);
   });
@@ -530,7 +536,7 @@ describe("CameraCapture", () => {
     await clickOpenCamera();
 
     await waitFor(() => {
-      expect(screen.getByText(/camera took too long to start/i)).toBeInTheDocument();
+      expect(screen.getByText(/your camera didn't start/i)).toBeInTheDocument();
     });
 
     const stream = createMockStream();
@@ -570,7 +576,7 @@ describe("CameraCapture", () => {
     await clickOpenCamera();
 
     await waitFor(() => {
-      expect(screen.getByText(/no camera found/i)).toBeInTheDocument();
+      expect(screen.getByText(/can't find a camera on this device/i)).toBeInTheDocument();
     });
 
     expect(mockGetUserMedia).toHaveBeenCalledTimes(3);
@@ -605,7 +611,7 @@ describe("CameraCapture", () => {
     );
   });
 
-  it("shows file upload fallback on camera error", async () => {
+  it("never offers a file or gallery upload when the camera fails", async () => {
     const err = new Error("denied");
     err.name = "NotAllowedError";
     mockGetUserMedia.mockRejectedValueOnce(err);
@@ -614,37 +620,66 @@ describe("CameraCapture", () => {
     await clickOpenCamera();
 
     await waitFor(() => {
-      const input = document.querySelector("input[type='file']");
-      expect(input).toBeTruthy();
+      expect(screen.getByText(/your camera is blocked for verifymzansi/i)).toBeInTheDocument();
     });
-
+    expect(document.querySelector("input[type='file']")).toBeNull();
+    expect(screen.queryByText(/upload/i)).toBeNull();
     const helpLink = screen.getByRole("link", { name: /verification help/i });
     expect(helpLink).toHaveAttribute("href", "/help/verification");
   });
 
-  it("calls onFallback when file input is used after camera error", async () => {
-    const err = new Error("denied");
-    err.name = "NotAllowedError";
-    mockGetUserMedia.mockRejectedValueOnce(err);
-    const onCapture = vi.fn();
-    const onFallback = vi.fn();
+  it("offers Continue on your phone on a computer without a camera", async () => {
+    const err = new Error("not found");
+    err.name = "NotFoundError";
+    mockGetUserMedia.mockRejectedValue(err);
+    const onContinueOnPhone = vi.fn();
 
-    render(<CameraCapture onCapture={onCapture} facingMode="user" onFallback={onFallback} />);
+    render(
+      <CameraCapture
+        onCapture={vi.fn()}
+        facingMode="environment"
+        documentGuide
+        onContinueOnPhone={onContinueOnPhone}
+      />
+    );
     await clickOpenCamera();
 
-    await waitFor(() => {
-      expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
-    });
+    const phone = await screen.findByRole("button", { name: /continue on your phone/i });
+    fireEvent.click(phone);
+    expect(onContinueOnPhone).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: /try the camera again/i })).toBeInTheDocument();
+  });
 
-    // Simulate file input
-    const input = document.querySelector("input[type='file']");
-    expect(input).toBeTruthy();
+  it("does not offer Continue on your phone on a phone", async () => {
+    const agent = vi
+      .spyOn(navigator, "userAgent", "get")
+      .mockReturnValue("Mozilla/5.0 (Linux; Android 14) Mobile Safari/537.36");
+    const err = new Error("not found");
+    err.name = "NotFoundError";
+    mockGetUserMedia.mockRejectedValue(err);
 
-    const file = new File(["test"], "test.jpg", { type: "image/jpeg" });
-    fireEvent.change(input!, { target: { files: [file] } });
+    render(
+      <CameraCapture
+        onCapture={vi.fn()}
+        facingMode="environment"
+        documentGuide
+        onContinueOnPhone={vi.fn()}
+      />
+    );
+    await clickOpenCamera();
 
-    expect(onCapture).toHaveBeenCalledWith(file);
-    expect(onFallback).toHaveBeenCalled();
+    await screen.findByText(/can't find a camera on this device/i);
+    expect(screen.queryByRole("button", { name: /continue on your phone/i })).toBeNull();
+    agent.mockRestore();
+  });
+
+  it("tells members inside an in-app browser how to open the page in their browser", async () => {
+    const agent = vi
+      .spyOn(navigator, "userAgent", "get")
+      .mockReturnValue("Mozilla/5.0 (iPhone) Mobile/15E148 Instagram 300.0");
+    render(<CameraCapture onCapture={vi.fn()} facingMode="environment" documentGuide />);
+    expect(await screen.findByText(/inside an app such as whatsapp/i)).toBeInTheDocument();
+    agent.mockRestore();
   });
 
   it("stops stream on unmount", async () => {
@@ -676,10 +711,10 @@ describe("CameraCapture", () => {
     await clickOpenCamera();
 
     await waitFor(() => {
-      expect(screen.getByText(/camera access was denied/i)).toBeInTheDocument();
+      expect(screen.getByText(/your camera is blocked for verifymzansi/i)).toBeInTheDocument();
     });
 
-    const retryBtn = screen.getByRole("button", { name: /try again/i });
+    const retryBtn = screen.getByRole("button", { name: /try the camera again/i });
     expect(retryBtn).toBeInTheDocument();
 
     const stream = createMockStream();
@@ -754,5 +789,66 @@ describe("CameraCapture", () => {
     // guard must block the blank-frame capture.
     expect(onCapture).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /retake/i })).not.toBeInTheDocument();
+  });
+
+  it("asks the member to check an ID photo before it is used, as a 0.85 JPEG", async () => {
+    const stream = createMockStream();
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+    mockGetUserMedia.mockResolvedValueOnce(stream);
+    const drawImage = vi.fn();
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage,
+      getImageData: () => ({ data: new Uint8ClampedArray(4 * 320 * 180).fill(120) }),
+    } as unknown as CanvasRenderingContext2D);
+    const toBlobSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "toBlob")
+      .mockImplementation((callback) => {
+        callback(new Blob(["img"], { type: "image/jpeg" }));
+      });
+    const widthSpy = vi
+      .spyOn(HTMLVideoElement.prototype, "videoWidth", "get")
+      .mockReturnValue(3840);
+    const heightSpy = vi
+      .spyOn(HTMLVideoElement.prototype, "videoHeight", "get")
+      .mockReturnValue(2160);
+    const readySpy = vi.spyOn(HTMLVideoElement.prototype, "readyState", "get").mockReturnValue(4);
+    const onCapture = vi.fn();
+    const onReviewChange = vi.fn();
+
+    render(
+      <CameraCapture
+        onCapture={onCapture}
+        facingMode="environment"
+        documentGuide
+        onReviewChange={onReviewChange}
+      />
+    );
+    await clickOpenCamera();
+    expect(mockGetUserMedia.mock.calls[0][0].video).toMatchObject({
+      facingMode: { ideal: "environment" },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: /take photo/i }));
+
+    expect(await screen.findByText("Photo taken")).toBeInTheDocument();
+    expect(screen.getByText(/can you read your name and id number/i)).toBeInTheDocument();
+    expect(onCapture).not.toHaveBeenCalled();
+    expect(onReviewChange).toHaveBeenLastCalledWith(true);
+    expect(toBlobSpy.mock.calls[0][1]).toBe("image/jpeg");
+    expect(toBlobSpy.mock.calls[0][2]).toBe(0.85);
+    // The long edge is capped at 2,000 px.
+    expect(drawImage).toHaveBeenCalledWith(expect.any(HTMLVideoElement), 0, 0, 2000, 1125);
+
+    fireEvent.click(screen.getByRole("button", { name: /use this photo/i }));
+    expect(onCapture).toHaveBeenCalledTimes(1);
+    expect(onCapture.mock.calls[0][0]).toBeInstanceOf(File);
+    expect(onCapture.mock.calls[0][0].type).toBe("image/jpeg");
+
+    getContextSpy.mockRestore();
+    toBlobSpy.mockRestore();
+    widthSpy.mockRestore();
+    heightSpy.mockRestore();
+    readySpy.mockRestore();
   });
 });

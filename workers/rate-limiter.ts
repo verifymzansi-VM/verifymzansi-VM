@@ -230,6 +230,12 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 60, ttl: 3600 }, // 60 per hour
   ],
   "verification:status": [{ limit: 30, ttl: 60 }], // polling-friendly
+  // Continue on your phone: the database also allows 5 links an hour per account.
+  "verification:handoff": [
+    { limit: 10, ttl: 600 },
+    { limit: 30, ttl: 3600 },
+  ],
+  "verification:handoff-open": [{ limit: 20, ttl: 600 }],
   "verification:manual-location": [{ limit: 10, ttl: 60 }],
   // "Detect province and city": a suggestion only, kept apart from manual saving.
   "verification:location-detect": [{ limit: 10, ttl: 60 }],

@@ -80,6 +80,85 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## ID photos with the camera only, and Continue on your phone, 20 November 2026
+
+`20261120131212_camera_capture_handoff.sql` is **pending** (see the applied
+register). Didit plan, build step 2: ID photos and selfies are taken only with
+the camera on the verification page, and a member on a computer without a usable
+camera continues on their phone. Works on today's Manual setting.
+
+- **Links:** new table `private.capture_handoffs`. The website makes a random
+  32-byte token and stores only its SHA-256; the link carries the token in its
+  `#fragment`. A link belongs to one account, its open identity case and the
+  computer's live session, works for 15 minutes (fixed by a check) and only the
+  newest link of an account works. At most 5 links an hour per account (PT429,
+  detail `handoff_rate_limited`). No API role has table access; links are
+  deleted one day after they expire by `internal.purge_capture_handoffs`, run by
+  `api.run_retention` as `capture_handoffs`.
+- **Commands:** `api.start_capture_handoff` (members with a live session: the
+  typed legal names, saved as the ID upload saves them, and the encrypted ID
+  number receipt; without them only the selfie, after an ID photo of the case,
+  else PT409 `handoff_needs_id`); `api.redeem_capture_handoff` (service: uses
+  the link once and binds the SHA-256 of a capture grant the website keeps in an
+  HttpOnly cookie on the phone; every unusable link gets PT409
+  `handoff_unavailable`; a phone signed in as another account gets 42501
+  `handoff_other_account` and the link stays unused);
+  `api.capture_handoff_context` (service: the short public name, the expiry and
+  which photos are still needed); `api.reserve_handoff_verification_upload`
+  (service: reserves the phone's ID photo or selfie for the link's case only, on
+  the computer's session, with the same rules as
+  `api.reserve_frontend_verification_upload`; the selfie is stored as taken with
+  the camera). The phone's uploads are completed by the existing service
+  commands, so signing out on the computer also stops the phone.
+- **Camera only:** `internal.record_my_selfie_capture` (same signature) refuses
+  a browser that says the selfie was an uploaded file (PT409 `camera required`,
+  detail `camera_required`). Rows stored earlier keep their answer and the
+  table's check is unchanged (expand only). The website refuses ID and selfie
+  photos the page did not take (no `camera` capture method, not a JPEG, an EXIF
+  block, or an ID photo under 1,000 px on its long edge). None of this proves a
+  picture came from a live camera; staff still review every case.
+
+New commands only: no command loses an argument or a grant. A website release
+without the matching code never calls them, and the release with them needs them
+(its "Continue on your phone" answers "not available" without the update).
+ORDER: apply first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261120131212_camera_capture_handoff.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "camera capture handoff: update not applied; selfies
+   said to be uploaded files: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "camera capture handoff: already applied; selfies said to
+   be uploaded files: N; phone links: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261120131212_camera_capture_handoff.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update is
+applied, puts back `internal.record_my_selfie_capture` and
+`internal.run_retention` byte for byte, and drops the four commands, their
+helpers and `private.capture_handoffs` (open links and the ID number receipts
+they hold). Uploads already completed from a phone are kept.
+
+`node --import tsx scripts/test-foundation-camera-capture-handoff.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted body and a
+premature rollback; apply, rollback and re-apply return the same fingerprints;
+an uploaded-file selfie is refused and earlier answers stay; a link stores only
+hashes, its case and session, and lasts 15 minutes; bad input, missing ID
+details, a reused token and a sixth link in an hour are refused; the phone opens
+a link once, a phone signed in as another account is refused without using it;
+the phone's ID photo and selfie complete through the existing service commands
+and register the submission with the selfie marked as a camera capture; a link
+stops working when expired, replaced, signed out on the computer or the account
+is closed; a selfie-only link; only the website's server opens links and
+reserves phone uploads, and no API role reads the table; links go one day after
+they expired.
+
 ## A daily limit on SMS codes for the whole site, 20 November 2026
 
 `20261120074411_sms_daily_limit.sql` was applied on 20 November 2026 at 12:26
@@ -5980,5 +6059,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   limit: already applied; codes today: 0; counted today: 0; limit: 500";
   production fingerprint after it (fingerprint.sql at cd725fb9) matched the full
   replay (except the known schema grant difference)
+- `20261120131212_camera_capture_handoff.sql`: pending
 
 <!-- applied-register:end -->

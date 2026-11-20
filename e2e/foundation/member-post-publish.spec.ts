@@ -1,4 +1,4 @@
-import { randomBytes, randomInt, randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import {
   expect,
   test,
@@ -6,9 +6,13 @@ import {
   type BrowserContext,
   type Page,
 } from "@playwright/test";
-import sharp from "sharp";
 import { E2E_FIXTURE, LOCAL_OPS_JOBS_SECRET } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { isMultipartForm } from "./support/multipart";
+import {
+  takeIdPhoto,
+  takeSelfieForManualReview,
+  withSyntheticCamera,
+} from "./support/synthetic-camera";
 import { endedWithTest } from "./support/route-teardown";
 import { clickWhileToastShows, holdToast, switchToShortPhone } from "./support/toasts";
 import {
@@ -160,14 +164,6 @@ async function guard(context: BrowserContext) {
   return { outside, replies, reply, sentTo, captchaTokens };
 }
 
-/** The camera is unavailable, so the photo steps offer their upload fallback,
- * exactly as on a device without a usable camera (today's capture rules). */
-async function withoutCamera(context: BrowserContext) {
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, "mediaDevices", { value: undefined, configurable: true });
-  });
-}
-
 async function signInBrowser(context: BrowserContext, person: Person) {
   const session = await browserSessionCookies(readTestCopy(), person);
   await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
@@ -198,15 +194,6 @@ async function claimQueue(page: Page, claims: () => Reply[], sent: () => number)
   }).toPass({ timeout: 30_000, intervals: [1_000, 2_000, 4_000] });
   await expect.poll(() => claims().map((entry) => entry.status)).toEqual([200]);
   await expect(page.getByText(/^You hold \d+ items? in this queue\.$/)).toBeVisible();
-}
-
-/** A synthetic photo: random noise over a flat colour, never a face or a
- * document, and different on every run (the risk check rejects reused photos). */
-async function syntheticPhoto(width: number, height: number) {
-  const noise = randomBytes(width * height * 3);
-  return sharp(noise, { raw: { width, height, channels: 3 } })
-    .jpeg({ quality: 70 })
-    .toBuffer();
 }
 
 /** A valid synthetic South African ID number for an adult (Luhn checksum). */
@@ -436,33 +423,26 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    await withoutCamera(context);
+    await withSyntheticCamera(context);
     const { outside, reply } = await guard(context);
     await signInBrowser(context, member);
     await page.goto("/verification");
 
-    // ID step: legal names, the ID number and a photo (upload fallback).
-    await page.getByLabel("First name (as shown on ID)").fill(member.firstName);
-    await page.getByLabel("Surname (as shown on ID)").fill(member.lastName);
+    // ID step: legal names, the ID number and a photo taken with the camera
+    // on the page (no file or gallery upload is offered).
+    await page.getByLabel("All first names (as on your ID)").fill(member.firstName);
+    await page.getByLabel("Surname (as on your ID)").fill(member.lastName);
     await page.getByLabel("13-digit SA ID number").fill(member.idNumber);
     await expect(page.getByText("ID number valid")).toBeVisible();
-    await page.getByRole("button", { name: "Open camera" }).click();
-    await page.getByLabel("Or upload a photo").setInputFiles({
-      name: "id-front.jpg",
-      mimeType: "image/jpeg",
-      buffer: await syntheticPhoto(960, 600),
-    });
+    await expect(page.locator('input[type="file"]')).toHaveCount(0);
+    await takeIdPhoto(page);
     await page.getByRole("button", { name: "Continue" }).click();
     await expect.poll(() => reply("/api/verification/upload").length, { timeout: 30_000 }).toBe(1);
 
-    // Selfie step: today's rules allow an upload when no camera is available.
+    // Selfie step: the camera again, for manual review (no face check here).
     await expect(page.getByRole("heading", { name: "Live selfie" })).toBeVisible();
-    await page.getByRole("button", { name: "Open camera" }).click();
-    await page.getByLabel("Or upload a photo").setInputFiles({
-      name: "selfie.jpg",
-      mimeType: "image/jpeg",
-      buffer: await syntheticPhoto(600, 800),
-    });
+    await expect(page.locator('input[type="file"]')).toHaveCount(0);
+    await takeSelfieForManualReview(page);
     await page.getByRole("button", { name: "Continue" }).click();
     await expect.poll(() => reply("/api/verification/upload").length, { timeout: 30_000 }).toBe(2);
     expect(reply("/api/verification/upload").map((entry) => entry.status)).toEqual([200, 200]);

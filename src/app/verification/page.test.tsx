@@ -11,9 +11,40 @@ import {
 } from "@/lib/constants/verification-email-confirmation";
 
 const mockToast = vi.fn();
-// Camera failure telemetry is an external side effect of the genuine fallback
-// UI. Do not compile or initialize the provider SDK for these form tests.
 vi.mock("@sentry/nextjs", () => ({ captureMessage: vi.fn(), addBreadcrumb: vi.fn() }));
+// The camera has its own tests (src/components/ui/camera-capture.test.tsx).
+// Here a stand-in takes a photo the way the real one hands it to the page:
+// a camera JPEG, with the face check passed for the selfie. It never offers a
+// file input, like the real one.
+vi.mock("@/components/ui/camera-capture", () => ({
+  CameraCapture: ({
+    onCapture,
+    onContinueOnPhone,
+    documentGuide,
+  }: {
+    onCapture: (file: File, meta?: { livenessPassed: boolean }) => void;
+    onContinueOnPhone?: () => void;
+    documentGuide?: boolean;
+  }) => (
+    <div>
+      <button
+        type="button"
+        onClick={() =>
+          onCapture(new File(["photo"], "capture.jpg", { type: "image/jpeg" }), {
+            livenessPassed: !documentGuide,
+          })
+        }
+      >
+        Take test photo
+      </button>
+      {onContinueOnPhone && (
+        <button type="button" onClick={onContinueOnPhone}>
+          Continue on your phone
+        </button>
+      )}
+    </div>
+  ),
+}));
 const OriginalURL = global.URL;
 const VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION =
   "Verification is temporarily unavailable right now. Please try again later.";
@@ -112,18 +143,9 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-async function openCameraAndUseFileFallback(file: File) {
-  fireEvent.click(screen.getByRole("button", { name: /Open Camera/i }));
-
-  await waitFor(() => {
-    expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
-  });
-
-  fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
-    target: {
-      files: [file],
-    },
-  });
+/** Takes a photo with the (stand-in) camera on the current step. */
+async function takeCameraPhoto() {
+  fireEvent.click(await screen.findByRole("button", { name: /Take test photo/i }));
 }
 
 describe("VerificationPage", () => {
@@ -578,9 +600,7 @@ describe("VerificationPage", () => {
       200
     );
 
-    await openCameraAndUseFileFallback(
-      new File(["fake-selfie"], "selfie.jpg", { type: "image/jpeg" })
-    );
+    await takeCameraPhoto();
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     await waitFor(() => {
@@ -627,9 +647,7 @@ describe("VerificationPage", () => {
       200
     );
 
-    await openCameraAndUseFileFallback(
-      new File(["fake-selfie"], "selfie.jpg", { type: "image/jpeg" })
-    );
+    await takeCameraPhoto();
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     await screen.findByRole("heading", { name: /Step 4: Confirm your province and city/i });
@@ -849,10 +867,10 @@ describe("VerificationPage", () => {
       expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText(/First name \(as shown on ID\)/i), {
+    fireEvent.change(screen.getByLabelText(/All first names \(as on your ID\)/i), {
       target: { value: "Sipho" },
     });
-    fireEvent.change(screen.getByLabelText(/Surname \(as shown on ID\)/i), {
+    fireEvent.change(screen.getByLabelText(/Surname \(as on your ID\)/i), {
       target: { value: "Mokoena" },
     });
 
@@ -860,7 +878,7 @@ describe("VerificationPage", () => {
       target: { value: "8001015009087" },
     });
 
-    await openCameraAndUseFileFallback(new File(["fake-img"], "id.jpg", { type: "image/jpeg" }));
+    await takeCameraPhoto();
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /^Continue$/i })).toBeEnabled();
     });
@@ -900,10 +918,10 @@ describe("VerificationPage", () => {
       expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText(/First name \(as shown on ID\)/i), {
+    fireEvent.change(screen.getByLabelText(/All first names \(as on your ID\)/i), {
       target: { value: "Sipho" },
     });
-    fireEvent.change(screen.getByLabelText(/Surname \(as shown on ID\)/i), {
+    fireEvent.change(screen.getByLabelText(/Surname \(as on your ID\)/i), {
       target: { value: "Mokoena" },
     });
 
@@ -911,7 +929,7 @@ describe("VerificationPage", () => {
       target: { value: "8001015009087" },
     });
 
-    await openCameraAndUseFileFallback(new File(["fake-img"], "id.jpg", { type: "image/jpeg" }));
+    await takeCameraPhoto();
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /^Continue$/i })).toBeEnabled();
     });
@@ -921,9 +939,9 @@ describe("VerificationPage", () => {
       () => {
         expect(mockToast).toHaveBeenCalledWith(
           expect.objectContaining({
-            title: "ID document upload failed",
+            title: "Your ID photo wasn't sent",
             description:
-              "ID document upload is temporarily unavailable. Please try again in a moment. Ref: req_test_123",
+              "ID document can't be sent right now. Please try again in a moment. Ref: req_test_123",
           })
         );
       },
@@ -931,7 +949,7 @@ describe("VerificationPage", () => {
     );
   });
 
-  it("supports file fallback on the selfie step after ID document submission", async () => {
+  it("sends camera photos for the ID and the selfie, never a file", async () => {
     statusResponse = jsonResponse(
       buildStatusPayload({
         steps: [{ step_type: "phone", status: "approved" }],
@@ -945,17 +963,17 @@ describe("VerificationPage", () => {
       expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText(/First name \(as shown on ID\)/i), {
+    fireEvent.change(screen.getByLabelText(/All first names \(as on your ID\)/i), {
       target: { value: "Sipho" },
     });
-    fireEvent.change(screen.getByLabelText(/Surname \(as shown on ID\)/i), {
+    fireEvent.change(screen.getByLabelText(/Surname \(as on your ID\)/i), {
       target: { value: "Mokoena" },
     });
     fireEvent.change(screen.getByLabelText(/13-digit SA ID number/i), {
       target: { value: "8001015009087" },
     });
 
-    await openCameraAndUseFileFallback(new File(["fake-id"], "id.jpg", { type: "image/jpeg" }));
+    await takeCameraPhoto();
 
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
@@ -963,9 +981,7 @@ describe("VerificationPage", () => {
       expect(screen.getByRole("heading", { name: /Step 3: Selfie/i })).toBeInTheDocument();
     });
 
-    await openCameraAndUseFileFallback(
-      new File(["fake-selfie"], "selfie.jpg", { type: "image/jpeg" })
-    );
+    await takeCameraPhoto();
 
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
@@ -979,6 +995,73 @@ describe("VerificationPage", () => {
       String(input).includes("/api/verification/upload")
     );
     expect(verificationUploadCalls.length).toBeGreaterThanOrEqual(2);
+    for (const [, init] of verificationUploadCalls) {
+      const body = (init as RequestInit).body as FormData;
+      expect(body.get("captureMethod")).toBe("camera");
+    }
+    const selfieBody = (verificationUploadCalls.at(-1)![1] as RequestInit).body as FormData;
+    expect(selfieBody.get("docType")).toBe("selfie");
+    expect(selfieBody.get("livenessPassed")).toBe("true");
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+  });
+
+  it("labels the names as on the ID and continues on a phone with the typed details", async () => {
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        steps: [{ step_type: "phone", status: "approved" }],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/Type every first name in the same order as your ID/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Photos from your gallery or files can't be used/i)
+    ).toBeInTheDocument();
+
+    // Without the details, the phone link is not made.
+    fireEvent.click(screen.getByRole("button", { name: /Continue on your phone/i }));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Enter your names and ID number first" })
+    );
+    expect(
+      fetchCalls().some(([input]) => String(input).includes("/api/verification/handoff"))
+    ).toBe(false);
+
+    fireEvent.change(screen.getByLabelText(/All first names \(as on your ID\)/i), {
+      target: { value: "Thando Sipho" },
+    });
+    fireEvent.change(screen.getByLabelText(/Surname \(as on your ID\)/i), {
+      target: { value: "Dlamini" },
+    });
+    fireEvent.change(screen.getByLabelText(/13-digit SA ID number/i), {
+      target: { value: "8001015009087" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Continue on your phone/i }));
+
+    await screen.findByRole("heading", { name: /Step 2: Continue on your phone/i });
+    await waitFor(() => {
+      const call = fetchCalls().find(([input]) =>
+        String(input).includes("/api/verification/handoff")
+      );
+      expect(call).toBeDefined();
+      expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({
+        idNumber: "8001015009087",
+        firstName: "Thando Sipho",
+        lastName: "Dlamini",
+      });
+    });
+    expect(
+      screen.getByText(/Works once, for 15 minutes, only for your account/i)
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Back$/i }));
+    expect(await screen.findByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
   });
 
   it("treats duplicate pending ID uploads as already submitted and advances to the selfie step", async () => {
@@ -1002,17 +1085,17 @@ describe("VerificationPage", () => {
       expect(screen.getByLabelText(/13-digit SA ID number/i)).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText(/First name \(as shown on ID\)/i), {
+    fireEvent.change(screen.getByLabelText(/All first names \(as on your ID\)/i), {
       target: { value: "Sipho" },
     });
-    fireEvent.change(screen.getByLabelText(/Surname \(as shown on ID\)/i), {
+    fireEvent.change(screen.getByLabelText(/Surname \(as on your ID\)/i), {
       target: { value: "Mokoena" },
     });
     fireEvent.change(screen.getByLabelText(/13-digit SA ID number/i), {
       target: { value: "8001015009087" },
     });
 
-    await openCameraAndUseFileFallback(new File(["fake-id"], "id.jpg", { type: "image/jpeg" }));
+    await takeCameraPhoto();
 
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 

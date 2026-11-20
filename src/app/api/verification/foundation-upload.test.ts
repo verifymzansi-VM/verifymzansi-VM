@@ -7,6 +7,7 @@ import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import { putImmutableR2Bytes } from "@/lib/services/storage";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { cleanEvidence } from "@/lib/foundation/verification-runtime";
+import { cameraJpegFile } from "@/test/fixtures/camera-jpeg";
 vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: vi.fn() }));
 vi.mock("@/lib/foundation/runtime-connection", () => ({
   readFoundationRuntimeConnection: () => ({}),
@@ -35,12 +36,18 @@ const owner = "11111111-1111-4111-8111-111111111111",
 const purpose = () => (selfie ? "selfie" : "id_front");
 let selfie = false,
   completed = false;
-function request(extra: Record<string, string> = {}, origin = "https://verifymzansi.com") {
+/** `extra` adds or replaces form fields; a null value leaves that field out. */
+function request(
+  extra: Record<string, string | null> = {},
+  origin = "https://verifymzansi.com",
+  file: File = cameraJpegFile()
+) {
   const form = new FormData();
-  form.append("file", new File(["fixture-document"], "fixture.png", { type: "image/png" }));
-  const fields = {
+  form.append("file", file);
+  const fields: Record<string, string | null> = {
     docType: selfie ? "selfie" : "id_document",
     uploadRequestId: receipt,
+    captureMethod: "camera",
     ...(!selfie
       ? {
           idNumber: "8001015009087",
@@ -51,7 +58,7 @@ function request(extra: Record<string, string> = {}, origin = "https://verifymza
       : {}),
     ...extra,
   };
-  for (const [k, v] of Object.entries(fields)) form.append(k, v);
+  for (const [k, v] of Object.entries(fields)) if (v !== null) form.append(k, v);
   return new NextRequest("https://verifymzansi.com/api/verification/upload", {
     method: "POST",
     headers: { origin, "x-csrf-token": csrf, cookie: `vm_csrf=${csrf}` },
@@ -154,10 +161,6 @@ it("records how the browser says the selfie was taken, for staff review only", a
       { captureMethod: "camera", livenessPassed: "false" },
       { p_capture_method: "camera", p_browser_liveness_passed: false },
     ],
-    [
-      { captureMethod: "file_upload" },
-      { p_capture_method: "file_upload", p_browser_liveness_passed: false },
-    ],
   ];
   for (const [fields, expected] of cases) {
     rpc.mockClear();
@@ -179,10 +182,48 @@ it("records how the browser says the selfie was taken, for staff review only", a
     );
     expect(serviceRpc.mock.calls[completion][1]).toMatchObject({ p_risk_score: 10 });
   }
-  // Nothing reported: nothing recorded (the viewer says "Liveness unknown").
-  rpc.mockClear();
-  expect((await POST(request())).status).toBe(200);
-  expect(recorded()).toEqual([]);
+});
+it("refuses photos the page did not take with its camera, before reserving or storing", async () => {
+  for (const asSelfie of [false, true]) {
+    selfie = asSelfie;
+    const refused: [Record<string, string | null>, File | undefined][] = [
+      [{ captureMethod: "file_upload" }, undefined],
+      [{ captureMethod: null, livenessPassed: null }, undefined],
+      [{}, new File(["fixture-document"], "fixture.png", { type: "image/png" })],
+      [{}, cameraJpegFile({ exif: true })],
+    ];
+    for (const [fields, file] of refused) {
+      const res = await POST(request(fields, undefined, file));
+      expect(res.status).toBe(409);
+      expect((await res.json()).code).toBe("camera_required");
+    }
+  }
+  // An ID photo too small to read.
+  selfie = false;
+  const small = await POST(request({}, undefined, cameraJpegFile({ width: 640, height: 480 })));
+  expect(small.status).toBe(409);
+  expect(await small.json()).toMatchObject({
+    code: "camera_required",
+    error: expect.stringMatching(/continue on your phone/i),
+  });
+  expect(rpc).not.toHaveBeenCalled();
+  expect(cleanEvidence).not.toHaveBeenCalled();
+  expect(putImmutableR2Bytes).not.toHaveBeenCalled();
+});
+it("answers camera_required when the database refuses an uploaded-file selfie", async () => {
+  selfie = true;
+  rpc.mockImplementation(async (name: string) =>
+    name === "record_my_selfie_capture"
+      ? {
+          data: null,
+          error: { code: "PT409", message: "camera required", details: "camera_required" },
+        }
+      : { data: { artifact_id: artifact, completed: false }, error: null }
+  );
+  const res = await POST(request());
+  expect(res.status).toBe(409);
+  expect((await res.json()).code).toBe("camera_required");
+  expect(putImmutableR2Bytes).not.toHaveBeenCalled();
 });
 it("refuses the upload when the report cannot be recorded, before storing evidence", async () => {
   selfie = true;
@@ -199,11 +240,11 @@ it("refuses the upload when the report cannot be recorded, before storing eviden
 });
 it("rejects a capture report outside the closed set before reserving or storing evidence", async () => {
   selfie = true;
-  const refused: Record<string, string>[] = [
+  const refused: Record<string, string | null>[] = [
     { captureMethod: "screen" },
     { captureMethod: "file_upload", livenessPassed: "true" },
     { captureMethod: "camera", livenessPassed: "yes" },
-    { livenessPassed: "true" },
+    { captureMethod: null, livenessPassed: "true" },
   ];
   for (const fields of refused) {
     const res = await POST(request(fields));
@@ -214,7 +255,7 @@ it("rejects a capture report outside the closed set before reserving or storing 
   expect(putImmutableR2Bytes).not.toHaveBeenCalled();
 });
 it("never records a capture report for the ID document", async () => {
-  expect((await POST(request({ captureMethod: "file_upload" }))).status).toBe(200);
+  expect((await POST(request())).status).toBe(200);
   expect(rpc.mock.calls.some((c) => c[0] === "record_my_selfie_capture")).toBe(false);
 });
 it("rejects cross-origin writes and forged owner fields before reserving or storing evidence", async () => {

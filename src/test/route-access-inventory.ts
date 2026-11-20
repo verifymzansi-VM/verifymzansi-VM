@@ -175,6 +175,9 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/foundation/verification/evidence": { POST: "staff" },
   "api/foundation/verification/location": { POST: "signed-in" },
   "api/foundation/verification/review": { GET: "staff", POST: "staff" },
+  "api/handoff/open": { POST: "public" },
+  "api/handoff/state": { GET: "public" },
+  "api/handoff/upload": { POST: "public" },
   "api/health": { GET: "public" },
   "api/health/storage": { GET: "service" },
   "api/internal/bindings/verify": { POST: "service" },
@@ -209,6 +212,7 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/promotions/[id]/urgent": { POST: "signed-in" },
   "api/reports": { POST: "public" },
   "api/share-preview/[type]/[id]": { GET: "public" },
+  "api/verification/handoff": { POST: "signed-in" },
   "api/verification/location/detect": { POST: "signed-in" },
   "api/verification/location/manual": { POST: "signed-in" },
   "api/verification/session/start": { POST: "signed-in" },
@@ -234,6 +238,12 @@ export const PUBLIC_ROUTE_REASONS: Record<string, string> = {
   "api/auth/resend-confirmation POST": "Resends the sign-up confirmation email",
   "api/auth/reset-password GET": "Opens password recovery from the emailed link",
   "api/auth/reset-password POST": "Completes password recovery from the emailed link",
+  "api/handoff/open POST":
+    "Continue on your phone: a phone that may be signed out opens a single-use, hashed, 15-minute link made by the signed-in owner; the database binds it to that account, case and live computer session and refuses a phone signed in as another account",
+  "api/handoff/state GET":
+    "Continue on your phone: answers only for the HttpOnly capture grant of an opened link (short public name, expiry, photos still needed)",
+  "api/handoff/upload POST":
+    "Continue on your phone: takes camera photos only for the case of the opened link behind the HttpOnly capture grant, on the owner's live computer session",
   "api/auth/sign-out POST": "Ends the caller's session, if there is one",
   "api/businesses GET": "Public directory of live businesses",
   "api/businesses/[id] GET": "Live business detail; the owner view (?owner=1) needs a session",

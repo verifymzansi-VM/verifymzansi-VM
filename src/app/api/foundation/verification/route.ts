@@ -12,6 +12,10 @@ import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { createLogger } from "@/lib/utils/logger";
 import { readBoundedRequestFormData, RequestBodyTooLargeError } from "@/lib/utils/request-body";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+import {
+  assertCameraPhoto,
+  CameraRequiredError,
+} from "@/lib/foundation/restored-verification-upload";
 const log = createLogger("FoundationVerification");
 const headers = { "Cache-Control": "private, no-store", "CDN-Cache-Control": "no-store" };
 async function handle(request: NextRequest, mutate: boolean) {
@@ -57,6 +61,10 @@ async function handle(request: NextRequest, mutate: boolean) {
           { status: 400, headers }
         )
       );
+    // Photos are taken with the camera on the page only: the same checks as
+    // the verification page's upload (they cannot prove a live camera).
+    await assertCameraPhoto(document, form.get("capture_method"), "id_front");
+    await assertCameraPhoto(selfie, form.get("capture_method"), "selfie");
     return context.respond(
       NextResponse.json(
         await submitFoundationIdentity(
@@ -71,6 +79,13 @@ async function handle(request: NextRequest, mutate: boolean) {
       )
     );
   } catch (error) {
+    if (error instanceof CameraRequiredError)
+      return context.respond(
+        NextResponse.json(
+          { error: error.message, code: "camera_required" },
+          { status: 409, headers }
+        )
+      );
     const status =
       error instanceof FoundationSessionError || error instanceof FoundationVerificationError
         ? error.status

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock3,
-  FileImage,
   IdCard,
   Loader2,
   MailCheck,
@@ -67,6 +66,7 @@ import {
   type CalloutTone,
   type OverallVerificationState,
 } from "./verification-ui";
+import { ContinueOnPhonePanel, type HandoffDetails } from "./continue-on-phone";
 
 type WizardStep = "phone" | "id_doc" | "selfie" | "location" | "complete";
 type UploadReceipt = { name: string; uploadedAtIso: string | null };
@@ -181,25 +181,25 @@ function mapUploadFailureMessage(label: string, error: unknown, code?: string): 
       return "Verification is temporarily unavailable. Please try again later.";
     case "storage_unavailable":
     case "storage_failed":
-      return `${normalizedLabel} upload is temporarily unavailable. Please try again in a moment.`;
+      return `${normalizedLabel} can't be sent right now. Please try again in a moment.`;
     case "config_missing":
-      return `${normalizedLabel} upload is unavailable because secure verification storage is not configured.`;
+      return `${normalizedLabel} can't be sent because secure verification storage is not configured.`;
     case "encryption_failed":
       return `${normalizedLabel} could not be encrypted securely. Please contact support.`;
     case "artifact_record_failed":
-      return `${normalizedLabel} upload reached the server but could not be recorded. Please retry.`;
+      return `${normalizedLabel} reached us but could not be recorded. Please retry.`;
     case VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE:
       return VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE;
     default: {
       const message = error instanceof Error ? error.message : String(error ?? "").trim();
       if (!message) {
-        return `Failed to upload ${label}.`;
+        return `Your ${label} wasn't sent.`;
       }
       if (/^not found$/i.test(message)) {
         return "Verification is temporarily unavailable. Please try again later.";
       }
       if (/failed to upload document/i.test(message)) {
-        return `Failed to upload ${label}. Please try again.`;
+        return `Your ${label} wasn't sent. Please try again.`;
       }
       return message;
     }
@@ -210,11 +210,11 @@ function mapUploadFailureMessage(label: string, error: unknown, code?: string): 
 const REJECTION_GUIDANCE: Record<string, string> = {
   blurry_image: "Image too blurry. Retake in good lighting with a steady hand.",
   mismatch: "Details don't match your document. Check your name and ID number.",
-  expired_document: "Document expired. Upload a valid, unexpired document.",
+  expired_document: "Document expired. Use a valid, unexpired document.",
   incomplete_info: "Document cut off. Retake showing all edges clearly.",
   fraudulent: "Submission could not be verified. Contact support if this is an error.",
-  wrong_document_type: "Wrong document type. Upload an SA ID card, book, or passport.",
-  not_sa_document: "Only SA documents accepted. Upload an SA ID book, card, or passport.",
+  wrong_document_type: "Wrong document type. Photograph an SA ID card or ID book.",
+  not_sa_document: "Only SA documents accepted. Photograph an SA ID card or ID book.",
   location_mismatch: "Confirm your province and city manually, then save your location.",
   high_risk_override: "Flagged for admin review. No action needed from you.",
   other: "Needs attention. See the admin note above for instructions.",
@@ -266,7 +266,7 @@ function getStepLabel(stepType: VerificationStepType): string {
 function getFallbackRejectionReason(stepType: VerificationStepType): string {
   switch (stepType) {
     case "id_doc":
-      return "Your ID document was not accepted. Upload a clear photo showing the full document and all details.";
+      return "Your ID document was not accepted. Take a clear photo showing the full document and all details.";
     case "selfie":
       return "Your selfie was not accepted. Retake a clear selfie with your face fully visible.";
     case "location":
@@ -419,12 +419,6 @@ function getInitialWizardStep({
   return nextMissing ?? "complete";
 }
 
-function formatFileSize(sizeBytes: number): string {
-  if (sizeBytes < 1024) return `${sizeBytes} B`;
-  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`;
-  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 const SAST_OFFSET_MS = 2 * 60 * 60 * 1000;
 
 /** HH:mm in South African time, identical on every device (no Intl/locale APIs). */
@@ -438,7 +432,7 @@ function formatUploadedTime(isoDate: string): string {
 }
 function uploadTimestampLabel(value: string | null): string {
   const time = value ? formatUploadedTime(value) : "";
-  return time ? `Uploaded at ${time}` : "Upload time not recorded";
+  return time ? `Sent at ${time}` : "Time not recorded";
 }
 
 /** Date of birth from the ID digits (a UTC-midnight Date), read in UTC so it never shifts a day. */
@@ -524,10 +518,13 @@ export default function VerificationPage() {
   const [nameFieldsTouched, setNameFieldsTouched] = useState({ first: false, last: false });
   const [idFile, setIdFile] = useState<File | null>(null);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
-  const [idCaptureMethod, setIdCaptureMethod] = useState<"camera" | "file_upload">("camera");
-  const [selfieCaptureMethod, setSelfieCaptureMethod] = useState<"camera" | "file_upload">(
-    "camera"
-  );
+  // Photos are taken with the camera on this page only (no file or gallery upload).
+  const [idReviewing, setIdReviewing] = useState(false);
+  // "Continue on your phone" for the ID step (with the typed details) or the selfie.
+  const [handoff, setHandoff] = useState<{
+    step: "id_doc" | "selfie";
+    details: HandoffDetails;
+  } | null>(null);
   const [selfieLivenessPassed, setSelfieLivenessPassed] = useState(false);
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
@@ -857,29 +854,6 @@ export default function VerificationPage() {
     }
   }
 
-  const idPreviewUrl = useMemo(
-    () => (idFile && idFile.type.startsWith("image/") ? URL.createObjectURL(idFile) : null),
-    [idFile]
-  );
-
-  const selfiePreviewUrl = useMemo(
-    () =>
-      selfieFile && selfieFile.type.startsWith("image/") ? URL.createObjectURL(selfieFile) : null,
-    [selfieFile]
-  );
-
-  useEffect(() => {
-    return () => {
-      if (idPreviewUrl) URL.revokeObjectURL(idPreviewUrl);
-    };
-  }, [idPreviewUrl]);
-
-  useEffect(() => {
-    return () => {
-      if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
-    };
-  }, [selfiePreviewUrl]);
-
   useEffect(() => {
     if (otpRetryAfterSeconds <= 0) return;
 
@@ -1050,7 +1024,7 @@ export default function VerificationPage() {
         err instanceof SubmissionError &&
         err.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE;
       toast({
-        title: isEmailBlocker ? "Confirm your email first" : "ID document upload failed",
+        title: isEmailBlocker ? "Confirm your email first" : "Your ID photo wasn't sent",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
@@ -1093,7 +1067,7 @@ export default function VerificationPage() {
         err instanceof SubmissionError &&
         err.code === VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE;
       toast({
-        title: isEmailBlocker ? "Confirm your email first" : "Selfie upload failed",
+        title: isEmailBlocker ? "Confirm your email first" : "Your selfie wasn't sent",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
@@ -1189,7 +1163,7 @@ export default function VerificationPage() {
       fd.append("firstName", normalizedFirstName);
       fd.append("lastName", normalizedLastName);
       fd.append("idDocumentType", "sa_id");
-      fd.append("captureMethod", idCaptureMethod);
+      fd.append("captureMethod", "camera");
       return fd;
     }, "ID document");
 
@@ -1211,8 +1185,8 @@ export default function VerificationPage() {
       const fd = new FormData();
       fd.append("file", selfieFile);
       fd.append("docType", "selfie");
-      fd.append("captureMethod", selfieCaptureMethod);
-      if (selfieCaptureMethod === "camera" && selfieLivenessPassed) {
+      fd.append("captureMethod", "camera");
+      if (selfieLivenessPassed) {
         fd.append("livenessPassed", "true");
       }
       return fd;
@@ -1226,6 +1200,53 @@ export default function VerificationPage() {
       },
     }));
     markStepComplete("selfie");
+  }
+
+  // The last status read while waiting for the phone (to choose the next step).
+  const handoffStepsRef = useRef<StepStatusEntry[]>([]);
+  const handoffDone = useCallback(async () => {
+    const snapshot = await syncVerificationStatus();
+    handoffStepsRef.current = snapshot?.steps ?? [];
+    const map = buildStepStatusMap(handoffStepsRef.current);
+    const sent = (type: VerificationStepType) =>
+      ["approved", "pending"].includes(map.get(type) ?? "");
+    return sent("id_doc") && sent("selfie");
+  }, [syncVerificationStatus]);
+
+  const finishHandoff = useCallback(() => {
+    setHandoff(null);
+    setStep(areAllReviewStepsSubmitted(handoffStepsRef.current) ? "complete" : "location");
+    toast({
+      title: "Photos received",
+      description: "Your phone sent your photos. Carry on here.",
+      variant: "success",
+    });
+  }, [toast]);
+
+  function startHandoff(stepType: "id_doc" | "selfie") {
+    if (stepType === "selfie") {
+      setHandoff({ step: "selfie", details: null });
+      return;
+    }
+    if (
+      !/^\d{13}$/.test(idNumber) ||
+      idChecksumValid === false ||
+      idAgeError ||
+      firstNameError ||
+      lastNameError
+    ) {
+      setNameFieldsTouched({ first: true, last: true });
+      toast({
+        title: "Enter your names and ID number first",
+        description: "Then continue on your phone.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setHandoff({
+      step: "id_doc",
+      details: { idNumber, firstName: normalizedFirstName, lastName: normalizedLastName },
+    });
   }
 
   async function handleManualLocationSubmit() {
@@ -1746,7 +1767,24 @@ export default function VerificationPage() {
                   </StepCard>
                 )}
 
-                {step === "id_doc" && (
+                {step === "id_doc" && handoff?.step === "id_doc" && (
+                  <StepCard
+                    id="verification-step-id"
+                    stepNumber={2}
+                    title="Continue on your phone"
+                    icon={Smartphone}
+                    why="Your photos go straight from your phone to us."
+                  >
+                    <ContinueOnPhonePanel
+                      details={handoff.details}
+                      onBack={() => setHandoff(null)}
+                      isDone={handoffDone}
+                      onDone={finishHandoff}
+                    />
+                  </StepCard>
+                )}
+
+                {step === "id_doc" && handoff?.step !== "id_doc" && (
                   <StepCard
                     id="verification-step-id"
                     stepNumber={2}
@@ -1758,7 +1796,7 @@ export default function VerificationPage() {
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="firstName">First name (as shown on ID)</Label>
+                        <Label htmlFor="firstName">All first names (as on your ID)</Label>
                         <Input
                           id="firstName"
                           maxLength={100}
@@ -1766,7 +1804,9 @@ export default function VerificationPage() {
                           value={firstName}
                           disabled={verificationSubmissionBlocked}
                           aria-invalid={showFirstNameError || undefined}
-                          aria-describedby={showFirstNameError ? "firstName-error" : undefined}
+                          aria-describedby={
+                            showFirstNameError ? "firstName-error names-hint" : "names-hint"
+                          }
                           onBlur={() => setNameFieldsTouched((prev) => ({ ...prev, first: true }))}
                           onChange={(e) => {
                             setFirstName(e.target.value);
@@ -1783,7 +1823,7 @@ export default function VerificationPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="lastName">Surname (as shown on ID)</Label>
+                        <Label htmlFor="lastName">Surname (as on your ID)</Label>
                         <Input
                           id="lastName"
                           maxLength={100}
@@ -1791,7 +1831,9 @@ export default function VerificationPage() {
                           value={lastName}
                           disabled={verificationSubmissionBlocked}
                           aria-invalid={showLastNameError || undefined}
-                          aria-describedby={showLastNameError ? "lastName-error" : undefined}
+                          aria-describedby={
+                            showLastNameError ? "lastName-error names-hint" : "names-hint"
+                          }
                           onBlur={() => setNameFieldsTouched((prev) => ({ ...prev, last: true }))}
                           onChange={(e) => {
                             setLastName(e.target.value);
@@ -1807,6 +1849,10 @@ export default function VerificationPage() {
                         )}
                       </div>
                     </div>
+                    <p id="names-hint" className="-mt-2 text-xs leading-5 text-muted-foreground">
+                      Type every first name in the same order as your ID. Your verified name
+                      can&apos;t be changed later.
+                    </p>
 
                     <div className="space-y-2">
                       <Label htmlFor="idNumber">13-digit SA ID number</Label>
@@ -1880,11 +1926,20 @@ export default function VerificationPage() {
                     </div>
 
                     <div className="space-y-3">
-                      <FieldGroupHeading title="Photo of your ID" />
+                      <FieldGroupHeading
+                        title={idReviewing ? "Check your photo" : "Photo of your ID"}
+                        hint={
+                          idReviewing
+                            ? undefined
+                            : "Taken with your camera here. Photos from your gallery or files can't be used."
+                        }
+                      />
                       <CameraCapture
                         facingMode="environment"
                         telemetryContext="id_doc"
                         documentGuide
+                        onReviewChange={setIdReviewing}
+                        onContinueOnPhone={() => startHandoff("id_doc")}
                         onReset={() => {
                           setIdFile(null);
                           setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
@@ -1893,11 +1948,9 @@ export default function VerificationPage() {
                         disabled={verificationSubmissionBlocked}
                         onCapture={(file) => {
                           setIdFile(file);
-                          setIdCaptureMethod("camera");
                           setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
                           clearStepCompletion("id_doc");
                         }}
-                        onFallback={() => setIdCaptureMethod("file_upload")}
                       />
                       {idFileError && idFile && (
                         <p className="inline-form-error" role="alert">
@@ -1905,17 +1958,6 @@ export default function VerificationPage() {
                         </p>
                       )}
                     </div>
-
-                    {idFile && <SelectedFileRow name={idFile.name} sizeBytes={idFile.size} />}
-
-                    {idPreviewUrl && idCaptureMethod === "file_upload" && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={idPreviewUrl}
-                        alt="ID preview"
-                        className="max-h-80 w-full rounded-2xl border border-border bg-muted object-contain"
-                      />
-                    )}
 
                     <StepActions>
                       <Button
@@ -1940,7 +1982,7 @@ export default function VerificationPage() {
                               className="h-4 w-4 animate-spin motion-reduce:animate-none"
                               aria-hidden="true"
                             />
-                            Uploading…
+                            Sending…
                           </>
                         ) : (
                           "Continue"
@@ -1950,7 +1992,24 @@ export default function VerificationPage() {
                   </StepCard>
                 )}
 
-                {step === "selfie" && (
+                {step === "selfie" && handoff?.step === "selfie" && (
+                  <StepCard
+                    id="verification-step-selfie"
+                    stepNumber={3}
+                    title="Continue on your phone"
+                    icon={Smartphone}
+                    why="Your photos go straight from your phone to us."
+                  >
+                    <ContinueOnPhonePanel
+                      details={null}
+                      onBack={() => setHandoff(null)}
+                      isDone={handoffDone}
+                      onDone={finishHandoff}
+                    />
+                  </StepCard>
+                )}
+
+                {step === "selfie" && handoff?.step !== "selfie" && (
                   <StepCard
                     id="verification-step-selfie"
                     stepNumber={3}
@@ -1967,6 +2026,7 @@ export default function VerificationPage() {
                         telemetryContext="selfie"
                         disabled={verificationSubmissionBlocked}
                         requireLiveness
+                        onContinueOnPhone={() => startHandoff("selfie")}
                         onReset={() => {
                           setSelfieFile(null);
                           setSelfieLivenessPassed(false);
@@ -1975,14 +2035,9 @@ export default function VerificationPage() {
                         }}
                         onCapture={(file, meta) => {
                           setSelfieFile(file);
-                          setSelfieCaptureMethod("camera");
                           setSelfieLivenessPassed(meta?.livenessPassed ?? false);
                           setUploadReceipts((prev) => ({ ...prev, selfie: undefined }));
                           clearStepCompletion("selfie");
-                        }}
-                        onFallback={() => {
-                          setSelfieCaptureMethod("file_upload");
-                          setSelfieLivenessPassed(false);
                         }}
                       />
                       {selfieFileError && selfieFile && (
@@ -1991,19 +2046,6 @@ export default function VerificationPage() {
                         </p>
                       )}
                     </div>
-
-                    {selfieFile && (
-                      <SelectedFileRow name={selfieFile.name} sizeBytes={selfieFile.size} />
-                    )}
-
-                    {selfiePreviewUrl && selfieCaptureMethod === "file_upload" && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={selfiePreviewUrl}
-                        alt="Selfie preview"
-                        className="max-h-80 w-full rounded-2xl border border-border bg-muted object-contain"
-                      />
-                    )}
 
                     <StepActions>
                       <Button
@@ -2030,7 +2072,7 @@ export default function VerificationPage() {
                               className="h-4 w-4 animate-spin motion-reduce:animate-none"
                               aria-hidden="true"
                             />
-                            Uploading…
+                            Sending…
                           </>
                         ) : (
                           "Continue"
@@ -2268,7 +2310,7 @@ export default function VerificationPage() {
                         value={
                           uploadReceipts.id_doc
                             ? `${idDocumentStatus ? `${formatStatusLabel(idDocumentStatus)} - ` : ""}${uploadTimestampLabel(uploadReceipts.id_doc.uploadedAtIso)}`
-                            : "Not yet uploaded — go back to the ID step to add your document"
+                            : "Not taken yet: go back to the ID step to take the photo"
                         }
                         detail={
                           idChecksumValid && idDob
@@ -2282,7 +2324,7 @@ export default function VerificationPage() {
                         value={
                           uploadReceipts.selfie
                             ? `${selfieStatus ? `${formatStatusLabel(selfieStatus)} - ` : ""}${uploadTimestampLabel(uploadReceipts.selfie.uploadedAtIso)}`
-                            : "Not yet uploaded — go back to the selfie step to take your photo"
+                            : "Not taken yet: go back to the selfie step to take your photo"
                         }
                       />
                       <ReviewRow
@@ -2313,16 +2355,6 @@ export default function VerificationPage() {
           </div>
         </div>
       </main>
-    </div>
-  );
-}
-
-function SelectedFileRow({ name, sizeBytes }: { name: string; sizeBytes: number }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/40 px-3.5 py-2.5 text-sm">
-      <FileImage className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{name}</span>
-      <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(sizeBytes)}</span>
     </div>
   );
 }
