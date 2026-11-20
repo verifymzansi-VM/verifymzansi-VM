@@ -53,7 +53,6 @@ export function BrandSurface({
   );
 }
 
-/** Secondary (outline) buttons placed on a BrandSurface. */
 /**
  * The one main action on a dark-green brand band: the dashboard banner's gold
  * (use with `variant="trust-gold"`). The dark: classes keep it gold in dark mode.
@@ -61,5 +60,6 @@ export function BrandSurface({
 export const brandGoldButtonClassName =
   "bg-brand-gold-300 text-brand-gold-950 hover:bg-brand-gold-200 dark:bg-brand-gold-300 dark:text-brand-gold-950 dark:hover:bg-brand-gold-200";
 
+/** Secondary (outline) buttons placed on a BrandSurface. */
 export const brandOutlineButtonClassName =
   "border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white focus-visible:ring-white";
