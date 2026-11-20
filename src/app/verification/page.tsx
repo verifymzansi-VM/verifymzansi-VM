@@ -486,6 +486,17 @@ function formatCountdown(totalSeconds: number): string {
   return `${minutes}m ${seconds}s`;
 }
 
+/** A capture token for a camera that starts now (sent with its photo). */
+async function requestCaptureToken(kind: "id_front" | "selfie"): Promise<string | null> {
+  const response = await fetch("/api/verification/capture-token", {
+    method: "POST",
+    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ kind }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { token?: string };
+  return response.ok && typeof payload.token === "string" ? payload.token : null;
+}
+
 /** The hint shown under a code that was sent. */
 function otpDeliveryHint(formattedPhone: string): string {
   return `SMS delivery can take up to 60 seconds. If nothing arrives, confirm ${formattedPhone} and resend once the timer ends.`;
@@ -526,6 +537,9 @@ export default function VerificationPage() {
     details: HandoffDetails;
   } | null>(null);
   const [selfieLivenessPassed, setSelfieLivenessPassed] = useState(false);
+  // Capture tokens issued when each camera started (sent with the photo).
+  const [idCaptureToken, setIdCaptureToken] = useState<string | null>(null);
+  const [selfieCaptureToken, setSelfieCaptureToken] = useState<string | null>(null);
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
 
@@ -1105,7 +1119,7 @@ export default function VerificationPage() {
         if (res.status === 409 && payload.code === "step_already_approved") {
           toast({
             title: "Already approved",
-            description: `Your ${label} was already approved while you were uploading. No action needed.`,
+            description: `Your ${label} was already approved while you were sending it. No action needed.`,
             variant: "success",
           });
           return payload;
@@ -1113,7 +1127,7 @@ export default function VerificationPage() {
         if (res.status === 409 && payload.code === "duplicate_pending_artifact") {
           toast({
             title: "Already submitted",
-            description: `Your ${label} is already pending review. You can continue without uploading it again.`,
+            description: `Your ${label} is already pending review. You can continue without sending it again.`,
             variant: "success",
           });
           return payload;
@@ -1122,7 +1136,7 @@ export default function VerificationPage() {
           appendRequestId(
             mapUploadFailureMessage(
               label,
-              payload.error || `Failed to upload ${label}`,
+              payload.error || `Your ${label} wasn't sent`,
               payload.code
             ),
             payload.requestId
@@ -1164,6 +1178,7 @@ export default function VerificationPage() {
       fd.append("lastName", normalizedLastName);
       fd.append("idDocumentType", "sa_id");
       fd.append("captureMethod", "camera");
+      if (idCaptureToken) fd.append("captureToken", idCaptureToken);
       return fd;
     }, "ID document");
 
@@ -1189,6 +1204,7 @@ export default function VerificationPage() {
       if (selfieLivenessPassed) {
         fd.append("livenessPassed", "true");
       }
+      if (selfieCaptureToken) fd.append("captureToken", selfieCaptureToken);
       return fd;
     }, "selfie");
 
@@ -1946,8 +1962,10 @@ export default function VerificationPage() {
                           clearStepCompletion("id_doc");
                         }}
                         disabled={verificationSubmissionBlocked}
-                        onCapture={(file) => {
+                        getCaptureToken={() => requestCaptureToken("id_front")}
+                        onCapture={(file, meta) => {
                           setIdFile(file);
+                          setIdCaptureToken(meta?.captureToken ?? null);
                           setUploadReceipts((prev) => ({ ...prev, id_doc: undefined }));
                           clearStepCompletion("id_doc");
                         }}
@@ -2033,9 +2051,11 @@ export default function VerificationPage() {
                           setUploadReceipts((prev) => ({ ...prev, selfie: undefined }));
                           clearStepCompletion("selfie");
                         }}
+                        getCaptureToken={() => requestCaptureToken("selfie")}
                         onCapture={(file, meta) => {
                           setSelfieFile(file);
                           setSelfieLivenessPassed(meta?.livenessPassed ?? false);
+                          setSelfieCaptureToken(meta?.captureToken ?? null);
                           setUploadReceipts((prev) => ({ ...prev, selfie: undefined }));
                           clearStepCompletion("selfie");
                         }}

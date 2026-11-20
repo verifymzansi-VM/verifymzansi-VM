@@ -60,11 +60,18 @@ interface CameraCaptureProps {
   onContinueOnPhone?: () => void;
   /** Tells the page whether the ID photo is being checked (picture 01b). */
   onReviewChange?: (reviewing: boolean) => void;
+  /**
+   * Asks the server for a capture token when the camera starts; the photo
+   * must be sent within 10 minutes of it. Null or an error stops the camera.
+   */
+  getCaptureToken?: () => Promise<string | null>;
 }
 
 export interface CaptureMeta {
   /** True when the in-browser liveness challenge was completed. */
   livenessPassed: boolean;
+  /** The capture token issued when this camera started (getCaptureToken). */
+  captureToken?: string;
 }
 
 type CameraState = "idle" | "streaming" | "review" | "captured" | "error";
@@ -174,6 +181,7 @@ export function CameraCapture({
   onReset,
   onContinueOnPhone,
   onReviewChange,
+  getCaptureToken,
 }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sessionRef = useRef(0);
@@ -185,6 +193,7 @@ export function CameraCapture({
   const streamContainerRef = useRef<HTMLDivElement>(null);
   const takePhotoButtonRef = useRef<HTMLButtonElement>(null);
   const reviewFileRef = useRef<File | null>(null);
+  const captureTokenRef = useRef<string | null>(null);
   const [state, setState] = useState<CameraState>("idle");
   const [problem, setProblem] = useState<CameraProblem | null>(null);
   // A message other than the problem's own title and text (an interruption).
@@ -445,6 +454,22 @@ export function CameraCapture({
         throw new DOMException("No compatible camera configuration found.", "NotFoundError");
       }
 
+      captureTokenRef.current = null;
+      if (getCaptureToken) {
+        let token: string | null = null;
+        try {
+          token = await getCaptureToken();
+        } catch {
+          token = null;
+        }
+        if (session !== sessionRef.current || !token) {
+          stream.getTracks().forEach((track) => track.stop());
+          if (session === sessionRef.current)
+            showProblem("failed", "We couldn't prepare the camera. Please try again.");
+          return;
+        }
+        captureTokenRef.current = token;
+      }
       streamRef.current = stream;
       const [track] = stream.getVideoTracks?.() ?? [];
       const capabilities = track?.getCapabilities?.() as TorchCapabilities | undefined;
@@ -489,6 +514,7 @@ export function CameraCapture({
     resetLiveness,
     onReset,
     showProblem,
+    getCaptureToken,
   ]);
 
   // Cleanup stream on unmount
@@ -697,6 +723,7 @@ export function CameraCapture({
           setState("captured");
           onCapture(file, {
             livenessPassed: requireLiveness ? livenessStatus.livenessPassed : false,
+            captureToken: captureTokenRef.current ?? undefined,
           });
         },
         "image/jpeg",
@@ -744,7 +771,7 @@ export function CameraCapture({
     const file = reviewFileRef.current;
     if (!file) return;
     setState("captured");
-    onCapture(file, { livenessPassed: false });
+    onCapture(file, { livenessPassed: false, captureToken: captureTokenRef.current ?? undefined });
   }, [onCapture]);
 
   // Cleanup captured object URL

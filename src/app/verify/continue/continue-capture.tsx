@@ -16,18 +16,53 @@ type PhoneView = {
   needsSelfie: boolean;
 };
 type Stage =
-  { kind: "loading" } | { kind: "problem"; message: string } | { kind: "ready"; view: PhoneView };
+  | { kind: "loading" }
+  | { kind: "sign_in" }
+  | { kind: "problem"; message: string }
+  | { kind: "ready"; view: PhoneView };
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+/** Where the link's token waits while the member signs in on this phone (this
+ * tab only; it never goes into a URL). */
+const PENDING_TOKEN_KEY = "vm_handoff_pending_token";
+const SIGN_IN_HREF = `/login?returnUrl=${encodeURIComponent("/verify/continue")}`;
+
+function readPendingToken() {
+  try {
+    return window.sessionStorage.getItem(PENDING_TOKEN_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+function keepPendingToken(token: string | null) {
+  try {
+    if (token) window.sessionStorage.setItem(PENDING_TOKEN_KEY, token);
+    else window.sessionStorage.removeItem(PENDING_TOKEN_KEY);
+  } catch {
+    // Without storage the member scans the code again after signing in.
+  }
+}
+
+/** A capture token for a camera that starts now on this phone. */
+async function requestPhoneCaptureToken(kind: "id_front" | "selfie") {
+  const response = await fetch("/api/handoff/capture-token", {
+    method: "POST",
+    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ kind }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { token?: string };
+  return response.ok && typeof payload.token === "string" ? payload.token : null;
+}
 const UNAVAILABLE =
   "This link has expired or was already used. On your computer, choose New code and scan it again.";
 
-async function readView(response: Response): Promise<PhoneView | { error: string }> {
+async function readView(response: Response): Promise<PhoneView | { error: string; code?: string }> {
   const payload = (await response.json().catch(() => ({}))) as Partial<PhoneView> & {
     error?: string;
+    code?: string;
   };
   if (!response.ok || typeof payload.publicName !== "string" || !payload.expiresAt)
-    return { error: payload.error ?? UNAVAILABLE };
+    return { error: payload.error ?? UNAVAILABLE, code: payload.code };
   return {
     publicName: payload.publicName,
     expiresAt: payload.expiresAt,
@@ -37,10 +72,12 @@ async function readView(response: Response): Promise<PhoneView | { error: string
 }
 
 /**
- * The phone side of "Continue on your phone" (picture 01d, phone). The token
- * comes from the link's #fragment and is sent once; the server then keeps a
- * capture grant in an HttpOnly cookie that only allows taking this check's
- * photos. Nothing about the account is shown beyond a short public name.
+ * The phone side of "Continue on your phone" (picture 01d, phone). The phone
+ * must be signed in as the same account (owner decision): a signed-out phone
+ * is sent to sign in first, with the link's token kept in this tab's session
+ * storage (never in a URL), and comes back here. The token comes from the
+ * link's #fragment and is sent once; the server then keeps a capture grant in
+ * an HttpOnly cookie that only allows taking this check's photos.
  */
 export function ContinueCapture() {
   const [stage, setStage] = useState<Stage>({ kind: "loading" });
@@ -52,9 +89,10 @@ export function ContinueCapture() {
   useEffect(() => {
     if (opened.current) return;
     opened.current = true;
-    const token = window.location.hash.slice(1);
+    const fromLink = window.location.hash.slice(1);
     // The token is used once; it never stays in the address bar or history.
-    if (token) window.history.replaceState(null, "", window.location.pathname);
+    if (fromLink) window.history.replaceState(null, "", window.location.pathname);
+    const token = TOKEN.test(fromLink) ? fromLink : readPendingToken();
     void (async () => {
       try {
         const response = TOKEN.test(token)
@@ -65,6 +103,13 @@ export function ContinueCapture() {
             })
           : await fetch("/api/handoff/state", { cache: "no-store" });
         const view = await readView(response);
+        if ("error" in view && view.code === "handoff_sign_in_required" && TOKEN.test(token)) {
+          keepPendingToken(token);
+          setStage({ kind: "sign_in" });
+          return;
+        }
+        // Used, refused or done with: it is not kept.
+        keepPendingToken(null);
         setStage(
           "error" in view ? { kind: "problem", message: view.error } : { kind: "ready", view }
         );
@@ -83,7 +128,12 @@ export function ContinueCapture() {
   }, []);
 
   const send = useCallback(
-    async (file: File, docType: "id_document" | "selfie", livenessPassed?: boolean) => {
+    async (
+      file: File,
+      docType: "id_document" | "selfie",
+      captureToken: string | undefined,
+      livenessPassed?: boolean
+    ) => {
       setSending(true);
       setSendError(null);
       const requestId = crypto.randomUUID();
@@ -94,6 +144,7 @@ export function ContinueCapture() {
         form.append("uploadRequestId", requestId);
         form.append("captureMethod", "camera");
         if (docType === "selfie") form.append("livenessPassed", livenessPassed ? "true" : "false");
+        if (captureToken) form.append("captureToken", captureToken);
         return fetch("/api/handoff/upload", {
           method: "POST",
           headers: withCsrfHeaders(),
@@ -109,7 +160,7 @@ export function ContinueCapture() {
           code?: string;
         };
         if (!response.ok) {
-          if (payload.code === "handoff_unavailable")
+          if (payload.code === "handoff_unavailable" || payload.code === "handoff_sign_in_required")
             setStage({ kind: "problem", message: payload.error ?? UNAVAILABLE });
           else setSendError(payload.error ?? "Your photo wasn't sent. Please take it again.");
           return;
@@ -153,6 +204,26 @@ export function ContinueCapture() {
                 />
                 Opening your check…
               </p>
+            )}
+            {stage.kind === "sign_in" && (
+              <StepCard
+                id="continue-capture-sign-in"
+                stepNumber={2}
+                title="Sign in on this phone"
+                icon={Monitor}
+                why="Your photos go straight from your phone to us."
+              >
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Sign in on your phone with the same account, then take the photos. You&apos;ll
+                  come back here after signing in.
+                </p>
+                <Button asChild variant="trust-verified" size="lg" className="w-full">
+                  <Link href={SIGN_IN_HREF}>Sign in</Link>
+                </Button>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Didn&apos;t start this yourself? Close this page. Nothing is shared.
+                </p>
+              </StepCard>
             )}
             {stage.kind === "problem" && (
               <StatusCallout tone="attention" title="This link can't be used">
@@ -224,7 +295,10 @@ export function ContinueCapture() {
                         facingMode="environment"
                         telemetryContext="handoff_id_doc"
                         documentGuide
-                        onCapture={(file) => void send(file, "id_document")}
+                        getCaptureToken={() => requestPhoneCaptureToken("id_front")}
+                        onCapture={(file, meta) =>
+                          void send(file, "id_document", meta?.captureToken)
+                        }
                       />
                     ) : (
                       <CameraCapture
@@ -232,8 +306,14 @@ export function ContinueCapture() {
                         facingMode="user"
                         telemetryContext="handoff_selfie"
                         requireLiveness
+                        getCaptureToken={() => requestPhoneCaptureToken("selfie")}
                         onCapture={(file, meta) =>
-                          void send(file, "selfie", meta?.livenessPassed ?? false)
+                          void send(
+                            file,
+                            "selfie",
+                            meta?.captureToken,
+                            meta?.livenessPassed ?? false
+                          )
                         }
                       />
                     )}

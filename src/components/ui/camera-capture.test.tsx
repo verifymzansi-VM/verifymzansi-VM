@@ -791,6 +791,24 @@ describe("CameraCapture", () => {
     expect(screen.queryByRole("button", { name: /retake/i })).not.toBeInTheDocument();
   });
 
+  it("asks for a capture token when the camera starts and stops the camera without one", async () => {
+    mockGetUserMedia.mockResolvedValueOnce(createMockStream());
+    const getCaptureToken = vi.fn().mockResolvedValue(null);
+    render(
+      <CameraCapture
+        onCapture={vi.fn()}
+        facingMode="environment"
+        documentGuide
+        getCaptureToken={getCaptureToken}
+      />
+    );
+    await clickOpenCamera();
+    expect(await screen.findByText(/couldn't prepare the camera/i)).toBeInTheDocument();
+    expect(getCaptureToken).toHaveBeenCalledTimes(1);
+    expect(mockStop).toHaveBeenCalled();
+    expect(document.querySelector("video")).toBeNull();
+  });
+
   it("asks the member to check an ID photo before it is used, as a 0.85 JPEG", async () => {
     const stream = createMockStream();
     mockGetUserMedia.mockResolvedValueOnce(stream);
@@ -821,6 +839,7 @@ describe("CameraCapture", () => {
         facingMode="environment"
         documentGuide
         onReviewChange={onReviewChange}
+        getCaptureToken={async () => "token-from-camera-start"}
       />
     );
     await clickOpenCamera();
@@ -844,6 +863,10 @@ describe("CameraCapture", () => {
     expect(onCapture).toHaveBeenCalledTimes(1);
     expect(onCapture.mock.calls[0][0]).toBeInstanceOf(File);
     expect(onCapture.mock.calls[0][0].type).toBe("image/jpeg");
+    expect(onCapture.mock.calls[0][1]).toEqual({
+      livenessPassed: false,
+      captureToken: "token-from-camera-start",
+    });
 
     getContextSpy.mockRestore();
     toBlobSpy.mockRestore();

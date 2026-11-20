@@ -11,6 +11,15 @@ export type HandoffDetails = { idNumber: string; firstName: string; lastName: st
 type HandoffCode = { qr: { size: number; path: string }; expiresAt: string };
 
 const POLL_MS = 4_000;
+/** A code with less time left than this is not shown again. */
+const MIN_LEFT_MS = 2 * 60_000;
+
+/**
+ * The last code made in this tab, for the same details: going Back and
+ * choosing Continue on your phone again shows it instead of making a new link
+ * (each new link counts against the limit of 5 an hour). New code makes one.
+ */
+let lastCode: { key: string; code: HandoffCode } | null = null;
 
 /**
  * "Continue on your phone" on a computer without a usable camera (picture
@@ -37,37 +46,51 @@ export function ContinueOnPhonePanel({
   const [expired, setExpired] = useState(false);
   const started = useRef(false);
 
-  const makeCode = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setExpired(false);
-    try {
-      const response = await fetch("/api/verification/handoff", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(details ?? {}),
-      });
-      const payload = (await response.json().catch(() => ({}))) as Partial<HandoffCode> & {
-        error?: string;
-      };
-      if (!response.ok || !payload.qr || !payload.expiresAt) {
-        setCode(null);
-        setError(payload.error ?? "We couldn't make a phone link right now. Please try again.");
+  const key = JSON.stringify(details);
+  const makeCode = useCallback(
+    async (reuse: boolean) => {
+      if (
+        reuse &&
+        lastCode?.key === key &&
+        Date.parse(lastCode.code.expiresAt) - Date.now() > MIN_LEFT_MS
+      ) {
+        setCode(lastCode.code);
         return;
       }
-      setCode({ qr: payload.qr, expiresAt: payload.expiresAt });
-    } catch {
-      setCode(null);
-      setError("We couldn't make a phone link right now. Check your connection and try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, [details]);
+      setLoading(true);
+      setError(null);
+      setExpired(false);
+      try {
+        const response = await fetch("/api/verification/handoff", {
+          method: "POST",
+          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify(details ?? {}),
+        });
+        const payload = (await response.json().catch(() => ({}))) as Partial<HandoffCode> & {
+          error?: string;
+        };
+        if (!response.ok || !payload.qr || !payload.expiresAt) {
+          setCode(null);
+          setError(payload.error ?? "We couldn't make a phone link right now. Please try again.");
+          return;
+        }
+        const made = { qr: payload.qr, expiresAt: payload.expiresAt };
+        lastCode = { key, code: made };
+        setCode(made);
+      } catch {
+        setCode(null);
+        setError("We couldn't make a phone link right now. Check your connection and try again.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [details, key]
+  );
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    queueMicrotask(() => void makeCode());
+    queueMicrotask(() => void makeCode(true));
   }, [makeCode]);
 
   // Wait for the phone: the status updates once its photos arrive.
@@ -129,8 +152,8 @@ export function ContinueOnPhonePanel({
         <div className="min-w-0 space-y-3 text-sm leading-6">
           <p className="font-semibold text-foreground">Scan this with your phone&apos;s camera</p>
           <p className="text-muted-foreground">
-            This computer has no camera we can use. Your phone opens this same check and takes the
-            photos. This page updates when you&apos;re done.
+            This computer has no camera we can use. Sign in on your phone with the same account,
+            then take the photos. This page updates when you&apos;re done.
           </p>
           <p className="text-muted-foreground">
             No QR scanner? Sign in on your phone and open{" "}
@@ -141,6 +164,7 @@ export function ContinueOnPhonePanel({
             <Timer className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             Works once, for 15 minutes, only for your account.
           </p>
+          <p className="text-xs font-semibold text-foreground">Never send this code to anyone.</p>
         </div>
       </div>
       {code && !expired && (
@@ -164,7 +188,7 @@ export function ContinueOnPhonePanel({
         <Button
           variant="outline"
           size="lg"
-          onClick={() => void makeCode()}
+          onClick={() => void makeCode(false)}
           disabled={loading}
           className="w-full sm:w-auto"
         >

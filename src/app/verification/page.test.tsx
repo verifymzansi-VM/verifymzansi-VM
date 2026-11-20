@@ -22,7 +22,7 @@ vi.mock("@/components/ui/camera-capture", () => ({
     onContinueOnPhone,
     documentGuide,
   }: {
-    onCapture: (file: File, meta?: { livenessPassed: boolean }) => void;
+    onCapture: (file: File, meta?: { livenessPassed: boolean; captureToken?: string }) => void;
     onContinueOnPhone?: () => void;
     documentGuide?: boolean;
   }) => (
@@ -32,6 +32,7 @@ vi.mock("@/components/ui/camera-capture", () => ({
         onClick={() =>
           onCapture(new File(["photo"], "capture.jpg", { type: "image/jpeg" }), {
             livenessPassed: !documentGuide,
+            captureToken: documentGuide ? "id-capture-token" : "selfie-capture-token",
           })
         }
       >
@@ -998,6 +999,9 @@ describe("VerificationPage", () => {
     for (const [, init] of verificationUploadCalls) {
       const body = (init as RequestInit).body as FormData;
       expect(body.get("captureMethod")).toBe("camera");
+      expect(body.get("captureToken")).toBe(
+        body.get("docType") === "selfie" ? "selfie-capture-token" : "id-capture-token"
+      );
     }
     const selfieBody = (verificationUploadCalls.at(-1)![1] as RequestInit).body as FormData;
     expect(selfieBody.get("docType")).toBe("selfie");
@@ -1107,7 +1111,7 @@ describe("VerificationPage", () => {
       expect.objectContaining({
         title: "Already submitted",
         description:
-          "Your ID document is already pending review. You can continue without uploading it again.",
+          "Your ID document is already pending review. You can continue without sending it again.",
       })
     );
   });
