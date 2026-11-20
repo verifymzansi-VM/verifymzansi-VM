@@ -37,7 +37,7 @@ try {
   assert.equal(response.status, 200);
   const text = await response.text();
   assert.equal(text.includes("PRIVATE_UPSTREAM_BODY"), false);
-  assert.equal(JSON.parse(text).checks.length, 12);
+  assert.equal(JSON.parse(text).checks.length, 11);
   await server.update(config(true));
   assert.equal(
     (
