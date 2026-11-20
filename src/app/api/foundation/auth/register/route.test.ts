@@ -1,5 +1,5 @@
 /** @vitest-environment node */
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "./route";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
@@ -367,4 +367,44 @@ it("fails closed when the limiter cannot be checked, without asking Auth", async
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: true, degraded: true });
   expect((await POST(registerRequest())).status).toBe(503);
   expect(fetcher).not.toHaveBeenCalled();
+});
+describe("which Auth answers spend a sign-up limit", () => {
+  const spent = () =>
+    vi.mocked(checkRateLimit).mock.calls.map(([options]) => options.readOnly ?? false);
+  const authAnswers = (body: unknown, status: number) =>
+    fetcher.mockImplementation(async () =>
+      Response.json(body, { status, headers: { "x-supabase-api-version": "2024-01-01" } })
+    );
+
+  it("spends one on a created account", async () => {
+    expect((await POST(registerRequest())).status).toBe(200);
+    expect(spent()).toEqual([true, false]);
+  });
+
+  it("spends one on an existing address, answered like a new one", async () => {
+    authAnswers({ code: "user_already_exists", msg: "User already registered" }, 422);
+    const response = await POST(registerRequest());
+    expect(response.status).toBe(200);
+    expect(spent()).toEqual([true, false]);
+  });
+
+  it("never spends one on Auth's own rate limit", async () => {
+    authAnswers({ code: "over_request_rate_limit", msg: "Too many requests" }, 429);
+    expect((await POST(registerRequest())).status).toBe(429);
+    expect(spent()).toEqual([true]);
+  });
+
+  it("never spends one on an Auth failure, a timeout or a network failure", async () => {
+    authAnswers({ code: "unexpected_failure", msg: "Internal" }, 500);
+    expect((await POST(registerRequest())).status).toBe(503);
+    fetcher.mockImplementation(async () => {
+      throw new TypeError("fetch failed");
+    });
+    expect((await POST(registerRequest())).status).toBe(503);
+    fetcher.mockImplementation(async () => {
+      throw new DOMException("The operation timed out.", "TimeoutError");
+    });
+    expect((await POST(registerRequest())).status).toBe(503);
+    expect(spent()).toEqual([true, true, true]);
+  });
 });

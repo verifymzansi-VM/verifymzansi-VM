@@ -16,8 +16,9 @@ export class FoundationRegistrationError extends Error {
   constructor(
     readonly status: 400 | 429 | 503,
     breached = false,
-    /** Whether Auth was asked and did not refuse the CAPTCHA, so the attempt
-     * counts against the sign-up limits (a made-up token never does). */
+    /** Whether the attempt counts against the sign-up limits: only an Auth
+     * answer that shows the CAPTCHA was checked and passed
+     * (CHECKED_CAPTCHA_REFUSALS). */
     readonly countsAsAttempt = false
   ) {
     super(
@@ -31,6 +32,21 @@ export class FoundationRegistrationError extends Error {
     );
   }
 }
+
+/**
+ * Auth refusals that come after its CAPTCHA check, so the attempt was real and
+ * counts against the sign-up limits, like a created account or the uniform
+ * answer for an existing or uninvited address (those return normally and
+ * always count). Anything else never counts: a refused CAPTCHA, Auth's own
+ * rate limit (429, which may come before its CAPTCHA check), 5xx, timeouts
+ * and network failures, so made-up tokens can never spend a shared network's
+ * limit.
+ */
+const CHECKED_CAPTCHA_REFUSALS: ReadonlySet<string> = new Set([
+  "weak_password",
+  "validation_failed",
+  "email_address_invalid",
+]);
 
 /** The target's auth.users triggers create its private profile and record the
  * current Terms version as accepted at sign-up. Display name is an unverified
@@ -47,7 +63,6 @@ export async function registerFoundationAccount(
 ): Promise<void> {
   const parsed = foundationRegistrationSchema.safeParse(input);
   if (!parsed.success) throw new FoundationRegistrationError(400);
-  let askedAuth = false;
   try {
     const config = parseFoundationConnection(connection);
     let breached: boolean;
@@ -70,7 +85,6 @@ export async function registerFoundationAccount(
       fetcher
     );
     const { email, password, displayName, turnstileToken } = parsed.data;
-    askedAuth = true;
     const { data, error } = await attempt.auth.signUp({
       email,
       password,
@@ -83,7 +97,7 @@ export async function registerFoundationAccount(
         captchaToken: turnstileToken,
       },
     });
-    if (attempt.cookieAccessFailed()) throw new FoundationRegistrationError(503, false, true);
+    if (attempt.cookieAccessFailed()) throw new FoundationRegistrationError(503);
     if (error) {
       // An existing address, or one the sign-up guard turns away while
       // registration is by invitation only (403), gets the same reply as a
@@ -106,14 +120,14 @@ export async function registerFoundationAccount(
             ? 503
             : 400,
         false,
-        error.code !== "captcha_failed"
+        CHECKED_CAPTCHA_REFUSALS.has(error.code ?? "")
       );
     }
     // Confirmed-email signup is mandatory. Discard an unexpected auto-login.
     if (data.session || !z.uuid().safeParse(data.user?.id).success)
-      throw new FoundationRegistrationError(503, false, true);
+      throw new FoundationRegistrationError(503);
   } catch (error) {
     if (error instanceof FoundationRegistrationError) throw error;
-    throw new FoundationRegistrationError(503, false, askedAuth);
+    throw new FoundationRegistrationError(503);
   }
 }
