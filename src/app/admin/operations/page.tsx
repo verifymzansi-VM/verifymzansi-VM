@@ -2,85 +2,72 @@ import Link from "next/link";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { redirect } from "next/navigation";
 import { SHOW_STAFF_OPERATIONS } from "@/lib/hidden-features";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import {
+  readStaffOperationsHealth,
+  type OperationsHealth,
+  type ScheduledJob,
+} from "@/lib/foundation/operations-health";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 import { createLogger } from "@/lib/utils/logger";
 import { formatDateTime } from "@/lib/utils/format";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RetryJobButton } from "./retry-job-button";
 
 export const metadata = {
   title: "Operations health — Admin",
-  description: "Failed decision updates, stuck jobs and incidents that need a person.",
+  description: "Stuck emails and notices, payment problems, blocked deletions and late jobs.",
 };
 
-/** The expiry job runs every 5 minutes; flag it if it has been quiet for 15. */
-const EXPIRY_STALE_MS = 15 * 60 * 1000;
+const PATH = "/admin/operations";
 
-/** Server-rendered per request, so reading the clock here is deterministic for the response. */
-function isStale(lastRunAt: string | null | undefined): boolean {
-  return !lastRunAt || Date.now() - new Date(lastRunAt).getTime() > EXPIRY_STALE_MS;
-}
+const JOB_LABELS: Record<ScheduledJob, string> = {
+  slot_renewals: "Slot renewals",
+  post_lifecycle: "Post expiry and deletion",
+  sponsorships: "Sponsored places",
+  inbox_purge: "Old enquiries and notices removed",
+  intro_trials: "Free trial checks",
+  commissions: "Partner commissions",
+  bank_transfer_expiry: "Bank transfer expiry",
+  package_add_invoices: "Unpaid added-slot invoices",
+  email_delivery: "Emails",
+  payment_alerts: "Payment alerts to staff",
+  privacy_notices: "Privacy request notices",
+  retention: "Data retention",
+  form_drafts: "Saved form drafts removed",
+  evidence_cleanup: "ID evidence files deleted",
+  media_cleanup: "Photo and video files deleted",
+  payment_checks: "Payment status checks",
+  refund_check: "Daily refund check",
+};
 
-/** From the retention_overview() RPC (20260928130000_dsar_operations.sql). */
-interface RetentionOverview {
-  jobs: Array<{
-    job: string;
-    schedule: string;
-    last_run: string | null;
-    last_status: string | null;
-    failures_7d: number;
-  }>;
-  deletions_pending: number;
-  deletions_stuck: number;
-  evidence_overdue: number;
-  legal_holds: number;
+const SCHEDULES: Record<OperationsHealth["jobs"][number]["every"], string> = {
+  minute: "Every minute",
+  "5_minutes": "Every 5 minutes",
+  "10_minutes": "Every 10 minutes",
+  day: "Daily",
+};
+
+/** "amount_mismatch" -> "amount mismatch". */
+function words(code: string): string {
+  return code.replace(/_/g, " ");
 }
 
 export default async function OperationsHealthPage() {
-  const { role } = await requireStaff("audit:view");
-  // Hidden until it works on the live backend (src/lib/hidden-features.ts).
+  await requireStaff("audit:view");
+  // Hidden until launch (src/lib/hidden-features.ts).
   if (!SHOW_STAFF_OPERATIONS) redirect("/admin");
-  const admin = createAdminClient();
 
-  const [deadJobs, failedDecisions, events, heartbeat, backlog, retentionResult] =
-    await Promise.all([
-      admin
-        .from("operation_jobs")
-        .select("id, kind, attempts, last_error, decision_id, updated_at", { count: "exact" })
-        .eq("status", "dead")
-        .order("updated_at", { ascending: false })
-        .limit(50),
-      admin
-        .from("decision_records")
-        .select("id, action_category, execution_error, decided_at", { count: "exact" })
-        .eq("execution_status", "failed")
-        .order("decided_at", { ascending: false })
-        .limit(50),
-      admin
-        .from("ops_events")
-        .select("id, kind, severity, detail, created_at")
-        .is("acknowledged_at", null)
-        .order("created_at", { ascending: false })
-        .limit(50),
-      admin
-        .from("ops_heartbeats")
-        .select("last_run_at, detail")
-        .eq("name", "expire_due_items")
-        .maybeSingle(),
-      admin
-        .from("operation_jobs")
-        .select("id", { count: "exact", head: true })
-        .in("status", ["pending", "running"]),
-      admin.rpc("retention_overview"),
-    ]);
-
-  const failed = [deadJobs, failedDecisions, events].find((r) => r.error);
-  if (failed?.error) {
-    createLogger("OperationsHealth").error("Operations health read failed", {
-      error: failed.error.message,
-    });
+  let health: OperationsHealth;
+  try {
+    const { api } = await readFoundationServerSession();
+    health = await readStaffOperationsHealth(api);
+  } catch (error) {
+    if (error instanceof FoundationStaffCommandError && error.mfaRequired)
+      redirect(staffVerifyHref("/staff/two-step", PATH));
+    createLogger("OperationsHealth").error("Operations health read failed");
     return (
       <p role="alert">
         Operations health could not be loaded. Refresh to try again. This does not mean everything
@@ -89,85 +76,100 @@ export default async function OperationsHealthPage() {
     );
   }
 
-  const expiryStale = isStale(heartbeat.data?.last_run_at);
-  // A failed retention read shows "Unavailable", never zero.
-  const retention = retentionResult.error ? null : (retentionResult.data as RetentionOverview);
-  if (retentionResult.error) {
-    createLogger("OperationsHealth").warn("Retention overview read failed", {
-      error: retentionResult.error.message,
-    });
-  }
+  const { emails, notices, payments, deletions, incidents } = health;
+  const tiles = [
+    { label: "Stuck emails", value: emails.stuck },
+    { label: "Stuck notices", value: notices.stuck },
+    { label: "Payment problems", value: payments.problems },
+    { label: "Blocked deletions", value: deletions.accounts_blocked },
+  ];
   const retentionTiles = [
-    { label: "Evidence past its purge date", value: retention?.evidence_overdue, alert: true },
-    { label: "File deletions stuck over a day", value: retention?.deletions_stuck, alert: true },
-    { label: "File deletions queued", value: retention?.deletions_pending, alert: false },
-    { label: "Accounts on legal hold", value: retention?.legal_holds, alert: false },
+    { label: "Evidence past its purge date", value: deletions.evidence_overdue, alert: true },
+    { label: "File deletions stuck over a day", value: deletions.files_stuck, alert: true },
+    { label: "File deletions queued", value: deletions.files_queued, alert: false },
+    { label: "Accounts on legal hold", value: deletions.legal_holds, alert: false },
   ];
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Operations health"
-        description="Work that was approved but did not finish, and incidents that need a person."
+        description="Work that did not finish, scheduled jobs that stopped, and incidents that need a person."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Operations health" }]}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Stuck jobs</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">{deadJobs.count ?? 0}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Failed decision updates</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">{failedDecisions.count ?? 0}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Jobs waiting</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">{backlog.count ?? "Unavailable"}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Expiry job</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            <Badge variant={expiryStale ? "destructive" : "outline"}>
-              {expiryStale ? "Not running" : "Running"}
-            </Badge>
-            <p className="text-xs text-muted-foreground">
-              {heartbeat.data?.last_run_at
-                ? `Last run ${formatDateTime(heartbeat.data.last_run_at)}`
-                : "No run recorded"}
-            </p>
-          </CardContent>
-        </Card>
+        {tiles.map((tile) => (
+          <Card key={tile.label}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">{tile.label}</CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-bold">{tile.value}</CardContent>
+          </Card>
+        ))}
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Failed decision updates</CardTitle>
+          <CardTitle>Scheduled jobs</CardTitle>
         </CardHeader>
         <CardContent>
-          {!failedDecisions.data?.length ? (
-            <p className="text-sm text-muted-foreground">
-              None. Every approved decision was applied.
-            </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground">
+                  <th className="py-2 pr-4 font-medium">Scheduled job</th>
+                  <th className="py-2 pr-4 font-medium">Last run</th>
+                  <th className="py-2 font-medium">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {health.jobs.map((job) => (
+                  <tr key={job.job} className="border-t">
+                    <td className="py-2 pr-4">
+                      {JOB_LABELS[job.job]}
+                      <span className="block text-xs text-muted-foreground">
+                        {SCHEDULES[job.every]}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4 text-xs">
+                      {job.last_run_at ? formatDateTime(job.last_run_at) : "Never"}
+                    </td>
+                    <td className="py-2">
+                      <Badge variant={job.late ? "destructive" : "outline"}>
+                        {job.late ? "Late" : "On time"}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Stuck emails</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Not sent after the last of 8 tries, or still not sent a day after they were queued.{" "}
+            {emails.waiting} {emails.waiting === 1 ? "email is" : "emails are"} waiting to send.
+          </p>
+          {!emails.items.length ? (
+            <p className="text-sm text-muted-foreground">None. Emails are going out.</p>
           ) : (
             <ul className="space-y-2">
-              {failedDecisions.data.map((d) => (
-                <li key={d.id} className="rounded-lg border p-3 text-sm">
-                  <Link
-                    href={`/admin/governance/escalations/${d.id}`}
-                    className="font-medium underline"
-                  >
-                    {d.action_category.replace(/_/g, " ")}
-                  </Link>
-                  <p className="text-xs text-muted-foreground">{d.execution_error}</p>
+              {emails.items.map((email, index) => (
+                <li key={index} className="rounded-lg border p-3 text-sm">
+                  <p className="font-medium">{words(email.kind)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {email.attempts} attempts · queued {formatDateTime(email.queued_at)}
+                  </p>
+                  {email.last_error && (
+                    <p className="text-xs text-muted-foreground">{words(email.last_error)}</p>
+                  )}
                 </li>
               ))}
             </ul>
@@ -177,26 +179,96 @@ export default async function OperationsHealthPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Stuck jobs</CardTitle>
+          <CardTitle>Stuck notices</CardTitle>
         </CardHeader>
-        <CardContent>
-          {!deadJobs.data?.length ? (
-            <p className="text-sm text-muted-foreground">None. Notices and syncs are going out.</p>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Privacy request notices not sent after the last of 8 tries, or still not sent a day
+            after they were queued.
+          </p>
+          {!notices.items.length ? (
+            <p className="text-sm text-muted-foreground">None. Notices are going out.</p>
           ) : (
             <ul className="space-y-2">
-              {deadJobs.data.map((job) => (
+              {notices.items.map((notice, index) => (
+                <li key={index} className="rounded-lg border p-3 text-sm">
+                  <p className="font-medium">{words(notice.kind)} notice</p>
+                  <p className="text-xs text-muted-foreground">
+                    {notice.attempts} attempts · queued {formatDateTime(notice.queued_at)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Payment problems</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Seen in the past 7 days. Work on them from{" "}
+            <Link href="/admin/payments" className="font-medium underline">
+              Payments &amp; Refunds
+            </Link>
+            .
+          </p>
+          {payments.not_activated > 0 && (
+            <p className="text-sm font-medium text-destructive">
+              {payments.not_activated} paid{" "}
+              {payments.not_activated === 1 ? "payment was" : "payments were"} not activated.
+            </p>
+          )}
+          {!payments.items.length ? (
+            <p className="text-sm text-muted-foreground">None in the past 7 days.</p>
+          ) : (
+            <ul className="space-y-2">
+              {payments.items.map((problem, index) => (
                 <li
-                  key={job.id}
+                  key={index}
                   className="flex flex-wrap items-start justify-between gap-3 rounded-lg border p-3 text-sm"
                 >
                   <div className="min-w-0">
-                    <p className="font-medium">{job.kind.replace(/_/g, " ")}</p>
+                    <p className="font-medium">{words(problem.reason)}</p>
                     <p className="text-xs text-muted-foreground">
-                      {job.attempts} attempts · last {formatDateTime(job.updated_at)}
+                      {problem.payment_ref ? `Payment ${problem.payment_ref} · ` : ""}
+                      {words(problem.source)} · seen {problem.occurrences}{" "}
+                      {problem.occurrences === 1 ? "time" : "times"} · last{" "}
+                      {formatDateTime(problem.last_seen_at)}
                     </p>
-                    <p className="line-clamp-2 text-xs text-muted-foreground">{job.last_error}</p>
                   </div>
-                  {role === "admin" && <RetryJobButton jobId={job.id} />}
+                  {problem.alerted && <Badge variant="outline">Staff alerted</Badge>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Blocked deletions</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Closed accounts whose deletion is held back, and why.
+          </p>
+          {!deletions.items.length ? (
+            <p className="text-sm text-muted-foreground">
+              None. Closed accounts are being deleted on time.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {deletions.items.map((deletion, index) => (
+                <li key={index} className="rounded-lg border p-3 text-sm">
+                  <p className="font-medium">{words(deletion.reason)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Closed by {deletion.closed_by} · held back since{" "}
+                    {formatDateTime(deletion.blocked_at)} · due{" "}
+                    {formatDateTime(deletion.erase_after)}
+                  </p>
                 </li>
               ))}
             </ul>
@@ -218,58 +290,13 @@ export default async function OperationsHealthPage() {
               <div key={tile.label} className="rounded-lg border p-3">
                 <p className="text-xs text-muted-foreground">{tile.label}</p>
                 <p
-                  className={`text-xl font-bold ${tile.alert && (tile.value ?? 0) > 0 ? "text-destructive" : ""}`}
+                  className={`text-xl font-bold ${tile.alert && tile.value > 0 ? "text-destructive" : ""}`}
                 >
-                  {typeof tile.value === "number" ? tile.value : "Unavailable"}
+                  {tile.value}
                 </p>
               </div>
             ))}
           </div>
-          {retention && retention.jobs.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="py-2 pr-4 font-medium">Scheduled job</th>
-                    <th className="py-2 pr-4 font-medium">Last run</th>
-                    <th className="py-2 pr-4 font-medium">Result</th>
-                    <th className="py-2 font-medium">Failures (7 days)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {retention.jobs.map((job) => (
-                    <tr key={job.job} className="border-t">
-                      <td className="py-2 pr-4">
-                        <span className="font-mono text-xs">{job.job}</span>
-                        <span className="block text-xs text-muted-foreground">{job.schedule}</span>
-                      </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {job.last_run ? formatDateTime(job.last_run) : "Never"}
-                      </td>
-                      <td className="py-2 pr-4">
-                        <Badge
-                          variant={
-                            job.last_status === "failed" || !job.last_run
-                              ? "destructive"
-                              : "outline"
-                          }
-                        >
-                          {job.last_status ?? "no runs"}
-                        </Badge>
-                      </td>
-                      <td className="py-2">{job.failures_7d}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {retention
-                ? "No retention jobs are scheduled. Check the pg_cron migrations were applied."
-                : "Scheduled job history is unavailable."}
-            </p>
-          )}
         </CardContent>
       </Card>
 
@@ -278,19 +305,19 @@ export default async function OperationsHealthPage() {
           <CardTitle>Open incidents</CardTitle>
         </CardHeader>
         <CardContent>
-          {!events.data?.length ? (
+          {!incidents.items.length ? (
             <p className="text-sm text-muted-foreground">No open incidents.</p>
           ) : (
             <ul className="space-y-2">
-              {events.data.map((e) => (
-                <li key={e.id} className="rounded-lg border p-3 text-sm">
+              {incidents.items.map((alarm, index) => (
+                <li key={index} className="rounded-lg border p-3 text-sm">
                   <p className="font-medium">
-                    {e.kind.replace(/_/g, " ")}{" "}
-                    <Badge variant={e.severity === "critical" ? "destructive" : "outline"}>
-                      {e.severity}
+                    {words(alarm.metric)} ({alarm.period}){" "}
+                    <Badge variant={alarm.level === "critical" ? "destructive" : "outline"}>
+                      {alarm.level}
                     </Badge>
                   </p>
-                  <p className="text-xs text-muted-foreground">{formatDateTime(e.created_at)}</p>
+                  <p className="text-xs text-muted-foreground">{formatDateTime(alarm.raised_at)}</p>
                 </li>
               ))}
             </ul>

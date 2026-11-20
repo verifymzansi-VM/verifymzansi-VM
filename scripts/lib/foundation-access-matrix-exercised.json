@@ -92,6 +92,7 @@
     "get_staff_invoice_payments",
     "get_staff_invoice_transfers",
     "get_staff_invoices",
+    "get_staff_operations_health",
     "get_staff_ozow_refunds",
     "get_staff_package_invoice_requests",
     "get_staff_package_move_failures",

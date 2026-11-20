@@ -44,11 +44,13 @@ export const SHOW_LOCATION_DETECTION: boolean =
   LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_LOCATION_DETECTION;
 
 /**
- * Staff "Operations health" page (/admin/operations), its menu entry, the
- * links to it on the staff home, and its "Retry" route
- * (/api/admin/ops/jobs/retry). They read job, incident and retention records
- * the live backend does not have. While hidden, the page's address leads to
- * the staff home and the route answers 404.
+ * Staff "Operations health" page (/admin/operations), its menu entry and the
+ * links to it on the staff home. The page reads the live backend's staff
+ * command api.get_staff_operations_health (database update
+ * 20261120163500_staff_operations_health.sql): late scheduled jobs, stuck
+ * emails and notices, payment problems and blocked deletions. Off until launch
+ * (on at launch in LAUNCH_VALUES; frontend ledger group 70). While hidden, the
+ * page's address leads to the staff home.
  */
 export const SHOW_STAFF_OPERATIONS: boolean =
   LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_STAFF_OPERATIONS;

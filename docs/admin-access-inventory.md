@@ -56,7 +56,8 @@ Legend for "Authorised by":
 - **New routes.**
   - `POST /api/appeals` (member)
   - `POST /api/admin/governance/restrictions/lift`
-  - `POST /api/admin/ops/jobs/retry` (admin)
+  - `POST /api/admin/ops/jobs/retry` (admin; removed 20 November 2026, launch
+    checklist item 8)
   - `POST /api/webhooks/ops-jobs` (worker; shared secret)
 - **New pages.** `/appeals`, `/appeals/new` and `/admin/operations`.
 - **Removed.**

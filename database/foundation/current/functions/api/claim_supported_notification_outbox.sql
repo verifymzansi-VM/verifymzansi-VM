@@ -5,7 +5,9 @@ CREATE OR REPLACE FUNCTION api.claim_supported_notification_outbox(p_supported_k
  RETURNS jsonb
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
-AS $function$select internal.claim_supported_notification_outbox(p_supported_kinds,p_limit)$function$;
+AS $function$
+  select internal.note_scheduled_job_run('email_delivery', internal.claim_supported_notification_outbox(p_supported_kinds,p_limit));
+$function$;
 alter function api.claim_supported_notification_outbox(text[],integer) owner to postgres;
 revoke all on function api.claim_supported_notification_outbox(text[],integer) from public;
 grant execute on function api.claim_supported_notification_outbox(text[],integer) to service_role;

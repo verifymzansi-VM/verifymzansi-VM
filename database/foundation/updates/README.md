@@ -80,6 +80,87 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Staff operations health and a last-run record for every scheduled job, 20 November 2026
+
+`20261120163500_staff_operations_health.sql` is pending (see the applied
+register). Launch checklist item 8 (roadmap M5.5, first part). The staff page
+`/admin/operations` read job, incident and retention records that only the
+retired backend had; it now reads one staff command over what this database
+holds. The page stays switched off (`SHOW_STAFF_OPERATIONS`) until launch.
+
+- **Every scheduled job records its last run.** The seventeen service-only
+  commands the timed Workers start through the website (every minute: slot
+  renewals, post lifecycle, sponsorships, inbox purge, intro trials, partner
+  commissions, bank transfer expiry, added-slot invoices, email delivery,
+  payment alerts, privacy notices; every 5 minutes: retention, form drafts,
+  evidence and media cleanup; every 10 minutes: payment checks; daily: the Ozow
+  refund check) keep their signatures, grants and results; each passes its
+  result through `internal.note_scheduled_job_run`, which writes the job's time
+  in the new `private.scheduled_job_runs` (one row per job, no account data, no
+  API role access, RLS on). The record is written in the same transaction as the
+  job's work, so a failed command records nothing. At most one write per job
+  every 20 seconds. Only the api wrappers change; `internal.run_retention` and
+  the other internal functions are untouched.
+- **Late jobs.** `internal.scheduled_job_catalogue()` lists each job, how often
+  it runs and when it counts as late (10 minutes for the minute jobs, 30 for the
+  5-minute jobs, 40 for the payment checks, 26 hours for the daily refund
+  check). Until a job's first run after the update it shows as late with no run
+  recorded. The refund check runs only while the Ozow refund key is set.
+- **The staff read** `api.get_staff_operations_health()` (governor and admin,
+  `audit:view`, with a recent authenticator code; read only) returns each job's
+  last run and whether it is late; stuck emails (unsent after the last of 8
+  attempts, or a day after queuing) with the size of the unsent queue; stuck
+  privacy request notices (same rule); payment problems seen in the past 7 days
+  and paid payments not activated; account deletions held back, file deletions
+  stuck over a day or queued, ID evidence past its deletion date outside legal
+  and fraud holds, and accounts on legal hold; and open cost alarms. Lists have
+  at most 50 rows; counts are complete. It returns kinds, reasons, counts, times
+  and an 8-character payment reference, never an account id, name, email, phone
+  or message text.
+
+The job commands keep their signatures, so a website release without the
+matching code works with the update, and the release with it shows "could not be
+loaded" on the (switched-off) page until the update is applied. As usual: apply
+first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261120163500_staff_operations_health.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff operations health: update not applied".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "staff operations health: already applied; jobs with a
+   recorded run: N of 17" (N grows to 16 within about 10 minutes as the timed
+   jobs run, and to 17 after the next daily refund check).
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261120163500_staff_operations_health.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update is
+applied, puts back the seventeen job commands byte for byte and drops the read,
+its internal twin, `internal.note_scheduled_job_run`,
+`internal.scheduled_job_catalogue` and `private.scheduled_job_runs`.
+
+`node --import tsx scripts/test-foundation-staff-operations-health.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted body and a
+premature rollback, changing nothing; apply, rollback and re-apply return the
+same fingerprints, and the rollback restores every job command byte for byte
+with its grants; each of the seventeen commands, called as the timed jobs call
+it, records only its own job and returns its result unchanged; a failed command
+records nothing; at most one write per job every 20 seconds; only catalogued
+jobs can be recorded, and members can run neither the commands nor the helper;
+every job is listed in order and turns late after its limit (9 and 11 minutes,
+29 and 31, 39 and 41, 25 and 27 hours); stuck emails and notices, payment
+problems, blocked deletions, evidence past its date (a held account's excluded)
+and open alarms are counted and listed as described, with no account, subject,
+request or case id; lists stop at 50 while counts stay complete; and only
+governor and admin with a recent authenticator code can read it (a moderator, a
+member, an admin whose code is 20 minutes old, the server key and a visitor are
+refused).
+
 ## A daily limit on SMS codes for the whole site, 20 November 2026
 
 `20261120074411_sms_daily_limit.sql` was applied on 20 November 2026 at 12:26
@@ -5980,5 +6061,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   limit: already applied; codes today: 0; counted today: 0; limit: 500";
   production fingerprint after it (fingerprint.sql at cd725fb9) matched the full
   replay (except the known schema grant difference)
+
+- `20261120163500_staff_operations_health.sql`: pending
 
 <!-- applied-register:end -->

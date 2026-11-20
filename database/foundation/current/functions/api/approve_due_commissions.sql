@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.approve_due_commissions(p_limit integer)
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.approve_due_commissions(p_limit);
+  select internal.note_scheduled_job_run('commissions', internal.approve_due_commissions(p_limit));
 $function$;
 alter function api.approve_due_commissions(integer) owner to postgres;
 revoke all on function api.approve_due_commissions(integer) from public;

@@ -5418,6 +5418,19 @@
         "service_role": false
       },
       "authority": "Signed-in member with a live session and a current accepted ID review, only while Multi-listing packages are on sale: asks staff for an invoice for slots added to the account's own running package (PT409 package_ended otherwise), only while 10 or more whole days are left (PT409 package_add_invoice_too_late), at most 250 slots in all, at the price of that moment for the days left (PT428 when the total shown differs), which the invoice keeps; the member confirms the invoice cooling-off wording. Refused while a package invoice is unpaid or staff prepare an earlier request. One open request per account; the same request id returns the first answer; another order replaces a request no staff member has prepared."
+    },
+    {
+      "name": "get_staff_operations_health",
+      "updates": ["updates/20261120163500_staff_operations_health.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current audit:view capability (governor, admin) and recent authenticator proof: every scheduled job with how often it runs, its last recorded run and whether it is late; counts and at most 50 rows each of stuck emails (kind, attempts, queued time, error code), stuck privacy request notices (kind, attempts, queued time), payment problems seen in the past 7 days (an 8-character payment reference, reason, source, times, occurrences, whether staff were alerted), paid payments not activated, account deletions held back (reason and dates), file deletions stuck or queued, ID evidence past its deletion date outside holds, accounts on legal hold and open cost alarms; never an account id, name, email, phone or message text. Read only."
     }
   ]
 }

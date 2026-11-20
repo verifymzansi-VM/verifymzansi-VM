@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.reconcile_intro_trials(p_limit integer DEFAULT 20
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.reconcile_intro_trials(p_limit);
+  select internal.note_scheduled_job_run('intro_trials', internal.reconcile_intro_trials(p_limit));
 $function$;
 alter function api.reconcile_intro_trials(integer) owner to postgres;
 revoke all on function api.reconcile_intro_trials(integer) from public;

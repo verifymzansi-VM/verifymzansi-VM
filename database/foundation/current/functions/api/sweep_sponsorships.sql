@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.sweep_sponsorships(p_limit integer)
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.sweep_sponsorships(p_limit);
+  select internal.note_scheduled_job_run('sponsorships', internal.sweep_sponsorships(p_limit));
 $function$;
 alter function api.sweep_sponsorships(integer) owner to postgres;
 revoke all on function api.sweep_sponsorships(integer) from public;

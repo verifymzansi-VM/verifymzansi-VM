@@ -84,9 +84,6 @@ const ID = "11111111-1111-4111-8111-111111111111";
 const NOT_STAFF = "permission denied: staff role required";
 const SECOND_FACTOR = "recent second-factor verification required";
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
-/** Hidden staff routes still on the retired backend; they answer 404 in
- * production. */
-const OUTSIDE = new Set(["admin/ops/jobs/retry", "admin/ops/jobs"]);
 
 /** Bodies each of these routes accepts as far as the database command. */
 const BODIES: Record<string, unknown> = {
@@ -129,7 +126,6 @@ beforeAll(async () => {
   });
   for (const [file, load] of Object.entries(modules).sort(([a], [b]) => a.localeCompare(b))) {
     const name = file.replace(/^\/src\/app\/api\//, "").replace(/\/route\.ts$/, "");
-    if (OUTSIDE.has(name)) continue;
     const exports = await load();
     for (const method of METHODS)
       if (typeof exports[method] === "function")
