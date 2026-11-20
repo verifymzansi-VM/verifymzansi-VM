@@ -2864,7 +2864,12 @@ sign-in gate, and most staff screens showed it as an error.
 - Every staff page: when an action is refused for this reason, the page goes
   to 'Two-step verification' (or 'Confirm it's you' for a sensitive action)
   and, after the code, back to the same page. Screens that already did this
-  are unchanged. Other refusals still show as before.
+  are unchanged. Other refusals still show as before. Several refusals at
+  once move the page once; it only acts on staff pages, and the address it
+  goes to is rebuilt as the two-step page (with 'Confirm it's you' when
+  asked), never taken as given.
+- 'Two-step verification' page: an address with a repeated return path no
+  longer breaks the page; it returns to the staff home.
 - Member invitations (group 65): a malformed request no longer says 'Enter a
   valid email address.' unless the address was the problem ('This request
   could not be read. Reload the page and try again.'); an address with a
@@ -2876,8 +2881,9 @@ Decision: awaiting owner.
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/admin/staff-two-step-return.tsx` | wording-behaviour | Group 72: on staff pages, a staff action refused because the authenticator check ran out goes to the two-step page and back, as staff pages already do. | Staff: the two-step page instead of an error after an expired check. | keep | awaiting owner | 2026-11-20 | dd406acd217a |
-| `src/components/admin/staff-two-step-return.test.tsx` | test | Group 72: checks which answers go to the two-step page, that only the two-step page is followed, that the screen still gets its answer and that the original fetch is put back. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-20 | 8b8dbaccf41a |
+| `src/components/admin/staff-two-step-return.tsx` | wording-behaviour | Group 72: on staff pages, a staff action refused because the authenticator check ran out goes to the two-step page and back, as staff pages already do. | Staff: the two-step page instead of an error after an expired check. | keep | awaiting owner | 2026-11-20 | e9e3dd7775fc |
+| `src/components/admin/staff-two-step-return.test.tsx` | test | Group 72: checks which answers go to the two-step page, that only the two-step page is followed, that the screen still gets its answer and that the original fetch is put back. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-20 | 1396865e7488 |
+| `src/app/staff/two-step/page.tsx` | wording-behaviour | Group 72: the return path comes from a tested helper (staffReturnPath); a repeated `next` in the address now returns to the staff home instead of breaking the page. | Staff: nothing in normal use; a malformed two-step address opens the page instead of an error. | keep | awaiting owner | 2026-11-20 | b4565266495f |
 
 <!-- frontend-ledger:end -->
 

@@ -4,6 +4,7 @@ import { isOwnApiRequest, StaffTwoStepReturn, staffTwoStepTarget } from "./staff
 
 const HERE = "/admin/member-invitations?tab=open";
 const BACK = encodeURIComponent(HERE);
+const ORIGIN = "https://verifymzansi.com";
 
 describe("staffTwoStepTarget", () => {
   it("sends the proxy's expired-check answer to the two-step page and back", () => {
@@ -11,7 +12,8 @@ describe("staffTwoStepTarget", () => {
       staffTwoStepTarget(
         403,
         { code: "mfa_required", verifyUrl: "/staff/two-step", redirectUrl: "/staff/two-step" },
-        HERE
+        HERE,
+        ORIGIN
       )
     ).toBe(`/staff/two-step?next=${BACK}`);
   });
@@ -21,7 +23,8 @@ describe("staffTwoStepTarget", () => {
       staffTwoStepTarget(
         403,
         { code: "step_up_required", verifyUrl: "/staff/two-step?confirm=1" },
-        HERE
+        HERE,
+        ORIGIN
       )
     ).toBe(`/staff/two-step?confirm=1&next=${BACK}`);
   });
@@ -31,7 +34,8 @@ describe("staffTwoStepTarget", () => {
       staffTwoStepTarget(
         403,
         { reason: "staff_mfa_required", code: "step_up_required", redirectUrl: "/staff/two-step" },
-        HERE
+        HERE,
+        ORIGIN
       )
     ).toBe(`/staff/two-step?next=${BACK}`);
   });
@@ -42,10 +46,27 @@ describe("staffTwoStepTarget", () => {
     "/login",
     "/staff/two-stepper",
     "/staff/two-step?next=/admin/other",
-  ])("never follows another address (%s)", (url) => {
-    expect(staffTwoStepTarget(403, { code: "mfa_required", verifyUrl: url }, HERE)).toBe(
+    "/staff/two-step?%6eext=%2Flogin",
+    "/staff/two-step?next=/a&next=/b",
+    "/staff/two-step/../../login",
+    "javascript:alert(1)",
+  ])("never follows another address or keeps its query (%s)", (url) => {
+    expect(staffTwoStepTarget(403, { code: "mfa_required", verifyUrl: url }, HERE, ORIGIN)).toBe(
       `/staff/two-step?next=${BACK}`
     );
+  });
+
+  it.each([
+    "https://example.com/staff/two-step?confirm=1",
+    "/staff/two-step?confirm=1&%6eext=%2Flogin",
+    "/staff/two-step?confirm=1&confirm=1",
+  ])("keeps only the confirm flag of the two-step page (%s)", (url) => {
+    const expected = url.startsWith("/staff/two-step?confirm=1&%6e")
+      ? `/staff/two-step?confirm=1&next=${BACK}`
+      : `/staff/two-step?next=${BACK}`;
+    expect(
+      staffTwoStepTarget(403, { code: "step_up_required", verifyUrl: url }, HERE, ORIGIN)
+    ).toBe(expected);
   });
 
   it.each([
@@ -55,7 +76,7 @@ describe("staffTwoStepTarget", () => {
     [401, { code: "mfa_required" }],
     [500, { reason: "staff_mfa_required" }],
   ])("leaves other answers to the screen (%s)", (status, body) => {
-    expect(staffTwoStepTarget(status, body, HERE)).toBeNull();
+    expect(staffTwoStepTarget(status, body, HERE, ORIGIN)).toBeNull();
   });
 });
 
@@ -124,6 +145,40 @@ describe("StaffTwoStepReturn", () => {
     render(<StaffTwoStepReturn />);
     await window.fetch("/api/admin/commercial", { method: "POST" });
     await window.fetch("https://example.com/api/admin", { method: "POST" });
+    await window.fetch("/api/admin/commercial", { method: "POST" });
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it("navigates once when several staff actions are refused at the same time", async () => {
+    window.fetch = vi.fn().mockImplementation(async () => json(403, { code: "mfa_required" }));
+    render(<StaffTwoStepReturn />);
+    await Promise.all([
+      window.fetch("/api/admin/commercial", { method: "POST" }),
+      window.fetch("/api/admin/support/update", { method: "POST" }),
+      window.fetch("/api/admin/member-invitations", { method: "POST" }),
+    ]);
+    expect(assign).toHaveBeenCalledOnce();
+  });
+
+  it("does nothing once the staff area has closed, even if still in the fetch chain", async () => {
+    window.fetch = vi.fn().mockResolvedValue(json(403, { code: "mfa_required" }));
+    const { unmount } = render(<StaffTwoStepReturn />);
+    const kept = window.fetch;
+    // Another wrapper installed later keeps calling it after the unmount.
+    window.fetch = (input, init) => kept(input, init);
+    unmount();
+    const response = await window.fetch("/api/admin/commercial", { method: "POST" });
+    expect(response.status).toBe(403);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it("does nothing outside the staff pages", async () => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { origin: ORIGIN, pathname: "/dashboard", search: "", assign },
+    });
+    window.fetch = vi.fn().mockResolvedValue(json(403, { code: "mfa_required" }));
+    render(<StaffTwoStepReturn />);
     await window.fetch("/api/admin/commercial", { method: "POST" });
     expect(assign).not.toHaveBeenCalled();
   });
