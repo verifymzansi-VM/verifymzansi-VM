@@ -107,19 +107,22 @@ test("an extension cannot silently widen the approved audience", async () => {
   );
   assert.equal(requested, false);
 });
+const postIdsArgument = [{ name: "p_post_ids", sqlType: "uuid[]", optional: false }];
+// A manifest holding one reviewed anonymous read with its approved audience.
+const publicRead = (name, args = postIdsArgument) => ({
+  ...manifest,
+  functions: [
+    {
+      name,
+      arguments: args,
+      returns: "jsonb",
+      volatility: "s",
+      execute: { anon: true, authenticated: true, service_role: false },
+    },
+  ],
+});
 test("the reviewed public Seen projection accepts only the empty anonymous probe response", async () => {
-  const input = {
-    ...manifest,
-    functions: [
-      {
-        name: "get_public_frontend_business_seen",
-        arguments: [{ name: "p_post_ids", sqlType: "uuid[]", optional: false }],
-        returns: "jsonb",
-        volatility: "s",
-        execute: { anon: true, authenticated: true, service_role: false },
-      },
-    ],
-  };
+  const input = publicRead("get_public_frontend_business_seen");
   assert.equal(
     await verifyFoundationRuntimeApi(
       connection,
@@ -141,18 +144,7 @@ test("the reviewed public Seen projection accepts only the empty anonymous probe
   );
 });
 test("the reviewed public engagement read accepts only its empty items answer", async () => {
-  const input = {
-    ...manifest,
-    functions: [
-      {
-        name: "get_post_engagement",
-        arguments: [{ name: "p_post_ids", sqlType: "uuid[]", optional: false }],
-        returns: "jsonb",
-        volatility: "s",
-        execute: { anon: true, authenticated: true, service_role: false },
-      },
-    ],
-  };
+  const input = publicRead("get_post_engagement");
   assert.equal(
     await verifyFoundationRuntimeApi(
       connection,
@@ -197,18 +189,7 @@ test("the reviewed public engagement read accepts only its empty items answer", 
     );
 });
 test("the reviewed public payment limit accepts only its one-number answer", async () => {
-  const input = {
-    ...manifest,
-    functions: [
-      {
-        name: "get_payment_limits",
-        arguments: [],
-        returns: "jsonb",
-        volatility: "s",
-        execute: { anon: true, authenticated: true, service_role: false },
-      },
-    ],
-  };
+  const input = publicRead("get_payment_limits", []);
   assert.equal(
     await verifyFoundationRuntimeApi(
       connection,
