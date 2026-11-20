@@ -71,6 +71,71 @@ export function packageQuote(
     : { kind: "invoice", totalCents };
 }
 
+// ------------------------------------------------- adding slots part-way (P4b)
+
+/** Slots are added online while this many whole days of the package are left. */
+export const PACKAGE_ADD_MIN_DAYS = 7;
+/** ...and by invoice while this many are left (D1: 7 days of use, 3 to pay). */
+export const PACKAGE_ADD_MIN_INVOICE_DAYS = 10;
+
+/** An added-slots invoice is due this many days after it is issued, or on the
+ * package's last day when that is sooner (owner's decision of 20 November 2026). */
+export const PACKAGE_ADD_INVOICE_DUE_DAYS = 3;
+
+/** The South African date (YYYY-MM-DD) of an instant. */
+const saDate = (at: Date) => at.toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
+
+/** The due date (YYYY-MM-DD) an added-slots invoice issued at `now` gets, as
+ * the database sets it (internal.issue_package_customer_invoice). */
+export function packageAddInvoiceDueOn(packageEndsAt: string, now: Date) {
+  const issued = new Date(`${saDate(now)}T12:00:00+02:00`);
+  issued.setUTCDate(issued.getUTCDate() + PACKAGE_ADD_INVOICE_DUE_DAYS);
+  const due = saDate(issued);
+  const last = saDate(new Date(packageEndsAt));
+  return due < last ? due : last;
+}
+
+/** The add checkout's box; the database records it as package-add-starts-now-v1. */
+export const PACKAGE_ADD_COOLING_OFF_CONSENT =
+  "My added slots start now and end with my package; the 7-day cooling-off does not apply because the service starts immediately.";
+
+export type PackageAddQuote =
+  | { kind: "invalid" }
+  | { kind: "too_large"; maxSlots: number }
+  | { kind: "online"; totalCents: number }
+  | { kind: "invoice"; totalCents: number }
+  | { kind: "closed"; totalCents: number };
+
+/**
+ * What adding `slots` to a running package costs and how it is paid. The
+ * database prices one added slot for the days left (`unitPriceCents`, R100 per
+ * 30 days, rounded to the cent) and refuses any other total; an add of n slots
+ * costs n times that. Online up to 100 slots in all and Ozow's maximum
+ * (`onlineMaxCents`), otherwise by invoice; "closed" when that way is not open
+ * any more (fewer than 7, or 10, days left).
+ */
+export function packageAddQuote(
+  slots: number | null,
+  offer: {
+    unitPriceCents: number;
+    places: number;
+    maxSlots: number;
+    onlineOpen: boolean;
+    invoiceOpen: boolean;
+  },
+  onlineMaxCents: number | null
+): PackageAddQuote {
+  if (slots === null || !Number.isSafeInteger(slots) || slots < 1) return { kind: "invalid" };
+  if (slots > offer.maxSlots) return { kind: "too_large", maxSlots: offer.maxSlots };
+  const totalCents = offer.unitPriceCents * slots;
+  const online =
+    offer.places + slots <= PACKAGE_MAX_ONLINE_SLOTS &&
+    (onlineMaxCents === null || totalCents <= onlineMaxCents);
+  if (online)
+    return offer.onlineOpen ? { kind: "online", totalCents } : { kind: "closed", totalCents };
+  return offer.invoiceOpen ? { kind: "invoice", totalCents } : { kind: "closed", totalCents };
+}
+
 /** Reads the typed box: whole numbers only (empty or anything else is null). */
 export function parseSlotCount(value: string): number | null {
   const text = value.trim();

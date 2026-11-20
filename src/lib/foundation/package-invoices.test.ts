@@ -7,6 +7,7 @@ import {
   issueStaffPackageInvoice,
   readMyPackageInvoiceRequest,
   readStaffPackageInvoiceRequests,
+  requestPackageAddInvoice,
   requestPackageInvoice,
 } from "./package-invoices";
 import { FoundationStaffCommandError } from "./staff-command";
@@ -137,6 +138,90 @@ describe("Ask for an invoice (member)", () => {
     const { api } = fixture(ok({ request }), ok({ request: null }));
     await expect(readMyPackageInvoiceRequest(api)).resolves.toMatchObject({ slots: 50 });
     await expect(readMyPackageInvoiceRequest(api)).resolves.toBeNull();
+  });
+});
+
+describe("Ask for an invoice for added slots (member, P4b)", () => {
+  const packageId = "55555555-5555-4555-8555-555555555555";
+  const addRequest = {
+    ...request,
+    term_days: 30,
+    slots: 2,
+    unit_price_cents: 12667,
+    total_cents: 25334,
+    kind: "add",
+    days_left: 38,
+    invoiced_days: null,
+    days_left_now: 38,
+    package_ends_at: "2026-12-24T08:00:00+00:00",
+  };
+  const addOrder = {
+    packageId,
+    slots: 2,
+    expectedTotalCents: 25334,
+    coolingOffConsent: true,
+    requestId,
+  };
+
+  it("sends the package, slots, total and request id, and reads an add answer", async () => {
+    const { rpc, api } = fixture(ok({ ...addRequest, repeated: false }));
+    await expect(requestPackageAddInvoice(api, addOrder)).resolves.toMatchObject({
+      kind: "add",
+      days_left: 38,
+      slots: 2,
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "request_package_add_invoice",
+      {
+        p_package_id: packageId,
+        p_slots: 2,
+        p_expected_total_cents: 25334,
+        p_cooling_off_consent: true,
+        p_request_id: requestId,
+      },
+      { get: false }
+    );
+  });
+
+  it("never asks without the tick", async () => {
+    const { rpc, api } = fixture();
+    await expect(
+      requestPackageAddInvoice(api, { ...addOrder, coolingOffConsent: false })
+    ).rejects.toMatchObject({ status: 422 });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["PT409", "package_ended", 409, /package has ended/],
+    ["PT409", "package_add_invoice_too_late", 409, /10 or more days/],
+    ["22023", "package_slots_invalid", 422, /at most 250 slots/],
+  ] as const)("puts %s %s in plain words", async (code, detail, status, message) => {
+    const { api } = fixture(refused(code, detail));
+    const error = await requestPackageAddInvoice(api, addOrder).catch((caught: unknown) => caught);
+    expect(invoiceRouteRefusal(error)).toMatchObject({
+      status,
+      error: expect.stringMatching(message),
+    });
+  });
+
+  it("reads an add request as the member's latest request and in the staff queue", async () => {
+    const { api } = fixture(
+      ok({ request: addRequest }),
+      ok({
+        items: [{ ...staffRequest, ...addRequest, package_open: true }],
+        open: 1,
+        approval_above_cents: 5000000,
+      })
+    );
+    await expect(readMyPackageInvoiceRequest(api)).resolves.toMatchObject({ kind: "add" });
+    await expect(readStaffPackageInvoiceRequests(api)).resolves.toMatchObject({
+      items: [{ kind: "add", slots: 2 }],
+    });
+  });
+
+  it("still refuses a new-package request of fewer than 5 slots", async () => {
+    const { api } = fixture(ok({ request: { ...request, slots: 2 } }));
+    await expect(readMyPackageInvoiceRequest(api)).rejects.toMatchObject({ status: 503 });
   });
 });
 

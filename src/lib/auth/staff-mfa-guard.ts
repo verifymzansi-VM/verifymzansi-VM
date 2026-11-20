@@ -1,34 +1,39 @@
 import { NextResponse } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { hasActiveStaffSession } from "@/lib/auth/staff-session";
-import { readStaffAccessFromDb } from "@/lib/auth/admin-access";
+import type { StaffAccess } from "@/lib/auth/admin-access";
 import { evaluateStaffMfa, hasRecentSecondFactor, STAFF_MFA_PATH } from "@/lib/auth/staff-mfa";
 import { recordSecurityEvent } from "@/lib/security/security-events";
 
 /**
  * Enforce the staff MFA policy on a back-office API request, after the
- * caller's staff role has been verified. Returns a 403 response to send, or
- * null when the request may proceed.
+ * caller's staff role has been verified. `access` is the caller's staff
+ * access read from the database for this request (null refuses), and
+ * `authenticatorAt` the verified session's last authenticator time (seconds).
+ * Returns a 403 response to send, or null when the request may proceed.
  *
  * `stepUp` marks sensitive actions (role changes, high-risk KYC overrides,
- * DSAR exports) that need a second factor verified in the last 15 minutes,
- * even during the enrolment grace period.
+ * DSAR exports) that need a second factor verified in the last 15 minutes.
  */
 export async function checkStaffApiMfa(
-  supabase: SupabaseClient,
-  userId: string,
+  {
+    access,
+    accountId,
+    authenticatorAt,
+  }: { access: StaffAccess | null; accountId: string; authenticatorAt: number | null },
   { stepUp = false }: { stepUp?: boolean } = {}
 ): Promise<NextResponse | null> {
-  const access = await readStaffAccessFromDb(userId);
-  if (!access || !(await hasActiveStaffSession(supabase, userId))) {
+  if (!access) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const mfa = await evaluateStaffMfa(supabase, access.mfaRequiredAfter);
+  const mfa = evaluateStaffMfa({
+    canAccess: access.canAccess,
+    totpEnrolled: access.totpEnrolled,
+    authenticatorAt,
+  });
   if (mfa.status === "required") {
     recordSecurityEvent({
       event: "staff.second_factor_required",
-      accountId: userId,
+      accountId,
       reason: "mfa_required",
     });
     return NextResponse.json(
@@ -43,7 +48,7 @@ export async function checkStaffApiMfa(
   if (stepUp && !hasRecentSecondFactor(mfa)) {
     recordSecurityEvent({
       event: "staff.second_factor_required",
-      accountId: userId,
+      accountId,
       reason: "step_up_required",
     });
     return NextResponse.json(

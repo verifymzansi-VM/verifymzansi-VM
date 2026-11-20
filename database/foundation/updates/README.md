@@ -163,6 +163,146 @@ row deleted, the 350th and 500th codes are stored and the 501st is refused with
 `sms_daily_limit`, with no alarm; and no API role can read the counts or run the
 helper.
 
+## Add slots part-way through a Multi-listing package, 20 November 2026
+
+`20261120045404_package_add_slots.sql` was applied on 20 November 2026 at 10:45
+UTC (see the applied register). Roadmap P4b; the owner's decision D1 of 19
+November 2026. It needs `20261114154823_slot_packages.sql`,
+`20261119025106_package_invoices.sql` and
+`20261119151152_package_gap_fixes.sql`, and refuses (55000) unless the seventeen
+functions it replaces have their reviewed bodies (or this update's), the fifteen
+it adds are absent (or this update's) and `private.package_invoice_requests` has
+no column `kind` (or this update's). It only adds: three member commands and one
+service sweep, four columns, a foreign key and two rules on the request table
+(and a wider slots rule), and a void rule on `private.customer_invoices` that
+also allows the database's own void of an ended package's add invoice; no API
+command, argument or grant is removed or changed. **Nothing can be added after
+it is applied**: packages stay off sale and every new command refuses with PT403
+`packages_not_on_sale` until the owner switches them on (launch item 60).
+
+- **The price.** Added slots end with the package, always, and start on payment.
+  One added slot costs the package term's catalogue price for the whole 24-hour
+  periods left (rounded down), R100 per 30 days, rounded to the cent
+  (`internal.slot_package_add_quote`, from the term's catalogue row on sale,
+  `internal.slot_package_term_plan`); an add of n slots costs n times that, so
+  an invoice keeps "slots × unit price = total". A package holds at most 250
+  slots.
+- **Online.**
+  `api.start_package_add_checkout(p_package_id, p_slots, p_expected_total_cents, p_cooling_off_consent)`:
+  the switch on (PT403), an accepted ID review (PT412), the box ticked (22023;
+  `package-add-starts-now-v1` in the payment's snapshot), the account's running
+  package (PT409 `package_ended`) with 7 or more whole days left (PT409
+  `package_add_too_late`), 1 slot or more and 250 in all (22023
+  `package_slots_invalid`), 100 in all and the online payment limit (PT413
+  `package_invoice_required`), the total shown (PT428) and no unpaid package
+  invoice (PT409 `package_invoice_unpaid`). One payment, one line holding every
+  added slot, snapshot category `slot_package_add` naming the package. The same
+  order within 30 minutes is continued; another unsent one is replaced; one open
+  at Ozow is returned to continue, check or cancel.
+  `internal.claim_checkout_request` sends an add to Ozow only while its package
+  runs with room, an online order only within 30 minutes of its price (PT409
+  `package_add_price_expired`) and with 7 or more days left.
+- **By invoice (D1).**
+  `api.request_package_add_invoice(p_package_id, p_slots, p_expected_total_cents, p_cooling_off_consent, p_request_id)`
+  only while 10 or more whole days are left (PT409
+  `package_add_invoice_too_late`), at the price of that moment, at most 245
+  slots in one add (22023 `package_slots_invalid`). The request (`kind` `add`,
+  the package as a foreign key, set to null if the retention job removes the
+  package record, and the days left; the guard keeps them) uses the existing
+  queue, repeats and limits. Staff issue it (above R50,000 a second admin
+  approves) only while the package runs with 10 or more whole days left and room
+  (PT409 `package_ended`, `package_add_invoice_too_late`,
+  `package_slots_invalid`), at the price asked for or, when fewer whole days are
+  left by then, for those days at their lower price ("Multi-listing package: <n>
+  slots added for <d> days", slots × unit price = total), due 3 days after it is
+  issued or on the package's last day when sooner (staff do not choose the days
+  for an add). The request records the days invoiced (`invoiced_days`); the
+  staff queue shows the days priced, the days left now and the package's end;
+  the invoice gains `days_added` and `package_ends_at`. A new package's request,
+  read and checkout never take an add request or an add order for theirs (the
+  checkout closes any add order still pending, even one open at Ozow: its
+  package has ended). An unpaid add invoice of a package that has ended blocks
+  no other package order (`internal.package_invoice_blocking`) and is voided by
+  the website's minute operations job (`api.void_ended_package_add_invoices`,
+  service only, no staff member, one fixed reason, which the trigger
+  `customer_invoices_system_void` refuses on any other invoice; an invoice with
+  a payment open at Ozow or a transfer waiting is left for staff). The privacy
+  export lists each request's kind, package and days.
+  `api.get_my_package_add_offer()` gives the member's running package, the days
+  left, one slot's price, the most that can be added, which ways are open, an
+  unpaid package invoice, their latest add request and the adds so far.
+- **Delivery and late money.** Every way an add is paid (the Ozow notice, staff
+  activation, Pay now, a bank transfer) delivers it only to the package it was
+  bought for while that package runs and has room
+  (`internal.slot_package_add_ok`): a further grant of the package
+  (`internal.issue_slot_line_entitlements`) from payment to the package's end, 4
+  new posts per added slot per 30 days, the partner commission on its line.
+  Money that arrives after the package ended is not delivered: an Ozow payment
+  goes to reconciliation (staff refund it in full; staff activation refuses it,
+  PT409 `package_ended`); Pay now and a bank transfer are refused (PT409
+  `package_ended`; staff void the invoice and return the money).
+- **Refunds.** An add is its own line, refunded alone with the existing tools.
+  When any package grant is revoked, the posts in it that still fit in the
+  package's other running grants stay, the most recently approved first
+  (`internal.slot_package_keep_posts`, run by the revocation trigger); the
+  reversal ends the others as before. The places are counted under the package's
+  row lock, the one an activation holds, taken without waiting: while an
+  activation holds it the reversal is refused (PT409 `package_busy`) and staff
+  retry it; any other failure never stops the reversal.
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the new commands (behind the switch) and the deploy preflight
+probes every command in `../runtime-api-manifest.json`. Earlier releases keep
+working with the update applied: an add request or add invoice (the only answers
+with new fields) cannot exist while packages are off sale, and the operations
+job of an earlier release does not call the new sweep.
+
+**Applying.**
+
+1. Run `../preflight/20261120045404_package_add_slots.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "package add slots: update not applied; on sale: no;
+   packages running: 0; package invoice requests: 0; added-slots requests: none
+   (column absent); added-slots payments: 0; invoices voided by the database:
+   0".
+2. Run the update. It waits at most 5 seconds for any lock (it briefly locks
+   `private.package_invoice_requests` and `private.customer_invoices` to add
+   their columns and rules). Run the preflight again: it must read "package add
+   slots: already applied; on sale: no; packages running: 0; package invoice
+   requests: 0; added-slots requests: 0; added-slots payments: 0; invoices
+   voided by the database: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261120045404_package_add_slots.down.sql`
+(only with the owner's decision; prefer a forward fix). Revert and deploy the
+website release first. It refuses once an added-slots request or payment exists
+or an invoice was voided by the database; otherwise it puts back the seventeen
+earlier bodies byte for byte, drops the added functions, the four columns, the
+foreign key and its index and the void trigger, and restores the earlier slots
+and void rules.
+
+`node --import tsx scripts/test-foundation-package-add-slots.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after; drifted bodies and a premature rollback refused,
+changing nothing; apply, rollback and re-apply return the same fingerprints; the
+grants; nothing added while off sale; the offer; the online rules, repeat,
+replacement and delivery (one grant ending with the package, the new posts
+allowance, the partner commission); the 30-minute price hold and the 7-day rule
+at Ozow; invoices only from 10 days; an add paid after its package ended goes to
+reconciliation and cannot be activated; an invoice add asked, repeated, queued,
+issued at the price asked for and paid by a confirmed bank transfer or Pay now;
+late money refused, the ended package's invoice blocking no new package and
+voided by the sweep; an invoice issued later for the fewer days left, due by the
+package's end, and none issued with fewer than 10 days; a new-package request,
+read and checkout never taking an add's; the 245 and 250-slot limits; the
+privacy export; a refunded add keeps the posts that fit (the most recently
+approved first) and ends only the others; two adds paid at once near 250 (one
+delivered, one to reconciliation); a refund while an activation holds the
+package refused at once and going through after; and the rollback refused once
+slots were added.
+
 ## Sign-up mode in the database, and member invitations, 20 November 2026
 
 `20261120040242_signup_mode_member_invitations.sql` was applied on 20 November
@@ -5816,6 +5956,19 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   administrator invitations not yet used: 0"; production fingerprint after it
   (fingerprint.sql at cd725fb9) matched the full replay (except the known schema
   grant difference)
+- `20261120045404_package_add_slots.sql`: applied 2026-11-20 10:45 UTC;
+  owner-approved, apply-first, Supabase SQL editor (browser, the owner's
+  signed-in session), preflight + fingerprint checked; update, preflight and
+  fingerprint.sql loaded from the reviewed files at 710fc91b (raw GitHub; pull
+  request #306) and checked in the browser before running; update sha256
+  starting 811b772f; preflight (sha256 starting 1afe4a19) before "package add
+  slots: update not applied; on sale: no; packages running: 0; package invoice
+  requests: 0; added-slots requests: none (column absent); added-slots payments:
+  0; invoices voided by the database: 0", after "package add slots: already
+  applied; on sale: no; packages running: 0; package invoice requests: 0;
+  added-slots requests: 0; added-slots payments: 0; invoices voided by the
+  database: 0"; production fingerprint after it (fingerprint.sql at cd725fb9)
+  matched the full replay (except the known schema grant difference)
 
 - `20261120074411_sms_daily_limit.sql`: pending
 

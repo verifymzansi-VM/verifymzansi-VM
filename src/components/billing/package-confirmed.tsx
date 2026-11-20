@@ -2,19 +2,29 @@ import Link from "next/link";
 import { Check, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatPlanPrice } from "@/lib/constants/pricing";
-import { formatDateTime } from "@/lib/utils/format";
+import { formatDateTime, formatSaLongDate } from "@/lib/utils/format";
 import type { PackageConfirmation } from "@/lib/payments/package-confirmation";
 
 /**
  * The payment confirmation for a Multi-listing package (roadmap P4a): what
- * the member now holds, in South African time, and where to go next. The
- * general "Payment confirmed" card stays for every other payment.
+ * the member now holds, in South African time, and where to go next; for
+ * slots added part-way (P4b) how many were added and the new total, which all
+ * end together. The general "Payment confirmed" card stays for every other
+ * payment.
  */
 export function PackageConfirmed({ details }: { details: PackageConfirmation }) {
+  const added = details.addedSlots ?? null;
   const rows: Array<[string, string]> = [
-    ["Slots", details.slots.toLocaleString("en-ZA")],
-    ["Started", `${formatDateTime(details.startsAt)} (SA time)`],
-    ["Ends", `${formatDateTime(details.endsAt)} (SA time)`],
+    ...(added === null
+      ? ([["Slots", details.slots.toLocaleString("en-ZA")]] as Array<[string, string]>)
+      : ([
+          ["Slots added", added.toLocaleString("en-ZA")],
+          ["Slots in total", details.slots.toLocaleString("en-ZA")],
+        ] as Array<[string, string]>)),
+    ...(added === null
+      ? ([["Started", `${formatDateTime(details.startsAt)} (SA time)`]] as Array<[string, string]>)
+      : []),
+    [added === null ? "Ends" : "All end", `${formatDateTime(details.endsAt)} (SA time)`],
     ["New posts", `Up to ${details.newPostsLimit.toLocaleString("en-ZA")} every 30 days`],
     ["Paid", `${formatPlanPrice(details.paidCents)} online`],
   ];
@@ -26,11 +36,12 @@ export function PackageConfirmed({ details }: { details: PackageConfirmation }) 
             <Check aria-hidden="true" className="h-8 w-8" strokeWidth={3} />
           </span>
           <h1 className="mt-5 font-display text-2xl font-bold tracking-tight text-foreground">
-            Your package is active
+            {added === null ? "Your package is active" : "Slots added"}
           </h1>
           <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-            Payment confirmed. Your {details.slots.toLocaleString("en-ZA")} slots are ready to use
-            now.
+            {added === null
+              ? `Payment confirmed. Your ${details.slots.toLocaleString("en-ZA")} slots are ready to use now.`
+              : `Payment confirmed. ${added.toLocaleString("en-ZA")} ${added === 1 ? "slot" : "slots"} added, ${details.slots.toLocaleString("en-ZA")} in total, all ending ${formatSaLongDate(details.endsAt)}.`}
           </p>
         </div>
 

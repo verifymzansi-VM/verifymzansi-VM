@@ -27,6 +27,13 @@ AS $function$
           and p.checkout_expires_at > pg_catalog.clock_timestamp())
       from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
       where l.invoice_id = i.id order by l.attempt desc limit 1))
+  -- 20261120045404: an added-slots invoice says the whole days it was
+  -- issued for (`term_days` stays the package's term) and its package's end,
+  -- with which the added slots end.
+  || coalesce((select jsonb_build_object('days_added', r.invoiced_days,
+      'package_ends_at', (select max(e.ends_at) from private.entitlements e
+        where e.package_id = r.package_id and e.status = 'active'))
+    from private.package_invoice_requests r where r.invoice_id = i.id and r.kind = 'add'), '{}'::jsonb)
   || case when p_staff is null then '{}'::jsonb else jsonb_build_object('account_id', i.account_id,
     'customer_email', (select u.email from auth.users u where u.id = i.account_id),
     'customer_name', internal.profile_public_name((select f.display_name from private.profiles f where f.account_id = i.account_id)),

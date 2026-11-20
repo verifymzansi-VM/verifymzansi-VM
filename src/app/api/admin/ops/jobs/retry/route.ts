@@ -17,6 +17,9 @@ const schema = z.object({ jobId: z.string().uuid() });
 export async function POST(request: Request) {
   // Hidden until it works on the live backend (src/lib/hidden-features.ts).
   if (!SHOW_STAFF_OPERATIONS) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // Every reply after the guard goes through its respond, so refreshed
+  // session cookies and the private no-store headers reach the browser.
+  let respond: (response: NextResponse) => Promise<NextResponse> = async (response) => response;
   try {
     const guard = await enforceAdminMutationGuard({
       request,
@@ -25,13 +28,14 @@ export async function POST(request: Request) {
       rateLimitAction: "admin:ops:retry",
     });
     if (!guard.success) return guard.response;
+    respond = guard.respond;
 
     const body = await parseAndValidateJsonRequest(request, schema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
       includeValidationDetails: false,
     });
-    if (!body.success) return body.response;
+    if (!body.success) return respond(body.response);
 
     const { data, error } = await createAdminClient().rpc("retry_operation_job", {
       p_actor: guard.user.id,
@@ -40,16 +44,18 @@ export async function POST(request: Request) {
     if (error) throw new Error(error.message);
     const result = data as { ok: boolean; error?: string };
     if (!result.ok) {
-      return result.error === "not_dead"
-        ? NextResponse.json(
-            { error: "Only jobs that stopped retrying can be retried." },
-            { status: 409 }
-          )
-        : decisionRefusalResponse(result.error ?? "forbidden");
+      return respond(
+        result.error === "not_dead"
+          ? NextResponse.json(
+              { error: "Only jobs that stopped retrying can be retried." },
+              { status: 409 }
+            )
+          : decisionRefusalResponse(result.error ?? "forbidden")
+      );
     }
-    return NextResponse.json({ status: "pending" });
+    return respond(NextResponse.json({ status: "pending" }));
   } catch (err) {
     logApiError(log, "Retry failed", err);
-    return internalApiError();
+    return respond(internalApiError());
   }
 }

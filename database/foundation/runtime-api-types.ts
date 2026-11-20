@@ -178,6 +178,26 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         };
         Returns: Json;
       };
+      get_my_package_add_offer: { Args: Record<never, never>; Returns: Json };
+      start_package_add_checkout: {
+        Args: {
+          p_package_id: string;
+          p_slots: number;
+          p_expected_total_cents: number;
+          p_cooling_off_consent: boolean;
+        };
+        Returns: Json;
+      };
+      request_package_add_invoice: {
+        Args: {
+          p_package_id: string;
+          p_slots: number;
+          p_expected_total_cents: number;
+          p_cooling_off_consent: boolean;
+          p_request_id: string;
+        };
+        Returns: Json;
+      };
       get_my_package_invoice_request: { Args: Record<never, never>; Returns: Json };
       get_staff_package_invoice_requests: { Args: Record<never, never>; Returns: Json };
       get_staff_package_move_failures: { Args: Record<never, never>; Returns: Json };
@@ -700,6 +720,7 @@ export type FoundationRuntimeServiceDatabase = {
       claim_ozow_refund_send: { Args: { p_request_id: string }; Returns: Json };
       run_slot_renewals: { Args: { p_limit: number }; Returns: Json };
       expire_waiting_bank_transfers: { Args: { p_limit: number }; Returns: Json };
+      void_ended_package_add_invoices: { Args: { p_limit: number }; Returns: Json };
       get_slot_package_offer: { Args: Record<never, never>; Returns: Json };
       list_ozow_refund_sends_due: { Args: { p_limit: number }; Returns: Json };
       record_ozow_refund_send: { Args: { p_request_id: string; p_result: Json }; Returns: Json };
