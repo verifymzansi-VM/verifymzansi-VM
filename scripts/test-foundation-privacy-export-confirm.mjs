@@ -26,7 +26,6 @@
 //
 // Needs a local Docker daemon; it takes no connection settings at all.
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
   applyStepsBefore,
@@ -37,6 +36,7 @@ import {
   openUpdateCheck,
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps } from "./lib/foundation-sql-lint.mjs";
+import { psqlSessions } from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261120191500_privacy_export_confirm.sql";
 const [PREFLIGHT, ROLLBACK] = [
@@ -74,34 +74,8 @@ try {
   const { steps, index, step } = applyStepsBefore(database, UPDATE);
   const count = (sql) => Number(q(`select count(*) from ${sql};`));
   const stale = () => Math.floor(Date.now() / 1000) - 20 * 60;
-  // A separate psql session, for the concurrency check.
-  const session = (sql) =>
-    new Promise((resolve) => {
-      const child = spawn(
-        "docker",
-        [
-          "exec",
-          "-i",
-          database.name,
-          "psql",
-          "-X",
-          "-q",
-          "-A",
-          "-t",
-          "-v",
-          "ON_ERROR_STOP=1",
-        ].concat(["-U", "postgres", "-d", "postgres"]),
-        { windowsHide: true }
-      );
-      let stdout = "",
-        stderr = "";
-      child.stdout.on("data", (data) => (stdout += data));
-      child.stderr.on("data", (data) => (stderr += data));
-      child.on("close", (status) => resolve({ status, stdout, stderr }));
-      child.stdin.end(`\\set VERBOSITY verbose\n${sql}`);
-    });
-  const delayed = (ms, sql) =>
-    new Promise((resolve) => setTimeout(resolve, ms)).then(() => session(sql));
+  // Separate psql sessions, for the concurrency check.
+  const { session, sessionAfter: delayed } = psqlSessions(database);
 
   // ------------------------------------------------------- synthetic world
   const { user, staffUser } = installStaffPaymentWorld(q, json);
