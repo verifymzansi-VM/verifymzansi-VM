@@ -84,7 +84,7 @@ describe("LoginPage", () => {
     expect(await screen.findByText("Check your email")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there? Sign up with the email address your invitation was sent to."
+        "VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there after a few minutes? Resend it, or sign up with the email address your invitation was sent to."
       )
     ).toBeInTheDocument();
   });

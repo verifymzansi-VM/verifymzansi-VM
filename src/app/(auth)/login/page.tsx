@@ -28,6 +28,7 @@ import {
 } from "@/lib/turnstile-client";
 import { TURNSTILE_AUTH_PAGE_LOAD_TIMEOUT_MS } from "@/lib/turnstile-constants";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
+import { INVITE_ONLY_REGISTRATION_MESSAGE } from "@/lib/foundation/registration-message";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
@@ -435,7 +436,7 @@ export default function LoginPage() {
         <AuthNotice tone="info" icon={<Mail />} title="Check your email" role="status">
           <p>
             {loginPageFlags.invitedOnly
-              ? "VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there? Sign up with the email address your invitation was sent to."
+              ? INVITE_ONLY_REGISTRATION_MESSAGE
               : "We've sent a confirmation link to your email address."}
           </p>
           <Button

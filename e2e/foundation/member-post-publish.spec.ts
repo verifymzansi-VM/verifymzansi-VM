@@ -81,7 +81,7 @@ test.use({ serviceWorkers: "block" });
 /** The one registration reply while sign-up is by invitation only (the
  * database's sign-up mode, invite only by default, as in production). */
 const INVITE_ONLY_REPLY =
-  "VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there? Sign up with the email address your invitation was sent to.";
+  "VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there after a few minutes? Resend it, or sign up with the email address your invitation was sent to.";
 
 test.describe.configure({ mode: "serial" });
 

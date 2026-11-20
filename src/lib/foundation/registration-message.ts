@@ -1,5 +1,11 @@
 import type { FoundationSignupMode } from "./signup-mode";
 
+/** The one reply while sign-up is by invitation, also shown in the sign-in
+ * page's "Check your email" box (above its Resend button). Safe in client
+ * components. */
+export const INVITE_ONLY_REGISTRATION_MESSAGE =
+  "VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there after a few minutes? Resend it, or sign up with the email address your invitation was sent to.";
+
 /** The one answer every registration request gets, whether or not an account
  * can be created for that address, so the reply never reveals who is invited
  * or already registered. While sign-up is by invitation only it says so
@@ -13,7 +19,7 @@ export function foundationRegistrationReply(mode: FoundationSignupMode | null = 
     ok: true as const,
     inviteOnly,
     message: inviteOnly
-      ? "VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there? Sign up with the email address your invitation was sent to."
+      ? INVITE_ONLY_REGISTRATION_MESSAGE
       : "If registration is available for this email, check your inbox to continue.",
   };
 }
