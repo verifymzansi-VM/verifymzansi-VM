@@ -1,4 +1,5 @@
 /** @vitest-environment node */
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest, type NextResponse } from "next/server";
 import { POST } from "./route";
@@ -23,6 +24,14 @@ const staff = "11111111-1111-4111-8111-111111111111",
   requestId = "22222222-2222-4222-8222-222222222222",
   csrf = "c".repeat(64),
   rpc = vi.fn();
+/** Datasets the live database exports: the registry entries of the committed
+ * snapshot, which CI keeps in step with database/foundation/updates. */
+const registryCount = [
+  ...readFileSync(
+    "database/foundation/current/functions/internal/frontend_privacy_export_data.sql",
+    "utf8"
+  ).matchAll(/^\s*\('[a-z_]+',\$q\$/gm),
+].length;
 /** `count` distinct dataset names of letters and underscores, each with one row. */
 function datasets(count: number) {
   return Object.fromEntries(
@@ -67,15 +76,15 @@ beforeEach(() => {
   } as unknown as ReturnType<typeof createFoundationRouteContext>);
 });
 afterEach(() => vi.unstubAllEnvs());
-it("downloads an export holding all 33 datasets through one native command", async () => {
-  rpc.mockResolvedValue({ data: exported(true, 33), error: null });
+it("downloads an export holding every dataset the database returns through one native command", async () => {
+  rpc.mockResolvedValue({ data: exported(true, registryCount), error: null });
   const response = await POST(request());
   expect(response.status).toBe(200);
   expect(response.headers.get("Content-Disposition")).toBe(
     'attachment; filename="dsar-export-22222222.json"'
   );
   const body = await response.json();
-  expect(Object.keys(body.datasets)).toHaveLength(33);
+  expect(Object.keys(body.datasets)).toHaveLength(registryCount);
   expect(body.scope).toMatch(/^Account records in the listed datasets/);
   expect(rpc).toHaveBeenCalledExactlyOnceWith(
     "export_frontend_privacy_request",
@@ -86,7 +95,7 @@ it("downloads an export holding all 33 datasets through one native command", asy
   expect(createAdminClient).not.toHaveBeenCalled();
 });
 it("refuses an export with any other number of datasets instead of returning part of it", async () => {
-  for (const count of [32, 34]) {
+  for (const count of [registryCount - 1, registryCount + 1]) {
     rpc.mockResolvedValueOnce({ data: exported(true, count), error: null });
     const response = await POST(request());
     expect(response.status).toBe(503);
@@ -96,6 +105,6 @@ it("refuses an export with any other number of datasets instead of returning par
 it("returns no datasets when no account matches the request", async () => {
   rpc.mockResolvedValueOnce({ data: exported(false, 0), error: null });
   expect((await POST(request())).status).toBe(200);
-  rpc.mockResolvedValueOnce({ data: exported(false, 33), error: null });
+  rpc.mockResolvedValueOnce({ data: exported(false, registryCount), error: null });
   expect((await POST(request())).status).toBe(503);
 });
