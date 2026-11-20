@@ -82,12 +82,13 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## A daily limit on SMS codes for the whole site, 20 November 2026
 
-`20261120074411_sms_daily_limit.sql` is pending (see the applied register).
-Launch checklist item 12, launch assurance LA-A15: an operational limit so that
-many accounts, or a fault in the website, cannot send an unbounded number of SMS
-codes (each one is paid for) in one day. The website's limits per number (10 a
-day), per account (10 a day) and per network (30 a day) are unchanged; this
-limit is counted in the database for the whole site.
+`20261120074411_sms_daily_limit.sql` was applied on 20 November 2026 at 12:26
+UTC (see the applied register). Launch checklist item 12, launch assurance
+LA-A15: an operational limit so that many accounts, or a fault in the website,
+cannot send an unbounded number of SMS codes (each one is paid for) in one day.
+The website's limits per number (10 a day), per account (10 a day) and per
+network (30 a day) are unchanged; this limit is counted in the database for the
+whole site.
 
 - **What counts:** every SMS code the website sends follows exactly one stored
   challenge, so `internal.create_verification_phone_challenge` counts it, per
@@ -5970,6 +5971,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   database: 0"; production fingerprint after it (fingerprint.sql at cd725fb9)
   matched the full replay (except the known schema grant difference)
 
-- `20261120074411_sms_daily_limit.sql`: pending
+- `20261120074411_sms_daily_limit.sql`: applied 2026-11-20 12:26 UTC;
+  owner-approved, apply-first, Supabase SQL editor (the owner's signed-in
+  session), preflight + fingerprint checked; update and preflight from the
+  reviewed files at 1cc61068 (pull request #311) and checked in the page before
+  running; update sha256 starting 6087d33a; preflight (sha256 starting e9551d55)
+  before "sms daily limit: update not applied; codes today: 0", after "sms daily
+  limit: already applied; codes today: 0; counted today: 0; limit: 500";
+  production fingerprint after it (fingerprint.sql at cd725fb9) matched the full
+  replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
