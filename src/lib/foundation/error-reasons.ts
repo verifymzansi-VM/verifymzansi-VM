@@ -233,6 +233,13 @@ export const FOUNDATION_ERROR_MESSAGES = {
   liveSessionRequired: "live session required",
   signedInMemberRequired: "signed-in member required",
   activeMemberRequired: "active authenticated member required",
+  // Staff checks (internal.staff_actor): the staff member's role lacks the
+  // command's capability.
+  capabilityNotGranted: "capability not granted",
+  // Member invitations (internal.invite_member): an address that is not
+  // name@domain.tld, and a staff member's 201st invitation in 24 hours.
+  memberInvitationEmailInvalid: "member_invitation_email_invalid",
+  memberInvitationLimit: "member_invitation_limit",
 } as const;
 
 /**

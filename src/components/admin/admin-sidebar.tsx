@@ -25,6 +25,7 @@ import {
   ShoppingBag,
   ToggleLeft,
   TreePalm,
+  UserPlus,
   Users,
 } from "lucide-react";
 import { BrandShield } from "@/components/shared/brand-shield";
@@ -54,6 +55,7 @@ const ICONS: Record<NavIcon, React.ElementType> = {
   landmark: Landmark,
   handshake: Handshake,
   receipt: Receipt,
+  "user-plus": UserPlus,
   toggle: ToggleLeft,
 };
 
