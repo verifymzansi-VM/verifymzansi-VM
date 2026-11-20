@@ -27,6 +27,7 @@ import { VerificationStatusCard } from "@/components/dashboard/verification-stat
 import { SuspensionNotice } from "@/components/dashboard/suspension-notice";
 import { readSelfReviewSession } from "@/lib/foundation/self-review-session";
 import { readFoundationServerUser } from "@/lib/foundation/server-session";
+import { restoredPostEngagement } from "@/lib/foundation/marketplace-server";
 import {
   readRestoredOwnerDashboard,
   restoredDashboardResults,
@@ -121,6 +122,8 @@ export default async function DashboardPage({
 
   // Build posts for the mini listing manager
   const listingRows = ownerListingsResult.data ?? [];
+  // View totals of the owner's publicly listed posts (SHOW_ENGAGEMENT_TOTALS).
+  const engagement = await restoredPostEngagement(listingRows.map((row: { id: string }) => row.id));
   const posts: MiniListingPost[] = listingRows.map(
     (l: {
       id: string;
@@ -139,7 +142,7 @@ export default async function DashboardPage({
       status: l.status,
       area: l.area,
       photos: l.photos,
-      view_count: l.view_count ?? null,
+      view_count: engagement.get(l.id)?.views ?? l.view_count ?? null,
       expires_at: l.expires_at,
       deletes_at: l.deletes_at ?? null,
       created_at: l.created_at,

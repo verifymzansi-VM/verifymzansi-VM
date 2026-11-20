@@ -71,6 +71,10 @@ begin
     ('locality_verification',$q$select province_id,city_id,assurance,confirmed_at from private.verification_localities where owner_id=$1$q$),
     ('enquiries_sent',$q$select id,post_id,message,created_at from private.enquiries where sender_account_id=$1 order by created_at,id$q$),
     ('enquiries_received',$q$select id,post_id,message,status,created_at from private.enquiries where owner_id=$1 order by created_at,id$q$),
+    ('post_likes',$q$select l.post_id,l.created_at from (select post_id,created_at,id from private.post_likes
+      where account_id=$1 order by created_at desc,id limit 2000) l$q$),
+    ('post_likes_summary',$q$select count(*) total,min(created_at) first_at,max(created_at) last_at
+      from private.post_likes where account_id=$1$q$),
     ('notifications',$q$select id,kind,post_id,created_at,read_at from private.notifications where account_id=$1 order by created_at,id$q$),
     ('reports_submitted',$q$select id,post_id,coalesce(frontend_reason,category) category,description,status,created_at,resolved_at
       from private.reports where reporter_id=$1 order by created_at,id$q$),

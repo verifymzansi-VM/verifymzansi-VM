@@ -51,6 +51,7 @@ export const FOUNDATION_ERROR_REASONS = {
   display_name_invalid: ["22023"],
   display_name_reserved: ["22023"],
   duplicate_event: ["PT409"],
+  engagement_invalid: ["22023"],
   enquiries_disabled: ["PT403"],
   enquiry_invalid: ["22023"],
   enquiry_limit: ["PT429"],
@@ -104,6 +105,7 @@ export const FOUNDATION_ERROR_REASONS = {
   legal_name_invalid: ["22023"],
   legal_name_locked: ["PT409"],
   legal_name_required: ["PT409"],
+  like_invalid: ["22023"],
   location_invalid: ["22023"],
   logo_unavailable: ["22023"],
   no_account: ["PT409"],
@@ -210,6 +212,7 @@ export const FOUNDATION_ERROR_REASONS = {
   transfer_resolved: ["PT409"],
   transfer_resolver_same: ["42501"],
   verification_required: ["42501", "PT409"],
+  views_invalid: ["22023"],
 } as const satisfies Record<string, readonly string[]>;
 // </database-reasons>
 

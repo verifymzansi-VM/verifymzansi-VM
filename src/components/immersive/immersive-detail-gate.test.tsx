@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ImmersiveDetailGate } from "./immersive-detail-gate";
 import type { FeedSlide } from "@/lib/feed/types";
 
-const mocks = vi.hoisted(() => ({ fail: false, track: vi.fn().mockResolvedValue(true) }));
+const mocks = vi.hoisted(() => ({ fail: false, track: vi.fn(() => () => {}) }));
 vi.mock("next/dynamic", () => ({
   default: () =>
     function TestViewer() {
@@ -11,7 +11,7 @@ vi.mock("next/dynamic", () => ({
       return <div>Desktop viewer</div>;
     },
 }));
-vi.mock("@/lib/views/content-views", () => ({ trackContentView: mocks.track }));
+vi.mock("@/lib/views/content-views", () => ({ trackContentViewAfterDwell: mocks.track }));
 const slide = { id: "one", href: "/listing/one", targetType: "listing" } as FeedSlide;
 
 describe("desktop viewer gate", () => {

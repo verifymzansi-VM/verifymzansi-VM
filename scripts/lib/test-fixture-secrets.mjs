@@ -4,6 +4,7 @@
 // secret of the retired stub suite, which stays public in the history. The
 // production launch check (scripts/validate-launch-env.ts) refuses them.
 import {
+  LOCAL_ENGAGEMENT_COOKIE_SECRET,
   LOCAL_ID_ENCRYPTION_KEY,
   LOCAL_INTERNAL_JOBS_SECRET,
   LOCAL_OPS_JOBS_SECRET,
@@ -26,6 +27,7 @@ export function testFixtureSecrets() {
       LOCAL_OPS_JOBS_SECRET,
       LOCAL_PHONE_OTP_KEY,
       LOCAL_ID_ENCRYPTION_KEY,
+      LOCAL_ENGAGEMENT_COOKIE_SECRET,
     ].filter((value) => typeof value === "string" && value.length > 0)
   );
 }

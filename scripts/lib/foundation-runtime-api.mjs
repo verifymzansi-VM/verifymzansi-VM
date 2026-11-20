@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+// Reviewed public reads keyed by post ids (totals and stickers of publicly
+// listed posts; no account data).
 const publicBusinessProjections = new Set([
   "get_public_frontend_business_seen",
   "get_public_frontend_business_cipc",
   "get_public_frontend_business_affiliations",
+  // 20261119172135_post_views_and_likes.sql: view and like totals only.
+  "get_post_engagement",
 ]);
 // Reviewed public settings (20261117082020_online_payment_limit.sql): no
 // arguments, no account data, readable by visitors like the price catalogue.

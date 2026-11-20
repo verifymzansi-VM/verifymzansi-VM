@@ -22,6 +22,8 @@ import {
   presentedVideoLayout,
   type FrontendPostPresentation,
 } from "./post-presentation";
+import { readFoundationPostEngagement, type PostEngagement } from "./post-engagement";
+import { SHOW_ENGAGEMENT_TOTALS } from "../hidden-features";
 
 export type PublicCollection = "listings" | "businesses" | "promotions";
 export class MarketplaceQueryError extends Error {
@@ -42,9 +44,10 @@ export const PUBLIC_POST_NOT_AVAILABLE = declareNotAvailable({
   boost_until: notAvailable(null, "public reads carry no paid Boost placement"),
   featured_until: notAvailable(null, "public reads carry no paid Featured placement"),
   featured: notAvailable(false, "public reads carry no paid Featured placement"),
-  view_count: notAvailable(null, "views are not stored"),
-  like_count: notAvailable(null, "likes are not stored"),
-  viewer_has_liked: notAvailable(false, "likes are not stored"),
+  viewer_has_liked: notAvailable(
+    false,
+    "public reads are the same for everyone; the like button reads the browser's own likes"
+  ),
   location_suburb: notAvailable(null, "posts keep a province and city only"),
   account_profile: notAvailable(null, "public reads never carry the owner's profile"),
 });
@@ -66,8 +69,10 @@ export function restoredPublicRow(
     contact_channels?: string[];
     business_type?: string | null;
     frontend?: FrontendPostPresentation;
+    engagement?: PostEngagement | null;
   },
-  presentation?: FoundationCardPresentation
+  presentation?: FoundationCardPresentation,
+  engagement: PostEngagement | null = detail?.engagement ?? null
 ) {
   const media = detail?.media ?? [];
   const images = media.filter((row) => row.kind === "image" && row.purpose !== "logo");
@@ -142,8 +147,9 @@ export function restoredPublicRow(
     boost_until: missing.boost_until,
     featured_until: missing.featured_until,
     featured: missing.featured,
-    view_count: missing.view_count,
-    like_count: missing.like_count,
+    // Totals while SHOW_ENGAGEMENT_TOTALS is on (readPublicEngagement), else null.
+    view_count: engagement?.views ?? null,
+    like_count: engagement?.likes ?? null,
     viewer_has_liked: missing.viewer_has_liked,
     seller: detail
       ? {
@@ -176,12 +182,16 @@ export function restoredPublicRow(
  * card presentation (business type and form fields). Null when the post is not
  * public. */
 /** A publicly live post with its presentation, as its detail page reads it.
- * The link preview asks for one kind and skips the contact-channel read it
- * does not show. */
+ * The link preview asks for one kind and skips the contact-channel and
+ * engagement reads it does not show. */
 export async function readRestoredPublicDetail(
   api: FoundationPublicApi,
   id: string,
-  options: { kind?: FoundationPublicPostCore["kind"]; withContactChannels?: boolean } = {}
+  options: {
+    kind?: FoundationPublicPostCore["kind"];
+    withContactChannels?: boolean;
+    withEngagement?: boolean;
+  } = {}
 ) {
   const post = await readFoundationPublicPost(api, { id });
   if (!post || (options.kind && post.kind !== options.kind)) return null;
@@ -193,11 +203,16 @@ export async function readRestoredPublicDetail(
     await searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 })
   ).items[0]?.presentation;
   if (!presentation) return null;
+  const engagement =
+    options.withEngagement === false
+      ? null
+      : ((await readPublicEngagement(api, [id])).get(id) ?? null);
   return {
     ...post,
     contact_channels,
     business_type: presentation.business_type,
     frontend: presentation.frontend,
+    engagement,
   };
 }
 
@@ -277,6 +292,23 @@ function databaseOrder(sort: unknown) {
     if (published) return published;
     return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
   };
+}
+
+/**
+ * View and like totals for public cards and pages, only while
+ * SHOW_ENGAGEMENT_TOTALS is on (no read otherwise). Counts are never worth a
+ * failed page: a failed read leaves them out (null).
+ */
+export async function readPublicEngagement(
+  api: FoundationPublicApi,
+  ids: readonly string[]
+): Promise<Map<string, PostEngagement>> {
+  if (!SHOW_ENGAGEMENT_TOTALS || ids.length === 0) return new Map();
+  try {
+    return await readFoundationPostEngagement(api, ids);
+  } catch {
+    return new Map();
+  }
 }
 
 /** Translate the selected frontend's filters, never send legacy table names,
@@ -437,8 +469,17 @@ export async function readRestoredCollection(
     api,
     selected.filter((row) => row.kind === "business").map((row) => row.id)
   );
+  const engagement = await readPublicEngagement(
+    api,
+    selected.map((row) => row.id)
+  );
   const mapped = selected.map((row) => {
-    const view = restoredPublicRow(row, undefined, row.presentation);
+    const view = restoredPublicRow(
+      row,
+      undefined,
+      row.presentation,
+      engagement.get(row.id) ?? null
+    );
     const sticker = stickers.get(row.id);
     return sticker ? { ...view, ...sticker } : view;
   });

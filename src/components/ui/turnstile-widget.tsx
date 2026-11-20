@@ -46,6 +46,8 @@ interface TurnstileWidgetProps {
   size?: "normal" | "compact" | "flexible";
   /** "interaction-only" keeps the widget out of sight unless Cloudflare asks the visitor to click. */
   appearance?: "always" | "interaction-only";
+  /** Turnstile action name, checked by the server for this widget's purpose. */
+  action?: string;
   /** Additional CSS class */
   className?: string;
   /** Changes when the caller wants to explicitly retry the widget */
@@ -147,6 +149,7 @@ export function TurnstileWidget({
   theme = "auto",
   size = "normal",
   appearance,
+  action,
   className,
   retryToken,
 }: TurnstileWidgetProps) {
@@ -313,6 +316,7 @@ export function TurnstileWidget({
       theme,
       size: renderSize,
       ...(appearance ? { appearance } : {}),
+      ...(action ? { action } : {}),
       callback: (token: string) => {
         onSuccessRef.current(token);
       },
@@ -362,6 +366,7 @@ export function TurnstileWidget({
     theme,
     size,
     appearance,
+    action,
     cleanupWidget,
     getCurrentHostname,
     markUnavailable,

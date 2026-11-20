@@ -50,6 +50,8 @@ begin
   delete from private.outbox_events o where o.owner_id = p_user;
   delete from private.profiles x where x.account_id = p_user;
   get diagnostics n = row_count; counts := counts || jsonb_build_object('profile', n);
+  -- Likes made signed in (20261119172135_post_views_and_likes.sql).
+  delete from private.post_likes l where l.account_id = p_user;
   delete from private.frontend_form_drafts d where d.owner_id = p_user;
   delete from private.listing_price_drafts d where d.owner_id = p_user;
   delete from private.intro_trial_requests t where t.owner_id = p_user;

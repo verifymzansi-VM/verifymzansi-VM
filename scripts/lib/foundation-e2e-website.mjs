@@ -8,6 +8,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   E2E_FIXTURE,
+  LOCAL_ENGAGEMENT_COOKIE_SECRET,
   LOCAL_ID_ENCRYPTION_KEY,
   LOCAL_INTERNAL_JOBS_SECRET,
   LOCAL_OPS_JOBS_SECRET,
@@ -150,6 +151,8 @@ export function foundationWebsiteEnv(status, { root = process.cwd(), launchConfi
     // requires (a key that repeats one digit is refused).
     FOUNDATION_PHONE_OTP_KEY: LOCAL_PHONE_OTP_KEY,
     ID_ENCRYPTION_KEY: LOCAL_ID_ENCRYPTION_KEY,
+    // Signs the view and like cookie (counting works only with it).
+    ENGAGEMENT_COOKIE_SECRET: LOCAL_ENGAGEMENT_COOKIE_SECRET,
     // Unset, these would be refilled from .env files.
     // The e2e runtime validates the environment strictly (a limiter key needs a
     // limiter URL, formatted keys reject ""), so these get neutral valid

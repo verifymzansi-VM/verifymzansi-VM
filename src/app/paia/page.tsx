@@ -87,7 +87,7 @@ const MANUAL_TEXT = [
       "Categories of data subjects and their information:",
       "• Members: name, email, phone, SA ID or passport number and images, selfie, province and city, posts, media, enquiries, payment references and device data",
       "• Business owners and representatives: the above, plus company details, director or representative status and verification notes or visit photos",
-      "• Visitors: device and browser data, a random browser identifier and a hashed network address used for view counting",
+      "• Visitors: device and browser data, and a random browser identifier (signed by us, stored only as a one-way hash) used for view and like counting; a like made while signed in is stored with the member's account",
       "• People who send enquiries: name, contact details and message",
       "• Employees, contractors, suppliers and partners: contact, contract and payment details",
       "Recipients: our own staff on a need-to-know basis, and operators who process information for us: Supabase (database, sign-in and file storage), Cloudflare (hosting, security and bot protection), Resend (email), Africa's Talking (SMS codes), Sentry (error monitoring) and Ozow (payments). We also disclose information where the law requires it.",

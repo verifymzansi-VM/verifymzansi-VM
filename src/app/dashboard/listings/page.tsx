@@ -24,6 +24,7 @@ import {
   FoundationServerSessionError,
 } from "@/lib/foundation/server-session";
 import { readRestoredPostManager } from "@/lib/foundation/post-manager";
+import { restoredPostEngagement } from "@/lib/foundation/marketplace-server";
 import { PlanAdministratorsCard } from "@/components/dashboard/plan-administrators-card";
 import { ExpiryCountdownBadge } from "@/components/dashboard/expiry-countdown-badge";
 import { PageHeader } from "@/components/layout/page-header";
@@ -320,11 +321,13 @@ export default async function ListingsPage({
   ];
 
   const sponsoredIds = nativeData.sponsoredIds;
+  // View totals of the owner's publicly listed posts (SHOW_ENGAGEMENT_TOTALS).
+  const engagement = await restoredPostEngagement(baseItems.map((item) => item.id));
   const items = sortByNewest(
     baseItems
       .map((item) => ({
         ...item,
-        view_count: item.view_count ?? null,
+        view_count: engagement.get(item.id)?.views ?? item.view_count ?? null,
         sponsored: sponsoredIds.has(item.id),
       }))
       .map((item) => applyDashboardExpiryStatus(item))

@@ -3,11 +3,14 @@ import { cache } from "react";
 import { z } from "zod";
 import { foundationServerPublicApi } from "./server-public";
 import {
+  readPublicEngagement,
   readRestoredCollection,
   readRestoredPublicDetail,
   restoredPublicRow,
   type PublicCollection,
 } from "./marketplace-read";
+import type { PostEngagement } from "./post-engagement";
+import { SHOW_ENGAGEMENT_TOTALS } from "../hidden-features";
 import type { FoundationPublicPostCore } from "./public-post-contract";
 import { readPublicBusinessStickers } from "./business-seen";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
@@ -68,9 +71,27 @@ export async function restoredHomeCollection(collection: PublicCollection, touri
   }
 }
 
-export const restoredPublicDetail = cache(async (id: string) => {
+/** View and like totals of publicly listed posts, for the owner's post lists.
+ * Empty, with no connection made, while SHOW_ENGAGEMENT_TOTALS is off. */
+export async function restoredPostEngagement(ids: readonly string[]) {
+  if (!SHOW_ENGAGEMENT_TOTALS || ids.length === 0) return new Map<string, PostEngagement>();
+  return readPublicEngagement(foundationServerPublicApi(), ids);
+}
+
+/** A publicly live post without its view and like totals (the feed reads
+ * those for all its slides at once). */
+export const restoredPublicDetailWithoutTotals = cache(async (id: string) => {
   if (!z.uuid().safeParse(id).success) return null;
-  return readRestoredPublicDetail(foundationServerPublicApi(), id);
+  return readRestoredPublicDetail(foundationServerPublicApi(), id, { withEngagement: false });
+});
+
+/** A publicly live post as its page shows it, with its totals while
+ * SHOW_ENGAGEMENT_TOTALS is on. */
+export const restoredPublicDetail = cache(async (id: string) => {
+  const post = await restoredPublicDetailWithoutTotals(id);
+  if (!post) return null;
+  const engagement = (await restoredPostEngagement([post.id])).get(post.id) ?? null;
+  return { ...post, engagement };
 });
 
 /**
@@ -84,6 +105,7 @@ export async function restoredSharePreview(kind: FoundationPublicPostCore["kind"
   const post = await readRestoredPublicDetail(foundationServerPublicApi(), id, {
     kind,
     withContactChannels: false,
+    withEngagement: false,
   });
   if (!post) return null;
   const row = restoredPublicRow(post, post);

@@ -5138,6 +5138,98 @@
         "service_role": false
       },
       "authority": "Current payments:refund capability and recent authenticator proof; the staff member's own current accepted ID review, never an account of their own identity or a customer they referred: closes an open package invoice request (requested or awaiting approval) with an audited reason; nothing is issued."
+    },
+    {
+      "name": "record_post_views",
+      "updates": ["updates/20261119172135_post_views_and_likes.sql"],
+      "arguments": [
+        {
+          "name": "p_post_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        },
+        {
+          "name": "p_device",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_account",
+          "sqlType": "uuid",
+          "optional": true
+        },
+        {
+          "name": "p_device_issued_at",
+          "sqlType": "timestamp with time zone",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only, with the browser identifier from its own signed first-party cookie (issued after a Turnstile check), when it was issued, and the GoTrue-verified account or none: counts each of 1 to 5 publicly live posts at most once per browser in 24 hours, in id order; never the signed-in owner's own view or a view by an account with an active staff role (an inactive account counts as signed out). No per-post cap (per-source limits are the website's). Storage safety valve: over 300,000 counted views in a day only established viewers (identifier older than 24 hours, or account older than 7 days) are counted; staff cost alarms at 70% and at the valve. Stores only keyed hashes of the browser and post under a daily salt (deleted by the daily retention job within 2 days; salts within 3), never an account, plus per-post daily and total counts; returns the posts counted."
+    },
+    {
+      "name": "set_post_like",
+      "updates": ["updates/20261119172135_post_views_and_likes.sql"],
+      "arguments": [
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_device",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_account",
+          "sqlType": "uuid",
+          "optional": true
+        },
+        {
+          "name": "p_liked",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_device_issued_at",
+          "sqlType": "timestamp with time zone",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only, with the browser identifier from its own signed first-party cookie (issued after a Turnstile check) and when it was issued, and the GoTrue-verified account or none: sets (or toggles) the like of the signed-in account, or of the browser when signed out, on a publicly live post (PT404 post_unavailable otherwise); signed in it acts only on the account's like, signed out only on the browser's; the owner's and staff's own likes are never stored, and they may remove the like their browser made signed out. A signed-out like from an identifier issued less than 10 minutes earlier is stored but counts from then. No per-post cap. Storage safety valve: over 50,000 net new likes in a day only established likers' likes are stored; staff cost alarms at 70% and at the valve. Stores the account for a signed-in like, or only a keyed hash of the browser identifier; returns liked, the post's counted likes (plus the caller's own waiting like) and whether it counted."
+    },
+    {
+      "name": "get_post_engagement",
+      "updates": ["updates/20261119172135_post_views_and_likes.sql"],
+      "arguments": [
+        {
+          "name": "p_post_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public: view and like totals of up to 50 publicly live posts (the get_public_post rule); a hidden or unknown post is absent, so the answer never tells them apart; totals only, never who viewed or liked."
     }
   ]
 }

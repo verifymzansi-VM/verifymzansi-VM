@@ -1,16 +1,17 @@
 /**
- * Client side of the content view counter (views v2).
+ * Client side of the content view counter.
  *
- * A view is counted the way social platforms and the MRC/IAB video standard
- * count it: the video played for 2 continuous seconds with at least half of
- * the player on screen, or the post's own page was opened. Every page that
- * shows a post (showrooms, home rows, grids, detail pages, full-screen
- * viewer) reports through this one queue. The server counts one view per
- * person, per post, per 30 minutes and is the source of truth; this module
- * only avoids sending what it already sent.
+ * Every page that shows a post (showrooms, home rows, grids, detail pages,
+ * full-screen viewer) reports through this one queue. The server counts only
+ * page views: the post's own page, or the full-screen viewer on it, visible
+ * for 2 seconds (source "page"); video plays on cards are sent but not
+ * counted. It counts one view per browser and account, per post, per 24 hours
+ * (database update 20261119172135_post_views_and_likes.sql) and is the source
+ * of truth; this module only avoids sending what it already sent.
  */
 
 import type { ContentTargetType } from "@/lib/engagement";
+import { obtainViewerIdentifier } from "@/components/engagement/viewer-challenge";
 
 export type ViewSource = "video" | "page";
 
@@ -24,7 +25,8 @@ export interface ContentViewEvent {
   engaged?: boolean;
 }
 
-/** Same window the server uses: one view per person per post per 30 minutes. */
+/** How long this browser waits before sending the same post again (the
+ * server's own window is 24 hours). */
 export const VIEW_WINDOW_MS = 30 * 60 * 1000;
 const VIEW_RECORDED_EVENT = "vmz:content-view-recorded";
 
@@ -99,7 +101,7 @@ function announce(event: ContentViewEvent) {
   );
 }
 
-async function send(batch: Pending[], useBeacon: boolean) {
+async function send(batch: Pending[], useBeacon: boolean, again = false): Promise<void> {
   if (batch.length === 0) return;
   const body = JSON.stringify({ events: batch.map((pending) => pending.event) });
 
@@ -118,7 +120,14 @@ async function send(batch: Pending[], useBeacon: boolean) {
       keepalive: true,
     });
     if (!response.ok) throw new Error(`View request failed: ${response.status}`);
-    const payload = (await response.json().catch(() => null)) as { counted?: string[] } | null;
+    const payload = (await response.json().catch(() => null)) as {
+      counted?: string[];
+      needs_challenge?: boolean;
+    } | null;
+    // A first visit: the browser has no signed identifier yet. Get one (a
+    // Turnstile check) and send the views once more.
+    if (payload?.needs_challenge && !again && (await obtainViewerIdentifier()))
+      return send(batch, false, true);
     // The server lists each post it counted as a new view once; credit it to
     // the first event for that post so the page number moves by exactly one.
     const counted = new Set(payload?.counted ?? []);
@@ -174,6 +183,42 @@ export function trackContentView(event: ContentViewEvent): Promise<boolean> {
     if (queue.length >= MAX_BATCH) flush();
     else if (!timer) timer = setTimeout(() => flush(), FLUSH_DELAY_MS);
   });
+}
+
+/** A page counts as viewed after two continuous seconds visible in the
+ * foreground (the full-screen viewer uses the same rule, use-dwell-view.ts). */
+const VIEW_DWELL_MS = 2000;
+
+/**
+ * Queues `event` once the page has been visible for VIEW_DWELL_MS without a
+ * break (a hidden tab restarts the countdown when it is shown again). Calls
+ * `onCounted` when the server counted it. Returns a cancel function.
+ */
+export function trackContentViewAfterDwell(
+  event: ContentViewEvent,
+  onCounted?: () => void
+): () => void {
+  if (typeof window === "undefined") return () => {};
+  let timer: number | null = null;
+  let cancelled = false;
+  const arm = () => {
+    if (timer) window.clearTimeout(timer);
+    timer = null;
+    if (document.visibilityState !== "visible") return;
+    timer = window.setTimeout(() => {
+      document.removeEventListener("visibilitychange", arm);
+      void trackContentView(event).then((counted) => {
+        if (counted && !cancelled) onCounted?.();
+      });
+    }, VIEW_DWELL_MS);
+  };
+  arm();
+  document.addEventListener("visibilitychange", arm);
+  return () => {
+    cancelled = true;
+    if (timer) window.clearTimeout(timer);
+    document.removeEventListener("visibilitychange", arm);
+  };
 }
 
 /** Test helper: drop queued events and markers. */

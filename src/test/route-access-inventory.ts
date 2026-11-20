@@ -123,6 +123,7 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/engagement/like": { POST: "public" },
   "api/engagement/share": { POST: "public" },
   "api/engagement/view": { POST: "public" },
+  "api/engagement/viewer": { POST: "public" },
   "api/feed/browse": { GET: "public" },
   "api/feed/direct": { GET: "public" },
   "api/feed/slides": { GET: "public" },
@@ -239,11 +240,13 @@ export const PUBLIC_ROUTE_REASONS: Record<string, string> = {
   "api/csp-report POST": "Browsers send Content-Security-Policy reports; bounded and rate limited",
   "api/csrf GET": "Issues the CSRF token and cookie",
   "api/engagement/like POST":
-    "Closed: answers 204 without reading the request or calling the database",
+    "Anyone can like a post (owner decision); 204 while SHOW_ENGAGEMENT_TOTALS is off, otherwise origin and CSRF checked, signed cookie or session, per-network limits",
   "api/engagement/share POST":
     "Closed: answers 204 without reading the request or calling the database",
   "api/engagement/view POST":
-    "Closed: answers 204 without reading the request or calling the database",
+    "Visitors' post views; 204 while SHOW_ENGAGEMENT_TOTALS is off, otherwise origin checked, signed cookie, per-network limits",
+  "api/engagement/viewer POST":
+    "Issues the signed view-and-like cookie after a Turnstile check; 204 while SHOW_ENGAGEMENT_TOTALS is off, origin and CSRF checked, per-network limit",
   "api/feed/browse GET": "Public feed of live posts, rate limited",
   "api/feed/direct GET": "Public feed of live posts, rate limited",
   "api/feed/slides GET": "Public feed of live posts, rate limited",

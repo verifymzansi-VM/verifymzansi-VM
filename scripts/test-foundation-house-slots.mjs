@@ -58,6 +58,12 @@ const ADDED = {
 const EXPORT = "internal.frontend_privacy_export_data(uuid)";
 const EXPORT_BEFORE = "0b4cd3f792ffecf94c329277db4da28e";
 const EXPORT_AFTER = "e3842fd91a8d4f6b0bfe4cdc5b3030d9";
+/** The export after later reviewed updates. */
+const EXPORT_LATER = [
+  EXPORT_AFTER,
+  // 20261119172135_post_views_and_likes.sql
+  "3dfe35ae5e93f0661ecd7dbf710cf45d",
+];
 const LIFECYCLE = "internal.run_post_lifecycle(integer)";
 const LIFECYCLE_BEFORE = "cb5770e3e71e9e6ed31d1eff3e06e3fc";
 const LIFECYCLE_AFTER = "9496376abcf65c764efe02d4971bba5e";
@@ -807,7 +813,13 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     await check("later updates keep the house slots", () => {
       for (const [signature, md5] of Object.entries(ADDED))
         assert.equal(bodyMd5(signature), md5, signature);
-      assert.equal(bodyMd5(EXPORT), EXPORT_AFTER);
+      // 20261119172135_post_views_and_likes.sql adds the like datasets to the
+      // export; house_slot_events stays.
+      assert.ok(EXPORT_LATER.includes(bodyMd5(EXPORT)), bodyMd5(EXPORT));
+      assert.match(
+        q(`select prosrc from pg_proc where oid='${EXPORT}'::regprocedure;`),
+        /'house_slot_events'/
+      );
       assert.equal(bodyMd5(LIFECYCLE), LIFECYCLE_AFTER);
     });
   }

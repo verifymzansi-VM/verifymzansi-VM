@@ -2,12 +2,14 @@
 
 import { useEffect, useRef } from "react";
 import type { ContentTargetType } from "@/lib/engagement";
-import { trackContentView } from "@/lib/views/content-views";
+import { trackContentViewAfterDwell } from "@/lib/views/content-views";
 import { useClassicSuppressed } from "@/components/immersive/classic-suppression";
 
 /**
- * Opening a post's own page is a view. It shares the 30-minute window with
- * video views, so opening the page and watching its video counts once.
+ * Opening a post's own page is a view once the page has been visible for two
+ * seconds in the foreground (a hidden tab pauses the countdown). It shares the
+ * window with video views, so opening the page and watching its video counts
+ * once.
  */
 export function useTrackContentView(
   targetId: string,
@@ -24,17 +26,9 @@ export function useTrackContentView(
   useEffect(() => {
     // The desktop viewer counts this post itself, after two seconds on screen.
     if (!enabled || isSuppressed()) return;
-    let active = true;
-    void trackContentView({
-      type: targetType,
-      id: targetId,
-      source: "page",
-      surface: "detail",
-    }).then((counted) => {
-      if (counted && active) onRecordedRef.current?.();
-    });
-    return () => {
-      active = false;
-    };
+    return trackContentViewAfterDwell(
+      { type: targetType, id: targetId, source: "page", surface: "detail" },
+      () => onRecordedRef.current?.()
+    );
   }, [enabled, isSuppressed, targetId, targetType]);
 }

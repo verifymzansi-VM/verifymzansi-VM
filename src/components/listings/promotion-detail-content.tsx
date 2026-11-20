@@ -91,6 +91,7 @@ export interface PromotionDetailRecord {
   boost_until: string | null;
   featured_until: string | null;
   view_count: number | null;
+  like_count?: number | null;
   created_at: string;
   logo_url?: string | null;
   event_details?: EventDetails | null;

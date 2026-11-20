@@ -14,7 +14,7 @@ import { ClassicSuppressionProvider } from "@/components/immersive/classic-suppr
 import dynamic from "next/dynamic";
 import { IMMERSIVE_MIN_WIDTH_QUERY } from "@/lib/feed/session";
 import type { FeedSlide } from "@/lib/feed/types";
-import { trackContentView } from "@/lib/views/content-views";
+import { trackContentViewAfterDwell } from "@/lib/views/content-views";
 
 // Loaded only on desktop; a failed download falls back to the classic page.
 const ImmersiveViewer = dynamic(
@@ -74,6 +74,9 @@ export function ImmersiveDetailGate({
     () => typeof window !== "undefined" && window.matchMedia(IMMERSIVE_MIN_WIDTH_QUERY).matches
   );
   const fellBack = useRef(false);
+  // Cancels the classic page's pending view when the page is left first.
+  const cancelView = useRef<(() => void) | null>(null);
+  useEffect(() => () => cancelView.current?.(), []);
   const isSuppressed = useCallback(() => desktopAtStart && !fellBack.current, [desktopAtStart]);
   const [mode, setMode] = useState<Mode>("pending");
   const activeHref = useRef(initialSlide.href);
@@ -124,7 +127,9 @@ export function ImmersiveDetailGate({
     fellBack.current = true;
     classicRef.current?.removeAttribute("hidden");
     setMode("classic");
-    void trackContentView({
+    // The classic page counts once it has been visible for two seconds.
+    cancelView.current?.();
+    cancelView.current = trackContentViewAfterDwell({
       type: initialSlide.targetType,
       id: initialSlide.id,
       source: "page",
