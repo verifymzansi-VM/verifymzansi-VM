@@ -136,7 +136,10 @@ export default async function OperationsHealthPage() {
                       {job.last_run_at ? formatDateTime(job.last_run_at) : "Never"}
                     </td>
                     <td className="py-2">
-                      <Badge variant={job.late ? "destructive" : "outline"}>
+                      <Badge
+                        variant={job.late ? "destructive" : "outline"}
+                        className="whitespace-nowrap"
+                      >
                         {job.late ? "Late" : "On time"}
                       </Badge>
                     </td>
