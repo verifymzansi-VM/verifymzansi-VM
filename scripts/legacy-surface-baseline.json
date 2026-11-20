@@ -5,7 +5,7 @@
     "legacyClientImports": 10,
     "retiredCommandNames": 14,
     "retiredCommandCalls": 14,
-    "retiredTableReads": 20
+    "retiredTableReads": 19
   },
   "legacyClientImporters": [
     "src/app/admin/operations/page.tsx",
@@ -39,7 +39,6 @@
     "account_profiles",
     "business_private",
     "businesses",
-    "commercial_settings",
     "contact_events",
     "content_edit_requests",
     "decision_records",

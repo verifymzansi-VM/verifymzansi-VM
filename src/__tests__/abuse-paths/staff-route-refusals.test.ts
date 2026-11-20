@@ -23,9 +23,54 @@ const database = vi.hoisted(() => ({
   message: "permission denied: staff role required" as string | null,
   calls: [] as string[],
 }));
+/** What the database answers a staff session it accepts, for the commands
+ * behind the routes with bodies (BODIES): a well-formed answer for each, so
+ * the positive control below sees a real success, not a 503 for a malformed
+ * answer. Other commands answer {}. */
+const accepted = vi.hoisted(() => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  const at = "2026-11-20T08:00:00.000+00:00";
+  return {
+    staff_review_post: { id, kind: "listing", area: "market", revision: 7, edit_of: null },
+    moderate_post: { id, status: "live" },
+    record_frontend_privacy_intake: { id, due_by: at },
+    set_frontend_feature_flag: {
+      account_id: "22222222-2222-4222-8222-222222222222",
+      flags: [
+        {
+          key: "kyc_evidence_desk",
+          enabled: true,
+          mode: "on",
+          rollout_percent: 100,
+          allowlist_roles: [],
+          id,
+          description: "Evidence desk",
+          revision: 2,
+          updated_at: at,
+          updated_reason: "Quick toggle: on",
+        },
+      ],
+    },
+    // A refund recorded by hand (no Ozow send), approved and applied.
+    get_staff_refund_context: {
+      channel: "manual",
+      status: "awaiting_approval",
+      ozow_checked: false,
+      ozow_missing: false,
+    },
+    approve_staff_payment_refund: {
+      request_id: id,
+      status: "applied",
+      kind: "refunded",
+      released_activations: 0,
+      payment_status: "refunded",
+      repeated: false,
+    },
+  } as Record<string, unknown>;
+});
 const rpc = vi.hoisted(() => async (name: string) => {
   database.calls.push(name);
-  if (database.message === null) return { data: {}, error: null };
+  if (database.message === null) return { data: accepted[name] ?? {}, error: null };
   return { data: null, error: { code: "42501", message: database.message, details: null } };
 });
 vi.mock("@/lib/foundation/runtime-connection", () => ({
@@ -211,13 +256,14 @@ describe("staff routes and a caller the database does not accept", () => {
     expect(others).toEqual([]);
   });
 
-  it("a staff session the database accepts gets past the routes' own checks", async () => {
+  it("a staff session the database accepts succeeds", async () => {
     // The positive control: a route that refused everyone, or refused these
-    // bodies before asking the database, would pass the sweeps above.
+    // bodies before asking the database, would pass the sweeps above. With
+    // well-formed database answers each route must succeed outright.
     const { answers } = await sweep(null);
     const wrong = EXACT.filter((key) => {
       const answer = answers.get(key);
-      return !answer?.asked || [400, 401, 403].includes(answer.status);
+      return !answer?.asked || answer.status < 200 || answer.status >= 300;
     }).map((key) => `${key}: ${JSON.stringify(answers.get(key))}`);
     expect(wrong).toEqual([]);
   });

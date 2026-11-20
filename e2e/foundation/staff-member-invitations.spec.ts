@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type BrowserContext } from "@playwright/test";
+import { expect, test, type BrowserContext, type Locator } from "@playwright/test";
 import { E2E_FIXTURE } from "../../scripts/lib/foundation-e2e-target.mjs";
 import people from "./fixture/people.json";
 import {
@@ -44,6 +44,19 @@ async function guard(context: BrowserContext) {
   return outside;
 }
 
+/** Waits until React has hydrated the element (it carries React's own
+ * properties). Typing or clicking before then (slow WebKit runs) can lose the
+ * typed address or post the form as a plain page load, so no invitation is
+ * sent and the "Invited" message never shows (as public-forms.spec.ts). */
+async function hydrated(locator: Locator) {
+  await expect(locator).toBeVisible();
+  await expect
+    .poll(() =>
+      locator.evaluate((element) => Object.keys(element).some((key) => key.startsWith("__react")))
+    )
+    .toBe(true);
+}
+
 async function signInBrowser(context: BrowserContext, person: Person, options?: SessionOptions) {
   const session = await browserSessionCookies(readTestCopy(), person, options);
   await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
@@ -75,10 +88,14 @@ test.describe("staff member invitations", () => {
     await expect(page.getByText("It never gives staff access.", { exact: false })).toBeVisible();
     await expect(page.getByRole("link", { name: "Staff roles" }).first()).toBeVisible();
 
-    // Invite.
+    // Invite, once the form is live.
     const field = page.getByLabel("Email address");
+    const inviteButton = page.getByRole("button", { name: "Invite", exact: true });
+    await hydrated(field);
+    await hydrated(inviteButton);
     await field.fill(invited);
-    await page.getByRole("button", { name: "Invite", exact: true }).click();
+    await expect(field).toHaveValue(invited);
+    await inviteButton.click();
     const status = page.getByRole("status").filter({ hasText: `Invited ${invited}.` });
     await expect(status).toBeVisible();
     await expect(status.getByRole("button", { name: "Copy link" })).toBeVisible();
@@ -89,7 +106,7 @@ test.describe("staff member invitations", () => {
     // An address that already has an account.
     const existing = people.verifiedMember.email;
     await field.fill(existing);
-    await page.getByRole("button", { name: "Invite", exact: true }).click();
+    await inviteButton.click();
     const notice = page.getByRole("alert").filter({ hasText: "already has an account" });
     await expect(notice).toContainText(
       "This email already has an account. They can sign in at verifymzansi.com/login."
