@@ -436,6 +436,56 @@ describe("the phone's state, capture tokens and photos", () => {
     expect(putImmutableR2Bytes).not.toHaveBeenCalled();
   });
 
+  it("clear the grant only when the link is gone; other refusals ask for the photo again", async () => {
+    const fields = {
+      docType: "id_document",
+      uploadRequestId: receipt,
+      captureMethod: "camera",
+      captureToken: phoneTokenFor("id_front"),
+    };
+    const refusals: [{ code: string; details?: string; message: string }, string, boolean][] = [
+      [
+        { code: "PT409", details: "handoff_unavailable", message: "phone link expired" },
+        "handoff_unavailable",
+        true,
+      ],
+      [{ code: "PT409", message: "upload the ID document first" }, "handoff_retake", false],
+      [{ code: "PT409", message: "upload request changed or expired" }, "handoff_retake", false],
+      [
+        { code: "PT409", message: "upload belongs to a returned submission; reload verification" },
+        "handoff_retake",
+        false,
+      ],
+      [
+        { code: "PT409", details: "handoff_needs_id", message: "ID details required" },
+        "handoff_retake",
+        false,
+      ],
+      [{ code: "22023", message: "upload request required" }, "handoff_retake", false],
+      [
+        { code: "PT409", details: "handoff_done", message: "this phone link has both photos" },
+        "handoff_done",
+        false,
+      ],
+    ];
+    for (const [error, code, clears] of refusals) {
+      serviceRpc.mockImplementation(async (name: string) =>
+        name === "reserve_handoff_verification_upload"
+          ? { data: null, error }
+          : { data: handoffState(), error: null }
+      );
+      const res = await upload(form(fields, cameraJpegFile(), grantCookie));
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.code).toBe(code);
+      if (code === "handoff_retake")
+        expect(body.error).toBe("Your photo wasn't sent. Please take it again.");
+      const cookie = res.headers.get("set-cookie") ?? "";
+      expect(cookie.includes("__Secure-vm_capture_grant=;")).toBe(clears);
+    }
+    expect(putImmutableR2Bytes).not.toHaveBeenCalled();
+  });
+
   it("refuse a signed-out phone, a missing grant, identity fields and a forged owner", async () => {
     const fields = {
       docType: "id_document",

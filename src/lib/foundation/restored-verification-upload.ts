@@ -67,9 +67,15 @@ export function rpcFailure(error: { code?: string }): never {
           : 503,
     error.code === "PT409"
       ? "Your verification changed. Refresh the page before continuing."
-      : "The upload could not be confirmed. Refresh your verification status before trying again."
+      : "We couldn't confirm your photo. Refresh your verification status, then take it again."
   );
 }
+
+/** Answers when the photo request limit can't be checked or was reached. */
+const PHOTO_LIMIT_MESSAGES = {
+  busy: "We couldn't send your photo right now. Please try again in a moment.",
+  limited: "Too many attempts. Please wait a moment.",
+} as const;
 
 /** A refusal for a photo the page did not take with the camera (409, code
  * camera_required; capture_expired when its capture token is too old). */
@@ -280,10 +286,7 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
       degradedMode: "block",
     });
     if (ip.degraded || ip.limited)
-      return reply(
-        ip.degraded ? 503 : 429,
-        "Upload protection is unavailable or too many attempts were made"
-      );
+      return reply(ip.degraded ? 503 : 429, PHOTO_LIMIT_MESSAGES[ip.degraded ? "busy" : "limited"]);
     const caller = await context.authenticateCaller();
     apis.push(caller.api);
     const limit = await checkRateLimit({
@@ -294,7 +297,7 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
     if (limit.degraded || limit.limited)
       return reply(
         limit.degraded ? 503 : 429,
-        "Upload protection is unavailable or too many attempts were made"
+        PHOTO_LIMIT_MESSAGES[limit.degraded ? "busy" : "limited"]
       );
     const form = await readBoundedRequestFormData(request, 5 * 1024 * 1024 + 16384);
     const allowed = [
@@ -414,7 +417,7 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
     if (error instanceof FoundationVerificationError) return reply(error.status, error.message);
     return reply(
       503,
-      "The upload could not be confirmed. Refresh your verification status before trying again.",
+      "We couldn't confirm your photo. Refresh your verification status, then take it again.",
       logRequestFailure(log, "Identity upload could not be confirmed", {
         request,
         error,

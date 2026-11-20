@@ -79,6 +79,7 @@ const HANDOFF_MESSAGES = {
   sessionCheck: "We couldn't check your sign-in right now. Please try again.",
   inactive: "Confirm your email address and make sure your account is active, then try again.",
   done: "Your phone has sent both photos. Go back to your computer.",
+  retake: "Your photo wasn't sent. Please take it again.",
 } as const;
 
 type HandoffError = { code?: string; details?: string | null; message?: string };
@@ -264,13 +265,24 @@ async function phoneCaller(request: NextRequest, action: string) {
   }
 }
 
-type Refusal = { status: number; body: Record<string, unknown> };
+/** A refused phone-link command. Only a link the database says is gone
+ * (handoff_unavailable) clears the phone's capture grant. */
+type Refusal = { status: number; body: Record<string, unknown>; linkGone?: boolean };
 type GrantState =
   | { ok: false; refusal: Refusal }
   | { ok: true; state: ReturnType<typeof captureHandoffStateSchema.parse> };
 
-/** The answer for a refused phone-link command, or null to rethrow. */
-function phoneRefusal(error: HandoffError): Refusal | null {
+/**
+ * The answer for a refused phone-link command, or null to rethrow. Other
+ * refusals without a known reason are answered as `otherwise`: opening a link
+ * and reading its state say the link can't be used; a photo is taken again,
+ * with the grant kept (the photo order, a changed request, a returned
+ * submission).
+ */
+function phoneRefusal(
+  error: HandoffError,
+  otherwise: "unavailable" | "retake" = "unavailable"
+): Refusal | null {
   if (hasDatabaseReason(error, "handoff_sign_in_required"))
     return {
       status: 401,
@@ -283,12 +295,19 @@ function phoneRefusal(error: HandoffError): Refusal | null {
     };
   if (hasDatabaseReason(error, "handoff_done"))
     return { status: 409, body: { error: HANDOFF_MESSAGES.done, code: "handoff_done" } };
-  if (error.code === "PT409" || error.code === "22023")
+  if (hasDatabaseReason(error, "handoff_unavailable"))
     return {
       status: 409,
       body: { error: HANDOFF_MESSAGES.unavailable, code: "handoff_unavailable" },
+      linkGone: true,
     };
-  return null;
+  if (error.code !== "PT409" && error.code !== "22023") return null;
+  return otherwise === "retake"
+    ? { status: 409, body: { error: HANDOFF_MESSAGES.retake, code: "handoff_retake" } }
+    : {
+        status: 409,
+        body: { error: HANDOFF_MESSAGES.unavailable, code: "handoff_unavailable" },
+      };
 }
 
 /**
@@ -356,7 +375,7 @@ async function grantState(
   return { ok: true, state: captureHandoffStateSchema.parse(state.data) };
 }
 
-/** A refusal from grantState, with the grant cookie cleared when the link is gone. */
+/** A refusal, with the grant cookie cleared only when the link is gone. */
 async function refuse(
   request: NextRequest,
   context: { respond: (r: NextResponse) => Promise<NextResponse> },
@@ -365,9 +384,7 @@ async function refuse(
   const response = await context.respond(
     NextResponse.json(refusal.body, { status: refusal.status })
   );
-  return refusal.body.code === "handoff_unavailable"
-    ? setGrantCookie(request, response, "")
-    : response;
+  return refusal.linkGone ? setGrantCookie(request, response, "") : response;
 }
 
 /** GET /api/handoff/state: what the signed-in phone may still do. */
@@ -466,9 +483,7 @@ export async function handleCaptureHandoffUpload(request: NextRequest): Promise<
       ...(selfie ? { p_browser_liveness_passed: capture?.browserLivenessPassed ?? false } : {}),
     });
     if (reserved.error) {
-      const refusal = phoneRefusal(reserved.error as HandoffError);
-      if (refusal && refusal.body.code !== "handoff_unavailable")
-        return reply(refusal.status, refusal.body);
+      const refusal = phoneRefusal(reserved.error as HandoffError, "retake");
       if (refusal) return refuse(request, context, refusal);
       rpcFailure(reserved.error);
     }
