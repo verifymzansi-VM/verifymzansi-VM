@@ -10,8 +10,9 @@ import {
   FoundationEmailChangeError,
 } from "@/lib/foundation/email-change";
 
-const { authenticate, context, respond, readAccount, limit, legacy, logged, hold } = vi.hoisted(
-  () => ({
+const { authenticate, context, respond, readAccount, limit, legacy, logged, hold, domain } =
+  vi.hoisted(() => ({
+    domain: vi.fn(),
     hold: vi.fn(),
     authenticate: vi.fn(),
     context: vi.fn(),
@@ -20,8 +21,7 @@ const { authenticate, context, respond, readAccount, limit, legacy, logged, hold
     limit: vi.fn(),
     legacy: vi.fn(),
     logged: vi.fn(),
-  })
-);
+  }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/server", () => ({ createClient: legacy, createPublicClient: legacy }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: legacy }));
@@ -36,6 +36,8 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   getClientIp: () => "synthetic-ip",
 }));
 vi.mock("@/lib/foundation/answer-floor", () => ({ holdAnswer: hold }));
+// api.check_email_domain (the sign-up hook's domain rule while sign-up is open).
+vi.mock("@/lib/foundation/signup-mode", () => ({ checkFoundationEmailDomain: domain }));
 vi.mock("@/lib/utils/logger", () => {
   const logger = {
     debug: (...args: unknown[]) => logged("debug", ...args),
@@ -124,6 +126,7 @@ beforeEach(() => {
   limit.mockResolvedValue({ limited: false });
   changeEmail.mockResolvedValue("requested");
   hold.mockResolvedValue(undefined);
+  domain.mockResolvedValue(true);
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -550,5 +553,29 @@ describe("email change on the foundation backend", () => {
     const text = JSON.stringify(logged.mock.calls);
     for (const secret of [NEXT, CURRENT, "next@", csrf, "synthetic.verified"])
       expect(text).not.toContain(secret);
+  });
+});
+
+describe("while sign-up is open", () => {
+  it("refuses an address the sign-up hook's domain rule refuses, before any budget is spent", async () => {
+    domain.mockResolvedValue(false);
+    const response = await POST(request());
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      error: "This email address can't be used. Use a different address.",
+      code: "email_domain_blocked",
+    });
+    expect(domain).toHaveBeenCalledWith({}, NEXT);
+    expect(changeEmail).not.toHaveBeenCalled();
+    // Only the network limit ran.
+    expect(limit).toHaveBeenCalledTimes(1);
+  });
+
+  it("is unavailable when the domain check cannot be read", async () => {
+    domain.mockRejectedValue(new Error("down"));
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual(UNAVAILABLE);
+    expect(changeEmail).not.toHaveBeenCalled();
   });
 });

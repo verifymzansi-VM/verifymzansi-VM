@@ -48,7 +48,7 @@ export async function registerGoogleMember(label: string): Promise<GoogleMember>
     email_verified: true,
     phone_verified: false,
   };
-  queryTestCopy(`insert into private.owner_admin_invitations(email) values ('${email}');`);
+  queryTestCopy(`insert into private.member_invitations(email) values ('${email}');`);
   try {
     const created = await authAdmin("/auth/v1/admin/users", {
       email,
@@ -90,9 +90,9 @@ export async function registerGoogleMember(label: string): Promise<GoogleMember>
     if (!passwordRefused) throw new Error("A Google member must have no password");
     return { id, email, fullName };
   } finally {
-    // Closed once used, so it can never be claimed as an owner-admin invitation.
+    // Closed once used (a member invitation never makes an administrator).
     queryTestCopy(
-      `update private.owner_admin_invitations set revoked_at = now() where email = '${email}';`
+      `update private.member_invitations set revoked_at = now() where email = '${email}';`
     );
   }
 }

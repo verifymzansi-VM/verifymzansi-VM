@@ -15,7 +15,11 @@ export class FoundationRegistrationError extends Error {
   override name = "FoundationRegistrationError";
   constructor(
     readonly status: 400 | 429 | 503,
-    breached = false
+    breached = false,
+    /** Whether the attempt counts against the sign-up limits: only an Auth
+     * answer that shows the CAPTCHA was checked and passed
+     * (CHECKED_CAPTCHA_REFUSALS). */
+    readonly countsAsAttempt = false
   ) {
     super(
       breached
@@ -28,6 +32,21 @@ export class FoundationRegistrationError extends Error {
     );
   }
 }
+
+/**
+ * Auth refusals that come after its CAPTCHA check, so the attempt was real and
+ * counts against the sign-up limits, like a created account or the uniform
+ * answer for an existing or uninvited address (those return normally and
+ * always count). Anything else never counts: a refused CAPTCHA, Auth's own
+ * rate limit (429, which may come before its CAPTCHA check), 5xx, timeouts
+ * and network failures, so made-up tokens can never spend a shared network's
+ * limit.
+ */
+const CHECKED_CAPTCHA_REFUSALS: ReadonlySet<string> = new Set([
+  "weak_password",
+  "validation_failed",
+  "email_address_invalid",
+]);
 
 /** The target's auth.users triggers create its private profile and record the
  * current Terms version as accepted at sign-up. Display name is an unverified
@@ -99,7 +118,9 @@ export async function registerFoundationAccount(
           ? 429
           : error.code === "signup_disabled" || ![400, 401, 403, 422].includes(error.status ?? 0)
             ? 503
-            : 400
+            : 400,
+        false,
+        CHECKED_CAPTCHA_REFUSALS.has(error.code ?? "")
       );
     }
     // Confirmed-email signup is mandatory. Discard an unexpected auto-login.

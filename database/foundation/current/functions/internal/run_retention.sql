@@ -22,7 +22,8 @@ begin
     'staff_records',internal.retention_staff_records(p_limit),
     'commerce',internal.retention_commerce(p_limit),
     'operations',internal.retention_operations(p_limit),
-    'engagement',internal.purge_post_engagement());
+    'engagement',internal.purge_post_engagement(),
+    'member_invitations',internal.purge_member_invitations(p_limit));
   perform pg_catalog.set_config('vm.retention','off',true);
   return result;
 end;

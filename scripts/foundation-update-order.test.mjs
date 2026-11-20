@@ -33,9 +33,11 @@ const files = listUpdateFiles(repo);
 const [baseline, runtime] = API_MANIFESTS.map((file) => readJsonFile(repo, file));
 // What each reviewed anonymous read answers the probe's synthetic arguments.
 const publicProbeAnswer = (name) =>
-  ({ get_payment_limits: { online_max_cents: 130000 }, get_post_engagement: { items: [] } })[
-    name
-  ] ?? [];
+  ({
+    get_payment_limits: { online_max_cents: 130000 },
+    get_post_engagement: { items: [] },
+    get_signup_mode: { mode: "invite_only" },
+  })[name] ?? [];
 
 const fn = (name, args = [], extra = {}) => ({
   name,
