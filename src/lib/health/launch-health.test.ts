@@ -1,13 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getAuditFailureCount } from "@/lib/services/audit";
 import { getLaunchHealthSnapshot } from "./launch-health";
 import { verifyFoundationGateway } from "@/lib/foundation/gateway-readiness";
 
 vi.mock("@/lib/foundation/gateway-readiness", () => ({ verifyFoundationGateway: vi.fn() }));
-
-vi.mock("@/lib/services/audit", () => ({
-  getAuditFailureCount: vi.fn(),
-}));
 
 const VALID_PRODUCTION_ENV = {
   NODE_ENV: "production",
@@ -24,8 +19,7 @@ const VALID_PRODUCTION_ENV = {
   OZOW_CLIENT_SECRET: "client-secret-value", // secret-scan: allow deterministic fixture
   OZOW_SITE_CODE: "site-code",
   OZOW_WEBHOOK_SECRET: "webhook-secret-value", // secret-scan: allow deterministic fixture
-  KYC_PROVIDER: "smileid",
-  KYC_WEBHOOK_SECRET: "kyc-webhook-secret-value", // secret-scan: allow deterministic fixture
+  KYC_PROVIDER: "manual",
   RESEND_API_KEY: "re_test_1234567890",
   R2_ACCOUNT_ID: "cloudflare-account-id",
   R2_ACCESS_KEY_ID: "cloudflare-access-key",
@@ -87,8 +81,6 @@ describe("getLaunchHealthSnapshot", () => {
   });
 
   it("reports every check ok for a complete production configuration", async () => {
-    vi.mocked(getAuditFailureCount).mockReturnValue(0);
-
     const snapshot = await getLaunchHealthSnapshot();
 
     expect(snapshot.checks.config.status).toBe("ok");
@@ -101,14 +93,12 @@ describe("getLaunchHealthSnapshot", () => {
     expect(snapshot.checks.africasTalking.status).toBe("ok");
     expect(snapshot.checks.turnstile.status).toBe("ok");
     expect(snapshot.checks.rateLimiter.status).toBe("ok");
-    expect(snapshot.checks.audit.status).toBe("ok");
+    expect(snapshot.checks.audit).toEqual({ status: "ok", failureCount: 0 });
     expect(snapshot.status).toBe("ok");
   });
 
   it("returns degraded when external readiness env is missing in production", async () => {
     vi.stubEnv("RATE_LIMITER_API_KEY", "");
-    vi.mocked(getAuditFailureCount).mockReturnValue(0);
-
     const snapshot = await getLaunchHealthSnapshot();
 
     expect(snapshot.status).toBe("degraded");
@@ -123,8 +113,6 @@ describe("getLaunchHealthSnapshot", () => {
         .fn()
         .mockResolvedValue(new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }))
     );
-    vi.mocked(getAuditFailureCount).mockReturnValue(0);
-
     const snapshot = await getLaunchHealthSnapshot();
 
     expect(snapshot.status).toBe("degraded");
@@ -135,8 +123,6 @@ describe("getLaunchHealthSnapshot", () => {
 
   it("degrades when the rate limiter probe hits a network error", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connect ETIMEDOUT")));
-    vi.mocked(getAuditFailureCount).mockReturnValue(0);
-
     const snapshot = await getLaunchHealthSnapshot();
 
     expect(snapshot.checks.rateLimiter.status).toBe("degraded");
@@ -153,8 +139,6 @@ describe("getLaunchHealthSnapshot", () => {
     [200, '{"allowed":true}'],
   ])("degrades for an unsuccessful rate limiter response (%s, %s)", async (status, body) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, { status })));
-    vi.mocked(getAuditFailureCount).mockReturnValue(0);
-
     const snapshot = await getLaunchHealthSnapshot();
 
     expect(snapshot.checks.rateLimiter.status).toBe("degraded");
@@ -166,8 +150,6 @@ describe("getLaunchHealthSnapshot", () => {
       .fn()
       .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
-    vi.mocked(getAuditFailureCount).mockReturnValue(0);
-
     const snapshot = await getLaunchHealthSnapshot();
 
     expect(snapshot.checks.rateLimiter.status).toBe("ok");
@@ -186,8 +168,6 @@ describe("getLaunchHealthSnapshot", () => {
   it("returns degraded when critical env vars are missing", async () => {
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(getAuditFailureCount).mockReturnValue(0);
-
     const snapshot = await getLaunchHealthSnapshot();
 
     expect(snapshot.status).toBe("degraded");
@@ -198,8 +178,6 @@ describe("getLaunchHealthSnapshot", () => {
 
   it("returns degraded when production config drifts from launch requirements", async () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
-    vi.mocked(getAuditFailureCount).mockReturnValue(0);
-
     const snapshot = await getLaunchHealthSnapshot();
 
     expect(snapshot.status).toBe("degraded");
@@ -213,8 +191,6 @@ describe("getLaunchHealthSnapshot", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://127.0.0.1:3000");
     vi.stubEnv("AFRICASTALKING_USERNAME", "sandbox");
     vi.stubEnv("OZOW_ENV", "staging");
-    vi.mocked(getAuditFailureCount).mockReturnValue(0);
-
     const snapshot = await getLaunchHealthSnapshot();
 
     expect(snapshot.status).toBe("ok");

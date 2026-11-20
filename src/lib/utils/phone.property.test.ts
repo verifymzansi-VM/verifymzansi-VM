@@ -51,21 +51,34 @@ describe("normalizeSaPhone", () => {
 });
 
 describe("isValidSaPhone", () => {
-  it("accepts exactly the inputs that normalise to a +27 mobile number", () => {
+  const candidates = fc.oneof(
+    fc.string({ unit: "binary-ascii", maxLength: 16 }),
+    subscriber.map((digits) => `0${digits}`),
+    subscriber.map((digits) => `+27${digits}`),
+    fc.stringMatching(/^\+?27[0-9]{7,10}$/),
+    fc.stringMatching(/^0[0-9]{8,10}$/)
+  );
+
+  it("accepts only inputs that normalise to a +27 mobile number", () => {
     fc.assert(
-      fc.property(
-        fc.oneof(
-          fc.string({ unit: "binary-ascii", maxLength: 16 }),
-          subscriber.map((digits) => `0${digits}`),
-          subscriber.map((digits) => `+27${digits}`),
-          fc.stringMatching(/^\+?27[0-9]{7,10}$/),
-          fc.stringMatching(/^0[0-9]{8,10}$/)
-        ),
-        (value) => {
-          if (isValidSaPhone(value)) expect(normalizeSaPhone(value)).toMatch(/^\+27[6-8]\d{8}$/);
-        }
-      ),
+      fc.property(candidates, (value) => {
+        if (isValidSaPhone(value)) expect(normalizeSaPhone(value)).toMatch(/^\+27[6-8]\d{8}$/);
+      }),
       { numRuns: 1000 }
+    );
+  });
+
+  it("accepts every way of typing a mobile number", () => {
+    // The reverse direction, for the forms people type (see normalizeSaPhone).
+    fc.assert(
+      fc.property(subscriber, separator, (digits, sep) => {
+        for (const typed of [
+          `0${punctuate(digits, sep)}`,
+          `+27${punctuate(digits, sep)}`,
+          `27${punctuate(digits, sep)}`,
+        ])
+          expect(isValidSaPhone(typed), typed).toBe(true);
+      })
     );
   });
 

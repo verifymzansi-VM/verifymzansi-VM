@@ -101,7 +101,7 @@ export function MySlots({
             </Button>
           ) : null}
           {!individual.verified ? (
-            <Button asChild variant="outline" className="h-11 rounded-full">
+            <Button asChild variant="default" className="h-11 rounded-full">
               <Link href="/verification">Finish my ID review</Link>
             </Button>
           ) : buyHref && room > 0 && !closed ? (

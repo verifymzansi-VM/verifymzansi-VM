@@ -147,23 +147,6 @@
         }
       }
     },
-    "/api/auth/sign-out": {
-      "post": {
-        "tags": ["Auth"],
-        "summary": "Sign out the current session",
-        "operationId": "signOut",
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Signed out successfully"
-          }
-        }
-      }
-    },
     "/api/auth/forgot-password": {
       "post": {
         "tags": ["Auth"],

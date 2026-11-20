@@ -147,11 +147,23 @@ describe("the like and view browser identifier", () => {
           fc.integer({ min: -(10 ** 9), max: -(401 * 86_400) })
         ),
         async (offset) => {
-          const token = (await issueViewerToken(Date.now() + offset * 1000))!;
-          expect(await readViewerToken(token.value)).toBeNull();
+          // One clock for issuing and reading: with two Date.now() calls a
+          // second could tick between them and shrink the offset by one.
+          const now = Date.now();
+          const token = (await issueViewerToken(now + offset * 1000))!;
+          expect(await readViewerToken(token.value, now)).toBeNull();
         }
       )
     );
+  });
+
+  it("accepts an identifier up to five minutes ahead of the reader's clock", async () => {
+    // The edge of the window above, read with the same whole-second clock.
+    const now = Math.floor(Date.now() / 1000) * 1000;
+    const token = (await issueViewerToken(now + 300 * 1000))!;
+    expect((await readViewerToken(token.value, now))?.id).toBe(token.id);
+    const late = (await issueViewerToken(now + 301 * 1000))!;
+    expect(await readViewerToken(late.value, now)).toBeNull();
   });
 });
 

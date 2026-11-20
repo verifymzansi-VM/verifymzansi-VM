@@ -12,6 +12,22 @@ function firstStep() {
 describe("DashboardOnboarding", () => {
   afterEach(cleanup);
 
+  it("adds no second post button: the dashboard banner's New post is the way to post", () => {
+    render(
+      <DashboardOnboarding
+        isVerified={false}
+        verificationStatus="incomplete"
+        hasListings={false}
+        hasBusinesses={false}
+      />
+    );
+    expect(screen.queryByRole("link", { name: /Create your first post/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /Post your first item/ })).toHaveAttribute(
+      "href",
+      "/post/create"
+    );
+  });
+
   it("keeps the verification step open while the ID is in review", () => {
     render(
       <DashboardOnboarding

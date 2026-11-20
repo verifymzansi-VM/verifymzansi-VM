@@ -257,7 +257,7 @@ function ContactActionsForTarget({
           </p>
         )}
         {whatsappUrl && (
-          <Button className="w-full gap-2" size="lg" asChild>
+          <Button variant="outline" className="w-full gap-2" size="lg" asChild>
             <a href={whatsappUrl} target="_blank" rel="noopener noreferrer nofollow ugc">
               <MessageIcon className="h-4 w-4" />
               WhatsApp{whatsappNumberShown && whatsapp ? ` ${whatsapp}` : ""}

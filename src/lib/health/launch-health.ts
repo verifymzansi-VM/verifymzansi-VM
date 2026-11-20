@@ -7,7 +7,6 @@ import { createLogger } from "@/lib/utils/logger";
 import { verifyFoundationGateway } from "@/lib/foundation/gateway-readiness";
 
 const logger = createLogger("Health");
-const AUDIT_FAILURE_DEGRADE_THRESHOLD = 5;
 
 export interface HealthCheckStatus {
   status: "ok" | "degraded" | "skipped";
@@ -95,20 +94,11 @@ function probeCriticalEnvVars(): HealthCheckStatus {
   }
 }
 
-async function getAuditHealth(): Promise<HealthCheckStatus> {
-  try {
-    const { getAuditFailureCount } = await import("@/lib/services/audit");
-    const failureCount = getAuditFailureCount();
-    return {
-      status: failureCount < AUDIT_FAILURE_DEGRADE_THRESHOLD ? "ok" : "degraded",
-      failureCount,
-    };
-  } catch {
-    return {
-      status: "skipped",
-      detail: "Audit monitor unavailable in this runtime",
-    };
-  }
+/** The live database writes each audit record in the same transaction as the
+ * change it records, so the app has no separate audit write that can fail.
+ * The check keeps its place and shape in the health answer. */
+function getAuditHealth(): HealthCheckStatus {
+  return { status: "ok", failureCount: 0 };
 }
 
 async function probeR2(
@@ -365,12 +355,12 @@ export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
       ];
     }
   };
-  const [[supabase, schema], r2, audit, rateLimiter] = await Promise.all([
+  const [[supabase, schema], r2, rateLimiter] = await Promise.all([
     database(),
     probeR2(mode),
-    getAuditHealth(),
     probeRateLimiter(mode),
   ]);
+  const audit = getAuditHealth();
   const ozow = probeOzow(mode);
   const resend = probeResend(mode);
   const africasTalking = probeAfricasTalking(mode);

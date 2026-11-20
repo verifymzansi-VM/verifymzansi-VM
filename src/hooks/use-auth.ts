@@ -98,8 +98,7 @@ export async function clearClientAccountState(): Promise<void> {
     await import("@/stores/notification-store")
   ).useNotificationStore.getState();
   clearNotifications();
-  // Clear the phone-gate cookie client-side (server sign-out route also
-  // does this, but the client hook may be used directly).
+  // Clear the retired phone-gate cookie in case an older session left it.
   document.cookie = "x-phone-ok=; path=/; max-age=0";
 }
 

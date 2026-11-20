@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-export { KycWebhookPayloadSchema } from "../../lib/validations/kyc-webhook";
 const SmsRecipientSchema = z.object({
   statusCode: z.number().int(),
   number: z.string().optional(),

@@ -19,11 +19,13 @@ vi.mock("@/lib/hidden-features", async (original) => {
   );
 });
 const database = vi.hoisted(() => ({
-  message: "permission denied: staff role required",
+  /** The refusal message, or null for a staff session the database accepts. */
+  message: "permission denied: staff role required" as string | null,
   calls: [] as string[],
 }));
 const rpc = vi.hoisted(() => async (name: string) => {
   database.calls.push(name);
+  if (database.message === null) return { data: {}, error: null };
   return { data: null, error: { code: "42501", message: database.message, details: null } };
 });
 vi.mock("@/lib/foundation/runtime-connection", () => ({
@@ -160,13 +162,17 @@ function send(route: (typeof routes)[number]) {
   return route.handler(request, { params });
 }
 
-async function sweep(message: string) {
+type Answer = { status: number; body: Record<string, unknown>; asked: boolean };
+
+async function sweep(message: string | null) {
   database.message = message;
-  const answers = new Map<string, { status: number; body: Record<string, unknown> }>();
+  const answers = new Map<string, Answer>();
   const failures: string[] = [];
   for (const route of routes) {
     const key = `${route.method} ${route.name}`;
+    database.calls.length = 0;
     const response = await send(route);
+    const asked = database.calls.length > 0;
     const text = await response.text();
     let body: Record<string, unknown> = {};
     try {
@@ -174,9 +180,9 @@ async function sweep(message: string) {
     } catch {
       // Binary or empty answers carry no message to check.
     }
-    answers.set(key, { status: response.status, body });
+    answers.set(key, { status: response.status, body, asked });
     if (response.status < 400) failures.push(`${key}: ${response.status}`);
-    if (text.includes(message)) failures.push(`${key}: repeats the database message`);
+    if (message && text.includes(message)) failures.push(`${key}: repeats the database message`);
   }
   return { answers, failures };
 }
@@ -191,9 +197,28 @@ describe("staff routes and a caller the database does not accept", () => {
   it("a member who is not staff gets no success and no database detail", async () => {
     const { answers, failures } = await sweep(NOT_STAFF);
     expect(failures).toEqual([]);
-    const wrong = EXACT.filter((key) => answers.get(key)?.status !== 403).map(
-      (key) => `${key}: ${answers.get(key)?.status}`
-    );
+    // The routes with bodies reached the database's staff check (a 400 for the
+    // body would also be "no success" and prove nothing), and refused with 403.
+    const wrong = EXACT.filter((key) => {
+      const answer = answers.get(key);
+      return !answer?.asked || answer.status !== 403;
+    }).map((key) => `${key}: ${JSON.stringify(answers.get(key))}`);
+    expect(wrong).toEqual([]);
+    // Any other route that asked the database passes its refusal on as 403 too.
+    const others = [...answers]
+      .filter(([, answer]) => answer.asked && answer.status !== 403)
+      .map(([key, answer]) => `${key}: ${answer.status}`);
+    expect(others).toEqual([]);
+  });
+
+  it("a staff session the database accepts gets past the routes' own checks", async () => {
+    // The positive control: a route that refused everyone, or refused these
+    // bodies before asking the database, would pass the sweeps above.
+    const { answers } = await sweep(null);
+    const wrong = EXACT.filter((key) => {
+      const answer = answers.get(key);
+      return !answer?.asked || [400, 401, 403].includes(answer.status);
+    }).map((key) => `${key}: ${JSON.stringify(answers.get(key))}`);
     expect(wrong).toEqual([]);
   });
 
@@ -202,7 +227,7 @@ describe("staff routes and a caller the database does not accept", () => {
     expect(failures).toEqual([]);
     const wrong = EXACT.filter((key) => {
       const answer = answers.get(key);
-      return answer?.status !== 403 || answer.body.code !== "step_up_required";
+      return !answer?.asked || answer.status !== 403 || answer.body.code !== "step_up_required";
     }).map((key) => `${key}: ${JSON.stringify(answers.get(key))}`);
     expect(wrong).toEqual([]);
   });

@@ -100,7 +100,6 @@ const METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 const SERVER_TO_SERVER: Record<string, string> = {
   "webhooks/ozow": "provider signature",
   "webhooks/ozow/refunds": "provider signature",
-  "webhooks/kyc/provider": "provider signature",
   "webhooks/ops-jobs": "shared job secret",
   "internal/bindings/verify": "shared job secret",
   "internal/payments/reconcile": "shared job secret",

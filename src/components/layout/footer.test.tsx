@@ -32,6 +32,19 @@ describe("Footer", () => {
     expect(screen.queryByRole("link", { name: "X" })).not.toBeInTheDocument();
   });
 
+  it("draws the band's Post for free in gold, and hides the band where the page asks", () => {
+    const { unmount } = render(<Footer />);
+    const post = screen.getByRole("link", { name: /Post for free/ });
+    expect(post.className).toMatch(/bg-brand-gold-300/);
+    expect(post.className).not.toMatch(/bg-brand-green/);
+    unmount();
+
+    render(<Footer showPostBand={false} />);
+    expect(screen.queryByText(/Got something to sell/)).toBeNull();
+    expect(screen.queryByRole("link", { name: /Post for free/ })).toBeNull();
+    expect(screen.getByRole("link", { name: "Pricing" })).toBeInTheDocument();
+  });
+
   it("exposes public trust and safety routes", () => {
     render(<Footer />);
 

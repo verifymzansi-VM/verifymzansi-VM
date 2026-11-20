@@ -640,7 +640,7 @@ test("the production launch check refuses the test suites' secrets", () => {
     ["FOUNDATION_PHONE_OTP_KEY", LOCAL_PHONE_OTP_KEY],
     ["ID_ENCRYPTION_KEY", LOCAL_ID_ENCRYPTION_KEY],
     // Under another name, or with stray spaces, it is still refused.
-    ["KYC_WEBHOOK_SECRET", ` ${LOCAL_INTERNAL_JOBS_SECRET} `],
+    ["RENAMED_JOBS_SECRET", ` ${LOCAL_INTERNAL_JOBS_SECRET} `],
   ];
   for (const [name, value] of cases)
     assert.deepEqual(testFixtureSecretFindings({ ...production, [name]: value }), [name], name);

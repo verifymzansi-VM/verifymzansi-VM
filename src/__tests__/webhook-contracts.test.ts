@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import {
-  EmailProviderResponseSchema,
-  KycWebhookPayloadSchema,
-  SmsProviderResponseSchema,
-} from "@/test/contracts/webhooks";
+import { EmailProviderResponseSchema, SmsProviderResponseSchema } from "@/test/contracts/webhooks";
 
 const FIXTURE_ROOT = path.join(process.cwd(), "src", "test", "fixtures", "contracts");
 
@@ -15,20 +11,6 @@ function readFixture<T>(segments: string[]): T {
 }
 
 describe("Webhook and Provider Contract Fixtures", () => {
-  it("accepts KYC approved payload fixture", () => {
-    const payload = readFixture<Record<string, unknown>>(["kyc", "provider-approved.json"]);
-
-    const parsed = KycWebhookPayloadSchema.safeParse(payload);
-    expect(parsed.success).toBe(true);
-  });
-
-  it("accepts KYC rejected payload fixture", () => {
-    const payload = readFixture<Record<string, unknown>>(["kyc", "provider-rejected.json"]);
-
-    const parsed = KycWebhookPayloadSchema.safeParse(payload);
-    expect(parsed.success).toBe(true);
-  });
-
   it("accepts Africa's Talking success payload fixture", () => {
     const payload = readFixture<Record<string, unknown>>(["sms", "africastalking-success.json"]);
 
@@ -55,14 +37,6 @@ describe("Webhook and Provider Contract Fixtures", () => {
 
     const parsed = EmailProviderResponseSchema.safeParse(payload);
     expect(parsed.success).toBe(true);
-  });
-
-  it("rejects KYC payload with invalid status", () => {
-    const payload = readFixture<Record<string, unknown>>(["kyc", "provider-approved.json"]);
-    payload.status = "pass";
-
-    const parsed = KycWebhookPayloadSchema.safeParse(payload);
-    expect(parsed.success).toBe(false);
   });
 
   it("rejects SMS payload without recipients", () => {

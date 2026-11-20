@@ -13,6 +13,7 @@ import {
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
+import { brandGoldButtonClassName } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 
@@ -205,7 +206,7 @@ export default function VerificationHelpPage() {
           description="Fix common verification issues quickly."
           breadcrumbs={[{ label: "Verification", href: "/verification" }, { label: "Help" }]}
           actions={
-            <Button asChild variant="trust-verified" size="lg">
+            <Button asChild variant="trust-gold" size="lg" className={brandGoldButtonClassName}>
               <Link href="/verification">Continue verification</Link>
             </Button>
           }

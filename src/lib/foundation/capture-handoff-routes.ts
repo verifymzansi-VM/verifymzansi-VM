@@ -40,13 +40,27 @@ import {
 } from "./capture-handoff";
 import { enforceMutationRequest } from "../utils/mutation-guard";
 import { checkRateLimit, getClientRateLimitIdentity } from "../utils/rate-limit";
-import { readBoundedRequestFormData, RequestBodyTooLargeError } from "../utils/request-body";
+import {
+  readBoundedRequestFormData,
+  readBoundedRequestText,
+  RequestBodyTooLargeError,
+} from "../utils/request-body";
 import { createLogger } from "../utils/logger";
 import { logRequestFailure } from "../utils/request-failure";
 import { foundationNoStore } from "@/lib/foundation/owner-route";
 import { hasDatabaseReason } from "./error-reasons";
 
 const log = createLogger("CaptureHandoff");
+
+/** A small JSON body (the start and open requests are a few hundred bytes). */
+async function readSmallJson(request: NextRequest): Promise<unknown> {
+  try {
+    return JSON.parse(await readBoundedRequestText(request, 4096));
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) throw error;
+    return null;
+  }
+}
 
 /** Member-facing answers (no provider, no internal detail). */
 const HANDOFF_MESSAGES = {
@@ -111,7 +125,7 @@ export async function handleStartCaptureHandoff(request: NextRequest) {
     const caller = await context.authenticateCaller();
     const own = await limited(caller.accountId, "verification:handoff");
     if (own) return reply(own, { error: HANDOFF_MESSAGES.busy });
-    const raw = await request.json().catch(() => null);
+    const raw = await readSmallJson(request);
     const body = startBody.safeParse(raw);
     if (!body.success) return reply(400, { error: HANDOFF_MESSAGES.needsId });
     let names: { first: string; last: string } | undefined;
@@ -163,6 +177,8 @@ export async function handleStartCaptureHandoff(request: NextRequest) {
       needsId: made.needs_id,
     });
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError)
+      return reply(413, { error: HANDOFF_MESSAGES.failed });
     if (error instanceof FoundationSessionError)
       return reply(error.status, {
         error: error.status === 401 ? "Sign in to continue verification" : HANDOFF_MESSAGES.failed,
@@ -218,7 +234,7 @@ export async function handleOpenCaptureHandoff(request: NextRequest) {
     if (ip) return reply(ip, { error: HANDOFF_MESSAGES.busy });
     const body = z
       .strictObject({ token: handoffSecretSchema })
-      .safeParse(await request.json().catch(() => null));
+      .safeParse(await readSmallJson(request));
     if (!body.success)
       return reply(409, { error: HANDOFF_MESSAGES.unavailable, code: "handoff_unavailable" });
     // A phone already signed in must be signed in as the link's owner.
@@ -226,6 +242,8 @@ export async function handleOpenCaptureHandoff(request: NextRequest) {
     try {
       signedIn = (await context.authenticateCaller()).accountId;
     } catch (error) {
+      if (error instanceof RequestBodyTooLargeError)
+        return reply(413, { error: HANDOFF_MESSAGES.unavailable, code: "handoff_unavailable" });
       if (!(error instanceof FoundationSessionError) || error.status !== 401) throw error;
     }
     const grant = newHandoffSecret();

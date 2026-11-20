@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   BRAND_SHIELD_LARGE_SRC,
   BrandSurface,
+  brandGoldButtonClassName,
   brandOutlineButtonClassName,
 } from "@/components/brand";
 import { LayoutList, Plus } from "lucide-react";
@@ -166,6 +167,10 @@ export default async function DashboardPage({
     organisationAdministrator: (organisationAdminResult.count ?? 0) > 0,
   });
   const verStatus = verificationSummary.accountVerificationStatus;
+  // VerificationStatusCard shows until the ID review is done. Its button is filled
+  // (the main one) only while the member has a step to do; while the review is
+  // in progress it is outlined, so the banner's New post stays the main button.
+  const verificationStepFirst = verStatus === "incomplete" || verStatus === "rejected";
   const stepsRemaining = verificationSummary.stepsRemaining;
   const hasAnyPosts = posts.length > 0;
   const showDashboardOnboarding = !hasAnyPosts && businessCount === 0 && tourismEventsCount === 0;
@@ -220,9 +225,15 @@ export default async function DashboardPage({
         </div>
 
         <div className="relative grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:pr-40">
+          {/* One main action: while the member has an ID review step to do, the card's
+              button is the main one and New post is outlined here. */}
           <Button
             asChild
-            className="h-11 gap-1.5 rounded-full bg-brand-gold-300 px-5 font-semibold text-brand-gold-950 hover:bg-brand-gold-200"
+            variant={verificationStepFirst ? "outline" : "trust-gold"}
+            className={cn(
+              "h-11 gap-1.5 rounded-full px-5 font-semibold",
+              verificationStepFirst ? brandOutlineButtonClassName : brandGoldButtonClassName
+            )}
           >
             <Link href="/post/create">
               <Plus aria-hidden="true" className="h-4 w-4" />

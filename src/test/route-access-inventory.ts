@@ -82,7 +82,6 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/auth/register": { POST: "public" },
   "api/auth/resend-confirmation": { POST: "public" },
   "api/auth/reset-password": { GET: "public", POST: "public" },
-  "api/auth/sign-out": { POST: "public" },
   "api/billing/allowance": { GET: "signed-in" },
   "api/billing/cancel": { POST: "signed-in" },
   "api/billing/cancel-pending": { POST: "signed-in" },
@@ -218,7 +217,6 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/verification/session/start": { POST: "signed-in" },
   "api/verification/status": { GET: "signed-in" },
   "api/verification/upload": { POST: "signed-in" },
-  "api/webhooks/kyc/provider": { POST: "service" },
   "api/webhooks/ops-jobs": { POST: "service" },
   "api/webhooks/ozow": { POST: "service" },
   "api/webhooks/ozow/refunds": { POST: "service" },
@@ -244,7 +242,6 @@ export const PUBLIC_ROUTE_REASONS: Record<string, string> = {
     "Continue on your phone: answers only for the HttpOnly capture grant of an opened link (short public name, expiry, photos still needed)",
   "api/handoff/upload POST":
     "Continue on your phone: takes camera photos only for the case of the opened link behind the HttpOnly capture grant, on the owner's live computer session",
-  "api/auth/sign-out POST": "Ends the caller's session, if there is one",
   "api/businesses GET": "Public directory of live businesses",
   "api/businesses/[id] GET": "Live business detail; the owner view (?owner=1) needs a session",
   "api/contact POST": "Enquiry to an advertiser, behind Turnstile and a rate limit",

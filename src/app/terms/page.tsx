@@ -78,7 +78,7 @@ export default async function TermsPage() {
             </Link>
             <a
               href="mailto:legal@verifymzansi.com"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-green-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:bg-brand-green-500 dark:text-brand-green-950 dark:hover:bg-brand-green-400"
+              className="inline-flex min-h-11 items-center gap-2 rounded-sm text-sm font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:text-brand-gold-300 dark:hover:text-brand-gold-100"
             >
               <Mail className="h-4 w-4" aria-hidden="true" />
               legal@verifymzansi.com

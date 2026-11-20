@@ -6,6 +6,7 @@ import Image from "next/image";
 import { Pencil, Eye, Package, AlertTriangle, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ExpiryCountdownBadge } from "@/components/dashboard/expiry-countdown-badge";
+import { lightTealSelectedClassName } from "@/components/ui/selected-state";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
@@ -226,7 +227,7 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
                 "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isActive
-                  ? "border-foreground bg-foreground text-background"
+                  ? lightTealSelectedClassName
                   : "border-border bg-card text-muted-foreground hover:border-foreground/25 hover:text-foreground"
               )}
             >
@@ -235,7 +236,9 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
                 <span
                   className={cn(
                     "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none tabular-nums",
-                    isActive ? "bg-background/20 text-background" : "bg-muted text-muted-foreground"
+                    isActive
+                      ? "bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-100"
+                      : "bg-muted text-muted-foreground"
                   )}
                 >
                   {count > 99 ? "99+" : count}

@@ -454,7 +454,6 @@ describe("pending deployment secret validation", () => {
       "FOUNDATION_PHONE_OTP_KEY",
       "INTERNAL_JOBS_SECRET",
       "OPS_JOBS_SECRET",
-      "KYC_WEBHOOK_SECRET",
       "TURNSTILE_SECRET_KEY",
       "HEALTH_DIAGNOSTIC_TOKEN",
       "RATE_LIMITER_API_KEY",

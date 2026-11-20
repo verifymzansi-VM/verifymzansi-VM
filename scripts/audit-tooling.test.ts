@@ -50,17 +50,17 @@ test("responsive CSS includes both mobile dialog docking and short-screen spacin
   assert.equal(mediaFor(".short\\:p-4").params, "(max-height: 820px)");
 });
 
-test("the build must contain the payment, KYC, verification and pricing routes", () => {
+test("the build must contain the payment, verification and pricing routes", () => {
   const manifest = Object.fromEntries(
     REQUIRED_BUILT_ROUTES.map((route) => [`/(group)${route}`, `app${route}.js`])
   );
-  assert.equal(REQUIRED_BUILT_ROUTES.length, 4);
+  assert.equal(REQUIRED_BUILT_ROUTES.length, 3);
   assert.deepEqual(missingBuiltRoutes(manifest), []);
   const { ["/(group)/pricing/page"]: _pricing, ...withoutPricing } = manifest;
   assert.deepEqual(missingBuiltRoutes(withoutPricing), ["/pricing/page"]);
   assert.deepEqual(missingBuiltRoutes({}), REQUIRED_BUILT_ROUTES);
   // A suffix match must not accept a different route that merely ends alike.
-  assert.deepEqual(missingBuiltRoutes({ "/x/api/webhooks/ozow/route-old": "" }).length, 4);
+  assert.deepEqual(missingBuiltRoutes({ "/x/api/webhooks/ozow/route-old": "" }).length, 3);
 });
 import { sanitizeCloudflareEnvModule } from "./lib/cloudflare-env-policy";
 import { copyWorkingTreeSnapshot } from "./lib/working-tree-snapshot";

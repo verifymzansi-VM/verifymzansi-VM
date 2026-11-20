@@ -102,7 +102,6 @@ function IndividualPanel({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:gap-5">
         {offers.map((offer) => {
-          const highlighted = offer.tier === "month";
           const term = `${offer.durationDays} days`;
           // An Individual slot works in every section, so every section's
           // plan id names the same plan; any one of them is the slot's link.
@@ -112,12 +111,8 @@ function IndividualPanel({
             <article
               key={offer.tier}
               data-testid={`retail-offer-${offer.tier}`}
-              className={cn(
-                "spotlight flex flex-col rounded-3xl border bg-card p-5 text-card-foreground sm:p-6",
-                highlighted
-                  ? "border-brand-green-600/70 ring-4 ring-brand-green/10 elev-lg dark:border-brand-green-500/70"
-                  : "border-border/70 elev-xs"
-              )}
+              // The three terms are equal choices: same card, same outlined button.
+              className="spotlight flex flex-col rounded-3xl border border-border/70 bg-card p-5 text-card-foreground elev-xs sm:p-6"
             >
               <h3 className="font-body text-base font-semibold text-foreground">{term}</h3>
               <span
@@ -131,11 +126,7 @@ function IndividualPanel({
               </p>
               {/* Checkout always confirms dates, slots and renewal before payment. */}
               {onSale && planId ? (
-                <Button
-                  asChild
-                  variant={highlighted ? "trust-verified" : "outline"}
-                  className="mt-5 h-11 w-full rounded-full"
-                >
+                <Button asChild variant="outline" className="mt-5 h-11 w-full rounded-full">
                   <Link href={`/billing/checkout?plan=${planId}`}>Choose {term}</Link>
                 </Button>
               ) : (
@@ -216,7 +207,7 @@ function MultiListingPanel() {
         </div>
         <Button
           asChild
-          variant="trust-verified"
+          variant="outline"
           className="h-11 w-full shrink-0 rounded-full px-6 sm:w-auto"
         >
           <Link href="/pricing/multi-listing">Choose your package</Link>

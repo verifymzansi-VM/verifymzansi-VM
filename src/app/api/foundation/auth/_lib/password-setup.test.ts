@@ -519,3 +519,71 @@ describe("password setup for a member without a password", () => {
     expect((await POST(request())).status).toBe(503);
   });
 });
+
+describe("a body larger than the route's 4 KiB limit", () => {
+  const pad = "x".repeat(8 * 1024);
+  const bodies = {
+    "a password setup body": { email: "member@example.invalid", pad },
+    "a forgot-password body": {
+      email: "member@example.invalid",
+      turnstileToken: "synthetic-captcha",
+      pad,
+    },
+  };
+  /** The body read whole (with its length declared) or streamed in pieces. */
+  function large(body: unknown, declared: boolean) {
+    const bytes = new TextEncoder().encode(JSON.stringify(body));
+    const headers: Record<string, string> = {
+      origin: "https://verifymzansi.com",
+      "content-type": "application/json",
+      cookie: "vm_csrf=" + csrf,
+      "x-csrf-token": csrf,
+    };
+    if (declared) headers["content-length"] = String(bytes.byteLength);
+    let offset = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (offset >= bytes.byteLength) return controller.close();
+        controller.enqueue(bytes.slice(offset, offset + 1024));
+        offset += 1024;
+      },
+    });
+    return new NextRequest("https://verifymzansi.com/api/auth/forgot-password", {
+      method: "POST",
+      headers,
+      body: declared ? bytes : stream,
+      ...(declared ? {} : { duplex: "half" }),
+    } as ConstructorParameters<typeof NextRequest>[1]);
+  }
+  const answer = (response: Promise<Response>) =>
+    Promise.race([response, new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))]);
+
+  it.each(
+    Object.entries(bodies).flatMap(([label, body]) => [
+      [label, "with its length declared", body, true] as const,
+      [label, "streamed without a declared length", body, false] as const,
+    ])
+  )("refuses %s at once, %s", async (_label, _how, body, declared) => {
+    for (const post of [POST, compatibilityPOST]) {
+      vi.clearAllMocks();
+      const response = await answer(post(large(body, declared)));
+      expect(response?.status).toBe(400);
+      expect(context).not.toHaveBeenCalled();
+      expectNothingSent();
+    }
+  });
+
+  it("still serves ordinary bodies of both kinds", async () => {
+    // A fresh Auth reply for each request (a reply's body is read once).
+    fetcher.mockImplementation(async () => Response.json({}));
+    expect((await answer(POST(request())))?.status).toBe(200);
+    const recovery = await answer(
+      POST(request({ email: "member@example.invalid", turnstileToken: "synthetic-captcha" }))
+    );
+    expect(recovery?.status).toBe(200);
+    expect(await recovery?.json()).toEqual({
+      ok: true,
+      message: "If this address has an account, check your inbox for the next step.",
+    });
+  });
+});

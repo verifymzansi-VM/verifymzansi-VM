@@ -66,11 +66,6 @@ test.describe("routes refuse visitors who are not signed in", () => {
     expect([400, 401, 403]).toContain(report.status());
   });
 
-  test("the identity provider webhook refuses an empty payload", async ({ request }) => {
-    const response = await request.post("/api/webhooks/kyc/provider", { data: {} });
-    expect(response.status()).toBe(400);
-  });
-
   // The routes must be in the build: a missing route (404) or method (405)
   // broke feature-listing checkout once.
   for (const name of ["featured", "urgent", "boost"]) {

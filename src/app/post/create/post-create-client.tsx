@@ -16,6 +16,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  lightTealHoverClassName,
+  lightTealSelectedClassName,
+} from "@/components/ui/selected-state";
 import { buildPostCategoryHref } from "@/app/post/_lib/post-access";
 import { normalizeAccountVerificationStatus } from "@/lib/account/compat";
 import { cn } from "@/lib/utils";
@@ -297,7 +301,11 @@ export function PostCreateClient({
               <Link
                 href="/verification?returnUrl=%2Fpost%2Fcreate"
                 prefetch={false}
-                className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-foreground px-5 text-sm font-semibold text-background transition-colors hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className={cn(
+                  "inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full px-5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  lightTealSelectedClassName,
+                  lightTealHoverClassName
+                )}
               >
                 Continue verification
               </Link>
@@ -390,7 +398,9 @@ export function PostCreateClient({
                   disabled={isBusy}
                   aria-label={`${option.action}: ${option.about} (${option.area})`}
                   className={cn(
-                    "btn-shine spotlight-cta relative z-[1] flex h-11 w-full items-center justify-center gap-2 rounded-full bg-foreground px-4 text-sm font-semibold text-background shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait",
+                    "spotlight-cta relative z-[1] flex h-11 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait",
+                    lightTealSelectedClassName,
+                    lightTealHoverClassName,
                     isBusy && !isPending && "opacity-60"
                   )}
                 >

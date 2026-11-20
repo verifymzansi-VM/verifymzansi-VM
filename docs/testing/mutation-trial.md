@@ -19,10 +19,19 @@ pnpm test:mutation
 - Configuration: [stryker.config.mjs](../../stryker.config.mjs). The tests it
   runs are listed in
   [vitest.mutation.config.ts](../../vitest.mutation.config.ts), so a run takes
-  about two minutes instead of the whole suite's time.
+  minutes instead of the whole suite's time. How many depends on the machine:
+  about two on a quiet one, about 15 on one busy with other work.
 - Reports go to `tmp/mutation/` (`index.html` to browse, `mutation.json`), which
-  Git ignores. Stryker works in a copy of the project under `tmp/stryker/` and
-  removes it afterwards.
+  Git ignores. Stryker works in a copy of the project under
+  `tmp/stryker/sandbox-*` and removes it afterwards.
+- **That copy links to the project's `node_modules`** (a junction on Windows, a
+  symbolic link elsewhere). A finished run removes it; an interrupted one leaves
+  it behind. Deleting the copy with a recursive delete that follows the link
+  deletes the project's real `node_modules` too. Before deleting anything under
+  `tmp/`, check for links first (on Windows,
+  `Get-ChildItem tmp -Recurse -Attributes ReparsePoint`), and remove each link
+  on its own (on Windows, `cmd /c rmdir <link>`, which removes only the link)
+  before deleting the rest.
 
 ## Modules in the trial
 

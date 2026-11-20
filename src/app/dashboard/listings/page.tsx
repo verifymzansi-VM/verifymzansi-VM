@@ -381,9 +381,11 @@ export default async function ListingsPage({
         description="Edit, promote or take posts offline."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "My posts" }]}
       >
+        {/* Filled when the member has posts. With no posts yet it is outlined,
+            so the empty list's filled "Create your first post" is the one main button. */}
         <Button
           asChild
-          variant="trust-verified"
+          variant={hasAnyItems ? "trust-verified" : "outline"}
           className="h-11 w-full gap-2 rounded-full px-5 sm:w-auto"
         >
           <Link href="/post/create">

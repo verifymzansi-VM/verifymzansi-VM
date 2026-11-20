@@ -16,7 +16,7 @@ import {
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { BrandShield } from "@/components/shared/brand-shield";
-import { brandOutlineButtonClassName } from "@/components/brand";
+import { brandGoldButtonClassName, brandOutlineButtonClassName } from "@/components/brand";
 import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { VerifiedTick } from "@/components/trust/verified-tick";
@@ -136,11 +136,11 @@ export default function TrustSafetyPage() {
           breadcrumbs={[{ label: "Trust & Safety" }]}
           actions={
             <>
-              <Button asChild variant="trust-verified" size="lg">
-                <Link href="/safety">Safety tips</Link>
+              <Button asChild variant="trust-gold" size="lg" className={brandGoldButtonClassName}>
+                <Link href="/contact?topic=fraud_report">Report a concern</Link>
               </Button>
               <Button asChild variant="outline" size="lg" className={brandOutlineButtonClassName}>
-                <Link href="/contact?topic=fraud_report">Report a concern</Link>
+                <Link href="/safety">Safety tips</Link>
               </Button>
             </>
           }

@@ -314,7 +314,6 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 10, ttl: 3600 }, // 10 per hour
   ],
   "webhook:ozow": [{ limit: 100, ttl: 60 }], // webhooks can be bursty
-  "webhook:kyc": [{ limit: 100, ttl: 60 }], // webhooks can be bursty
 
   // ── Media ────────────────────────────────────────────
   "media:upload": [{ limit: 20, ttl: 60 }],

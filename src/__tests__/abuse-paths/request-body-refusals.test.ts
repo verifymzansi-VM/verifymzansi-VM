@@ -104,7 +104,6 @@ const OUTSIDE = new Set([
   // Server-to-server, covered by their own tests.
   "webhooks/ozow",
   "webhooks/ozow/refunds",
-  "webhooks/kyc/provider",
   "webhooks/ops-jobs",
   "internal/bindings/verify",
   "internal/payments/reconcile",
@@ -115,8 +114,6 @@ const OUTSIDE = new Set([
   "analytics/events",
   "analytics/visit",
   "engagement/share",
-  // Sign-out reads no body at all.
-  "auth/sign-out",
   // Hidden until it works on the live backend.
   "admin/ops/jobs/retry",
 ]);
@@ -188,6 +185,27 @@ function streamed(bytes: number) {
   });
 }
 
+const PIECE = 16 * 1024;
+/** Four times the largest route limit (256 KiB). */
+const HUGE = 1024 * 1024;
+/** The largest route limit, the piece that crosses it and the one the stream
+ * queues ahead. */
+const READ_LIMIT = 256 * 1024 + 2 * PIECE;
+/** Valid JSON ("{}" and then spaces) in 16 KiB pieces, counting what is read. */
+function counted(bytes: number) {
+  const encoder = new TextEncoder();
+  let sent = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (sent >= bytes) return controller.close();
+      const piece = encoder.encode((sent === 0 ? "{}" : "").padEnd(PIECE, " "));
+      sent += piece.byteLength;
+      controller.enqueue(piece);
+    },
+  });
+  return { stream, pulled: () => sent };
+}
+
 /** Routes that read no body, so any body is as good as none. */
 const NO_BODY = new Set([
   "verification/session/start",
@@ -195,8 +213,8 @@ const NO_BODY = new Set([
   // A page-view beacon: answers 200 to anything and counts nothing it cannot read.
   "engagement/view",
 ]);
-/** Covered by the skipped case at the end of this file. */
-const SEPARATE = new Set(["auth/forgot-password", "foundation/auth/recovery/request"]);
+/** Also checked with a body just past their small limit, at the end of this file. */
+const RECOVERY = ["auth/forgot-password", "foundation/auth/recovery/request"];
 /** High-risk routes whose configuration this test supplies: each must answer
  * 4xx itself, not fail later with 5xx. */
 const STRICT = new Set([
@@ -240,7 +258,7 @@ const STRICT = new Set([
 async function sweep(body: () => BodyInit, headers?: Record<string, string>) {
   const failures: string[] = [];
   for (const route of routes) {
-    if (NO_BODY.has(route.name) || SEPARATE.has(route.name)) continue;
+    if (NO_BODY.has(route.name)) continue;
     work.commands.length = 0;
     const response = await Promise.race([
       send(route, body(), headers),
@@ -263,11 +281,41 @@ describe("bodies no page sends are refused without running a command", () => {
 
   it("a body larger than the route's limit, with its length declared", async () => {
     const big = JSON.stringify({ text: "x".repeat(OVERSIZE) });
-    expect(await sweep(() => big)).toEqual([]);
+    const length = String(new TextEncoder().encode(big).byteLength);
+    expect(await sweep(() => big, { "content-length": length })).toEqual([]);
   });
 
   it("a body larger than the route's limit, streamed without a declared length", async () => {
     expect(await sweep(() => streamed(OVERSIZE))).toEqual([]);
+  });
+
+  // The two cases above would pass even if a route ignored its limit: such a
+  // body is no valid input anyway, so the schema refuses it after reading it
+  // all. These count what each route reads of a body that is valid JSON ("{}"
+  // padded with spaces) and far larger than any limit.
+  it.each([
+    ["with its length declared", true],
+    ["streamed without a declared length", false],
+  ])("a route reads no more than its limit of a large body, %s", async (_label, declared) => {
+    const failures: string[] = [];
+    for (const route of routes) {
+      if (NO_BODY.has(route.name)) continue;
+      work.commands.length = 0;
+      const body = counted(HUGE);
+      const response = await Promise.race([
+        send(route, body.stream, declared ? { "content-length": String(HUGE) } : {}),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+      ]);
+      const status = response?.status ?? 0;
+      // A declared length over the limit is refused before reading; the
+      // stream itself may have queued a piece or two ahead.
+      const allowed = declared ? 2 * PIECE : READ_LIMIT;
+      if (!response || status < 400 || work.commands.length > 0 || body.pulled() > allowed)
+        failures.push(
+          `${route.method} ${route.name}: ${status || "no answer"}, read ${body.pulled()} bytes`
+        );
+    }
+    expect(failures).toEqual([]);
   });
 
   it.each([
@@ -290,14 +338,27 @@ describe("bodies no page sends are refused without running a command", () => {
 });
 
 describe("the password recovery request", () => {
-  it.skip("answers a large body promptly", async () => {
-    for (const name of SEPARATE) {
+  // Its limit is 4 KiB, far below the sweeps' sizes: a body just past it,
+  // declared or streamed, must be refused as promptly.
+  const LARGE = 8 * 1024;
+  it.each([
+    ["with its length declared", () => JSON.stringify({ text: "x".repeat(LARGE) }), true],
+    ["streamed without a declared length", () => streamed(LARGE), false],
+  ])("answers a large body promptly, %s", async (_label, body, declared) => {
+    for (const name of RECOVERY) {
       const route = routes.find((r) => r.name === name)!;
+      const sent = body();
+      const headers =
+        declared && typeof sent === "string"
+          ? { "content-length": String(new TextEncoder().encode(sent).byteLength) }
+          : undefined;
+      work.commands.length = 0;
       const response = await Promise.race([
-        send(route, JSON.stringify({ text: "x".repeat(8 * 1024) })),
+        send(route, sent, headers),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
       ]);
-      expect(response?.status, name).toBeGreaterThanOrEqual(400);
+      expect(response?.status, name).toBe(400);
+      expect(work.commands, name).toEqual([]);
     }
   });
 });

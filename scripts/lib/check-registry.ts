@@ -419,11 +419,7 @@ for (const item of CHECKS) {
       "src/lib/payments/ozow.test.ts",
       "src/app/api/billing/**/route.test.ts",
     ],
-    "kyc-unit": [
-      "scripts/run-domain-tests.ts kyc",
-      "src/lib/validations/kyc-webhook.test.ts",
-      "src/app/api/webhooks/kyc/provider/route.test.ts",
-    ],
+    "kyc-unit": ["scripts/run-domain-tests.ts kyc"],
     coverage: ["vitest.config.ts", "scripts/run-vitest.ts coverage-core"],
     "unit-coverage-excluded": [
       "vitest.config.ts",

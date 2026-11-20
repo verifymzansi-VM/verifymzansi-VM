@@ -55,23 +55,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/auth/sign-out": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Sign out the current session */
-    post: operations["signOut"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/api/auth/forgot-password": {
     parameters: {
       query?: never;
@@ -584,24 +567,6 @@ export interface operations {
         content?: never;
       };
       401: components["responses"]["Unauthorized"];
-    };
-  };
-  signOut: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Signed out successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
     };
   };
   forgotPassword: {

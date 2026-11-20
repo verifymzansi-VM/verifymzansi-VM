@@ -16,8 +16,9 @@ async function checkDeclaredBodySize(
   }
   const contentLength = request.headers?.get("content-length");
   if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
-    await request.body?.cancel().catch(() => {
-      // The request is refused below either way; cancelling only frees the stream.
+    void request.body?.cancel().catch(() => {
+      // Not awaited: cancelling one copy of a cloned body settles only once the
+      // other copy is read too. The request is refused below either way.
     });
     throw new RequestBodyTooLargeError();
   }
@@ -46,8 +47,9 @@ export async function readBoundedRequestFormData(
     !/^multipart\/form-data\s*;/i.test(contentType) ||
     !/(?:^|;)\s*boundary=(?:"[^"]+"|[^;\s]+)(?:\s*;|\s*$)/i.test(contentType)
   ) {
-    await request.body?.cancel().catch(() => {
-      // The request is refused below either way; cancelling only frees the stream.
+    void request.body?.cancel().catch(() => {
+      // Not awaited: cancelling one copy of a cloned body settles only once the
+      // other copy is read too. The request is refused below either way.
     });
     throw new TypeError("Invalid multipart content type");
   }
@@ -71,8 +73,9 @@ export async function readBoundedRequestFormData(
     }).formData();
   } catch (error) {
     // A parser can reject the content type before consuming the stream.
-    await body?.cancel().catch(() => {
-      // The request is refused below either way; cancelling only frees the stream.
+    void body?.cancel().catch(() => {
+      // Not awaited: cancelling one copy of a cloned body settles only once the
+      // other copy is read too. The request is refused below either way.
     });
     // Multipart parsers may wrap stream errors in a TypeError.
     if (tooLarge) throw new RequestBodyTooLargeError();
@@ -105,8 +108,10 @@ export async function readBoundedRequestText(
       if (done) break;
       bytes += value.byteLength;
       if (bytes > maxBytes) {
-        await reader.cancel().catch(() => {
-          // The request is refused below either way; cancelling only frees the stream.
+        void reader.cancel().catch(() => {
+          // Not awaited: cancelling one copy of a cloned body settles only
+          // once the other copy is read too. The request is refused below
+          // either way.
         });
         throw new RequestBodyTooLargeError();
       }

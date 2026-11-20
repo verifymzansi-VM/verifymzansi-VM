@@ -174,7 +174,6 @@ const OUTSIDE = new Set([
   // Server-to-server, covered by their own tests.
   "webhooks/ozow",
   "webhooks/ozow/refunds",
-  "webhooks/kyc/provider",
   "webhooks/ops-jobs",
   "internal/bindings/verify",
   "internal/payments/reconcile",
@@ -185,8 +184,6 @@ const OUTSIDE = new Set([
   "analytics/events",
   "analytics/visit",
   "engagement/share",
-  // Sign-out reads no body at all.
-  "auth/sign-out",
   // Hidden until it works on the live backend.
   "admin/ops/jobs/retry",
 ]);

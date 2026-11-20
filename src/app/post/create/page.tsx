@@ -4,13 +4,34 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { BrandSurface } from "@/components/brand";
-import { resolveAccountVerification } from "@/lib/account/resolved-verification";
-import { createClient } from "@/lib/supabase/server";
+import { readFoundationAccountVerificationStatus } from "@/lib/foundation/account-verification-status";
+import {
+  readFoundationServerSession,
+  FoundationServerSessionError,
+} from "@/lib/foundation/server-session";
+import { createLogger } from "@/lib/utils/logger";
+import type { AccountVerificationStatus } from "@/types/enums";
 import { cn } from "@/lib/utils";
 import { PostCreateClient } from "./post-create-client";
 
 // How a post goes live, shown beside the headline on wide screens.
 const STEPS = ["Choose a section", "Fill in the form", "We review it, then it goes live"] as const;
+
+const log = createLogger("PostCreatePage");
+
+/** The member's verification status, or null when it cannot be read: the page
+ * then shows the "finish verification" note and the browser asks again. */
+async function readInitialVerificationStatus(
+  api: Awaited<ReturnType<typeof readFoundationServerSession>>["api"]
+): Promise<AccountVerificationStatus | null> {
+  try {
+    return await readFoundationAccountVerificationStatus(api);
+  } catch {
+    // Category only: never ids, emails or raw error messages.
+    log.warn("Post create verification status unavailable", { reason: "read_failed" });
+    return null;
+  }
+}
 
 export const metadata = {
   title: "Create a Post",
@@ -18,20 +39,16 @@ export const metadata = {
 };
 
 export default async function PostCreatePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login?returnUrl=%2Fpost%2Fcreate");
+  let session: Awaited<ReturnType<typeof readFoundationServerSession>> | null = null;
+  try {
+    session = await readFoundationServerSession();
+  } catch (error) {
+    if (!(error instanceof FoundationServerSessionError) || error.status !== 401) throw error;
   }
+  // redirect() throws, so it stays outside the try block above.
+  if (!session) redirect("/login?returnUrl=%2Fpost%2Fcreate");
 
-  const initialVerificationStatus = (
-    await resolveAccountVerification(supabase, user.id, {
-      includeStepsWhenVerified: true,
-    })
-  ).accountVerificationStatus;
+  const initialVerificationStatus = await readInitialVerificationStatus(session.api);
 
   return (
     <div className="flex min-h-screen flex-col">
