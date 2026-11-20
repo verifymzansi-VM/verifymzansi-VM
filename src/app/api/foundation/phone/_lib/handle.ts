@@ -9,6 +9,7 @@ import {
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import {
   FoundationPhoneError,
+  FoundationSmsDailyLimitError,
   type FoundationPhoneRefusal,
   issueFoundationPhoneChallenge,
   verifyFoundationPhoneChallenge,
@@ -29,6 +30,7 @@ import { saPhoneSchema } from "@/lib/validations/shared";
 import {
   ACCOUNT_PHONE_ALREADY_VERIFIED,
   ACCOUNT_PHONE_IN_USE_ERROR,
+  PHONE_CODES_UNAVAILABLE,
   PHONE_NUMBER_UNAVAILABLE,
   normalizeSaPhone,
 } from "@/lib/utils/phone";
@@ -165,6 +167,10 @@ export async function handleFoundationPhoneRoute(
           retryAfter: error.retryAfter,
           error: `Too many attempts. Try again ${phoneRetryWait(error.retryAfter)}.`,
         };
+      // The site-wide daily limit on codes: a calm message, no wait time.
+      // The 503 is logged with the reason sms_daily_limit.
+      if (error instanceof FoundationSmsDailyLimitError)
+        return { status: 503, reason: error.reason, error: PHONE_CODES_UNAVAILABLE };
       if (error instanceof FoundationPhoneError && error.refusal)
         return {
           status: error.status,

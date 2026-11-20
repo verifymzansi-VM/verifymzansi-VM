@@ -8,6 +8,8 @@ CREATE OR REPLACE FUNCTION internal.create_verification_phone_challenge(p_owner 
  SET search_path TO 'pg_catalog'
 AS $function$
 declare challenge private.verification_phone_challenges; held private.verification_phone_proofs;
+  today date := (statement_timestamp() at time zone 'Africa/Johannesburg')::date;
+  day_limit integer; sent_today integer;
 begin
   perform internal.lock_verification_subject(p_owner);
   if not exists(select 1 from private.current_account_access a where a.id=p_owner) then
@@ -29,6 +31,18 @@ begin
   if exists(select 1 from private.verification_phone_proofs f
       where f.phone=p_phone and f.revoked_at is null and f.owner_id<>p_owner) then
     raise exception 'phone number in use' using errcode='PT409', detail='phone_in_use'; end if;
+  -- Site-wide daily limit on codes sent (South African day), counted after
+  -- every refusal above. The UPDATE locks the day's row, so concurrent
+  -- requests count one at a time and the count never passes the limit. Over
+  -- it nothing is stored and no SMS is sent.
+  day_limit := internal.sms_daily_limit();
+  insert into private.sms_code_days(day) values(today) on conflict (day) do nothing;
+  update private.sms_code_days d set sent=d.sent+1 where d.day=today and d.sent<day_limit
+    returning d.sent into sent_today;
+  if sent_today is null then
+    raise exception 'daily SMS code limit reached' using errcode='PT429', detail='sms_daily_limit'; end if;
+  -- Staff cost alarms at 70% of the limit (warning) and at the limit (critical).
+  perform internal.engagement_valve_alarms('sms_codes_day', day_limit, sent_today-1, sent_today);
   -- New delivery invalidates older pending challenges for this subject.
   update private.verification_phone_challenges set expires_at=greatest(created_at+interval '1 microsecond',clock_timestamp())
     where owner_id=p_owner and verified_at is null and expires_at>clock_timestamp();

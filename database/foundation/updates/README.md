@@ -80,6 +80,86 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## A daily limit on SMS codes for the whole site, 20 November 2026
+
+`20261120074411_sms_daily_limit.sql` is pending (see the applied register).
+Launch checklist item 12, launch assurance LA-A15: an operational limit so that
+many accounts, or a fault in the website, cannot send an unbounded number of SMS
+codes (each one is paid for) in one day. The website's limits per number (10 a
+day), per account (10 a day) and per network (30 a day) are unchanged; this
+limit is counted in the database for the whole site.
+
+- **What counts:** every SMS code the website sends follows exactly one stored
+  challenge, so `internal.create_verification_phone_challenge` counts it, per
+  South African day, in the new table `private.sms_code_days` (one row a day:
+  the date and the count; no account, number or code; no API role has access).
+  It counts after every existing refusal (account, number, own number, change
+  rules, `phone_banned`, `phone_in_use`), so a refused request uses no place.
+  The challenges already stored on the day the update is applied are counted by
+  the update.
+- **Safe with requests at the same moment:** the count is one `UPDATE` of the
+  day's row with `sent < limit` in its condition. The row lock makes concurrent
+  requests count one at a time, and a request that waited re-checks the
+  condition on the newest row, so the count never passes the limit.
+- **At the limit:** PT429 'daily SMS code limit reached', reason
+  `sms_daily_limit`, before a challenge is stored or the member's open code is
+  expired: no SMS is sent and a code already sent still works. The website
+  answers 503 with "We can't send codes right now. Please try again later." and
+  logs the request (reason `sms_daily_limit`). It resets at midnight, South
+  African time.
+- **Staff see it** on the staff cost page: a cost alarm 'warning' when the day's
+  count reaches 70% of the limit and 'critical' when it reaches the limit (at
+  most once each a day, under open alarms, until acknowledged), and the line
+  "SMS verification codes sent today (daily limit)" with the limit.
+- **The setting** is the cost allowance `sms_codes_day` (`free_quantity`, 500 to
+  start; read by `internal.sms_daily_limit()`, which gives 500 when the row is
+  empty and at most 1,000,000). The owner decides the value. To change it, a
+  reviewed update or the owner in the SQL editor runs
+  `update private.cost_allowances set free_quantity=<n> where metric='sms_codes_day';`
+  It takes effect on the next request. A value lowered below the day's count
+  refuses at once but raises no alarm that day.
+
+No API command changes, so the order does not matter: a website release without
+the matching code shows its generic "Phone verification could not be completed"
+for the new refusal (still with no SMS), and the release with it works without
+the update (no daily limit). As usual: apply first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261120074411_sms_daily_limit.check.sql` unchanged in the
+   SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "sms daily limit: update not applied; codes today: N"
+   (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "sms daily limit: already applied; codes today: N;
+   counted today: N; limit: 500", with the two counts equal (a code sent in
+   between counts in both).
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261120074411_sms_daily_limit.down.sql`
+(only with the owner's decision; prefer a forward fix, such as a higher limit).
+It refuses unless the update is applied, puts back
+`internal.create_verification_phone_challenge` byte for byte and drops
+`internal.sms_daily_limit`, `private.sms_code_days`, the cost allowance
+`sms_codes_day` and its cost alarms.
+
+`node --import tsx scripts/test-foundation-sms-daily-limit.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database, with no
+SMS provider involved: the preflight before and after, read only; the refusals
+with a drifted body and a premature rollback, changing nothing; apply, rollback
+and re-apply return the same fingerprints; the codes stored earlier that day
+count and the limit is 500; each stored code counts once; at the limit no
+challenge is stored, the member's open code is not expired and can still be
+used, and other members are refused too; raising the setting allows more codes
+at once; at the limit, requests refused for another reason still get that reason
+and none is counted; the warning alarm at 70% and the critical one at the limit,
+once a day; 20 requests at the same moment, waiting on the day's row together,
+store exactly the 5 codes the limit leaves; a new day starts at zero and keeps
+the previous day's count; the setting's fallback and bounds; and no API role can
+read the counts or run the helper.
+
 ## Post views and likes, 19 November 2026
 
 `20261119172135_post_views_and_likes.sql` was applied on 20 November 2026 at
@@ -5602,5 +5682,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   "post views and likes: already applied; likes: 0; view days: 0; views: 0";
   production fingerprint after it (fingerprint.sql at a71f9a5c) matched the full
   replay (except the known schema grant difference)
+
+- `20261120074411_sms_daily_limit.sql`: pending
 
 <!-- applied-register:end -->

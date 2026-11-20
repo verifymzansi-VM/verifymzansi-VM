@@ -192,6 +192,7 @@ export const FOUNDATION_ERROR_REASONS = {
   slot_limit_reached: ["PT429"],
   slot_unavailable: ["PT404"],
   slug_conflict: ["PT409"],
+  sms_daily_limit: ["PT429"],
   sponsorship_busy: ["PT409"],
   sponsorship_exists: ["PT409"],
   sponsorship_invalid: ["22023"],

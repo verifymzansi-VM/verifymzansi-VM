@@ -46,6 +46,19 @@ export class FoundationPhoneError extends Error {
     super("Phone verification could not be completed");
   }
 }
+/** The site-wide daily limit on SMS codes is reached (PT429 sms_daily_limit,
+ * update 20261120074411_sms_daily_limit.sql): the database stored no
+ * challenge, so no SMS is sent until midnight, South African time. The member
+ * is asked to try again later; the request is logged with this reason, and
+ * staff see the limit's cost alarm. */
+export class FoundationSmsDailyLimitError extends FoundationPhoneError {
+  override name = "FoundationSmsDailyLimitError";
+  /** Logged with the failed request (see describeRequestFailure). */
+  readonly reason = "sms_daily_limit" satisfies FoundationErrorReason;
+  constructor() {
+    super(503);
+  }
+}
 const utcTime = z.iso.datetime();
 /** The cooldown end the database gives as the refusal's hint, when valid. */
 function changeAllowedFrom(hint: unknown) {
@@ -95,7 +108,8 @@ function failed(error: { code?: string }) {
  * Before any challenge is stored, SQL refuses (PT409, with a listed reason) a
  * number already verified on this account, a change of number that is not
  * allowed yet, and a number another account holds, so no SMS is paid for a
- * code that could not be used; finalization keeps every check. */
+ * code that could not be used; finalization keeps every check. Over the
+ * site-wide daily limit on codes SQL stores nothing either (PT429). */
 export async function issueFoundationPhoneChallenge(
   api: FoundationServiceApi,
   owner: string,
@@ -132,6 +146,8 @@ export async function issueFoundationPhoneChallenge(
         refusal,
         refusal === "phone_change_cooldown" ? changeAllowedFrom(error.hint) : undefined
       );
+    if (error.code === "PT429" && hasDatabaseReason(error, "sms_daily_limit"))
+      throw new FoundationSmsDailyLimitError();
     failed(error);
   }
   const created = foundationPhoneChallengeSchema.safeParse(result.data);
