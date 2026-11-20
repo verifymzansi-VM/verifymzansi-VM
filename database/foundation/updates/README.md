@@ -159,6 +159,7 @@ once a day; 20 requests at the same moment, waiting on the day's row together,
 store exactly the 5 codes the limit leaves; a new day starts at zero and keeps
 the previous day's count; the setting's fallback and bounds; and no API role can
 read the counts or run the helper.
+
 ## Sign-up mode in the database, and member invitations, 20 November 2026
 
 `20261120040242_signup_mode_member_invitations.sql` was applied on 20 November
