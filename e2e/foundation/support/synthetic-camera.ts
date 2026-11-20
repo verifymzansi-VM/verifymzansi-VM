@@ -23,6 +23,10 @@ export async function withSyntheticCamera(
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
+        // Kept in the page (off screen): WebKit only sends frames from a
+        // canvas stream whose canvas is attached to the document.
+        canvas.style.cssText = "position:fixed;left:-10000px;top:0;width:4px;height:4px;";
+        document.body.appendChild(canvas);
         const ctx = canvas.getContext("2d");
         const paint = () => {
           const image = ctx.createImageData(width, height);
@@ -37,9 +41,12 @@ export async function withSyntheticCamera(
         };
         paint();
         const stream = canvas.captureStream(5);
-        const timer = setInterval(paint, 200);
+        const timer = setInterval(paint, 100);
         for (const track of stream.getTracks())
-          track.addEventListener("ended", () => clearInterval(timer));
+          track.addEventListener("ended", () => {
+            clearInterval(timer);
+            canvas.remove();
+          });
         return stream;
       };
       Object.defineProperty(navigator, "mediaDevices", {
