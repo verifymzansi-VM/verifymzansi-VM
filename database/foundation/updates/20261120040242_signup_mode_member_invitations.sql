@@ -91,8 +91,10 @@
 --    internal.claim_owner_admin_invitation (checked against its reviewed
 --    body): unchanged except that an administrator invitation already signed
 --    up by one account is claimed only by that account when it enrols an
---    authenticator app (an invitation from before this update, with no
---    sign-up recorded, is claimed as before).
+--    authenticator app, never by a later account on the same address after
+--    that account is erased (an invitation from before this update, with no
+--    sign-up recorded, is claimed as before). Invitations already claimed
+--    are filled from their claim.
 -- 10. Replaces internal.acceptance_signup_guard (checked against its reviewed
 --    body). Same refusal text "Registration is not open yet" (the website
 --    matches it) and same invoker rights. It admits an address with an
@@ -174,7 +176,7 @@ begin
         'internal.run_retention(integer) 06a3fbfcb5b2d53e2487719174a62cc5',
         'internal.run_retention(integer) 95dda89b3f540a74110a0ca1eba02e66',
         'internal.claim_owner_admin_invitation() a2313942c8eb9e5cb0f9be64f64ca025',
-        'internal.claim_owner_admin_invitation() 7bb53811b07c4cde91df59201627a7b7',
+        'internal.claim_owner_admin_invitation() 9b58d1999a5babe02f2ab051cb79bcce',
         'internal.erase_closed_account(uuid,text) c1352cec14d02d401b58e466c387d747',
         'internal.erase_closed_account(uuid,text) 1e8253098e47fd6773f8b9298cc9f722') then
       raise exception 'signup mode precondition: % is not a reviewed body', shape
@@ -625,7 +627,10 @@ begin
 end$$;
 create index if not exists owner_admin_invitations_signed_up_by_idx
   on private.owner_admin_invitations using btree (signed_up_by) where signed_up_by is not null;
--- An invitation whose address already has an account has been used.
+-- An invitation already claimed was signed up by the account that claimed
+-- it; one whose address already has an account has been used too.
+update private.owner_admin_invitations i set signed_up_by = i.claimed_by, signed_up_at = i.claimed_at
+  where i.signed_up_at is null and i.claimed_at is not null;
 update private.owner_admin_invitations i set signed_up_by = u.id, signed_up_at = u.created_at
   from auth.users u
   where i.signed_up_at is null and u.email = i.email and u.created_at is not null;
@@ -667,10 +672,11 @@ begin
     where u.id=new.user_id and u.email_confirmed_at is not null and u.is_anonymous is false;
   if not found then return new; end if;
   -- An invitation already signed up by an account is claimed only by that
-  -- account (20261120040242_signup_mode_member_invitations.sql).
+  -- account, never by a later one after it is erased
+  -- (20261120040242_signup_mode_member_invitations.sql).
   select * into invitation from private.owner_admin_invitations i
     where i.email=account_email and i.claimed_at is null and i.revoked_at is null
-      and (i.signed_up_by is null or i.signed_up_by=new.user_id) for update;
+      and (i.signed_up_at is null or i.signed_up_by=new.user_id) for update;
   if not found then return new; end if;
   -- Serialise with the first-administrator bootstrap and ordinary role grants.
   lock table private.staff_roles in share row exclusive mode;

@@ -64,7 +64,7 @@ bodies as (
     ('internal.run_retention(integer)', '06a3fbfcb5b2d53e2487719174a62cc5',
       '95dda89b3f540a74110a0ca1eba02e66'),
     ('internal.claim_owner_admin_invitation()', 'a2313942c8eb9e5cb0f9be64f64ca025',
-      '7bb53811b07c4cde91df59201627a7b7'),
+      '9b58d1999a5babe02f2ab051cb79bcce'),
     ('internal.erase_closed_account(uuid,text)', 'c1352cec14d02d401b58e466c387d747',
       '1e8253098e47fd6773f8b9298cc9f722')
   ) v(sig, reviewed, updated)
@@ -97,7 +97,7 @@ select 'summary' as kind,
                 'select count(*) as n from private.signup_mode_events', false, true, '')))[1]::text
            || '; member invitations open: '
            || (xpath('/row/n/text()', query_to_xml(
-                'select count(*) as n from private.member_invitations where revoked_at is null and expires_at > statement_timestamp()',
+                'select count(*) as n from private.member_invitations where revoked_at is null and claimed_at is null and expires_at > statement_timestamp()',
                 false, true, '')))[1]::text
            || '; blocked domains: '
            || (xpath('/row/n/text()', query_to_xml(

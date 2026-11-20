@@ -55,6 +55,10 @@ beforeEach(() => {
   }))
     vi.stubEnv(key, value);
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
+  vi.mocked(getClientRateLimitIdentity).mockReturnValue({
+    key: "registration-client",
+    source: "unknown",
+  });
   vi.mocked(isPwnedPassword).mockResolvedValue(false);
   vi.mocked(readFoundationSignupMode).mockResolvedValue(null);
   fetcher.mockImplementation(async () =>
@@ -81,11 +85,11 @@ it("uses native CAPTCHA and PKCE in one signup call, without a legacy profile wr
     inviteOnly: false,
     message: expect.any(String),
   });
-  expect(checkRateLimit).toHaveBeenCalledExactlyOnceWith({
-    key: "registration-client",
-    action: "auth:register",
-    degradedMode: "block",
-  });
+  // Checked before Auth is asked, then spent once Auth has handled it.
+  expect(vi.mocked(checkRateLimit).mock.calls.map(([options]) => options)).toEqual([
+    { key: "registration-client", action: "auth:register", degradedMode: "block", readOnly: true },
+    { key: "registration-client", action: "auth:register", degradedMode: "block" },
+  ]);
   expect(isPwnedPassword).toHaveBeenCalledExactlyOnceWith(submission.password);
   expect(fetcher).toHaveBeenCalledTimes(1);
   const [url, options] = fetcher.mock.calls[0];
@@ -308,15 +312,59 @@ it("counts an IPv6 sign-up per /64 and, more loosely, per /48", async () => {
     ip: "2001:db8:1:2::9",
   });
   expect((await POST(registerRequest())).status).toBe(200);
+  const address = { key: "v6:2001:db8:1:2::/64", action: "auth:register", degradedMode: "block" };
+  const network = {
+    key: "v6:2001:db8:1::/48",
+    action: "auth:register:network",
+    degradedMode: "block",
+  };
   expect(vi.mocked(checkRateLimit).mock.calls.map(([options]) => options)).toEqual([
-    { key: "v6:2001:db8:1:2::/64", action: "auth:register", degradedMode: "block" },
-    { key: "v6:2001:db8:1::/48", action: "auth:register:network", degradedMode: "block" },
+    { ...address, readOnly: true },
+    { ...network, readOnly: true },
+    address,
+    network,
   ]);
-  // The looser network bucket refuses too.
+  // The looser network bucket refuses too, before Auth is asked.
+  vi.mocked(checkRateLimit).mockClear();
+  fetcher.mockClear();
   vi.mocked(checkRateLimit)
     .mockResolvedValueOnce({ limited: false })
     .mockResolvedValueOnce({ limited: true, retryAfter: 120 });
   const limited = await POST(registerRequest());
   expect(limited.status).toBe(429);
   expect(limited.headers.get("Retry-After")).toBe("120");
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(vi.mocked(checkRateLimit).mock.calls.every(([options]) => options.readOnly)).toBe(true);
+});
+it("never spends a limit on a made-up CAPTCHA token Auth refuses", async () => {
+  fetcher.mockImplementation(async () =>
+    Response.json(
+      { code: "captcha_failed", msg: "captcha protection: request disallowed" },
+      { status: 400, headers: { "x-supabase-api-version": "2024-01-01" } }
+    )
+  );
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const response = await POST(registerRequest({ ...submission, turnstileToken: "x" }));
+    expect(response.status).toBe(400);
+  }
+  expect(fetcher).toHaveBeenCalledTimes(12);
+  // Only checks: nothing was spent.
+  expect(vi.mocked(checkRateLimit).mock.calls.every(([options]) => options.readOnly)).toBe(true);
+});
+it("spends a limit on a real attempt Auth refuses for another reason", async () => {
+  fetcher.mockImplementation(async () =>
+    Response.json(
+      { code: "weak_password", msg: "weak" },
+      { status: 422, headers: { "x-supabase-api-version": "2024-01-01" } }
+    )
+  );
+  expect((await POST(registerRequest())).status).toBe(400);
+  expect(
+    vi.mocked(checkRateLimit).mock.calls.map(([options]) => options.readOnly ?? false)
+  ).toEqual([true, false]);
+});
+it("fails closed when the limiter cannot be checked, without asking Auth", async () => {
+  vi.mocked(checkRateLimit).mockResolvedValue({ limited: true, degraded: true });
+  expect((await POST(registerRequest())).status).toBe(503);
+  expect(fetcher).not.toHaveBeenCalled();
 });

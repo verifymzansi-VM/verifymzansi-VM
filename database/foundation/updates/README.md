@@ -86,9 +86,13 @@ preflight then reports the database ahead, and a forward fix is preferred.
 register). **Order: apply-first** (the default): the website release from the
 same pull request names `api.get_signup_mode` and `api.check_email_domain`, and
 the deploy preflight probes every command in `../runtime-api-manifest.json`, so
-a deploy before the update is applied stops there. It refuses (55000) unless its
-21 objects are all absent or all present and the four functions it replaces
-(`internal.acceptance_signup_guard`, `internal.run_retention`,
+a deploy before the update is applied stops there. The sign-up limiter's new
+action `auth:register:network` needs no step of its own: the rate limiter Worker
+(`workers/rate-limiter.ts`) is deployed by the same production Deploy workflow,
+right after the website; until it is, the old Worker gives that action its
+default limit (30 a minute) and answers normally. The update refuses (55000)
+unless its 21 objects are all absent or all present and the four functions it
+replaces (`internal.acceptance_signup_guard`, `internal.run_retention`,
 `internal.claim_owner_admin_invitation`, `internal.erase_closed_account`) have
 their reviewed bodies (or this update's).
 
@@ -144,10 +148,11 @@ their reviewed bodies (or this update's).
   invitation used (`claimed_by`, `claimed_at`) and the matching administrator
   invitation signed up (new columns `signed_up_by`, `signed_up_at` on
   `private.owner_admin_invitations`, filled when the update is applied for
-  invitations whose address already has an account). The hook admits neither
-  again, so changing the account's email or erasing it does not let the same
-  address sign up a second time. An administrator invitation still becomes an
-  administrator role when the account enrols an authenticator app
+  invitations already claimed, from their claim, and for invitations whose
+  address already has an account). The hook admits neither again, so changing
+  the account's email or erasing it does not let the same address sign up a
+  second time. An administrator invitation still becomes an administrator role
+  when the account enrols an authenticator app
   (`internal.claim_owner_admin_invitation`, unchanged except that an invitation
   already signed up is claimed only by the account that signed up with it).
 - **The sign-up hook** (`internal.acceptance_signup_guard`, same invoker rights

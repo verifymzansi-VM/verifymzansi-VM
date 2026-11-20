@@ -108,6 +108,12 @@ try {
       ('existing-admin@example.invalid');`);
   // An administrator invitation already used to sign up before the update.
   const existingAdmin = account("existing-admin@example.invalid");
+  // An administrator invitation already claimed, whose account later moved to
+  // another address.
+  const claimedAdmin = account("claimed-admin@example.invalid");
+  q(`insert into private.owner_admin_invitations(email,claimed_by,claimed_at)
+      values ('claimed-admin@example.invalid','${claimedAdmin.id}',now());
+    update auth.users set email='claimed-moved@example.invalid' where id='${claimedAdmin.id}';`);
 
   // ------------------------------------------------------------ before
   await check("before the update: preflight reads 'not applied' and is read only", () => {
@@ -172,8 +178,17 @@ try {
     );
     assert.equal(
       q(`select count(*) from private.owner_admin_invitations where signed_up_at is not null;`),
-      "1"
+      "2"
     );
+    // A claimed invitation is filled from its claim, so its address admits no
+    // further sign-up after the account moved away.
+    assert.equal(
+      q(
+        `select signed_up_by from private.owner_admin_invitations where email='claimed-admin@example.invalid';`
+      ),
+      claimedAdmin.id
+    );
+    assert.equal(hook("claimed-admin@example.invalid").error.http_code, 403);
   });
 
   // ------------------------------------------------------------- hook
@@ -588,7 +603,7 @@ try {
         "admin"
       );
       // Neither command ever touches the administrator list.
-      assert.equal(q("select count(*) from private.owner_admin_invitations;"), "2");
+      assert.equal(q("select count(*) from private.owner_admin_invitations;"), "3");
     }
   );
 
@@ -673,6 +688,39 @@ try {
         ),
         "admin"
       );
+    }
+  );
+
+  await check(
+    "an erased account's administrator invitation is never claimed by a later account",
+    () => {
+      q(
+        `insert into private.owner_admin_invitations(email) values ('admin-erased@example.invalid');`
+      );
+      const first = account("admin-erased@example.invalid");
+      json(
+        as(
+          {
+            ...claims(first),
+            amr: [{ method: "password", timestamp: Math.floor(Date.now() / 1000) - 60 }],
+          },
+          "select api.close_my_account();"
+        )
+      );
+      q(`select vmtest.erasure_due('${first.id}');`);
+      assert.ok(json(`select internal.erase_closed_account('${first.id}','sweep');`).erased_at);
+      // The Auth user is gone (its sign-up link is cleared), the sign-up stays.
+      assert.equal(
+        q(`select (signed_up_by is null and signed_up_at is not null)::text from private.owner_admin_invitations
+        where email='admin-erased@example.invalid';`),
+        "true"
+      );
+      assert.deepEqual(hook("admin-erased@example.invalid"), CLOSED);
+      const later = account("admin-erased@example.invalid");
+      q(
+        `insert into auth.mfa_factors(user_id,factor_type,status) values('${later.id}','totp','verified');`
+      );
+      assert.equal(q(`select count(*) from private.staff_roles where user_id='${later.id}';`), "0");
     }
   );
 

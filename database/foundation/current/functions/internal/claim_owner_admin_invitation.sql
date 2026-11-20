@@ -15,10 +15,11 @@ begin
     where u.id=new.user_id and u.email_confirmed_at is not null and u.is_anonymous is false;
   if not found then return new; end if;
   -- An invitation already signed up by an account is claimed only by that
-  -- account (20261120040242_signup_mode_member_invitations.sql).
+  -- account, never by a later one after it is erased
+  -- (20261120040242_signup_mode_member_invitations.sql).
   select * into invitation from private.owner_admin_invitations i
     where i.email=account_email and i.claimed_at is null and i.revoked_at is null
-      and (i.signed_up_by is null or i.signed_up_by=new.user_id) for update;
+      and (i.signed_up_at is null or i.signed_up_by=new.user_id) for update;
   if not found then return new; end if;
   -- Serialise with the first-administrator bootstrap and ordinary role grants.
   lock table private.staff_roles in share row exclusive mode;

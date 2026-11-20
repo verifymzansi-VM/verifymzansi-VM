@@ -27,5 +27,7 @@ export function POST(request: NextRequest) {
       error instanceof FoundationRegistrationError
         ? { status: error.status, error: error.message }
         : null,
+    countsAsAttempt: (error) =>
+      error instanceof FoundationRegistrationError && error.countsAsAttempt,
   });
 }

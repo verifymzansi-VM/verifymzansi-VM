@@ -55,5 +55,7 @@ export function handleFoundationRegistration(request: NextRequest, legacyForm = 
       error instanceof FoundationRegistrationError
         ? { status: error.status, error: error.message }
         : null,
+    countsAsAttempt: (error) =>
+      error instanceof FoundationRegistrationError && error.countsAsAttempt,
   });
 }

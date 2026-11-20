@@ -15,7 +15,10 @@ export class FoundationRegistrationError extends Error {
   override name = "FoundationRegistrationError";
   constructor(
     readonly status: 400 | 429 | 503,
-    breached = false
+    breached = false,
+    /** Whether Auth was asked and did not refuse the CAPTCHA, so the attempt
+     * counts against the sign-up limits (a made-up token never does). */
+    readonly countsAsAttempt = false
   ) {
     super(
       breached
@@ -44,6 +47,7 @@ export async function registerFoundationAccount(
 ): Promise<void> {
   const parsed = foundationRegistrationSchema.safeParse(input);
   if (!parsed.success) throw new FoundationRegistrationError(400);
+  let askedAuth = false;
   try {
     const config = parseFoundationConnection(connection);
     let breached: boolean;
@@ -66,6 +70,7 @@ export async function registerFoundationAccount(
       fetcher
     );
     const { email, password, displayName, turnstileToken } = parsed.data;
+    askedAuth = true;
     const { data, error } = await attempt.auth.signUp({
       email,
       password,
@@ -78,7 +83,7 @@ export async function registerFoundationAccount(
         captchaToken: turnstileToken,
       },
     });
-    if (attempt.cookieAccessFailed()) throw new FoundationRegistrationError(503);
+    if (attempt.cookieAccessFailed()) throw new FoundationRegistrationError(503, false, true);
     if (error) {
       // An existing address, or one the sign-up guard turns away while
       // registration is by invitation only (403), gets the same reply as a
@@ -99,14 +104,16 @@ export async function registerFoundationAccount(
           ? 429
           : error.code === "signup_disabled" || ![400, 401, 403, 422].includes(error.status ?? 0)
             ? 503
-            : 400
+            : 400,
+        false,
+        error.code !== "captcha_failed"
       );
     }
     // Confirmed-email signup is mandatory. Discard an unexpected auto-login.
     if (data.session || !z.uuid().safeParse(data.user?.id).success)
-      throw new FoundationRegistrationError(503);
+      throw new FoundationRegistrationError(503, false, true);
   } catch (error) {
     if (error instanceof FoundationRegistrationError) throw error;
-    throw new FoundationRegistrationError(503);
+    throw new FoundationRegistrationError(503, false, askedAuth);
   }
 }
