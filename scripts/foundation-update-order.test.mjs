@@ -31,6 +31,11 @@ const readme = readFileSync(path.join(repo, UPDATES_README), "utf8");
 const fingerprint = readJsonFile(repo, FINGERPRINT);
 const files = listUpdateFiles(repo);
 const [baseline, runtime] = API_MANIFESTS.map((file) => readJsonFile(repo, file));
+// What each reviewed anonymous read answers the probe's synthetic arguments.
+const publicProbeAnswer = (name) =>
+  ({ get_payment_limits: { online_max_cents: 130000 }, get_post_engagement: { items: [] } })[
+    name
+  ] ?? [];
 
 const fn = (name, args = [], extra = {}) => ({
   name,
@@ -381,12 +386,12 @@ test("the live comparison sends only the publishable key and reports a missing c
       const name = url.split("/rpc/")[1];
       const fnSpec = runtime.functions.find((item) => item.name === name);
       if (name === target.name) return Response.json({ code: "PGRST202" }, { status: 404 });
-      if (fnSpec.execute.anon)
-        return Response.json(name === "get_payment_limits" ? { online_max_cents: 130000 } : []);
+      if (fnSpec.execute.anon) return Response.json(publicProbeAnswer(name));
       return Response.json({ code: "42501" }, { status: 401 });
     },
   });
   assert.equal(requests.length, runtime.functions.length);
+  assert.deepEqual(drift.unexpected, []);
   for (const init of requests) {
     assert.equal(init.headers.apikey, "sb_publishable_synthetic");
     assert.equal(init.headers.Authorization, undefined);
@@ -813,7 +818,7 @@ test("staging comparison: unreachable or paused is inconclusive, a missing comma
       const name = url.split("/rpc/")[1];
       if (name === missing) return Response.json({ code: "PGRST202" }, { status: 404 });
       return runtime.functions.find((item) => item.name === name).execute.anon
-        ? Response.json(name === "get_payment_limits" ? { online_max_cents: 130000 } : [])
+        ? Response.json(publicProbeAnswer(name))
         : Response.json({ code: "42501" }, { status: 401 });
     };
     const offline = async () => {
