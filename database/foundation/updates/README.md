@@ -82,12 +82,13 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Sign-up mode in the database, and member invitations, 20 November 2026
 
-`20261120040242_signup_mode_member_invitations.sql` is pending (see the applied
-register). **Order: apply-first** (the default): the website release from the
-same pull request names `api.get_signup_mode` and `api.check_email_domain`, and
-the deploy preflight probes every command in `../runtime-api-manifest.json`, so
-a deploy before the update is applied stops there. The sign-up limiter's new
-action `auth:register:network` needs no step of its own: the rate limiter Worker
+`20261120040242_signup_mode_member_invitations.sql` was applied on 20 November
+2026 at 07:15 UTC (see the applied register). **Order: apply-first** (the
+default): the website release from the same pull request names
+`api.get_signup_mode` and `api.check_email_domain`, and the deploy preflight
+probes every command in `../runtime-api-manifest.json`, so a deploy before the
+update is applied stops there. The sign-up limiter's new action
+`auth:register:network` needs no step of its own: the rate limiter Worker
 (`workers/rate-limiter.ts`) is deployed by the same production Deploy workflow,
 right after the website; until it is, the old Worker gives that action its
 default limit (30 a minute) and answers normally. The update refuses (55000)
@@ -5723,6 +5724,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   "post views and likes: already applied; likes: 0; view days: 0; views: 0";
   production fingerprint after it (fingerprint.sql at a71f9a5c) matched the full
   replay (except the known schema grant difference)
-- `20261120040242_signup_mode_member_invitations.sql`: pending
+- `20261120040242_signup_mode_member_invitations.sql`: applied 2026-11-20 07:15
+  UTC; owner-approved, apply-first, Supabase SQL editor (browser, the owner's
+  signed-in session), preflight + fingerprint checked; update sha256 starting
+  98491eb2 (pull request #304); preflight (sha256 starting a53666a8) after
+  "signup mode and member invitations: already applied; mode: invite_only; mode
+  changes recorded: 0; member invitations open: 0; blocked domains: 15;
+  administrator invitations not yet used: 0"; production fingerprint after it
+  (fingerprint.sql at cd725fb9) matched the full replay (except the known schema
+  grant difference)
 
 <!-- applied-register:end -->
