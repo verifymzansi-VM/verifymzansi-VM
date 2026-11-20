@@ -162,17 +162,31 @@ export function PackageAddCheckout({
   const canAskInvoice =
     !blocked && quote.kind === "invoice" && invoiceConsent && state === "idle" && !requested;
   const addHref = `/billing/package/add?slots=${slots ?? 1}`;
-  const payIcon =
-    state === "idle" ? (
-      <LockKeyhole aria-hidden="true" className="h-4 w-4" />
-    ) : (
-      <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
-    );
-  const payLabel = {
-    idle: totalCents === null ? "Pay securely" : `Pay ${formatPlanPrice(totalCents)} securely`,
-    submitting: "Opening secure checkout…",
-    redirecting: "Redirecting to Ozow…",
-  }[state];
+  const busyIcon = <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />;
+  // The one main button: ask for an invoice, or pay online.
+  const mainAction =
+    !offer || blocked || (quote.kind === "invoice" && requested)
+      ? null
+      : quote.kind === "invoice"
+        ? {
+            disabled: !canAskInvoice,
+            icon:
+              state === "idle" ? <ReceiptText aria-hidden="true" className="h-4 w-4" /> : busyIcon,
+            label: "Ask for an invoice",
+          }
+        : {
+            disabled: !canPay,
+            icon:
+              state === "idle" ? <LockKeyhole aria-hidden="true" className="h-4 w-4" /> : busyIcon,
+            label: {
+              idle:
+                totalCents === null
+                  ? "Pay securely"
+                  : `Pay ${formatPlanPrice(totalCents)} securely`,
+              submitting: "Opening secure checkout…",
+              redirecting: "Redirecting to Ozow…",
+            }[state],
+          };
 
   async function pay() {
     if (!canPay || pending.current || !offer || totalCents === null || slots === null) return;
@@ -518,32 +532,16 @@ export function PackageAddCheckout({
             />
           ) : null}
           <div className="flex flex-col gap-1 sm:gap-2">
-            {offer && !blocked && quote.kind === "invoice" && !requested ? (
+            {mainAction ? (
               <Button
                 variant="trust-verified"
                 size="lg"
                 className="h-12 rounded-full"
-                disabled={!canAskInvoice}
-                onClick={askForInvoice}
+                disabled={mainAction.disabled}
+                onClick={quote.kind === "invoice" ? askForInvoice : pay}
               >
-                {state === "idle" ? (
-                  <ReceiptText aria-hidden="true" className="h-4 w-4" />
-                ) : (
-                  <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
-                )}
-                Ask for an invoice
-              </Button>
-            ) : null}
-            {offer && !blocked && quote.kind !== "invoice" ? (
-              <Button
-                variant="trust-verified"
-                size="lg"
-                className="h-12 rounded-full"
-                disabled={!canPay}
-                onClick={pay}
-              >
-                {payIcon}
-                {payLabel}
+                {mainAction.icon}
+                {mainAction.label}
               </Button>
             ) : null}
             <Button asChild variant="ghost" className="h-11 rounded-full">
