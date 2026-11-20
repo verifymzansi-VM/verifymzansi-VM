@@ -7,7 +7,7 @@ import {
   type GoogleMember,
 } from "./support/google-member";
 import { endedWithTest } from "./support/route-teardown";
-import { clickWhileToastShows, holdToast } from "./support/toasts";
+import { clickWhileToastShows, holdToast, switchToShortPhone } from "./support/toasts";
 import {
   browserSessionCookies,
   latestMailTo,
@@ -1117,6 +1117,9 @@ test.describe("account recovery and self-service", () => {
         .toBe(before + 1);
       return guarded.reply(CHANGE_PASSWORD_PATH).at(-1)!;
     };
+    // On a short phone screen in every project: the toast must stay clear of
+    // 'Update password'.
+    const restoreScreen = await switchToShortPhone(page);
     await openProfileTab(page, "Security");
     await page.getByRole("button", { name: "Change", exact: true }).click();
     // A wrong current password is refused, and its check opened no session.
@@ -1145,6 +1148,7 @@ test.describe("account recovery and self-service", () => {
       body: { ok: true },
     });
     await expect(toast(page, "Password changed")).toBeVisible();
+    await restoreScreen();
     expect(authEvents()).toBe(`${logins + 1}/${logouts + 1}`);
     expect(sessions()).toBe("1");
     await page.goto("/dashboard/profile");

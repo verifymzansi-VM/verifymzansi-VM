@@ -10,7 +10,7 @@ import sharp from "sharp";
 import { E2E_FIXTURE, LOCAL_OPS_JOBS_SECRET } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { isMultipartForm } from "./support/multipart";
 import { endedWithTest } from "./support/route-teardown";
-import { clickWhileToastShows, holdToast } from "./support/toasts";
+import { clickWhileToastShows, holdToast, switchToShortPhone } from "./support/toasts";
 import {
   browserSessionCookies,
   caughtMailFor,
@@ -383,6 +383,8 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
 
     // Phone code: sent by the website's e2e SMS branch to the copy's sink.
     await expect(page.getByRole("heading", { name: "Verify your phone number" })).toBeVisible();
+    // On a short phone screen in every project: the toast must stay clear of Verify.
+    const restoreScreen = await switchToShortPhone(page);
     const smsBefore = readTestSms().length;
     await page.getByLabel("SA mobile number *").fill(member.phone.replace("+27", "0"));
     await page.getByRole("button", { name: "Send code" }).click();
@@ -404,6 +406,7 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     // On a short phone the toast stays clear of the button.
     await clickWhileToastShows(codeSent, page.getByRole("button", { name: "Verify", exact: true }));
     await expect(page.getByText("This phone number is verified.")).toBeVisible();
+    await restoreScreen();
     await expect
       .poll(() => reply("/api/otp/verify"))
       .toEqual([expect.objectContaining({ status: 200 })]);
