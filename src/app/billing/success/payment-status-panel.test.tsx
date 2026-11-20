@@ -219,8 +219,17 @@ describe("PaymentStatusPanel", () => {
   });
 
   it("never reloads for a payment that is not a package", async () => {
+    vi.useFakeTimers();
     render(<PaymentStatusPanel initialStatus="pending" paymentId="pay-slot" />);
-    await waitFor(() => expect(screen.getByText("Payment confirmed")).toBeInTheDocument());
+    // Let the status request, the confirmed render and every effect after it
+    // settle, plus a full poll interval, before checking that nothing reloaded.
+    // Asserting straight after the confirmation renders would pass before a
+    // reload effect had the chance to run.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    });
+    expect(screen.getByText("Payment confirmed")).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(refresh).not.toHaveBeenCalled();
   });
 });
