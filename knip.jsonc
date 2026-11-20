@@ -12,6 +12,8 @@
     "remotion/*index.{ts,tsx}",
     // Run inside the pinned browser image by scripts/foundation-visual.mjs.
     "playwright.visual.config.ts",
+    // Named by stryker.config.mjs (pnpm test:mutation).
+    "vitest.mutation.config.ts",
     // Build command in wrangler.toml.
     "scripts/ensure-opennext-build.mjs",
     // Worker fixtures started by path by the check-*-runtime scripts.

@@ -92,6 +92,8 @@ docs/*
 !docs/admin-access-inventory.md
 !docs/runbooks/
 !docs/runbooks/admin-provisioning.md
+!docs/testing/
+!docs/testing/mutation-trial.md
 # Publish implementation tools and prototypes; keep detailed audits private.
 !docs/backend-foundation/
 docs/backend-foundation/*

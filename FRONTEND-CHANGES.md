@@ -130,6 +130,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 64. Toasts clear of form buttons on phones | approved by owner 2026-11-20 (with the group 64 part of 1 row elsewhere) | Phones (narrower than 768 px): a toast shows at the top of the screen instead of near the bottom, where it covered the button tapped next ('Verify', 'Update password'); while it shows (about 5 seconds) it covers the header (logo, search, menu). Tablets and desktops: same place and look (bottom right). Every screen size: a tap on the empty space around a toast now reaches the page |
 | 65. Member invitations (staff) | approved by owner 2026-11-20 (design and pictures; with the group 65 part of 1 row in group 57) | Admins only: a 'Member invitations' page under Platform in the staff menu. An admin types an email and presses Invite; the page says nobody is emailed and gives the sign-up link to copy and send. Each invitation shows Waiting to join, Joined, Withdrawn or Expired with one date; waiting ones can be withdrawn after a confirmation. An address that already has an account, today's limit of 200 and non-admins are refused with a plain message. It never gives staff access |
 | 66. One main button per screen (button hierarchy) | approved by owner 2026-11-20 (with the group 66 part of rows in other groups) | Every page: one filled main button per screen. Header 'Register' and '+ Post' light-green tinted; Pricing's three terms equal and outlined, no footer band; gold main buttons on dark-green bands (footer band, Advertise, the two verification help heroes, Trust & Safety); black buttons outlined; section pages' title buttons outlined; post page 'WhatsApp' outlined; dashboard, checkout and My slots: the ID review button is the main one until it is done; Terms and Privacy e-mail addresses are text links; Safety Centre's second 'Report a problem' a text link. Follow-ups: Home's About 'Post for free' outlined (the footer band's gold one is Home's main button); Safety Centre hero 'Report a problem' gold; My posts' 'New post' on every tab, filled when there are posts and outlined only beside the empty list's 'Create your first post'. No black (owner: no black, light tourism colour): selected chips and tabs and the former black buttons are light teal |
+| 67. Daily limit on SMS codes: message (no file rows: server message only) | approved by owner 2026-11-20 | 'Verify your phone number' and 'Complete your profile': when the site's daily limit on SMS codes is reached, 'Send code' shows 'We can't send codes right now. Please try again later.' under the number instead of sending a code (until midnight, South African time). Nothing changes otherwise |
 
 Questions for the owner:
 
@@ -2796,6 +2797,26 @@ tiles and the flag stripe are not buttons or chips and stay as they are.
 | `src/components/admin/moderation/moderation-queue-client.tsx` | visual | Group 66: keeps its look after the Button merge. | Nothing: staff only, 'Approve' keeps its green in dark mode. | keep | approved by owner 2026-11-20 | 2026-11-20 | 1b726e95d5fc |
 | `src/components/ui/selected-state.ts` | helper | Group 66 (owner: no black, light tourism colour): one shared light-teal style for a selected chip, tab or small action (teal 800 on teal 50, about 7.3:1; teal 200 on the dark page above 12:1). | Nothing by itself (see the files that use it). | keep | approved by owner 2026-11-20 | 2026-11-20 | 577f523b8ae7 |
 | `src/components/dashboard/area-filter.tsx` | visual | Group 66 (owner: no black, light tourism colour): the selected 'All areas' chip was black. | My posts: the selected 'All areas' chip is light teal with dark teal words and a thin teal edge instead of black with white words; the other areas' selected colours are unchanged. | keep | approved by owner 2026-11-20 | 2026-11-20 | 9b7b25027b14 |
+
+### 67. Daily limit on SMS codes: message
+
+Server message only: no file in the checked scope changes, so this group has no
+file rows. Launch checklist item 12 (launch assurance LA-A15) adds a limit on
+SMS verification codes for the whole site per South African day (database update
+`20261120074411_sms_daily_limit.sql`, 500 codes a day, approved by the owner). When it is reached, asking for a code on 'Verify your phone
+number' (`/verification`) or 'Complete your profile' sends no SMS and shows,
+where the send errors already appear under the number:
+
+> We can't send codes right now. Please try again later.
+
+The words are new (owner rule 4). The pages show the server's message as they
+already do for other send errors; no page file changes. A code already sent
+before the limit still works. Text outside the checked scope: the message in
+`src/lib/utils/phone.ts` (`PHONE_CODES_UNAVAILABLE`), returned by
+`src/app/api/foundation/phone/_lib/handle.ts` with status 503.
+
+Decision: approved by owner 2026-11-20 (the limit of 500 and the wording as
+written).
 
 <!-- frontend-ledger:end -->
 
