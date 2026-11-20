@@ -86,7 +86,10 @@ function knownToken(member: VerifiedMember) {
 
 test.describe("continue on your phone", () => {
   // The computer side needs a desktop browser (phones are not offered the link).
-  test.skip(({ browserName, isMobile }) => browserName !== "chromium" || Boolean(isMobile));
+  test.skip(
+    ({ browserName, isMobile }) => browserName !== "chromium" || Boolean(isMobile),
+    "Continue on your phone starts on a desktop computer, checked once in chromium."
+  );
 
   test("the phone, signed in as the same member, sends both photos", async ({ browser }) => {
     test.setTimeout(180_000);
