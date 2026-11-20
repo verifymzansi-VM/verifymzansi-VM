@@ -5313,6 +5313,111 @@
         "service_role": false
       },
       "authority": "Any signed-in account: whether an email address may be used while sign-up is open (false only in open mode for a malformed, reserved, numeric or blocked domain, the same rule as the sign-up hook); always true while sign-up is by invitation. Used by the website's email change; says nothing about any account."
+    },
+    {
+      "name": "void_ended_package_add_invoices",
+      "updates": ["updates/20261120045404_package_add_slots.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only housekeeping sweep (the website's minute operations job): voids at most p_limit unpaid added-slots invoices whose package no longer runs, oldest first, with a fixed reason and no staff member, closing their unsent Pay now attempts; an invoice with a payment still open at Ozow or a bank transfer waiting for confirmation is left for staff. Returns how many were voided and how many could not be changed. No account data."
+    },
+    {
+      "name": "get_my_package_add_offer",
+      "updates": ["updates/20261120045404_package_add_slots.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound read of what the signed-in account could add to its own running Multi-listing package: whether packages are on sale, its own ID review, the online payment limit, the package's slots, end and whole days left, the price of one added slot for them, the most slots that can still be added, whether adding is open online (7 or more days left) and by invoice (10 or more), whether a package invoice is unpaid, its own latest added-slots invoice request and the slots it added so far; no other account's data."
+    },
+    {
+      "name": "start_package_add_checkout",
+      "updates": ["updates/20261120045404_package_add_slots.sql"],
+      "arguments": [
+        {
+          "name": "p_package_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_slots",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_expected_total_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_consent",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound quote for slots added to the account's own running Multi-listing package (the package named must be it, PT409 package_ended): only while the owner's sales switch is on; an accepted ID review; 7 or more whole days left (PT409 package_add_too_late); at most 250 slots in all, and online at most 100 in all and internal.online_payment_max_cents() (PT413 package_invoice_required); priced in SQL for the whole days left, the server total equal to the total shown (PT428); the 'my added slots start now' consent recorded in the payment; no unpaid package invoice. One payment with one line holding every added slot; the same order within 30 minutes continued, another unsent order replaced, one open at Ozow returned."
+    },
+    {
+      "name": "request_package_add_invoice",
+      "updates": ["updates/20261120045404_package_add_slots.sql"],
+      "arguments": [
+        {
+          "name": "p_package_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_slots",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_expected_total_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_consent",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_request_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Signed-in member with a live session and a current accepted ID review, only while Multi-listing packages are on sale: asks staff for an invoice for slots added to the account's own running package (PT409 package_ended otherwise), only while 10 or more whole days are left (PT409 package_add_invoice_too_late), at most 250 slots in all, at the price of that moment for the days left (PT428 when the total shown differs), which the invoice keeps; the member confirms the invoice cooling-off wording. Refused while a package invoice is unpaid or staff prepare an earlier request. One open request per account; the same request id returns the first answer; another order replaces a request no staff member has prepared."
     }
   ]
 }

@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION internal.record_staff_invoice_transfer(p_invoice_numb
 AS $function$
 declare actor uuid; inv private.customer_invoices; plan private.plan_versions; reference text; reference_key text;
   cleared date; today date; audit_reason text; prior private.invoice_transfers; made private.invoice_transfers;
-  fingerprint text;
+  fingerprint text; add_package uuid;
 begin
   actor := internal.staff_actor('payments:refund');
   reference := regexp_replace(btrim(coalesce(p_bank_reference, '')), '\s+', ' ', 'g');
@@ -104,10 +104,13 @@ begin
   if not exists(select 1 from private.current_account_access a where a.id = inv.account_id) then
     raise exception 'the customer''s account cannot use slots now' using errcode='PT409', detail='payment_account_unavailable';
   end if;
-  -- An Individual slot invoice, or (P4e) a Multi-listing package invoice.
+  -- An Individual slot invoice, or (P4e) a Multi-listing package invoice; or
+  -- (20261120045404) an added-slots invoice, at the price asked for (D1).
+  add_package := internal.package_add_invoice_package(inv.id);
   select * into plan from private.plan_versions v where v.id = inv.plan_version_id
-    and (internal.individual_slot_plan(v.plan_code) or internal.slot_package_plan(v.plan_code))
-    and v.price_cents = inv.unit_price_cents;
+    and (((internal.individual_slot_plan(v.plan_code) or internal.slot_package_plan(v.plan_code))
+        and v.price_cents = inv.unit_price_cents)
+      or (add_package is not null and internal.slot_package_plan(v.plan_code)));
   if not found then
     raise exception 'this invoice''s slot is no longer sold at its price' using errcode='PT409', detail='invoice_plan_unavailable';
   end if;
@@ -121,7 +124,14 @@ begin
     if not internal.slot_packages_on_sale() then
       raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
     end if;
-    if internal.slot_package_open(inv.account_id) then
+    if add_package is not null then
+      -- Money for added slots that arrives after the package ended is
+      -- returned in full (D1).
+      if not internal.slot_package_add_ok(inv.account_id, add_package, inv.slots) then
+        raise exception 'the customer''s package has ended (or has no room); void this invoice and return the money in full'
+          using errcode='PT409', detail='package_ended';
+      end if;
+    elsif internal.slot_package_open(inv.account_id) then
       raise exception 'the customer already has a Multi-listing package; void this invoice'
         using errcode='PT409', detail='package_active';
     end if;

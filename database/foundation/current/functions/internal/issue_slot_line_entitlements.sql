@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION internal.issue_slot_line_entitlements(p_payment_id uu
  SET search_path TO 'pg_catalog'
 AS $function$
 declare pay private.payments; snap jsonb; line private.payment_lines; target private.entitlements;
-  tail private.entitlements; chain uuid; starts timestamptz; made integer := 0; pkg uuid;
+  tail private.entitlements; chain uuid; starts timestamptz; made integer := 0; pkg uuid; add_end timestamptz;
 begin
   select * into pay from private.payments p where p.id=p_payment_id;
   snap := pay.snapshot;
@@ -16,7 +16,24 @@ begin
     chain := null;
     tail := null;
     pkg := null;
-    if exists(select 1 from private.plan_versions v where v.id=line.plan_version_id
+    add_end := null;
+    if snap->>'category' = 'slot_package_add' then
+      -- Slots added part-way (P4b): a further grant of the buyer's running
+      -- package holding every added slot, from payment to the package's end.
+      pkg := (snap->>'package_id')::uuid;
+      if line.slot_count is distinct from (snap->>'slot_capacity')::integer
+          or not exists(select 1 from private.plan_versions v where v.id=line.plan_version_id
+            and internal.slot_package_plan(v.plan_code))
+          or not exists(select 1 from private.slot_packages k where k.id=pkg and k.owner_id=pay.owner_id) then
+        raise exception 'an added-slots line holds the slots it was sold with, for the buyer''s package' using errcode='23514';
+      end if;
+      select max(e.ends_at) into add_end from private.entitlements e
+        where e.package_id=pkg and e.owner_id=pay.owner_id and e.status='active'
+          and e.starts_at<=statement_timestamp() and e.ends_at>statement_timestamp();
+      if add_end is null then
+        raise exception 'the package these slots were added to has ended' using errcode='PT409', detail='package_ended';
+      end if;
+    elsif exists(select 1 from private.plan_versions v where v.id=line.plan_version_id
         and internal.slot_package_plan(v.plan_code)) then
       -- A Multi-listing package (20261114154823): its one line holds every
       -- slot it was sold with and opens the package; its grant carries them
@@ -46,7 +63,7 @@ begin
     values (pay.owner_id, 'retail_paid', snap->>'area', pay.id, line.id, (snap->>'slot_capacity')::integer,
       (snap->>'activations_per_period')::integer, (snap->>'activation_period_days')::integer,
       (snap->>'max_photos')::integer, (snap->>'max_videos')::integer, starts,
-      starts + make_interval(days => (snap->>'duration_days')::integer),
+      coalesce(add_end, starts + make_interval(days => (snap->>'duration_days')::integer)),
       array(select jsonb_array_elements_text(coalesce(snap->'addon_capabilities','[]'::jsonb))),
       case when chain is not null then coalesce(tail.id, target.id) end, chain, pkg);
     made := made + 1;

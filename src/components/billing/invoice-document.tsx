@@ -154,7 +154,9 @@ export function InvoiceDocument({
               <td className="py-3">
                 {lineDescription}
                 <span className="block text-xs text-muted-foreground">
-                  Each slot runs {invoice.term_days} days from the day this invoice is paid.
+                  {invoice.days_added === undefined
+                    ? `Each slot runs ${invoice.term_days} days from the day this invoice is paid.`
+                    : `${invoice.days_added} days added. The slots run from the day this invoice is paid until the package ends${invoice.package_ends_at ? ` on ${formatSaLongDate(invoice.package_ends_at)}` : ""}.`}
                 </span>
               </td>
               <td className="py-3 text-right tabular-nums">{invoice.slots}</td>

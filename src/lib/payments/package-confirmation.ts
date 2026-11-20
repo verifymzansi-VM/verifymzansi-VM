@@ -4,6 +4,7 @@ import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import {
   readFoundationMySlotPackage,
   readFoundationMySlots,
+  readFoundationPackageAddOffer,
   readFoundationPayment,
 } from "@/lib/foundation/billing-runtime";
 import { readPackagesOnSale } from "@/lib/foundation/slot-package-offer";
@@ -18,6 +19,9 @@ export interface PackageConfirmation {
   paidCents: number;
   /** The member also holds Individual slots, which keep running beside it. */
   individualSlots: boolean;
+  /** The payment added this many slots to a running package (P4b); `slots`
+   * is then the package's new total. */
+  addedSlots?: number;
 }
 
 /**
@@ -40,12 +44,15 @@ export async function readPackageConfirmation(paymentId?: string): Promise<{
     if (!payment || !offer.plans.some((plan) => plan.id === payment.product_id)) return none;
     if (payment.status !== "complete" || payment.fulfillment_status !== "fulfilled")
       return { packagePayment: true, details: null };
-    const [mine, slots] = await Promise.all([
+    const [mine, slots, adding] = await Promise.all([
       readFoundationMySlotPackage(api),
       readFoundationMySlots(api).catch(() => null),
+      readFoundationPackageAddOffer(api).catch(() => null),
     ]);
     const held = mine.package;
     if (!held || held.state !== "active") return { packagePayment: true, details: null };
+    // Slots added part-way (P4b): this payment is one of the package's adds.
+    const added = adding?.package?.adds.find((entry) => entry.payment_id === payment.id);
     return {
       packagePayment: true,
       details: {
@@ -55,6 +62,7 @@ export async function readPackageConfirmation(paymentId?: string): Promise<{
         newPostsLimit: held.new_posts_limit,
         paidCents: Number(payment.amount_cents),
         individualSlots: (slots?.individual.held ?? 0) > 0,
+        ...(added && { addedSlots: added.slots }),
       },
     };
   } catch {

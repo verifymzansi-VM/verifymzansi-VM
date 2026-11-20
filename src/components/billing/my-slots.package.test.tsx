@@ -117,6 +117,62 @@ describe("MySlots with a Multi-listing package (P4a)", () => {
     expect(screen.queryAllByTestId("my-slot")).toHaveLength(0);
   });
 
+  it("offers 'Add slots' only while packages are on sale and 7 or more whole days are left (P4b)", () => {
+    const { unmount } = render(
+      <MySlots
+        now={now}
+        buyHref={null}
+        individual={individual}
+        slotPackage={slotPackage()}
+        slots={[]}
+      />
+    );
+    // Off sale (the owner's switch): no button.
+    expect(screen.queryByTestId("slot-package-add")).toBeNull();
+    unmount();
+    const onSale = (endsAt: string) => ({
+      ...slotPackage({ ends_at: endsAt }),
+      on_sale: true,
+    });
+    const first = render(
+      <MySlots
+        now={now}
+        buyHref={null}
+        individual={individual}
+        slotPackage={onSale("2027-02-12T08:00:00Z")}
+        slots={[]}
+      />
+    );
+    expect(screen.getByRole("link", { name: "Add slots" })).toHaveAttribute(
+      "href",
+      "/billing/package/add"
+    );
+    first.unmount();
+    // Exactly 7 whole days left: still open.
+    const second = render(
+      <MySlots
+        now={now}
+        buyHref={null}
+        individual={individual}
+        slotPackage={onSale("2026-11-21T10:00:00Z")}
+        slots={[]}
+      />
+    );
+    expect(screen.getByTestId("slot-package-add")).toBeInTheDocument();
+    second.unmount();
+    // A moment less than 7 days: closed.
+    render(
+      <MySlots
+        now={now}
+        buyHref={null}
+        individual={individual}
+        slotPackage={onSale("2026-11-21T09:59:00Z")}
+        slots={[]}
+      />
+    );
+    expect(screen.queryByTestId("slot-package-add")).toBeNull();
+  });
+
   it("keeps Individual slots beside it closed: no buying or renewing, and says where their posts go", () => {
     render(
       <MySlots

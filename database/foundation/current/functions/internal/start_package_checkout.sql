@@ -55,18 +55,28 @@ begin
   end if;
   -- 20261119025106: while a package invoice of the account is unpaid, it is
   -- paid (or cancelled) first, so no second package is bought beside it.
-  if exists(select 1 from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
-      where i.account_id = actor and i.status = 'issued' and internal.slot_package_plan(v.plan_code)) then
+  -- (20261120045404: an added-slots invoice of an ended package blocks nothing.)
+  if internal.package_invoice_blocking(actor, null) is not null then
     raise exception 'your package invoice is not paid yet; pay it, or ask us to cancel it first'
       using errcode='PT409', detail='package_invoice_unpaid';
   end if;
+  -- (20261120045404: an added-slots order is never continued, nor returned,
+  -- as a new package. No package of the account runs here, so any still
+  -- pending is for a package that has ended: it is closed, also one sent to
+  -- Ozow; if that one is paid anyway it goes to reconciliation and is
+  -- refunded.)
+  update private.payments p set status='cancelled', status_changed_at=clock_timestamp()
+    where p.owner_id=actor and p.status='pending' and p.target_post_id is null
+      and p.snapshot->>'category'='slot_package_add';
   select p.* into pay from private.payments p join private.plan_versions v on v.id=p.plan_version_id
     where p.owner_id=actor and p.status='pending' and p.target_post_id is null and internal.slot_package_plan(v.plan_code)
+      and p.snapshot->>'category' is distinct from 'slot_package_add'
     order by p.created_at desc, p.id limit 1
     for update of p;
   if found then
     select l.slot_count into open_slots from private.payment_lines l where l.payment_id=pay.id and l.line_number=1;
-    if pay.plan_version_id <> plan.id or open_slots is distinct from p_slots then
+    if pay.plan_version_id <> plan.id or open_slots is distinct from p_slots
+        or pay.snapshot->>'category' is distinct from 'slot_package' then
       if pay.checkout_url is not null then
         -- Open at Ozow for another package order: the member continues,
         -- checks or cancels it first.

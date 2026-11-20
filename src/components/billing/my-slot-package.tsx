@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { ArrowRightLeft, Plus } from "lucide-react";
-import { BrandSurface } from "@/components/brand";
+import { BrandSurface, brandOutlineButtonClassName } from "@/components/brand";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { formatSaLongDate, saCalendarDaysBetween } from "@/lib/utils/format";
+import { PACKAGE_ADD_MIN_DAYS } from "@/lib/billing/slot-packages";
 import type { FoundationMySlotPackage } from "@/lib/foundation/billing-runtime";
 
 type SlotPackage = NonNullable<FoundationMySlotPackage["package"]>;
@@ -19,21 +22,33 @@ function daysLeftLabel(endsAt: string, now: Date) {
   return days <= 0 ? "ends today" : days === 1 ? "1 day left" : `${days} days left`;
 }
 
+/** Whole 24-hour periods left before the package ends (as the database counts
+ * them when slots are added). */
+function wholeDaysLeft(endsAt: string, now: Date) {
+  return Math.floor((Date.parse(endsAt) - now.getTime()) / 86_400_000);
+}
+
 /**
  * The member's Multi-listing package on "My slots" (roadmap P4a; the owner's
  * approved draft p4-07): one card with the slots in use, the shared end date
  * and the days left, then the posts in the package (a post from an ended
  * Individual slot that the package took is shown as moving in) and its empty
- * places. Renew, Add slots and Team come with the later parts (P4b-P4d).
+ * places. "Add slots" (P4b) while packages are on sale and 7 or more whole
+ * days are left; Renew and Team come with the later parts (P4c-P4d).
  */
 export function MySlotPackage({
   slotPackage,
   now = new Date(),
+  onSale = false,
 }: {
   slotPackage: SlotPackage;
   now?: Date;
+  /** Packages are on sale (the owner's switch): only then can slots be added. */
+  onSale?: boolean;
 }) {
   const ended = slotPackage.state === "ended";
+  const canAdd =
+    onSale && !ended && wholeDaysLeft(slotPackage.ends_at, now) >= PACKAGE_ADD_MIN_DAYS;
   const used = Math.min(slotPackage.posts.length, slotPackage.places);
   const empty = ended ? 0 : Math.max(0, slotPackage.places - slotPackage.posts.length);
   const share = slotPackage.places > 0 ? Math.round((used / slotPackage.places) * 100) : 0;
@@ -77,6 +92,18 @@ export function MySlotPackage({
           <p className="mt-3 text-xs text-white/70">
             {`${slotPackage.new_posts_started} of ${slotPackage.new_posts_limit} new posts used in the last 30 days`}
           </p>
+        ) : null}
+        {canAdd ? (
+          <Button
+            asChild
+            variant="outline"
+            className={cn("mt-4 h-11 rounded-full", brandOutlineButtonClassName)}
+          >
+            <Link href="/billing/package/add" data-testid="slot-package-add">
+              <Plus aria-hidden="true" className="h-4 w-4" />
+              Add slots
+            </Link>
+          </Button>
         ) : null}
       </BrandSurface>
 

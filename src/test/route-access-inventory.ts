@@ -88,6 +88,8 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/billing/change-plan": { POST: "signed-in" },
   "api/billing/create-checkout": { POST: "signed-in" },
   "api/billing/invoices": { POST: "signed-in" },
+  "api/billing/package-add-checkout": { POST: "signed-in" },
+  "api/billing/package-add-invoice": { POST: "signed-in" },
   "api/billing/package-checkout": { POST: "signed-in" },
   "api/billing/package-invoice": { POST: "signed-in" },
   "api/billing/payment-status": { GET: "signed-in" },

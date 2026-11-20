@@ -44,7 +44,8 @@ begin
   select * into prior from private.package_invoice_requests r
     where r.account_id = actor and r.member_request_id = p_request_id;
   if found then
-    if prior.plan_version_id = plan.id and prior.slots = p_slots then
+    -- (20261120045404: only a request for a new package, never an add.)
+    if prior.kind = 'package' and prior.plan_version_id = plan.id and prior.slots = p_slots then
       perform internal.price_draft_actor();
       return internal.package_invoice_request_dto(prior, null) || jsonb_build_object('repeated', true);
     end if;
@@ -53,9 +54,8 @@ begin
   if internal.slot_package_open(actor) then
     raise exception 'this account already has a Multi-listing package' using errcode='PT409', detail='package_active';
   end if;
-  select i.invoice_number into unpaid from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
-    where i.account_id = actor and i.status = 'issued' and internal.slot_package_plan(v.plan_code)
-    order by i.issued_at limit 1;
+  -- (20261120045404: an added-slots invoice of an ended package blocks nothing.)
+  unpaid := internal.package_invoice_blocking(actor, null);
   if unpaid is not null then
     raise exception 'your package invoice % is not paid yet; pay it, or ask us to cancel it first', unpaid
       using errcode='PT409', detail='package_invoice_unpaid';
@@ -70,7 +70,7 @@ begin
       raise exception 'your invoice is being prepared; ask us to cancel it before asking for another'
         using errcode='PT409', detail='package_invoice_request_open';
     end if;
-    if waiting.plan_version_id = plan.id and waiting.slots = p_slots then
+    if waiting.kind = 'package' and waiting.plan_version_id = plan.id and waiting.slots = p_slots then
       perform internal.price_draft_actor();
       return internal.package_invoice_request_dto(waiting, null) || jsonb_build_object('repeated', true);
     end if;

@@ -4,7 +4,11 @@ import { NextRequest, type NextResponse } from "next/server";
 import { checkRateLimit } from "../utils/rate-limit";
 import { readFoundationBillingCatalogue } from "./billing-catalogue";
 import { handleFoundationBillingRoute } from "./billing-route";
-import { FoundationBillingError, startFoundationPackageCheckout } from "./billing-runtime";
+import {
+  FoundationBillingError,
+  startFoundationPackageAddCheckout,
+  startFoundationPackageCheckout,
+} from "./billing-runtime";
 import type * as BillingRuntime from "./billing-runtime";
 import { createFoundationRouteContext } from "./request-route";
 import { readFoundationSlotPackageOffer } from "./slot-package-offer";
@@ -23,6 +27,7 @@ vi.mock("../utils/rate-limit", () => ({
 vi.mock("./billing-runtime", async (importOriginal) => ({
   ...(await importOriginal<typeof BillingRuntime>()),
   startFoundationPackageCheckout: vi.fn(),
+  startFoundationPackageAddCheckout: vi.fn(),
 }));
 
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
@@ -136,5 +141,49 @@ describe("the Multi-listing package checkout (P4a)", () => {
       status: 409,
       body: { error: "This account already has a Multi-listing package.", code: "PACKAGE_ACTIVE" },
     });
+  });
+});
+
+describe("adding slots to a running package (P4b)", () => {
+  const add = { packageId: uuid(40), slots: 5, expectedTotalCents: 63335, coolingOffConsent: true };
+  beforeEach(() => {
+    vi.mocked(startFoundationPackageAddCheckout).mockResolvedValue({
+      paymentId: uuid(6),
+      checkoutUrl: "https://one.ozow.com/checkout/add",
+    });
+  });
+  it("is refused while packages are not on sale, before any payment", async () => {
+    vi.mocked(readFoundationSlotPackageOffer).mockResolvedValueOnce(offer(false) as never);
+    const response = await handleFoundationBillingRoute(request(add), "package-add-checkout");
+    expect(response.status).toBe(403);
+    expect(startFoundationPackageAddCheckout).not.toHaveBeenCalled();
+  });
+  it("starts the add checkout for the member's package with the total shown", async () => {
+    const response = await handleFoundationBillingRoute(request(add), "package-add-checkout");
+    expect(await json(response)).toEqual({
+      status: 200,
+      body: {
+        paymentId: uuid(6),
+        checkoutUrl: "https://one.ozow.com/checkout/add",
+        account_id: account,
+      },
+    });
+    expect(startFoundationPackageAddCheckout).toHaveBeenCalledExactlyOnceWith(
+      {},
+      account,
+      add,
+      "https://verifymzansi.com"
+    );
+  });
+  it.each([
+    ["no slots", { ...add, slots: 0 }],
+    ["more than 100 slots online", { ...add, slots: 101 }],
+    ["no consent", { ...add, coolingOffConsent: false }],
+    ["a package that is not an id", { ...add, packageId: "mine" }],
+    ["an unknown field", { ...add, planId: uuid(2) }],
+  ])("refuses %s before any payment", async (_label, value) => {
+    const response = await handleFoundationBillingRoute(request(value), "package-add-checkout");
+    expect(response.status).toBe(400);
+    expect(startFoundationPackageAddCheckout).not.toHaveBeenCalled();
   });
 });

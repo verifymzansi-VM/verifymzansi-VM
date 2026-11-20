@@ -60,7 +60,7 @@ create table private.customer_invoices (
   constraint customer_invoices_total CHECK (total_cents = (unit_price_cents * slots)),
   constraint customer_invoices_total_cents_check CHECK (total_cents > 0 AND total_cents <= 15000000),
   constraint customer_invoices_unit_price_cents_check CHECK (unit_price_cents >= 100 AND unit_price_cents <= 1000000),
-  constraint customer_invoices_void CHECK ((status = 'void'::text) = (voided_by IS NOT NULL AND voided_at IS NOT NULL AND void_reason IS NOT NULL)),
+  constraint customer_invoices_void CHECK ((status = 'void'::text) = (voided_at IS NOT NULL AND void_reason IS NOT NULL) AND (voided_by IS NOT NULL OR status <> 'void'::text OR void_reason = 'The package these slots were added to ended before the invoice was paid'::text)),
   constraint customer_invoices_void_reason_check CHECK (void_reason IS NULL OR internal.plain_text_valid(void_reason, 5, 500, true)),
   constraint customer_invoices_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES auth.users(id) ON DELETE RESTRICT
 );
@@ -72,5 +72,6 @@ CREATE INDEX customer_invoices_plan_version_idx ON private.customer_invoices USI
 CREATE INDEX customer_invoices_recent_idx ON private.customer_invoices USING btree (issued_at DESC, id DESC);
 CREATE INDEX customer_invoices_voided_by_idx ON private.customer_invoices USING btree (voided_by) WHERE (voided_by IS NOT NULL);
 CREATE TRIGGER customer_invoices_guard BEFORE INSERT OR DELETE OR UPDATE ON private.customer_invoices FOR EACH ROW EXECUTE FUNCTION internal.customer_invoice_guard();
+CREATE TRIGGER customer_invoices_system_void BEFORE UPDATE OF status ON private.customer_invoices FOR EACH ROW WHEN (new.status = 'void'::text AND new.voided_by IS NULL) EXECUTE FUNCTION internal.customer_invoice_system_void_guard();
 CREATE TRIGGER notify_invoice_issued AFTER INSERT ON private.customer_invoices FOR EACH ROW EXECUTE FUNCTION internal.notify_invoice_issued();
 revoke all on private.customer_invoices from public;

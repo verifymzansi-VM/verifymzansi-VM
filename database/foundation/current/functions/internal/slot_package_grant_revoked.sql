@@ -7,6 +7,17 @@ CREATE OR REPLACE FUNCTION internal.slot_package_grant_revoked()
  SET search_path TO 'pg_catalog'
 AS $function$
 begin
+  -- 20261120045404: the posts in the revoked grant that still fit in the
+  -- package's other running grants stay in it (the reversal then ends only the
+  -- others). While an activation holds the package the reversal is refused
+  -- and retried (PT409); any other failure never stops the refund or
+  -- chargeback (the posts then end with the grant, as before).
+  begin
+    perform internal.slot_package_keep_posts(new.id);
+  exception when others then
+    if sqlstate = 'PT409' then raise; end if;
+    raise warning 'slot package posts not kept after a revoked grant (%)', sqlstate;
+  end;
   begin
     perform internal.slot_package_release_dates(new.owner_id);
   exception when others then
