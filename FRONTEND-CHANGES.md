@@ -129,6 +129,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 63. Sign-up mode in the database (item 7) | approved by owner 2026-11-20 (no file rows: the group 63 part of 2 rows in group 2) | Nothing while sign-up is by invitation (today). Once the owner opens sign-up: a Google sign-up refused for a blocked or reserved email domain shows 'This email can't be used to register' on the sign-in page, and the profile page's email change refuses such an address with 'This email address can't be used. Use a different address.' |
 | 64. Toasts clear of form buttons on phones | approved by owner 2026-11-20 (with the group 64 part of 1 row elsewhere) | Phones (narrower than 768 px): a toast shows at the top of the screen instead of near the bottom, where it covered the button tapped next ('Verify', 'Update password'); while it shows (about 5 seconds) it covers the header (logo, search, menu). Tablets and desktops: same place and look (bottom right). Every screen size: a tap on the empty space around a toast now reaches the page |
 | 65. Member invitations (staff) | approved by owner 2026-11-20 (design and pictures; with the group 65 part of 1 row in group 57) | Admins only: a 'Member invitations' page under Platform in the staff menu. An admin types an email and presses Invite; the page says nobody is emailed and gives the sign-up link to copy and send. Each invitation shows Waiting to join, Joined, Withdrawn or Expired with one date; waiting ones can be withdrawn after a confirmation. An address that already has an account, today's limit of 200 and non-admins are refused with a plain message. It never gives staff access |
+| 67. Daily limit on SMS codes: message (no file rows: server message only) | approved by owner 2026-11-20 | 'Verify your phone number' and 'Complete your profile': when the site's daily limit on SMS codes is reached, 'Send code' shows 'We can't send codes right now. Please try again later.' under the number instead of sending a code (until midnight, South African time). Nothing changes otherwise |
 
 Questions for the owner:
 
@@ -2726,6 +2727,26 @@ goes to the owner with after-pictures.
 | `src/app/admin/member-invitations/member-invitations-client.tsx` | visual | Group 65: the invite form, the result messages with the sign-up link, the invitations list and the withdraw confirmation. | Admins: everything described in group 65. | keep | approved by owner 2026-11-20 | 2026-11-20 | d66b867c369f |
 | `src/app/admin/member-invitations/member-invitations-client.test.tsx` | test | Group 65: checks the list, the empty state, inviting, renewing, each refusal, the re-verify redirect and withdrawing. | Nothing (not part of a page) | keep | approved by owner 2026-11-20 | 2026-11-20 | 10677f8a4c39 |
 | `src/app/admin/member-invitations/page.test.tsx` | test | Group 65: checks the page guard, both intros, the re-verify redirect and the failed-read message. | Nothing (not part of a page) | keep | approved by owner 2026-11-20 | 2026-11-20 | 4b2a5ff7c37c |
+
+### 67. Daily limit on SMS codes: message
+
+Server message only: no file in the checked scope changes, so this group has no
+file rows. Launch checklist item 12 (launch assurance LA-A15) adds a limit on
+SMS verification codes for the whole site per South African day (database update
+`20261120074411_sms_daily_limit.sql`, 500 codes a day, approved by the owner). When it is reached, asking for a code on 'Verify your phone
+number' (`/verification`) or 'Complete your profile' sends no SMS and shows,
+where the send errors already appear under the number:
+
+> We can't send codes right now. Please try again later.
+
+The words are new (owner rule 4). The pages show the server's message as they
+already do for other send errors; no page file changes. A code already sent
+before the limit still works. Text outside the checked scope: the message in
+`src/lib/utils/phone.ts` (`PHONE_CODES_UNAVAILABLE`), returned by
+`src/app/api/foundation/phone/_lib/handle.ts` with status 503.
+
+Decision: approved by owner 2026-11-20 (the limit of 500 and the wording as
+written).
 
 <!-- frontend-ledger:end -->
 
