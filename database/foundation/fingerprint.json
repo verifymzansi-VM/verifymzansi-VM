@@ -1,7 +1,7 @@
 {
   "description": "Fingerprint of the production (foundation) schema rebuilt from this repository: platform-prelude.sql, candidate.sql, baseline-supplement.sql and updates/*.sql in filename order. Produced by `pnpm db:foundation:replay -- --write` with database/foundation/fingerprint.sql. CI fails when the replay differs.",
   "productionCheck": {
-    "capturedOn": "2026-11-19",
+    "capturedOn": "2026-11-20",
     "method": "Read-only catalogue capture of production, same query formats. table_grants returns no row in production or in the replay (no table privileges for the API roles), so it is listed as matching without a fingerprint.",
     "matching": [
       "function_bodies",
