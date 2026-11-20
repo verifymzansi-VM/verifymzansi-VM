@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { E2E_FIXTURE, KNOWN_BREACHED_PASSWORD } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { requireOnlyKnownBreak } from "./support/known-break";
 import {
@@ -7,7 +7,7 @@ import {
   type GoogleMember,
 } from "./support/google-member";
 import { endedWithTest } from "./support/route-teardown";
-import { waitForToastsToClose } from "./support/toasts";
+import { clickWhileToastShows, holdToast } from "./support/toasts";
 import {
   browserSessionCookies,
   latestMailTo,
@@ -1103,14 +1103,15 @@ test.describe("account recovery and self-service", () => {
     const [logins, logouts] = authEvents().split("/").map(Number);
     const openSessions = sessions();
     const next = `${changer.password}-next`;
-    const submit = async (current: string) => {
+    const submit = async (current: string, shownToast?: Locator) => {
       const before = guarded.reply(CHANGE_PASSWORD_PATH).length;
       await page.getByLabel("Current password", { exact: true }).fill(current);
       await page.getByLabel("New password", { exact: true }).fill(next);
       await page.getByLabel("Confirm new password", { exact: true }).fill(next);
-      // The previous answer's toast can cover the button on a short phone.
-      await waitForToastsToClose(page);
-      await page.getByRole("button", { name: "Update password" }).click();
+      const button = page.getByRole("button", { name: "Update password" });
+      // On a short phone the previous answer's toast stays clear of the button.
+      if (shownToast) await clickWhileToastShows(shownToast, button);
+      else await button.click();
       await expect
         .poll(() => guarded.reply(CHANGE_PASSWORD_PATH).length, { timeout: 20_000 })
         .toBe(before + 1);
@@ -1125,7 +1126,9 @@ test.describe("account recovery and self-service", () => {
       status: 400,
       body: { error: "Current password is incorrect", reason: "current_password" },
     });
-    await expect(toast(page, "Password change failed")).toBeVisible();
+    // Kept open: the next submission is clicked while it shows.
+    const failed = toast(page, "Password change failed");
+    await holdToast(failed);
     expect(authEvents()).toBe(`${logins}/${logouts}`);
     expect(sessions()).toBe(openSessions);
     // The page sends the three password fields only.
@@ -1135,7 +1138,7 @@ test.describe("account recovery and self-service", () => {
     // The right one changes it. The check signed in once and ended that
     // session at once; Auth then ended the member's other sessions, and the
     // browser's own session stays signed in.
-    expect(await submit(changer.password)).toEqual({
+    expect(await submit(changer.password, failed)).toEqual({
       method: "POST",
       path: CHANGE_PASSWORD_PATH,
       status: 200,
