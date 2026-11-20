@@ -163,7 +163,11 @@ describe("OperationsHealthPage", () => {
     expect(screen.getByText("enquiry received")).toBeVisible();
     expect(screen.getByText("delivery failed")).toBeVisible();
     expect(screen.getByText("submitted notice")).toBeVisible();
-    expect(screen.getByText(/2 notices can never be sent/)).toBeVisible();
+    const undeliverable = screen.getByText(
+      "2 notices from the last 30 days can never be sent: the request was minimised or the account's email address changed or is not confirmed."
+    );
+    expect(undeliverable).toBeVisible();
+    expect(undeliverable).not.toHaveClass("text-destructive");
     expect(screen.getByText("2 paid payments were not activated.")).toBeVisible();
     expect(screen.getByText("amount mismatch")).toBeVisible();
     expect(screen.getByText(/Payment abcdef12 · notice · seen 3 times/)).toBeVisible();

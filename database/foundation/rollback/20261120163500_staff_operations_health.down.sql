@@ -10,7 +10,8 @@
 -- internal.scheduled_job_catalogue and private.scheduled_job_runs (with the
 -- recorded run times; nothing else).
 -- It refuses (55000) unless every function it replaces or drops still has the
--- update's body and no other function calls internal.note_scheduled_job_run,
+-- update's body and no other function uses what it drops (the run table, the
+-- catalogue, the note and record helpers or the read),
 -- so a later update that changed one of them is never undone silently.
 begin;
 set local lock_timeout='5s';
@@ -43,7 +44,7 @@ begin
     ('api.record_scheduled_job_run(text)', '030f074f26e1e23c13a00e3e30f0fbd8'),
     ('api.get_staff_operations_health()', '0d522526c382954f585b476ecdb25fac'),
     ('internal.record_scheduled_job_run(text)', '677e30342cfe57d26c45dc58ce7b5ee8'),
-    ('internal.get_staff_operations_health()', 'c7be6d6d742cbb8cdac138b0db778bb5'),
+    ('internal.get_staff_operations_health()', '464a32f492d9cd7dcebae419a4b5d8e8'),
     ('internal.note_scheduled_job_run(text,anyelement)', '783b802513659a9ad0723c5ad59e1ee5'),
     ('internal.scheduled_job_catalogue()', '249bf575fc434934aafe0f0a68ea30dc')
   ) v(sig, updated)
@@ -52,11 +53,15 @@ begin
   if drift is not null then
     raise exception 'rollback precondition: changed since the update: %', drift using errcode='55000';
   end if;
-  -- Only the fifteen job commands and internal.record_scheduled_job_run call
-  -- the helper this rollback drops.
+  -- Only the fifteen job commands and the update's own functions use what
+  -- this rollback drops (exact text, so an underscore is not a wildcard).
   select string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text) into callers
   from pg_proc p
-  where p.prosrc like '%note_scheduled_job_run%'
+  where (strpos(p.prosrc, 'note_scheduled_job_run') > 0
+      or strpos(p.prosrc, 'private.scheduled_job_runs') > 0
+      or strpos(p.prosrc, 'internal.scheduled_job_catalogue') > 0
+      or strpos(p.prosrc, 'internal.record_scheduled_job_run') > 0
+      or strpos(p.prosrc, 'internal.get_staff_operations_health') > 0)
     and p.oid not in (
       to_regprocedure('api.run_slot_renewals(integer)'),
       to_regprocedure('api.run_post_lifecycle(integer)'),
@@ -73,9 +78,14 @@ begin
       to_regprocedure('api.purge_frontend_form_drafts(integer)'),
       to_regprocedure('api.claim_evidence_cleanup(integer)'),
       to_regprocedure('api.claim_media_cleanup(integer)'),
-      to_regprocedure('internal.record_scheduled_job_run(text)'));
+      to_regprocedure('internal.record_scheduled_job_run(text)'),
+      to_regprocedure('api.record_scheduled_job_run(text)'),
+      to_regprocedure('internal.get_staff_operations_health()'),
+      to_regprocedure('api.get_staff_operations_health()'),
+      to_regprocedure('internal.note_scheduled_job_run(text,anyelement)'),
+      to_regprocedure('internal.scheduled_job_catalogue()'));
   if callers is not null then
-    raise exception 'rollback precondition: other functions call internal.note_scheduled_job_run: %', callers using errcode='55000';
+    raise exception 'rollback precondition: other functions use what this rollback drops: %', callers using errcode='55000';
   end if;
 end$$;
 

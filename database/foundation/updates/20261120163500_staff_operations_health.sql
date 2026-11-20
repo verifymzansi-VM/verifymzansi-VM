@@ -71,9 +71,9 @@
 --      time, error code);
 --    - notices: privacy request notices in the same state (stuck), at most 50
 --      (kind, attempts, queued time), counting only notices the notice job can
---      still send; notices it can never send (the request was minimised, or
---      the account's address is gone or no longer confirmed) are counted
---      apart (undeliverable);
+--      still send; notices queued in the last 30 days that it can never send
+--      (the request was minimised, or the account's address changed or is not
+--      confirmed) are counted apart (undeliverable);
 --    - payments: payment problems seen in the past 7 days and paid payments
 --      that could not be activated, with at most 50 problems (an 8-character
 --      payment reference, reason, source, first and last seen, how often,
@@ -451,7 +451,10 @@ begin
       select jsonb_build_object(
         'stuck', count(*) filter (where w.deliverable
           and (w.attempts >= 8 or w.created_at < now_at - interval '1 day')),
-        'undeliverable', count(*) filter (where not w.deliverable),
+        -- Only the last 30 days: retention minimises a closed request after
+        -- 30 days, while its notice rows stay for years.
+        'undeliverable', count(*) filter (where not w.deliverable
+          and w.created_at >= now_at - interval '30 days'),
         'items', (select coalesce(jsonb_agg(jsonb_build_object('kind', x.kind, 'attempts', x.attempts,
             'queued_at', x.created_at) order by x.created_at, x.id), '[]'::jsonb)
           from (select w2.id, w2.kind, w2.attempts, w2.created_at from waiting w2

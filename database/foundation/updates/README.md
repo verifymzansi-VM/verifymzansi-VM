@@ -119,14 +119,16 @@ holds. The page stays switched off (`SHOW_STAFF_OPERATIONS`) until launch.
   last run and whether it is late; stuck emails (unsent after the last of 8
   attempts, or a day after queuing) with the size of the unsent queue; stuck
   privacy request notices (same rule, only notices the notice job can still
-  send), and apart the number it can never send (the request was minimised, or
-  the account's address is gone or no longer confirmed); payment problems seen
-  in the past 7 days and paid payments not activated; account deletions held
-  back, file deletions stuck over a day or queued, ID evidence past its deletion
-  date outside legal and fraud holds, and accounts on legal hold; and open cost
-  alarms. Lists have at most 50 rows; counts are complete. It returns kinds,
-  reasons, counts, times and an 8-character payment reference, never an account
-  id, name, email, phone or message text.
+  send), and apart the number queued in the last 30 days that it can never send
+  (the request was minimised, or the account's address changed or is not
+  confirmed; retention minimises closed requests after 30 days, so older ones
+  are not counted); payment problems seen in the past 7 days and paid payments
+  not activated; account deletions held back, file deletions stuck over a day or
+  queued, ID evidence past its deletion date outside legal and fraud holds, and
+  accounts on legal hold; and open cost alarms. Lists have at most 50 rows;
+  counts are complete. It returns kinds, reasons, counts, times and an
+  8-character payment reference, never an account id, name, email, phone or
+  message text.
 
 The job commands keep their signatures, so a website release without the
 matching code works with the update, and the release with it shows "could not be
@@ -151,7 +153,8 @@ The reviewed rollback is
 `../rollback/20261120163500_staff_operations_health.down.sql` (only with the
 owner's decision; prefer a forward fix). It refuses (55000) unless the update is
 applied, every function it replaces or drops still has the update's body, and no
-other function calls `internal.note_scheduled_job_run`; then it puts back the
+other function uses what it drops (the run table, the catalogue, the note and
+record helpers or the read; matched as exact text); then it puts back the
 fifteen job commands byte for byte and drops the read, the record command, their
 internal twins, `internal.note_scheduled_job_run`,
 `internal.scheduled_job_catalogue` and `private.scheduled_job_runs`.
@@ -162,21 +165,23 @@ preflight before and after, read only; the refusals with a drifted body and a
 premature rollback, changing nothing; apply, rollback and re-apply return the
 same fingerprints, and the rollback restores every job command byte for byte
 with its grants, leaving the two payment commands untouched; the rollback
-refuses once a job command changed later or another function calls the helper;
-each of the fifteen commands, called as the timed jobs call it, records only its
-own job and returns its result unchanged, while the two payment commands record
-nothing and the record command records only those two jobs; a failed command
-records nothing, and a failed payment run turns late; at most one write per job
-every 20 seconds; a future time shows late and is pulled back to now; only
-catalogued jobs can be recorded, and members and visitors can run neither the
-commands nor the helpers; every job is listed in order and turns late after its
-limit (9 and 11 minutes, 29 and 31, 39 and 41, 25 and 27 hours); stuck emails
-and notices (notices that can never be sent counted apart), payment problems,
-blocked deletions, evidence past its date (a held account's excluded) and open
-alarms are counted and listed as described, with no account, subject, request or
-case id; lists stop at 50 while counts stay complete; and only governor and
-admin with a recent authenticator code can read it (a moderator, a member, an
-admin whose code is 20 minutes old, the server key and a visitor are refused).
+refuses once a job command changed later or another function uses the run table,
+the catalogue, the helpers or the read (an underscore in a name is not a
+wildcard); each of the fifteen commands, called as the timed jobs call it,
+records only its own job and returns its result unchanged, while the two payment
+commands record nothing and the record command records only those two jobs; a
+failed command records nothing, and a failed payment run turns late; at most one
+write per job every 20 seconds; a future time shows late and is pulled back to
+now; only catalogued jobs can be recorded, and members and visitors can run
+neither the commands nor the helpers; every job is listed in order and turns
+late after its limit (9 and 11 minutes, 29 and 31, 39 and 41, 25 and 27 hours);
+stuck emails and notices (notices of the last 30 days that can never be sent
+counted apart, older ones not), payment problems, blocked deletions, evidence
+past its date (a held account's excluded) and open alarms are counted and listed
+as described, with no account, subject, request or case id; lists stop at 50
+while counts stay complete; and only governor and admin with a recent
+authenticator code can read it (a moderator, a member, an admin whose code is 20
+minutes old, the server key and a visitor are refused).
 
 ## A daily limit on SMS codes for the whole site, 20 November 2026
 

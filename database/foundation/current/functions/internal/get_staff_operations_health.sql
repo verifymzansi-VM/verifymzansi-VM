@@ -50,7 +50,10 @@ begin
       select jsonb_build_object(
         'stuck', count(*) filter (where w.deliverable
           and (w.attempts >= 8 or w.created_at < now_at - interval '1 day')),
-        'undeliverable', count(*) filter (where not w.deliverable),
+        -- Only the last 30 days: retention minimises a closed request after
+        -- 30 days, while its notice rows stay for years.
+        'undeliverable', count(*) filter (where not w.deliverable
+          and w.created_at >= now_at - interval '30 days'),
         'items', (select coalesce(jsonb_agg(jsonb_build_object('kind', x.kind, 'attempts', x.attempts,
             'queued_at', x.created_at) order by x.created_at, x.id), '[]'::jsonb)
           from (select w2.id, w2.kind, w2.attempts, w2.created_at from waiting w2

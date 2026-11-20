@@ -241,14 +241,31 @@ try {
     );
     assert.match(fails(ROLLBACK, "55000"), /changed since the update: api\.sweep_sponsorships/);
     q(`${live};`);
-    // A later function that also records runs would lose its helper.
-    q(`create function internal.vmtest_other_job() returns integer language sql
-      as $f$ select internal.note_scheduled_job_run('retention', 1) $f$;`);
-    assert.match(
-      fails(ROLLBACK, "55000"),
-      /other functions call internal\.note_scheduled_job_run: internal\.vmtest_other_job\(\)/
-    );
-    q(`drop function internal.vmtest_other_job();`);
+    // A later function that uses anything the rollback drops would break.
+    for (const use of [
+      "perform internal.note_scheduled_job_run('retention', 1);",
+      "perform 1 from private.scheduled_job_runs;",
+      "perform 1 from internal.scheduled_job_catalogue();",
+      "perform internal.record_scheduled_job_run('refund_check');",
+      "perform internal.get_staff_operations_health();",
+    ]) {
+      q(`create function internal.vmtest_other_job() returns void language plpgsql
+        as $f$ begin ${use} end $f$;`);
+      assert.match(
+        fails(ROLLBACK, "55000"),
+        /other functions use what this rollback drops: internal\.vmtest_other_job\(\)/,
+        use
+      );
+      q(`drop function internal.vmtest_other_job();`);
+    }
+    // Exact text: a name that differs where the drop list has an underscore
+    // does not block the rollback (LIKE would have matched it).
+    q(`create function internal.vmtest_lookalike() returns text language sql
+      as $f$ select 'noteXscheduledXjobXrun privateXscheduled_job_runs' $f$;`);
+    q(ROLLBACK);
+    assert.equal(q(`select to_regclass('private.scheduled_job_runs') is null;`), "t");
+    q(`drop function internal.vmtest_lookalike();`);
+    applySteps(database, [step]);
     assert.equal(fingerprint(), before);
   });
 
@@ -425,7 +442,7 @@ try {
   const ids = json(`select jsonb_build_object('owner',gen_random_uuid(),'subject',gen_random_uuid(),
     'payment',gen_random_uuid(),'request',gen_random_uuid(),'closed',gen_random_uuid(),
     'held',gen_random_uuid(),'case',gen_random_uuid(),'minimised',gen_random_uuid(),
-    'gone',gen_random_uuid());`);
+    'gone',gen_random_uuid(),'old',gen_random_uuid());`);
   q(`set session_replication_role=replica;
     insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key,created_at,delivery_attempts,delivery_error,processed_at) values
       ('enquiry_received','${ids.subject}','${ids.owner}','ops-final',now()-interval '3 hours',8,'delivery_failed',null),
@@ -435,11 +452,13 @@ try {
     insert into private.privacy_requests(id,type,requester_email,description,identity_check,received_at,due_by,legal_basis,minimised_at,subject_user_id) values
       ('${ids.request}','access','ops-manual@example.invalid','Fixture request','manual',now()-interval '3 days',now()+interval '27 days','POPIA s23',null,null),
       ('${ids.minimised}','access','ops-minimised@example.invalid','Fixture request','manual',now()-interval '3 days',now()+interval '27 days','POPIA s23',now(),null),
-      ('${ids.gone}','access','ops-gone@example.invalid','Fixture request','session',now()-interval '3 days',now()+interval '27 days','POPIA s23',null,'${ids.owner}');
+      ('${ids.gone}','access','ops-gone@example.invalid','Fixture request','session',now()-interval '3 days',now()+interval '27 days','POPIA s23',null,'${ids.owner}'),
+      ('${ids.old}','access','ops-old@example.invalid','Fixture request','manual',now()-interval '90 days',now()-interval '60 days','POPIA s23',now()-interval '20 days',null);
     insert into private.privacy_notice_jobs(request_id,kind,created_at,attempts) values
       ('${ids.minimised}','submitted',now()-interval '2 days',3),
       ('${ids.gone}','submitted',now()-interval '2 days',3),
       ('${ids.gone}','approved',now()-interval '1 hour',1),
+      ('${ids.old}','submitted',now()-interval '40 days',2),
       ('${ids.request}','submitted',now()-interval '2 days',3),
       ('${ids.request}','approved',now()-interval '1 hour',8),
       ('${ids.request}','completed',now()-interval '1 hour',1);
@@ -500,6 +519,8 @@ try {
       assert.equal(health.notices.stuck, 2);
       // The minimised request's notice and the two of a request whose account
       // is gone can never be sent: counted apart, never listed.
+      // A notice queued over 30 days ago (its request since minimised by
+      // retention) is not counted.
       assert.equal(health.notices.undeliverable, 3);
       assert.equal(health.payments.problems, 1);
       assert.equal(health.payments.not_activated, 0);

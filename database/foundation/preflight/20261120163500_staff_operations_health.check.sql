@@ -6,7 +6,7 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row and reads "update not applied".
 --
--- The summary says whether the seventeen scheduled job commands have their
+-- The summary says whether the fifteen scheduled job commands have their
 -- reviewed bodies and the update's table and functions are absent (update not
 -- applied), or everything is the update's (already applied). After the
 -- update it also counts the jobs with a recorded run (each job records its
@@ -39,7 +39,7 @@ with bodies as (
     ('internal.note_scheduled_job_run(text,anyelement)', null, '783b802513659a9ad0723c5ad59e1ee5'),
     ('internal.record_scheduled_job_run(text)', null, '677e30342cfe57d26c45dc58ce7b5ee8'),
     ('api.record_scheduled_job_run(text)', null, '030f074f26e1e23c13a00e3e30f0fbd8'),
-    ('internal.get_staff_operations_health()', null, 'c7be6d6d742cbb8cdac138b0db778bb5'),
+    ('internal.get_staff_operations_health()', null, '464a32f492d9cd7dcebae419a4b5d8e8'),
     ('api.get_staff_operations_health()', null, '0d522526c382954f585b476ecdb25fac')
   ) v(sig, reviewed, updated)
 ),

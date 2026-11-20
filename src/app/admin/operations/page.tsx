@@ -190,9 +190,10 @@ export default async function OperationsHealthPage() {
             after they were queued.
           </p>
           {notices.undeliverable > 0 && (
-            <p className="text-sm font-medium text-destructive">
-              {notices.undeliverable} {notices.undeliverable === 1 ? "notice" : "notices"} can never
-              be sent: the request was minimised or the account&apos;s email address is gone.
+            <p className="text-sm text-muted-foreground">
+              {notices.undeliverable} {notices.undeliverable === 1 ? "notice" : "notices"} from the
+              last 30 days can never be sent: the request was minimised or the account&apos;s email
+              address changed or is not confirmed.
             </p>
           )}
           {!notices.items.length ? (
