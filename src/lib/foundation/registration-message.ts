@@ -13,7 +13,7 @@ export function foundationRegistrationReply(mode: FoundationSignupMode | null = 
     ok: true as const,
     inviteOnly,
     message: inviteOnly
-      ? "Registration is by invitation only for now. If this email was invited, check your inbox to continue."
+      ? "VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there? Sign up with the email address your invitation was sent to."
       : "If registration is available for this email, check your inbox to continue.",
   };
 }

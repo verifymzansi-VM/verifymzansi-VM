@@ -132,6 +132,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 66. One main button per screen (button hierarchy) | approved by owner 2026-11-20 (with the group 66 part of rows in other groups) | Every page: one filled main button per screen. Header 'Register' and '+ Post' light-green tinted; Pricing's three terms equal and outlined, no footer band; gold main buttons on dark-green bands (footer band, Advertise, the two verification help heroes, Trust & Safety); black buttons outlined; section pages' title buttons outlined; post page 'WhatsApp' outlined; dashboard, checkout and My slots: the ID review button is the main one until it is done; Terms and Privacy e-mail addresses are text links; Safety Centre's second 'Report a problem' a text link. Follow-ups: Home's About 'Post for free' outlined (the footer band's gold one is Home's main button); Safety Centre hero 'Report a problem' gold; My posts' 'New post' on every tab, filled when there are posts and outlined only beside the empty list's 'Create your first post'. No black (owner: no black, light tourism colour): selected chips and tabs and the former black buttons are light teal |
 | 67. Daily limit on SMS codes: message (no file rows: server message only) | approved by owner 2026-11-20 | 'Verify your phone number' and 'Complete your profile': when the site's daily limit on SMS codes is reached, 'Send code' shows 'We can't send codes right now. Please try again later.' under the number instead of sending a code (until midnight, South African time). Nothing changes otherwise |
 | 68. Old backend retired, part 2 (item 10) | approved by owner 2026-11-20 (with the group 68 part of 7 rows elsewhere) | Create a post: a verified member no longer sees 'Verification required before posting' flash up, and a member under review or turned down sees the right note at once. Nothing else on screen: post pages, Leads, Pricing and Billing look the same, and the post pages read no session |
+| 71. Invite-only sign-up: clearer, kinder message (item 11) | awaiting owner (with the group 71 part of 2 rows elsewhere) | Sign-up while it is by invitation (today). After 'Create account', and in the 'Check your email' box on the sign-in page: 'VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there? Sign up with the email address your invitation was sent to.' (was 'Registration is by invitation only for now...'). A Google sign-up without an invitation: 'Sign-up is by invitation for now' and 'If you were invited, use the email address the invitation was sent to. Already have an account? Sign in with the email you used.' (was 'Registration is not open yet'). Every address still gets the same answer, so the page never says who is invited. |
 
 Questions for the owner:
 
@@ -1154,10 +1155,10 @@ saved at sign-up).
 | File                                             | Kind              | Reason                                                                                                                         | What changes on screen                                                                                                                                                                                                                                                                                                    | Proposed | Owner decision               | Date       | Version      |
 | ------------------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------- | ---------- | ------------ |
 | `src/components/ui/google-oauth-button.tsx`      | wording-behaviour | Google sign-up creates an account without the Terms box the email form has.                                                    | Sign-in and sign-up pages: under the Google button, one small line 'By continuing with Google, you agree to the Terms of Service and Privacy Policy.' with both links opening in a new tab.                                                                                                                               | keep     | approved by owner 2026-11-12 | 2026-11-12 | 744c498f6990 |
-| `src/app/(auth)/login/page.tsx`                  | wording-behaviour | A refused or cancelled Google sign-in said 'Your sign-in link has expired', and an uninvited sign-up was told a link was sent. Group 63: a Google sign-up the sign-up hook refuses for its email domain (only while sign-up is open) gets its own message instead of the generic sign-in error. | Sign-in page: 'Registration is not open yet' (invitation only for now) when Google sign-up is refused; 'Google sign-in was not completed' when it is cancelled; after an invite-only sign-up the notice reads 'Registration is by invitation only for now. If your email was invited, we've sent it a confirmation link.' Group 63 (only once the owner opens sign-up): 'This email can't be used to register' with 'Sign up with a different email address or Google account.' when Google sign-up is refused for a blocked or reserved email domain. | keep     | approved by owner 2026-11-12; group 63 part approved by owner 2026-11-20 | 2026-11-20 | 5d455ca9a1bf |
+| `src/app/(auth)/login/page.tsx` | wording-behaviour | A refused or cancelled Google sign-in said 'Your sign-in link has expired', and an uninvited sign-up was told a link was sent. Group 63: a Google sign-up the sign-up hook refuses for its email domain (only while sign-up is open) gets its own message instead of the generic sign-in error. Group 71: the invite-only words: the 'Check your email' box after an invite-only sign-up and the Google sign-up refusal ('Sign-up is by invitation for now'). | Sign-in page: 'Registration is not open yet' (invitation only for now) when Google sign-up is refused; 'Google sign-in was not completed' when it is cancelled; after an invite-only sign-up the notice reads 'Registration is by invitation only for now. If your email was invited, we've sent it a confirmation link.' Group 63 (only once the owner opens sign-up): 'This email can't be used to register' with 'Sign up with a different email address or Google account.' when Google sign-up is refused for a blocked or reserved email domain. | keep | approved by owner 2026-11-12; group 63 part approved by owner 2026-11-20; group 71 part awaiting owner | 2026-11-20 | b74d2e5de280 |
 | `src/app/(auth)/register/page.tsx`               | wording-behaviour | Every sign-up showed 'Account created!', even for addresses that cannot register yet.                                          | While sign-up is by invitation only, the toast reads 'Check your email' with the server's invitation wording instead of 'Account created!'. The reply is the same for every address, so it never shows who is invited or registered.                                                                                      | keep     | approved by owner 2026-11-12 | 2026-11-12 | e3f950bca7f5 |
 | `src/components/ui/google-oauth-button.test.tsx` | test              | Tests that the Terms and Privacy line and its two links show under both Google buttons.                                        | Nothing (not part of a page)                                                                                                                                                                                                                                                                                              | keep     | approved by owner 2026-11-12 | 2026-11-12 | 7ecacb998493 |
-| `src/app/(auth)/login/page.test.tsx`             | test              | Tests for the invitation notice and the two Google sign-in messages. Group 63: also the blocked-domain message. | Nothing (not part of a page)                                                                                                                                                                                                                                                                                              | keep     | approved by owner 2026-11-12; group 63 part approved by owner 2026-11-20 | 2026-11-20 | ef8923c03117 |
+| `src/app/(auth)/login/page.test.tsx` | test | Tests for the invitation notice and the two Google sign-in messages. Group 63: also the blocked-domain message. Group 71: checks the new invite-only words. | Nothing (not part of a page) | keep | approved by owner 2026-11-12; group 63 part approved by owner 2026-11-20; group 71 part awaiting owner | 2026-11-20 | 34689969eaa7 |
 
 ### 16. One terms step
 
@@ -2848,6 +2849,39 @@ Decision: approved by owner 2026-11-20 (owner question: 'Approve the Create a po
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/app/post/create/page.test.tsx` | test | Group 68: the page test runs on the live backend's session and verification read: one check per status (verified, under review, turned down, sent back to fix, not finished), a failed read, and 403/503 refusals that are not treated as signed out. | Nothing (not part of a page) | keep | approved by owner 2026-11-20 | 2026-11-20 | 5bc0dcdc1538 |
+
+### 71. Invite-only sign-up: clearer, kinder message (item 11)
+
+Launch checklist item 11, the invite-only sign-up message (the sign-up mode is
+held in the database since item 7, group 63). While sign-up is by invitation,
+everyone who signs up gets the same answer whether or not their address was
+invited, so the words never say who is invited. Only the words change; the
+steps, the boxes and their places stay as they are.
+
+- After 'Create account' (the 'Check your email' message) and in the 'Check
+  your email' box on the sign-in page:
+
+  > VerifyMzansi is open by invitation for now. If this email was invited,
+  > we've sent it a confirmation link. Nothing there? Sign up with the email
+  > address your invitation was sent to.
+
+  Before: 'Registration is by invitation only for now. If this email was
+  invited, check your inbox to continue.' (the message) and 'Registration is
+  by invitation only for now. If your email was invited, we've sent it a
+  confirmation link.' (the box).
+- A Google sign-up without an invitation, back on the sign-in page:
+  'Sign-up is by invitation for now' and 'If you were invited, use the email
+  address the invitation was sent to. Already have an account? Sign in with
+  the email you used.' Before: 'Registration is not open yet' and
+  'VerifyMzansi is open by invitation only for now. If you already have an
+  account, sign in with the email you used.'
+
+Text outside the checked scope: the server's reply in
+`src/lib/foundation/registration-message.ts`. Pictures (desktop and phone,
+made-up data): `docs/engineering-review/screenshots/item11-invite-message/`
+(not published).
+
+Decision: awaiting owner.
 
 <!-- frontend-ledger:end -->
 

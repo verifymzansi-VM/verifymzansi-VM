@@ -256,7 +256,7 @@ it("answers a sign-up the invitation guard refuses exactly like any other addres
   expect(refusedBody).toEqual({
     ok: true,
     inviteOnly: true,
-    message: expect.stringContaining("by invitation only"),
+    message: expect.stringContaining("open by invitation for now"),
   });
 });
 it("words the uniform reply from the database's sign-up mode before the environment switch", async () => {
@@ -266,7 +266,7 @@ it("words the uniform reply from the database's sign-up mode before the environm
   expect(await closed.json()).toEqual({
     ok: true,
     inviteOnly: true,
-    message: expect.stringContaining("by invitation only"),
+    message: expect.stringContaining("open by invitation for now"),
   });
   expect(readFoundationSignupMode).toHaveBeenCalledWith(
     expect.objectContaining({ publishableKey: publicKey })

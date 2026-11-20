@@ -149,9 +149,9 @@ export default function LoginPage() {
       });
     } else if (loginPageFlags.error === "registration_closed") {
       toast({
-        title: "Registration is not open yet",
+        title: "Sign-up is by invitation for now",
         description:
-          "VerifyMzansi is open by invitation only for now. If you already have an account, sign in with the email you used.",
+          "If you were invited, use the email address the invitation was sent to. Already have an account? Sign in with the email you used.",
         variant: "destructive",
       });
     } else if (loginPageFlags.error === "registration_unavailable") {
@@ -436,7 +436,7 @@ export default function LoginPage() {
         <AuthNotice tone="info" icon={<Mail />} title="Check your email" role="status">
           <p>
             {loginPageFlags.invitedOnly
-              ? "Registration is by invitation only for now. If your email was invited, we've sent it a confirmation link."
+              ? "VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there? Sign up with the email address your invitation was sent to."
               : "We've sent a confirmation link to your email address."}
           </p>
           <Button
