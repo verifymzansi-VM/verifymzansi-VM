@@ -176,15 +176,13 @@ test.describe("public pages", () => {
     expect(payload.status).toBeTruthy();
   });
 
-  test("webhook endpoints answer malformed payloads without a server error", async ({
+  test("the payment webhook answers a malformed payload without a server error", async ({
     request,
   }) => {
     const ozow = await request.post("/api/webhooks/ozow", {
       data: { merchantReference: "smoke-1", eventType: "transaction.complete" },
     });
     expect([400, 401, 503]).toContain(ozow.status());
-    const kyc = await request.post("/api/webhooks/kyc/provider", { data: {} });
-    expect(kyc.status()).toBeLessThan(500);
   });
 
   test("Google sign-in recovers when the page starts without a CSRF token", async ({ page }) => {

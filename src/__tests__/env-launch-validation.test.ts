@@ -28,8 +28,7 @@ const validProductionEnv: Record<string, string> = {
   OZOW_CLIENT_SECRET: "client-secret", // secret-scan: allow deterministic fixture
   OZOW_SITE_CODE: "site-code",
   OZOW_WEBHOOK_SECRET: "webhook-secret", // secret-scan: allow deterministic fixture
-  KYC_PROVIDER: "veriff",
-  KYC_WEBHOOK_SECRET: "kyc-webhook-secret", // secret-scan: allow deterministic fixture
+  KYC_PROVIDER: "manual",
   RESEND_API_KEY: "re_live_123456789",
   R2_ACCOUNT_ID: "account-12345678",
   R2_ACCESS_KEY_ID: "access-key-12345678",
@@ -92,7 +91,6 @@ describe("launch env validation", () => {
   it("fails launch validation when KYC provider is still stub in production", () => {
     const summary = validateLaunchConfiguration({
       ...validProductionEnv,
-      KYC_WEBHOOK_SECRET: undefined,
       KYC_PROVIDER: "stub",
     });
 
@@ -105,25 +103,14 @@ describe("launch env validation", () => {
     );
   });
 
-  it("fails launch validation when KYC provider is non-stub and KYC webhook secret is missing", () => {
+  it("no longer asks for a KYC webhook secret for any provider", () => {
     const summary = validateLaunchConfiguration({
       ...validProductionEnv,
-      KYC_WEBHOOK_SECRET: undefined,
       KYC_PROVIDER: "veriff",
     });
 
-    expect(summary.isValid).toBe(false);
-    expect(summary.errors).toContainEqual(
-      expect.objectContaining({
-        name: "Launch env",
-        detail: expect.stringContaining("KYC_WEBHOOK_SECRET"),
-      })
-    );
-    expect(summary.errors).toContainEqual(
-      expect.objectContaining({
-        name: "KYC webhook",
-      })
-    );
+    expect(summary.isValid).toBe(true);
+    expect(JSON.stringify(summary)).not.toContain("KYC_WEBHOOK_SECRET");
   });
 
   it("fails launch validation when Ozow is still pointed at staging", () => {
@@ -228,13 +215,9 @@ describe("launch env validation", () => {
     );
   });
 
-  it("fails strict production env validation when KYC_PROVIDER is non-stub and the webhook secret is missing", () => {
-    applyEnv({
-      ...validProductionEnv,
-      KYC_PROVIDER: "veriff",
-      KYC_WEBHOOK_SECRET: undefined,
-    });
+  it("passes strict production env validation without a KYC webhook secret", () => {
+    applyEnv({ ...validProductionEnv, KYC_PROVIDER: "manual" });
 
-    expect(() => validateEnv({ strict: true, mode: "production" })).toThrow(/KYC_WEBHOOK_SECRET/);
+    expect(() => validateEnv({ strict: true, mode: "production" })).not.toThrow();
   });
 });

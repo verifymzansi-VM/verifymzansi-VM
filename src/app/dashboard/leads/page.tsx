@@ -1,8 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { LeadsFeed, type LeadRow } from "@/components/dashboard/leads-feed";
 import { restoredOwnerEnquiries } from "@/lib/foundation/restored-inbox-server";
+import { readFoundationServerUser } from "@/lib/foundation/server-session";
 
 export const metadata = {
   title: "Leads",
@@ -10,10 +10,8 @@ export const metadata = {
 };
 
 export default async function LeadsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // The account the sign-in gate already verified for this request.
+  const user = await readFoundationServerUser();
   if (!user) redirect("/login");
   const nativeLeads = await restoredOwnerEnquiries(user.id);
   const rows = nativeLeads as unknown as LeadRow[];

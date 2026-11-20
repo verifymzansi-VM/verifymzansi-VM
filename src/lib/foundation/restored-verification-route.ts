@@ -52,7 +52,8 @@ async function readFrontendVerificationUploads(api: FoundationAuthenticatedApi) 
   if (result.error) throw new Error("Verification uploads unavailable");
   return uploadRows.parse(result.data);
 }
-function presentedVerification(
+/** Exported for the parity test of account-verification-status.ts. */
+export function presentedVerification(
   value: FoundationOwnerDashboard,
   uploads: z.infer<typeof uploadRows> = []
 ) {

@@ -2,24 +2,71 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CreatePostPage from "./page";
 
-const { mockCreateClient, mockResolveAccountVerification, mockFetch, mockRedirect, mockPush } =
-  vi.hoisted(() => {
-    class RedirectError extends Error {
-      digest = "NEXT_REDIRECT";
-      constructor(public url: string) {
-        super(`NEXT_REDIRECT;${url}`);
-      }
+const {
+  mockReadSession,
+  mockRpc,
+  mockLegacyClient,
+  SessionError,
+  mockFetch,
+  mockRedirect,
+  mockPush,
+} = vi.hoisted(() => {
+  class RedirectError extends Error {
+    digest = "NEXT_REDIRECT";
+    constructor(public url: string) {
+      super(`NEXT_REDIRECT;${url}`);
     }
-    return {
-      mockCreateClient: vi.fn(),
-      mockResolveAccountVerification: vi.fn(),
-      mockFetch: vi.fn(),
-      mockPush: vi.fn(),
-      mockRedirect: vi.fn((url: string) => {
-        throw new RedirectError(url);
-      }),
-    };
-  });
+  }
+  class SessionError extends Error {
+    constructor(readonly status: 401 | 403 | 503) {
+      super("A verified account page session is required");
+    }
+  }
+  return {
+    mockReadSession: vi.fn(),
+    mockRpc: vi.fn(),
+    mockLegacyClient: vi.fn(() => {
+      throw new Error("old backend client used");
+    }),
+    SessionError,
+    mockFetch: vi.fn(),
+    mockPush: vi.fn(),
+    mockRedirect: vi.fn((url: string) => {
+      throw new RedirectError(url);
+    }),
+  };
+});
+
+/** What get_my_verification_case answers (the live verification read). */
+const verificationCase = (change: Record<string, unknown> = {}) => ({
+  case_id: "00000000-0000-4000-8000-0000000000c1",
+  version: 2,
+  verified: false,
+  phone_verified: true,
+  locality_confirmed: true,
+  submission_pending: false,
+  return_reason: null,
+  ...change,
+});
+const VERIFIED = { verified: true };
+
+/** Answers the page's verification read; a returned case also gets its decision. */
+function answerVerification(change: Record<string, unknown>, decision: string | null = null) {
+  mockRpc.mockImplementation(async (name: string) =>
+    name === "get_my_verification_case"
+      ? { data: verificationCase(change), error: null }
+      : {
+          data: {
+            account_id: "user-1",
+            case_id: "00000000-0000-4000-8000-0000000000c1",
+            case_version: 2,
+            reason: change.return_reason ?? null,
+            decision,
+          },
+          error: null,
+        }
+  );
+}
 
 vi.mock("next/link", () => ({
   default: ({
@@ -43,12 +90,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: mockCreateClient,
-}));
-
-vi.mock("@/lib/account/resolved-verification", () => ({
-  resolveAccountVerification: mockResolveAccountVerification,
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/supabase/server", () => ({ createClient: mockLegacyClient }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockLegacyClient }));
+vi.mock("@/lib/foundation/server-session", () => ({
+  readFoundationServerSession: mockReadSession,
+  FoundationServerSessionError: SessionError,
 }));
 
 vi.mock("@/components/layout/header", () => ({
@@ -68,14 +115,8 @@ describe("CreatePostPage", () => {
       status: 200,
       json: vi.fn().mockResolvedValue({ accountVerificationStatus: "incomplete" }),
     });
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
-      },
-    });
-    mockResolveAccountVerification.mockResolvedValue({
-      accountVerificationStatus: "verified",
-    });
+    mockReadSession.mockResolvedValue({ user: { id: "user-1" }, api: { rpc: mockRpc } });
+    answerVerification(VERIFIED);
   });
 
   afterEach(() => {
@@ -140,9 +181,7 @@ describe("CreatePostPage", () => {
   });
 
   it("sends unverified users to verification with a returnUrl", async () => {
-    mockResolveAccountVerification.mockResolvedValue({
-      accountVerificationStatus: "incomplete",
-    });
+    answerVerification({ phone_verified: false });
 
     render(await CreatePostPage());
 
@@ -158,9 +197,7 @@ describe("CreatePostPage", () => {
   });
 
   it("trusts the server-resolved verification status on first render", async () => {
-    mockResolveAccountVerification.mockResolvedValue({
-      accountVerificationStatus: "verified",
-    });
+    answerVerification(VERIFIED);
 
     render(await CreatePostPage());
 
@@ -178,9 +215,7 @@ describe("CreatePostPage", () => {
   });
 
   it("updates the posting gate copy when the verification status refresh resolves to pending review", async () => {
-    mockResolveAccountVerification.mockResolvedValue({
-      accountVerificationStatus: "incomplete",
-    });
+    answerVerification({ phone_verified: false });
     mockFetch.mockResolvedValue({
       ok: true,
       status: 200,
@@ -222,25 +257,14 @@ describe("CreatePostPage", () => {
   });
 
   it("redirects unauthenticated users to login with returnUrl", async () => {
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
-      },
-    });
+    mockReadSession.mockRejectedValue(new SessionError(401));
 
     await expect(CreatePostPage()).rejects.toThrow("NEXT_REDIRECT");
     expect(mockRedirect).toHaveBeenCalledWith("/login?returnUrl=%2Fpost%2Fcreate");
   });
 
   it("redirects unauthenticated users even when verification API would report verified", async () => {
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
-      },
-    });
-    mockResolveAccountVerification.mockResolvedValue({
-      accountVerificationStatus: null,
-    });
+    mockReadSession.mockRejectedValue(new SessionError(401));
     mockFetch.mockResolvedValue({
       ok: true,
       status: 200,
@@ -250,4 +274,62 @@ describe("CreatePostPage", () => {
     await expect(CreatePostPage()).rejects.toThrow("NEXT_REDIRECT");
     expect(mockRedirect).toHaveBeenCalledWith("/login?returnUrl=%2Fpost%2Fcreate");
   });
+  // Every status the live verification read can give, as the page first shows it.
+  it.each([
+    ["verified", VERIFIED, null, null],
+    [
+      "pending_review",
+      { submission_pending: true },
+      null,
+      "Your verification is being reviewed. You can post once it's approved.",
+    ],
+    [
+      "rejected",
+      { return_reason: "document_unreadable" },
+      "rejected",
+      "Your verification wasn't approved. Check the feedback and try again.",
+    ],
+    [
+      "incomplete (sent back to fix)",
+      { return_reason: "document_unreadable" },
+      "needs_resubmission",
+      "Finish verification to start posting.",
+    ],
+    ["incomplete", { phone_verified: false }, null, "Finish verification to start posting."],
+  ] as const)("shows a %s member the matching note", async (_status, change, decision, note) => {
+    answerVerification(change, decision);
+    // The browser's own refresh stays out of the way: only the first render counts.
+    mockFetch.mockReturnValue(new Promise(() => {}));
+
+    render(await CreatePostPage());
+
+    if (note === null) {
+      expect(screen.queryByText("Verification required before posting")).not.toBeInTheDocument();
+    } else {
+      expect(screen.getByText("Verification required before posting")).toBeInTheDocument();
+      expect(screen.getByText(note)).toBeInTheDocument();
+    }
+    expect(mockRpc).toHaveBeenCalledWith("get_my_verification_case", {}, { get: false });
+    expect(mockLegacyClient).not.toHaveBeenCalled();
+  });
+
+  it("shows the finish-verification note when the verification read fails", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { code: "PGRST000" } });
+    mockFetch.mockReturnValue(new Promise(() => {}));
+
+    render(await CreatePostPage());
+
+    expect(screen.getByText("Verification required before posting")).toBeInTheDocument();
+    expect(screen.getByText("Finish verification to start posting.")).toBeInTheDocument();
+  });
+
+  it.each([403, 503] as const)(
+    "does not treat a %s session refusal as signed out",
+    async (status) => {
+      mockReadSession.mockRejectedValue(new SessionError(status));
+
+      await expect(CreatePostPage()).rejects.toMatchObject({ status });
+      expect(mockRedirect).not.toHaveBeenCalled();
+    }
+  );
 });

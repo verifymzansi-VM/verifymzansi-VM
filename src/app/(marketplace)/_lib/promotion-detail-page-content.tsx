@@ -11,10 +11,9 @@ import type { Metadata } from "next";
 
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
-import { normalizeOwnerRecord, readOwnerId } from "@/lib/account/compat";
+import { normalizeOwnerRecord } from "@/lib/account/compat";
 import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
 import { presentEventSlide } from "@/lib/feed/presenters";
-import { createClient } from "@/lib/supabase/server";
 import { toPublicVerification } from "@/lib/business-verification/public";
 
 export async function generatePromotionDetailMetadata(id: string): Promise<Metadata> {
@@ -36,7 +35,6 @@ export async function generatePromotionDetailMetadata(id: string): Promise<Metad
 }
 
 export async function PromotionDetailPageContent({ id }: { id: string }) {
-  const supabase = await createClient();
   const rawPromotion = await restoredEventDetail(id);
 
   const promotion = rawPromotion ? normalizeOwnerRecord(rawPromotion) : null;
@@ -45,7 +43,6 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
     notFound();
   }
 
-  const promotionOwnerId = readOwnerId(promotion);
   const publicPost = await restoredPublicDetail(id);
   const advertiserProfile = publicPost
     ? {
@@ -61,9 +58,6 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
     ? await restoredEventHostBusiness(promotion.business_id)
     : null;
   const linkedBusiness = linkedBusinessRow ? toPublicVerification(linkedBusinessRow) : null;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   const promotionViewCount = promotion.view_count ?? 0;
 
   const locationName = [promotion.location_city, promotion.location_province]
@@ -90,16 +84,16 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
     }),
   };
 
-  // The number reaches the page only for the advertiser; visitors reveal it.
+  // The number never reaches the page: everyone, the advertiser included,
+  // reveals it, so this public page reads no session.
   const publishesPhone = Boolean(
     promotion.contact_methods?.some((method: string) => ["call", "whatsapp"].includes(method))
   );
-  const viewerIsAdvertiser = Boolean(user && user.id === promotionOwnerId);
   const safeAdvertiser = advertiserProfile
     ? {
         ...advertiserProfile,
         display_name: publicPersonName(advertiserProfile.display_name),
-        phone: publishesPhone && viewerIsAdvertiser ? advertiserProfile.phone : null,
+        phone: null,
         has_phone: publishesPhone,
         masked_phone_public: null,
       }

@@ -93,7 +93,6 @@ const envSchema = z.object({
   OZOW_API_BASE_URL: z.string().url().optional(),
   OZOW_WEBHOOK_SECRET: z.string().optional(),
   KYC_PROVIDER: z.string().optional(),
-  KYC_WEBHOOK_SECRET: z.string().optional(),
 
   // ── Resend (required for email) ───────────────────────────
   RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required for transactional emails"),
@@ -184,7 +183,6 @@ function _createFallbackEnv(): Env {
     OZOW_API_BASE_URL: process.env.OZOW_API_BASE_URL,
     OZOW_WEBHOOK_SECRET: process.env.OZOW_WEBHOOK_SECRET,
     KYC_PROVIDER: process.env.KYC_PROVIDER,
-    KYC_WEBHOOK_SECRET: process.env.KYC_WEBHOOK_SECRET,
     RESEND_API_KEY: process.env.RESEND_API_KEY || "",
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "",
     TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY || "",

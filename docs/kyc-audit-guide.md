@@ -17,15 +17,12 @@ exist. Unsupported provider names fail instead of falling back silently.
    velocity and document signals, and records risk and provider evidence. Raw
    IDs must not appear in public API results or ordinary logs.
 4. `kyc-provider.ts` supplies null scores and sends manual/stub submissions to
-   human review. The shared `src/lib/validations/kyc-webhook.ts` accepts only
-   finite 0–100 scores, optional/missing or explicit null unknown scores,
-   bounded metadata, known statuses and bounded references/reasons.
-5. `src/app/api/webhooks/kyc/provider/route.ts` verifies HMAC before data
-   access, bounds the body, rejects unsupported configuration and production
-   unsigned bypasses, then calls `apply_kyc_provider_webhook` once.
-   Finalized/old artifacts do not replay current risk; missing publication and
-   failed writes remain retryable. Manual workflow has no genuine external KYC
-   vendor attestation.
+   human review.
+5. The provider callback route (`src/app/api/webhooks/kyc/provider/route.ts`),
+   its payload schema and its `KYC_WEBHOOK_SECRET` were removed on 20 November
+   2026 (owner decision): they wrote only to the retired source backend. The
+   manual workflow has no external KYC vendor attestation; a provider
+   integration will be built fresh.
 6. `src/app/api/admin/verification/decide/route.ts` authorizes reviewer roles.
    High/critical approvals require an override reason and a second reviewer.
    Provider results do not independently grant verified status.

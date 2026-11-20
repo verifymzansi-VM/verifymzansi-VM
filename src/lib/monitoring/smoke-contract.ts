@@ -55,12 +55,4 @@ export const checks: SmokeCheck[] = [
     body: JSON.stringify({ merchantReference: "test", eventType: "transaction.complete" }),
     expectStatuses: [400, 401, 403, 404],
   },
-  {
-    name: "KYC webhook path reachable",
-    path: "/api/webhooks/kyc/provider",
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: { provider_ref: "unknown-smoke-ref", status: "approved" },
-    expectStatuses: [400, 401, 403, 404, 503],
-  },
 ];

@@ -4,7 +4,6 @@ import { readRestoredCollection } from "@/lib/foundation/marketplace-read";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import { notFound } from "next/navigation";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
-import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
@@ -14,7 +13,7 @@ import {
   type SimilarSellerRow,
 } from "@/components/listings/listing-detail-content";
 import type { Metadata } from "next";
-import { normalizeOwnerRecord, normalizeOwnerRecords, readOwnerId } from "@/lib/account/compat";
+import { normalizeOwnerRecord, normalizeOwnerRecords } from "@/lib/account/compat";
 import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
 import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import { presentListingSlide } from "@/lib/feed/presenters";
@@ -44,13 +43,6 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
 
 export default async function ListingDetailPage({ params }: ListingDetailPageProps) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  // Check if visitor is authenticated
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   // Fetch listing
   const rawListing = await restoredListingDetail(id);
 
@@ -58,7 +50,6 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
   if (!listing) notFound();
 
-  const listingOwnerId = readOwnerId(listing);
   const publicPost = await restoredPublicDetail(id);
   const seller = publicPost
     ? {
@@ -72,17 +63,16 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     : null;
 
   // Publish phone only when the poster explicitly selected a phone contact method.
+  // The number never reaches the page: everyone, the seller included, taps
+  // "Show contact number" to get it, so this public page reads no session.
   const publishesPhone = listing.contact_methods?.some((method: string) =>
     ["call", "whatsapp"].includes(method)
   );
-  // The number reaches the page only for the seller; everyone else taps
-  // "Show contact number" (signed in, rate-limited) to get it.
-  const viewerIsSeller = Boolean(user && user.id === listingOwnerId);
   const safeSeller = seller
     ? {
         ...seller,
         display_name: publicPersonName(seller.display_name),
-        phone: publishesPhone && viewerIsSeller ? seller.phone : null,
+        phone: null,
         has_phone: Boolean(publishesPhone),
         masked_phone_public: null,
         // Use the location selected for this post, never a private account location.
