@@ -14,8 +14,12 @@ const ToastViewport = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Viewport
     ref={ref}
+    // Phones: at the top of the screen, over the header (z-110), clear of a
+    // form's buttons and the bottom navigation, so a toast never sits over the
+    // button the visitor taps next. md and up: bottom right, as before. The
+    // list itself lets taps through; only the toasts take them.
     className={cn(
-      "fixed bottom-0 left-0 right-0 z-[100] flex max-h-screen w-full flex-col p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:left-auto md:pb-[calc(1rem+env(safe-area-inset-bottom))] md:max-w-[420px]",
+      "pointer-events-none fixed left-0 right-0 top-0 z-[115] flex max-h-screen w-full flex-col p-4 pt-[max(1rem,env(safe-area-inset-top))] md:bottom-0 md:left-auto md:top-auto md:z-[100] md:max-w-[420px] md:pb-[calc(1rem+env(safe-area-inset-bottom))] md:pt-4",
       className
     )}
     {...props}
@@ -24,7 +28,7 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-xl border border-border/60 p-4 pr-10 shadow-lg transition-all break-words data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-bottom-full",
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-xl border border-border/60 p-4 pr-10 shadow-lg transition-all break-words data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full md:data-[state=open]:slide-in-from-bottom-full",
   {
     variants: {
       variant: {

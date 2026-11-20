@@ -1,14 +1,26 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+const isEmptyArray = (data) => Array.isArray(data) && data.length === 0;
 // Reviewed public reads keyed by post ids (totals and stickers of publicly
-// listed posts; no account data).
-const publicBusinessProjections = new Set([
-  "get_public_frontend_business_seen",
-  "get_public_frontend_business_cipc",
-  "get_public_frontend_business_affiliations",
-  // 20261119172135_post_views_and_likes.sql: view and like totals only.
-  "get_post_engagement",
+// listed posts; no account data), each with the exact answer it gives the
+// probe's empty id list.
+const publicBusinessProjections = new Map([
+  ["get_public_frontend_business_seen", isEmptyArray],
+  ["get_public_frontend_business_cipc", isEmptyArray],
+  ["get_public_frontend_business_affiliations", isEmptyArray],
+  // 20261119172135_post_views_and_likes.sql: view and like totals only, as
+  // {"items": [{"post_id", "views", "likes"}]} for publicly live posts, so the
+  // empty id list answers exactly {"items": []}.
+  [
+    "get_post_engagement",
+    (data) =>
+      data !== null &&
+      typeof data === "object" &&
+      !Array.isArray(data) &&
+      Object.keys(data).join() === "items" &&
+      isEmptyArray(data.items),
+  ],
 ]);
 // Reviewed public settings (20261117082020_online_payment_limit.sql): no
 // arguments, no account data, readable by visitors like the price catalogue.
@@ -116,16 +128,12 @@ export async function probeFoundationRuntimeApi(
     });
     const data = await response.json().catch(() => null);
     const publicSetting = publicSettingReads.get(fn.name);
-    const publicProjection = publicBusinessProjections.has(fn.name) || publicSetting !== undefined;
+    const emptyProjection = publicBusinessProjections.get(fn.name);
+    const publicProjection = emptyProjection !== undefined || publicSetting !== undefined;
     let state = "unexpected";
     if (publicSetting) {
       if (response.status === 200 && publicSetting(data)) state = "present";
-    } else if (
-      publicProjection &&
-      response.status === 200 &&
-      Array.isArray(data) &&
-      data.length === 0
-    )
+    } else if (emptyProjection && response.status === 200 && emptyProjection(data))
       state = "present";
     else if (!publicProjection && [401, 403].includes(response.status) && data?.code === "42501")
       state = "present";
