@@ -1,172 +1,71 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const { isFeatureEnabled, flagRow } = vi.hoisted(() => ({
-  isFeatureEnabled: vi.fn(),
-  flagRow: vi.fn(),
-}));
-vi.mock("@/lib/services/feature-flags", () => ({ isFeatureEnabled }));
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: flagRow }) }) }),
-  }),
-}));
-
-import { evaluateStaffMfa, hasRecentSecondFactor, STAFF_MFA_FLAG } from "./staff-mfa";
+import { describe, expect, it } from "vitest";
+import { evaluateStaffMfa, hasRecentSecondFactor } from "./staff-mfa";
 
 const NOW = new Date("2026-09-27T12:00:00.000Z");
 const seconds = (date: Date) => Math.floor(date.getTime() / 1000);
 const minutesAgo = (m: number) => new Date(NOW.getTime() - m * 60_000);
 const IN_GRACE = new Date("2026-10-01T00:00:00.000Z");
-const GRACE_OVER = new Date("2026-09-20T00:00:00.000Z");
 
-function supabaseWith(result: { data: unknown; error: unknown }) {
-  return {
-    auth: { mfa: { getAuthenticatorAssuranceLevel: vi.fn().mockResolvedValue(result) } },
-  } as never;
-}
-
-const aal = (currentLevel: string, nextLevel: string, methods: unknown[] = []) =>
-  supabaseWith({
-    data: { currentLevel, nextLevel, currentAuthenticationMethods: methods },
-    error: null,
-  });
-
-describe("evaluateStaffMfa", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    isFeatureEnabled.mockResolvedValue(true);
-  });
-
-  it("does nothing when the enforcement flag is switched off", async () => {
-    isFeatureEnabled.mockResolvedValue(false);
-    flagRow.mockResolvedValue({ data: { enabled: false, mode: "off" }, error: null });
-    const supabase = aal("aal1", "aal1");
-    await expect(evaluateStaffMfa(supabase, GRACE_OVER, NOW)).resolves.toEqual({
-      status: "not_enforced",
-    });
-    expect(isFeatureEnabled).toHaveBeenCalledWith(STAFF_MFA_FLAG);
-  });
-
-  it("keeps enforcing when the flag cannot be read", async () => {
-    isFeatureEnabled.mockResolvedValue(false);
-    flagRow.mockResolvedValue({ data: null, error: { message: "timeout" } });
-    await expect(evaluateStaffMfa(aal("aal1", "aal1"), GRACE_OVER, NOW)).resolves.toEqual({
-      status: "required",
-      hasFactor: false,
-    });
-  });
-  it("keeps a freshly verified factor available when routine enforcement is off", async () => {
-    isFeatureEnabled.mockResolvedValue(false);
-    flagRow.mockResolvedValue({ data: { enabled: false, mode: "off" }, error: null });
-    const verifiedAt = minutesAgo(1);
-    const state = await evaluateStaffMfa(
-      aal("aal2", "aal2", [{ method: "totp", timestamp: seconds(verifiedAt) }]),
-      GRACE_OVER,
-      NOW
-    );
-    expect(state.status).toBe("verified");
-    expect(hasRecentSecondFactor(state, NOW)).toBe(true);
-  });
-
-  it("records when the second factor was last verified", async () => {
-    const verifiedAt = minutesAgo(5);
-    const state = await evaluateStaffMfa(
-      aal("aal2", "aal2", [
-        { method: "password", timestamp: seconds(minutesAgo(60)) },
-        { method: "totp", timestamp: seconds(verifiedAt) },
-      ]),
-      GRACE_OVER,
-      NOW
-    );
-    expect(state).toEqual({
-      status: "verified",
-      lastVerifiedAt: new Date(seconds(verifiedAt) * 1000),
-    });
-  });
-
-  it("asks staff to verify again once the last authenticator code is over 12 hours old", async () => {
-    const at = (hours: number) =>
-      aal("aal2", "aal2", [{ method: "totp", timestamp: seconds(minutesAgo(hours * 60)) }]);
-    await expect(evaluateStaffMfa(at(11.9), GRACE_OVER, NOW)).resolves.toMatchObject({
-      status: "verified",
-    });
-    await expect(evaluateStaffMfa(at(12.1), GRACE_OVER, NOW)).resolves.toEqual({
-      status: "required",
-      hasFactor: true,
-    });
-  });
-
-  it("does not accept a session raised by a factor other than an authenticator app", async () => {
-    for (const method of ["phone", "webauthn", "mfa/phone"]) {
-      await expect(
-        evaluateStaffMfa(
-          aal("aal2", "aal2", [{ method, timestamp: seconds(minutesAgo(1)) }]),
-          IN_GRACE,
-          NOW
-        )
-      ).resolves.toEqual({ status: "required", hasFactor: true });
-    }
-  });
-
-  it("requires verification when a factor is enrolled, even during the grace period", async () => {
-    await expect(evaluateStaffMfa(aal("aal1", "aal2"), IN_GRACE, NOW)).resolves.toEqual({
-      status: "required",
-      hasFactor: true,
-    });
-  });
-
-  it("allows staff without a factor until the grace period ends", async () => {
-    await expect(evaluateStaffMfa(aal("aal1", "aal1"), IN_GRACE, NOW)).resolves.toEqual({
-      status: "grace",
-      graceEndsAt: IN_GRACE,
-    });
-    await expect(evaluateStaffMfa(aal("aal1", "aal1"), GRACE_OVER, NOW)).resolves.toEqual({
-      status: "required",
-      hasFactor: false,
-    });
-  });
-
-  it("never treats an unreadable session as verified", async () => {
-    const broken = supabaseWith({ data: null, error: { message: "no session" } });
-    await expect(evaluateStaffMfa(broken, IN_GRACE, NOW)).resolves.toMatchObject({
-      status: "grace",
-    });
-    await expect(evaluateStaffMfa(broken, GRACE_OVER, NOW)).resolves.toMatchObject({
-      status: "required",
-    });
-  });
+const facts = (overrides: Partial<Parameters<typeof evaluateStaffMfa>[0]> = {}) => ({
+  canAccess: true,
+  totpEnrolled: true,
+  authenticatorAt: seconds(minutesAgo(5)),
+  ...overrides,
 });
 
-describe("production staff MFA", () => {
-  afterEach(() => vi.unstubAllEnvs());
-  it("does not grant development grace or flag bypass against the live backend", async () => {
-    vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://tnygdgormnofpgjknlhr.supabase.co");
-    isFeatureEnabled.mockResolvedValue(false);
-    flagRow.mockResolvedValue({ data: { enabled: false, mode: "off" }, error: null });
-    await expect(evaluateStaffMfa(aal("aal1", "aal1"), IN_GRACE, NOW)).resolves.toMatchObject({
-      status: "required",
+describe("evaluateStaffMfa", () => {
+  it("records when the second factor was last verified", () => {
+    expect(evaluateStaffMfa(facts(), NOW)).toEqual({
+      status: "verified",
+      lastVerifiedAt: new Date(seconds(minutesAgo(5)) * 1000),
     });
   });
-  it.each(["NODE_ENV", "ENVIRONMENT"])(
-    "cannot disable MFA using the feature flag or grace with %s=production",
-    async (key) => {
-      vi.stubEnv(key, "production");
-      isFeatureEnabled.mockResolvedValue(false);
-      flagRow.mockResolvedValue({ data: { enabled: false, mode: "off" }, error: null });
-      await expect(evaluateStaffMfa(aal("aal1", "aal1"), IN_GRACE, NOW)).resolves.toEqual({
+
+  it("accepts a code verified exactly 12 hours ago", () => {
+    expect(
+      evaluateStaffMfa(facts({ authenticatorAt: seconds(minutesAgo(12 * 60)) }), NOW)
+    ).toMatchObject({ status: "verified" });
+  });
+
+  it("asks staff to verify again once the last authenticator code is over 12 hours old", () => {
+    // The database's own check would refuse this too; the app does not rely on it.
+    expect(
+      evaluateStaffMfa(facts({ authenticatorAt: seconds(minutesAgo(12 * 60 + 1)) }), NOW)
+    ).toEqual({ status: "required", hasFactor: true });
+  });
+
+  it("follows the database when it refuses the session", () => {
+    // No code in this session, expired code, or a role assigned after the last code.
+    expect(evaluateStaffMfa(facts({ canAccess: false }), NOW)).toEqual({
+      status: "required",
+      hasFactor: true,
+    });
+  });
+
+  it("sends staff without an authenticator app to enrol, with no grace period", () => {
+    expect(
+      evaluateStaffMfa(facts({ canAccess: false, totpEnrolled: false, authenticatorAt: null }), NOW)
+    ).toEqual({ status: "required", hasFactor: false });
+  });
+
+  it.each([null, 0, -5, 1.5, Number.NaN])(
+    "never treats a session without a valid authenticator time as verified: %s",
+    (authenticatorAt) => {
+      expect(evaluateStaffMfa(facts({ authenticatorAt }), NOW)).toEqual({
         status: "required",
-        hasFactor: false,
+        hasFactor: true,
       });
-      await expect(
-        evaluateStaffMfa(
-          aal("aal2", "aal2", [{ method: "totp", timestamp: seconds(minutesAgo(1)) }]),
-          IN_GRACE,
-          NOW
-        )
-      ).resolves.toMatchObject({ status: "verified" });
     }
   );
+
+  it("never returns the disabled or grace states", () => {
+    for (const canAccess of [true, false])
+      for (const totpEnrolled of [true, false])
+        for (const authenticatorAt of [null, seconds(minutesAgo(1)), seconds(minutesAgo(9999))])
+          expect(["verified", "required"]).toContain(
+            evaluateStaffMfa({ canAccess, totpEnrolled, authenticatorAt }, NOW).status
+          );
+  });
 });
 
 describe("hasRecentSecondFactor", () => {
@@ -198,5 +97,12 @@ describe("hasRecentSecondFactor", () => {
     expect(hasRecentSecondFactor({ status: "verified", lastVerifiedAt: minutesAgo(15) }, NOW)).toBe(
       true
     );
+  });
+
+  it("applies the 15-minute window to a freshly evaluated session", () => {
+    const fresh = evaluateStaffMfa(facts({ authenticatorAt: seconds(minutesAgo(14)) }), NOW);
+    const stale = evaluateStaffMfa(facts({ authenticatorAt: seconds(minutesAgo(16)) }), NOW);
+    expect(hasRecentSecondFactor(fresh, NOW)).toBe(true);
+    expect(hasRecentSecondFactor(stale, NOW)).toBe(false);
   });
 });
