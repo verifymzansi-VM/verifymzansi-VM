@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import {
   applyStepsBefore,
   applyWithRollbackCheck,
+  assertDriftRefused,
   assertReadOnlyPreflight,
   executeGrants,
   openUpdateCheck,
@@ -167,24 +168,17 @@ try {
     );
     assertReadOnlyPreflight(database, PREFLIGHT);
   });
-  await check("drift and a premature rollback are refused", () => {
-    const before = fingerprint();
-    assert.match(fails(ROLLBACK, "55000"), /rollback precondition/);
-    assert.equal(fingerprint(), before);
-    for (const sig of [RECORD, RETENTION]) {
-      const live = q(`select pg_get_functiondef('${sig}'::regprocedure);`);
-      q(
-        `do $$begin execute replace(pg_get_functiondef('${sig}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
-      );
-      const rows = preflight();
-      assert.equal(rows.length, 2, JSON.stringify(rows));
-      assert.match(rows[0][1], /unexpected state/);
-      assert.ok(rows[1][1].startsWith(`${sig} is not the reviewed body`), rows[1][1]);
-      assert.match(fails(step.sql, "55000"), /camera capture handoff drift/);
-      q(`${live};`);
-    }
-    assert.equal(fingerprint(), before);
-  });
+  await check("drift and a premature rollback are refused", () =>
+    assertDriftRefused(
+      { q, fails, fingerprint, preflightRows: preflight },
+      {
+        rollback: ROLLBACK,
+        updateSql: step.sql,
+        signatures: [RECORD, RETENTION],
+        drift: /camera capture handoff drift/,
+      }
+    )
+  );
 
   // ------------------------------------------------------------- apply
   applyWithRollbackCheck(database, {

@@ -11,19 +11,13 @@ import {
   verificationSecret,
   FoundationVerificationError,
 } from "./verification-runtime";
-import { processIdentityNumber } from "../domains/verification/identity-processing";
-import {
-  validateSaIdChecksum,
-  extractDobFromSaId,
-  calculateAgeFromDob,
-} from "../utils/sa-id-validation";
-import { normalizePersonName, isPersonName } from "./person-name";
 import { readSelfieCaptureReport } from "./selfie-capture";
 import {
   assertCameraPhoto,
   CameraRequiredError,
   IDENTITY_BLOCKED_MESSAGE,
   identityReceiptSchema,
+  readIdentityDetails,
   rpcFailure,
   storeReservedVerificationUpload,
 } from "./restored-verification-upload";
@@ -128,36 +122,25 @@ export async function handleStartCaptureHandoff(request: NextRequest) {
     const raw = await readSmallJson(request);
     const body = startBody.safeParse(raw);
     if (!body.success) return reply(400, { error: HANDOFF_MESSAGES.needsId });
-    let names: { first: string; last: string } | undefined;
-    let identity: z.infer<typeof identityReceiptSchema> | undefined;
-    if ("idNumber" in body.data) {
-      const { idNumber } = body.data;
-      if (!validateSaIdChecksum(idNumber))
-        return reply(400, { error: "Check the 13-digit South African ID number" });
-      const dob = extractDobFromSaId(idNumber);
-      if (!dob || calculateAgeFromDob(dob) < 18)
-        return reply(400, { error: "You must be at least 18 years old to register" });
-      const first = normalizePersonName(body.data.firstName);
-      const last = normalizePersonName(body.data.lastName);
-      if (!isPersonName(first) || !isPersonName(last))
-        return reply(400, { error: "Enter the legal names on your ID document" });
-      names = { first, last };
-      const processed = processIdentityNumber(caller.accountId, idNumber, {
-        identityMatchKey: verificationSecret("HMAC_SECRET").toString("hex"),
-        numberEncryptionKey: verificationSecret("ID_ENCRYPTION_KEY").toString("hex"),
-        identityKeyId: "identity-match-v1",
-        encryptionKeyId: "identity-number-v1",
-      });
-      identity = identityReceiptSchema.parse({
-        fingerprint: processed.fingerprint,
-        encrypted_number: processed.encryptedNumber,
-      });
-    }
+    const details =
+      "idNumber" in body.data
+        ? readIdentityDetails(
+            caller.accountId,
+            body.data.idNumber,
+            body.data.firstName,
+            body.data.lastName
+          )
+        : null;
+    if (details && "error" in details) return reply(400, { error: details.error });
     const token = newHandoffSecret();
     const started = await caller.api.rpc("start_capture_handoff", {
       p_token_sha256: sha256Hex(token),
-      ...(names && identity
-        ? { p_first_name: names.first, p_last_name: names.last, p_identity: identity }
+      ...(details
+        ? {
+            p_first_name: details.firstName,
+            p_last_name: details.lastName,
+            p_identity: details.identity,
+          }
         : {}),
     });
     if (started.error) {

@@ -189,6 +189,51 @@ export async function storeReservedVerificationUpload({
   return true;
 }
 
+/**
+ * The typed ID number and legal names, checked as the ID upload checks them,
+ * and the encrypted ID number receipt (the number itself never leaves this
+ * server). Returns the member-facing reason when they are not usable.
+ */
+export function readIdentityDetails(
+  accountId: string,
+  rawNumber: unknown,
+  rawFirst: unknown,
+  rawLast: unknown
+): { error: string } | { firstName: string; lastName: string; identity: IdentityReceipt } {
+  if (
+    typeof rawNumber !== "string" ||
+    !/^\d{13}$/.test(rawNumber) ||
+    !validateSaIdChecksum(rawNumber)
+  )
+    return { error: "Check the 13-digit South African ID number" };
+  const dob = extractDobFromSaId(rawNumber);
+  if (!dob || calculateAgeFromDob(dob) < 18)
+    return { error: "You must be at least 18 years old to register" };
+  const firstName = normalizePersonName(String(rawFirst ?? ""));
+  const lastName = normalizePersonName(String(rawLast ?? ""));
+  if (
+    firstName.length > 400 ||
+    lastName.length > 400 ||
+    !isPersonName(firstName) ||
+    !isPersonName(lastName)
+  )
+    return { error: "Enter the legal names on your ID document" };
+  const processed = processIdentityNumber(accountId, rawNumber, {
+    identityMatchKey: verificationSecret("HMAC_SECRET").toString("hex"),
+    numberEncryptionKey: verificationSecret("ID_ENCRYPTION_KEY").toString("hex"),
+    identityKeyId: "identity-match-v1",
+    encryptionKeyId: "identity-number-v1",
+  });
+  return {
+    firstName,
+    lastName,
+    identity: identityReceiptSchema.parse({
+      fingerprint: processed.fingerprint,
+      encrypted_number: processed.encryptedNumber,
+    }),
+  };
+}
+
 export const IDENTITY_BLOCKED_MESSAGE =
   "These identity details cannot be used for this submission. Contact support.";
 
@@ -261,36 +306,20 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
       return reply(400, "Reload verification and choose one document");
     const selfie = kind.data === "selfie",
       purpose = selfie ? "selfie" : "id_front";
-    let identity: ReturnType<typeof processIdentityNumber> | undefined;
+    let identity: IdentityReceipt | undefined;
     let firstName: string | undefined, lastName: string | undefined;
     const rawNumber = form.get("idNumber");
     if (!selfie) {
-      if (
-        typeof rawNumber !== "string" ||
-        !/^\d{13}$/.test(rawNumber) ||
-        !validateSaIdChecksum(rawNumber)
-      )
-        return reply(400, "Check the 13-digit South African ID number");
-      const dob = extractDobFromSaId(rawNumber);
-      if (!dob || calculateAgeFromDob(dob) < 18)
-        return reply(400, "You must be at least 18 years old to register");
+      const details = readIdentityDetails(
+        caller.accountId,
+        rawNumber,
+        form.get("firstName"),
+        form.get("lastName")
+      );
+      if ("error" in details) return reply(400, details.error);
       if (form.get("idDocumentType") !== "sa_id")
         return reply(400, "Use a South African ID document");
-      firstName = normalizePersonName(String(form.get("firstName") ?? ""));
-      lastName = normalizePersonName(String(form.get("lastName") ?? ""));
-      if (
-        firstName.length > 400 ||
-        lastName.length > 400 ||
-        !isPersonName(firstName) ||
-        !isPersonName(lastName)
-      )
-        return reply(400, "Enter the legal names on your ID document");
-      identity = processIdentityNumber(caller.accountId, rawNumber, {
-        identityMatchKey: verificationSecret("HMAC_SECRET").toString("hex"),
-        numberEncryptionKey: verificationSecret("ID_ENCRYPTION_KEY").toString("hex"),
-        identityKeyId: "identity-match-v1",
-        encryptionKeyId: "identity-number-v1",
-      });
+      ({ identity, firstName, lastName } = details);
     } else if (["idNumber", "firstName", "lastName", "idDocumentType"].some((key) => form.has(key)))
       return reply(400, "Choose a selfie without identity fields");
     // How the browser says the selfie was taken: stored for staff as review
@@ -331,9 +360,7 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
       purpose,
       artifactId: artifact.artifact_id,
       bytes,
-      identity: identity
-        ? { fingerprint: identity.fingerprint, encrypted_number: identity.encryptedNumber }
-        : undefined,
+      identity,
       beforeSelfie: capture
         ? async () => {
             // Recorded with the member's own session, on their own selfie
