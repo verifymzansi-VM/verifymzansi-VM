@@ -1,0 +1,78 @@
+# Limits register
+
+`docs/testing/limits-register.json` lists every limit the system enforces: rate
+and flood limits, quotas, caps on counts and money, size and length limits,
+batch and page sizes, attempt counts and a few expiry windows. Each entry says
+what the limit is, its value, where it is enforced and which test proves it.
+
+`node scripts/check-limits-register.mjs` (CI job `foundation-replay`, after the
+schema snapshot is regenerated) fails when the register and the code disagree.
+`--list` also prints every limit with its current `file:line`.
+
+## Entry fields
+
+| Field        | Meaning                                                                                                                                                                                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`         | `LIM-<AREA>-<name>`: `SQL` (curated database limits), `F` (other database guard lines), `T` (table CHECK constraints, named after the constraint), `RL` (shared rate limiter), `APP` (website and worker), `MECH` (a shared mechanism other entries rely on).            |
+| `title`      | The limit in plain words.                                                                                                                                                                                                                                                |
+| `value`      | The limit's value (and `unit` when it is not a count). `RL` entries also carry `tiers` (`limit` per `ttl` seconds), which the rate-limiter test compares with the worker.                                                                                                |
+| `category`   | `rate`, `quota`, `cap`, `money`, `size`, `length`, `batch`, `retention`, `expiry`, `attempts`, `range` or `mechanism`.                                                                                                                                                   |
+| `enforcedAt` | One or more `{ file, contains, symbol? }`. `contains` is the exact text that enforces the limit, value included, so changing the value without updating the register fails the check. Database anchors point at the generated snapshot in `database/foundation/current`. |
+| `tests`      | One or more `{ kind, file }` or `{ kind: "declaration", mechanism }`.                                                                                                                                                                                                    |
+
+## Test kinds
+
+- `behaviour`: the test exercises the limit at or past its bound. The test file
+  must contain the entry's id.
+- `register`: a register-driven test reads the register and checks every entry
+  of its kind: `src/__tests__/limits/rate-limiter-limits.test.ts` (every limiter
+  action and tier, one request below and at each limit) and
+  `scripts/limits-sql.test.mjs` (every table CHECK constraint present, validated
+  and exactly as registered, with boundary probes for simple length and number
+  ranges).
+- `declaration`: a value the code declares that a tested mechanism enforces: a
+  database guard line (`LIM-MECH-SQL-GUARD`: the line is in the replayed
+  function body), a `privacy_text` length rule (`LIM-MECH-PRIVACY-TEXT`), a
+  route body cap (`LIM-MECH-BODY-READER`), or a browser pre-check that mirrors a
+  tested server limit. These are weaker than behaviour tests: they prove the
+  value is in force, not each caller's behaviour at the bound.
+
+Behaviour tests for database limits run on the replayed production schema in
+`scripts/limits-sql.test.mjs` (embedded Postgres, part of `pnpm test:tooling`)
+or in the Docker suites named in the register.
+
+## Adding or changing a limit
+
+1. Change the code or add the database update as usual.
+2. Run `pnpm db:foundation:snapshot` for database changes, then
+   `node scripts/check-limits-register.mjs`.
+3. Add or update the register entry and its test in the same pull request. A
+   line the scanner flags that is not a limit goes in `notLimits` with a reason.
+
+## What the scanner looks at, and what it cannot catch
+
+The check scans:
+
+- `database/foundation/current/functions`: lines that compare with, or bound
+  between, an integer of 2 or more, including `privacy_text(value, min, max)`;
+- `database/foundation/current/tables`: CHECK constraints with such a bound;
+- `workers/rate-limiter.ts`: every `ACTION_LIMITS` action and the phone-code
+  tiers;
+- `src` and `workers` outside tests: `maxBytes: N` body caps and `*BYTES` /
+  `*SIZE` number constants.
+
+It does not find:
+
+- time windows written as `interval '…'` (retention periods, expiry, cooldowns,
+  the windows of rate limits). The register lists the most important ones by
+  hand; others are only reviewed when their function changes;
+- limits written as plain literals without a size-like name, for example
+  `file.size > 2 * 1024 * 1024`, `MAX_VIDEO_SECONDS = 120`, or `.max(n)` in
+  request schemas (zod field lengths), and constants in other naming styles;
+- values stored as data rather than code, such as plan and package rows, cost
+  allowances (the SMS daily limit is registered by hand) and feature flags;
+- limits in Supabase, Cloudflare or provider settings outside the repository.
+
+A finding is covered when a register anchor in the same file is part of its
+line; a guard that spans several lines is anchored on the line holding the
+number.

@@ -2402,6 +2402,7 @@ try {
   const submit = (owner, id) =>
     member(owner, `select api.submit_post('${id}',${row(id).revision});`);
   const draft = (owner) => post(owner, "event", "draft");
+  // LIM-SQL-events-30-days (docs/testing/limits-register.json)
   await check("events: the 10th submission passes and the 11th is refused", () => {
     q(submit(cara, draft(cara)));
     fails(submit(cara, draft(cara)), "PT429");

@@ -495,6 +495,7 @@ try {
         /not the order total of 6900 cents/,
       ],
       [
+        // LIM-SQL-bank-transfer-record-max (docs/testing/limits-register.json)
         recordSql(admin, { ...ok, amount: 5000001, reference: "REF-BIG-1" }),
         "PT413",
         /above R50,000/,

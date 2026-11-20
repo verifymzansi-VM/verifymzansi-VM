@@ -124,8 +124,18 @@ try {
   }
   const notPdf = await post(OFFLOAD_PDF_PATH, new TextEncoder().encode("not a pdf"), "x/y");
   assert.deepEqual(await notPdf.json(), { result: null });
+  // LIM-APP-offload-pdf-size (docs/testing/limits-register.json)
   const huge = await post(OFFLOAD_PDF_PATH, new Uint8Array(OFFLOAD_MAX_PDF_BYTES + 1), "x/y");
   assert.equal(huge.status, 413);
+  // LIM-APP-offload-card-body: share-card requests over 8 KB are refused unread.
+  const bigCard = await post(OFFLOAD_SHARE_CARD_PATH, " ".repeat(8 * 1024 + 1), "application/json");
+  assert.equal(bigCard.status, 413);
+  const cardAtLimit = await post(
+    OFFLOAD_SHARE_CARD_PATH,
+    JSON.stringify(CARD).padEnd(8 * 1024, " "),
+    "application/json"
+  );
+  assert.equal(cardAtLimit.status, 200);
 
   for (const input of [CARD, { ...CARD, hasVideo: false, price: "" }]) {
     const response = await post(OFFLOAD_SHARE_CARD_PATH, JSON.stringify(input), "application/json");
