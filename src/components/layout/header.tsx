@@ -253,9 +253,9 @@ function HeaderInner({
               </Button>
               <Button
                 asChild
-                variant="trust-verified"
+                variant="tinted"
                 size="sm"
-                className="rounded-full px-4 font-semibold shadow-sm"
+                className="rounded-full px-4 font-semibold"
               >
                 <Link href="/post/create" prefetch={false}>
                   + Post
@@ -352,9 +352,9 @@ function HeaderInner({
               </Button>
               <Button
                 asChild
-                variant="trust-verified"
+                variant="tinted"
                 size="sm"
-                className="rounded-full px-4 font-semibold shadow-sm"
+                className="rounded-full px-4 font-semibold"
               >
                 <a href={REGISTER_HREF}>Register</a>
               </Button>
@@ -462,11 +462,7 @@ function HeaderInner({
                     Admin
                   </Link>
                 )}
-                <Button
-                  asChild
-                  variant="trust-verified"
-                  className="w-full rounded-full font-semibold"
-                >
+                <Button asChild variant="tinted" className="w-full rounded-full font-semibold">
                   <Link href="/post/create" prefetch={false} onClick={() => setMobileOpen(false)}>
                     + Post
                   </Link>
@@ -504,11 +500,7 @@ function HeaderInner({
                     Sign in
                   </a>
                 </Button>
-                <Button
-                  asChild
-                  variant="trust-verified"
-                  className="w-full rounded-full font-semibold"
-                >
+                <Button asChild variant="tinted" className="w-full rounded-full font-semibold">
                   <a href={REGISTER_HREF} onClick={() => setMobileOpen(false)}>
                     Register
                   </a>

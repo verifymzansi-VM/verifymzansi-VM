@@ -1280,9 +1280,11 @@ export function PromotionDetailContent({
               </a>
             </Button>
           )}
+          {/* Only the first way to contact is filled; the others are outlined. */}
           {canCall && (
             <Button
               type="button"
+              variant={advertiserRevealable ? "outline" : "default"}
               className="h-12 flex-1 gap-2 rounded-full font-semibold"
               size="lg"
               asChild
@@ -1295,7 +1297,7 @@ export function PromotionDetailContent({
 
           {canWhatsapp && advertiserProfile?.phone && (
             <Button
-              variant="outline"
+              variant={advertiserRevealable || canCall ? "outline" : "default"}
               className="h-12 flex-1 gap-2 rounded-full font-semibold"
               size="lg"
               asChild

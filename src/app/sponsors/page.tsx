@@ -154,7 +154,7 @@ export default async function SponsorsPage() {
                   a branded showcase and an activity summary every 30 days.
                 </p>
               </div>
-              <Button asChild variant="ink" className="h-11 shrink-0 rounded-full px-5">
+              <Button asChild variant="outline" className="h-11 shrink-0 rounded-full px-5">
                 <Link href="/advertise#programmes">Become a Business Sponsor</Link>
               </Button>
             </div>

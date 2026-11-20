@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { lightTealSelectedClassName } from "@/components/ui/selected-state";
 import { cn } from "@/lib/utils";
 import {
   DASHBOARD_ACCOUNT_NAV,
@@ -51,7 +52,7 @@ export function DashboardMobileNav({ badges = {} }: { badges?: DashboardSidebarB
                   "inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-medium transition-colors",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isActive
-                    ? "bg-foreground text-background"
+                    ? lightTealSelectedClassName
                     : "border border-border bg-card text-foreground/80 hover:bg-muted"
                 )}
               >

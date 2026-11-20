@@ -61,7 +61,15 @@ function SouthAfricanFlagMark() {
   );
 }
 
-export function Footer() {
+interface FooterProps {
+  /**
+   * The "Got something to sell" band. Pages whose own hero or closing band
+   * already offers "Post for free" (Pricing, Advertise) hide it.
+   */
+  showPostBand?: boolean;
+}
+
+export function Footer({ showPostBand = true }: FooterProps = {}) {
   const currentYear = new Date().getFullYear();
   const runtimeConfig = getServerPublicRuntimeConfig();
   const footerLinkClassName =
@@ -80,37 +88,39 @@ export function Footer() {
       />
 
       {/* Call-to-action band */}
-      <div className="relative border-b border-white/10">
-        <div className="container-page flex flex-col gap-5 py-10 md:flex-row md:items-center md:justify-between md:py-12">
-          <div className="max-w-xl">
-            <p className="font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
-              Got something to sell,{" "}
-              <span className="gold-shine text-brand-gold-300">share or host?</span>
-            </p>
-            <p className="mt-2 text-sm text-white/70 sm:text-base">
-              Get verified once, post anywhere.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/post/create"
-              prefetch={false}
-              className="btn-shine chip-pop home-link-arrow inline-flex h-12 items-center gap-2 rounded-full bg-brand-green-500 px-6 text-sm font-semibold text-brand-green-950 transition-colors hover:bg-brand-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-green-950"
-            >
-              Post for free
-              <ArrowRight aria-hidden="true" className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/trust-safety"
-              prefetch={false}
-              className="chip-pop inline-flex h-12 items-center gap-2 rounded-full border border-white/20 px-6 text-sm font-semibold text-white transition-colors hover:border-brand-gold-300/50 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-green-950"
-            >
-              <BrandShield className="h-4 w-4" />
-              How verification works
-            </Link>
+      {showPostBand ? (
+        <div className="relative border-b border-white/10">
+          <div className="container-page flex flex-col gap-5 py-10 md:flex-row md:items-center md:justify-between md:py-12">
+            <div className="max-w-xl">
+              <p className="font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
+                Got something to sell,{" "}
+                <span className="gold-shine text-brand-gold-300">share or host?</span>
+              </p>
+              <p className="mt-2 text-sm text-white/70 sm:text-base">
+                Get verified once, post anywhere.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/post/create"
+                prefetch={false}
+                className="btn-shine chip-pop home-link-arrow inline-flex h-12 items-center gap-2 rounded-full bg-brand-gold-300 px-6 text-sm font-semibold text-brand-gold-950 transition-colors hover:bg-brand-gold-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-green-950"
+              >
+                Post for free
+                <ArrowRight aria-hidden="true" className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/trust-safety"
+                prefetch={false}
+                className="chip-pop inline-flex h-12 items-center gap-2 rounded-full border border-white/20 px-6 text-sm font-semibold text-white transition-colors hover:border-brand-gold-300/50 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-green-950"
+              >
+                <BrandShield className="h-4 w-4" />
+                How verification works
+              </Link>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="container-page relative py-10 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] md:py-14 md:pb-12">
         {/* Mobile nav is h-16 (64px). Extra bottom spacing keeps legal links above nav across mobile browsers. */}
