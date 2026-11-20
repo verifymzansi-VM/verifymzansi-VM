@@ -81,6 +81,11 @@ export const customerInvoiceSchema = z.strictObject({
   voided_at: instant.nullable(),
   /** A bank transfer to this invoice waits for a second staff member. */
   transfer_waiting: z.boolean(),
+  /** Slots added to a running package (P4b, update 20261120045404): the whole
+   * days they were invoiced for and the package's end (null once it has no
+   * running slot), with which they end. Absent on every other invoice. */
+  days_added: z.number().int().min(1).max(179).optional(),
+  package_ends_at: instant.nullable().optional(),
   latest_attempt: z
     .strictObject({
       payment_id: z.uuid(),

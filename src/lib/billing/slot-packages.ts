@@ -78,6 +78,23 @@ export const PACKAGE_ADD_MIN_DAYS = 7;
 /** ...and by invoice while this many are left (D1: 7 days of use, 3 to pay). */
 export const PACKAGE_ADD_MIN_INVOICE_DAYS = 10;
 
+/** An added-slots invoice is due this many days after it is issued, or on the
+ * package's last day when that is sooner (owner's decision of 20 November 2026). */
+export const PACKAGE_ADD_INVOICE_DUE_DAYS = 3;
+
+/** The South African date (YYYY-MM-DD) of an instant. */
+const saDate = (at: Date) => at.toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
+
+/** The due date (YYYY-MM-DD) an added-slots invoice issued at `now` gets, as
+ * the database sets it (internal.issue_package_customer_invoice). */
+export function packageAddInvoiceDueOn(packageEndsAt: string, now: Date) {
+  const issued = new Date(`${saDate(now)}T12:00:00+02:00`);
+  issued.setUTCDate(issued.getUTCDate() + PACKAGE_ADD_INVOICE_DUE_DAYS);
+  const due = saDate(issued);
+  const last = saDate(new Date(packageEndsAt));
+  return due < last ? due : last;
+}
+
 /** The add checkout's box; the database records it as package-add-starts-now-v1. */
 export const PACKAGE_ADD_COOLING_OFF_CONSENT =
   "My added slots start now and end with my package; the 7-day cooling-off does not apply because the service starts immediately.";

@@ -28,8 +28,9 @@ create table private.package_invoice_requests (
   kind text default 'package'::text not null,
   package_id uuid,
   days_left integer,
+  invoiced_days integer,
   constraint package_invoice_requests_account_id_fkey FOREIGN KEY (account_id) REFERENCES auth.users(id) ON DELETE CASCADE,
-  constraint package_invoice_requests_add CHECK ((kind = 'add'::text) = (package_id IS NOT NULL) AND (kind = 'add'::text) = (days_left IS NOT NULL) AND (days_left IS NULL OR days_left >= 10 AND days_left <= 179)),
+  constraint package_invoice_requests_add CHECK ((kind = 'add'::text) = (days_left IS NOT NULL) AND (package_id IS NULL OR kind = 'add'::text) AND (days_left IS NULL OR days_left >= 10 AND days_left <= 179) AND (invoiced_days IS NULL OR kind = 'add'::text AND invoiced_days >= 10 AND invoiced_days <= days_left)),
   constraint package_invoice_requests_approved CHECK ((approved_by IS NULL) = (approved_at IS NULL) AND (approved_by IS NULL OR status = 'issued'::text AND approved_by <> prepared_by)),
   constraint package_invoice_requests_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint package_invoice_requests_close_reason_check CHECK (close_reason IS NULL OR internal.plain_text_valid(close_reason, 5, 500, true)),
@@ -41,6 +42,7 @@ create table private.package_invoice_requests (
   constraint package_invoice_requests_kind_check CHECK (kind = ANY (ARRAY['package'::text, 'add'::text])),
   constraint package_invoice_requests_member_request_key UNIQUE (account_id, member_request_id),
   constraint package_invoice_requests_not_own CHECK (prepared_by <> account_id AND approved_by <> account_id AND closed_by <> account_id),
+  constraint package_invoice_requests_package_id_fkey FOREIGN KEY (package_id) REFERENCES private.slot_packages(id) ON DELETE SET NULL,
   constraint package_invoice_requests_pkey PRIMARY KEY (id),
   constraint package_invoice_requests_plan_version_id_fkey FOREIGN KEY (plan_version_id) REFERENCES private.plan_versions(id) ON DELETE RESTRICT,
   constraint package_invoice_requests_prepared CHECK ((prepared_by IS NULL) = (prepared_at IS NULL) AND (prepared_by IS NULL) = (due_days IS NULL) AND (prepared_by IS NULL) = (staff_reason IS NULL)),
@@ -66,6 +68,7 @@ CREATE INDEX package_invoice_requests_account_idx ON private.package_invoice_req
 CREATE INDEX package_invoice_requests_approved_by_idx ON private.package_invoice_requests USING btree (approved_by) WHERE (approved_by IS NOT NULL);
 CREATE INDEX package_invoice_requests_closed_by_idx ON private.package_invoice_requests USING btree (closed_by) WHERE (closed_by IS NOT NULL);
 CREATE UNIQUE INDEX package_invoice_requests_open_idx ON private.package_invoice_requests USING btree (account_id) WHERE (status = ANY (ARRAY['requested'::text, 'awaiting_approval'::text]));
+CREATE INDEX package_invoice_requests_package_idx ON private.package_invoice_requests USING btree (package_id) WHERE (package_id IS NOT NULL);
 CREATE INDEX package_invoice_requests_plan_version_idx ON private.package_invoice_requests USING btree (plan_version_id);
 CREATE INDEX package_invoice_requests_prepared_by_idx ON private.package_invoice_requests USING btree (prepared_by) WHERE (prepared_by IS NOT NULL);
 CREATE INDEX package_invoice_requests_queue_idx ON private.package_invoice_requests USING btree (requested_at, id) WHERE (status = ANY (ARRAY['requested'::text, 'awaiting_approval'::text]));

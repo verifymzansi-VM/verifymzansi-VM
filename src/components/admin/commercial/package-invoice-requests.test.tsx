@@ -115,4 +115,62 @@ describe("PackageInvoiceRequestPanel (P4e)", () => {
     expect(screen.getByText(/ID review is not accepted/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
   });
+
+  it("shows an added-slots request with the priced days, the package end and the days left now (P4b)", () => {
+    const add = {
+      ...row,
+      slots: 20,
+      total_cents: 253_340,
+      package_open: true,
+      kind: "add" as const,
+      days_left: 38,
+      days_left_now: 30,
+      package_ends_at: "2026-12-24T08:00:00.000+00:00",
+    };
+    const { unmount } = panel([add]);
+    expect(screen.getByText(/Add 20 slots · priced for 38 days/)).toBeInTheDocument();
+    expect(screen.getByTestId("package-add-days")).toHaveTextContent(
+      /Package ends .*2026.* · 30 whole days left now · issued now, the invoice is for 30 days at their lower price/
+    );
+    expect(screen.queryByText(/decline this request/)).toBeNull();
+    unmount();
+    panel([
+      { ...add, days_left_now: 9 },
+      {
+        ...add,
+        request_id: "55555555-5555-4555-8555-555555555555",
+        days_left_now: null,
+        package_open: false,
+      },
+    ]);
+    expect(
+      screen.getByText(/Fewer than 10 days of the customer's package are left/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/package has ended: decline this request/)).toBeInTheDocument();
+  });
+
+  it("issues an added-slots invoice with the due date the database sets, no days to choose (P4b)", async () => {
+    panel([
+      {
+        ...row,
+        slots: 2,
+        total_cents: 25_334,
+        package_open: true,
+        kind: "add" as const,
+        days_left: 38,
+        days_left_now: 38,
+        package_ends_at: "2099-12-24T08:00:00.000+00:00",
+      },
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Issue invoice" }));
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(screen.getByTestId("package-add-due")).toHaveTextContent(
+      /^Due .* \(3 days after it is issued, or the package's last day if sooner\)$/
+    );
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Asked on the add page" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Issue invoice" }).at(-1)!);
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    const [, init] = fetch.mock.calls[0] as [string, { body: string }];
+    expect(JSON.parse(init.body)).toMatchObject({ action: "package_invoice.issue", dueDays: 3 });
+  });
 });

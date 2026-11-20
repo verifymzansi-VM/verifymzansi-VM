@@ -703,6 +703,8 @@ const packageAddRequestSchema = z.strictObject({
   closed_at: instant.nullable(),
   kind: z.literal("add"),
   days_left: z.number().int().min(10).max(179),
+  invoiced_days: z.number().int().min(10).max(179).nullable(),
+  days_left_now: z.number().int().min(0).max(180).nullable(),
   package_ends_at: instant.nullable(),
 });
 const packageAddOfferSchema = z.strictObject({

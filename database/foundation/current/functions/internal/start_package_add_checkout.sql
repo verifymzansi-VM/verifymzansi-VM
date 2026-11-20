@@ -51,8 +51,7 @@ begin
   if total <> p_expected_total_cents then
     raise exception 'the price changed; check the total again' using errcode='PT428';
   end if;
-  if exists(select 1 from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
-      where i.account_id = actor and i.status = 'issued' and internal.slot_package_plan(v.plan_code)) then
+  if internal.package_invoice_blocking(actor, null) is not null then
     raise exception 'your package invoice is not paid yet; pay it, or ask us to cancel it first'
       using errcode='PT409', detail='package_invoice_unpaid';
   end if;

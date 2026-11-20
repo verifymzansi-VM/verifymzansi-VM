@@ -19,8 +19,10 @@ begin
     raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
   end if;
   if r.kind = 'add' then
-    -- Slots added part-way (20261120045404): at the price asked for (D1),
-    -- only while the package runs with 7 or more whole days left and room.
+    -- Slots added part-way (20261120045404): at the price asked for (D1), or
+    -- for the fewer whole days left when issued later
+    -- (internal.issue_package_customer_invoice), only while the package runs
+    -- with 10 or more whole days left (D1: 7 of use and 3 to pay) and room.
     select * into plan from private.plan_versions v where v.id = r.plan_version_id
       and internal.slot_package_plan(v.plan_code);
     if not found then
@@ -32,9 +34,9 @@ begin
       raise exception 'the customer''s package has ended; decline the request'
         using errcode='PT409', detail='package_ended';
     end if;
-    if q.days_left < 7 then
-      raise exception 'fewer than 7 days of the customer''s package are left; decline the request'
-        using errcode='PT409', detail='package_add_too_late';
+    if q.days_left < 10 then
+      raise exception 'fewer than 10 days of the customer''s package are left; decline the request'
+        using errcode='PT409', detail='package_add_invoice_too_late';
     end if;
     if q.places + r.slots > 250 then
       raise exception 'the package would hold more than 250 slots; decline the request'
@@ -61,9 +63,7 @@ begin
     raise exception 'the customer has a package payment open at Ozow; try again when it has closed'
       using errcode='PT409', detail='invoice_checkout_open';
   end if;
-  select i.invoice_number into unpaid from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
-    where i.account_id = r.account_id and i.status = 'issued' and internal.slot_package_plan(v.plan_code)
-    order by i.issued_at limit 1;
+  unpaid := internal.package_invoice_blocking(r.account_id, null);
   if unpaid is not null then
     raise exception 'the customer''s package invoice % is not paid yet; void it first', unpaid
       using errcode='PT409', detail='package_invoice_unpaid';

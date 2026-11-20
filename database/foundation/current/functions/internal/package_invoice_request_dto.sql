@@ -11,8 +11,13 @@ AS $function$
     'invoice_number', (select i.invoice_number from private.customer_invoices i where i.id = r.invoice_id),
     'closed_at', r.closed_at)
   -- 20261120045404: an added-slots request says so, with the days it was
-  -- priced for and its package's current end (a new package's is unchanged).
+  -- priced for, the days its invoice was issued for (fewer when issued
+  -- later), the whole days its package has left now (null once it no longer
+  -- runs) and the package's current end (a new package's is unchanged).
   || case when r.kind = 'add' then jsonb_build_object('kind', 'add', 'days_left', r.days_left,
+    'invoiced_days', r.invoiced_days,
+    'days_left_now', (select q.days_left from internal.slot_package_add_quote(r.account_id) q
+      where q.package_id = r.package_id),
     'package_ends_at', (select max(e.ends_at) from private.entitlements e
       where e.package_id = r.package_id and e.status = 'active')) else '{}'::jsonb end
   || case when p_staff is null then '{}'::jsonb else jsonb_build_object('account_id', r.account_id,

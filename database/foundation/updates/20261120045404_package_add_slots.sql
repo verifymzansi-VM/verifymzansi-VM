@@ -4,12 +4,13 @@
 -- It needs 20261114154823_slot_packages.sql, 20261119025106_package_invoices.sql
 -- and 20261119151152_package_gap_fixes.sql. Order: apply-first. It adds three
 -- member commands (api.get_my_package_add_offer,
--- api.start_package_add_checkout, api.request_package_add_invoice); no
--- command, argument or grant is removed or changed, and no field is added to
--- an answer the website reads strictly except for an added-slots invoice
--- request, which cannot exist while packages are off sale. It refuses with
--- 55000 unless the six functions it adds are absent (or this update's), the
--- twelve it replaces have their reviewed bodies (or this update's) and
+-- api.start_package_add_checkout, api.request_package_add_invoice) and one
+-- service sweep (api.void_ended_package_add_invoices); no command, argument
+-- or grant is removed or changed, and no field is added to an answer the
+-- website reads strictly except for an added-slots invoice request or
+-- invoice, which cannot exist while packages are off sale. It refuses with
+-- 55000 unless the fourteen functions it adds are absent (or this update's),
+-- the seventeen it replaces have their reviewed bodies (or this update's) and
 -- private.package_invoice_requests has no column `kind` (or this update's).
 -- Packages stay off sale (private.slot_package_sales is not touched): every
 -- new command refuses with PT403 packages_not_on_sale until the owner switches
@@ -47,12 +48,30 @@
 --    for; asked only while 10 or more whole days are left (PT409
 --    package_add_invoice_too_late), at the price of that moment, which the
 --    invoice keeps. The same rules as the online add otherwise, with the
---    existing request rules (one open request, repeats, 10 a day). Staff issue,
---    approve (above R50,000) or decline it in the existing queue:
---    internal.package_invoice_issue_check and
+--    existing request rules (one open request, repeats, 10 a day; at most 245
+--    slots in one add). Staff issue, approve (above R50,000) or decline it in
+--    the existing queue: internal.package_invoice_issue_check and
 --    internal.issue_package_customer_invoice (replaced) issue it only while
---    the package runs with 7 or more days left and has room, at the price
---    asked for ("Multi-listing package: <n> slots added for <d> days").
+--    the package runs with 10 or more whole days left (PT409
+--    package_add_invoice_too_late) and has room, at the price asked for, or,
+--    when fewer whole days are left than it was priced for, for those days at
+--    their lower price ("Multi-listing package: <n> slots added for <d>
+--    days"; slots x unit price = total), due 3 days after it is issued or on
+--    the package's last day when sooner (staff do not choose the days). The request records the days invoiced (`invoiced_days`, set by
+--    internal.package_invoice_request_guard, replaced); the staff queue shows
+--    the days priced, the days left now and the package's end; the invoice
+--    (internal.customer_invoice_dto, replaced) gains `days_added` and
+--    `package_ends_at`. internal.request_package_invoice,
+--    internal.get_my_package_invoice_request and
+--    internal.start_package_checkout (replaced) never treat an add request
+--    or an add order as a new package's. An unpaid added-slots invoice of a
+--    package that has ended blocks no other package order
+--    (internal.package_invoice_blocking) and is voided by the minute
+--    operations job (api.void_ended_package_add_invoices, service only; the
+--    void rule of private.customer_invoices allows that one fixed reason
+--    without a staff member). The privacy export
+--    (internal.frontend_privacy_export_data, replaced) lists each request's
+--    kind, package and days.
 -- 4. Delivers an add, however it is paid, only while the package it was
 --    bought for still runs and has room (internal.slot_package_add_ok): the
 --    Ozow notice (internal.apply_provider_event), staff activation
@@ -72,7 +91,10 @@
 --    posts in it that still fit in the package's other running grants stay in
 --    the package, the most recently approved first (new
 --    internal.slot_package_keep_posts); the reversal ends only the others, as
---    before. It never stops a refund or chargeback.
+--    before. It counts the places under the package's row lock (taken without
+--    waiting, as is the grant the posts move to): while an activation holds
+--    them the reversal is refused (PT409 package_busy) and staff retry it.
+--    Any other failure never stops a refund or chargeback.
 --
 -- Read-only preflight: ../preflight/20261120045404_package_add_slots.check.sql.
 -- Rollback: ../rollback/20261120045404_package_add_slots.down.sql.
@@ -109,7 +131,15 @@ begin
       ('internal.issue_package_customer_invoice(private.package_invoice_requests,private.plan_versions,uuid,integer,text)'),
       ('internal.start_invoice_payment(text,bigint,boolean)'),
       ('internal.record_staff_invoice_transfer(text,text,text,boolean,text)'),
-      ('internal.confirm_staff_invoice_payment(uuid)')) v(sig)
+      ('internal.confirm_staff_invoice_payment(uuid)'),
+      ('internal.package_invoice_blocking(uuid,uuid)'),
+      ('internal.void_ended_package_add_invoices(integer)'),
+      ('api.void_ended_package_add_invoices(integer)'),
+      ('internal.customer_invoice_dto(private.customer_invoices,uuid)'),
+      ('internal.request_package_invoice(uuid,integer,bigint,boolean,uuid)'),
+      ('internal.get_my_package_invoice_request()'),
+      ('internal.start_package_checkout(uuid,integer,bigint,boolean)'),
+      ('internal.frontend_privacy_export_data(uuid)')) v(sig)
   loop
     if shape not in (
         -- each: absent or its reviewed body, then this update's body
@@ -122,19 +152,25 @@ begin
         'internal.package_add_invoice_package(uuid) absent',
         'internal.package_add_invoice_package(uuid) 1c6cab90a756caa366bb753b0af5b18e',
         'internal.slot_package_keep_posts(uuid) absent',
-        'internal.slot_package_keep_posts(uuid) f02b6d4a487a0bf83b9a22afb7d0fb9a',
+        'internal.slot_package_keep_posts(uuid) 3618e3c5cd90a9c5bc5c081432c4333b',
         'internal.get_my_package_add_offer() absent',
-        'internal.get_my_package_add_offer() f605a9652ebaaaba2aad1a2080f52d6b',
+        'internal.get_my_package_add_offer() 9ae9f7cb7a1c18ec5a1b769e85c83eac',
         'internal.start_package_add_checkout(uuid,integer,bigint,boolean) absent',
-        'internal.start_package_add_checkout(uuid,integer,bigint,boolean) 59df4cce4fd43a0302efc281933a7ca7',
+        'internal.start_package_add_checkout(uuid,integer,bigint,boolean) 2c803b109be23131c9b0cd2b1d05cba7',
         'internal.request_package_add_invoice(uuid,integer,bigint,boolean,uuid) absent',
-        'internal.request_package_add_invoice(uuid,integer,bigint,boolean,uuid) ea74ccfc168e27e7d3f087063c40ce6b',
+        'internal.request_package_add_invoice(uuid,integer,bigint,boolean,uuid) 3e7bd289c5fd516312b752920d4237b8',
         'api.get_my_package_add_offer() absent',
         'api.get_my_package_add_offer() 4b7a12f241f9fdc5ec61545eaac6fa2b',
         'api.start_package_add_checkout(uuid,integer,bigint,boolean) absent',
         'api.start_package_add_checkout(uuid,integer,bigint,boolean) 3be278362296fc2ec9cc5fdfbb256593',
         'api.request_package_add_invoice(uuid,integer,bigint,boolean,uuid) absent',
         'api.request_package_add_invoice(uuid,integer,bigint,boolean,uuid) 6a61e0b25fc1600829ac3c13f1d22a67',
+        'internal.package_invoice_blocking(uuid,uuid) absent',
+        'internal.package_invoice_blocking(uuid,uuid) 460577dbfc512edb1f9a6576dc8b2d73',
+        'internal.void_ended_package_add_invoices(integer) absent',
+        'internal.void_ended_package_add_invoices(integer) 01d78539331e4875d06cd138089531e7',
+        'api.void_ended_package_add_invoices(integer) absent',
+        'api.void_ended_package_add_invoices(integer) ff2882aa42979545ada32c671ff1a408',
         'internal.issue_slot_line_entitlements(uuid) 3d167ce1ce2bcc4a84480b8ed7888e0a',
         'internal.issue_slot_line_entitlements(uuid) b81aadc5fd06b47c33fc96b81d49b586',
         'internal.apply_provider_event(jsonb) 7f33edbb6bcafaecb519eef80c9b3633',
@@ -142,23 +178,33 @@ begin
         'internal.activate_staff_paid_payment(uuid,text) 324f8855e844937190754f70c03fcd2e',
         'internal.activate_staff_paid_payment(uuid,text) 369ef2cc3b3a3139cfe83a3e7edb74eb',
         'internal.claim_checkout_request(uuid,uuid) 4922a976d1652603d491349a40f4f7da',
-        'internal.claim_checkout_request(uuid,uuid) d8affaf6a98880da473f7707c8a1de4a',
+        'internal.claim_checkout_request(uuid,uuid) 9d136593beb5f0e4aef35cb1f5fd5c75',
         'internal.slot_package_grant_revoked() 3d22cd9389fa075274e8ba14343e9aea',
-        'internal.slot_package_grant_revoked() bf7e9466fba7aae9f5b3b67cd24daffb',
+        'internal.slot_package_grant_revoked() 0f5b47f62caf51472e9da4987958ec28',
         'internal.package_invoice_request_guard() e41853f9d3e75297df7a4bf00e736792',
-        'internal.package_invoice_request_guard() 10402007d059149a498cc3eb64b6b232',
+        'internal.package_invoice_request_guard() 6278c187470a7908134ebed5ec72939f',
         'internal.package_invoice_request_dto(private.package_invoice_requests,uuid) 16fb4eae547a00d51cf95b55adc16dda',
-        'internal.package_invoice_request_dto(private.package_invoice_requests,uuid) d9f8aad4e141beee2e957664cb564908',
+        'internal.package_invoice_request_dto(private.package_invoice_requests,uuid) 7de219f93bdf5de34c73c1c10642129a',
         'internal.package_invoice_issue_check(private.package_invoice_requests) e0ae2e35373cba98b3cb385d07871377',
-        'internal.package_invoice_issue_check(private.package_invoice_requests) 25ff4d2cd9f12123d0f238ffcfaf558f',
+        'internal.package_invoice_issue_check(private.package_invoice_requests) 28d36c25e3b05d045286b1584a8d529c',
         'internal.issue_package_customer_invoice(private.package_invoice_requests,private.plan_versions,uuid,integer,text) 117d33c9a93c2d965e138a7fdc7930b8',
-        'internal.issue_package_customer_invoice(private.package_invoice_requests,private.plan_versions,uuid,integer,text) 6495b7bce4bc6572b59ad585f8352411',
+        'internal.issue_package_customer_invoice(private.package_invoice_requests,private.plan_versions,uuid,integer,text) cc5a02870820c4b28ab8af83baf1654c',
         'internal.start_invoice_payment(text,bigint,boolean) a43e58e5ebc85179c901428e4f0f805e',
         'internal.start_invoice_payment(text,bigint,boolean) 3637cefdf51809d67891104e041d71da',
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) e37a32a916640c9a16f5924818b9b735',
         'internal.record_staff_invoice_transfer(text,text,text,boolean,text) 0f3f117b8bed207a401030c3bfb429df',
         'internal.confirm_staff_invoice_payment(uuid) c9adba77f7b7ac7c6366083956e53454',
-        'internal.confirm_staff_invoice_payment(uuid) ff40d1c2cf36149d535a4fdb7d99f1bf'
+        'internal.confirm_staff_invoice_payment(uuid) ff40d1c2cf36149d535a4fdb7d99f1bf',
+        'internal.customer_invoice_dto(private.customer_invoices,uuid) 27604995d3de7e7a5794c1bf220b3213',
+        'internal.customer_invoice_dto(private.customer_invoices,uuid) b322c8309ff009f5ef969862b4b77d89',
+        'internal.request_package_invoice(uuid,integer,bigint,boolean,uuid) beb95771af677d39b775e83197dfd8d1',
+        'internal.request_package_invoice(uuid,integer,bigint,boolean,uuid) f64d310d8ca3a549840db98df6f083f9',
+        'internal.get_my_package_invoice_request() f46514db5c5524de116f099e0794a89b',
+        'internal.get_my_package_invoice_request() d3f564bbfb6271560c72f0aaf1af047a',
+        'internal.start_package_checkout(uuid,integer,bigint,boolean) d5d9713994c8789030bd30c90c4c00b5',
+        'internal.start_package_checkout(uuid,integer,bigint,boolean) 26868efedb8522c1e933278ed52dfaad',
+        'internal.frontend_privacy_export_data(uuid) 3dfe35ae5e93f0661ecd7dbf710cf45d',
+        'internal.frontend_privacy_export_data(uuid) e543b105fe264d5a683b5c570bf68cb5'
       ) then
       raise exception 'package add slots precondition: % is not a reviewed body', shape using errcode='55000';
     end if;
@@ -174,20 +220,38 @@ end$$;
 
 -- 3. The package invoice request learns what it is for: a new package
 -- (`package`, as before) or slots added to the account's running package
--- (`add`: the package, and the whole days left it was priced for). The package
--- is named without a foreign key, as a payment's snapshot names it: the request
--- is kept five tax years, with its invoice, whatever happens to the package
--- record.
+-- (`add`: the package, the whole days left it was priced for, and the days
+-- its invoice was issued for, `invoiced_days`, fewer when staff issue it
+-- later). The package is a foreign key; when the retention job removes a
+-- package record (five tax years after its payments) the request keeps its
+-- kind and days and loses only the link, so the request (kept with its
+-- invoice) is never removed with it.
 alter table private.package_invoice_requests add column if not exists kind text not null default 'package';
 alter table private.package_invoice_requests add column if not exists package_id uuid;
 alter table private.package_invoice_requests add column if not exists days_left integer;
+alter table private.package_invoice_requests add column if not exists invoiced_days integer;
 alter table private.package_invoice_requests drop constraint if exists package_invoice_requests_kind_check;
 alter table private.package_invoice_requests add constraint package_invoice_requests_kind_check
   check (kind in ('package', 'add'));
 alter table private.package_invoice_requests drop constraint if exists package_invoice_requests_add;
 alter table private.package_invoice_requests add constraint package_invoice_requests_add
-  check ((kind = 'add') = (package_id is not null) and (kind = 'add') = (days_left is not null)
-    and (days_left is null or days_left between 10 and 179));
+  check ((kind = 'add') = (days_left is not null) and (package_id is null or kind = 'add')
+    and (days_left is null or days_left between 10 and 179)
+    and (invoiced_days is null or (kind = 'add' and invoiced_days between 10 and days_left)));
+alter table private.package_invoice_requests drop constraint if exists package_invoice_requests_package_id_fkey;
+alter table private.package_invoice_requests add constraint package_invoice_requests_package_id_fkey
+  foreign key (package_id) references private.slot_packages(id) on delete set null;
+-- The foreign key's index (deletion of a package record reads it).
+create index if not exists package_invoice_requests_package_idx on private.package_invoice_requests (package_id)
+  where package_id is not null;
+-- 2b. An unpaid added-slots invoice whose package ended is voided by the
+-- database itself (internal.void_ended_package_add_invoices): such a void has
+-- no staff member, only its fixed reason.
+alter table private.customer_invoices drop constraint if exists customer_invoices_void;
+alter table private.customer_invoices add constraint customer_invoices_void
+  check ((status = 'void') = (voided_at is not null and void_reason is not null)
+    and (voided_by is not null or status <> 'void'
+      or void_reason = 'The package these slots were added to ended before the invoice was paid'));
 -- A new package has 5 to 250 slots; an add 1 to 245 (a package holds at most 250).
 alter table private.package_invoice_requests drop constraint if exists package_invoice_requests_slots_check;
 alter table private.package_invoice_requests add constraint package_invoice_requests_slots_check
@@ -268,11 +332,101 @@ $$;
 alter function internal.package_add_invoice_package(uuid) owner to postgres;
 revoke all on function internal.package_add_invoice_package(uuid) from public;
 
+-- 2b. The account's unpaid package invoice that stops another package order
+-- (the oldest; null when none): an issued invoice for a new package, or for
+-- slots added to a package that still runs. An added-slots invoice whose
+-- package has ended blocks nothing (it can no longer be paid, and is voided
+-- by internal.void_ended_package_add_invoices). `p_payment`: a payment that
+-- is an attempt of the invoice does not count against itself.
+create or replace function internal.package_invoice_blocking(p_account uuid, p_payment uuid)
+ returns text
+ language sql
+ stable
+ set search_path to 'pg_catalog'
+as $$
+  select i.invoice_number from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
+  where i.account_id = p_account and i.status = 'issued' and internal.slot_package_plan(v.plan_code)
+    and not exists(select 1 from private.customer_invoice_payments l where l.invoice_id = i.id and l.payment_id = p_payment)
+    and not exists(select 1 from private.package_invoice_requests r where r.invoice_id = i.id and r.kind = 'add'
+      and not exists(select 1 from private.entitlements e where e.package_id = r.package_id and e.status = 'active'
+        and e.starts_at <= statement_timestamp() and e.ends_at > statement_timestamp()))
+  order by i.issued_at, i.id
+  limit 1;
+$$;
+alter function internal.package_invoice_blocking(uuid,uuid) owner to postgres;
+revoke all on function internal.package_invoice_blocking(uuid,uuid) from public;
+
+-- 2b. Voids the unpaid added-slots invoices whose package no longer runs
+-- (ended, or its slots refunded), at most p_limit a run, oldest first: the
+-- invoice can no longer be paid (Pay now and a bank transfer refuse it), so it
+-- stops showing as owed. Unsent Pay now attempts are closed with it. An
+-- invoice with a payment still open at Ozow or a bank transfer waiting for
+-- confirmation is left for staff (they refund or decline it). Each invoice in
+-- its own subtransaction, never waiting for a row another transaction holds.
+-- Run by the website's minute operations job (service role). No email: a
+-- staff void sends none either.
+create or replace function internal.void_ended_package_add_invoices(p_limit integer)
+ returns jsonb
+ language plpgsql
+ security definer
+ set search_path to 'pg_catalog'
+as $$
+declare r record; voided integer := 0; skipped integer := 0; n integer;
+begin
+  if p_limit is null or p_limit < 1 or p_limit > 500 then
+    raise exception 'limit must be 1 to 500' using errcode='22023';
+  end if;
+  for r in
+    select i.id from private.customer_invoices i join private.package_invoice_requests q on q.invoice_id = i.id
+    where i.status = 'issued' and q.kind = 'add'
+      and not exists(select 1 from private.entitlements e where e.package_id = q.package_id and e.status = 'active'
+        and e.starts_at <= statement_timestamp() and e.ends_at > statement_timestamp())
+      and not exists(select 1 from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
+        where l.invoice_id = i.id and internal.customer_invoice_attempt_live(p))
+      and not exists(select 1 from private.invoice_transfers t where t.customer_invoice_id = i.id
+        and internal.invoice_transfer_waiting(t))
+    order by i.issued_at, i.id
+    limit p_limit
+  loop
+    begin
+      update private.payments p set status = 'cancelled', status_changed_at = pg_catalog.clock_timestamp()
+        from private.customer_invoice_payments l
+        where l.invoice_id = r.id and l.payment_id = p.id and p.status = 'pending' and p.checkout_url is null;
+      update private.customer_invoices set status = 'void', voided_at = statement_timestamp(),
+          void_reason = 'The package these slots were added to ended before the invoice was paid'
+        where id = (select i.id from private.customer_invoices i where i.id = r.id and i.status = 'issued'
+          for update skip locked);
+      get diagnostics n = row_count;
+      if n = 0 then skipped := skipped + 1; else voided := voided + 1; end if;
+    exception when others then
+      skipped := skipped + 1;
+    end;
+  end loop;
+  return jsonb_build_object('voided', voided, 'failed', skipped);
+end;
+$$;
+alter function internal.void_ended_package_add_invoices(integer) owner to postgres;
+revoke all on function internal.void_ended_package_add_invoices(integer) from public;
+grant execute on function internal.void_ended_package_add_invoices(integer) to service_role;
+
+create or replace function api.void_ended_package_add_invoices(p_limit integer)
+ returns jsonb
+ language sql
+ set search_path to 'pg_catalog'
+as $$
+  select internal.void_ended_package_add_invoices(p_limit);
+$$;
+alter function api.void_ended_package_add_invoices(integer) owner to postgres;
+revoke all on function api.void_ended_package_add_invoices(integer) from public;
+grant execute on function api.void_ended_package_add_invoices(integer) to service_role;
+
 -- 5. A package grant was revoked (a refund or chargeback of its line): the
 -- posts in it that still fit in the package's other running grants stay in the
 -- package, the most recently approved first, each moved as a continued
 -- activation (not a post going live) onto the running grant that ends last.
--- Returns how many stayed. The reversal then ends only the others.
+-- Returns how many stayed. The reversal then ends only the others. Refuses
+-- (PT409 package_busy, the reversal is retried) while an activation holds the
+-- package or that grant.
 create or replace function internal.slot_package_keep_posts(p_grant uuid)
  returns integer
  language plpgsql
@@ -283,16 +437,32 @@ declare g private.entitlements; target private.entitlements; v_places integer; v
 begin
   select * into g from private.entitlements e where e.id = p_grant;
   if g.id is null or g.package_id is null or g.status <> 'revoked' then return 0; end if;
+  if not exists(select 1 from internal.slot_package_now(g.owner_id) n where n.package_id = g.package_id) then
+    return 0;
+  end if;
+  -- The package's places are counted under its row lock, the one
+  -- internal.activate_post holds while it fills a place, and the grant the
+  -- posts move to is held against an activation changing it. Both are taken
+  -- without waiting: the reversal already holds the revoked grant and its
+  -- posts, so waiting for an activation (which locks grants, then the
+  -- package) could deadlock. While one is busy the reversal is refused and
+  -- staff retry it, as for any funded post that is busy.
+  begin
+    perform 1 from private.slot_packages k where k.id = g.package_id for update nowait;
+    select e.* into target from private.entitlements e
+      where e.package_id = g.package_id and e.owner_id = g.owner_id and e.status = 'active'
+        and e.starts_at <= statement_timestamp() and e.ends_at > statement_timestamp()
+        and exists(select 1 from private.payments pay where pay.id = e.payment_id and pay.owner_id = e.owner_id
+          and pay.status = 'complete')
+      order by e.ends_at desc, e.slot_capacity desc, e.id
+      limit 1
+      for key share nowait;
+  exception when lock_not_available then
+    raise exception 'funded posts are busy; retry reversal' using errcode='PT409', detail='package_busy';
+  end;
+  if target.id is null then return 0; end if;
   select n.places into v_places from internal.slot_package_now(g.owner_id) n where n.package_id = g.package_id;
   if v_places is null then return 0; end if;
-  select e.* into target from private.entitlements e
-    where e.package_id = g.package_id and e.owner_id = g.owner_id and e.status = 'active'
-      and e.starts_at <= statement_timestamp() and e.ends_at > statement_timestamp()
-      and exists(select 1 from private.payments pay where pay.id = e.payment_id and pay.owner_id = e.owner_id
-        and pay.status = 'complete')
-    order by e.ends_at desc, e.slot_capacity desc, e.id
-    limit 1;
-  if target.id is null then return 0; end if;
   select count(*)::integer into v_held from private.post_activations a
     join private.entitlements c on c.id = a.entitlement_id
     where a.released_at is null and c.package_id = g.package_id and c.id <> g.id;
@@ -345,13 +515,12 @@ begin
     'package', case when q.package_id is null then null else jsonb_build_object(
       'id', q.package_id, 'term_days', q.term_days, 'places', q.places, 'ends_at', q.ends_at,
       'days_left', q.days_left, 'unit_price_cents', q.unit_price_cents::text,
-      'max_slots', greatest(250 - q.places, 0),
+      -- 250 in all, and at most 245 in one add (a package starts at 5)
+      'max_slots', greatest(least(250 - q.places, 245), 0),
       'max_online_slots', greatest(100 - q.places, 0),
       'online_open', q.days_left >= 7 and q.plan_id is not null,
       'invoice_open', q.days_left >= 10 and q.plan_id is not null,
-      'invoice_unpaid', exists(select 1 from private.customer_invoices i
-        join private.plan_versions v on v.id = i.plan_version_id
-        where i.account_id = actor and i.status = 'issued' and internal.slot_package_plan(v.plan_code)),
+      'invoice_unpaid', internal.package_invoice_blocking(actor, null) is not null,
       'request', case when request.id is null then null
         else internal.package_invoice_request_dto(request, null) end,
       -- the slots added to it so far (paid and delivered), newest first
@@ -422,8 +591,7 @@ begin
   if total <> p_expected_total_cents then
     raise exception 'the price changed; check the total again' using errcode='PT428';
   end if;
-  if exists(select 1 from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
-      where i.account_id = actor and i.status = 'issued' and internal.slot_package_plan(v.plan_code)) then
+  if internal.package_invoice_blocking(actor, null) is not null then
     raise exception 'your package invoice is not paid yet; pay it, or ask us to cancel it first'
       using errcode='PT409', detail='package_invoice_unpaid';
   end if;
@@ -537,16 +705,16 @@ begin
   if not found then
     raise exception 'this package term is not on sale' using errcode='PT409', detail='invoice_plan_unavailable';
   end if;
-  if p_slots < 1 or q.places + p_slots > 250 then
-    raise exception 'a package holds at most 250 slots' using errcode='22023', detail='package_slots_invalid';
+  -- 250 in all, and at most 245 in one add (a package starts at 5).
+  if p_slots < 1 or p_slots > 245 or q.places + p_slots > 250 then
+    raise exception 'a package holds at most 250 slots, and one add at most 245' using errcode='22023',
+      detail='package_slots_invalid';
   end if;
   total := q.unit_price_cents * p_slots;
   if total <> p_expected_total_cents then
     raise exception 'the price changed; check the total again' using errcode='PT428';
   end if;
-  select i.invoice_number into unpaid from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
-    where i.account_id = actor and i.status = 'issued' and internal.slot_package_plan(v.plan_code)
-    order by i.issued_at limit 1;
+  unpaid := internal.package_invoice_blocking(actor, null);
   if unpaid is not null then
     raise exception 'your package invoice % is not paid yet; pay it, or ask us to cancel it first', unpaid
       using errcode='PT409', detail='package_invoice_unpaid';
@@ -1106,10 +1274,8 @@ begin
     elsif pay.checkout_url is null and internal.slot_package_open(pay.owner_id) then
       raise exception 'this account already has a Multi-listing package' using errcode='PT409', detail='package_active';
     end if;
-    if pay.checkout_url is null and exists(select 1 from private.customer_invoices i
-        join private.plan_versions v on v.id=i.plan_version_id
-        where i.account_id=pay.owner_id and i.status='issued' and internal.slot_package_plan(v.plan_code)
-          and not exists(select 1 from private.customer_invoice_payments l where l.invoice_id=i.id and l.payment_id=pay.id)) then
+    -- (20261120045404: an added-slots invoice of an ended package blocks nothing.)
+    if pay.checkout_url is null and internal.package_invoice_blocking(pay.owner_id, pay.id) is not null then
       raise exception 'your package invoice is not paid yet; pay it, or ask us to cancel it first'
         using errcode='PT409', detail='package_invoice_unpaid';
     end if;
@@ -1150,10 +1316,13 @@ AS $function$
 begin
   -- 20261120045404: the posts in the revoked grant that still fit in the
   -- package's other running grants stay in it (the reversal then ends only the
-  -- others); this never stops the refund or chargeback.
+  -- others). While an activation holds the package the reversal is refused
+  -- and retried (PT409); any other failure never stops the refund or
+  -- chargeback (the posts then end with the grant, as before).
   begin
     perform internal.slot_package_keep_posts(new.id);
   exception when others then
+    if sqlstate = 'PT409' then raise; end if;
     raise warning 'slot package posts not kept after a revoked grant (%)', sqlstate;
   end;
   begin
@@ -1179,11 +1348,11 @@ CREATE OR REPLACE FUNCTION internal.package_invoice_request_guard()
  LANGUAGE plpgsql
  SET search_path TO 'pg_catalog'
 AS $function$
-declare inv private.customer_invoices;
+declare inv private.customer_invoices; got boolean;
 begin
   if tg_op = 'INSERT' then
     if new.status <> 'requested' or new.prepared_by is not null or new.approved_by is not null
-        or new.invoice_id is not null or new.closed_at is not null then
+        or new.invoice_id is not null or new.closed_at is not null or new.invoiced_days is not null then
       raise exception 'a package invoice request starts as requested' using errcode='23514';
     end if;
     return new;
@@ -1194,6 +1363,13 @@ begin
       and internal.erasure_unlinks(to_jsonb(old), to_jsonb(new), array['account_id']) then
     return new;
   end if;
+  -- The retention job's removal of a package record unlinks it from an
+  -- added-slots request (20261120045404); nothing else may change with it.
+  if pg_catalog.current_setting('vm.retention', true) = 'on' and old.package_id is not null
+      and new.package_id is null
+      and (to_jsonb(new) - 'package_id') = (to_jsonb(old) - 'package_id') then
+    return new;
+  end if;
   -- What the member asked for never changes; staff details are written once.
   if (new.id, new.account_id, new.member_request_id, new.plan_version_id, new.term_days, new.slots,
       new.unit_price_cents, new.total_cents, new.requested_at, new.consent_at, new.consent_version,
@@ -1201,6 +1377,7 @@ begin
     is distinct from (old.id, old.account_id, old.member_request_id, old.plan_version_id, old.term_days, old.slots,
       old.unit_price_cents, old.total_cents, old.requested_at, old.consent_at, old.consent_version,
       old.consent_terms_version, old.kind, old.package_id, old.days_left)
+    or old.invoiced_days is not null and new.invoiced_days is distinct from old.invoiced_days
     or (old.prepared_by is not null and (new.prepared_by, new.prepared_at, new.due_days, new.staff_reason)
       is distinct from (old.prepared_by, old.prepared_at, old.due_days, old.staff_reason)) then
     raise exception 'a package invoice request keeps what was asked and prepared' using errcode='23514';
@@ -1213,11 +1390,29 @@ begin
     raise exception 'a package invoice request moves on once, from requested or awaiting approval'
       using errcode='23514';
   end if;
+  if new.status <> 'issued' and new.invoiced_days is not null then
+    raise exception 'only an issued request records the days it was invoiced for' using errcode='23514';
+  end if;
   if new.status = 'issued' then
     select * into inv from private.customer_invoices i where i.id = new.invoice_id;
-    if not found or inv.account_id <> new.account_id or inv.plan_version_id <> new.plan_version_id
-        or inv.slots <> new.slots or inv.unit_price_cents <> new.unit_price_cents
-        or inv.total_cents <> new.total_cents or inv.request_id <> new.id or inv.issued_by <> new.prepared_by
+    got := found;
+    -- 20261120045404: an added-slots invoice is issued for the whole days left
+    -- at that moment when they are fewer than the days it was priced for
+    -- (internal.issue_package_customer_invoice), at that lower price; this
+    -- records those days and checks the invoice's price against them.
+    if new.kind = 'add' then
+      new.invoiced_days := least(new.days_left,
+        (select q.days_left from internal.slot_package_add_quote(new.account_id) q where q.package_id = new.package_id));
+    end if;
+    if not got or inv.account_id <> new.account_id or inv.plan_version_id <> new.plan_version_id
+        or inv.slots <> new.slots
+        or inv.unit_price_cents <> (case when new.kind = 'add' and new.invoiced_days < new.days_left
+          then (select round(v.price_cents::numeric * new.invoiced_days / v.duration_days)::bigint
+            from private.plan_versions v where v.id = new.plan_version_id)
+          else new.unit_price_cents end)
+        or inv.total_cents <> inv.unit_price_cents * new.slots
+        or (new.kind = 'add') <> (new.invoiced_days is not null)
+        or inv.request_id <> new.id or inv.issued_by <> new.prepared_by
         or inv.status <> 'issued' then
       raise exception 'an issued request names its own invoice of that order' using errcode='23514';
     end if;
@@ -1240,8 +1435,13 @@ AS $function$
     'invoice_number', (select i.invoice_number from private.customer_invoices i where i.id = r.invoice_id),
     'closed_at', r.closed_at)
   -- 20261120045404: an added-slots request says so, with the days it was
-  -- priced for and its package's current end (a new package's is unchanged).
+  -- priced for, the days its invoice was issued for (fewer when issued
+  -- later), the whole days its package has left now (null once it no longer
+  -- runs) and the package's current end (a new package's is unchanged).
   || case when r.kind = 'add' then jsonb_build_object('kind', 'add', 'days_left', r.days_left,
+    'invoiced_days', r.invoiced_days,
+    'days_left_now', (select q.days_left from internal.slot_package_add_quote(r.account_id) q
+      where q.package_id = r.package_id),
     'package_ends_at', (select max(e.ends_at) from private.entitlements e
       where e.package_id = r.package_id and e.status = 'active')) else '{}'::jsonb end
   || case when p_staff is null then '{}'::jsonb else jsonb_build_object('account_id', r.account_id,
@@ -1278,8 +1478,10 @@ begin
     raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
   end if;
   if r.kind = 'add' then
-    -- Slots added part-way (20261120045404): at the price asked for (D1),
-    -- only while the package runs with 7 or more whole days left and room.
+    -- Slots added part-way (20261120045404): at the price asked for (D1), or
+    -- for the fewer whole days left when issued later
+    -- (internal.issue_package_customer_invoice), only while the package runs
+    -- with 10 or more whole days left (D1: 7 of use and 3 to pay) and room.
     select * into plan from private.plan_versions v where v.id = r.plan_version_id
       and internal.slot_package_plan(v.plan_code);
     if not found then
@@ -1291,9 +1493,9 @@ begin
       raise exception 'the customer''s package has ended; decline the request'
         using errcode='PT409', detail='package_ended';
     end if;
-    if q.days_left < 7 then
-      raise exception 'fewer than 7 days of the customer''s package are left; decline the request'
-        using errcode='PT409', detail='package_add_too_late';
+    if q.days_left < 10 then
+      raise exception 'fewer than 10 days of the customer''s package are left; decline the request'
+        using errcode='PT409', detail='package_add_invoice_too_late';
     end if;
     if q.places + r.slots > 250 then
       raise exception 'the package would hold more than 250 slots; decline the request'
@@ -1320,9 +1522,7 @@ begin
     raise exception 'the customer has a package payment open at Ozow; try again when it has closed'
       using errcode='PT409', detail='invoice_checkout_open';
   end if;
-  select i.invoice_number into unpaid from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
-    where i.account_id = r.account_id and i.status = 'issued' and internal.slot_package_plan(v.plan_code)
-    order by i.issued_at limit 1;
+  unpaid := internal.package_invoice_blocking(r.account_id, null);
   if unpaid is not null then
     raise exception 'the customer''s package invoice % is not paid yet; void it first', unpaid
       using errcode='PT409', detail='package_invoice_unpaid';
@@ -1346,24 +1546,37 @@ CREATE OR REPLACE FUNCTION internal.issue_package_customer_invoice(r private.pac
  SET search_path TO 'pg_catalog'
 AS $function$
 declare issued_on date; year_number integer; next_number integer; made private.customer_invoices;
+  q record; days integer; unit bigint; due date;
 begin
   issued_on := internal.customer_invoice_day(statement_timestamp());
   year_number := extract(year from issued_on)::integer;
+  unit := p_plan.price_cents;
+  due := issued_on + p_due_days;
+  if r.kind = 'add' then
+    -- 20261120045404: added slots at the price asked for (D1); when fewer
+    -- whole days are left now than it was priced for, for those days at
+    -- their lower price (slots × unit price = total, as always). Due 3 days
+    -- after it is issued, or on the package's last day (South African date)
+    -- when that is sooner; the days staff give are not used for an add.
+    select x.* into q from internal.slot_package_add_quote(r.account_id) x where x.package_id = r.package_id;
+    days := least(r.days_left, q.days_left);
+    unit := case when days < r.days_left
+      then round(p_plan.price_cents::numeric * days / p_plan.duration_days)::bigint
+      else r.unit_price_cents end;
+    due := least(issued_on + 3, internal.customer_invoice_day(q.ends_at));
+  end if;
   insert into private.customer_invoice_numbers as n (invoice_year, last_number) values (year_number, 1)
     on conflict (invoice_year) do update set last_number = n.last_number + 1
     returning n.last_number into next_number;
   insert into private.customer_invoices (invoice_number, invoice_year, sequence_number, account_id, plan_version_id,
       slots, unit_price_cents, total_cents, description, due_on, issued_by, issue_reason, request_id, seller)
     values ('VM-' || year_number::text || '-' || lpad(next_number::text, 6, '0'), year_number, next_number, r.account_id,
-      p_plan.id, r.slots,
-      -- 20261120045404: added slots at the price asked for (D1).
-      case when r.kind = 'add' then r.unit_price_cents else p_plan.price_cents end,
-      case when r.kind = 'add' then r.total_cents else p_plan.price_cents * r.slots end,
+      p_plan.id, r.slots, unit, unit * r.slots,
       case when r.kind = 'add'
         then 'Multi-listing package: ' || r.slots::text || case when r.slots = 1 then ' slot' else ' slots' end
-          || ' added for ' || r.days_left::text || ' days'
+          || ' added for ' || days::text || ' days'
         else 'Multi-listing package: ' || r.slots::text || ' slots × ' || p_plan.duration_days::text || ' days' end,
-      issued_on + p_due_days, p_issuer, p_reason, r.id,
+      due, p_issuer, p_reason, r.id,
       jsonb_build_object('legal_name', 'Verifymzansi (Pty) Ltd', 'registration_number', '2026/155305/07',
         'vat_registered', false))
     returning * into made;
@@ -2001,6 +2214,404 @@ $function$;
 alter function internal.confirm_staff_invoice_payment(uuid) owner to postgres;
 revoke all on function internal.confirm_staff_invoice_payment(uuid) from public;
 grant execute on function internal.confirm_staff_invoice_payment(uuid) to authenticated;
+
+
+-- REPLACE: internal.customer_invoice_dto
+
+CREATE OR REPLACE FUNCTION internal.customer_invoice_dto(i private.customer_invoices, p_staff uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select jsonb_build_object('invoice_id', i.id, 'invoice_number', i.invoice_number, 'status', i.status,
+    'issued_at', i.issued_at, 'due_on', to_char(i.due_on::timestamp, 'YYYY-MM-DD'),
+    'seller', i.seller,
+    'buyer', case when i.buyer_name is null then null else jsonb_build_object('name', i.buyer_name,
+      'address', i.buyer_address, 'registration_number', i.buyer_registration_number) end,
+    'revision', i.revision, 'term_days', (select v.duration_days from private.plan_versions v where v.id = i.plan_version_id),
+    'slots', i.slots, 'unit_price_cents', i.unit_price_cents, 'total_cents', i.total_cents,
+    'description', i.description, 'currency', 'ZAR', 'payment_reference', i.invoice_number,
+    'cooling_off_consent_at', i.cooling_off_consent_at, 'cooling_off_consent_version', i.cooling_off_consent_version,
+    'consent', internal.customer_invoice_consent(),
+    'paid_at', i.paid_at, 'payment_id', i.payment_id,
+    'payment_status', (select p.status from private.payments p where p.id = i.payment_id),
+    'voided_at', i.voided_at,
+    'transfer_waiting', exists(select 1 from private.invoice_transfers t
+      where t.customer_invoice_id = i.id and internal.invoice_transfer_waiting(t)),
+    'latest_attempt', (select jsonb_build_object('payment_id', p.id, 'attempt', l.attempt, 'status', p.status,
+        'checkout_open', p.status = 'pending' and p.checkout_url is not null
+          and p.checkout_expires_at > pg_catalog.clock_timestamp())
+      from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
+      where l.invoice_id = i.id order by l.attempt desc limit 1))
+  -- 20261120045404: an added-slots invoice says the whole days it was
+  -- issued for (`term_days` stays the package's term) and its package's end,
+  -- with which the added slots end.
+  || coalesce((select jsonb_build_object('days_added', r.invoiced_days,
+      'package_ends_at', (select max(e.ends_at) from private.entitlements e
+        where e.package_id = r.package_id and e.status = 'active'))
+    from private.package_invoice_requests r where r.invoice_id = i.id and r.kind = 'add'), '{}'::jsonb)
+  || case when p_staff is null then '{}'::jsonb else jsonb_build_object('account_id', i.account_id,
+    'customer_email', (select u.email from auth.users u where u.id = i.account_id),
+    'customer_name', internal.profile_public_name((select f.display_name from private.profiles f where f.account_id = i.account_id)),
+    'issued_by_me', internal.same_identity(i.issued_by, p_staff),
+    'issued_by_name', internal.profile_public_name((select f.display_name from private.profiles f where f.account_id = i.issued_by)),
+    'issue_reason', i.issue_reason, 'void_reason', i.void_reason,
+    'attempts', (select count(*) from private.customer_invoice_payments l where l.invoice_id = i.id),
+    'extra_payments', coalesce((select jsonb_agg(p.id order by p.completed_at, p.id)
+      from private.customer_invoice_payments l join private.payments p on p.id = l.payment_id
+      where l.invoice_id = i.id and p.completed_at is not null and p.id is distinct from i.payment_id), '[]'::jsonb)) end;
+$function$;
+alter function internal.customer_invoice_dto(private.customer_invoices,uuid) owner to postgres;
+revoke all on function internal.customer_invoice_dto(private.customer_invoices,uuid) from public;
+
+-- REPLACE: internal.request_package_invoice
+
+CREATE OR REPLACE FUNCTION internal.request_package_invoice(p_plan_id uuid, p_slots integer, p_expected_total_cents bigint, p_cooling_off_consent boolean, p_request_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid := internal.price_draft_actor(); plan private.plan_versions; total bigint; unpaid text;
+  prior private.package_invoice_requests; waiting private.package_invoice_requests; made private.package_invoice_requests;
+  consent jsonb := internal.customer_invoice_consent();
+begin
+  if p_plan_id is null or p_slots is null or p_expected_total_cents is null or p_request_id is null then
+    raise exception 'package term, number of slots, total and request id required' using errcode='22023';
+  end if;
+  -- Paid by bank transfer, the slots start without the 7-day cooling-off: the
+  -- member confirms it when asking (posting-v5), in the invoice's own words.
+  if p_cooling_off_consent is distinct from true then
+    raise exception 'cooling-off consent required before asking for an invoice'
+      using errcode='22023', detail='invoice_consent_required';
+  end if;
+  perform internal.lock_evidence_subject(actor);
+  if not internal.slot_packages_on_sale() then
+    raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
+  end if;
+  select * into plan from private.plan_versions v
+    where v.id = p_plan_id and v.retired_at is null and internal.slot_package_plan(v.plan_code);
+  if not found then raise exception 'this package term is not on sale' using errcode='22023'; end if;
+  -- The package checkout's numbers: 5 to 250 slots; an invoice at any amount.
+  if p_slots < 5 or p_slots > 250 then
+    raise exception 'a package has 5 to 250 slots' using errcode='22023', detail='package_slots_invalid';
+  end if;
+  if internal.current_verified_identity(actor) is null then
+    raise exception 'your ID review must be accepted before you ask for a package invoice' using errcode='PT412';
+  end if;
+  total := plan.price_cents * p_slots;
+  if total <> p_expected_total_cents then
+    raise exception 'the price changed; check the total again' using errcode='PT428';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text, 707));
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||actor::text, 707));
+  -- The same request again (a retried submission) returns the first answer.
+  select * into prior from private.package_invoice_requests r
+    where r.account_id = actor and r.member_request_id = p_request_id;
+  if found then
+    -- (20261120045404: only a request for a new package, never an add.)
+    if prior.kind = 'package' and prior.plan_version_id = plan.id and prior.slots = p_slots then
+      perform internal.price_draft_actor();
+      return internal.package_invoice_request_dto(prior, null) || jsonb_build_object('repeated', true);
+    end if;
+    raise exception 'that request already asked for another invoice' using errcode='PT409', detail='invoice_request_conflict';
+  end if;
+  if internal.slot_package_open(actor) then
+    raise exception 'this account already has a Multi-listing package' using errcode='PT409', detail='package_active';
+  end if;
+  -- (20261120045404: an added-slots invoice of an ended package blocks nothing.)
+  unpaid := internal.package_invoice_blocking(actor, null);
+  if unpaid is not null then
+    raise exception 'your package invoice % is not paid yet; pay it, or ask us to cancel it first', unpaid
+      using errcode='PT409', detail='package_invoice_unpaid';
+  end if;
+  -- One request open at a time. The same order again: the waiting request
+  -- stands. Another order replaces it while no staff member has prepared it.
+  select * into waiting from private.package_invoice_requests r
+    where r.account_id = actor and r.status in ('requested', 'awaiting_approval')
+    for update;
+  if found then
+    if waiting.status = 'awaiting_approval' then
+      raise exception 'your invoice is being prepared; ask us to cancel it before asking for another'
+        using errcode='PT409', detail='package_invoice_request_open';
+    end if;
+    if waiting.kind = 'package' and waiting.plan_version_id = plan.id and waiting.slots = p_slots then
+      perform internal.price_draft_actor();
+      return internal.package_invoice_request_dto(waiting, null) || jsonb_build_object('repeated', true);
+    end if;
+  end if;
+  -- At most 10 new requests per account in 24 hours (each other order is a
+  -- new request), so the staff queue cannot be flooded.
+  if (select count(*) from private.package_invoice_requests r
+      where r.account_id = actor and r.requested_at > statement_timestamp() - interval '24 hours') >= 10 then
+    raise exception 'too many invoice requests today; try again tomorrow or contact us'
+      using errcode='PT429', detail='package_invoice_requests_limit';
+  end if;
+  if waiting.id is not null then
+    update private.package_invoice_requests set status = 'withdrawn', closed_at = statement_timestamp()
+      where id = waiting.id;
+  end if;
+  insert into private.package_invoice_requests (account_id, member_request_id, plan_version_id, term_days, slots,
+      unit_price_cents, total_cents, consent_at, consent_version, consent_terms_version)
+    values (actor, p_request_id, plan.id, plan.duration_days, p_slots, plan.price_cents, total, statement_timestamp(),
+      consent->>'version', (select c.version from private.posting_terms_current c where c.singleton))
+    returning * into made;
+  perform internal.price_draft_actor(); -- final live owner/session check after all waits
+  return internal.package_invoice_request_dto(made, null) || jsonb_build_object('repeated', false);
+end;
+$function$;
+alter function internal.request_package_invoice(uuid,integer,bigint,boolean,uuid) owner to postgres;
+revoke all on function internal.request_package_invoice(uuid,integer,bigint,boolean,uuid) from public;
+grant execute on function internal.request_package_invoice(uuid,integer,bigint,boolean,uuid) to authenticated;
+
+-- REPLACE: internal.get_my_package_invoice_request
+
+CREATE OR REPLACE FUNCTION internal.get_my_package_invoice_request()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid := internal.price_draft_actor(); latest private.package_invoice_requests;
+begin
+  -- (20261120045404: a request for a new package; added-slots requests are
+  -- read with api.get_my_package_add_offer.)
+  select * into latest from private.package_invoice_requests r where r.account_id = actor and r.kind = 'package'
+    order by r.requested_at desc, r.id desc limit 1;
+  perform internal.price_draft_actor();
+  return jsonb_build_object('request', case when latest.id is null then null
+    else internal.package_invoice_request_dto(latest, null) end);
+end;
+$function$;
+alter function internal.get_my_package_invoice_request() owner to postgres;
+revoke all on function internal.get_my_package_invoice_request() from public;
+grant execute on function internal.get_my_package_invoice_request() to authenticated;
+
+-- REPLACE: internal.start_package_checkout
+
+CREATE OR REPLACE FUNCTION internal.start_package_checkout(p_plan_id uuid, p_slots integer, p_expected_total_cents bigint, p_cooling_off_consent boolean)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare
+  actor uuid := internal.price_draft_actor();
+  plan private.plan_versions;
+  pay private.payments;
+  fingerprint text;
+  total bigint;
+  open_slots integer;
+begin
+  if p_plan_id is null or p_slots is null or p_expected_total_cents is null then
+    raise exception 'package term, number of slots and total required' using errcode='22023';
+  end if;
+  if p_cooling_off_consent is distinct from true then
+    raise exception 'cooling-off consent required before payment' using errcode='22023';
+  end if;
+  perform internal.lock_evidence_subject(actor);
+  if not internal.slot_packages_on_sale() then
+    raise exception 'Multi-listing packages are not on sale' using errcode='PT403', detail='packages_not_on_sale';
+  end if;
+  select * into plan from private.plan_versions v
+    where v.id=p_plan_id and v.retired_at is null and internal.slot_package_plan(v.plan_code);
+  if not found then raise exception 'this package term is not on sale' using errcode='22023'; end if;
+  -- Typed: a whole number of slots, at least 5 (1 to 4 are Individual slots),
+  -- at most 250 per business; more than 100 is bought by invoice.
+  if p_slots < 5 or p_slots > 250 then
+    raise exception 'a package has 5 to 250 slots' using errcode='22023', detail='package_slots_invalid';
+  end if;
+  fingerprint := internal.current_verified_identity(actor);
+  if fingerprint is null then
+    raise exception 'your ID review must be accepted before you buy a package' using errcode='PT412';
+  end if;
+  total := plan.price_cents * p_slots;
+  -- More than 100 slots, or above the most Ozow accepts in one payment
+  -- (internal.online_payment_max_cents, the one setting): by invoice.
+  if p_slots > 100 or total > internal.online_payment_max_cents() then
+    raise exception 'packages above 100 slots or the online payment limit of % cents are paid by invoice',
+      internal.online_payment_max_cents() using errcode='PT413',
+      detail='package_invoice_required';
+  end if;
+  if total <> p_expected_total_cents then
+    raise exception 'the price changed; check the total again' using errcode='PT428';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text, 707));
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('slot-package:'||actor::text, 707));
+  if internal.slot_package_open(actor) then
+    raise exception 'this account already has a Multi-listing package' using errcode='PT409', detail='package_active';
+  end if;
+  -- 20261119025106: while a package invoice of the account is unpaid, it is
+  -- paid (or cancelled) first, so no second package is bought beside it.
+  -- (20261120045404: an added-slots invoice of an ended package blocks nothing.)
+  if internal.package_invoice_blocking(actor, null) is not null then
+    raise exception 'your package invoice is not paid yet; pay it, or ask us to cancel it first'
+      using errcode='PT409', detail='package_invoice_unpaid';
+  end if;
+  -- (20261120045404: an added-slots order is never continued as a new
+  -- package; one left unsent is closed below as any other package order.)
+  select p.* into pay from private.payments p join private.plan_versions v on v.id=p.plan_version_id
+    where p.owner_id=actor and p.status='pending' and p.target_post_id is null and internal.slot_package_plan(v.plan_code)
+    order by p.created_at desc, p.id limit 1
+    for update of p;
+  if found then
+    select l.slot_count into open_slots from private.payment_lines l where l.payment_id=pay.id and l.line_number=1;
+    if pay.plan_version_id <> plan.id or open_slots is distinct from p_slots
+        or pay.snapshot->>'category' is distinct from 'slot_package' then
+      if pay.checkout_url is not null then
+        -- Open at Ozow for another package order: the member continues,
+        -- checks or cancels it first.
+        perform internal.price_draft_actor();
+        return jsonb_build_object('payment_id', pay.id, 'merchant_reference', pay.merchant_reference,
+          'amount_cents', pay.amount_cents::text, 'currency', pay.currency, 'status', pay.status,
+          'slots', open_slots, 'package', true, 'reused', true);
+      elsif pay.checkout_claim_until > clock_timestamp() then
+        raise exception 'checkout is being created' using errcode='PT409';
+      end if;
+      -- Never sent to Ozow, so it can never be paid: replaced.
+      update private.payments set status='cancelled', status_changed_at=clock_timestamp() where id=pay.id;
+      pay := null;
+    end if;
+  end if;
+  if pay.id is null then
+    insert into private.payments (owner_id, product_kind, plan_version_id, amount_cents, currency, snapshot)
+    values (actor, 'plan', plan.id, total, plan.currency, jsonb_build_object('kind', 'plan', 'category', 'slot_package',
+        'code', plan.plan_code, 'version', plan.version, 'label', plan.label, 'area', plan.area,
+        'price_cents', plan.price_cents, 'slots', p_slots, 'total_cents', total,
+        'duration_days', plan.duration_days, 'slot_capacity', p_slots,
+        'activations_per_period', plan.activations_per_period * p_slots,
+        'activation_period_days', plan.activation_period_days,
+        'max_photos', plan.max_photos, 'max_videos', plan.max_videos,
+        'addon_capabilities', to_jsonb(plan.addon_capabilities),
+        'invoice_description', 'Multi-listing package: ' || p_slots::text || ' slots × ' || plan.duration_days::text || ' days',
+        'cooling_off_consent', jsonb_build_object('accepted_at', statement_timestamp(),
+          'terms_version', (select c.version from private.posting_terms_current c where c.singleton),
+          'wording_version', 'package-starts-now-v1',
+          'wording', 'My slots start now; the 7-day cooling-off does not apply because the service starts immediately')))
+    returning * into pay;
+    insert into private.payment_lines (payment_id, line_number, plan_version_id, amount_cents, slot_count)
+      values (pay.id, 1, plan.id, total, p_slots);
+  end if;
+  perform internal.price_draft_actor(); -- final live owner/session check after all waits
+  return jsonb_build_object('payment_id', pay.id, 'merchant_reference', pay.merchant_reference,
+    'amount_cents', pay.amount_cents::text, 'currency', pay.currency, 'status', pay.status,
+    'slots', p_slots, 'package', true, 'reused', pay.created_at < statement_timestamp());
+end;
+$function$;
+alter function internal.start_package_checkout(uuid,integer,bigint,boolean) owner to postgres;
+revoke all on function internal.start_package_checkout(uuid,integer,bigint,boolean) from public;
+grant execute on function internal.start_package_checkout(uuid,integer,bigint,boolean) to authenticated;
+
+-- REPLACE: internal.frontend_privacy_export_data
+
+CREATE OR REPLACE FUNCTION internal.frontend_privacy_export_data(p_subject uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare entry record;items jsonb;row_count integer;result jsonb:='{}';size_so_far bigint:=0;
+begin
+  for entry in select * from (values
+    ('profile',$q$select account_id,display_name,bio,legal_first_name,legal_last_name,legal_name_locked_at,created_at,updated_at from private.profiles where account_id=$1$q$),
+    ('account',$q$select id,email,email_confirmed_at,phone,phone_confirmed_at,created_at,last_sign_in_at from auth.users where id=$1 and deleted_at is null$q$),
+    ('listing_drafts',$q$select category_key,price_mode,price_cents,price_negotiable,revision,expires_at from private.listing_price_drafts where owner_id=$1$q$),
+    ('posts',$q$select p.id,p.kind,p.area,p.category_key,p.activity_key,p.title,p.description,p.province_id,p.city_id,p.locality_label,
+      p.status,p.status_reason,p.created_at,p.submitted_at,p.published_at,p.visible_until,p.edit_of,
+      l.price_mode,l.price_cents,l.price_negotiable,l.attributes,b.business_type,e.starts_at,e.ends_at,e.timezone,
+      s.slug,d.data presentation,d.contacts contact_details,c.channels
+      from private.posts p left join private.listing_details l on l.post_id=p.id left join private.business_details b on b.post_id=p.id
+      left join private.event_details e on e.post_id=p.id left join private.post_slugs s on s.post_id=p.id
+      left join private.post_presentations d on d.post_id=p.id left join private.post_contacts c on c.post_id=p.id
+      where p.owner_id=$1 order by p.created_at,p.id$q$),
+    ('post_reviews',$q$select m.post_id,m.edit_id,m.decision,m.reason,m.decided_at,m.price_only
+      from private.moderation_log m join private.posts p on p.id=m.post_id where p.owner_id=$1 order by m.decided_at,m.id$q$),
+    ('media_metadata',$q$select id,kind,size_bytes,mime,width,height,state,created_at,deleted_at from private.media_objects where owner_id=$1 order by created_at,id$q$),
+    ('payments',$q$select p.id,p.product_kind,p.target_post_id,p.amount_cents,p.currency,p.status,p.fulfillment_status,p.merchant_reference,
+      p.provider,p.created_at,p.completed_at,coalesce((p.snapshot->>'renewal')::boolean,false) renewal,
+      p.snapshot->'cooling_off_consent' cooling_off_consent,p.snapshot->'renewal_starts' renewal_starts,
+      (select jsonb_agg(jsonb_build_object('line_number',l.line_number,'amount_cents',l.amount_cents,'status',l.status,
+          'renews_entitlement_id',l.renews_entitlement_id,'slot_count',l.slot_count,'reversal_kind',l.reversal_kind,
+          'reversed_at',l.reversed_at)
+        order by l.line_number) from private.payment_lines l where l.payment_id=p.id) lines
+      from private.payments p where p.owner_id=$1 order by p.created_at,p.id$q$),
+    ('invoices',$q$select i.id,i.payment_id,i.invoice_number,i.amount_ex_vat_cents,i.vat_cents,i.total_cents,i.description,i.issued_at
+      from private.invoices i join private.payments p on p.id=i.payment_id where p.owner_id=$1 order by i.issued_at,i.id$q$),
+    ('customer_invoices',$q$select i.invoice_number,i.status,i.description,i.slots,i.unit_price_cents,i.total_cents,i.issued_at,i.due_on,
+      i.buyer_name,i.buyer_address,i.buyer_registration_number,i.buyer_saved_at,i.cooling_off_consent_at,i.cooling_off_consent_version,
+      i.payment_id,i.paid_at,i.voided_at,(select array_agg(l.payment_id order by l.attempt) from private.customer_invoice_payments l
+        where l.invoice_id=i.id) payment_attempts
+      from private.customer_invoices i where i.account_id=$1 order by i.issued_at,i.id$q$),
+    ('bank_transfers',$q$select t.id,t.payment_id,v.duration_days term_days,t.slots,t.amount_received_cents,t.bank_reference,t.cleared_on,
+      t.cooling_off_waiver_confirmed,t.status,t.recorded_at,t.confirmed_at,t.declined_at,t.expired_at
+      from private.invoice_transfers t join private.plan_versions v on v.id=t.plan_version_id where t.account_id=$1 order by t.recorded_at,t.id$q$),
+    ('entitlements',$q$select id,source,area,slot_capacity,activations_per_period,activation_period_days,max_photos,max_videos,starts_at,ends_at,status,revoked_reason,
+      renews_entitlement_id,slot_id,package_id
+      from private.entitlements where owner_id=$1 order by created_at,id$q$),
+    ('house_slot_events',$q$select h.entitlement_id,h.action,h.ends_at,h.recorded_at from private.house_slot_events h
+      join private.entitlements e on e.id=h.entitlement_id where e.owner_id=$1 order by h.recorded_at,h.id$q$),
+    ('slot_packages',$q$select id,term_days,slot_count,created_at from private.slot_packages where owner_id=$1
+      order by created_at,id$q$),
+    ('package_invoice_requests',$q$select r.id,r.term_days,r.slots,r.unit_price_cents,r.total_cents,r.requested_at,r.consent_at,
+      r.consent_version,r.status,r.closed_at,(select i.invoice_number from private.customer_invoices i where i.id=r.invoice_id) invoice_number,
+      r.kind,r.package_id,r.days_left,r.invoiced_days
+      from private.package_invoice_requests r where r.account_id=$1 order by r.requested_at,r.id$q$),
+    ('post_activations',$q$select post_id,entitlement_id,activated_at,released_at,release_reason,continued
+      from private.post_activations where owner_id=$1 order by activated_at,id$q$),
+    ('event_submissions',$q$select post_id,submitted_at,released_at,release_reason
+      from private.event_submissions where owner_id=$1 order by submitted_at,id$q$),
+    ('introductory_trials',$q$select post_id,trial_entitlement_id,claimed_at,converted_at
+      from private.post_trial_claims where owner_id=$1 order by claimed_at,post_id$q$),
+    ('posting_terms',$q$select version,document_hash,accepted_at from private.posting_terms_acceptances where owner_id=$1 order by accepted_at,version$q$),
+    ('signup_terms',$q$select version,document_hash,method,accepted_at from private.signup_terms_acceptances where account_id=$1$q$),
+    ('communication_choices',$q$select purpose,granted,wording_version,recorded_at from private.communication_choice_events
+      where account_id=$1 order by recorded_at,id$q$),
+    ('verification_cases',$q$select id,kind,status,created_at from private.evidence_cases where subject_id=$1 order by created_at,id$q$),
+    ('verification_reviews',$q$select r.case_id,r.reason,r.decision,r.created_at from private.verification_return_requests r join private.evidence_cases c on c.id=r.case_id
+      where c.subject_id=$1 order by r.created_at,r.id$q$),
+    ('evidence_metadata',$q$select id,case_id,purpose,state,size_bytes,created_at,retain_until,deleted_at
+      from private.evidence_artifacts where owner_id=$1 order by created_at,id$q$),
+    ('phone_verification',$q$select phone,verified_at,contact_changed_at,revoked_at from private.verification_phone_proofs where owner_id=$1 order by verified_at,id$q$),
+    ('locality_verification',$q$select province_id,city_id,assurance,confirmed_at from private.verification_localities where owner_id=$1$q$),
+    ('enquiries_sent',$q$select id,post_id,message,created_at from private.enquiries where sender_account_id=$1 order by created_at,id$q$),
+    ('enquiries_received',$q$select id,post_id,message,status,created_at from private.enquiries where owner_id=$1 order by created_at,id$q$),
+    ('post_likes',$q$select l.post_id,l.created_at from (select post_id,created_at,id from private.post_likes
+      where account_id=$1 order by created_at desc,id limit 2000) l$q$),
+    ('post_likes_summary',$q$select count(*) total,min(created_at) first_at,max(created_at) last_at
+      from private.post_likes where account_id=$1$q$),
+    ('notifications',$q$select id,kind,post_id,created_at,read_at from private.notifications where account_id=$1 order by created_at,id$q$),
+    ('reports_submitted',$q$select id,post_id,coalesce(frontend_reason,category) category,description,status,created_at,resolved_at
+      from private.reports where reporter_id=$1 order by created_at,id$q$),
+    ('moderation_decisions',$q$select id,kind,reason,starts_at,ends_at,active from private.frontend_appealable_actions
+      where account_id=$1 order by starts_at,id$q$),
+    ('appeals',$q$select id,action_id,kind,reason,status,reviewer_rationale,created_at,resolved_at from private.frontend_appeals
+      where appellant_id=$1 order by created_at,id$q$),
+    ('organisation_applications',$q$select id,organisation_id,programme_id,post_id,reason,member_reference,share_representative_name,consented_at,
+      status,info_request,info_response,decision_at,decision_note,created_at from private.organisation_applications where applicant_id=$1 order by created_at,id$q$),
+    ('organisation_affiliations',$q$select a.id,a.organisation_id,a.programme_id,a.post_id,a.affiliation_type,a.status,a.confirmed_at,a.revoked_at,a.revoke_reason
+      from private.organisation_affiliations a join private.posts p on p.id=a.post_id where p.owner_id=$1 order by a.created_at,a.id$q$),
+    ('organisation_roles',$q$select organisation_id,role,created_at from private.organisation_admins where account_id=$1 order by created_at,organisation_id$q$),
+    ('sponsorships',$q$select id,organisation_id,post_id,sponsor_type,status,starts_at,ends_at,ended_at,end_reason
+      from private.organisation_sponsorships where owner_id=$1 order by created_at,id$q$),
+    ('partner_account',$q$select id,code,status,commission_bps,created_at,updated_at from private.partners where account_id=$1 order by created_at,id$q$),
+    ('partner_commissions',$q$select c.id,c.base_cents,c.rate_bps,c.amount_cents,c.status,c.eligible_at,c.approved_at,c.paid_at,c.reversed_at
+      from private.partner_commissions c join private.partners p on p.id=c.partner_id where p.account_id=$1 order by c.created_at,c.id$q$),
+    ('acquisition',$q$select source,campaign,landing_path,referrer_host,first_touch_at,recorded_at from private.account_acquisitions where account_id=$1$q$),
+    ('account_closure',$q$select closed_at,evidence_delete_after from private.account_closures where user_id=$1$q$),
+    ('data_requests',$q$select id,type,description,status,received_at,due_by,extended_due_at,extension_reason,response_summary,completed_at
+      from private.privacy_requests where subject_user_id=$1 order by received_at,id$q$)
+  ) as registry(dataset,statement) loop
+    execute 'select coalesce(jsonb_agg(to_jsonb(x)),''[]''::jsonb),count(*) from ('||entry.statement||' limit 2501)x'
+      into items,row_count using p_subject;
+    size_so_far:=size_so_far+octet_length(items::text);
+    if row_count>2500 or size_so_far>4194304 then raise exception 'privacy export exceeds the direct delivery limit' using errcode='PT413';end if;
+    result:=result||jsonb_build_object(entry.dataset,items);
+  end loop;
+  return result;
+end$function$;
+alter function internal.frontend_privacy_export_data(uuid) owner to postgres;
+revoke all on function internal.frontend_privacy_export_data(uuid) from public;
 
 notify pgrst,'reload schema';
 commit;

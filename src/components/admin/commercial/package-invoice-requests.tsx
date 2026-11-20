@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatPlanPrice } from "@/lib/constants/pricing";
+import { formatSaLongDate } from "@/lib/utils/format";
+import { PACKAGE_ADD_INVOICE_DUE_DAYS, packageAddInvoiceDueOn } from "@/lib/billing/slot-packages";
 import {
   ActionMessage,
   AdminCard,
@@ -29,9 +31,12 @@ export type StaffPackageInvoiceRequestRow = {
   prepared_by_me: boolean;
   prepared_by_name: string | null;
   /** Slots added to the customer's running package (P4b), priced for
-   * `days_left` whole days and ending with it (`package_ends_at`). */
+   * `days_left` whole days and ending with it (`package_ends_at`); the
+   * package's whole days left now (`days_left_now`, null once it no longer
+   * runs). Issued later, the invoice is for the fewer days at their price. */
   kind?: "add";
   days_left?: number;
+  days_left_now?: number | null;
   package_ends_at?: string | null;
 };
 
@@ -57,17 +62,21 @@ function RequestRow({
   const who = request.customer_name ?? request.customer_email ?? "this customer";
   const add = request.kind === "add";
   const order = add
-    ? `Add ${request.slots} ${request.slots === 1 ? "slot" : "slots"} × ${request.days_left} days left`
+    ? `Add ${request.slots} ${request.slots === 1 ? "slot" : "slots"} · priced for ${request.days_left} days`
     : `${request.slots} slots × ${request.term_days} days`;
   const waiting = request.status === "awaiting_approval";
-  // A new package is refused while the customer has one; an add needs it running.
+  const daysNow = request.days_left_now ?? null;
+  // A new package is refused while the customer has one; an add needs it
+  // running with 10 or more whole days left.
   const blocked = !request.identity_accepted
     ? "The customer's ID review is not accepted: no invoice can be issued."
-    : add && !request.package_open
+    : add && daysNow === null
       ? "The customer's package has ended: decline this request."
-      : !add && request.package_open
-        ? "The customer already has a Multi-listing package: decline this request."
-        : null;
+      : add && daysNow !== null && daysNow < 10
+        ? "Fewer than 10 days of the customer's package are left: decline this request."
+        : !add && request.package_open
+          ? "The customer already has a Multi-listing package: decline this request."
+          : null;
 
   return (
     <li className="space-y-2 rounded-lg border p-3 text-sm" data-testid="package-invoice-request">
@@ -85,11 +94,19 @@ function RequestRow({
       <p className="text-muted-foreground">
         Asked {requestedDate.format(new Date(request.requested_at))}
         {waiting
-          ? ` · prepared by ${request.prepared_by_me ? "you" : (request.prepared_by_name ?? "another staff member")}, due ${request.due_days} days after it is issued; waits for a second admin`
+          ? ` · prepared by ${request.prepared_by_me ? "you" : (request.prepared_by_name ?? "another staff member")}, due ${add ? `${PACKAGE_ADD_INVOICE_DUE_DAYS} days after it is issued or on the package's last day if sooner` : `${request.due_days} days after it is issued`}; waits for a second admin`
           : request.needs_approval
             ? ` · above ${formatPlanPrice(approvalAboveCents)}: a second admin approves it before it is issued`
             : ""}
       </p>
+      {add && daysNow !== null && request.package_ends_at ? (
+        <p className="text-muted-foreground" data-testid="package-add-days">
+          {`Package ends ${requestedDate.format(new Date(request.package_ends_at))} · ${daysNow} whole days left now`}
+          {daysNow < (request.days_left ?? 0)
+            ? ` · issued now, the invoice is for ${daysNow} days at their lower price`
+            : ""}
+        </p>
+      ) : null}
       {blocked ? <p className="font-medium text-destructive">{blocked}</p> : null}
       <ActionMessage message={message} />
       <div className="flex flex-wrap gap-2">
@@ -162,7 +179,9 @@ function RequestRow({
               {
                 action: "package_invoice.issue",
                 requestId: request.request_id,
-                dueDays: Number(values.dueDays),
+                // An add's due date is set by the database (3 days, or the
+                // package's last day if sooner).
+                dueDays: add ? PACKAGE_ADD_INVOICE_DUE_DAYS : Number(values.dueDays),
                 reason: values.reason,
               },
               (data) => {
@@ -181,19 +200,25 @@ function RequestRow({
             if (done) setOpen(null);
           }}
         >
-          <label className="block text-sm">
-            <span className="font-medium">Days to pay</span>
-            <input
-              name="dueDays"
-              type="number"
-              inputMode="numeric"
-              required
-              min={1}
-              max={30}
-              defaultValue={7}
-              className="mt-1 block w-full rounded-md border bg-background p-2 sm:w-40"
-            />
-          </label>
+          {add && request.package_ends_at ? (
+            <p className="text-sm" data-testid="package-add-due">
+              {`Due ${formatSaLongDate(`${packageAddInvoiceDueOn(request.package_ends_at, new Date())}T12:00:00+02:00`)} (${PACKAGE_ADD_INVOICE_DUE_DAYS} days after it is issued, or the package's last day if sooner)`}
+            </p>
+          ) : (
+            <label className="block text-sm">
+              <span className="font-medium">Days to pay</span>
+              <input
+                name="dueDays"
+                type="number"
+                inputMode="numeric"
+                required
+                min={1}
+                max={30}
+                defaultValue={7}
+                className="mt-1 block w-full rounded-md border bg-background p-2 sm:w-40"
+              />
+            </label>
+          )}
           <ReasonField />
           <SubmitButton busy={busy}>
             {request.needs_approval ? "Prepare for approval" : "Issue invoice"}

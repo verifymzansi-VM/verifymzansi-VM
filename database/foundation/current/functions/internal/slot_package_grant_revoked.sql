@@ -9,10 +9,13 @@ AS $function$
 begin
   -- 20261120045404: the posts in the revoked grant that still fit in the
   -- package's other running grants stay in it (the reversal then ends only the
-  -- others); this never stops the refund or chargeback.
+  -- others). While an activation holds the package the reversal is refused
+  -- and retried (PT409); any other failure never stops the refund or
+  -- chargeback (the posts then end with the grant, as before).
   begin
     perform internal.slot_package_keep_posts(new.id);
   exception when others then
+    if sqlstate = 'PT409' then raise; end if;
     raise warning 'slot package posts not kept after a revoked grant (%)', sqlstate;
   end;
   begin

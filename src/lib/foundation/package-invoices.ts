@@ -52,6 +52,10 @@ const addFields = {
   slots: z.number().int().min(1).max(PACKAGE_MAX_SLOTS),
   kind: z.literal("add"),
   days_left: z.number().int().min(10).max(179),
+  // The days its invoice was issued for (fewer when issued later), and the
+  // whole days the package has left now (null once it no longer runs).
+  invoiced_days: z.number().int().min(10).max(179).nullable(),
+  days_left_now: z.number().int().min(0).max(180).nullable(),
   package_ends_at: instant.nullable(),
 };
 const packageSlots = z.number().int().min(PACKAGE_MIN_SLOTS).max(PACKAGE_MAX_SLOTS);

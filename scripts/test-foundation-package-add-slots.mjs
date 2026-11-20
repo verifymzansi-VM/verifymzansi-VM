@@ -43,6 +43,7 @@ import {
   ozowNoticeSql,
   ozowOpen,
   ozowSettle,
+  psqlSessions,
   runTwoAdminUpdateCheck,
   sqlValue,
 } from "./lib/foundation-staff-payment-world.mjs";
@@ -50,6 +51,7 @@ import {
 const UPDATE = "20261120045404_package_add_slots.sql";
 /** The Multi-listing package terms (20261114154823_slot_packages.sql). */
 const K30 = { id: "5b0f4c1e-2a7d-4c43-9b51-7e0d3f6a9c11", days: 30, cents: 10000 };
+const K90 = "8c3e1a52-6f0b-4d29-a7c4-2b9e5d1f7a33";
 const COMMANDS = [
   "api.get_my_package_add_offer()",
   "api.start_package_add_checkout(uuid,integer,bigint,boolean)",
@@ -185,6 +187,29 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
     scalar(
       `select a.entitlement_id from private.post_activations a where a.post_id='${id}' and a.released_at is null;`
     );
+  // Other sessions, for races.
+  const { session } = psqlSessions(database);
+  q("create table vmtest.gate(name text primary key);");
+  const until = async (sql, what) => {
+    for (let i = 0; i < 1200; i++) {
+      if (q(sql) === "t") return;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error(`timed out waiting for ${what}`);
+  };
+  /** Runs `sql` in a transaction of another session named `name`, which keeps
+   * its locks until the gate `name` opens. */
+  const hold = async (name, sql) => {
+    const done = session(
+      `begin;\nset local application_name='${name}';\n${sql}\ndo $$begin for i in 1..6000 loop exit when exists(select 1 from vmtest.gate where name='${name}'); perform pg_sleep(0.01); end loop; end$$;\ncommit;`
+    );
+    await until(
+      `select exists(select 1 from pg_stat_activity where application_name='${name}' and query like 'do $$begin for i%');`,
+      `${name} to hold its locks`
+    );
+    return { done };
+  };
+  const openGate = (name) => q(`insert into vmtest.gate(name) values('${name}');`);
 
   // ------------------------------------------------------------ before
   await check(
@@ -198,7 +223,7 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
       );
       assert.match(
         rows[0][1],
-        /^package add slots: update not applied; on sale: no; packages running: 0; package invoice requests: 0; added-slots requests: none \(column absent\); added-slots payments: 0$/
+        /^package add slots: update not applied; on sale: no; packages running: 0; package invoice requests: 0; added-slots requests: none \(column absent\); added-slots payments: 0; invoices voided by the database: 0$/
       );
       const someone = world.user("adds-before");
       fails(member(someone, "select api.get_my_package_add_offer();"), "42883");
@@ -213,7 +238,7 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
   await applyAndProveRollback(kit, database, check, {
     label: UPDATE,
     applied:
-      /^package add slots: already applied; on sale: no; packages running: 0; package invoice requests: 0; added-slots requests: 0; added-slots payments: 0$/,
+      /^package add slots: already applied; on sale: no; packages running: 0; package invoice requests: 0; added-slots requests: 0; added-slots payments: 0; invoices voided by the database: 0$/,
     notApplied: /^package add slots: update not applied/,
   });
 
@@ -518,8 +543,149 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
         "PT409",
         /package_ended/
       );
+      // The ended package's invoice blocks no new package, and the minute job
+      // voids it (no staff member, a fixed reason).
+      const fresh = json(
+        member(vusi, `select api.start_package_checkout('${K30.id}',5,${K30.cents * 5},true);`)
+      );
+      assert.ok(fresh.payment_id);
+      const swept = json(service("select api.void_ended_package_add_invoices(50);"));
+      assert.ok(swept.voided >= 1, JSON.stringify(swept));
+      const row = json(
+        `select to_jsonb(i) from private.customer_invoices i where invoice_number='${invoice.invoice_number}';`
+      );
+      assert.equal(row.status, "void");
+      assert.equal(row.voided_by, null);
+      assert.equal(
+        row.void_reason,
+        "The package these slots were added to ended before the invoice was paid"
+      );
+      // Once voided, the sweep leaves it alone.
+      assert.equal(json(service("select api.void_ended_package_add_invoices(50);")).voided, 0);
+      fails(member(vusi, "select api.void_ended_package_add_invoices(50);"), "42501");
     }
   );
+
+  await check("an invoice issued later is for the fewer days left, due 3 days later", () => {
+    const sizwe = packageHolder("adds-sizwe").owner;
+    const packageId = offer(sizwe).package.id;
+    const asked = ask(sizwe, packageId, 4);
+    assert.equal(asked.days_left, 19);
+    travel(sizwe, "5 days");
+    const listed = queue().items.find((item) => item.request_id === asked.request_id);
+    assert.equal(listed.days_left_now, 14);
+    const issued = issue(asked.request_id, 30);
+    assert.equal(issued.invoiced_days, 14);
+    assert.equal(issued.invoice.unit_price_cents, unit(14));
+    assert.equal(issued.invoice.total_cents, unit(14) * 4);
+    assert.equal(issued.invoice.description, "Multi-listing package: 4 slots added for 14 days");
+    assert.equal(issued.invoice.days_added, 14);
+    assert.ok(issued.invoice.package_ends_at);
+    // Due 3 days after it is issued (South African date), whatever days staff
+    // gave, and never after the package's last day.
+    assert.ok(
+      truth(`'${issued.invoice.due_on}'::date = '${today}'::date + 3`),
+      issued.invoice.due_on
+    );
+    assert.ok(
+      truth(`'${issued.invoice.due_on}'::date <= ('${issued.invoice.package_ends_at}'::timestamptz
+        at time zone 'Africa/Johannesburg')::date`)
+    );
+    const memberView = json(
+      member(sizwe, `select api.get_my_invoice('${issued.invoice.invoice_number}');`)
+    );
+    assert.equal(memberView.days_added, 14);
+    // Fewer than 10 days left: no invoice is issued.
+    const late = packageHolder("adds-late").owner;
+    const lateAsk = ask(late, offer(late).package.id, 2);
+    travel(late, "11 days");
+    fails(
+      staff(
+        admin,
+        `select api.issue_staff_package_invoice('${lateAsk.request_id}',3,'Invoice asked for on the add page');`
+      ),
+      "PT409",
+      /package_add_invoice_too_late/
+    );
+  });
+
+  await check(
+    "a new-package request is never answered with an add request, nor a new package with an add order",
+    () => {
+      const lindiwe = packageHolder("adds-lindiwe").owner;
+      const packageId = offer(lindiwe).package.id;
+      const id = randomUUID();
+      ask(lindiwe, packageId, 5, { id });
+      // The same request id for a new package: a conflict, never the add request.
+      fails(
+        member(
+          lindiwe,
+          `select api.request_package_invoice('${K30.id}',5,${K30.cents * 5},true,'${id}');`
+        ),
+        "PT409",
+        /invoice_request_conflict|package_active/
+      );
+      // The new-package read ignores the add request.
+      assert.equal(
+        json(member(lindiwe, "select api.get_my_package_invoice_request();")).request,
+        null
+      );
+      // An unsent add order of the same plan and number is never continued as a
+      // new package once the package has ended.
+      const bongi = packageHolder("adds-bongi").owner;
+      const pending = add(bongi, offer(bongi).package.id, 5);
+      travel(bongi, "21 days");
+      const fresh = json(
+        member(bongi, `select api.start_package_checkout('${K30.id}',5,${K30.cents * 5},true);`)
+      );
+      assert.notEqual(fresh.payment_id, pending.payment_id);
+      assert.equal(
+        scalar(
+          `select snapshot->>'category' from private.payments where id='${fresh.payment_id}';`
+        ),
+        "slot_package"
+      );
+    }
+  );
+
+  await check(
+    "the package's own slots refunded, it runs on with its added slots; one add is at most 245",
+    () => {
+      const holder = packageHolder("adds-small");
+      const small = holder.owner;
+      const packageId = offer(small).package.id;
+      const order = add(small, packageId, 3);
+      settle(small, order.payment_id);
+      // The package's own 5 slots refunded: 3 places left.
+      q(
+        `select internal.reverse_payment_line('${grantOf(holder.paymentId).line}','refunded','Customer asked to cancel the package slots','${admin.id}');`
+      );
+      const read = offer(small).package;
+      assert.equal(read.places, 3);
+      // The package keeps running with only its added slots, to the same end.
+      const held = mine(small);
+      assert.equal(held.state, "active");
+      assert.equal(held.places, 3);
+      assert.ok(
+        truth(`'${held.ends_at}'::timestamptz='${grantOf(order.payment_id).ends}'::timestamptz`)
+      );
+      const post = world.post(small, "listing", "market");
+      live(small, post);
+      assert.equal(grantHolding(post), grantOf(order.payment_id).id);
+      assert.equal(read.max_slots, 245);
+      fails(askSql(small, packageId, 246), "22023", /package_slots_invalid/);
+    }
+  );
+
+  await check("the privacy export lists the request's kind, package and days", () => {
+    const exported = json(`select internal.frontend_privacy_export_data('${ayanda.id}');`);
+    const requests = exported.package_invoice_requests;
+    const added = requests.find((r) => r.kind === "add");
+    assert.ok(added, JSON.stringify(requests));
+    assert.equal(added.package_id, ayandaPackage);
+    assert.equal(added.days_left, 19);
+    assert.equal(added.invoiced_days, 19);
+  });
 
   await check("a package holds at most 250 slots", () => {
     const kagiso = packageHolder("adds-kagiso").owner;
@@ -602,10 +768,96 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
     );
   });
 
+  // ------------------------------------------------------------ races
+  await check(
+    "two adds paid at once near 250: one is delivered, the other goes to reconciliation",
+    async () => {
+      const holder = packageHolder("adds-race");
+      const racer = holder.owner;
+      const packageId = offer(racer).package.id;
+      // 248 places (an invoice add), then two 2-slot orders, each within 250 alone.
+      const invoice = issue(ask(racer, packageId, 243).request_id).invoice;
+      confirm(
+        admin2,
+        json(transferSql(admin, invoice.invoice_number, "FNB ADD RACE1")).transfer_id
+      );
+      assert.equal(mine(racer).places, 248);
+      const template = json(
+        `select snapshot from private.payments where id='${holder.paymentId}';`
+      );
+      // Two package terms: one pending payment per term is allowed at a time.
+      const order = (planId) =>
+        q(`with p as (insert into private.payments (owner_id, product_kind, plan_version_id, amount_cents, currency, snapshot)
+          values ('${racer.id}','plan','${planId}',${unit(19) * 2},'ZAR',
+            $j$${JSON.stringify({ ...template, category: "slot_package_add", package_id: packageId, slots: 2, slot_capacity: 2, activations_per_period: 8 })}$j$::jsonb - 'merchant_invoice')
+          returning id),
+        l as (insert into private.payment_lines (payment_id, line_number, plan_version_id, amount_cents, slot_count)
+          select id, 1, '${planId}', ${unit(19) * 2}, 2 from p returning payment_id)
+        select payment_id from l;`);
+      const first = order(K30.id);
+      const second = order(K90);
+      ozowOpen(kit, racer, first);
+      ozowOpen(kit, racer, second);
+      const [a, b] = await Promise.all([
+        session(ozowNoticeSql(kit, first)),
+        session(ozowNoticeSql(kit, second)),
+      ]);
+      assert.equal(a.status, 0, a.stderr);
+      assert.equal(b.status, 0, b.stderr);
+      const outcomes =
+        json(`select jsonb_agg(fulfillment_status order by fulfillment_status) from private.payments
+      where id in ('${first}','${second}');`);
+      assert.deepEqual(outcomes, ["fulfilled", "needs_reconciliation"]);
+      assert.equal(mine(racer).places, 250);
+    }
+  );
+
+  await check(
+    "a refund while an activation holds the package is refused at once and goes through after",
+    async () => {
+      const holder = packageHolder("adds-busy");
+      const busy = holder.owner;
+      const mainGrant = grantOf(holder.paymentId);
+      const packageId = offer(busy).package.id;
+      const order = add(busy, packageId, 2);
+      settle(busy, order.payment_id);
+      const addGrant = grantOf(order.payment_id);
+      const posts = Array.from({ length: 2 }, () => world.post(busy, "listing", "market"));
+      for (const id of posts) live(busy, id);
+      q(`update private.post_activations set entitlement_id='${addGrant.id}'
+         where post_id in (${posts.map((id) => `'${id}'`).join(",")}) and released_at is null;`);
+      // What internal.activate_post holds while it fills a place: the package row.
+      const holderSession = await hold(
+        "adds-package-lock",
+        `select 1 from private.slot_packages where id='${packageId}' for update;`
+      );
+      try {
+        const before = Date.now();
+        fails(
+          `select internal.reverse_payment_line('${addGrant.line}','refunded','Customer cancelled the added slots','${admin.id}');`,
+          "PT409",
+          /package_busy/
+        );
+        assert.ok(Date.now() - before < 10_000, "the refund did not wait");
+        assert.equal(grantOf(order.payment_id).status, "active");
+      } finally {
+        openGate("adds-package-lock");
+      }
+      assert.equal((await holderSession.done).status, 0);
+      q(
+        `select internal.reverse_payment_line('${addGrant.line}','refunded','Customer cancelled the added slots','${admin.id}');`
+      );
+      for (const id of posts) {
+        assert.equal(scalar(`select status from private.posts where id='${id}';`), "live", id);
+        assert.equal(grantHolding(id), mainGrant.id);
+      }
+    }
+  );
+
   await check("the preflight counts the adds; the rollback refuses once slots were added", () => {
     assert.match(
       preflight()[0][1],
-      /^package add slots: already applied; on sale: yes; packages running: [1-9]\d*; package invoice requests: [1-9]\d*; added-slots requests: [1-9]\d*; added-slots payments: [1-9]\d*$/
+      /^package add slots: already applied; on sale: yes; packages running: [1-9]\d*; package invoice requests: [1-9]\d*; added-slots requests: [1-9]\d*; added-slots payments: [1-9]\d*; invoices voided by the database: [1-9]\d*$/
     );
     assert.match(fails(kit.rollbackSql, "55000"), /rollback precondition/);
   });

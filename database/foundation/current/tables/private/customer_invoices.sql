@@ -60,7 +60,7 @@ create table private.customer_invoices (
   constraint customer_invoices_total CHECK (total_cents = (unit_price_cents * slots)),
   constraint customer_invoices_total_cents_check CHECK (total_cents > 0 AND total_cents <= 15000000),
   constraint customer_invoices_unit_price_cents_check CHECK (unit_price_cents >= 100 AND unit_price_cents <= 1000000),
-  constraint customer_invoices_void CHECK ((status = 'void'::text) = (voided_by IS NOT NULL AND voided_at IS NOT NULL AND void_reason IS NOT NULL)),
+  constraint customer_invoices_void CHECK ((status = 'void'::text) = (voided_at IS NOT NULL AND void_reason IS NOT NULL) AND (voided_by IS NOT NULL OR status <> 'void'::text OR void_reason = 'The package these slots were added to ended before the invoice was paid'::text)),
   constraint customer_invoices_void_reason_check CHECK (void_reason IS NULL OR internal.plain_text_valid(void_reason, 5, 500, true)),
   constraint customer_invoices_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES auth.users(id) ON DELETE RESTRICT
 );

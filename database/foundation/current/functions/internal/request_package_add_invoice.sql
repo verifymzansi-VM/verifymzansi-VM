@@ -49,16 +49,16 @@ begin
   if not found then
     raise exception 'this package term is not on sale' using errcode='PT409', detail='invoice_plan_unavailable';
   end if;
-  if p_slots < 1 or q.places + p_slots > 250 then
-    raise exception 'a package holds at most 250 slots' using errcode='22023', detail='package_slots_invalid';
+  -- 250 in all, and at most 245 in one add (a package starts at 5).
+  if p_slots < 1 or p_slots > 245 or q.places + p_slots > 250 then
+    raise exception 'a package holds at most 250 slots, and one add at most 245' using errcode='22023',
+      detail='package_slots_invalid';
   end if;
   total := q.unit_price_cents * p_slots;
   if total <> p_expected_total_cents then
     raise exception 'the price changed; check the total again' using errcode='PT428';
   end if;
-  select i.invoice_number into unpaid from private.customer_invoices i join private.plan_versions v on v.id = i.plan_version_id
-    where i.account_id = actor and i.status = 'issued' and internal.slot_package_plan(v.plan_code)
-    order by i.issued_at limit 1;
+  unpaid := internal.package_invoice_blocking(actor, null);
   if unpaid is not null then
     raise exception 'your package invoice % is not paid yet; pay it, or ask us to cancel it first', unpaid
       using errcode='PT409', detail='package_invoice_unpaid';

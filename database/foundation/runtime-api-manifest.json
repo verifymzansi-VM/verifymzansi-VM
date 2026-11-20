@@ -5232,6 +5232,25 @@
       "authority": "Public: view and like totals of up to 50 publicly live posts (the get_public_post rule); a hidden or unknown post is absent, so the answer never tells them apart; totals only, never who viewed or liked."
     },
     {
+      "name": "void_ended_package_add_invoices",
+      "updates": ["updates/20261120045404_package_add_slots.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only housekeeping sweep (the website's minute operations job): voids at most p_limit unpaid added-slots invoices whose package no longer runs, oldest first, with a fixed reason and no staff member, closing their unsent Pay now attempts; an invoice with a payment still open at Ozow or a bank transfer waiting for confirmation is left for staff. Returns how many were voided and how many could not be changed. No account data."
+    },
+    {
       "name": "get_my_package_add_offer",
       "updates": ["updates/20261120045404_package_add_slots.sql"],
       "arguments": [],

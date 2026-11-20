@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isPackageTerm,
+  packageAddInvoiceDueOn,
   packageAddQuote,
   packageOnlineMaxSlots,
   packageQuote,
@@ -84,6 +85,11 @@ describe("Adding slots part-way (P4b)", () => {
     expect(packageAddQuote(null, offer, null)).toEqual({ kind: "invalid" });
     expect(packageAddQuote(0, offer, null)).toEqual({ kind: "invalid" });
     expect(packageAddQuote(226, offer, null)).toEqual({ kind: "too_large", maxSlots: 225 });
+  });
+  it("dues an added-slots invoice 3 days after issue, or on the package's last day if sooner", () => {
+    const now = new Date("2026-11-20T22:30:00Z"); // 21 November in South Africa
+    expect(packageAddInvoiceDueOn("2026-12-24T08:00:00Z", now)).toBe("2026-11-24");
+    expect(packageAddInvoiceDueOn("2026-11-22T21:00:00Z", now)).toBe("2026-11-22");
   });
   it("is closed when that way is not open any more", () => {
     expect(packageAddQuote(20, { ...offer, invoiceOpen: false }, 130_000).kind).toBe("closed");

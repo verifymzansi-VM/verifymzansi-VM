@@ -151,6 +151,8 @@ describe("Ask for an invoice for added slots (member, P4b)", () => {
     total_cents: 25334,
     kind: "add",
     days_left: 38,
+    invoiced_days: null,
+    days_left_now: 38,
     package_ends_at: "2026-12-24T08:00:00+00:00",
   };
   const addOrder = {

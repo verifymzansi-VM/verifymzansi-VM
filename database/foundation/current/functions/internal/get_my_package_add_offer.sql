@@ -23,13 +23,12 @@ begin
     'package', case when q.package_id is null then null else jsonb_build_object(
       'id', q.package_id, 'term_days', q.term_days, 'places', q.places, 'ends_at', q.ends_at,
       'days_left', q.days_left, 'unit_price_cents', q.unit_price_cents::text,
-      'max_slots', greatest(250 - q.places, 0),
+      -- 250 in all, and at most 245 in one add (a package starts at 5)
+      'max_slots', greatest(least(250 - q.places, 245), 0),
       'max_online_slots', greatest(100 - q.places, 0),
       'online_open', q.days_left >= 7 and q.plan_id is not null,
       'invoice_open', q.days_left >= 10 and q.plan_id is not null,
-      'invoice_unpaid', exists(select 1 from private.customer_invoices i
-        join private.plan_versions v on v.id = i.plan_version_id
-        where i.account_id = actor and i.status = 'issued' and internal.slot_package_plan(v.plan_code)),
+      'invoice_unpaid', internal.package_invoice_blocking(actor, null) is not null,
       'request', case when request.id is null then null
         else internal.package_invoice_request_dto(request, null) end,
       -- the slots added to it so far (paid and delivered), newest first

@@ -714,6 +714,7 @@ export type FoundationRuntimeServiceDatabase = {
       claim_ozow_refund_send: { Args: { p_request_id: string }; Returns: Json };
       run_slot_renewals: { Args: { p_limit: number }; Returns: Json };
       expire_waiting_bank_transfers: { Args: { p_limit: number }; Returns: Json };
+      void_ended_package_add_invoices: { Args: { p_limit: number }; Returns: Json };
       get_slot_package_offer: { Args: Record<never, never>; Returns: Json };
       list_ozow_refund_sends_due: { Args: { p_limit: number }; Returns: Json };
       record_ozow_refund_send: { Args: { p_request_id: string; p_result: Json }; Returns: Json };

@@ -63,10 +63,8 @@ begin
     elsif pay.checkout_url is null and internal.slot_package_open(pay.owner_id) then
       raise exception 'this account already has a Multi-listing package' using errcode='PT409', detail='package_active';
     end if;
-    if pay.checkout_url is null and exists(select 1 from private.customer_invoices i
-        join private.plan_versions v on v.id=i.plan_version_id
-        where i.account_id=pay.owner_id and i.status='issued' and internal.slot_package_plan(v.plan_code)
-          and not exists(select 1 from private.customer_invoice_payments l where l.invoice_id=i.id and l.payment_id=pay.id)) then
+    -- (20261120045404: an added-slots invoice of an ended package blocks nothing.)
+    if pay.checkout_url is null and internal.package_invoice_blocking(pay.owner_id, pay.id) is not null then
       raise exception 'your package invoice is not paid yet; pay it, or ask us to cancel it first'
         using errcode='PT409', detail='package_invoice_unpaid';
     end if;
