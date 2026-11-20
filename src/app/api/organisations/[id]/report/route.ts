@@ -3,8 +3,9 @@ import { SHOW_ORGANISATION_REPORT } from "@/lib/hidden-features";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyCapabilityRoleFromDb } from "@/lib/auth/admin-access";
+import { readStaffAccessFromDb, staffRoleMeeting } from "@/lib/auth/admin-access";
 import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
+import { authenticateStaffRequest } from "@/lib/auth/staff-session";
 import { parsePerformanceReport } from "@/components/organisations/performance-report";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
@@ -56,11 +57,21 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const { data: isAdmin } = await db.rpc("is_organisation_admin", { p_org: id, p_user: user.id });
   if (isAdmin !== true) {
     // Not an administrator of this programme: only staff, under the staff MFA policy.
-    if (!(await verifyCapabilityRoleFromDb(user, "organisations:manage"))) {
-      return NextResponse.json({ error: "Organisation access required" }, { status: 403 });
+    const staff = await authenticateStaffRequest(request);
+    if (!staff.ok) return staff.response;
+    const access =
+      staff.caller.accountId === user.id ? await readStaffAccessFromDb(staff.caller.api) : null;
+    if (!staffRoleMeeting(access, { capability: "organisations:manage" })) {
+      return staff.respond(
+        NextResponse.json({ error: "Organisation access required" }, { status: 403 })
+      );
     }
-    const mfaBlock = await checkStaffApiMfa(supabase, user.id);
-    if (mfaBlock) return mfaBlock;
+    const mfaBlock = await checkStaffApiMfa({
+      access,
+      accountId: staff.caller.accountId,
+      authenticatorAt: staff.caller.authenticatorAt,
+    });
+    if (mfaBlock) return staff.respond(mfaBlock);
   }
 
   const { data: org } = await db

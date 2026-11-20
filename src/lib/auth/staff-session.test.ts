@@ -1,82 +1,114 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const { rpc, getClaims } = vi.hoisted(() => ({ rpc: vi.fn(), getClaims: vi.fn() }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc }) }));
-import { hasActiveStaffSession } from "./staff-session";
-const sessionId = "123e4567-e89b-42d3-a456-426614174000";
-const supabase = { auth: { getClaims } } as never;
-describe("live privileged sessions", () => {
+import { NextRequest, type NextResponse } from "next/server";
+
+const { createFoundationRouteContext, readFoundationRuntimeConnection, authenticateCaller } =
+  vi.hoisted(() => ({
+    createFoundationRouteContext: vi.fn(),
+    readFoundationRuntimeConnection: vi.fn(),
+    authenticateCaller: vi.fn(),
+  }));
+vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext }));
+vi.mock("@/lib/foundation/runtime-connection", () => ({ readFoundationRuntimeConnection }));
+
+import { FoundationSessionError } from "@/lib/foundation/request-api";
+import { authenticateStaffRequest } from "./staff-session";
+
+const accountId = "11111111-1111-4111-8111-111111111111";
+const connection = { url: "https://example.supabase.co" };
+const api = { rpc: vi.fn() };
+const respond = vi.fn(async (response: NextResponse) => {
+  response.headers.set("x-responded", "1");
+  return response;
+});
+const request = (cookie?: string) =>
+  new Request("https://verifymzansi.com/api/admin/x", {
+    method: "POST",
+    headers: cookie ? { cookie } : {},
+  });
+
+describe("authenticateStaffRequest", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getClaims.mockResolvedValue({
-      data: { claims: { sub: "staff-1", session_id: sessionId } },
-      error: null,
-    });
-    rpc.mockResolvedValue({ data: true, error: null });
-  });
-  it("accepts the authenticated user's existing session", async () => {
-    expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(true);
-    expect(rpc).toHaveBeenCalledWith("staff_session_is_active", {
-      p_user: "staff-1",
-      p_session: sessionId,
+    readFoundationRuntimeConnection.mockReturnValue(connection);
+    createFoundationRouteContext.mockReturnValue({ authenticateCaller, respond });
+    authenticateCaller.mockResolvedValue({
+      api,
+      accountId,
+      sessionId: "22222222-2222-4222-8222-222222222222",
+      user: { id: accountId },
+      authenticatorAt: 1_790_000_000,
     });
   });
-  it.each([true, false, null])(
-    "checks live MFA facts for a signed AAL2 token: %s",
-    async (data) => {
-      getClaims.mockResolvedValue({
-        data: { claims: { sub: "staff-1", session_id: sessionId, aal: "aal2" } },
-        error: null,
-      });
-      rpc.mockResolvedValue({ data, error: null });
-      expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(data === true);
-      expect(rpc).toHaveBeenCalledExactlyOnceWith("staff_session_has_live_mfa", {
-        p_user: "staff-1",
-        p_session: sessionId,
-      });
-    }
-  );
-  it("fails closed when the new MFA lookup is missing or unavailable", async () => {
-    getClaims.mockResolvedValue({
-      data: { claims: { sub: "staff-1", session_id: sessionId, aal: "aal2" } },
-      error: null,
+
+  it("returns the Auth-verified caller and its authenticator time", async () => {
+    const result = await authenticateStaffRequest(request());
+    expect(result).toEqual({
+      ok: true,
+      respond,
+      caller: { api, accountId, user: { id: accountId }, authenticatorAt: 1_790_000_000 },
     });
-    rpc.mockResolvedValue({ data: null, error: { code: "PGRST202" } });
-    expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(false);
-    expect(rpc).toHaveBeenCalledOnce();
+    expect(createFoundationRouteContext).toHaveBeenCalledWith(connection, expect.anything());
   });
-  it("keeps an active AAL1 session available for authenticator enrolment", async () => {
-    getClaims.mockResolvedValue({
-      data: { claims: { sub: "staff-1", session_id: sessionId, aal: "aal1" } },
-      error: null,
+
+  it("reads the session cookies of a plain Request without its body", async () => {
+    const plain = request("sb-x-auth-token=abc; other=1");
+    await authenticateStaffRequest(plain);
+    const [, cookies] = createFoundationRouteContext.mock.calls[0];
+    expect(cookies.cookies.getAll()).toEqual([
+      { name: "sb-x-auth-token", value: "abc" },
+      { name: "other", value: "1" },
+    ]);
+    expect(plain.bodyUsed).toBe(false);
+  });
+
+  it("uses a Next.js request's own cookies", async () => {
+    const next = new NextRequest("https://verifymzansi.com/api/admin/x", {
+      headers: { cookie: "a=1" },
     });
-    expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(true);
-    expect(rpc).toHaveBeenCalledExactlyOnceWith("staff_session_is_active", {
-      p_user: "staff-1",
-      p_session: sessionId,
+    await authenticateStaffRequest(next);
+    expect(createFoundationRouteContext).toHaveBeenCalledWith(connection, {
+      cookies: next.cookies,
     });
   });
-  it.each([false, null])("rejects revoked/missing session result %s", async (data) => {
-    rpc.mockResolvedValue({ data, error: null });
-    expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(false);
+
+  it("refuses a signed-out, revoked or forged session with 401", async () => {
+    authenticateCaller.mockRejectedValue(new FoundationSessionError(401));
+    const result = await authenticateStaffRequest(request());
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(401);
+    expect(result.response.headers.get("x-responded")).toBe("1");
   });
+
+  it("refuses a caller whose verified user is not the token subject", async () => {
+    authenticateCaller.mockResolvedValue({
+      api,
+      accountId,
+      user: { id: "33333333-3333-4333-8333-333333333333" },
+      authenticatorAt: null,
+    });
+    const result = await authenticateStaffRequest(request());
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(401);
+  });
+
   it.each([
-    { sub: "other", session_id: sessionId },
-    { sub: "staff-1" },
-    { sub: "staff-1", session_id: "bad" },
-  ])("rejects mismatched or invalid claims %s", async (claims) => {
-    getClaims.mockResolvedValue({ data: { claims }, error: null });
-    expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(false);
-    expect(rpc).not.toHaveBeenCalled();
+    ["Auth is unavailable", new FoundationSessionError(503)],
+    ["an unexpected error", new Error("boom")],
+  ])("fails closed with 503 when %s", async (_label, error) => {
+    authenticateCaller.mockRejectedValue(error);
+    const result = await authenticateStaffRequest(request());
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(503);
   });
-  it("fails closed on signature verification failure", async () => {
-    getClaims.mockResolvedValue({ data: null, error: new Error("expired") });
-    expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(false);
-    expect(rpc).not.toHaveBeenCalled();
-  });
-  it("fails closed on database failure", async () => {
-    rpc.mockResolvedValue({ data: true, error: new Error("offline") });
-    expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(false);
-    rpc.mockRejectedValue(new Error("offline"));
-    expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(false);
+
+  it("fails closed with 503 when the live backend binding is missing", async () => {
+    readFoundationRuntimeConnection.mockImplementation(() => {
+      throw new Error("Unapproved foundation runtime project");
+    });
+    const result = await authenticateStaffRequest(request());
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(503);
+    expect(authenticateCaller).not.toHaveBeenCalled();
   });
 });

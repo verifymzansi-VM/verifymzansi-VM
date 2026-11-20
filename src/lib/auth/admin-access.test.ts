@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockRpc } = vi.hoisted(() => ({ mockRpc: vi.fn() }));
-
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ rpc: mockRpc }),
+const { readFoundationAccountContext } = vi.hoisted(() => ({
+  readFoundationAccountContext: vi.fn(),
 }));
+vi.mock("@/lib/foundation/account-context", () => ({ readFoundationAccountContext }));
 
 import {
   getAdminActorRole,
@@ -12,6 +11,7 @@ import {
   getStaffActorRole,
   readStaffAccessFromDb,
   roleHasCapability,
+  staffRoleMeeting,
   verifyAdminActorRoleFromDb,
   verifyCapabilityFromDb,
   verifyCapabilityRoleFromDb,
@@ -19,12 +19,18 @@ import {
   verifyStaffActorRoleFromDb,
 } from "./admin-access";
 
-const GRACE_END = "2026-10-04T10:00:00.000Z";
+const api = {} as never;
+const MODERATOR = ["queue:claim", "queue:view"];
+const GOVERNOR = ["decision:approve", "queue:view", "role:review"];
+const ADMIN = ["organisation:manage", "queue:view", "role:manage"];
 
-function dbReturns(role: string | null) {
-  mockRpc.mockResolvedValue({
-    data: role ? [{ role, mfa_required_after: GRACE_END }] : [],
-    error: null,
+function dbReturns(
+  staff: { role: string; can_access?: boolean; assigned_capabilities: string[] } | null,
+  totpEnrolled = true
+) {
+  readFoundationAccountContext.mockResolvedValue({
+    totp_enrolled: totpEnrolled,
+    staff: staff && { can_access: true, ...staff },
   });
 }
 
@@ -46,62 +52,73 @@ describe("admin access helpers", () => {
     expect(getGovernanceActorRole(user("governance_controller"))).toBe("governance_controller");
   });
 
-  it("reads role and MFA deadline from staff_access_of", async () => {
-    dbReturns("governance_controller");
+  it("reads role, capabilities and the live staff check from the caller's account context", async () => {
+    dbReturns({ role: "governor", can_access: false, assigned_capabilities: GOVERNOR }, false);
 
-    await expect(readStaffAccessFromDb("user-1")).resolves.toEqual({
+    await expect(readStaffAccessFromDb(api)).resolves.toEqual({
       role: "governance_controller",
-      mfaRequiredAfter: new Date(GRACE_END),
+      capabilities: GOVERNOR,
+      canAccess: false,
+      totpEnrolled: false,
     });
-    expect(mockRpc).toHaveBeenCalledWith("staff_access_of", { p_user: "user-1" });
+    expect(readFoundationAccountContext).toHaveBeenCalledExactlyOnceWith(api);
   });
 
-  it("ignores a staff role claimed only by the JWT", async () => {
+  it("ignores members and an owner invitation that carries no capabilities", async () => {
     dbReturns(null);
-    await expect(verifyStaffActorRoleFromDb(user("admin"))).resolves.toBeNull();
-    await expect(verifyCapabilityFromDb(user("admin"), "role:assign")).resolves.toBe(false);
+    await expect(verifyStaffActorRoleFromDb(api)).resolves.toBeNull();
+    dbReturns({ role: "admin", can_access: false, assigned_capabilities: [] });
+    await expect(readStaffAccessFromDb(api)).resolves.toBeNull();
+    await expect(verifyAdminActorRoleFromDb(api)).resolves.toBeNull();
+    await expect(verifyCapabilityFromDb(api, "role:assign")).resolves.toBe(false);
   });
 
-  it("uses the database role even when the JWT is stale", async () => {
-    dbReturns("admin");
-    await expect(verifyAdminActorRoleFromDb(user("member"))).resolves.toBe("admin");
+  it("checks capabilities against the database's assignment", async () => {
+    dbReturns({ role: "moderator", assigned_capabilities: MODERATOR });
+    await expect(verifyCapabilityRoleFromDb(api, "decision:approve")).resolves.toBeNull();
+    await expect(verifyCapabilityRoleFromDb(api, "queue:claim")).resolves.toBe("moderator");
 
-    dbReturns("moderator");
-    await expect(verifyCapabilityRoleFromDb(user("admin"), "decision:approve")).resolves.toBeNull();
-    await expect(verifyCapabilityRoleFromDb(user("admin"), "queue:claim")).resolves.toBe(
-      "moderator"
-    );
+    // Presentation aliases map to the canonical capability.
+    dbReturns({ role: "admin", assigned_capabilities: ADMIN });
+    await expect(verifyCapabilityRoleFromDb(api, "organisations:manage")).resolves.toBe("admin");
+    await expect(verifyCapabilityFromDb(api, "role:assign")).resolves.toBe(true);
   });
 
   it("narrows governance and admin roles", async () => {
-    dbReturns("governance_controller");
-    await expect(verifyGovernanceActorRoleFromDb(user())).resolves.toBe("governance_controller");
-    await expect(verifyAdminActorRoleFromDb(user())).resolves.toBeNull();
+    dbReturns({ role: "governor", assigned_capabilities: GOVERNOR });
+    await expect(verifyGovernanceActorRoleFromDb(api)).resolves.toBe("governance_controller");
+    await expect(verifyAdminActorRoleFromDb(api)).resolves.toBeNull();
+    dbReturns({ role: "admin", assigned_capabilities: ADMIN });
+    await expect(verifyAdminActorRoleFromDb(api)).resolves.toBe("admin");
   });
 
   it.each([
-    ["an RPC error", () => mockRpc.mockResolvedValue({ data: null, error: { message: "down" } })],
-    ["a thrown error", () => mockRpc.mockRejectedValue(new Error("network"))],
-    ["an unknown role", () => dbReturns("superuser")],
     [
-      "a malformed deadline",
-      () =>
-        mockRpc.mockResolvedValue({
-          data: [{ role: "admin", mfa_required_after: "not a date" }],
-          error: null,
-        }),
+      "a refused read",
+      () => readFoundationAccountContext.mockRejectedValue(new Error("forbidden")),
+    ],
+    [
+      "an unknown role",
+      () => dbReturns({ role: "superuser", assigned_capabilities: ["queue:view"] }),
     ],
   ])("fails closed on %s", async (_label, arrange) => {
     arrange();
-    await expect(readStaffAccessFromDb("user-1")).resolves.toBeNull();
+    await expect(readStaffAccessFromDb(api)).resolves.toBeNull();
+    await expect(verifyStaffActorRoleFromDb(api)).resolves.toBeNull();
   });
 
-  it("skips the database for missing and anonymous users", async () => {
-    await expect(verifyStaffActorRoleFromDb(null)).resolves.toBeNull();
-    await expect(
-      verifyStaffActorRoleFromDb({ ...user("admin"), is_anonymous: true })
-    ).resolves.toBeNull();
-    expect(mockRpc).not.toHaveBeenCalled();
+  it("meets a requirement only with the right role or capability", () => {
+    const access = {
+      role: "moderator" as const,
+      capabilities: MODERATOR,
+      canAccess: true,
+      totpEnrolled: true,
+    };
+    expect(staffRoleMeeting(null)).toBeNull();
+    expect(staffRoleMeeting(access)).toBe("moderator");
+    expect(staffRoleMeeting(access, { adminOnly: true })).toBeNull();
+    expect(staffRoleMeeting(access, { capability: "queue:claim" })).toBe("moderator");
+    expect(staffRoleMeeting(access, { capability: "role:assign" })).toBeNull();
   });
 
   it("maps roles to capabilities", () => {

@@ -1,89 +1,90 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-vi.mock("@/lib/auth/staff-session", () => ({ hasActiveStaffSession: vi.fn(async () => true) }));
-import type * as StaffMfa from "./staff-mfa";
+import type { StaffAccess } from "./admin-access";
 
 // src/test/setup.ts replaces this module globally; test the real one here.
 vi.unmock("@/lib/auth/staff-mfa-guard");
 
-const { readStaffAccessFromDb, evaluateStaffMfa } = vi.hoisted(() => ({
-  readStaffAccessFromDb: vi.fn(),
-  evaluateStaffMfa: vi.fn(),
-}));
-vi.mock("@/lib/auth/admin-access", () => ({ readStaffAccessFromDb }));
-vi.mock("@/lib/auth/staff-mfa", async (importOriginal) => ({
-  ...(await importOriginal<typeof StaffMfa>()),
-  evaluateStaffMfa,
-}));
+const { recordSecurityEvent } = vi.hoisted(() => ({ recordSecurityEvent: vi.fn() }));
+vi.mock("@/lib/security/security-events", () => ({ recordSecurityEvent }));
 
 import { checkStaffApiMfa } from "./staff-mfa-guard";
 
-const supabase = {} as never;
-const recently = () => new Date(Date.now() - 60_000);
+const accountId = "11111111-1111-4111-8111-111111111111";
+const minutesAgo = (m: number) => Math.floor(Date.now() / 1000) - m * 60;
+const access = (overrides: Partial<StaffAccess> = {}): StaffAccess => ({
+  role: "admin",
+  capabilities: ["queue:view"],
+  canAccess: true,
+  totpEnrolled: true,
+  ...overrides,
+});
+const check = (
+  input: { access?: StaffAccess | null; authenticatorAt?: number | null } = {},
+  options?: { stepUp?: boolean }
+) =>
+  checkStaffApiMfa(
+    {
+      access: input.access === undefined ? access() : input.access,
+      accountId,
+      authenticatorAt: input.authenticatorAt === undefined ? minutesAgo(1) : input.authenticatorAt,
+    },
+    options
+  );
 
 describe("checkStaffApiMfa", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    readStaffAccessFromDb.mockResolvedValue({
-      role: "admin",
-      mfaRequiredAfter: new Date("2026-10-01T00:00:00Z"),
-    });
-  });
+  beforeEach(() => vi.clearAllMocks());
 
   it("refuses anyone the database no longer lists as staff", async () => {
-    readStaffAccessFromDb.mockResolvedValue(null);
-    const res = await checkStaffApiMfa(supabase, "user-1");
+    const res = await check({ access: null });
     expect(res?.status).toBe(403);
-    expect(evaluateStaffMfa).not.toHaveBeenCalled();
+    await expect(res?.json()).resolves.toEqual({ error: "Forbidden" });
   });
 
-  it("blocks staff who must verify, pointing them to the two-step page", async () => {
-    evaluateStaffMfa.mockResolvedValue({ status: "required", hasFactor: true });
-    const res = await checkStaffApiMfa(supabase, "user-1");
+  it("lets a session verified within 12 hours through", async () => {
+    await expect(check({ authenticatorAt: minutesAgo(11 * 60) })).resolves.toBeNull();
+  });
+
+  it.each([
+    ["the database refuses the session", { access: access({ canAccess: false }) }],
+    ["the last code is over 12 hours old", { authenticatorAt: minutesAgo(12 * 60 + 1) }],
+    ["the session never used its authenticator", { authenticatorAt: null }],
+  ])("blocks staff who must verify (%s), pointing them to the two-step page", async (_, input) => {
+    const res = await check(input);
     expect(res?.status).toBe(403);
     await expect(res?.json()).resolves.toMatchObject({
       code: "mfa_required",
       verifyUrl: "/staff/two-step",
     });
+    expect(recordSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId, reason: "mfa_required" })
+    );
   });
 
-  it("lets routine actions through during the grace period", async () => {
-    evaluateStaffMfa.mockResolvedValue({ status: "grace", graceEndsAt: new Date() });
-    await expect(checkStaffApiMfa(supabase, "user-1")).resolves.toBeNull();
-  });
-
-  it("asks for a fresh code on sensitive actions during the grace period", async () => {
-    evaluateStaffMfa.mockResolvedValue({ status: "grace", graceEndsAt: new Date() });
-    const res = await checkStaffApiMfa(supabase, "user-1", { stepUp: true });
-    await expect(res?.json()).resolves.toMatchObject({ code: "step_up_required" });
-  });
-
-  it("rejects a disabled MFA policy for sensitive actions", async () => {
-    evaluateStaffMfa.mockResolvedValue({ status: "not_enforced" });
-    const response = await checkStaffApiMfa(supabase, "user-1", { stepUp: true });
-    expect(response?.status).toBe(403);
-    await expect(response?.json()).resolves.toMatchObject({ code: "step_up_required" });
+  it("sends staff without an authenticator app to enrol (no grace period)", async () => {
+    const res = await check({
+      access: access({ canAccess: false, totpEnrolled: false }),
+      authenticatorAt: null,
+    });
+    await expect(res?.json()).resolves.toMatchObject({ code: "mfa_required" });
   });
 
   it("allows sensitive actions right after verifying", async () => {
-    evaluateStaffMfa.mockResolvedValue({ status: "verified", lastVerifiedAt: recently() });
-    await expect(checkStaffApiMfa(supabase, "user-1", { stepUp: true })).resolves.toBeNull();
+    await expect(check({ authenticatorAt: minutesAgo(1) }, { stepUp: true })).resolves.toBeNull();
   });
-  it("does not let the routine MFA kill switch bypass a sensitive action", async () => {
-    evaluateStaffMfa.mockResolvedValue({ status: "not_enforced" });
-    const response = await checkStaffApiMfa(supabase, "user-1", { stepUp: true });
-    expect(response?.status).toBe(403);
-    await expect(response?.json()).resolves.toMatchObject({ code: "step_up_required" });
+
+  it("asks for a fresh code on sensitive actions after 15 minutes", async () => {
+    const res = await check({ authenticatorAt: minutesAgo(16) }, { stepUp: true });
+    expect(res?.status).toBe(403);
+    await expect(res?.json()).resolves.toMatchObject({
+      code: "step_up_required",
+      verifyUrl: "/staff/two-step?confirm=1",
+    });
+    expect(recordSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId, reason: "step_up_required" })
+    );
   });
-  it.each([null, new Date(Date.now() - 16 * 60_000)])(
-    "requires re-verification when the second factor is missing or stale: %s",
-    async (lastVerifiedAt) => {
-      evaluateStaffMfa.mockResolvedValue({ status: "verified", lastVerifiedAt });
-      const response = await checkStaffApiMfa(supabase, "user-1", { stepUp: true });
-      expect(response?.status).toBe(403);
-      await expect(response?.json()).resolves.toMatchObject({
-        code: "step_up_required",
-        verifyUrl: "/staff/two-step?confirm=1",
-      });
-    }
-  );
+
+  it("does not ask for a fresh code on routine actions within 12 hours", async () => {
+    await expect(check({ authenticatorAt: minutesAgo(16) })).resolves.toBeNull();
+  });
 });

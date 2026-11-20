@@ -2,10 +2,10 @@
   "$comment": "Ratchet for pnpm check:legacy-surface (roadmap M0.11). Every value may only go down. Lower it with `pnpm check:legacy-surface --update` after removing old-backend code; raising any value needs a reviewed reason. legacyClientImporters is also the frozen import list read by .dependency-cruiser.cjs.",
   "counts": {
     "backendSwitches": 0,
-    "legacyClientImports": 25,
-    "retiredCommandNames": 18,
-    "retiredCommandCalls": 16,
-    "retiredTableReads": 46
+    "legacyClientImports": 21,
+    "retiredCommandNames": 15,
+    "retiredCommandCalls": 15,
+    "retiredTableReads": 45
   },
   "legacyClientImporters": [
     "src/app/(marketplace)/_lib/promotion-detail-page-content.tsx",
@@ -24,15 +24,11 @@
     "src/app/organisation-invite/page.tsx",
     "src/app/post/create/page.tsx",
     "src/app/pricing/page.tsx",
-    "src/lib/auth/admin-access.ts",
-    "src/lib/auth/staff-mfa.ts",
-    "src/lib/auth/staff-session.ts",
     "src/lib/business-verification/admin-queries.ts",
     "src/lib/content/private-fields.ts",
     "src/lib/services/audit.ts",
     "src/lib/services/kyc-metrics.ts",
-    "src/lib/utils/admin-queries.ts",
-    "src/lib/utils/admin-route-guard.ts"
+    "src/lib/utils/admin-queries.ts"
   ],
   "retiredCommandNames": [
     "apply_kyc_provider_webhook",
@@ -49,10 +45,7 @@
     "release_intro_trial",
     "reserve_intro_trial",
     "retention_overview",
-    "retry_operation_job",
-    "staff_access_of",
-    "staff_session_has_live_mfa",
-    "staff_session_is_active"
+    "retry_operation_job"
   ],
   "retiredTableNames": [
     "account_profiles",
@@ -67,7 +60,6 @@
     "contact_events",
     "content_edit_requests",
     "decision_records",
-    "feature_flags",
     "kyc_artifacts",
     "listing_private",
     "listings",
