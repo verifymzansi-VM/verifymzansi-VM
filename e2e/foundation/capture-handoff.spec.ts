@@ -109,9 +109,11 @@ test.describe("continue on your phone", () => {
       await withSyntheticCamera(phone);
       const phonePage = await phone.newPage();
       await phonePage.goto(`/verify/continue#${token}`);
+      const signIn = phonePage.getByRole("link", { name: "Sign in" });
+      await expect(signIn).toBeVisible({ timeout: 20_000 });
       // The token does not stay in the address bar.
       expect(new URL(phonePage.url()).hash).toBe("");
-      await phonePage.getByRole("link", { name: "Sign in" }).click();
+      await signIn.click();
       await phonePage.waitForURL((url) => url.pathname === "/login");
       expect(new URL(phonePage.url()).search).toBe("?returnUrl=%2Fverify%2Fcontinue");
       const statuses = await watchSignIn(phonePage);
