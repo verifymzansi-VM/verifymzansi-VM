@@ -165,6 +165,10 @@ describe("MySlots", () => {
       "href",
       "/verification"
     );
+    // Group 66: the ID review is the one main (filled) button while it blocks buying.
+    expect(screen.getByRole("link", { name: "Finish my ID review" }).className).toMatch(
+      /bg-brand-green-600/
+    );
   });
 
   it("offers Renew on each slot that can be renewed, and Renew all for several (P3)", () => {

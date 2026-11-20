@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { FoundationServiceApi } from "./service-api";
 import {
   FoundationPhoneError,
+  FoundationSmsDailyLimitError,
   issueFoundationPhoneChallenge,
   verifyFoundationPhoneChallenge,
 } from "./phone-verification";
@@ -130,6 +131,25 @@ it.each([
   expect(refused).toBeInstanceOf(FoundationPhoneError);
   expect(refused).toMatchObject({ status, refusal: reason, changeAllowedFrom: undefined });
   expect(rpc).toHaveBeenCalledTimes(1);
+  expect(deliver).not.toHaveBeenCalled();
+});
+it("sends no SMS when the site's daily limit on codes is reached", async () => {
+  rpc.mockResolvedValue({
+    data: null,
+    error: { code: "PT429", message: "daily SMS code limit reached", details: "sms_daily_limit" },
+  });
+  const refused = await issued().catch((error: unknown) => error);
+  expect(refused).toBeInstanceOf(FoundationSmsDailyLimitError);
+  expect(refused).toMatchObject({ status: 503, reason: "sms_daily_limit", refusal: undefined });
+  expect(rpc).toHaveBeenCalledTimes(1);
+  expect(deliver).not.toHaveBeenCalled();
+});
+it("keeps another PT429 a generic failure, still without an SMS", async () => {
+  rpc.mockResolvedValue({ data: null, error: { code: "PT429", details: "enquiry_limit" } });
+  const refused = await issued().catch((error: unknown) => error);
+  expect(refused).toBeInstanceOf(FoundationPhoneError);
+  expect(refused).not.toBeInstanceOf(FoundationSmsDailyLimitError);
+  expect(refused).toMatchObject({ status: 503 });
   expect(deliver).not.toHaveBeenCalled();
 });
 it("sends no SMS during the change cooldown and keeps the date the database gives", async () => {

@@ -326,7 +326,7 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
             </div>
             <Button
               size="sm"
-              className="gap-1.5 bg-brand-green hover:bg-brand-green/90 text-white"
+              className="gap-1.5 bg-brand-green text-white hover:bg-brand-green/90 dark:bg-brand-green dark:text-white dark:hover:bg-brand-green/90"
               onClick={() => {
                 if (previewItem) openReview(previewItem, "approve");
               }}

@@ -1405,6 +1405,20 @@ update `20261112080000_payment_problem_alerts.sql`; see
   `Package move alert not emailed`. `Package moves skipped this run` and
   `Package moves stuck` alone are warnings: the moves are retried on the next
   run.
+- **SMS daily limit** (a cost alarm on the staff cost page for "SMS verification
+  codes sent today (daily limit)", metric `sms_codes_day`; database update
+  `20261120074411_sms_daily_limit.sql`): 'warning' means the day's SMS codes
+  reached 70% of the site-wide daily limit, 'critical' that the limit was
+  reached. From then until midnight (South African time) no code is sent:
+  members asking for one see "We can't send codes right now. Please try again
+  later.", and the app Worker logs each refused request as
+  `Foundation owner request failed` with `errorReason` `sms_daily_limit`. Check
+  whether the codes went to real sign-ups or to a flood from many accounts (the
+  app Worker logs for `/api/otp/send`, and Africa's Talking's sent messages).
+  For real demand, the owner raises the limit
+  (`update private.cost_allowances set free_quantity=<n> where metric='sms_codes_day';`
+  in the SQL editor, or a reviewed update); it takes effect on the next request.
+  Acknowledge the alarm afterwards.
 
 ---
 

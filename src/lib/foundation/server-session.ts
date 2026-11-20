@@ -87,16 +87,3 @@ export async function readFoundationServerUser() {
     throw error;
   }
 }
-
-/** Public pages only: the verified user, or null for a visitor the page shows
- * as signed out. No session (401), a refused account (403) and a check that
- * could not run (503) all mean "signed out" here, so a public page never fails
- * because of the visitor's session. */
-export async function readFoundationPublicViewer() {
-  try {
-    return (await readFoundationServerSession()).user;
-  } catch (error) {
-    if (error instanceof FoundationServerSessionError) return null;
-    throw error;
-  }
-}

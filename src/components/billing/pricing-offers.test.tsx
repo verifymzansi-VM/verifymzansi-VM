@@ -43,7 +43,7 @@ describe("PricingOffers", () => {
     expect(container.textContent).not.toMatch(/R100|Multi-listing/);
   });
 
-  it("links each term to the section-free Individual slot checkout and highlights 30 days", () => {
+  it("links each term to the section-free Individual slot checkout as three equal outlined choices", () => {
     render(<PricingOffers offers={offers} onSale showMultiListing={false} />);
 
     for (const [tier, days, price] of [
@@ -62,13 +62,13 @@ describe("PricingOffers", () => {
     expect(
       within(screen.getByTestId("retail-offer-quarter")).getByText("R69 per 30 days")
     ).toBeVisible();
-    // The 30-day card is the highlighted one (filled button).
-    expect(within(screen.getByTestId("retail-offer-month")).getByRole("link").className).toMatch(
-      /bg-brand-green-600/
-    );
-    expect(
-      within(screen.getByTestId("retail-offer-quarter")).getByRole("link").className
-    ).not.toMatch(/bg-brand-green-600/);
+    // The three terms are equal choices: none is highlighted or filled.
+    for (const tier of ["month", "quarter", "half_year"] as const) {
+      const card = screen.getByTestId(`retail-offer-${tier}`);
+      expect(card.className).not.toMatch(/ring-4|border-brand-green/);
+      expect(within(card).getByRole("link").className).not.toMatch(/bg-brand-green-600/);
+      expect(within(card).getByRole("link").className).toMatch(/border-input/);
+    }
   });
 
   it("offers free events below the slots", () => {

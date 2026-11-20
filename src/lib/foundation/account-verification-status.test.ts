@@ -1,14 +1,15 @@
 /** @vitest-environment node */
 import { describe, expect, it, vi } from "vitest";
-import { summarizeVerification } from "@/lib/account/verification-summary";
 import {
   accountVerificationStatusFromCase,
   readFoundationAccountVerificationStatus,
 } from "./account-verification-status";
-import { dashboardVerificationSteps, type FoundationOwnerDashboard } from "./owner-dashboard";
+import type { FoundationOwnerDashboard } from "./owner-dashboard";
+import { presentedVerification } from "./restored-verification-route";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/foundation/owner-route", () => ({ handleFoundationOwnerRoute: vi.fn() }));
 
 const caseId = "00000000-0000-4000-8000-0000000000c1";
 const at = "2026-11-20T08:00:00.000Z";
@@ -26,32 +27,42 @@ const base: Case = {
 
 describe("accountVerificationStatusFromCase", () => {
   it.each([
-    ["verified", { verified: true, phone_verified: true, locality_confirmed: true }, null],
+    ["verified", { verified: true, phone_verified: true, locality_confirmed: true }, {}],
     [
       "pending_review",
       { submission_pending: true, phone_verified: true, locality_confirmed: true },
-      null,
+      {},
     ],
+    // Both uploads finished before the submission is registered.
+    [
+      "pending_review",
+      { phone_verified: true, locality_confirmed: true },
+      { uploads: ["id_front", "selfie"] },
+    ],
+    // Only the ID is uploaded so far.
+    ["incomplete", { phone_verified: true, locality_confirmed: true }, { uploads: ["id_front"] }],
+    // Both uploaded, but the area is not confirmed yet.
+    ["incomplete", { phone_verified: true }, { uploads: ["id_front", "selfie"] }],
     [
       "rejected",
       { return_reason: "document_unreadable", phone_verified: true, locality_confirmed: true },
-      "rejected",
+      { decision: "rejected" },
     ],
     [
       "incomplete",
       { return_reason: "document_unreadable", phone_verified: true, locality_confirmed: true },
-      "needs_resubmission",
+      { decision: "needs_resubmission" },
     ],
     // A returned case whose decision is not known is never shown as rejected.
-    ["incomplete", { return_reason: "document_unreadable" }, null],
+    ["incomplete", { return_reason: "document_unreadable" }, {}],
     // ID and selfie sent, but the phone or area is still missing.
-    ["incomplete", { submission_pending: true, phone_verified: true }, null],
-    ["incomplete", { submission_pending: true, locality_confirmed: true }, null],
+    ["incomplete", { submission_pending: true, phone_verified: true }, {}],
+    ["incomplete", { submission_pending: true, locality_confirmed: true }, {}],
     // Phone and area done, ID and selfie not sent yet.
-    ["incomplete", { phone_verified: true, locality_confirmed: true }, null],
-    ["incomplete", { case_id: null, version: null }, null],
-  ] as const)("shows %s for %j (decision %s)", (expected, change, decision) => {
-    expect(accountVerificationStatusFromCase({ ...base, ...change }, decision)).toBe(expected);
+    ["incomplete", { phone_verified: true, locality_confirmed: true }, {}],
+    ["incomplete", { case_id: null, version: null }, {}],
+  ] as const)("shows %s for %j (%j)", (expected, change, extras) => {
+    expect(accountVerificationStatusFromCase({ ...base, ...change }, extras)).toBe(expected);
   });
 
   // Same answer as GET /api/verification/status, which the page asks again in
@@ -63,42 +74,49 @@ describe("accountVerificationStatusFromCase", () => {
       for (const locality of flags)
         for (const identityAccepted of flags)
           for (const pending of flags)
-            for (const decision of [null, "rejected", "needs_resubmission"] as const) {
-              // The database's own rules: verified needs an accepted identity,
-              // phone and area; an accepted case has no pending or returned
-              // submission; a pending submission was not returned.
-              const verified = identityAccepted && phone && locality;
-              if (identityAccepted && (pending || decision)) continue;
-              if (pending && decision) continue;
-              const current: Case = {
-                ...base,
-                verified,
-                phone_verified: phone,
-                locality_confirmed: locality,
-                submission_pending: pending,
-                return_reason: decision ? "reason" : null,
-              };
-              const snapshot = {
-                verification: { ...current, ...(decision ? { return_decision: decision } : {}) },
-                profile_facts: {
-                  phone_verified_at: phone ? at : null,
-                  location_confirmed_at: locality ? at : null,
-                  identity_reviewed_at: identityAccepted ? at : null,
-                  id_document_uploaded_at: at,
-                  selfie_uploaded_at: at,
-                },
-              } as unknown as FoundationOwnerDashboard;
-              const route = summarizeVerification(
-                verified ? "verified" : "incomplete",
-                dashboardVerificationSteps(snapshot)
-              ).accountVerificationStatus;
-              expect(
-                accountVerificationStatusFromCase(current, decision),
-                JSON.stringify({ phone, locality, identityAccepted, pending, decision })
-              ).toBe(route);
-              compared += 1;
-            }
-    expect(compared).toBeGreaterThan(10);
+            for (const uploads of [[], ["id_front"], ["selfie"], ["id_front", "selfie"]] as const)
+              for (const decision of [null, "rejected", "needs_resubmission"] as const) {
+                // The database's own rules: verified needs an accepted identity,
+                // phone and area; an accepted case has no pending or returned
+                // submission; a pending submission was not returned.
+                const verified = identityAccepted && phone && locality;
+                if (identityAccepted && (pending || decision)) continue;
+                if (pending && decision) continue;
+                const current: Case = {
+                  ...base,
+                  verified,
+                  phone_verified: phone,
+                  locality_confirmed: locality,
+                  submission_pending: pending,
+                  return_reason: decision ? "reason" : null,
+                };
+                const snapshot = {
+                  verification: { ...current, ...(decision ? { return_decision: decision } : {}) },
+                  profile_facts: {
+                    phone_verified_at: phone ? at : null,
+                    location_confirmed_at: locality ? at : null,
+                    identity_reviewed_at: identityAccepted ? at : null,
+                    id_document_uploaded_at: at,
+                    selfie_uploaded_at: at,
+                  },
+                } as unknown as FoundationOwnerDashboard;
+                const route = presentedVerification(
+                  snapshot,
+                  uploads.map((purpose, index) => ({
+                    artifact_id: `00000000-0000-4000-8000-00000000000${index}`,
+                    case_id: caseId,
+                    purpose,
+                    submitted_at: at,
+                    expires_at: at,
+                  }))
+                ).accountVerificationStatus;
+                expect(
+                  accountVerificationStatusFromCase(current, { decision, uploads }),
+                  JSON.stringify({ phone, locality, identityAccepted, pending, uploads, decision })
+                ).toBe(route);
+                compared += 1;
+              }
+    expect(compared).toBeGreaterThan(40);
   });
 });
 
@@ -141,6 +159,52 @@ describe("readFoundationAccountVerificationStatus", () => {
     expect(rpc).toHaveBeenLastCalledWith("get_my_frontend_identity_state", {}, { get: false });
   });
 
+  const upload = (purpose: string, change: Record<string, unknown> = {}) => ({
+    artifact_id:
+      purpose === "selfie"
+        ? "00000000-0000-4000-8000-0000000000a2"
+        : "00000000-0000-4000-8000-0000000000a1",
+    case_id: caseId,
+    purpose,
+    submitted_at: at,
+    expires_at: at,
+    ...change,
+  });
+  const ready = { ...base, phone_verified: true, locality_confirmed: true };
+
+  it.each([
+    ["both uploads of this case", [upload("id_front"), upload("selfie")], "pending_review"],
+    ["only the ID upload", [upload("id_front")], "incomplete"],
+    [
+      "uploads of an older case",
+      [
+        upload("id_front", { case_id: "00000000-0000-4000-8000-0000000000c9" }),
+        upload("selfie", { case_id: "00000000-0000-4000-8000-0000000000c9" }),
+      ],
+      "incomplete",
+    ],
+  ] as const)(
+    "counts finished uploads like the status route: %s",
+    async (_name, rows, expected) => {
+      const { api, rpc } = apiWith({ data: ready, error: null }, { data: rows, error: null });
+      await expect(readFoundationAccountVerificationStatus(api)).resolves.toBe(expected);
+      expect(rpc).toHaveBeenLastCalledWith(
+        "get_my_frontend_verification_uploads",
+        {},
+        { get: false }
+      );
+    }
+  );
+
+  it.each([
+    ["the phone is missing", { ...base, locality_confirmed: true }, "incomplete"],
+    ["a submission is registered", { ...ready, submission_pending: true }, "pending_review"],
+  ] as const)("skips the uploads read when %s", async (_name, data, expected) => {
+    const { api, rpc } = apiWith({ data, error: null });
+    await expect(readFoundationAccountVerificationStatus(api)).resolves.toBe(expected);
+    expect(rpc).toHaveBeenCalledOnce();
+  });
+
   it.each([
     ["an unavailable case", [{ data: null, error: { code: "PGRST000" } }]],
     ["a malformed case", [{ data: { verified: "yes" }, error: null }]],
@@ -156,6 +220,13 @@ describe("readFoundationAccountVerificationStatus", () => {
       [
         { data: { ...base, return_reason: "document_unreadable" }, error: null },
         { data: identity("rejected", { case_version: 3 }), error: null },
+      ],
+    ],
+    [
+      "unavailable uploads",
+      [
+        { data: { ...base, phone_verified: true, locality_confirmed: true }, error: null },
+        { data: null, error: { code: "PGRST000" } },
       ],
     ],
   ] as const)("throws on %s", async (_name, answers) => {

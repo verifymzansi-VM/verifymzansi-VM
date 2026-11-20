@@ -117,7 +117,7 @@ export function PrelaunchBanner() {
             <DialogPrimitive.Close asChild>
               <Button
                 size="lg"
-                className="mt-7 h-12 w-full bg-brand-gold-300 text-base font-semibold text-brand-gold-950 hover:bg-brand-gold-200 sm:w-auto sm:px-10"
+                className="mt-7 h-12 w-full bg-brand-gold-300 text-base font-semibold text-brand-gold-950 hover:bg-brand-gold-200 dark:bg-brand-gold-300 dark:text-brand-gold-950 dark:hover:bg-brand-gold-200 sm:w-auto sm:px-10"
               >
                 Explore the site
               </Button>

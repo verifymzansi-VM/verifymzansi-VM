@@ -51,7 +51,7 @@ export async function HomeSponsorsSection() {
           ))}
         </ul>
         <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-          <Button asChild variant="ink" className="h-11 rounded-full px-5">
+          <Button asChild variant="outline" className="h-11 rounded-full px-5">
             <Link href="/sponsors">See supported businesses</Link>
           </Button>
           {/* The sponsor offer is on hold (src/lib/hidden-features.ts). */}

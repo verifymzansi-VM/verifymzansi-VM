@@ -7,12 +7,16 @@ import { POST as restoredSend } from "@/app/api/otp/send/route";
 import { POST as restoredVerify } from "@/app/api/otp/verify/route";
 import { FOUNDATION_PHONE_CHALLENGE_COOKIE } from "@/lib/foundation/phone-challenge-cookie";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
-import { FoundationPhoneError } from "@/lib/foundation/phone-verification";
+import {
+  FoundationPhoneError,
+  FoundationSmsDailyLimitError,
+} from "@/lib/foundation/phone-verification";
 import { phoneRetryWait } from "./_lib/handle";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import {
   ACCOUNT_PHONE_ALREADY_VERIFIED,
   ACCOUNT_PHONE_IN_USE_ERROR,
+  PHONE_CODES_UNAVAILABLE,
   PHONE_NUMBER_UNAVAILABLE,
 } from "@/lib/utils/phone";
 const { authenticate, readAccount, service, issue, prove, limit, context } = vi.hoisted(() => ({
@@ -203,6 +207,26 @@ it("refuses a banned number at the code step with the same neutral message", asy
   });
   expect(JSON.stringify(PHONE_NUMBER_UNAVAILABLE)).not.toMatch(/ban/i);
 });
+it.each([
+  ["restored form", restoredSend, "0820000000"],
+  ["foundation route", send, "+27820000000"],
+] as const)(
+  "says calmly that no code can be sent at the site's daily limit (%s)",
+  async (_label, route, phone) => {
+    issue.mockRejectedValue(new FoundationSmsDailyLimitError());
+    const sent = await route(request({ phone }));
+    expect(sent.status).toBe(503);
+    expect(sent.headers.get("Retry-After")).toBeNull();
+    const body = await sent.json();
+    expect(body).toEqual({
+      error: PHONE_CODES_UNAVAILABLE,
+      reason: "sms_daily_limit",
+      reference: expect.any(String),
+    });
+    expect(PHONE_CODES_UNAVAILABLE).toBe("We can't send codes right now. Please try again later.");
+    expect(sent.cookies.get(FOUNDATION_PHONE_CHALLENGE_COOKIE)).toBeUndefined();
+  }
+);
 it("keeps other phone refusals generic", async () => {
   issue.mockRejectedValue(new FoundationPhoneError(409));
   const sent = await send(request({ phone: "+27820000000" }));

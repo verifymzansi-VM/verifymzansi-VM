@@ -576,7 +576,7 @@ export function PromotionsExplorer() {
         title="Tourism & Events"
         breadcrumbs={[{ label: "Home", href: "/" }, { label: "Tourism & Events" }]}
       >
-        <Button asChild size="sm" className="h-11 gap-1 elev-xs hover:elev-sm">
+        <Button asChild size="sm" variant="outline" className="h-11 gap-1 elev-xs hover:elev-sm">
           <Link href={createHref}>
             {createLabel}
             <ArrowRight className="h-4 w-4" />

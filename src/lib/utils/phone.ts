@@ -6,6 +6,8 @@ export const ACCOUNT_PHONE_ALREADY_VERIFIED =
 /** Shown for a number a ban blocks; never says that a ban exists. */
 export const PHONE_NUMBER_UNAVAILABLE =
   "This phone number can't be used on VerifyMzansi. Contact support if you think this is a mistake.";
+/** Shown when no SMS code can be sent now (the site's daily limit on codes). */
+export const PHONE_CODES_UNAVAILABLE = "We can't send codes right now. Please try again later.";
 const SA_PHONE_E164_REGEX = /^\+27[6-8][0-9]{8}$/;
 const SA_PHONE_LOCAL_REGEX = /^0[6-8][0-9]{8}$/;
 

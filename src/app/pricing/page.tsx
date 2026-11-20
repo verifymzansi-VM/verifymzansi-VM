@@ -170,7 +170,7 @@ export default async function PricingPage() {
         </div>
       </main>
 
-      <Footer />
+      <Footer showPostBand={false} />
     </div>
   );
 }
