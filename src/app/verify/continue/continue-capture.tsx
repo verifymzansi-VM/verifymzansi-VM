@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, IdCard, Loader2, Monitor, ScanFace, Timer } from "lucide-react";
+import { CheckCircle2, IdCard, Loader2, Monitor, ScanFace, Smartphone, Timer } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { CameraCapture } from "@/components/ui/camera-capture";
 import { Button } from "@/components/ui/button";
@@ -210,7 +210,7 @@ export function ContinueCapture() {
                 id="continue-capture-sign-in"
                 stepNumber={2}
                 title="Sign in on this phone"
-                icon={Monitor}
+                icon={Smartphone}
                 why="Your photos go straight from your phone to us."
               >
                 <p className="text-sm leading-6 text-muted-foreground">

@@ -66,7 +66,11 @@ import {
   type CalloutTone,
   type OverallVerificationState,
 } from "./verification-ui";
-import { ContinueOnPhonePanel, type HandoffDetails } from "./continue-on-phone";
+import {
+  ContinueOnPhonePanel,
+  type HandoffCodeCache,
+  type HandoffDetails,
+} from "./continue-on-phone";
 
 type WizardStep = "phone" | "id_doc" | "selfie" | "location" | "complete";
 type UploadReceipt = { name: string; uploadedAtIso: string | null };
@@ -536,6 +540,8 @@ export default function VerificationPage() {
     step: "id_doc" | "selfie";
     details: HandoffDetails;
   } | null>(null);
+  // The last phone code made on this page (reused after Back; gone with the page).
+  const handoffCodesRef: HandoffCodeCache = useRef<HandoffCodeCache["current"]>(null);
   const [selfieLivenessPassed, setSelfieLivenessPassed] = useState(false);
   // Capture tokens issued when each camera started (sent with the photo).
   const [idCaptureToken, setIdCaptureToken] = useState<string | null>(null);
@@ -1792,6 +1798,7 @@ export default function VerificationPage() {
                     why="Your photos go straight from your phone to us."
                   >
                     <ContinueOnPhonePanel
+                      codeCacheRef={handoffCodesRef}
                       details={handoff.details}
                       onBack={() => setHandoff(null)}
                       isDone={handoffDone}
@@ -2019,6 +2026,7 @@ export default function VerificationPage() {
                     why="Your photos go straight from your phone to us."
                   >
                     <ContinueOnPhonePanel
+                      codeCacheRef={handoffCodesRef}
                       details={null}
                       onBack={() => setHandoff(null)}
                       isDone={handoffDone}

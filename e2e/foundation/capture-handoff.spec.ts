@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { E2E_FIXTURE } from "../../scripts/lib/foundation-e2e-target.mjs";
+import { submitSignInForm, watchSignIn } from "./support/sign-in-form";
 import { withSyntheticCamera } from "./support/synthetic-camera";
 import { browserSessionCookies, queryTestCopy, readTestCopy } from "./support/test-copy";
 import {
@@ -13,9 +14,10 @@ import {
 // copy (Didit plan, build step 2; owner decision: the phone must be signed in
 // as the same account):
 //   - a computer without a camera makes a link and shows its QR code;
-//   - a second browser (the phone), signed in as the same member, opens the
-//     link, takes the ID photo and the selfie with a synthetic camera, and the
-//     computer moves on to the area step by itself;
+//   - a second browser (the phone), signed out, opens the link, is asked to
+//     sign in, signs in as the same member through the login form, comes back
+//     to the link's page by itself, takes the ID photo and the selfie with a
+//     synthetic camera, and the computer moves on to the area step by itself;
 //   - a phone signed in as another member is refused, and a signed-out phone is
 //     asked to sign in first; neither uses up the link.
 // The QR code's own token is never shown anywhere, so the test gives the
@@ -91,11 +93,13 @@ test.describe("continue on your phone", () => {
     "Continue on your phone starts on a desktop computer, checked once in chromium."
   );
 
-  test("the phone, signed in as the same member, sends both photos", async ({ browser }) => {
-    test.setTimeout(180_000);
+  test("a signed-out phone signs in as the same member, comes back and sends both photos", async ({
+    browser,
+  }) => {
+    test.setTimeout(240_000);
     const member = await registerUnreviewedMember("handoff");
     const computer = await signedInContext(browser, member, false);
-    const phone = await signedInContext(browser, member, true);
+    const phone = await signedInContext(browser, null, true);
     try {
       await withoutAnyCamera(computer);
       const computerPage = await computer.newPage();
@@ -105,11 +109,22 @@ test.describe("continue on your phone", () => {
       await withSyntheticCamera(phone);
       const phonePage = await phone.newPage();
       await phonePage.goto(`/verify/continue#${token}`);
+      // The token does not stay in the address bar.
+      expect(new URL(phonePage.url()).hash).toBe("");
+      await phonePage.getByRole("link", { name: "Sign in" }).click();
+      await phonePage.waitForURL((url) => url.pathname === "/login");
+      expect(new URL(phonePage.url()).search).toBe("?returnUrl=%2Fverify%2Fcontinue");
+      const statuses = await watchSignIn(phonePage);
+      await submitSignInForm(phonePage, member.email, member.password);
+      expect(statuses).toEqual([200]);
+      // Back on the link's page, which opens the link it kept in this tab.
+      await phonePage.waitForURL((url) => url.pathname === "/verify/continue", {
+        timeout: 30_000,
+      });
       await expect(phonePage.getByText("Continuing your check from a computer.")).toBeVisible({
         timeout: 20_000,
       });
-      // The token does not stay in the address bar.
-      expect(new URL(phonePage.url()).hash).toBe("");
+      expect(new URL(phonePage.url()).search).toBe("");
 
       // ID photo: open the camera, take it, check it and use it (sent at once).
       await phonePage.getByRole("button", { name: "Open camera" }).click();

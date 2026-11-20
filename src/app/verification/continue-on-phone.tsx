@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { ArrowLeft, Loader2, RefreshCw, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
@@ -15,11 +15,20 @@ const POLL_MS = 4_000;
 const MIN_LEFT_MS = 2 * 60_000;
 
 /**
- * The last code made in this tab, for the same details: going Back and
+ * The last code made on this page, for the same details: going Back and
  * choosing Continue on your phone again shows it instead of making a new link
  * (each new link counts against the limit of 5 an hour). New code makes one.
+ * The verification page owns it, so it goes when the page does (signing out
+ * leaves the page), and it keeps only a SHA-256 digest of the details, never
+ * the typed ID number.
  */
-let lastCode: { key: string; code: HandoffCode } | null = null;
+export type HandoffCodeCache = RefObject<{ key: string; code: HandoffCode } | null>;
+
+async function detailsKey(details: HandoffDetails) {
+  const bytes = new TextEncoder().encode(JSON.stringify(details));
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 /**
  * "Continue on your phone" on a computer without a usable camera (picture
@@ -29,12 +38,15 @@ let lastCode: { key: string; code: HandoffCode } | null = null;
  */
 export function ContinueOnPhonePanel({
   details,
+  codeCacheRef,
   onBack,
   isDone,
   onDone,
 }: {
   /** The names and ID number typed on this computer, or null for the selfie only. */
   details: HandoffDetails;
+  /** The page's last code (see HandoffCodeCache). */
+  codeCacheRef: HandoffCodeCache;
   onBack: () => void;
   /** Reads the verification status; true once the phone sent what was needed. */
   isDone: () => Promise<boolean>;
@@ -46,15 +58,17 @@ export function ContinueOnPhonePanel({
   const [expired, setExpired] = useState(false);
   const started = useRef(false);
 
-  const key = JSON.stringify(details);
   const makeCode = useCallback(
     async (reuse: boolean) => {
+      const key = await detailsKey(details).catch(() => "");
+      const last = codeCacheRef.current;
       if (
         reuse &&
-        lastCode?.key === key &&
-        Date.parse(lastCode.code.expiresAt) - Date.now() > MIN_LEFT_MS
+        key &&
+        last?.key === key &&
+        Date.parse(last.code.expiresAt) - Date.now() > MIN_LEFT_MS
       ) {
-        setCode(lastCode.code);
+        setCode(last.code);
         return;
       }
       setLoading(true);
@@ -75,7 +89,7 @@ export function ContinueOnPhonePanel({
           return;
         }
         const made = { qr: payload.qr, expiresAt: payload.expiresAt };
-        lastCode = { key, code: made };
+        codeCacheRef.current = key ? { key, code: made } : null;
         setCode(made);
       } catch {
         setCode(null);
@@ -84,7 +98,7 @@ export function ContinueOnPhonePanel({
         setLoading(false);
       }
     },
-    [details, key]
+    [details, codeCacheRef]
   );
 
   useEffect(() => {

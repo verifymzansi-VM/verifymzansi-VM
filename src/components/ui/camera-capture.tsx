@@ -651,6 +651,7 @@ export function CameraCapture({
     // Guard against capturing before the stream has produced a frame —
     // otherwise a blank 0x0 image would be uploaded as the "photo".
     if (video.videoWidth === 0 || video.videoHeight === 0 || video.readyState < 2) {
+      setCaptureError("The camera is still starting. Try again in a moment.");
       return;
     }
 

@@ -789,6 +789,10 @@ describe("CameraCapture", () => {
     // guard must block the blank-frame capture.
     expect(onCapture).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /retake/i })).not.toBeInTheDocument();
+    // The member is told why nothing happened.
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The camera is still starting. Try again in a moment."
+    );
   });
 
   it("asks for a capture token when the camera starts and stops the camera without one", async () => {
