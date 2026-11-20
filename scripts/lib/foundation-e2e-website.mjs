@@ -110,10 +110,11 @@ const NEXT_MANAGED = new Set(["NODE_ENV"]);
  * next.config.js accepts it only for this copy) and the runtime switches set
  * to their launch values. Production's own values stay in wrangler.toml.
  * OZOW_API_REFUNDS_ENABLED has no effect with mock Ozow (src/lib/payments/ozow-refunds.ts).
+ * Sign-up stays as the database's sign-up mode (invite only; opening it is
+ * the owner's internal.set_signup_mode, not a website switch).
  */
 export const LAUNCH_CONFIG_SETTINGS = {
   VERIFYMZANSI_LAUNCH_CONFIG: "1",
-  FOUNDATION_REGISTRATION_INVITE_ONLY: "false",
   ADDON_SALES_ENABLED: "true",
   OZOW_API_REFUNDS_ENABLED: "true",
 };

@@ -16,6 +16,11 @@ vi.mock("@/lib/security/pwned-passwords", () => ({
   isPwnedPassword: vi.fn(),
   PWNED_PASSWORD_ERROR: "breached",
 }));
+// The database's sign-up mode is read through its own adapter (covered in
+// signup-mode.test.ts); unreadable here, so the environment switch decides.
+vi.mock("@/lib/foundation/signup-mode", () => ({
+  readFoundationSignupMode: vi.fn(async () => null),
+}));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: vi.fn(),
   getClientRateLimitIdentity: () => ({ key: "fixture" }),

@@ -5,6 +5,7 @@ import { buildAuthCallbackUrl } from "../utils/auth-redirect";
 import { FOUNDATION_POST_SIGNUP_PATH } from "./auth-navigation";
 import { FoundationRegistrationError, registerFoundationAccount } from "./registration";
 import { foundationRegistrationReply } from "./registration-message";
+import { readFoundationSignupMode } from "./signup-mode";
 import { handleFoundationAuthAttempt } from "./auth-attempt-route";
 import { registrationDisplayName } from "./registration-display-name";
 
@@ -48,11 +49,13 @@ export function handleFoundationRegistration(request: NextRequest, legacyForm = 
         undefined,
         hints
       );
-      return foundationRegistrationReply();
+      return foundationRegistrationReply(await readFoundationSignupMode(connection));
     },
     refusal: (error) =>
       error instanceof FoundationRegistrationError
         ? { status: error.status, error: error.message }
         : null,
+    countsAsAttempt: (error) =>
+      error instanceof FoundationRegistrationError && error.countsAsAttempt,
   });
 }

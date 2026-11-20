@@ -70,7 +70,7 @@ export function syntheticIdNumber() {
  * display name goes in the sign-up metadata, as the website's registration
  * sends it (the database keeps it only if valid; never authority). */
 async function register(copy: TestCopy, email: string, password: string, displayName: string) {
-  queryTestCopy(`insert into private.owner_admin_invitations(email) values ('${email}');`);
+  queryTestCopy(`insert into private.member_invitations(email) values ('${email}');`);
   const sentAfter = Date.now() - 1000;
   const signup = await fetch(new URL("/auth/v1/signup", API_ORIGIN), {
     method: "POST",
@@ -90,9 +90,9 @@ async function register(copy: TestCopy, email: string, password: string, display
     /error/.test(confirmed.headers.get("location") ?? "")
   )
     throw new Error("Email confirmation failed");
-  // Closed once used, so it can never be claimed as an owner-admin invitation.
+  // Closed once used (a member invitation never makes an administrator).
   queryTestCopy(
-    `update private.owner_admin_invitations set revoked_at = now() where email = '${email}';`
+    `update private.member_invitations set revoked_at = now() where email = '${email}';`
   );
 }
 

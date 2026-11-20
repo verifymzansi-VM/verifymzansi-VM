@@ -11,6 +11,7 @@ import {
 } from "@/lib/foundation/account-context";
 import { foundationAuthEmail } from "@/lib/foundation/auth-input";
 import { FoundationEmailChangeError } from "@/lib/foundation/email-change";
+import { checkFoundationEmailDomain } from "@/lib/foundation/signup-mode";
 import {
   foundationAuthenticatorStepRecent,
   foundationSignedInRecently,
@@ -156,6 +157,19 @@ export async function handleFoundationEmailChange(request: NextRequest) {
       throw new ChangeRefusal(422, {
         error: "This is already your current email address.",
         code: "same_email",
+      });
+    // While sign-up is open, an address the sign-up hook would refuse
+    // (malformed, reserved or blocked domain) cannot be moved to either.
+    let domainAllowed: boolean;
+    try {
+      domainAllowed = await checkFoundationEmailDomain(caller.api, newEmail);
+    } catch {
+      throw refuse.unavailable("domain_check_failed");
+    }
+    if (!domainAllowed)
+      throw new ChangeRefusal(422, {
+        error: "This email address can't be used. Use a different address.",
+        code: "email_domain_blocked",
       });
     if (!foundationSignedInRecently(caller.signedInAt))
       throw new ChangeRefusal(403, {
