@@ -14,13 +14,16 @@ export async function withSyntheticCamera(
   context: BrowserContext,
   { width = 1600, height = 1000 } = {}
 ) {
-  await context.addInitScript(
-    ({ width, height }) => {
+  // Passed as text, not a function: a transpiler's helpers (such as esbuild's
+  // __name) would be missing in the page and stop the script silently.
+  await context.addInitScript({
+    content: `(() => {
+      const width = ${Number(width)}, height = ${Number(height)};
       const open = async () => {
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext("2d")!;
+        const ctx = canvas.getContext("2d");
         const paint = () => {
           const image = ctx.createImageData(width, height);
           for (let i = 0; i < image.data.length; i += 4) {
@@ -34,18 +37,17 @@ export async function withSyntheticCamera(
         };
         paint();
         const stream = canvas.captureStream(5);
-        const timer = window.setInterval(paint, 200);
+        const timer = setInterval(paint, 200);
         for (const track of stream.getTracks())
-          track.addEventListener("ended", () => window.clearInterval(timer));
+          track.addEventListener("ended", () => clearInterval(timer));
         return stream;
       };
       Object.defineProperty(navigator, "mediaDevices", {
         configurable: true,
         value: { getUserMedia: open, enumerateDevices: async () => [] },
       });
-    },
-    { width, height }
-  );
+    })();`,
+  });
 }
 
 /** The ID step's camera: open, take the photo, check it and use it. */
