@@ -78,8 +78,8 @@ const REVIEW_CHECKS = [
 
 // A service worker could fetch outside page routing; the allowlist must see every request.
 test.use({ serviceWorkers: "block" });
-/** The one registration reply while sign-up is by invitation only
- * (FOUNDATION_REGISTRATION_INVITE_ONLY, as in production). */
+/** The one registration reply while sign-up is by invitation only (the
+ * database's sign-up mode, invite only by default, as in production). */
 const INVITE_ONLY_REPLY =
   "Registration is by invitation only for now. If this email was invited, check your inbox to continue.";
 
@@ -277,9 +277,11 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
   }) => {
     // Launch (OD-15: launch partners first): the website's registration switch
     // is on, as in production (FOUNDATION_REGISTRATION_ENABLED), and local
-    // Auth runs the same invitation-only sign-up hook production uses
-    // (internal.acceptance_signup_guard). Opening sign-up to everyone means
-    // switching that hook off in hosted Auth; that is not the launch setting.
+    // Auth runs the same sign-up hook production uses
+    // (internal.acceptance_signup_guard) with the database's sign-up mode at
+    // its default, invite only. Opening sign-up to everyone is the database
+    // owner's internal.set_signup_mode('open', ...); that is not the launch
+    // setting.
     const { outside, reply, captchaTokens } = await guard(context);
     const email = `uninvited-${member.ref}@verifymzansi.test`;
     await page.goto("/register");
@@ -315,10 +317,10 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
   }) => {
     test.setTimeout(120_000);
     const { outside, reply, captchaTokens } = await guard(context);
-    // Trusted step (as an owner SQL session does in production): the invitation.
-    queryTestCopy(
-      `insert into private.owner_admin_invitations(email) values (${sql(member.email)});`
-    );
+    // Trusted step (as an owner SQL session or the staff command
+    // api.invite_member does in production): a member invitation, kept apart
+    // from administrator invitations.
+    queryTestCopy(`insert into private.member_invitations(email) values (${sql(member.email)});`);
     const sentAfter = Date.now() - 1000;
     await page.goto("/register");
     await page.getByLabel("First name").fill(member.firstName);
@@ -375,11 +377,14 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
           `where a.account_id = '${member.id}';`
       )
     ).toBe("email_form true");
-    // Trusted step, as the seed does: close the invitation once it is used, so
-    // this member can never claim it as an owner-admin invitation later.
-    queryTestCopy(
-      `update private.owner_admin_invitations set revoked_at = now() where email = ${sql(member.email)};`
-    );
+    // A member invitation never makes an administrator: the new account has
+    // no staff role and is on no administrator invitation.
+    expect(
+      queryTestCopy(
+        `select (select count(*) from private.staff_roles where user_id = '${member.id}') || ',' || ` +
+          `(select count(*) from private.owner_admin_invitations where email = ${sql(member.email)});`
+      )
+    ).toBe("0,0");
 
     // Phone code: sent by the website's e2e SMS branch to the copy's sink.
     await expect(page.getByRole("heading", { name: "Verify your phone number" })).toBeVisible();

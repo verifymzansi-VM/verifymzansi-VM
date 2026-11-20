@@ -14,6 +14,7 @@ export type FoundationRuntimePublicDatabase = {
       get_public_frontend_business_cipc: { Args: { p_post_ids: string[] }; Returns: Json };
       get_payment_limits: { Args: Record<never, never>; Returns: Json };
       get_post_engagement: { Args: { p_post_ids: string[] }; Returns: Json };
+      get_signup_mode: { Args: Record<never, never>; Returns: Json };
     };
   };
 };
@@ -688,6 +689,11 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         };
         Returns: Json;
       };
+      get_signup_mode: { Args: Record<never, never>; Returns: Json };
+      invite_member: { Args: { p_email: string }; Returns: Json };
+      revoke_member_invitation: { Args: { p_email: string }; Returns: Json };
+      list_member_invitations: { Args: Record<never, never>; Returns: Json };
+      check_email_domain: { Args: { p_email: string }; Returns: Json };
     };
   };
 };

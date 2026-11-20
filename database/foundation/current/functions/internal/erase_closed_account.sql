@@ -66,6 +66,13 @@ begin
   delete from private.communication_choice_events c where c.account_id = p_user;
   delete from private.signup_terms_acceptances a where a.account_id = p_user;
   delete from private.posting_terms_acceptances a where a.owner_id = p_user;
+  -- Member invitations (20261120040242_signup_mode_member_invitations.sql):
+  -- the one the account used and any for its address, with their history.
+  delete from private.member_invitation_events e where e.email in (
+    select m.email from private.member_invitations m where m.claimed_by = p_user
+    union select lower(u.email) from auth.users u where u.id = p_user and u.email is not null);
+  delete from private.member_invitations m where m.claimed_by = p_user
+    or m.email = (select lower(u.email) from auth.users u where u.id = p_user);
   delete from private.verification_localities l where l.owner_id = p_user;
   -- Photos and videos nothing kept still uses: queued for deletion from
   -- storage now (the media cleanup job deletes the objects).

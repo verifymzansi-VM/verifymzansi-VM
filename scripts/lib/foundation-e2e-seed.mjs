@@ -379,7 +379,8 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
   const api = localApi(status);
   if (
     sql(
-      "select (select count(*) from auth.users) + (select count(*) from private.owner_admin_invitations);"
+      "select (select count(*) from auth.users) + (select count(*) from private.owner_admin_invitations)" +
+        " + (select count(*) from private.member_invitations);"
     ) !== "0"
   )
     throw new Error(
@@ -387,11 +388,16 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
     );
   const accounts = ["invitedMember", "verifiedMember", "moderator", "admin"];
 
-  log("Trusted step: sign-up invitations for the four test accounts.");
+  // Members (and the moderator, who is given the role later) get member
+  // invitations, which never make an administrator; only the admin gets the
+  // owner's administrator invitation.
+  log("Trusted step: member invitations for three test accounts, an admin invitation for one.");
   sql(
-    `insert into private.owner_admin_invitations(email) values ${accounts
+    `insert into private.member_invitations(email) values ${accounts
+      .filter((key) => key !== "admin")
       .map((key) => `(${quote(people[key].email.toLowerCase())})`)
-      .join(",")};`
+      .join(",")};` +
+      `insert into private.owner_admin_invitations(email) values (${quote(people.admin.email.toLowerCase())});`
   );
   const refused = await api.request("/auth/v1/signup", {
     body: { email: people.uninvited.email, password: "Local-fixture-refused-0" },
@@ -401,13 +407,6 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
     log(`Registering ${key} through the invitation gate and the mail catcher.`);
     await registerThroughInvitation(api, status, people[key]);
   }
-  log("Trusted step: closing the invitations of everyone except the admin.");
-  sql(
-    `update private.owner_admin_invitations set revoked_at=now() where email in (${accounts
-      .filter((key) => key !== "admin")
-      .map((key) => quote(people[key].email.toLowerCase()))
-      .join(",")});`
-  );
 
   const session = {};
   const factors = {};

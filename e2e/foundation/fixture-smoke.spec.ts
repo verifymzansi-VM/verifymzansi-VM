@@ -146,11 +146,14 @@ test.describe("foundation test copy", () => {
     const invited = await context("invitedMember");
     expect(invited.context.staff).toBeNull();
     expect(invited.context.profile.identity_verified).toBe(false);
+    // Invited as a member: on the member invitation list, never on the
+    // administrator list.
     expect(
       queryTestCopy(
-        `select count(*) from private.owner_admin_invitations where claimed_by is null and revoked_at is not null and email='${invited.context.email}';`
+        `select (select count(*) from private.member_invitations where email='${invited.context.email}') || ',' || ` +
+          `(select count(*) from private.owner_admin_invitations where email='${invited.context.email}');`
       )
-    ).toBe("1");
+    ).toBe("1,0");
 
     const verified = await context("verifiedMember");
     expect(verified.context.staff).toBeNull();

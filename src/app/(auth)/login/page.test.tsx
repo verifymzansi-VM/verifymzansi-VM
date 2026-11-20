@@ -87,6 +87,7 @@ describe("LoginPage", () => {
 
   it.each([
     ["registration_closed", "Registration is not open yet"],
+    ["registration_unavailable", "This email can't be used to register"],
     ["google_cancelled", "Google sign-in was not completed"],
   ])("explains a Google sign-in that came back with %s", async (error, title) => {
     window.history.pushState({}, "", `/login?error=${error}`);
