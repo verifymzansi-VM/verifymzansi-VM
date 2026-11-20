@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarClock, Loader2, LockKeyhole, Minus, Plus, ReceiptText } from "lucide-react";
 import { CheckoutShell } from "@/components/billing/checkout-shell";
 import { Button } from "@/components/ui/button";
 import { formatSaLongDate } from "@/lib/utils/format";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { getFriendlyCheckoutError } from "@/lib/billing/checkout-copy";
+import { postCheckoutOrder, useBackForwardReset } from "@/lib/billing/checkout-client";
 import { formatPlanPrice } from "@/lib/constants/pricing";
 import { INVOICE_COOLING_OFF_CONSENT } from "@/lib/billing/slot-checkout";
 import {
@@ -22,7 +22,6 @@ import {
 import {
   PendingPaymentActions,
   usePendingPayment,
-  type PendingPayment,
 } from "@/components/billing/pending-payment-actions";
 
 /** The running package as "Add slots" offers it (api.get_my_package_add_offer). */
@@ -142,16 +141,12 @@ export function PackageAddCheckout({
   );
   const requestId = useRef<{ order: string; id: string } | null>(null);
 
-  // Back from Ozow through the back/forward cache: never stuck on "Redirecting…".
-  useEffect(() => {
-    function onPageShow(event: PageTransitionEvent) {
-      if (!event.persisted) return;
-      pending.current = false;
-      setState("idle");
-    }
-    window.addEventListener("pageshow", onPageShow);
-    return () => window.removeEventListener("pageshow", onPageShow);
-  }, []);
+  const settle = () => {
+    pending.current = false;
+    setState("idle");
+  };
+  // Back from Ozow: never stuck on "Redirecting…".
+  useBackForwardReset(settle);
 
   const resetConsent = () => {
     setConsent(false);
@@ -167,6 +162,17 @@ export function PackageAddCheckout({
   const canAskInvoice =
     !blocked && quote.kind === "invoice" && invoiceConsent && state === "idle" && !requested;
   const addHref = `/billing/package/add?slots=${slots ?? 1}`;
+  const payIcon =
+    state === "idle" ? (
+      <LockKeyhole aria-hidden="true" className="h-4 w-4" />
+    ) : (
+      <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+    );
+  const payLabel = {
+    idle: totalCents === null ? "Pay securely" : `Pay ${formatPlanPrice(totalCents)} securely`,
+    submitting: "Opening secure checkout…",
+    redirecting: "Redirecting to Ozow…",
+  }[state];
 
   async function pay() {
     if (!canPay || pending.current || !offer || totalCents === null || slots === null) return;
@@ -174,38 +180,25 @@ export function PackageAddCheckout({
     setState("submitting");
     setError(null);
     setNeedsSignIn(false);
-    try {
-      const res = await fetch("/api/billing/package-add-checkout", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          packageId: offer.packageId,
-          slots,
-          expectedTotalCents: totalCents,
-          coolingOffConsent: consent,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (data.pendingPayment && typeof data.pendingPayment.id === "string")
-          setPendingPayment(data.pendingPayment as PendingPayment);
-        setError(getFriendlyCheckoutError(res.status, data.error, "your slots"));
-        setNeedsSignIn(res.status === 401);
-        setState("idle");
-        pending.current = false;
-        return;
-      }
-      if (typeof data.checkoutUrl === "string") {
-        setState("redirecting");
-        window.location.assign(data.checkoutUrl);
-        return;
-      }
-      setError("Secure checkout did not return a redirect URL.");
-    } catch {
-      setError(getFriendlyCheckoutError(undefined, null, "your slots"));
+    const started = await postCheckoutOrder(
+      "/api/billing/package-add-checkout",
+      {
+        packageId: offer.packageId,
+        slots,
+        expectedTotalCents: totalCents,
+        coolingOffConsent: consent,
+      },
+      "your slots"
+    );
+    if (started.kind === "redirect") {
+      setState("redirecting");
+      window.location.assign(started.url);
+      return;
     }
-    setState("idle");
-    pending.current = false;
+    if (started.pendingPayment) setPendingPayment(started.pendingPayment);
+    setError(started.message);
+    setNeedsSignIn(started.signIn);
+    settle();
   }
 
   async function askForInvoice() {
@@ -243,8 +236,7 @@ export function PackageAddCheckout({
     } catch {
       setError("Your request could not be sent. Please try again in a few minutes.");
     }
-    setState("idle");
-    pending.current = false;
+    settle();
   }
 
   if (block === "too_late" && offer) {
@@ -550,19 +542,8 @@ export function PackageAddCheckout({
                 disabled={!canPay}
                 onClick={pay}
               >
-                {state === "idle" ? (
-                  <>
-                    <LockKeyhole aria-hidden="true" className="h-4 w-4" />
-                    {totalCents === null
-                      ? "Pay securely"
-                      : `Pay ${formatPlanPrice(totalCents)} securely`}
-                  </>
-                ) : (
-                  <>
-                    <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
-                    {state === "redirecting" ? "Redirecting to Ozow…" : "Opening secure checkout…"}
-                  </>
-                )}
+                {payIcon}
+                {payLabel}
               </Button>
             ) : null}
             <Button asChild variant="ghost" className="h-11 rounded-full">

@@ -2611,7 +2611,7 @@ Decision: awaiting owner.
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/app/billing/package/add/page.tsx` | rewiring | Group 62: the 'Add slots' page, hidden (not found) while packages are not on sale; reads the member's running package and the online limit. | Nothing by itself (see `package-add-checkout.tsx`). | keep | awaiting owner | 2026-11-20 | 505bcd9bd30e |
-| `src/app/billing/package/add/package-add-checkout.tsx` | visual | Group 62: the 'Add slots' page (drafts p4-03, p4-04, n2). | The 'Add slots' page and its states described in group 62. | keep | awaiting owner | 2026-11-20 | 1aefe68f77d7 |
+| `src/app/billing/package/add/package-add-checkout.tsx` | visual | Group 62: the 'Add slots' page (drafts p4-03, p4-04, n2). | The 'Add slots' page and its states described in group 62. | keep | awaiting owner | 2026-11-20 | 6437726418a3 |
 | `src/app/billing/package/add/package-add-checkout.test.tsx` | test | Group 62: checks the price for the days left, paying online, asking for an invoice, the closed and too-late states and the blocks. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-20 | 565bca1ec99c |
 
 ### 64. Toasts clear of form buttons on phones
