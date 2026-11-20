@@ -417,6 +417,58 @@ describe("member and service limits", () => {
   });
 });
 
+describe("post media allowance", () => {
+  test("LIM-SQL-event-media-allowance: a free event takes at most 10 photos and 1 video", async () => {
+    const user = await member("limits-event-media");
+    const post = randomUUID();
+    const category = await one(
+      `select c.category_key from private.post_category_contracts c where c.kind='event' order by c.category_key limit 1`
+    );
+    await seed(`
+      insert into private.posts(id,owner_id,kind,area,category_key,activity_key,title,description,province_id,city_id)
+        values(${lit(post)},${lit(user.id)},'event',
+          (select c.area from private.post_category_contracts c where c.category_key=${lit(category)} and c.kind='event'),
+          ${lit(category)},(select a.key from private.category_activities a join private.categories c on c.key=a.category_key
+            where a.category_key=${lit(category)} and c.activity_required order by a.key limit 1),
+          'Fixture event','A synthetic description long enough for every rule.','gp','gp_johannesburg');
+      insert into private.event_details(post_id,starts_at,ends_at,timezone)
+        values(${lit(post)},now()+interval '1 day',now()+interval '2 days','Africa/Johannesburg');`);
+    const media = async (kind, mime) =>
+      one(
+        `insert into private.media_objects(owner_id,kind,object_key,declared_bytes,size_bytes,sha256,mime,width,height,state)
+         values($1,$2,'media/'||gen_random_uuid(),1024,1024,encode(sha256(convert_to(gen_random_uuid()::text,'UTF8')),'hex'),$3,800,600,'ready')
+         returning id`,
+        [user.id, kind, mime]
+      );
+    const photos = [];
+    for (let n = 0; n < 11; n += 1) photos.push(await media("image", "image/jpeg"));
+    const videos = [await media("video", "video/mp4"), await media("video", "video/mp4")];
+    const items = (photoCount, videoCount) => [
+      ...photos.slice(0, photoCount).map((id, i) => ({
+        object_id: id,
+        purpose: i === 0 ? "cover" : "gallery",
+        position: i,
+      })),
+      ...videos.slice(0, videoCount).map((id, i) => ({
+        object_id: id,
+        purpose: "video",
+        position: photoCount + i,
+      })),
+    ];
+    let revision = 1;
+    const set = async (photoCount, videoCount) => {
+      const rows = await asMember(
+        user,
+        `select api.set_post_media(${lit(post)},${revision},${lit(JSON.stringify(items(photoCount, videoCount)))}::jsonb) as r`
+      );
+      revision = rows[0].r.revision;
+    };
+    await set(10, 1);
+    await refused(set(11, 1), "22023", /exceed the current post allowance/);
+    await refused(set(10, 2), "22023", /exceed the current post allowance/);
+  });
+});
+
 describe("enquiry flood limits", () => {
   /** A live event that accepts enquiries, written directly as fixtures. */
   async function liveEvent(owner) {

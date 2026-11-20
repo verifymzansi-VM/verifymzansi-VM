@@ -27,7 +27,7 @@ const RATE_LIMITER = "workers/rate-limiter.ts";
 const APP_ROOTS = ["src", "workers"];
 
 export const SCANNER_SCOPE = [
-  `${SQL_FUNCTIONS}: lines comparing with, or bounding between, an integer of 2 or more (including privacy_text(value, min, max) text rules)`,
+  `${SQL_FUNCTIONS}: lines comparing with, or bounding between, an integer of 2 or more, privacy_text(value, min, max) text rules, "limit N" read caps, ":= N" constants and integers inside least(...) / greatest(...)`,
   `${SQL_TABLES}: CHECK constraints comparing with, or bounding between, an integer of 2 or more`,
   `${RATE_LIMITER}: every action in ACTION_LIMITS and the built-in phone-code tiers`,
   `${APP_ROOTS.join(", ")}: request body caps (maxBytes: N) and *BYTES / *SIZE number constants outside tests`,
@@ -49,6 +49,8 @@ const CATEGORIES = new Set([
   "range",
 ]);
 const TEST_KINDS = new Set(["behaviour", "register", "declaration"]);
+// Proves only that a guard line is present in the replayed function body.
+const UNTESTED_MECHANISM = "LIM-MECH-SQL-GUARD";
 
 const toPosix = (path) => path.split("\\").join("/");
 
@@ -68,13 +70,25 @@ const BETWEEN = /\bbetween\s+(-?\d+)\s+and\s+(-?\d+)/gi;
 // generation counters), not product limits.
 const IGNORED_NUMBERS = new Set(["2147483646", "2147483647", "9223372036854775807"]);
 
-/** Integers of 2 or more that a SQL line compares with or bounds between. */
+/**
+ * Integers of 2 or more that a SQL line compares with, bounds between, passes
+ * to privacy_text as a length, uses as a "limit N" read cap, assigns with
+ * ":=" or passes to least(...) / greatest(...). Text inside string literals
+ * is ignored for the last three forms.
+ */
 export function sqlLimitNumbers(line) {
   const numbers = [];
   for (const match of line.matchAll(COMPARISON)) numbers.push(match[1]);
   for (const match of line.matchAll(BETWEEN)) numbers.push(match[1], match[2]);
   for (const match of line.matchAll(/privacy_text\([^;]*?,\s*(\d+)\s*,\s*(\d+)\s*\)/g))
     numbers.push(match[1], match[2]);
+  const code = line.replace(/'(?:[^']|'')*'/g, "''");
+  for (const match of code.matchAll(/\blimit\s+(\d+)\b/gi)) numbers.push(match[1]);
+  for (const match of code.matchAll(/:=\s*(-?\d+)\b(?![.:])/g)) numbers.push(match[1]);
+  const bounded = /\b(?:least|greatest)\s*\(/i.exec(code);
+  if (bounded)
+    for (const match of code.slice(bounded.index).matchAll(/(?<![\w.$])(\d+)\b(?![.:])/g))
+      numbers.push(match[1]);
   return numbers
     .filter((n) => !IGNORED_NUMBERS.has(n.replace(/^-/, "")))
     .map(Number)
@@ -84,6 +98,11 @@ export function sqlLimitNumbers(line) {
 const isSqlComment = (line) => /^\s*--/.test(line);
 const stripSqlComment = (line) => line.replace(/--.*$/, "");
 
+/**
+ * Scans `files`; `pick(raw, text)` returns the limit numbers on a line (an
+ * empty list when the line is not limit-looking). An anchor covers a finding
+ * only when it contains every one of those numbers.
+ */
 function scanFiles(root, files, source, pick) {
   const findings = [];
   for (const path of files) {
@@ -91,7 +110,8 @@ function scanFiles(root, files, source, pick) {
     const lines = readFileSync(path, "utf8").split(/\r?\n/);
     lines.forEach((raw, index) => {
       const text = raw.trim();
-      if (text && pick(raw, text)) findings.push({ source, file, line: index + 1, text });
+      const numbers = text ? pick(raw, text) : [];
+      if (numbers.length) findings.push({ source, file, line: index + 1, text, numbers });
     });
   }
   return findings;
@@ -102,7 +122,7 @@ function scanSqlFunctions(root) {
     root,
     walk(join(root, SQL_FUNCTIONS)).filter((path) => path.endsWith(".sql")),
     "sql-function",
-    (raw) => !isSqlComment(raw) && sqlLimitNumbers(stripSqlComment(raw)).length > 0
+    (raw) => (isSqlComment(raw) ? [] : sqlLimitNumbers(stripSqlComment(raw)))
   );
 }
 
@@ -111,7 +131,7 @@ function scanSqlTables(root) {
     root,
     walk(join(root, SQL_TABLES)).filter((path) => path.endsWith(".sql")),
     "sql-table",
-    (raw, text) => /^constraint\s+\S+\s+CHECK\s*\(/i.test(text) && sqlLimitNumbers(raw).length > 0
+    (raw, text) => (/^constraint\s+\S+\s+CHECK\s*\(/i.test(text) ? sqlLimitNumbers(raw) : [])
   );
 }
 
@@ -127,8 +147,16 @@ function scanRateLimiter(root) {
     else if (inTable && text === "};") inTable = false;
     const action = inTable && /^"?[a-z0-9:_-]+"?:\s*\[/i.test(text);
     const phoneTier = /^\{\s*key:\s*`otp:[a-z]+:\$\{/.test(text);
+    // The anchor locates the action; its tiers (the values) are compared with
+    // the register by src/__tests__/limits/rate-limiter-limits.test.ts.
     if (action || phoneTier)
-      findings.push({ source: "rate-limiter", file: RATE_LIMITER, line: index + 1, text });
+      findings.push({
+        source: "rate-limiter",
+        file: RATE_LIMITER,
+        line: index + 1,
+        text,
+        numbers: [],
+      });
   });
   return findings;
 }
@@ -144,7 +172,13 @@ function scanAppCaps(root) {
   const files = APP_ROOTS.flatMap((dir) => walk(join(root, dir)))
     .filter((path) => /\.(ts|tsx|mjs|js)$/.test(path))
     .filter((path) => !isTestFile(toPosix(relative(root, path))));
-  return scanFiles(root, files, "app", (_raw, text) => APP_CAP.some((re) => re.test(text)));
+  return scanFiles(root, files, "app", (_raw, text) =>
+    APP_CAP.some((re) => re.test(text))
+      ? [...text.replace(/\/\/.*$/, "").matchAll(/(?<![\w.])(\d[\d_]*)\b/g)]
+          .map((match) => match[1])
+          .filter((n) => Number(n.replaceAll("_", "")) >= 2)
+      : []
+  );
 }
 
 export function scanLimitFindings(root = process.cwd()) {
@@ -278,8 +312,14 @@ export function checkLimitsRegister({
   });
   const uncovered = [];
   for (const finding of findings) {
-    const anchors = (anchorsByFile.get(finding.file) ?? []).filter((anchor) =>
-      finding.text.includes(anchor.contains)
+    // An anchor covers a line only when it is part of the line and names every
+    // limit number on it, so a short anchor cannot cover a new number.
+    const anchors = (anchorsByFile.get(finding.file) ?? []).filter(
+      (anchor) =>
+        finding.text.includes(anchor.contains) &&
+        (finding.numbers ?? []).every((n) =>
+          new RegExp(`(?<![\\w.])${String(n)}(?![\\w])`).test(anchor.contains)
+        )
     );
     if (anchors.length === 0) uncovered.push(finding);
     for (const anchor of anchors) anchor.used = true;
@@ -295,13 +335,18 @@ export function checkLimitsRegister({
           `${anchor.owner}: ${file} no longer has a line containing ${JSON.stringify(anchor.contains)}; remove it`
         );
 
-  const kinds = { behaviour: 0, register: 0, declaration: 0 };
+  // Strongest proof per entry. "untested" entries rely only on
+  // LIM-MECH-SQL-GUARD: the guard line is present in the running function, but
+  // nothing exercises it at its bound. They are the behaviour-test backlog.
+  const kinds = { behaviour: 0, register: 0, declaration: 0, untested: 0 };
   for (const entry of byId.values()) {
     const best = entry.tests.find((t) => t.kind === "behaviour")
       ? "behaviour"
       : entry.tests.find((t) => t.kind === "register")
         ? "register"
-        : "declaration";
+        : entry.tests.every((t) => t.mechanism === UNTESTED_MECHANISM)
+          ? "untested"
+          : "declaration";
     kinds[best] += 1;
   }
   return {

@@ -81,6 +81,44 @@ test("SQL limit numbers ignore integer-range guards, small numbers and non-compa
   assert.deepEqual(sqlLimitNumbers("claim_generation<9223372036854775807"), []);
   assert.deepEqual(sqlLimitNumbers("p->>'notes' and x->0 and y=>5"), []);
   assert.deepEqual(sqlLimitNumbers("internal.privacy_text(p_note,10,1000)"), [10, 1000]);
+  assert.deepEqual(sqlLimitNumbers("order by created_at desc limit 50;"), [50]);
+  assert.deepEqual(sqlLimitNumbers("photo_limit:=10; video_limit:=1;"), [10]);
+  assert.deepEqual(sqlLimitNumbers("allowed := least(p_limit, 20 - (select 1));"), [20]);
+  assert.deepEqual(sqlLimitNumbers("raise exception 'limit 1 to 500 reached';"), []);
+  assert.deepEqual(sqlLimitNumbers("x := greatest(a, interval '7 days');"), []);
+});
+
+test("a short anchor cannot cover a line with a number it does not name", () => {
+  const files = baseFiles();
+  files[FN] += "\n  if p_limit not between 1 and 50 then raise exception 'x'; end if;";
+  const broad = { file: FN, contains: "if p_limit not between", reason: "fixture" };
+  const loose = run(files, { limits: [entry(), tableEntry], notLimits: [broad] });
+  assert.ok(loose.failures.some((f) => /unregistered limit-looking line .*and 50 then/.test(f)));
+  const exact = { ...broad, contains: "if p_limit not between 1 and 50 then" };
+  assert.deepEqual(run(files, { limits: [entry(), tableEntry], notLimits: [exact] }).failures, []);
+});
+
+test("guard-only entries are counted as present but not behaviour-tested", () => {
+  const guard = {
+    id: "LIM-MECH-SQL-GUARD",
+    title: "guard lines",
+    value: "mechanism",
+    category: "mechanism",
+    enforcedAt: [{ file: FN, contains: "send_thing" }],
+    tests: [{ kind: "register", file: TEST }],
+  };
+  const files = { ...baseFiles(), [TEST]: "// LIM-SQL-things-hour limits-register.json\n" };
+  const { failures, stats } = run(files, {
+    limits: [
+      entry({ tests: [{ kind: "declaration", mechanism: "LIM-MECH-SQL-GUARD" }] }),
+      guard,
+      { ...tableEntry, tests: [{ kind: "register", file: TEST }] },
+    ],
+  });
+  assert.deepEqual(failures, []);
+  assert.equal(stats.untested, 1);
+  assert.equal(stats.register, 2);
+  assert.equal(stats.declaration, 0);
 });
 
 test("a complete register passes", () => {
@@ -138,7 +176,13 @@ test("an unregistered limit-looking line fails until registered or reviewed as n
   assert.ok(failures.some((f) => /unregistered limit-looking line .*things_note_check/.test(f)));
   const reviewed = run(baseFiles(), {
     limits: [entry()],
-    notLimits: [{ file: TABLE, contains: "things_note_check", reason: "fixture" }],
+    notLimits: [
+      {
+        file: TABLE,
+        contains: "things_note_check CHECK (length(note) >= 1 AND length(note) <= 300)",
+        reason: "fixture",
+      },
+    ],
   });
   assert.deepEqual(reviewed.failures, []);
 });

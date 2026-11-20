@@ -1250,7 +1250,26 @@
     {
       "id": "LIM-F-assess_identity_upload",
       "title": "internal.assess_identity_upload",
-      "value": ">= 3",
+      "value": ":= 75",
+      "category": "range",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/assess_identity_upload.sql",
+          "symbol": "internal.assess_identity_upload",
+          "contains": "or exists(select 1 from private.evidence_artifacts a where a.owner_id<>p_owner and a.content_sha256 in(p_document_sha256,p_selfie_sha256) and a.state in('clean','uploaded')) then risk:=75; end if;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-assess_identity_upload-2",
+      "title": "internal.assess_identity_upload",
+      "value": ">= 3, greatest(... 80 ...)",
       "category": "rate",
       "enforcedAt": [
         {
@@ -1514,25 +1533,6 @@
       ]
     },
     {
-      "id": "LIM-F-claim_queue_item",
-      "title": "internal.claim_queue_item: claim limit of 20 items reached",
-      "value": ">= 20",
-      "category": "range",
-      "enforcedAt": [
-        {
-          "file": "database/foundation/current/functions/internal/claim_queue_item.sql",
-          "symbol": "internal.claim_queue_item",
-          "contains": "and not (q.post_id is not distinct from s.post_id and q.report_id is not distinct from s.report_id)) >= 20 then"
-        }
-      ],
-      "tests": [
-        {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
-        }
-      ]
-    },
-    {
       "id": "LIM-F-claim_queue_items",
       "title": "internal.claim_queue_items: claim between 1 and 25 items",
       "value": "1 to 25",
@@ -1666,6 +1666,25 @@
       ]
     },
     {
+      "id": "LIM-F-complete_frontend_privacy_notice",
+      "title": "internal.complete_frontend_privacy_notice",
+      "value": "least(... 360 ...)",
+      "category": "attempts",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/complete_frontend_privacy_notice.sql",
+          "symbol": "internal.complete_frontend_privacy_notice",
+          "contains": "next_attempt_at=now_at+make_interval(mins=>least(360,1<<j.attempts)) where id=j.id;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-complete_frontend_verification_upload",
       "title": "internal.complete_frontend_verification_upload: server assessment required",
       "value": "0 to 100",
@@ -1675,6 +1694,25 @@
           "file": "database/foundation/current/functions/internal/complete_frontend_verification_upload.sql",
           "symbol": "internal.complete_frontend_verification_upload",
           "contains": "elsif p_identity is not null or p_risk_score is null or p_risk_score not between 0 and 100 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-complete_notification_outbox",
+      "title": "internal.complete_notification_outbox",
+      "value": "least(... 21600 ...), least(... 30 ...), least(... 2 ...), least(... 9 ...)",
+      "category": "attempts",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/complete_notification_outbox.sql",
+          "symbol": "internal.complete_notification_outbox",
+          "contains": "delivery_after=statement_timestamp()+make_interval(secs=>least(21600,30*(2^least(delivery_attempts,9))::integer))"
         }
       ],
       "tests": [
@@ -1970,6 +2008,25 @@
       ]
     },
     {
+      "id": "LIM-F-edit_allowance",
+      "title": "internal.edit_allowance",
+      "value": "greatest(... 2 ...)",
+      "category": "range",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/edit_allowance.sql",
+          "symbol": "internal.edit_allowance",
+          "contains": "select greatest(2, 2 * ceil(extract(epoch from (e.ends_at - e.starts_at)) / 2592000.0))::integer"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-execute_frontend_report_action",
       "title": "internal.execute_frontend_report_action: warning reason needs at least 10 characters",
       "value": "< 10",
@@ -2029,7 +2086,7 @@
     {
       "id": "LIM-F-finalize_media",
       "title": "internal.finalize_media",
-      "value": "1 to 20000, 1 to 20000",
+      "value": "1 to 20000",
       "category": "range",
       "enforcedAt": [
         {
@@ -2066,6 +2123,25 @@
     },
     {
       "id": "LIM-F-frontend_privacy_export_data",
+      "title": "internal.frontend_privacy_export_data: reads or returns at most 2000 rows",
+      "value": "limit 2000",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/frontend_privacy_export_data.sql",
+          "symbol": "internal.frontend_privacy_export_data",
+          "contains": "where account_id=$1 order by created_at desc,id limit 2000) l$q$),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-frontend_privacy_export_data-2",
       "title": "internal.frontend_privacy_export_data: privacy export exceeds the direct delivery limit",
       "value": "> 2500, > 4194304",
       "category": "size",
@@ -2103,6 +2179,82 @@
       ]
     },
     {
+      "id": "LIM-F-get_frontend_affiliation_workspace-2",
+      "title": "internal.get_frontend_affiliation_workspace: reads or returns at most 1000 rows",
+      "value": "limit 1000",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_affiliation_workspace.sql",
+          "symbol": "internal.get_frontend_affiliation_workspace",
+          "contains": "order by p0.created_at desc,p0.id limit 1000)p),'[]'::jsonb),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_affiliation_workspace-3",
+      "title": "internal.get_frontend_affiliation_workspace: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_affiliation_workspace.sql",
+          "symbol": "internal.get_frontend_affiliation_workspace",
+          "contains": "order by x.created_at desc,x.id limit 100)a join private.organisations o on o.id=a.organisation_id),'[]'::jsonb),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_affiliation_workspace-4",
+      "title": "internal.get_frontend_affiliation_workspace: reads or returns at most 1000 rows",
+      "value": "limit 1000",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_affiliation_workspace.sql",
+          "symbol": "internal.get_frontend_affiliation_workspace",
+          "contains": "where x.status='active' order by x.confirmed_at desc,x.id limit 1000)a join private.organisations o on o.id=a.organisation_id),'[]'::jsonb),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_appeal_queue",
+      "title": "internal.get_frontend_appeal_queue: reads or returns at most 50 rows",
+      "value": "limit 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_appeal_queue.sql",
+          "symbol": "internal.get_frontend_appeal_queue",
+          "contains": "from (select * from eligible order by created_at,id limit 50)a"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-get_frontend_area_activity",
       "title": "internal.get_frontend_area_activity: bounded program activity required",
       "value": "1 to 100",
@@ -2112,6 +2264,63 @@
           "file": "database/foundation/current/functions/internal/get_frontend_area_activity.sql",
           "symbol": "internal.get_frontend_area_activity",
           "contains": "if p_area is not null and p_area not in('market','business','tourism_events') or p_limit is null or p_limit not between 1 and 100 then raise exception 'bounded program activity required' using errcode='22023';end if;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_business_review_queue",
+      "title": "internal.get_frontend_business_review_queue: reads or returns at most 200 rows",
+      "value": "limit 200",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_business_review_queue.sql",
+          "symbol": "internal.get_frontend_business_review_queue",
+          "contains": "(item->>'createdAt')::timestamptz,item->>'id' limit 200)r),'[]'::jsonb)) into result;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_cipc_case",
+      "title": "internal.get_frontend_cipc_case: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_cipc_case.sql",
+          "symbol": "internal.get_frontend_cipc_case",
+          "contains": "order by m.created_at,m.id) from (select * from private.frontend_business_check_messages where check_id=x.id order by created_at desc,id desc limit 100)m),'[]'::jsonb) else '[]'::jsonb end,"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_cipc_case-2",
+      "title": "internal.get_frontend_cipc_case: reads or returns at most 10 rows",
+      "value": "limit 10",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_cipc_case.sql",
+          "symbol": "internal.get_frontend_cipc_case",
+          "contains": "from (select * from private.evidence_access_log where case_id=x.id order by accessed_at desc limit 10)a),'[]'::jsonb) else '[]'::jsonb end)"
         }
       ],
       "tests": [
@@ -2141,6 +2350,44 @@
       ]
     },
     {
+      "id": "LIM-F-get_frontend_enforcement",
+      "title": "internal.get_frontend_enforcement: reads or returns at most 50 rows",
+      "value": "limit 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_enforcement.sql",
+          "symbol": "internal.get_frontend_enforcement",
+          "contains": "(select * from active order by starts_at desc,id desc limit 50)x),'[]'::jsonb),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_enforcement-2",
+      "title": "internal.get_frontend_enforcement: reads or returns at most 20 rows",
+      "value": "limit 20",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_enforcement.sql",
+          "symbol": "internal.get_frontend_enforcement",
+          "contains": "(select * from history order by created_at desc,id desc limit 20)x),'[]'::jsonb)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-get_frontend_organisation_dashboard",
       "title": "internal.get_frontend_organisation_dashboard: valid organisation slug required",
       "value": "3 to 60",
@@ -2150,6 +2397,44 @@
           "file": "database/foundation/current/functions/internal/get_frontend_organisation_dashboard.sql",
           "symbol": "internal.get_frontend_organisation_dashboard",
           "contains": "if p_slug is null or length(p_slug) not between 3 and 60 or p_slug !~ '^[a-z0-9]+(-[a-z0-9]+)*$'"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_partner_admin",
+      "title": "internal.get_frontend_partner_admin: reads or returns at most 500 rows",
+      "value": "limit 500",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_partner_admin.sql",
+          "symbol": "internal.get_frontend_partner_admin",
+          "contains": "from private.partners p left join private.profiles pr on pr.account_id=p.account_id order by p.created_at desc,p.id desc limit 500)x),'[]'::jsonb),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_partner_admin-2",
+      "title": "internal.get_frontend_partner_admin: reads or returns at most 200 rows",
+      "value": "limit 200",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_partner_admin.sql",
+          "symbol": "internal.get_frontend_partner_admin",
+          "contains": "join private.payments pay on pay.id=c.payment_id order by c.created_at desc,c.id desc limit 200)x),'[]'::jsonb)"
         }
       ],
       "tests": [
@@ -2179,7 +2464,83 @@
       ]
     },
     {
+      "id": "LIM-F-get_frontend_privacy_queue-2",
+      "title": "internal.get_frontend_privacy_queue: reads or returns at most 25 rows",
+      "value": "limit 25",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_privacy_queue.sql",
+          "symbol": "internal.get_frontend_privacy_queue",
+          "contains": "select x.* from filtered x order by sort_key,id limit 25 offset (p_page-1)*25"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_seen_case",
+      "title": "internal.get_frontend_seen_case: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_seen_case.sql",
+          "symbol": "internal.get_frontend_seen_case",
+          "contains": "from (select * from private.frontend_business_check_messages where check_id=x.id order by created_at desc,id desc limit 100)m),'[]'::jsonb)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_seen_queue",
+      "title": "internal.get_frontend_seen_queue: reads or returns at most 200 rows",
+      "value": "limit 200",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_seen_queue.sql",
+          "symbol": "internal.get_frontend_seen_queue",
+          "contains": "order by sort_at,id limit 200)x),'[]'::jsonb)) into answer;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-get_frontend_staff_audit_page",
+      "title": "internal.get_frontend_staff_audit_page",
+      "value": ":= 50",
+      "category": "money",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_staff_audit_page.sql",
+          "symbol": "internal.get_frontend_staff_audit_page",
+          "contains": "declare actor uuid:=internal.staff_actor('audit:view');page_number integer:=1;amount integer:=50;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_staff_audit_page-2",
       "title": "internal.get_frontend_staff_audit_page: valid audit filters required",
       "value": "> 4096",
       "category": "length",
@@ -2198,7 +2559,7 @@
       ]
     },
     {
-      "id": "LIM-F-get_frontend_staff_audit_page-2",
+      "id": "LIM-F-get_frontend_staff_audit_page-3",
       "title": "internal.get_frontend_staff_audit_page: audit page limit exceeded",
       "value": "> 100000",
       "category": "range",
@@ -2217,7 +2578,7 @@
       ]
     },
     {
-      "id": "LIM-F-get_frontend_staff_audit_page-3",
+      "id": "LIM-F-get_frontend_staff_audit_page-4",
       "title": "internal.get_frontend_staff_audit_page: bounded audit search required",
       "value": "1 to 100",
       "category": "batch",
@@ -2256,6 +2617,25 @@
     },
     {
       "id": "LIM-F-get_frontend_staff_claims-2",
+      "title": "internal.get_frontend_staff_claims: reads or returns at most 1301 rows",
+      "value": "limit 1301",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_staff_claims.sql",
+          "symbol": "internal.get_frontend_staff_claims",
+          "contains": "where x->>'type'=c.item_type and x->>'id'=c.id::text) order by c.subject,c.id limit 1301"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_staff_claims-3",
       "title": "internal.get_frontend_staff_claims: too many claim subjects; narrow this view",
       "value": "> 1300",
       "category": "length",
@@ -2264,6 +2644,25 @@
           "file": "database/foundation/current/functions/internal/get_frontend_staff_claims.sql",
           "symbol": "internal.get_frontend_staff_claims",
           "contains": "if jsonb_array_length(items)>1300 then raise exception 'too many claim subjects; narrow this view' using errcode='PT409';end if;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_staff_identity_context",
+      "title": "internal.get_frontend_staff_identity_context: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_staff_identity_context.sql",
+          "symbol": "internal.get_frontend_staff_identity_context",
+          "contains": "order by x.accessed_at desc,x.id desc limit 100) l cross join lateral unnest(l.artifact_ids) a(id)"
         }
       ],
       "tests": [
@@ -2293,6 +2692,25 @@
       ]
     },
     {
+      "id": "LIM-F-get_frontend_staff_organisation_directory",
+      "title": "internal.get_frontend_staff_organisation_directory: reads or returns at most 200 rows",
+      "value": "limit 200",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_staff_organisation_directory.sql",
+          "symbol": "internal.get_frontend_staff_organisation_directory",
+          "contains": "into result from (select * from private.organisations order by created_at desc,id limit 200)o;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-get_frontend_staff_payments",
       "title": "internal.get_frontend_staff_payments: valid payment filter required",
       "value": "1 to 100000",
@@ -2312,6 +2730,25 @@
       ]
     },
     {
+      "id": "LIM-F-get_frontend_staff_payments-2",
+      "title": "internal.get_frontend_staff_payments: staff actor changed",
+      "value": "limit 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_staff_payments.sql",
+          "symbol": "internal.get_frontend_staff_payments",
+          "contains": "order by x.created_at desc,x.id desc limit 50 offset (p_page-1)*50)p;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-get_frontend_staff_role_review",
       "title": "internal.get_frontend_staff_role_review: valid roster page required",
       "value": "1 to 10000",
@@ -2321,6 +2758,63 @@
           "file": "database/foundation/current/functions/internal/get_frontend_staff_role_review.sql",
           "symbol": "internal.get_frontend_staff_role_review",
           "contains": "if p_page is null or p_page not between 1 and 10000 or (p_role is not null and p_role not in('moderator','governor','admin'))"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_staff_role_review-2",
+      "title": "internal.get_frontend_staff_role_review: reads or returns at most 50 rows",
+      "value": "limit 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_staff_role_review.sql",
+          "symbol": "internal.get_frontend_staff_role_review",
+          "contains": "select * from roster order by granted_at desc,user_id limit 50 offset (p_page-1)*50"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_staff_role_review-3",
+      "title": "internal.get_frontend_staff_role_review: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_staff_role_review.sql",
+          "symbol": "internal.get_frontend_staff_role_review",
+          "contains": "from private.frontend_staff_role_changes where status='proposed' and expires_at>now_at order by created_at,id limit 100"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_staff_role_review-4",
+      "title": "internal.get_frontend_staff_role_review: reads or returns at most 25 rows",
+      "value": "limit 25",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_staff_role_review.sql",
+          "symbol": "internal.get_frontend_staff_role_review",
+          "contains": "from private.frontend_staff_role_changes where status='applied' order by decided_at desc,id desc limit 25"
         }
       ],
       "tests": [
@@ -2351,6 +2845,25 @@
     },
     {
       "id": "LIM-F-get_frontend_staff_verification_queue-2",
+      "title": "internal.get_frontend_staff_verification_queue: reads or returns at most 1401 rows",
+      "value": "limit 1401",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_staff_verification_queue.sql",
+          "symbol": "internal.get_frontend_staff_verification_queue",
+          "contains": "from (select * from ready where n<=p_limit or id=any(p_include_ids) or claimed_by=actor and claim_expires_at>statement_timestamp() order by n limit 1401) r),'[]'::jsonb),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_frontend_staff_verification_queue-3",
       "title": "internal.get_frontend_staff_verification_queue: narrow the identity queue selection",
       "value": "> 1400",
       "category": "length",
@@ -2388,7 +2901,254 @@
       ]
     },
     {
+      "id": "LIM-F-get_frontend_support_inbox-2",
+      "title": "internal.get_frontend_support_inbox: reads or returns at most 50 rows",
+      "value": "limit 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_frontend_support_inbox.sql",
+          "symbol": "internal.get_frontend_support_inbox",
+          "contains": "select * from scope order by created_at desc,id desc limit 50 offset case when p_ticket is null then (p_page-1)*50 else 0 end"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_billing",
+      "title": "internal.get_my_billing: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_billing.sql",
+          "symbol": "internal.get_my_billing",
+          "contains": "from (select * from private.payments where owner_id=actor order by created_at desc limit 100) p),'[]'),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_billing-2",
+      "title": "internal.get_my_billing: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_billing.sql",
+          "symbol": "internal.get_my_billing",
+          "contains": "from (select * from private.payments where owner_id=actor order by created_at desc limit 100) p"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_frontend_business_checks",
+      "title": "internal.get_my_frontend_business_checks: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_frontend_business_checks.sql",
+          "symbol": "internal.get_my_frontend_business_checks",
+          "contains": "from (select * from private.frontend_business_check_messages where check_id=c.id order by created_at desc,id desc limit 100)m),'[]'::jsonb))"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_frontend_business_checks-2",
+      "title": "internal.get_my_frontend_business_checks: reads or returns at most 20 rows",
+      "value": "limit 20",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_frontend_business_checks.sql",
+          "symbol": "internal.get_my_frontend_business_checks",
+          "contains": "order by x.created_at desc,x.id desc limit 20)c),'[]'::jsonb),'linkable','[]'::jsonb) into result;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_frontend_business_review_state",
+      "title": "internal.get_my_frontend_business_review_state: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_frontend_business_review_state.sql",
+          "symbol": "internal.get_my_frontend_business_review_state",
+          "contains": "from (select * from private.frontend_business_check_messages where check_id=x.id order by created_at desc,id desc limit 100)m),'[]'::jsonb))"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_frontend_business_review_state-2",
+      "title": "internal.get_my_frontend_business_review_state: reads or returns at most 20 rows",
+      "value": "limit 20",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_frontend_business_review_state.sql",
+          "symbol": "internal.get_my_frontend_business_review_state",
+          "contains": "order by b.created_at desc,b.id desc limit 20)x left join private.frontend_cipc_reviews d on d.check_id=x.id;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_frontend_business_review_state-3",
+      "title": "internal.get_my_frontend_business_review_state: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_frontend_business_review_state.sql",
+          "symbol": "internal.get_my_frontend_business_review_state",
+          "contains": "where s.owner_id=actor and s.business_id<>p_business order by p.title,s.business_id limit 100)x;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_frontend_decisions",
+      "title": "internal.get_my_frontend_decisions: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_frontend_decisions.sql",
+          "symbol": "internal.get_my_frontend_decisions",
+          "contains": "from (select * from private.frontend_appealable_actions where account_id=actor order by starts_at desc,id desc limit 100)x"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_frontend_verification_uploads",
+      "title": "internal.get_my_frontend_verification_uploads: reads or returns at most 2 rows",
+      "value": "limit 2",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_frontend_verification_uploads.sql",
+          "symbol": "internal.get_my_frontend_verification_uploads",
+          "contains": "order by r.purpose,r.created_at desc,r.request_id limit 2) x;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_invoices",
+      "title": "internal.get_my_invoices: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_invoices.sql",
+          "symbol": "internal.get_my_invoices",
+          "contains": "order by x.issued_at desc, x.id desc limit 100) i;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-get_my_package_add_offer",
+      "title": "internal.get_my_package_add_offer",
+      "value": "greatest(... 250 ...), greatest(... 245 ...)",
+      "category": "range",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_package_add_offer.sql",
+          "symbol": "internal.get_my_package_add_offer",
+          "contains": "'max_slots', greatest(least(250 - q.places, 245), 0),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_package_add_offer-2",
+      "title": "internal.get_my_package_add_offer",
+      "value": "greatest(... 100 ...)",
+      "category": "range",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_package_add_offer.sql",
+          "symbol": "internal.get_my_package_add_offer",
+          "contains": "'max_online_slots', greatest(100 - q.places, 0),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_package_add_offer-3",
       "title": "internal.get_my_package_add_offer",
       "value": ">= 7",
       "category": "range",
@@ -2407,7 +3167,7 @@
       ]
     },
     {
-      "id": "LIM-F-get_my_package_add_offer-2",
+      "id": "LIM-F-get_my_package_add_offer-4",
       "title": "internal.get_my_package_add_offer",
       "value": ">= 10",
       "category": "range",
@@ -2416,6 +3176,82 @@
           "file": "database/foundation/current/functions/internal/get_my_package_add_offer.sql",
           "symbol": "internal.get_my_package_add_offer",
           "contains": "'invoice_open', q.days_left >= 10 and q.plan_id is not null,"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_package_add_offer-5",
+      "title": "internal.get_my_package_add_offer: reads or returns at most 20 rows",
+      "value": "limit 20",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_package_add_offer.sql",
+          "symbol": "internal.get_my_package_add_offer",
+          "contains": "order by p.completed_at desc, p.id limit 20) x), '[]'::jsonb)) end);"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_slots",
+      "title": "internal.get_my_slots: reads or returns at most 200 rows",
+      "value": "limit 200",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_slots.sql",
+          "symbol": "internal.get_my_slots",
+          "contains": "order by e.ends_at desc limit 200) s), '[]'),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_my_slots_v2",
+      "title": "internal.get_my_slots_v2: reads or returns at most 200 rows",
+      "value": "limit 200",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_my_slots_v2.sql",
+          "symbol": "internal.get_my_slots_v2",
+          "contains": "order by e.ends_at desc limit 200) s), '[]'),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_owner_business_event_editor",
+      "title": "internal.get_owner_business_event_editor: reads or returns at most 101 rows",
+      "value": "limit 101",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_owner_business_event_editor.sql",
+          "symbol": "internal.get_owner_business_event_editor",
+          "contains": "where pm.post_id=p.id and o.owner_id=actor order by pm.purpose,pm.position limit 101) m),'[]'::jsonb)"
         }
       ],
       "tests": [
@@ -2435,6 +3271,25 @@
           "file": "database/foundation/current/functions/internal/get_public_frontend_business_affiliations.sql",
           "symbol": "internal.get_public_frontend_business_affiliations",
           "contains": "if p_post_ids is null or cardinality(p_post_ids)>100"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_public_frontend_business_affiliations-2",
+      "title": "internal.get_public_frontend_business_affiliations: reads or returns at most 1000 rows",
+      "value": "limit 1000",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_public_frontend_business_affiliations.sql",
+          "symbol": "internal.get_public_frontend_business_affiliations",
+          "contains": "order by f.post_id,(s.id is not null) desc,f.confirmed_at,f.id limit 1000)q);"
         }
       ],
       "tests": [
@@ -2483,6 +3338,25 @@
       ]
     },
     {
+      "id": "LIM-F-get_staff_expired_invoice_transfers",
+      "title": "internal.get_staff_expired_invoice_transfers: staff actor changed",
+      "value": "limit 200",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_expired_invoice_transfers.sql",
+          "symbol": "internal.get_staff_expired_invoice_transfers",
+          "contains": "from (select * from open order by expired_on, id limit 200) o), '[]'::jsonb))"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-get_staff_invoice_payments",
       "title": "internal.get_staff_invoice_payments: up to 50 payment ids required",
       "value": "> 50",
@@ -2492,6 +3366,44 @@
           "file": "database/foundation/current/functions/internal/get_staff_invoice_payments.sql",
           "symbol": "internal.get_staff_invoice_payments",
           "contains": "if p_payment_ids is null or cardinality(p_payment_ids) > 50 or array_position(p_payment_ids, null) is not null then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_staff_invoice_transfers",
+      "title": "internal.get_staff_invoice_transfers: staff actor changed",
+      "value": "limit 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_invoice_transfers.sql",
+          "symbol": "internal.get_staff_invoice_transfers",
+          "contains": "order by x.recorded_at, x.id limit 50) t;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_staff_invoices",
+      "title": "internal.get_staff_invoices: staff actor changed",
+      "value": "limit 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_invoices.sql",
+          "symbol": "internal.get_staff_invoices",
+          "contains": "from (select * from private.customer_invoices x order by x.issued_at desc, x.id desc limit 50) i;"
         }
       ],
       "tests": [
@@ -2521,6 +3433,63 @@
       ]
     },
     {
+      "id": "LIM-F-get_staff_ozow_refunds-2",
+      "title": "internal.get_staff_ozow_refunds: staff actor changed",
+      "value": "limit 20",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_ozow_refunds.sql",
+          "symbol": "internal.get_staff_ozow_refunds",
+          "contains": "order by r.requested_at, r.id limit 20) a), '[]'::jsonb))"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_staff_package_invoice_requests",
+      "title": "internal.get_staff_package_invoice_requests: staff actor changed",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_package_invoice_requests.sql",
+          "symbol": "internal.get_staff_package_invoice_requests",
+          "contains": "order by x.requested_at, x.id limit 100) r;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_staff_package_move_failures",
+      "title": "internal.get_staff_package_move_failures: reads or returns at most 50 rows",
+      "value": "limit 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_package_move_failures.sql",
+          "symbol": "internal.get_staff_package_move_failures",
+          "contains": "order by x.first_failed_at, x.id limit 50) f"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-get_staff_payment_list",
       "title": "internal.get_staff_payment_list: valid payment filter required",
       "value": "1 to 100000",
@@ -2530,6 +3499,25 @@
           "file": "database/foundation/current/functions/internal/get_staff_payment_list.sql",
           "symbol": "internal.get_staff_payment_list",
           "contains": "if p_page is null or p_page not between 1 and 100000 or (p_filter is not null and p_filter not in ("
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_staff_payment_list-2",
+      "title": "internal.get_staff_payment_list: staff actor changed",
+      "value": "limit 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_payment_list.sql",
+          "symbol": "internal.get_staff_payment_list",
+          "contains": "from (select * from listed order by created_at desc, id desc limit 50 offset (p_page-1)*50) p;"
         }
       ],
       "tests": [
@@ -2568,6 +3556,25 @@
           "file": "database/foundation/current/functions/internal/invoice_customer_by_email.sql",
           "symbol": "internal.invoice_customer_by_email",
           "contains": "if length(btrim(coalesce(p_account_email, ''))) not between 3 and 254 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-issue_package_customer_invoice",
+      "title": "internal.issue_package_customer_invoice",
+      "value": "least(... 3 ...)",
+      "category": "range",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/issue_package_customer_invoice.sql",
+          "symbol": "internal.issue_package_customer_invoice",
+          "contains": "due := least(issued_on + 3, internal.customer_invoice_day(q.ends_at));"
         }
       ],
       "tests": [
@@ -2644,6 +3651,25 @@
           "file": "database/foundation/current/functions/internal/issue_staff_package_invoice.sql",
           "symbol": "internal.issue_staff_package_invoice",
           "contains": "if p_due_days is null or p_due_days not between 1 and 30 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-list_member_invitations",
+      "title": "internal.list_member_invitations: reads or returns at most 500 rows",
+      "value": "limit 500",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/list_member_invitations.sql",
+          "symbol": "internal.list_member_invitations",
+          "contains": "order by invited_at desc, email limit 500) m), '[]'::jsonb));"
         }
       ],
       "tests": [
@@ -2958,6 +3984,120 @@
       ]
     },
     {
+      "id": "LIM-F-my_organisation_links",
+      "title": "internal.my_organisation_links: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/my_organisation_links.sql",
+          "symbol": "internal.my_organisation_links",
+          "contains": "order by x.created_at desc limit 100) a"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-my_partner_dashboard",
+      "title": "internal.my_partner_dashboard: reads or returns at most 50 rows",
+      "value": "limit 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/my_partner_dashboard.sql",
+          "symbol": "internal.my_partner_dashboard",
+          "contains": "order by x.created_at desc,x.id desc limit 50) c));"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-my_sponsorships",
+      "title": "internal.my_sponsorships: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/my_sponsorships.sql",
+          "symbol": "internal.my_sponsorships",
+          "contains": "order by x.created_at desc,x.id desc limit 100) s"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-org_list_affiliations",
+      "title": "internal.org_list_affiliations: reads or returns at most 500 rows",
+      "value": "limit 500",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/org_list_affiliations.sql",
+          "symbol": "internal.org_list_affiliations",
+          "contains": "order by x.confirmed_at desc limit 500) f"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-org_list_applications",
+      "title": "internal.org_list_applications: reads or returns at most 200 rows",
+      "value": "limit 200",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/org_list_applications.sql",
+          "symbol": "internal.org_list_applications",
+          "contains": "and (p_status is null or x.status=p_status) order by x.created_at desc limit 200) a"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-org_list_sponsorships",
+      "title": "internal.org_list_sponsorships: reads or returns at most 500 rows",
+      "value": "limit 500",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/org_list_sponsorships.sql",
+          "symbol": "internal.org_list_sponsorships",
+          "contains": "order by x.created_at desc,x.id desc limit 500) s"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-package_invoice_issue_check",
       "title": "internal.package_invoice_issue_check: fewer than 10 days of the customer's package are left; decline the request",
       "value": "< 10",
@@ -3167,6 +4307,25 @@
       ]
     },
     {
+      "id": "LIM-F-public_organisation_directory-3",
+      "title": "internal.public_organisation_directory: reads or returns at most 200 rows",
+      "value": "limit 200",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/public_organisation_directory.sql",
+          "symbol": "internal.public_organisation_directory",
+          "contains": "order by x.display_order,x.name limit 200) o"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-public_post_affiliations",
       "title": "internal.public_post_affiliations: between 1 and 100 post ids required",
       "value": "1 to 100",
@@ -3252,6 +4411,25 @@
           "file": "database/foundation/current/functions/internal/public_programme_showcases.sql",
           "symbol": "internal.public_programme_showcases",
           "contains": "and c.n>=3"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-public_programme_showcases-2",
+      "title": "internal.public_programme_showcases: reads or returns at most 2 rows",
+      "value": "limit 2",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/public_programme_showcases.sql",
+          "symbol": "internal.public_programme_showcases",
+          "contains": "order by s.display_order,s.id limit 2) v);"
         }
       ],
       "tests": [
@@ -3358,6 +4536,25 @@
     },
     {
       "id": "LIM-F-purge_post_engagement",
+      "title": "internal.purge_post_engagement: reads or returns at most 10000 rows",
+      "value": "limit 10000",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/purge_post_engagement.sql",
+          "symbol": "internal.purge_post_engagement",
+          "contains": "where x.seen_at < statement_timestamp() - interval '24 hours' limit 10000);"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-purge_post_engagement-2",
       "title": "internal.purge_post_engagement",
       "value": "< 10000, >= 20",
       "category": "range",
@@ -3376,15 +4573,15 @@
       ]
     },
     {
-      "id": "LIM-F-reassign_queue_claim",
-      "title": "internal.reassign_queue_claim: that reviewer already holds 20 items",
-      "value": ">= 20",
-      "category": "cap",
+      "id": "LIM-F-purge_post_engagement-3",
+      "title": "internal.purge_post_engagement: reads or returns at most 1000 rows",
+      "value": "limit 1000",
+      "category": "batch",
       "enforcedAt": [
         {
-          "file": "database/foundation/current/functions/internal/reassign_queue_claim.sql",
-          "symbol": "internal.reassign_queue_claim",
-          "contains": "if (select count(*) from private.queue_claims q where q.claimed_by = p_to and q.claim_expires_at > clock_timestamp()) >= 20 then"
+          "file": "database/foundation/current/functions/internal/purge_post_engagement.sql",
+          "symbol": "internal.purge_post_engagement",
+          "contains": "group by l.post_id order by l.post_id limit 1000"
         }
       ],
       "tests": [
@@ -3870,6 +5067,25 @@
       ]
     },
     {
+      "id": "LIM-F-remove_account_sign_in",
+      "title": "internal.remove_account_sign_in: reads or returns at most 10000 rows",
+      "value": "limit 10000",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/remove_account_sign_in.sql",
+          "symbol": "internal.remove_account_sign_in",
+          "contains": "limit 10000);"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-renew_queue_claim",
       "title": "internal.renew_queue_claim: renewal limit reached; claim the item again after it expires",
       "value": ">= 4",
@@ -4231,6 +5447,44 @@
       ]
     },
     {
+      "id": "LIM-F-restored_owner_dashboard",
+      "title": "internal.restored_owner_dashboard: reads or returns at most 10 rows",
+      "value": "limit 10",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/restored_owner_dashboard.sql",
+          "symbol": "internal.restored_owner_dashboard",
+          "contains": "order by content_updated_at desc,id desc limit 10) post),'[]'::jsonb),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-restored_owner_dashboard-2",
+      "title": "internal.restored_owner_dashboard: reads or returns at most 3 rows",
+      "value": "limit 3",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/restored_owner_dashboard.sql",
+          "symbol": "internal.restored_owner_dashboard",
+          "contains": "from (select * from private.enquiries where owner_id=actor order by created_at desc,id desc limit 3) e"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-reverse_payment",
       "title": "internal.reverse_payment: reversal kind and audit reason required",
       "value": "5 to 500",
@@ -4402,6 +5656,25 @@
       ]
     },
     {
+      "id": "LIM-F-run_retention-2",
+      "title": "internal.run_retention",
+      "value": "least(... 20 ...)",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/run_retention.sql",
+          "symbol": "internal.run_retention",
+          "contains": "'accounts',internal.run_account_erasures(least(p_limit,20)),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-run_slot_renewals",
       "title": "internal.run_slot_renewals: limit 1 to 5000",
       "value": "1 to 5000",
@@ -4422,6 +5695,25 @@
     },
     {
       "id": "LIM-F-run_slot_renewals-2",
+      "title": "internal.run_slot_renewals: reads or returns at most 20 rows",
+      "value": "limit 20",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/run_slot_renewals.sql",
+          "symbol": "internal.run_slot_renewals",
+          "contains": "where f.runs_until > package_ends order by f.runs_until desc, f.entitlement_id limit 20 loop"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-run_slot_renewals-3",
       "title": "internal.run_slot_renewals",
       "value": ">= 20",
       "category": "length",
@@ -4745,6 +6037,25 @@
     },
     {
       "id": "LIM-F-staff_audit_page",
+      "title": "internal.staff_audit_page",
+      "value": ":= 25",
+      "category": "money",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/staff_audit_page.sql",
+          "symbol": "internal.staff_audit_page",
+          "contains": "amount integer:=25; before_at timestamptz; before_id text;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-staff_audit_page-2",
       "title": "internal.staff_audit_page: invalid staff audit request",
       "value": "> 4096",
       "category": "length",
@@ -4763,7 +6074,7 @@
       ]
     },
     {
-      "id": "LIM-F-staff_audit_page-2",
+      "id": "LIM-F-staff_audit_page-3",
       "title": "internal.staff_audit_page: invalid audit limit",
       "value": "1 to 100",
       "category": "money",
@@ -4782,7 +6093,7 @@
       ]
     },
     {
-      "id": "LIM-F-staff_audit_page-3",
+      "id": "LIM-F-staff_audit_page-4",
       "title": "internal.staff_audit_page: invalid audit action",
       "value": "> 100",
       "category": "length",
@@ -4801,7 +6112,7 @@
       ]
     },
     {
-      "id": "LIM-F-staff_audit_page-4",
+      "id": "LIM-F-staff_audit_page-5",
       "title": "internal.staff_audit_page: invalid audit search",
       "value": "1 to 100",
       "category": "length",
@@ -4820,7 +6131,64 @@
       ]
     },
     {
+      "id": "LIM-F-staff_cost_overview",
+      "title": "internal.staff_cost_overview: reads or returns at most 10 rows",
+      "value": "limit 10",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/staff_cost_overview.sql",
+          "symbol": "internal.staff_cost_overview",
+          "contains": ") m group by m.owner_id order by 2 desc,m.owner_id limit 10) t), '[]'),"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-staff_dashboard_overview",
+      "title": "internal.staff_dashboard_overview: reads or returns at most 40 rows",
+      "value": "limit 40",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/staff_dashboard_overview.sql",
+          "symbol": "internal.staff_dashboard_overview",
+          "contains": "order by expires_at,subject_id limit 40"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-staff_decision_page",
+      "title": "internal.staff_decision_page",
+      "value": ":= 25",
+      "category": "money",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/staff_decision_page.sql",
+          "symbol": "internal.staff_decision_page",
+          "contains": "actor uuid:=internal.staff_actor('decision:approve'); amount integer:=25;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-staff_decision_page-2",
       "title": "internal.staff_decision_page: invalid staff decision request",
       "value": "> 4096",
       "category": "length",
@@ -4839,7 +6207,7 @@
       ]
     },
     {
-      "id": "LIM-F-staff_decision_page-2",
+      "id": "LIM-F-staff_decision_page-3",
       "title": "internal.staff_decision_page: invalid decision limit",
       "value": "1 to 100",
       "category": "money",
@@ -4858,7 +6226,45 @@
       ]
     },
     {
+      "id": "LIM-F-staff_get_organisation",
+      "title": "internal.staff_get_organisation: reads or returns at most 50 rows",
+      "value": "limit 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/staff_get_organisation.sql",
+          "symbol": "internal.staff_get_organisation",
+          "contains": "order by n.created_at desc limit 50) n),'[]'));"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-staff_identity_history",
+      "title": "internal.staff_identity_history: reads or returns at most 21 rows",
+      "value": "limit 21",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/staff_identity_history.sql",
+          "symbol": "internal.staff_identity_history",
+          "contains": "order by x.reviewed_at desc,x.id desc limit 21) f;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-staff_identity_history-2",
       "title": "internal.staff_identity_history",
       "value": "> 20",
       "category": "length",
@@ -4867,6 +6273,63 @@
           "file": "database/foundation/current/functions/internal/staff_identity_history.sql",
           "symbol": "internal.staff_identity_history",
           "contains": "more:=jsonb_array_length(items)>20;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-staff_list_commissions",
+      "title": "internal.staff_list_commissions: reads or returns at most 500 rows",
+      "value": "limit 500",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/staff_list_commissions.sql",
+          "symbol": "internal.staff_list_commissions",
+          "contains": "and (p_status is null or x.status=p_status) order by x.created_at desc,x.id desc limit 500) c);"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-staff_list_organisations",
+      "title": "internal.staff_list_organisations: reads or returns at most 500 rows",
+      "value": "limit 500",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/staff_list_organisations.sql",
+          "symbol": "internal.staff_list_organisations",
+          "contains": "order by o.name),'[]') from (select * from private.organisations order by name limit 500) o);"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-staff_list_partners",
+      "title": "internal.staff_list_partners: reads or returns at most 500 rows",
+      "value": "limit 500",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/staff_list_partners.sql",
+          "symbol": "internal.staff_list_partners",
+          "contains": "from (select * from private.partners x order by x.created_at desc limit 500) p);"
         }
       ],
       "tests": [
@@ -5285,6 +6748,25 @@
           "file": "database/foundation/current/functions/internal/sweep_sponsorships.sql",
           "symbol": "internal.sweep_sponsorships",
           "contains": "if p_limit is null or p_limit not between 1 and 1000 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-sweep_sponsorships-2",
+      "title": "internal.sweep_sponsorships: reads or returns at most 100 rows",
+      "value": "limit 100",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/sweep_sponsorships.sql",
+          "symbol": "internal.sweep_sponsorships",
+          "contains": "order by g.id limit 100 loop"
         }
       ],
       "tests": [
@@ -8123,6 +9605,25 @@
       ]
     },
     {
+      "id": "LIM-SQL-event-media-allowance",
+      "title": "Free events: at most 10 photos and 1 video",
+      "value": "10 photos, 1 video",
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/set_post_media.sql",
+          "symbol": "internal.set_post_media",
+          "contains": "photo_limit:=10; video_limit:=1; -- Free event product allowance, not paid funding."
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-SQL-events-30-days",
       "title": "Free events: at most 10 submitted in a rolling 30 days per member (an owner's own early deletion returns the place)",
       "value": "10 per 30 days",
@@ -8257,6 +9758,30 @@
       ]
     },
     {
+      "id": "LIM-SQL-intro-media-allowance",
+      "title": "A post with no paid slot (the free first post): at most 10 photos and 1 video, in drafts and at submission",
+      "value": "10 photos, 1 video",
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/set_post_media.sql",
+          "symbol": "internal.set_post_media",
+          "contains": "photo_limit:=10; video_limit:=1;"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/submit_post.sql",
+          "symbol": "internal.submit_post",
+          "contains": "if not found then photo_limit:=10; video_limit:=1; end if;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-posting-terms-switch.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-SQL-likes-day-valve",
       "title": "Post likes: after 50,000 a day only established likers' likes are stored",
       "value": 50000,
@@ -8311,6 +9836,26 @@
         {
           "kind": "behaviour",
           "file": "scripts/limits-sql.test.mjs"
+        }
+      ],
+      "unit": "bytes"
+    },
+    {
+      "id": "LIM-SQL-media-storage-allowance",
+      "title": "Media storage per account: 5 MB per allowed photo and 50 MB per allowed video of the account's packages, at least 100 MB",
+      "value": "max(100 MB, photos x 5 MB + videos x 50 MB)",
+      "category": "size",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/package_capacity.sql",
+          "symbol": "internal.package_capacity",
+          "contains": "greatest(104857600, coalesce(max(e.max_photos::bigint * 5242880 + e.max_videos::bigint * 52428800), 0))"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
         }
       ],
       "unit": "bytes"
@@ -8470,6 +10015,25 @@
       "unit": "cents"
     },
     {
+      "id": "LIM-SQL-search-default-page",
+      "title": "Public search: 24 results per page when the request names no page size",
+      "value": 24,
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/search_posts.sql",
+          "symbol": "internal.search_posts",
+          "contains": "v_limit integer := 24;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-SQL-search-offset",
       "title": "Public search: no results beyond position 4,800",
       "value": 4800,
@@ -8626,6 +10190,35 @@
         }
       ],
       "unit": "cents"
+    },
+    {
+      "id": "LIM-SQL-staff-open-claims",
+      "title": "Staff review queues: at most 20 open claims per staff member (batch claims stop at 20; a single claim or a reassignment past 20 is refused)",
+      "value": 20,
+      "category": "quota",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/claim_queue_item.sql",
+          "symbol": "internal.claim_queue_item",
+          "contains": "and not (q.post_id is not distinct from s.post_id and q.report_id is not distinct from s.report_id)) >= 20 then"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/claim_queue_items.sql",
+          "symbol": "internal.claim_queue_items",
+          "contains": "allowed := least(p_limit, 20 - (select count(*) from private.queue_claims q"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/reassign_queue_claim.sql",
+          "symbol": "internal.reassign_queue_claim",
+          "contains": "if (select count(*) from private.queue_claims q where q.claimed_by = p_to and q.claim_expires_at > clock_timestamp()) >= 20 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
     },
     {
       "id": "LIM-SQL-staff-totp-age",
@@ -10383,7 +11976,7 @@
     {
       "id": "LIM-T-package_invoice_requests_add",
       "title": "private.package_invoice_requests: (kind = 'add'::text) = (days_left IS NOT NULL) AND (package_id IS NULL OR kind = 'add'::text) AND (days_left IS NULL OR days_left >= 10 A...",
-      "value": ">= 10, <= 179, >= 10",
+      "value": ">= 10, <= 179",
       "category": "range",
       "enforcedAt": [
         {
@@ -11524,112 +13117,112 @@
   "notLimits": [
     {
       "file": "database/foundation/current/functions/internal/frontend_identity_queue_steps.sql",
-      "contains": "risk_score>50",
+      "contains": "'risk_score',s.risk_score,'risk_level',case when s.risk_score>50 then 'high' else 'low' end,",
       "reason": "display label for high-risk items; the enforced rule is LIM-SQL-identity-high-risk-second-review"
     },
     {
       "file": "database/foundation/current/functions/internal/reserve_frontend_seen_photo.sql",
-      "contains": "p_lat not between -90",
+      "contains": "if p_digest is null or p_digest !~ '^[0-9a-f]{64}$' or p_lat not between -90 and 90 or p_lng not between -180 and 180",
       "reason": "valid latitude/longitude ranges, a coordinate sanity check"
     },
     {
       "file": "database/foundation/current/functions/internal/restored_staff_queues.sql",
-      "contains": "risk_score>50",
+      "contains": "'high_risk',count(*) filter(where s.risk_score>50),",
       "reason": "display label for high-risk items; the enforced rule is LIM-SQL-identity-high-risk-second-review"
     },
     {
       "file": "database/foundation/current/functions/internal/retention_tax_year_due.sql",
-      "contains": "extract(month",
+      "contains": "+ case when extract(month from p_at at time zone 'Africa/Johannesburg')>=3 then 1 else 0 end,",
       "reason": "the South African tax year starts in March; a calendar rule"
     },
     {
       "file": "database/foundation/current/functions/internal/save_business_event_context.sql",
-      "contains": "extract(year from",
+      "contains": "or extract(year from starts at time zone 'UTC') not between 1 and 9999",
       "reason": "valid calendar year (1 to 9999), a date sanity check"
     },
     {
       "file": "database/foundation/current/functions/internal/save_business_event_context.sql",
-      "contains": "extract(year from",
+      "contains": "or extract(year from ends at time zone 'UTC') not between 1 and 9999",
       "reason": "valid calendar year (1 to 9999), a date sanity check"
     },
     {
       "file": "database/foundation/current/functions/internal/search_posts.sql",
-      "contains": "word_similarity(t, d.search_text) >= 0.5",
+      "contains": "or (length(t) >= 4 and extensions.word_similarity(t, d.search_text) >= 0.5))))",
       "reason": "fuzzy matching only for terms of 4+ characters; ranking, not a limit"
     },
     {
       "file": "database/foundation/current/functions/internal/validate_attribute_value.sql",
-      "contains": "octet_length(c)>3 then 2",
+      "contains": "select coalesce(sum(case when c='' then 0 when octet_length(c)>3 then 2 else 1 end),0) into units from regexp_split_to_table(text_value,'') c;",
       "reason": "counts wide characters as two units when measuring a value; part of the attribute length rule"
     },
     {
       "file": "src/app/(marketplace)/mzansi-business/grid.tsx",
-      "contains": "PAGE_SIZE",
+      "contains": "const PAGE_SIZE = 24;",
       "reason": "display page size (cards per page), not an enforced limit"
     },
     {
       "file": "src/app/(marketplace)/mzansi-market/grid.tsx",
-      "contains": "PAGE_SIZE",
+      "contains": "const PAGE_SIZE = 24;",
       "reason": "display page size (cards per page), not an enforced limit"
     },
     {
       "file": "src/app/admin/audit-log/page.tsx",
-      "contains": "PAGE_SIZE",
+      "contains": "const PAGE_SIZE = 50;",
       "reason": "display page size; the database caps audit pages (LIM-F-staff_audit_page-2)"
     },
     {
       "file": "src/app/admin/dsar/page.tsx",
-      "contains": "PAGE_SIZE",
+      "contains": "const PAGE_SIZE = 25;",
       "reason": "display page size, not an enforced limit"
     },
     {
       "file": "src/app/admin/governance/enforcement/page.tsx",
-      "contains": "PAGE_SIZE",
+      "contains": "const PAGE_SIZE = 50;",
       "reason": "display page size, not an enforced limit"
     },
     {
       "file": "src/app/admin/governance/roles/page.tsx",
-      "contains": "STAFF_PAGE_SIZE",
+      "contains": "const STAFF_PAGE_SIZE = 50;",
       "reason": "display page size, not an enforced limit"
     },
     {
       "file": "src/app/admin/payments/page.tsx",
-      "contains": "PAGE_SIZE",
+      "contains": "const PAGE_SIZE = 50;",
       "reason": "display page size, not an enforced limit"
     },
     {
       "file": "src/app/organisation/[slug]/page.tsx",
-      "contains": "PAGE_SIZE",
+      "contains": "const PAGE_SIZE = 24;",
       "reason": "display page size, not an enforced limit"
     },
     {
       "file": "src/components/search/site-search.tsx",
-      "contains": "PAGE_SIZE",
+      "contains": "const PAGE_SIZE = 12;",
       "reason": "display page size, not an enforced limit"
     },
     {
       "file": "src/components/search/site-search.tsx",
-      "contains": "PREVIEW_SIZE",
+      "contains": "const PREVIEW_SIZE = 4;",
       "reason": "number of preview results shown, not an enforced limit"
     },
     {
       "file": "src/hooks/use-media-upload.ts",
-      "contains": "SMALL_PHOTO_BYTES",
+      "contains": "const SMALL_PHOTO_BYTES = 256 * 1024;",
       "reason": "photos under this size skip re-compression; a quality threshold, not a limit"
     },
     {
       "file": "src/lib/media/video-length.ts",
-      "contains": "WEBM_HEAD_BYTES",
+      "contains": "const WEBM_HEAD_BYTES = 1024 * 1024;",
       "reason": "how much of a WebM file is read to find its length; parsing window"
     },
     {
       "file": "src/lib/payments/ozow-refunds.ts",
-      "contains": "PAGE_SIZE",
+      "contains": "const PAGE_SIZE = 50;",
       "reason": "page size used to read the payment provider's refund list"
     },
     {
       "file": "src/lib/utils/blurhash.ts",
-      "contains": "ENCODE_SIZE",
+      "contains": "const ENCODE_SIZE = 32;",
       "reason": "image size used to compute a blur placeholder"
     }
   ]

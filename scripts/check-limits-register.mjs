@@ -38,6 +38,14 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(
-  `Limits register matches the code: ${stats.limits} limits (${stats.behaviour} with a behaviour test, ${stats.register} checked by a register-driven test, ${stats.declaration} declared values whose enforcing mechanism is tested), ${stats.notLimits} reviewed non-limits, ${stats.findings} scanned lines.`
+  `Limits register matches the code: ${stats.limits} limits, ${stats.notLimits} reviewed non-limits, ${stats.findings} scanned lines.`
+);
+console.log(`  ${stats.behaviour} with a behaviour test at the bound`);
+console.log(`  ${stats.register} checked by a register-driven test`);
+console.log(
+  `  ${stats.declaration} declared values enforced by a tested mechanism (privacy_text, the body reader, a mirrored server limit)`
+);
+console.log(
+  `  ${stats.untested} present in the running database function but NOT behaviour-tested (backlog)`
 );
 console.log(`Scanned: ${SCANNER_SCOPE.join("; ")}.`);
