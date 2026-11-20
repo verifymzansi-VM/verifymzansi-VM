@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth/require-staff";
-import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { formatSaLongDate } from "@/lib/utils/format";
 import { BrandLogo } from "@/components/shared/brand-logo";
+import { staffReturnPath } from "@/lib/auth/staff-mfa-links";
 import { StaffTwoStepClient } from "./two-step-client";
 
 export const metadata = {
@@ -10,20 +10,15 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-/** Only return to back-office pages after verifying. */
-function safeNext(value: string | undefined): string {
-  const next = sanitizeReturnUrl(value);
-  return next === "/admin" || next.startsWith("/admin/") ? next : "/admin";
-}
-
 export default async function StaffTwoStepPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; confirm?: string }>;
+  searchParams: Promise<{ next?: string | string[]; confirm?: string | string[] }>;
 }) {
   const session = await requireStaff(undefined, { allowPendingMfa: true });
   const params = await searchParams;
-  const next = safeNext(params.next);
+  // Only return to back-office pages after verifying (staffReturnPath).
+  const next = staffReturnPath(params.next);
   const confirming = params.confirm === "1";
   const graceEndsAt = session.mfa.status === "grace" ? session.mfa.graceEndsAt : null;
 

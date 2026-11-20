@@ -8,6 +8,7 @@ import { readFoundationRuntimeConnection } from "./runtime-connection";
 import { FOUNDATION_POST_SIGNUP_PATH } from "./auth-navigation";
 import { readMyRestrictionStatus } from "./enforcement";
 import { rememberFoundationPageSession } from "./page-session-handoff";
+import { STAFF_MFA_PATH } from "../auth/staff-mfa";
 
 function under(path: string, prefix: string) {
   return path === prefix || path.startsWith(prefix + "/");
@@ -80,9 +81,22 @@ export async function checkFoundationPageAccess(request: NextRequest, authPage: 
     const staffPath = ["/admin", "/api/admin", "/staff"].some((prefix) => under(path, prefix));
     if (staffPath) {
       if (!account.staff) return apiRequest ? refuse(403, "Forbidden") : redirect("/dashboard");
-      if (path !== "/staff/two-step" && !account.staff.can_access) {
-        if (apiRequest) return refuse(403, "Two-step verification required");
-        const url = new URL("/staff/two-step", request.url);
+      if (path !== STAFF_MFA_PATH && !account.staff.can_access) {
+        // Same answer as checkStaffApiMfa, so every staff screen sends the
+        // person to the two-step page and back instead of showing an error.
+        if (apiRequest)
+          return reply(
+            NextResponse.json(
+              {
+                error: "Verify with your authenticator app to continue.",
+                code: "mfa_required",
+                verifyUrl: STAFF_MFA_PATH,
+                redirectUrl: STAFF_MFA_PATH,
+              },
+              { status: 403 }
+            )
+          );
+        const url = new URL(STAFF_MFA_PATH, request.url);
         if (under(path, "/admin")) url.searchParams.set("next", path + request.nextUrl.search);
         return reply(NextResponse.redirect(url));
       }
