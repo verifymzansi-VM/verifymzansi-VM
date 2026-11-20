@@ -80,6 +80,63 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Access exports tell the member only after the website hands them over, 20 November 2026
+
+`20261120191500_privacy_export_confirm.sql` is pending (see the applied
+register). Until now `api.export_frontend_privacy_request` built a data (access)
+export and, in the same call, recorded the `exported` event, queued the
+requester's "an export was made" email and added the `privacy_export_made`
+notice to the member's bell. The website checks the export only after that call
+returns, so an export it then refused ("Nothing was exported") had already told
+the member one was made, and every retry added another `exported` event.
+
+This is the expand step: two new staff commands; the old command is unchanged
+and keeps working for the website deployed now. A later update removes it
+(contract step, with a `../contract-steps.json` entry) once no deployed website
+calls it.
+
+- **`api.prepare_frontend_privacy_export(p_case, p_revision)`**: the same rules
+  and the same export as the old command (dsar:manage with a second factor from
+  the last 15 minutes, a verified access request at the represented revision,
+  never the requester or the data subject, PT413 for an oversized export), plus
+  a new `export_id`. It records only an `export_prepared` event (the staff audit
+  of who prepared which export). No email, no notice, no `exported` event.
+- **`api.confirm_frontend_privacy_export(p_case, p_revision, p_export)`**: the
+  website calls it after checking the export (exactly the reviewed datasets in
+  `src/lib/foundation/privacy-export-datasets.ts`) and just before handing the
+  file over; if it fails, nothing is handed over. It needs the staff member who
+  prepared that export, at the same request revision, within 15 minutes. The
+  first confirmation records the `exported` event (with the export id), queues
+  the email (once per request, as before) and, when that email job is new and
+  the request names an account, adds the notice. A repeated confirmation of the
+  same export changes nothing and answers the same.
+- **Event log:** `private.privacy_request_events` gains `export_id` (nullable)
+  and the action `export_prepared`. An `export_prepared` row always has an
+  export id, an `exported` row may (the old command's have none), other actions
+  never; a unique index allows one row per export id and action.
+
+ORDER: apply first, then merge (the website in this pull request calls the new
+commands; the website deployed now does not).
+
+**Applying.**
+
+1. Run `../preflight/20261120191500_privacy_export_confirm.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "privacy export confirm: update not applied; exports
+   recorded: N; export emails waiting: M".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "privacy export confirm: already applied; exports
+   recorded: N; export emails waiting: M; prepared: 0; confirmed: 0" (larger
+   counts only if staff exported in between).
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+**Rollback** (`../rollback/20261120191500_privacy_export_confirm.down.sql`):
+only after the website that calls the new commands has been reverted. It drops
+the two commands, the index, the check and the column, deletes the
+`export_prepared` events and restores the action list; `exported` events stay.
+
 ## A daily limit on SMS codes for the whole site, 20 November 2026
 
 `20261120074411_sms_daily_limit.sql` was applied on 20 November 2026 at 12:26
@@ -5980,5 +6037,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   limit: already applied; codes today: 0; counted today: 0; limit: 500";
   production fingerprint after it (fingerprint.sql at cd725fb9) matched the full
   replay (except the known schema grant difference)
+
+- `20261120191500_privacy_export_confirm.sql`: pending
 
 <!-- applied-register:end -->

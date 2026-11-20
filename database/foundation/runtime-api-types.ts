@@ -455,6 +455,14 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_case: string; p_revision: number };
         Returns: Json;
       };
+      prepare_frontend_privacy_export: {
+        Args: { p_case: string; p_revision: number };
+        Returns: Json;
+      };
+      confirm_frontend_privacy_export: {
+        Args: { p_case: string; p_revision: number; p_export: string };
+        Returns: Json;
+      };
       record_frontend_privacy_intake: {
         Args: {
           p_type: string;

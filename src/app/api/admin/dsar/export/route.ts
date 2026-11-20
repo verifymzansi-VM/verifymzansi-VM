@@ -4,6 +4,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 import { uuidSchema } from "@/lib/validations/shared";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { isAcceptedPrivacyExportDatasetSet } from "@/lib/foundation/privacy-export-datasets";
 import { privacyRevision } from "@/lib/foundation/privacy-requests";
 import {
   FoundationStaffCommandError,
@@ -15,14 +16,6 @@ const log = createLogger("DSARExport");
 
 const exportSchema = z.object({ requestId: uuidSchema });
 
-/** Datasets in a foundation access export: the registry entries of
- * internal.frontend_privacy_export_data (42 since database update
- * 20261119172135_post_views_and_likes.sql added post_likes and
- * post_likes_summary). An update that adds a dataset must first ship a website
- * that accepts the new count (website-first); foundation.test.ts checks this
- * number against database/foundation/current. */
-const FOUNDATION_EXPORT_DATASET_COUNT = 42;
-
 /**
  * POST /api/admin/dsar/export  { requestId }
  *
@@ -30,6 +23,11 @@ const FOUNDATION_EXPORT_DATASET_COUNT = 42;
  * Needs dsar:manage, a second factor verified in the last 15 minutes, and a
  * verified requester identity. Nothing is stored: the file goes straight to
  * the staff member, who sends it to the requester.
+ *
+ * The database prepares the export without telling anyone, this route checks
+ * it (exactly the datasets in privacy-export-datasets.ts), and only then
+ * confirms it: the database records the export and tells the requester once.
+ * A refused export is never confirmed, so the requester hears nothing of it.
  */
 export async function POST(request: NextRequest) {
   return handleFoundationOwnerRoute<{ request_id: string }>({
@@ -54,8 +52,9 @@ export async function POST(request: NextRequest) {
           rl.degraded ? 503 : 429,
           "Export protection is temporarily unavailable or the limit has been reached."
         );
+      // 1. Prepare: the export, with nothing told to the member yet.
       const rpc = await api.rpc(
-        "export_frontend_privacy_request",
+        "prepare_frontend_privacy_export",
         {
           p_case: input.requestId,
           p_revision: input.revision,
@@ -68,11 +67,12 @@ export async function POST(request: NextRequest) {
           "The export is too large for a direct download. Nothing was exported."
         );
       const date = z.iso.datetime({ offset: true });
-      const result = await settleStaffCommand(
+      const { export_id: exportId, ...result } = await settleStaffCommand(
         Promise.resolve(rpc),
         z
           .strictObject({
             request_id: z.literal(input.requestId),
+            export_id: z.uuid(),
             reference: z.literal(`DSAR-${input.requestId.slice(0, 8).toUpperCase()}`),
             generated_at: date,
             request_type: z.literal("access"),
@@ -84,11 +84,27 @@ export async function POST(request: NextRequest) {
               z.array(z.record(z.string(), z.unknown())).max(2500)
             ),
           })
+          // Exactly the reviewed datasets: none missing, renamed or extra.
           .refine((v) =>
             v.account_found
-              ? Object.keys(v.datasets).length === FOUNDATION_EXPORT_DATASET_COUNT
+              ? isAcceptedPrivacyExportDatasetSet(Object.keys(v.datasets))
               : Object.keys(v.datasets).length === 0
           )
+      );
+      // 2. Confirm, now that the export is checked and about to be handed
+      // over: the database records it and tells the member once. If this
+      // fails, nothing is handed over.
+      await settleStaffCommand(
+        api.rpc(
+          "confirm_frontend_privacy_export",
+          { p_case: input.requestId, p_revision: input.revision, p_export: exportId },
+          { get: false }
+        ),
+        z.strictObject({
+          request_id: z.literal(input.requestId),
+          export_id: z.literal(exportId),
+          confirmed_at: date,
+        })
       );
       return {
         ...result,

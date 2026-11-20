@@ -2440,6 +2440,59 @@
       "authority": "Current privacy reviewer with fresh TOTP; only the represented verified access request and fixed subject-scoped datasets. Oversized exports are refused in full. The first export emails the requester and notifies the account the request names."
     },
     {
+      "name": "prepare_frontend_privacy_export",
+      "updates": ["updates/20261120191500_privacy_export_confirm.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_revision",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current privacy reviewer with fresh TOTP, never the requester or data subject; only the represented verified access request and fixed subject-scoped datasets, with a new export id. Oversized exports are refused in full. Records only the preparation in the staff audit; tells the member nothing."
+    },
+    {
+      "name": "confirm_frontend_privacy_export",
+      "updates": ["updates/20261120191500_privacy_export_confirm.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_export",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "The privacy reviewer who prepared that export, at the same request revision, within 15 minutes. The first confirmation records the export, emails the requester (once per request) and notifies the account the request names; a repeat changes nothing."
+    },
+    {
       "name": "claim_frontend_privacy_notice",
       "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
       "arguments": [],
