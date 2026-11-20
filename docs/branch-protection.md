@@ -358,7 +358,8 @@ interpreting an overall green workflow as proof of provider availability.
 
 The maintained check policy is `scripts/lib/check-registry.ts`. CI partitions
 must use its IDs and retain version-2 reports with skips and unavailable
-results. There is no mutation testing; the former security canaries (four
-assertions already made by unit tests) were removed. A missing/disabled CodeQL
-job is explicitly unavailable security coverage. Required local omissions are
-INCOMPLETE, never release GO.
+results. Mutation testing is a local trial only (`pnpm test:mutation`, see
+[the trial note](testing/mutation-trial.md)), not a CI check; the former
+security canaries (four assertions already made by unit tests) were removed. A
+missing/disabled CodeQL job is explicitly unavailable security coverage.
+Required local omissions are INCOMPLETE, never release GO.
