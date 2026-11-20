@@ -324,11 +324,15 @@ describe("member and service limits", () => {
 
   test("LIM-SQL-communication-choice-grants-day: at most 20 consents given a day", async () => {
     const user = await member("limits-choices");
-    const save = (on) =>
-      asMember(
+    // The current choice is the latest event by time; the embedded database's
+    // clock can tick only once a millisecond, so saves are spaced apart.
+    const save = async (on) => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return asMember(
         user,
         `select api.save_my_communication_choices('communication-2026-11',p_marketing_email=>${on})`
       );
+    };
     for (let n = 1; n <= 20; n += 1) {
       await save(true);
       await save(false);

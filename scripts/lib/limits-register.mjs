@@ -314,13 +314,15 @@ export function checkLimitsRegister({
   for (const finding of findings) {
     // An anchor covers a line only when it is part of the line and names every
     // limit number on it, so a short anchor cannot cover a new number.
-    const anchors = (anchorsByFile.get(finding.file) ?? []).filter(
-      (anchor) =>
-        finding.text.includes(anchor.contains) &&
-        (finding.numbers ?? []).every((n) =>
-          new RegExp(`(?<![\\w.])${String(n)}(?![\\w])`).test(anchor.contains)
-        )
-    );
+    const anchors = (anchorsByFile.get(finding.file) ?? []).filter((anchor) => {
+      if (!finding.text.includes(anchor.contains)) return false;
+      const named = new Set(
+        [...anchor.contains.matchAll(/(?<![\w.])-?\d[\d_]*(?!\w)/g)].map((match) => match[0])
+      );
+      return (finding.numbers ?? []).every(
+        (n) => named.has(String(n)) || named.has(String(n).replace(/^-/, ""))
+      );
+    });
     if (anchors.length === 0) uncovered.push(finding);
     for (const anchor of anchors) anchor.used = true;
   }
