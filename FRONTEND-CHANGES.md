@@ -125,6 +125,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 59. Video seek bar and time (roadmap M10.7, first part) | approved by owner 2026-11-20 (with the group 59 part of 6 rows elsewhere) | Every video player: the seek bar can be grabbed anywhere in a 24 px tall strip, follows a sideways drag on phones and jumps on a tap, while an up or down swipe still scrolls the page; arrow keys move 5 seconds; the time label shows the real length (it read '0:04 / 0:00' when the video loaded early). Video mode on phones: a new thin gold seek bar with '0:12 / 0:45' under the post's buttons. Posting and edit forms: the video help text adds one tip to show price, place and phone number on screen |
 | 60. Multi-listing packages: the small part-one gaps (Pricing v2 P4a) | approved by owner 2026-11-19 (with the group 60 part of 7 rows elsewhere) | Members (only once packages are on sale): 'Your package is active' after paying for a package (draft n1), and a note on 'Choose your package' about unpaid Individual slot invoices. Staff: a 'Needs attention' card on Payments & Refunds while a package move keeps failing (part of draft n7) |
 | 61. Real view counts and likes (P6) | awaiting owner (with the group 61 part of 11 rows elsewhere) | Nothing today (switch off). When the owner switches SHOW_ENGAGEMENT_TOTALS on: 'N views' and the heart with its count are back as on 27 October, with real numbers; anyone can like (signed in, per account; signed out, per browser; tap again to unlike); a signed-out visitor's first counted view or like may show Cloudflare's 'Verify you are human' box bottom-right, only when Cloudflare needs a click; a signed-out like from a browser seen for the first time counts after 10 minutes (the visitor sees it at once); a view counts after 2 seconds on the post's page, once a day per visitor, never the owner's or staff's own; the privacy notice and PAIA manual describe what is stored |
+| 64. Toasts clear of form buttons on phones | awaiting owner (with the group 64 part of 1 row elsewhere) | Phones (narrower than 768 px): a toast shows at the top of the screen instead of near the bottom, where it covered the button tapped next ('Verify', 'Update password'); while it shows (about 5 seconds) it covers the header (logo, search, menu). Tablets and desktops: same place and look (bottom right). Every screen size: a tap on the empty space around a toast now reaches the page |
 
 Questions for the owner:
 
@@ -900,7 +901,7 @@ None left: the three filter files were put back to `0b562f42` (see "Put back").
 | `src/hooks/use-post-transport.test.tsx`                             | test   | New test. Retired-backend cases removed; the rest run on the new backend. No longer sets the removed backend switch.                                                                                                                                                                                                                                                                                                                                                                              | Nothing (not part of a page) | keep     | awaiting owner                                                                                                                                                                              | 2026-11-11 | 0c3508d8ba8a |
 | `src/hooks/use-post-transport.ts`                                   | helper | New hook: posting-terms version/hash and request receipt for the existing forms. Retired-backend branch removed.                                                                                                                                                                                                                                                                                                                                                                                  | Nothing (not part of a page) | keep     | awaiting owner                                                                                                                                                                              | 2026-11-08 | fc4949c6db5f |
 | `src/hooks/use-realtime-foundation.test.tsx`                        | test   | New test. Mocks the foundation browser client module; no backend switch.                                                                                                                                                                                                                                                                                                                                                                                                                          | Nothing (not part of a page) | keep     | awaiting owner                                                                                                                                                                              | 2026-11-11 | 8aa9baf29fec |
-| `src/app/billing/success/payment-status-panel.test.tsx` | test | Test for the new state. Group 60: checks the package confirmation, the Individual slot note and the one reload (waiting for the reload, which runs in an effect). | Nothing (not part of a page) | keep | awaiting owner; group 60 part approved by owner 2026-11-19 | 2026-11-19 | 43a4b36d5ed8 |
+| `src/app/billing/success/payment-status-panel.test.tsx` | test | Test for the new state. Group 60: checks the package confirmation, the Individual slot note and the one reload (waiting for the reload, which runs in an effect). Group 64: the check that a payment that is not a package never reloads now waits for the status request and its effects to settle first. | Nothing (not part of a page) | keep | awaiting owner; group 60 part approved by owner 2026-11-19; group 64 part awaiting owner | 2026-11-20 | 9d62d101c2df |
 | `src/app/dashboard/listings/page.test.tsx`                          | test   | Unit tests for the page reading from the new backend; expects no view counts (M2.8). Retired-backend cases removed; the rest run on the new backend.                                                                                                                                                                                                                                                                                                                                              | Nothing (not part of a page) | keep     | approved by owner 2026-11-10 (M2.8 hidden until it works)                                                                                                                                   | 2026-11-10 | f54994514fd5 |
 | `src/app/dashboard/page.test.tsx`                                   | test   | Unit tests for the page reading from the new backend; no second sign-in check (M9.2). Retired-backend removal: retired-backend cases removed; the rest run on the new backend. No longer mocks the removed engagement reads.                                                                                                                                                                                                                                                                      | Nothing (not part of a page) | keep     | awaiting owner (earlier change); M9.2 part approved by owner 2026-11-12; retired-backend removal part awaiting owner                                                                        | 2026-11-12 | 6afe30e91bc2 |
 | `src/app/dashboard/profile/page.test.tsx`                           | test   | Unit tests for the page reading from the new backend; email-change message. Mocks the foundation browser client module; no backend switch. Group 27: a test that, while account deletion is hidden, the Account tab shows no 'Delete' and links the data request form; the deletion tests switch it on. Group 43: tests for the row and dialog text, the typed word, the request it sends, the fresh sign-in step, the staff refusal, a lost or unclear answer, a retry with the session gone, and the closed state after success; the hidden-state test stays. | Nothing (not part of a page) | keep     | awaiting owner; group 27 part awaiting owner; group 43 approved by owner 2026-11-19                                                                                                                       | 2026-11-19 | 4a88e17849bd |
@@ -2521,7 +2522,7 @@ switch in the database).
   Individual slots, 'You have an unpaid invoice for Individual slots
   (VM-2026-000187). If you pay by bank transfer after your package starts,
   those slots run beside the package until their own end. See Invoices.'
-  (plural for more than one). New words to confirm.
+  (plural for more than one).
 - Paying for a package that was started before a package invoice was paid
   (or before a package began): the database no longer sends it to Ozow, and the
   checkout shows the package checkout's existing words, 'This account already
@@ -2553,6 +2554,43 @@ Decision: approved by owner 2026-11-19.
 | `src/app/billing/success/package-refresh.tsx` | helper | Group 60: reloads the page's data once when a package payment is confirmed while the page is open. | Nothing by itself: the package confirmation replaces the general one without a manual reload. | keep | approved by owner 2026-11-19 | 2026-11-19 | 46d5133af172 |
 | `src/components/admin/commercial/package-move-attention.tsx` | visual | Group 60: staff see package moves the sweep keeps failing to make (part of draft n7). | Staff only, Payments & Refunds: the 'Needs attention' card described in group 60 (posts by short reference, never by title), only while a move fails. | keep | approved by owner 2026-11-19 | 2026-11-19 | f9e9342487b1 |
 | `src/components/admin/commercial/package-move-attention.test.tsx` | test | Group 60: checks the card is absent with nothing failing, and the stuck and not-yet-stuck items. | Nothing (not part of a page) | keep | approved by owner 2026-11-19 | 2026-11-19 | fb20fee57798 |
+
+### 64. Toasts clear of form buttons on phones
+
+On a short phone (375 x 667) the toast shown after an action, such as 'Code
+sent' on 'Verify your phone number' or 'Password change failed' on the
+profile's Security tab, sat near the bottom of the screen for 5 seconds, over
+the 'Verify' and 'Update password' buttons. The empty strip below it, kept
+clear of the bottom navigation, also caught taps. A tap on the button reached
+the toast list instead.
+
+- Phones (narrower than 768 px): toasts appear at the top of the screen, 16 px
+  from the edges, and slide in from the top. While a toast shows (about 5
+  seconds, longer while the pointer rests on it) it covers the header:
+  the logo, search and menu underneath cannot be tapped until it closes or is
+  swiped away. Their look (colours, border, corners, shadow, words, close
+  button, swipe to dismiss, 5 seconds) is unchanged.
+- Tablets and desktops (768 px and wider): same place and look, bottom right
+  as before (measured at 1280 x 800: same place and size).
+- Every screen size: only the toast itself takes taps. The empty space of the
+  toast list around it no longer catches them: a tap there reaches the page.
+
+Text outside the checked scope: the browser checks for the phone code and the
+password change now run on a 375 x 667 screen in every browser lane (desktop
+Chrome too), keep the toast open, check that the toast and the 'Verify' or
+'Update password' button do not overlap on screen, and click the button while
+the toast is still showing (`e2e/foundation/support/toasts.ts`), instead of
+waiting for it to close. The before and after pictures are in the pull
+request.
+
+Also in this group: the unit check that a payment that is not a package never
+reloads the payment result page (`payment-status-panel.test.tsx`, its row is in
+group 5) now waits for the status request and its effects to settle before
+checking. Nothing changes on screen.
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/components/ui/toast.tsx` | visual | Group 64: on phones toasts covered the button tapped next ('Verify', 'Update password') and the empty strip under them caught taps. Below md the toast list sits at the top of the screen above the header; md and up keep the bottom-right place. At every size the list lets taps through outside the toasts. | Phones: toasts at the top of the screen instead of near the bottom, sliding in from the top, covering the header for about 5 seconds; same look. Tablets and desktops: same place and look; taps on the empty space around a toast reach the page. | keep | awaiting owner | 2026-11-20 | 1e90302c7356 |
 
 <!-- frontend-ledger:end -->
 

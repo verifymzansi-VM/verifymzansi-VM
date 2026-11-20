@@ -10,7 +10,7 @@ import sharp from "sharp";
 import { E2E_FIXTURE, LOCAL_OPS_JOBS_SECRET } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { isMultipartForm } from "./support/multipart";
 import { endedWithTest } from "./support/route-teardown";
-import { waitForToastsToClose } from "./support/toasts";
+import { clickWhileToastShows, holdToast, switchToShortPhone } from "./support/toasts";
 import {
   browserSessionCookies,
   caughtMailFor,
@@ -383,9 +383,17 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
 
     // Phone code: sent by the website's e2e SMS branch to the copy's sink.
     await expect(page.getByRole("heading", { name: "Verify your phone number" })).toBeVisible();
+    // On a short phone screen in every project: the toast must stay clear of Verify.
+    const restoreScreen = await switchToShortPhone(page);
     const smsBefore = readTestSms().length;
     await page.getByLabel("SA mobile number *").fill(member.phone.replace("+27", "0"));
     await page.getByRole("button", { name: "Send code" }).click();
+    // Keep the "Code sent" toast open: Verify is clicked while it shows.
+    const codeSent = page
+      .getByRole("region", { name: /^Notifications/ })
+      .locator("li[data-state=open]")
+      .filter({ hasText: "Code sent" });
+    await holdToast(codeSent);
     await expect.poll(() => readTestSms().length).toBe(smsBefore + 1);
     const sms = readTestSms().at(-1);
     expect(sms?.to).toBe(member.phone);
@@ -395,10 +403,10 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
       .poll(() => reply("/api/otp/send"))
       .toEqual([expect.objectContaining({ status: 200 })]);
     await page.getByLabel("6-digit code").fill(code as string);
-    // The "code sent" toast can cover the button on a short phone.
-    await waitForToastsToClose(page);
-    await page.getByRole("button", { name: "Verify", exact: true }).click();
+    // On a short phone the toast stays clear of the button.
+    await clickWhileToastShows(codeSent, page.getByRole("button", { name: "Verify", exact: true }));
     await expect(page.getByText("This phone number is verified.")).toBeVisible();
+    await restoreScreen();
     await expect
       .poll(() => reply("/api/otp/verify"))
       .toEqual([expect.objectContaining({ status: 200 })]);
