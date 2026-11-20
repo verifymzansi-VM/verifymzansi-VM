@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
   "commit": "02115a26f4183ede9c22a13149fad853532d34fa",
-  "rationale": "Existing non-security duplication across expanded src/scripts/workers scope. Exact fragment/file-pair hashes block new findings; no security finding is excused. 2026-11-11: retired database tools removed; their clones left the baseline. Two existing clones in check-supabase-performance-advisor.ts (its usage text and option parsing) were reported against the deleted check-supabase-security-advisor.ts and are now reported against run-supabase-cli.ts: same code, new pair. 2026-11-12: two unreferenced R2 scripts removed with their shared clone; the check now fails when recorded debt is gone but still budgeted, so the budget only goes down. 2026-11-12: the retired-backend removal deleted source-backend code whose clones were recorded; their fingerprints left the baseline and the budget was lowered. Ignore entries that matched no clone were dropped from .jscpd.json. 2026-11-13: part 5 of the retired-backend removal deletes code without touching any clone, so the same 9 clones are a slightly larger share (0.09% to 0.10%). 2026-11-13: the touch-screen video card's full-card play target was removed (one tap opens the post), so its clone of the desktop card's play target left the baseline. 2026-11-17: the lead-count hook reads through one shared request, so its two copies of the same fetch left the baseline.",
+  "rationale": "Existing non-security duplication across expanded src/scripts/workers scope. Exact fragment/file-pair hashes block new findings; no security finding is excused. 2026-11-11: retired database tools removed; their clones left the baseline. Two existing clones in check-supabase-performance-advisor.ts (its usage text and option parsing) were reported against the deleted check-supabase-security-advisor.ts and are now reported against run-supabase-cli.ts: same code, new pair. 2026-11-12: two unreferenced R2 scripts removed with their shared clone; the check now fails when recorded debt is gone but still budgeted, so the budget only goes down. 2026-11-12: the retired-backend removal deleted source-backend code whose clones were recorded; their fingerprints left the baseline and the budget was lowered. Ignore entries that matched no clone were dropped from .jscpd.json. 2026-11-13: part 5 of the retired-backend removal deletes code without touching any clone, so the same 9 clones are a slightly larger share (0.09% to 0.10%). 2026-11-13: the touch-screen video card's full-card play target was removed (one tap opens the post), so its clone of the desktop card's play target left the baseline. 2026-11-17: the lead-count hook reads through one shared request, so its two copies of the same fetch left the baseline. 2026-11-20: the header's phone menu (signed-in and signed-out lists) is the same recorded clone; its 'Register' and '+ Post' buttons changed style (button hierarchy, ledger group 66), which changed the fragment's text, so its fingerprint was replaced and the budget lowered (190 to 186 lines).",
   "roots": ["src", "scripts", "workers"],
   "total": {
     "clones": 8,
-    "duplicatedLines": 190,
-    "percentage": 0.08
+    "duplicatedLines": 186,
+    "percentage": 0.07
   },
   "fingerprints": [
-    "5m9zAfx1xgEIlHo74Pqtwlqvk6rPDUHjWhnDZUILH-E",
     "B_h8vZs05g6uSXXSxJ-5Ms8FmFFPJx5zsBab1HIXPlM",
+    "FwPRbh4cvzrAOTNm7v8dRXoQw6RpNVEJupkoocLnwaA",
     "GDjpUkFLUeMUbXaJMX3auZi7-cUF2ttG0EkCDvDnNxY",
     "I2_H1WfKb9K2qfngAuT3w7u68aHvZx22-XX9Ai0NEEQ",
     "kRYinUmtBa3KMUE9Tu2BOL1BS1OlXFxO1-SSSwfUMbs",
