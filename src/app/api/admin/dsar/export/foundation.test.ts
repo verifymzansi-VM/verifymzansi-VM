@@ -29,21 +29,30 @@ const staff = "11111111-1111-4111-8111-111111111111",
 /** Datasets the live database exports: the registry of the committed snapshot,
  * which CI keeps in step with database/foundation/updates. */
 const registry = snapshotDatasetNames();
-/** One row in each named dataset. */
-function datasets(names: readonly string[]) {
-  return Object.fromEntries(names.map((name, i) => [name, [{ id: i }]]));
+const header = {
+  request_id: requestId,
+  export_id: exportId,
+  reference: "DSAR-22222222",
+  request_type: "access",
+  received_at: "2026-11-01T08:00:00Z",
+  due_by: "2026-12-01T08:00:00Z",
+};
+/** The prepare answer: names and row counts (one row each), no data. */
+function prepared(found: boolean, names: readonly string[]) {
+  return {
+    ...header,
+    account_found: found,
+    digest: "a".repeat(64),
+    datasets: Object.fromEntries(names.map((name) => [name, 1])),
+  };
 }
+/** The confirm answer: one row in each named dataset. */
 function exported(found: boolean, names: readonly string[]) {
   return {
-    request_id: requestId,
-    export_id: exportId,
-    reference: "DSAR-22222222",
+    ...header,
     generated_at: "2026-11-09T22:00:00Z",
-    request_type: "access",
-    received_at: "2026-11-01T08:00:00Z",
-    due_by: "2026-12-01T08:00:00Z",
     account_found: found,
-    datasets: datasets(names),
+    datasets: Object.fromEntries(names.map((name, i) => [name, [{ id: i }]])),
   };
 }
 function request() {
@@ -69,20 +78,22 @@ beforeEach(() => {
   } as unknown as ReturnType<typeof createFoundationRouteContext>);
 });
 afterEach(() => vi.unstubAllEnvs());
-const confirmed = {
-  data: { request_id: requestId, export_id: exportId, confirmed_at: "2026-11-09T22:00:01Z" },
-  error: null,
-};
-/** The database answers the prepare call with `prepared` and confirms. */
-function database(prepared: unknown) {
+/** The database answers prepare with `plan` and confirm with `delivered`
+ * (by default the export of the same names). */
+function database(plan: ReturnType<typeof prepared>, delivered?: unknown) {
   rpc.mockImplementation(async (name: string) =>
-    name === "prepare_frontend_privacy_export" ? { data: prepared, error: null } : confirmed
+    name === "prepare_frontend_privacy_export"
+      ? { data: plan, error: null }
+      : {
+          data: delivered ?? exported(plan.account_found, Object.keys(plan.datasets)),
+          error: null,
+        }
   );
 }
 const confirmCalls = () =>
   rpc.mock.calls.filter(([name]) => name === "confirm_frontend_privacy_export");
-it("downloads an export holding every dataset, confirmed after it was checked", async () => {
-  database(exported(true, registry));
+it("downloads the confirmed export after checking the prepared dataset names", async () => {
+  database(prepared(true, registry));
   const response = await POST(request());
   expect(response.status).toBe(200);
   expect(response.headers.get("Content-Disposition")).toBe(
@@ -90,7 +101,9 @@ it("downloads an export holding every dataset, confirmed after it was checked", 
   );
   const body = await response.json();
   expect(Object.keys(body.datasets).sort()).toEqual([...registry].sort());
+  expect(body.datasets[registry[0]]).toEqual([{ id: 0 }]);
   expect(body).not.toHaveProperty("export_id");
+  expect(body).not.toHaveProperty("digest");
   expect(body.scope).toMatch(/^Account records in the listed datasets/);
   expect(rpc.mock.calls).toEqual([
     ["prepare_frontend_privacy_export", { p_case: requestId, p_revision: 4 }, { get: false }],
@@ -103,21 +116,21 @@ it("downloads an export holding every dataset, confirmed after it was checked", 
   expect(checkSensitiveActionRateLimit).toHaveBeenCalledWith(staff, "admin:dsar:export");
   expect(createAdminClient).not.toHaveBeenCalled();
 });
-it("refuses, unconfirmed, an export whose datasets are not exactly the reviewed ones", async () => {
+it("never confirms an export whose datasets are not exactly the reviewed ones", async () => {
   const [first, ...rest] = registry;
-  for (const names of [
-    rest,
-    [...registry, "extra_set"],
-    [...rest, `${first}_renamed`],
-    [...rest, "profile_v2"].slice(0, registry.length),
-  ]) {
+  for (const names of [rest, [...registry, "extra_set"], [...rest, `${first}_renamed`]]) {
     rpc.mockClear();
-    database(exported(true, names));
+    database(prepared(true, names));
     const response = await POST(request());
     expect(response.status).toBe(503);
     expect(await response.json()).not.toHaveProperty("datasets");
     expect(confirmCalls()).toHaveLength(0);
   }
+});
+it("refuses a prepare answer that carries rows instead of counts", async () => {
+  database({ ...prepared(true, registry), datasets: exported(true, registry).datasets } as never);
+  expect((await POST(request())).status).toBe(503);
+  expect(confirmCalls()).toHaveLength(0);
 });
 it("accepts any accepted set during a transition", () => {
   // The route accepts exactly the sets in privacy-export-datasets.ts; the
@@ -129,37 +142,75 @@ it("accepts any accepted set during a transition", () => {
   ).toBe(true);
 });
 it("returns no datasets when no account matches the request", async () => {
-  database(exported(false, []));
+  database(prepared(false, []));
   expect((await POST(request())).status).toBe(200);
   expect(confirmCalls()).toHaveLength(1);
   rpc.mockClear();
-  database(exported(false, registry));
+  database(prepared(false, registry));
   expect((await POST(request())).status).toBe(503);
   expect(confirmCalls()).toHaveLength(0);
 });
-it("hands nothing over when the confirmation fails", async () => {
-  for (const answer of [
-    { data: null, error: { code: "PT409", message: "prepared export required" } },
-    { data: null, error: { code: "XX000", message: "connection lost" } },
-    {
-      data: { request_id: requestId, export_id: requestId, confirmed_at: "2026-11-09T22:00:01Z" },
-      error: null,
-    },
-  ]) {
+it("hands nothing over, in its own words, when the confirmation fails", async () => {
+  for (const [answer, status, message] of [
+    [
+      { data: null, error: { code: "PT409", message: "export changed since it was prepared" } },
+      409,
+      /changed or this export was already delivered\. Nothing was exported/,
+    ],
+    [
+      { data: null, error: { code: "XX000", message: "connection lost" } },
+      503,
+      /could not be confirmed\. Nothing was exported/,
+    ],
+    [
+      {
+        data: null,
+        error: { code: "42501", message: "recent second-factor verification required" },
+      },
+      403,
+      /Nothing was exported/,
+    ],
+    // Rows that do not match the prepared counts, or another export id.
+    [
+      {
+        data: {
+          ...exported(true, registry),
+          datasets: { ...exported(true, registry).datasets, [registry[0]]: [] },
+        },
+        error: null,
+      },
+      503,
+      /could not be confirmed\. Nothing was exported/,
+    ],
+    [
+      { data: { ...exported(true, registry), export_id: requestId }, error: null },
+      503,
+      /could not be confirmed\. Nothing was exported/,
+    ],
+  ] as const) {
     rpc.mockReset();
     rpc.mockImplementation(async (name: string) =>
       name === "prepare_frontend_privacy_export"
-        ? { data: exported(true, registry), error: null }
+        ? { data: prepared(true, registry), error: null }
         : answer
     );
     const response = await POST(request());
-    expect(response.status).toBeGreaterThanOrEqual(400);
-    expect(await response.json()).not.toHaveProperty("datasets");
+    expect(response.status).toBe(status);
+    const body = await response.json();
+    expect(body).not.toHaveProperty("datasets");
+    expect(body.error).toMatch(message);
   }
 });
-it("refuses an oversized export without confirming it", async () => {
-  rpc.mockResolvedValueOnce({ data: null, error: { code: "PT413", message: "too large" } });
-  const response = await POST(request());
-  expect(response.status).toBe(413);
-  expect(confirmCalls()).toHaveLength(0);
+it("refuses an oversized or too frequent export without confirming it", async () => {
+  for (const [code, status] of [
+    ["PT413", 413],
+    ["PT429", 429],
+  ] as const) {
+    rpc.mockReset();
+    rpc.mockResolvedValueOnce({ data: null, error: { code, message: "refused" } });
+    const response = await POST(request());
+    expect(response.status).toBe(status);
+    expect((await response.json()).error).toMatch(/Nothing was exported/);
+    expect(confirmCalls()).toHaveLength(0);
+  }
 });

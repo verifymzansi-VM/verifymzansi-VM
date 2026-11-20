@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 // Behaviour checks for 20261120191500_privacy_export_confirm.sql: a data
-// (access) export is prepared without telling the member anything, and only
-// its confirmation, after the website has checked and handed it over, records
-// the 'exported' event, queues the requester's email and adds the bell notice,
-// once. A prepared export that is never confirmed (the website refused it)
-// leaves no 'exported' event, email or notice; confirming the same export
-// twice gives one of each; only the staff member who prepared it can confirm
-// it, at the same revision, within 15 minutes. The old export command keeps
-// working unchanged (expand step).
+// (access) export leaves the database only together with the member's notice.
+// Preparing an export returns dataset names, row counts and a digest, never
+// personal data, and tells the member nothing; only the confirmation returns
+// the data, after rebuilding it and matching the prepared digest, in the same
+// transaction that records the 'exported' event, queues the requester's email
+// and adds the bell notice, once. A refused (never confirmed) export leaves no
+// 'exported' event, email or notice; a changed export is refused; a second
+// confirmation, even a parallel one, is refused and notifies nobody; only the
+// preparing staff member can confirm, at the same revision, within 15 minutes;
+// preparations are limited per staff member and request per hour. The old
+// export command keeps working unchanged (expand step), and the rollback
+// clears a partial state but refuses after a later change.
 //
 // Replays database/foundation (prelude, candidate.sql, every update before this
 // one) into the throwaway, network-less Postgres 17 container of the SQL lint
@@ -22,6 +26,7 @@
 //
 // Needs a local Docker daemon; it takes no connection settings at all.
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
   applyStepsBefore,
@@ -69,6 +74,34 @@ try {
   const { steps, index, step } = applyStepsBefore(database, UPDATE);
   const count = (sql) => Number(q(`select count(*) from ${sql};`));
   const stale = () => Math.floor(Date.now() / 1000) - 20 * 60;
+  // A separate psql session, for the concurrency check.
+  const session = (sql) =>
+    new Promise((resolve) => {
+      const child = spawn(
+        "docker",
+        [
+          "exec",
+          "-i",
+          database.name,
+          "psql",
+          "-X",
+          "-q",
+          "-A",
+          "-t",
+          "-v",
+          "ON_ERROR_STOP=1",
+        ].concat(["-U", "postgres", "-d", "postgres"]),
+        { windowsHide: true }
+      );
+      let stdout = "",
+        stderr = "";
+      child.stdout.on("data", (data) => (stdout += data));
+      child.stderr.on("data", (data) => (stderr += data));
+      child.on("close", (status) => resolve({ status, stdout, stderr }));
+      child.stdin.end(`\\set VERBOSITY verbose\n${sql}`);
+    });
+  const delayed = (ms, sql) =>
+    new Promise((resolve) => setTimeout(resolve, ms)).then(() => session(sql));
 
   // ------------------------------------------------------- synthetic world
   const { user, staffUser } = installStaffPaymentWorld(q, json);
@@ -156,6 +189,7 @@ try {
   });
 
   // ------------------------------------------------------------- apply
+  const before = fingerprint();
   applyWithRollbackCheck(database, {
     step,
     rollback: ROLLBACK,
@@ -165,6 +199,7 @@ try {
     appliedSummary:
       /^privacy export confirm: already applied; exports recorded: 0; export emails waiting: 0; prepared: 0; confirmed: 0$/,
   });
+  const after = fingerprint();
   await check("the new commands are staff commands only", () => {
     const grants = executeGrants(json, SIGNATURES);
     for (const signature of SIGNATURES)
@@ -174,50 +209,122 @@ try {
         signature
       );
   });
+  await check("re-running the update compares definitions, not only names", () => {
+    q(`drop index private.privacy_events_export_idx;
+      create index privacy_events_export_idx on private.privacy_request_events (export_id, action) where export_id is not null;`);
+    assert.match(fails(step.sql, "55000"), /not the reviewed definition/);
+    const rows = preflight();
+    assert.ok(
+      rows.some((r) => r[0] === "problem" && r[1].startsWith("index privacy_events_export_idx")),
+      JSON.stringify(rows)
+    );
+    q(`drop index private.privacy_events_export_idx;
+      create unique index privacy_events_export_idx on private.privacy_request_events (export_id, action) where export_id is not null;`);
+    q(`alter table private.privacy_request_events drop constraint privacy_request_events_export_check,
+      add constraint privacy_request_events_export_check check (true);`);
+    assert.match(fails(step.sql, "55000"), /not the reviewed definition/);
+    assert.ok(
+      preflight().some((r) => r[1].startsWith("check privacy_request_events_export_check")),
+      "preflight names the changed check"
+    );
+    q(
+      `alter table private.privacy_request_events drop constraint privacy_request_events_export_check;`
+    );
+    assert.match(fails(step.sql, "55000"), /7 of 8 objects exist/);
+    q(`alter table private.privacy_request_events add constraint privacy_request_events_export_check check (case action
+      when 'export_prepared' then export_id is not null and export_digest is not null and export_digest ~ '^[0-9a-f]{64}$'
+      when 'exported' then export_digest is null
+      else export_id is null and export_digest is null end);`);
+    applySteps(database, [step]);
+    assert.equal(fingerprint(), after);
+  });
+  await check("the rollback clears a partial state and refuses after a later change", () => {
+    // A later change of a new command, or of the old command, is refused.
+    const confirmFn = "internal.confirm_frontend_privacy_export(uuid,integer,uuid)";
+    for (const signature of [confirmFn, OLD_EXPORT]) {
+      const live = q(`select pg_get_functiondef('${signature}'::regprocedure);`);
+      q(
+        `do $$begin execute replace(pg_get_functiondef('${signature}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
+      );
+      assert.match(fails(ROLLBACK, "55000"), /rollback precondition/);
+      q(`${live};`);
+    }
+    assert.equal(fingerprint(), after);
+    // Half removed: the rollback still clears the rest.
+    q(`drop function api.confirm_frontend_privacy_export(uuid,integer,uuid);
+      drop index private.privacy_events_export_idx;`);
+    assert.ok(
+      preflight().some((r) => r[1] === "only part of the update is present"),
+      JSON.stringify(preflight())
+    );
+    applySteps(database, [{ label: "rollback from a partial state", sql: ROLLBACK }]);
+    assert.equal(fingerprint(), before);
+    applySteps(database, [step]);
+    assert.equal(fingerprint(), after);
+  });
 
   // -------------------------------------------------------------- rules
-  await check("a prepared export that is never confirmed tells the member nothing", () => {
-    const requester = user("refused");
+  /** The requester's own values that must never be in a prepare answer. */
+  const personal = (who) => [
+    who.id,
+    q(`select email from auth.users where id='${who.id}';`),
+    q(`select display_name from private.profiles where account_id='${who.id}';`),
+  ];
+  await check("prepare returns names, counts and a digest, never personal data", () => {
+    const requester = user("names-only");
     const id = approved(requester);
-    const exported = json(prepare(admin, id));
-    assert.equal(exported.request_id, id);
-    assert.match(exported.export_id, /^[0-9a-f-]{36}$/);
-    assert.equal(exported.account_found, true);
-    assert.equal(Object.keys(exported.datasets).length, 42);
-    // The website refuses it (for example a dataset it does not know) and
-    // never confirms: only the staff audit of the preparation exists.
+    const plan = json(prepare(admin, id));
+    assert.deepEqual(Object.keys(plan).sort(), [
+      "account_found",
+      "datasets",
+      "digest",
+      "due_by",
+      "export_id",
+      "received_at",
+      "reference",
+      "request_id",
+      "request_type",
+    ]);
+    assert.equal(plan.request_id, id);
+    assert.match(plan.export_id, /^[0-9a-f-]{36}$/);
+    assert.match(plan.digest, /^[0-9a-f]{64}$/);
+    assert.equal(plan.account_found, true);
+    assert.equal(Object.keys(plan.datasets).length, 42);
+    for (const [name, rows] of Object.entries(plan.datasets))
+      assert.ok(Number.isInteger(rows) && rows >= 0, `${name}: ${rows}`);
+    assert.equal(plan.datasets.profile, 1);
+    assert.equal(plan.datasets.account, 1);
+    const text = JSON.stringify(plan);
+    for (const value of personal(requester)) assert.ok(!text.includes(value), value);
+    // The website refuses it and never confirms: only the staff audit exists.
     assert.equal(events(id), "export_prepared");
     assert.equal(
-      count(
-        `private.privacy_request_events where request_id='${id}' and action='export_prepared'
-          and actor_id='${admin.id}' and export_id='${exported.export_id}'`
+      q(
+        `select export_digest from private.privacy_request_events where export_id='${plan.export_id}';`
       ),
-      1
+      plan.digest
     );
     assert.equal(exportedJobs(id), 0);
     assert.equal(notices(requester), 0);
-    // A retried, again refused, export adds nothing for the member either.
     json(prepare(admin, id));
     assert.equal(events(id), "export_prepared,export_prepared");
     assert.equal(exportedJobs(id), 0);
     assert.equal(notices(requester), 0);
   });
-  await check("confirming the same export twice gives one event, one email, one notice", () => {
+  await check("the data comes only with the confirmation, which tells the member once", () => {
     const requester = user("confirmed");
     const id = approved(requester);
-    const { export_id: exportId } = json(prepare(admin, id));
-    const first = json(confirm(admin, id, exportId));
-    assert.equal(first.request_id, id);
-    assert.equal(first.export_id, exportId);
-    const again = json(confirm(admin, id, exportId));
-    assert.deepEqual(again, first);
+    const plan = json(prepare(admin, id));
+    const delivered = json(confirm(admin, id, plan.export_id));
+    assert.equal(delivered.request_id, id);
+    assert.equal(delivered.export_id, plan.export_id);
+    assert.equal(delivered.account_found, true);
+    assert.deepEqual(Object.keys(delivered.datasets).sort(), Object.keys(plan.datasets).sort());
+    for (const [name, rows] of Object.entries(delivered.datasets))
+      assert.equal(rows.length, plan.datasets[name], name);
+    assert.equal(delivered.datasets.profile[0].account_id, requester.id);
+    assert.equal(delivered.datasets.account[0].email, personal(requester)[1]);
     assert.equal(events(id), "export_prepared,exported");
-    assert.equal(
-      count(
-        `private.privacy_request_events where request_id='${id}' and action='exported' and export_id='${exportId}'`
-      ),
-      1
-    );
     assert.equal(exportedJobs(id), 1);
     assert.equal(notices(requester), 1);
     const bell = json(member(requester, "select api.list_my_frontend_notices(50,false,null);"));
@@ -225,16 +332,53 @@ try {
       bell.items.some((n) => n.kind === "privacy_export_made"),
       JSON.stringify(bell.items.map((n) => n.kind))
     );
+    // Confirming the same export again is refused and changes nothing.
+    fails(confirm(admin, id, plan.export_id), "PT409", /export already confirmed/);
+    assert.equal(events(id), "export_prepared,exported");
+    assert.equal(exportedJobs(id), 1);
+    assert.equal(notices(requester), 1);
     // A later, separate export is recorded too, but the member is told once.
-    const later = json(prepare(governor, id)).export_id;
-    json(confirm(governor, id, later));
+    const second = json(prepare(governor, id)).export_id;
+    json(confirm(governor, id, second));
     assert.equal(events(id), "export_prepared,exported,export_prepared,exported");
     assert.equal(exportedJobs(id), 1);
     assert.equal(notices(requester), 1);
-    // A confirmed export answers the same even after the 15 minutes.
-    q(`update private.privacy_request_events set occurred_at=occurred_at-interval '1 hour'
-      where export_id='${exportId}';`);
-    assert.equal(json(confirm(admin, id, exportId)).export_id, exportId);
+  });
+  await check("an export that changed after it was prepared is refused", () => {
+    const requester = user("changed");
+    const id = approved(requester);
+    const plan = json(prepare(admin, id));
+    q(
+      `update private.profiles set bio='Changed after the export was prepared' where account_id='${requester.id}';`
+    );
+    fails(confirm(admin, id, plan.export_id), "PT409", /export changed since it was prepared/);
+    assert.equal(events(id), "export_prepared");
+    assert.equal(exportedJobs(id), 0);
+    assert.equal(notices(requester), 0);
+    // Prepared again, it is delivered with the change.
+    const again = json(prepare(admin, id));
+    assert.notEqual(again.digest, plan.digest);
+    const delivered = json(confirm(admin, id, again.export_id));
+    assert.equal(delivered.datasets.profile[0].bio, "Changed after the export was prepared");
+    assert.equal(notices(requester), 1);
+  });
+  await check("parallel confirmations of one export deliver it once and notify once", async () => {
+    const requester = user("parallel");
+    const id = approved(requester);
+    const exportId = json(prepare(admin, id)).export_id;
+    const revision = privacy(id).revision;
+    const call = `select api.confirm_frontend_privacy_export('${id}',${revision},'${exportId}')`;
+    // The first holds its transaction open; the second starts meanwhile and
+    // waits on the first's row.
+    const [first, second] = await Promise.all([
+      session(staff(admin, `begin;\n${call};\nselect pg_sleep(2);\ncommit;`)),
+      delayed(500, staff(admin, `${call};`)),
+    ]);
+    const outcomes = [first, second].map((r) => (r.status === 0 ? "delivered" : "refused"));
+    assert.deepEqual(outcomes.sort(), ["delivered", "refused"], first.stderr + second.stderr);
+    const refused = first.status === 0 ? second : first;
+    assert.match(refused.stderr, /PT409: export already confirmed/);
+    assert.equal(events(id), "export_prepared,exported");
     assert.equal(exportedJobs(id), 1);
     assert.equal(notices(requester), 1);
   });
@@ -275,7 +419,7 @@ try {
     assert.equal(exportedJobs(id), 0);
     assert.equal(notices(requester), 0);
   });
-  await check("prepare keeps the old command's rules", () => {
+  await check("prepare keeps the old command's rules and limits repeated builds", () => {
     const requester = user("prepare-rules");
     const id = approved(requester);
     fails(prepare(admin, id, stale()), "42501", RECENT);
@@ -288,6 +432,18 @@ try {
       "PT409",
       /represented verified access request required/
     );
+    assert.equal(events(id), "");
+    // At most 10 preparations per staff member and request per hour.
+    for (let i = 0; i < 10; i += 1) json(prepare(admin, id));
+    fails(prepare(admin, id), "PT429", /export preparation limit reached/);
+    assert.equal(
+      count(`private.privacy_request_events where request_id='${id}' and action='export_prepared'`),
+      10
+    );
+    json(prepare(governor, id));
+    q(`update private.privacy_request_events set occurred_at=occurred_at-interval '61 minutes'
+      where request_id='${id}' and actor_id='${admin.id}';`);
+    json(prepare(admin, id));
     // Staff never export a request of their own.
     const own = json(
       service(
@@ -307,18 +463,22 @@ try {
       )
     );
     fails(prepare(governor, own), "42501", /another staff member/);
-    assert.equal(events(id), "");
     assert.equal(events(own), "");
   });
-  await check("the event log keeps export ids to the two export actions, once each", () => {
+  await check("the event log keeps export ids and digests to the two export actions", () => {
     const id = approved(user("constraints"));
     const exportId = json(prepare(admin, id)).export_id;
-    const insert = (action, value) =>
-      `insert into private.privacy_request_events(request_id,actor_id,action,represented_revision,export_id)
-        values('${id}','${admin.id}','${action}',1,${value});`;
-    fails(insert("export_prepared", "null"), "23514");
+    const insert = (action, exportValue, digestValue = "null") =>
+      `insert into private.privacy_request_events(request_id,actor_id,action,represented_revision,export_id,export_digest)
+        values('${id}','${admin.id}','${action}',1,${exportValue},${digestValue});`;
+    const digest = `'${"b".repeat(64)}'`;
+    fails(insert("export_prepared", "null", digest), "23514");
+    fails(insert("export_prepared", `'${crypto.randomUUID()}'`), "23514");
+    fails(insert("export_prepared", `'${crypto.randomUUID()}'`, "'not-a-digest'"), "23514");
+    fails(insert("exported", `'${crypto.randomUUID()}'`, digest), "23514");
     fails(insert("submitted", `'${crypto.randomUUID()}'`), "23514");
-    fails(insert("export_prepared", `'${exportId}'`), "23505");
+    fails(insert("submitted", "null", digest), "23514");
+    fails(insert("export_prepared", `'${exportId}'`, digest), "23505");
     json(confirm(admin, id, exportId));
     fails(insert("exported", `'${exportId}'`), "23505");
   });
@@ -355,8 +515,8 @@ try {
       const id = approved(requester);
       const exportId = json(prepare(admin, id)).export_id;
       assert.equal(notices(requester), 0);
-      json(confirm(admin, id, exportId));
-      json(confirm(admin, id, exportId));
+      assert.equal(json(confirm(admin, id, exportId)).datasets.profile.length, 1);
+      fails(confirm(admin, id, exportId), "PT409", /export already confirmed/);
       assert.equal(notices(requester), 1);
     });
   }

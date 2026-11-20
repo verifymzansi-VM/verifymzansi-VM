@@ -9,13 +9,14 @@ create table private.privacy_request_events (
   represented_revision integer not null,
   occurred_at timestamp with time zone default clock_timestamp() not null,
   export_id uuid,
+  export_digest text,
   constraint privacy_request_events_action_check CHECK (action = ANY (ARRAY['submitted'::text, 'recorded'::text, 'assigned'::text, 'unassigned'::text, 'extended'::text, 'identity_verified'::text, 'started'::text, 'rejected'::text, 'completed'::text, 'exported'::text, 'erasure_ordered'::text, 'export_prepared'::text])),
   constraint privacy_request_events_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES auth.users(id) ON DELETE SET NULL,
   constraint privacy_request_events_export_check CHECK (
 CASE action
-    WHEN 'export_prepared'::text THEN export_id IS NOT NULL
-    WHEN 'exported'::text THEN true
-    ELSE export_id IS NULL
+    WHEN 'export_prepared'::text THEN export_id IS NOT NULL AND export_digest IS NOT NULL AND export_digest ~ '^[0-9a-f]{64}$'::text
+    WHEN 'exported'::text THEN export_digest IS NULL
+    ELSE export_id IS NULL AND export_digest IS NULL
 END),
   constraint privacy_request_events_pkey PRIMARY KEY (id),
   constraint privacy_request_events_represented_revision_check CHECK (represented_revision > 0),

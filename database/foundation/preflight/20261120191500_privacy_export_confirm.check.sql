@@ -7,8 +7,10 @@
 -- summary is the only row and reads "update not applied".
 --
 -- The summary says whether the old export command is the reviewed body and
--- the new commands, column and index are absent (update not applied), or
--- everything is the update's (already applied), and counts:
+-- none of the update's objects exist (update not applied), or every object is
+-- the update's exact definition (already applied): the four new functions
+-- (body md5), the two columns (name and type), the unique index
+-- (pg_get_indexdef) and the export check (pg_get_constraintdef md5). It counts:
 -- - "exports recorded": 'exported' events (the old command's and confirmed
 --   ones);
 -- - "export emails waiting": 'exported' email jobs not yet delivered;
@@ -25,53 +27,72 @@ with bodies as (
       '939737e433fcf800d5e98a3dd1569e5d', '939737e433fcf800d5e98a3dd1569e5d'),
     ('api.export_frontend_privacy_request(uuid,integer)',
       '251a62d1bb6d474172d02a2867b2556a', '251a62d1bb6d474172d02a2867b2556a'),
-    ('internal.prepare_frontend_privacy_export(uuid,integer)', null, 'c4b947da9786fd3cc73657e6f8c6fc24'),
+    ('internal.prepare_frontend_privacy_export(uuid,integer)', null, 'a7a7c1431e6da1c18eda98b7e18245fd'),
     ('api.prepare_frontend_privacy_export(uuid,integer)', null, '001f2fc46398c56fd2ac6d7b3bf2cf11'),
-    ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '520bd0b42886eb8b1af5cfacfd242b99'),
+    ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)', null, 'f5fc946f1870f6516592dacf42ce90e1'),
     ('api.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '438d948a6a90a8fefd9c6bf49df8c99f')
   ) v(sig, reviewed, updated)
 ),
-shape as (
-  select exists (select 1 from pg_attribute a where a.attrelid = 'private.privacy_request_events'::regclass
-        and a.attname = 'export_id' and not a.attisdropped) as has_column,
-    to_regclass('private.privacy_events_export_idx') is not null as has_index,
-    exists (select 1 from pg_constraint c where c.conrelid = 'private.privacy_request_events'::regclass
-        and c.conname = 'privacy_request_events_export_check') as has_check,
-    (select array_agg(m[1] order by m[1])::text[] from pg_constraint c,
+objects as (
+  -- Each other object of the update: its current definition (null when
+  -- absent) and the update's definition.
+  select v.name, v.updated,
+    case v.name
+      when 'column export_id' then (select format_type(a.atttypid, a.atttypmod) || ' ' || a.attnotnull
+        from pg_attribute a where a.attrelid = 'private.privacy_request_events'::regclass
+          and a.attname = 'export_id' and not a.attisdropped)
+      when 'column export_digest' then (select format_type(a.atttypid, a.atttypmod) || ' ' || a.attnotnull
+        from pg_attribute a where a.attrelid = 'private.privacy_request_events'::regclass
+          and a.attname = 'export_digest' and not a.attisdropped)
+      when 'index privacy_events_export_idx' then (select i.indisunique || ' ' || pg_get_indexdef(i.indexrelid)
+        from pg_index i where i.indexrelid = to_regclass('private.privacy_events_export_idx'))
+      when 'check privacy_request_events_export_check' then (select md5(pg_get_constraintdef(c.oid))
+        from pg_constraint c where c.conrelid = 'private.privacy_request_events'::regclass
+          and c.conname = 'privacy_request_events_export_check')
+    end as current
+  from (values
+    ('column export_id', 'uuid false'),
+    ('column export_digest', 'text false'),
+    ('index privacy_events_export_idx',
+      'true CREATE UNIQUE INDEX privacy_events_export_idx ON private.privacy_request_events USING btree (export_id, action) WHERE (export_id IS NOT NULL)'),
+    ('check privacy_request_events_export_check', '83e9c28122ad3bd5cc71b593251093c6')
+  ) v(name, updated)
+),
+actions as (
+  select (select array_agg(m[1] order by m[1])::text[] from pg_constraint c,
         regexp_matches(pg_get_constraintdef(c.oid), '''([a-z_]+)''', 'g') m
       where c.conrelid = 'private.privacy_request_events'::regclass
-        and c.conname = 'privacy_request_events_action_check') as actions
-),
-lists as (
-  select array['assigned','completed','erasure_ordered','exported','extended','identity_verified','recorded',
+        and c.conname = 'privacy_request_events_action_check') as current,
+    array['assigned','completed','erasure_ordered','exported','extended','identity_verified','recorded',
       'rejected','started','submitted','unassigned']::text[] as reviewed,
     array['assigned','completed','erasure_ordered','export_prepared','exported','extended','identity_verified',
       'recorded','rejected','started','submitted','unassigned']::text[] as updated
 ),
-state as (
-  select
-    count(*) filter (where body is not distinct from reviewed) as reviewed,
-    count(*) filter (where body = updated) as updated,
-    count(*) as total
-  from bodies
-),
 verdict as (
   select
-    s.updated = s.total and sh.has_column and sh.has_index and sh.has_check and sh.actions = l.updated as applied,
-    s.reviewed = s.total and not sh.has_column and not sh.has_index and not sh.has_check and sh.actions = l.reviewed as absent
-  from state s, shape sh, lists l
+    (select bool_and(body is not distinct from updated) from bodies)
+      and (select bool_and(current is not distinct from updated) from objects)
+      and a.current = a.updated as applied,
+    (select bool_and(body is not distinct from reviewed) from bodies)
+      and (select bool_and(current is null) from objects)
+      and a.current = a.reviewed as absent
+  from actions a
 ),
 problems as (
   select 'problem' as kind, sig || ' is not the reviewed body (md5 ' || coalesce(body, 'missing') || '); do not apply the update' as detail
     from bodies where body is distinct from reviewed and body is distinct from updated
   union all
+  select 'problem', name || ' is not the update''s definition (' || current || '); do not apply the update'
+    from objects where current is not null and current is distinct from updated
+  union all
   select 'problem', 'privacy_request_events_action_check is not the reviewed list; do not apply the update'
-    from shape sh, lists l where sh.actions is distinct from l.reviewed and sh.actions is distinct from l.updated
+    from actions a where a.current is distinct from a.reviewed and a.current is distinct from a.updated
   union all
   select 'problem', 'only part of the update is present'
     from verdict v
     where not v.applied and not v.absent
       and not exists (select 1 from bodies where body is distinct from reviewed and body is distinct from updated)
+      and not exists (select 1 from objects where current is not null and current is distinct from updated)
 )
 select 'summary' as kind,
   'privacy export confirm: '

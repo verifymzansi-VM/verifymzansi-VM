@@ -2461,7 +2461,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current privacy reviewer with fresh TOTP, never the requester or data subject; only the represented verified access request and fixed subject-scoped datasets, with a new export id. Oversized exports are refused in full. Records only the preparation in the staff audit; tells the member nothing."
+      "authority": "Current privacy reviewer with fresh TOTP, never the requester or data subject; only the represented verified access request. Returns no personal data: dataset names, row counts, a digest and a new export id. Oversized exports are refused in full; at most 10 preparations per reviewer and request per hour. Records only the preparation in the staff audit; tells the member nothing."
     },
     {
       "name": "confirm_frontend_privacy_export",
@@ -2490,7 +2490,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "The privacy reviewer who prepared that export, at the same request revision, within 15 minutes. The first confirmation records the export, emails the requester (once per request) and notifies the account the request names; a repeat changes nothing."
+      "authority": "The privacy reviewer who prepared that export, at the same request revision, within 15 minutes, once. Rebuilds the export and refuses it unless it matches the prepared digest; then, in one transaction, records the export, emails the requester (once per request), notifies the account the request names and returns the data. A second confirmation is refused."
     },
     {
       "name": "claim_frontend_privacy_notice",

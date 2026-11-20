@@ -49,12 +49,12 @@
       "fingerprint": "5e5623672e80b927048d8553487d5442"
     },
     "columns": {
-      "items": 1393,
-      "fingerprint": "2cd66c3d8514f793fbdaa526830ada05"
+      "items": 1394,
+      "fingerprint": "58292f4f56885a20fd09dd684bca5e2a"
     },
     "constraints": {
       "items": 1238,
-      "fingerprint": "167b7af7c1aa4e5cbd9c163146f0d077"
+      "fingerprint": "cc4cf7f795884f95f344ef80bc523c3b"
     },
     "event_triggers": {
       "items": 1,
@@ -62,7 +62,7 @@
     },
     "function_bodies": {
       "items": 1067,
-      "fingerprint": "9cd8de1a5ce9fb39ea2d266185b4d4fe"
+      "fingerprint": "6e74a4eb4a45d75eced81d032de5ab84"
     },
     "function_grants": {
       "items": 772,

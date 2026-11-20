@@ -80,7 +80,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
-## Access exports tell the member only after the website hands them over, 20 November 2026
+## Access exports leave the database only with the member's notice, 20 November 2026
 
 `20261120191500_privacy_export_confirm.sql` is pending (see the applied
 register). Until now `api.export_frontend_privacy_request` built a data (access)
@@ -95,25 +95,34 @@ and keeps working for the website deployed now. A later update removes it
 (contract step, with a `../contract-steps.json` entry) once no deployed website
 calls it.
 
-- **`api.prepare_frontend_privacy_export(p_case, p_revision)`**: the same rules
-  and the same export as the old command (dsar:manage with a second factor from
-  the last 15 minutes, a verified access request at the represented revision,
-  never the requester or the data subject, PT413 for an oversized export), plus
-  a new `export_id`. It records only an `export_prepared` event (the staff audit
-  of who prepared which export). No email, no notice, no `exported` event.
-- **`api.confirm_frontend_privacy_export(p_case, p_revision, p_export)`**: the
-  website calls it after checking the export (exactly the reviewed datasets in
-  `src/lib/foundation/privacy-export-datasets.ts`) and just before handing the
-  file over; if it fails, nothing is handed over. It needs the staff member who
-  prepared that export, at the same request revision, within 15 minutes. The
-  first confirmation records the `exported` event (with the export id), queues
-  the email (once per request, as before) and, when that email job is new and
-  the request names an account, adds the notice. A repeated confirmation of the
-  same export changes nothing and answers the same.
-- **Event log:** `private.privacy_request_events` gains `export_id` (nullable)
-  and the action `export_prepared`. An `export_prepared` row always has an
-  export id, an `exported` row may (the old command's have none), other actions
-  never; a unique index allows one row per export id and action.
+- **`api.prepare_frontend_privacy_export(p_case, p_revision)`** returns no
+  personal data: the request's reference and dates, a new `export_id`, each
+  dataset's name and row count, and the SHA-256 `digest` of the datasets. Same
+  rules as the old command (dsar:manage with a second factor from the last 15
+  minutes, a verified access request at the represented revision, never the
+  requester or the data subject, PT413 for an oversized export), and at most 10
+  preparations per staff member and request per hour (PT429). It records only an
+  `export_prepared` event with the digest (staff audit). No email, notice or
+  `exported` event.
+- **`api.confirm_frontend_privacy_export(p_case, p_revision, p_export)`** is the
+  only way to the data. Only the staff member who prepared that export, at the
+  same request revision, within 15 minutes, and only once. It builds the export
+  again and refuses it (PT409 "export changed since it was prepared") unless the
+  digest matches; staff then prepare again. In the same transaction that returns
+  the data it records the `exported` event (with the export id), queues the
+  email (once per request, as before) and, when that email job is new and the
+  request names an account, adds the notice. A second confirmation of the same
+  export, even at the same moment, is refused (PT409 "export already confirmed")
+  and changes nothing.
+- **The website** checks the prepared dataset names (exactly one set in
+  `src/lib/foundation/privacy-export-datasets.ts`), then confirms, checks that
+  the confirmed rows match the prepared counts, and hands the file over (without
+  the export id). Any refusal answers "Nothing was exported".
+- **Event log:** `private.privacy_request_events` gains `export_id` and
+  `export_digest` (both nullable) and the action `export_prepared`. An
+  `export_prepared` row always has both, an `exported` row may have an export id
+  (the old command's have none) and never a digest, other actions neither; a
+  unique index allows one row per export id and action.
 
 ORDER: apply first, then merge (the website in this pull request calls the new
 commands; the website deployed now does not).
@@ -121,9 +130,11 @@ commands; the website deployed now does not).
 **Applying.**
 
 1. Run `../preflight/20261120191500_privacy_export_confirm.check.sql` unchanged
-   in the SQL editor. It is read only. Continue only if its result is the single
-   "summary" row reading "privacy export confirm: update not applied; exports
-   recorded: N; export emails waiting: M".
+   in the SQL editor. It is read only and compares definitions (function body
+   md5, column types, `pg_get_indexdef`, the check's `pg_get_constraintdef`).
+   Continue only if its result is the single "summary" row reading "privacy
+   export confirm: update not applied; exports recorded: N; export emails
+   waiting: M".
 2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
    again: it must read "privacy export confirm: already applied; exports
    recorded: N; export emails waiting: M; prepared: 0; confirmed: 0" (larger
@@ -133,9 +144,12 @@ commands; the website deployed now does not).
    above.
 
 **Rollback** (`../rollback/20261120191500_privacy_export_confirm.down.sql`):
-only after the website that calls the new commands has been reverted. It drops
-the two commands, the index, the check and the column, deletes the
-`export_prepared` events and restores the action list; `exported` events stay.
+only after the website that calls the new commands has been reverted. It refuses
+if the old export command is missing or changed, if none of the update's objects
+exist, or if a new command that exists is not the update's body; it runs when
+only some objects exist. It drops the two commands, the index, the check and
+both columns, deletes the `export_prepared` events and restores the action list;
+`exported` events stay.
 
 ## A daily limit on SMS codes for the whole site, 20 November 2026
 
