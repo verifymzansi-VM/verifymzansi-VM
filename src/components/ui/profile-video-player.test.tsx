@@ -249,4 +249,52 @@ describe("ProfileVideoPlayer", () => {
     expect(managerMock.requestPriority).toHaveBeenCalledWith(video);
     expect(playMock).toHaveBeenCalled();
   });
+
+  it("shows the time and length, and seeks from a 24 px tall bar", () => {
+    render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" />);
+    const video = screen.getByLabelText("Profile clip video") as HTMLVideoElement;
+    Object.defineProperty(video, "duration", { configurable: true, get: () => 45 });
+    let position = 12;
+    Object.defineProperty(video, "currentTime", {
+      configurable: true,
+      get: () => position,
+      set: (value: number) => {
+        position = value;
+      },
+    });
+    fireEvent.loadedMetadata(video);
+
+    expect(screen.getByText("0:12 / 0:45")).toBeInTheDocument();
+    const bar = screen.getByRole("slider", { name: "Seek playback" });
+    expect(Number.parseFloat(window.getComputedStyle(bar).height)).toBeGreaterThanOrEqual(24);
+
+    fireEvent.change(bar, { target: { value: "30" } });
+    expect(position).toBe(30);
+    expect(screen.getByText("0:30 / 0:45")).toBeInTheDocument();
+  });
+
+  it("reads the length of a video that loaded before the page was interactive", () => {
+    const descriptors = {
+      readyState: Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "readyState"),
+      duration: Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "duration"),
+    };
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", {
+      configurable: true,
+      get: () => 1,
+    });
+    Object.defineProperty(HTMLMediaElement.prototype, "duration", {
+      configurable: true,
+      get: () => 45,
+    });
+    try {
+      // No loadedmetadata event reaches the player: it already happened.
+      render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" />);
+      expect(screen.getByText("0:00 / 0:45")).toBeInTheDocument();
+      expect(screen.getByRole("slider", { name: "Seek playback" })).toHaveAttribute("max", "45");
+    } finally {
+      for (const [name, descriptor] of Object.entries(descriptors)) {
+        if (descriptor) Object.defineProperty(HTMLMediaElement.prototype, name, descriptor);
+      }
+    }
+  });
 });

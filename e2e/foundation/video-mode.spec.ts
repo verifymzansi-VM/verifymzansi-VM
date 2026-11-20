@@ -194,6 +194,29 @@ test("controls step aside on their own after a quiet moment", async ({ page }) =
   await expect(root).toHaveAttribute("data-chrome", "hidden");
 });
 
+test("controls stay while the seek bar is being dragged", async ({ page }) => {
+  await page.clock.install();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/dev/video-mode");
+  await expect(heading(page)).toHaveText(market[0].title);
+  const root = page.locator("[data-chrome]");
+  const box = await page.getByRole("slider", { name: "Seek playback" }).boundingBox();
+  const y = (box?.y ?? 0) + (box?.height ?? 0) / 2;
+  const x = (box?.x ?? 0) + (box?.width ?? 0) * 0.2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  // Moving along the bar counts as activity, so 6 s without a click never hides it mid-drag.
+  for (const step of [1, 2, 3]) {
+    await page.clock.fastForward(2500);
+    await page.mouse.move(x + step * 20, y);
+  }
+  await expect(root).toHaveAttribute("data-chrome", "shown");
+  await page.mouse.up();
+  await page.mouse.move(x + 60, y + 200);
+  await page.clock.fastForward(6500);
+  await expect(root).toHaveAttribute("data-chrome", "hidden");
+});
+
 test("Back closes a sheet before it leaves Video mode", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dev/video-mode");
@@ -275,6 +298,30 @@ test("pausing a video brings the post's details back", async ({ page }) => {
   await expect(root).toHaveAttribute("data-chrome", "hidden");
   await page.getByRole("button", { name: "Pause video" }).click();
   await expect(root).toHaveAttribute("data-chrome", "shown");
+});
+
+test("the video's seek bar is easy to grab and shows the time and length", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/dev/video-mode");
+  await expect(heading(page)).toHaveText(market[0].title);
+  const seek = page.getByRole("slider", { name: "Seek playback" });
+  await expect(seek).toBeVisible();
+  const box = await seek.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(24);
+  // A length is read from the video, so the label never stays at "/ 0:00".
+  await expect(page.getByText(/^\d+:\d{2} \/ \d+:\d{2}$/)).not.toHaveText(/\/ 0:00$/);
+  // A tap near the end of the bar seeks there and keeps the same post.
+  await page.evaluate(() => document.querySelector<HTMLVideoElement>("video")?.pause());
+  await page.touchscreen.tap((box?.x ?? 0) + (box?.width ?? 0) * 0.8, (box?.y ?? 0) + 12);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const video = document.querySelector<HTMLVideoElement>("video");
+        return video ? video.currentTime / video.duration : 0;
+      })
+    )
+    .toBeGreaterThan(0.6);
+  await expect(heading(page)).toHaveText(market[0].title);
 });
 
 test("tickets stay in view and are not repeated under More", async ({ page }) => {

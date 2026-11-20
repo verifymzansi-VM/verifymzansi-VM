@@ -214,7 +214,8 @@ describe("PaymentStatusPanel", () => {
   it("reads the package once a package payment is confirmed while the page is open", async () => {
     render(<PaymentStatusPanel initialStatus="pending" paymentId="pay-package" packagePayment />);
     await waitFor(() => expect(screen.getByText("Payment confirmed")).toBeInTheDocument());
-    expect(refresh).toHaveBeenCalledOnce();
+    // The reload runs in an effect after that render, which can land a tick later.
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
   });
 
   it("never reloads for a payment that is not a package", async () => {

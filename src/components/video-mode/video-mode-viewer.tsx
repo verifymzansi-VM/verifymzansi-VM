@@ -35,6 +35,7 @@ import {
 } from "@/components/video-mode/video-mode-rails";
 import { EdgeTab } from "@/components/video-mode/video-mode-edge-tab";
 import { useConstrainedNetwork, VideoModeMedia } from "@/components/video-mode/video-mode-media";
+import { VideoModeSeek } from "@/components/video-mode/video-mode-seek";
 import { useVideoModeFeed, type VideoModePost } from "@/components/video-mode/use-video-mode-feed";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useDwellView } from "@/components/immersive/use-dwell-view";
@@ -67,6 +68,7 @@ const SOUND_KEY = "vm:video:sound";
 /** Idle time before the controls step aside for a clean view. */
 const AUTO_HIDE_MS = 6000;
 const AUTO_HIDE_KEY = "vm:video:auto-hide";
+const SEEK_ACTIVITY_MS = 1000;
 const noop = () => {};
 /** First visit only: show how to move on, until the first swipe. */
 const HINT_KEY = "vm:video:swipe-hint";
@@ -445,6 +447,16 @@ export function VideoModeViewer({
   const noteActivity = () => {
     if (!chromeHidden) setActivity((value) => value + 1);
   };
+  // Dragging the seek bar is activity too, so the controls never step aside mid-drag.
+  // Counted at most once a second: a drag sends a move for every frame.
+  const lastSeekMoveAt = useRef(0);
+  const noteSeekMove = (event: React.SyntheticEvent) => {
+    if (!(event.target instanceof Element) || !event.target.closest("[data-video-seek]")) return;
+    const now = performance.now();
+    if (now - lastSeekMoveAt.current < SEEK_ACTIVITY_MS) return;
+    lastSeekMoveAt.current = now;
+    noteActivity();
+  };
 
   /* ── The address bar keeps the section, filters and position (refresh, rotate, Back) ── */
   useEffect(() => {
@@ -736,6 +748,8 @@ export function VideoModeViewer({
       data-chrome={cleanView ? "hidden" : "shown"}
       onPointerDownCapture={noteActivity}
       onKeyDownCapture={noteActivity}
+      onPointerMoveCapture={noteSeekMove}
+      onTouchMoveCapture={noteSeekMove}
       className="fixed inset-0 z-50 overflow-hidden bg-black text-white"
       role="region"
       aria-roledescription="video mode"
@@ -1011,6 +1025,9 @@ export function VideoModeViewer({
                 );
               }}
             />
+            {activeMedia?.kind === "video" ? (
+              <VideoModeSeek key={`${activeSlide.key}:${mediaIndex}`} />
+            ) : null}
           </div>
           <MoreSheet
             key={`more:${activeSlide.key}`}
