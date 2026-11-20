@@ -152,7 +152,6 @@ export default function LoginPage() {
         title: "Sign-up is by invitation for now",
         description:
           "If you were invited, use the email address the invitation was sent to. Already have an account? Sign in with the email you used.",
-        variant: "destructive",
       });
     } else if (loginPageFlags.error === "registration_unavailable") {
       toast({

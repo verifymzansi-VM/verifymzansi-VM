@@ -104,6 +104,22 @@ describe("LoginPage", () => {
     );
   });
 
+  it("shows the invitation-only Google refusal as information, not as an error", async () => {
+    window.history.pushState({}, "", "/login?error=registration_closed");
+
+    render(<LoginPage />);
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Sign-up is by invitation for now" })
+      )
+    );
+    const call = toastMock.mock.calls.find(
+      ([options]) => options.title === "Sign-up is by invitation for now"
+    );
+    expect(call?.[0]).not.toHaveProperty("variant");
+  });
+
   it("shows the email confirmed banner when redirected from confirmation", async () => {
     window.history.pushState({}, "", "/login?confirmed=true");
 
