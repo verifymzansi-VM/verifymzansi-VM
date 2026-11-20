@@ -38,7 +38,8 @@ function assertNoDevBypassesInProduction(): string[] {
   const dangerous: Record<string, string> = {
     BYPASS_OTP_CODE: "Allows OTP verification bypass",
     TEST_PHONE_NUMBERS: "Allows test phone numbers to skip real OTP",
-    ENABLE_MOCK_OZOW: "Routes payments through mock endpoint",
+    ENABLE_MOCK_OZOW:
+      "Mock payments (works only inside the foundation test copy, pnpm test:e2e:foundation)",
     ENABLE_DEV_PAYMENT_BYPASS: "Bypasses payment verification",
     DEV_EXPOSE_OTP: "Exposes OTP codes in API responses",
     SMS_MOCK: "Prevents real SMS delivery",
