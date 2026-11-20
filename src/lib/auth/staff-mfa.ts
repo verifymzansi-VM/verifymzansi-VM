@@ -1,8 +1,8 @@
 /** Sensitive actions need a second factor verified within this window. */
-export const STEP_UP_WINDOW_MS = 15 * 60 * 1000;
+const STEP_UP_WINDOW_MS = 15 * 60 * 1000;
 
 /** Any staff access needs an authenticator code verified within this window. */
-export const STAFF_SESSION_MFA_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const STAFF_SESSION_MFA_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 /** Where staff enrol or verify their authenticator app. */
 export const STAFF_MFA_PATH = "/staff/two-step";
