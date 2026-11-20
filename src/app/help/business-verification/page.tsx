@@ -6,6 +6,7 @@ import { CipcDocumentGuide } from "@/components/business-verification/cipc-docum
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
+import { brandGoldButtonClassName } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -85,7 +86,7 @@ export default function BusinessVerificationHelpPage() {
             { label: "Business verification" },
           ]}
           actions={
-            <Button asChild variant="trust-verified" size="lg">
+            <Button asChild variant="trust-gold" size="lg" className={brandGoldButtonClassName}>
               <Link href="/dashboard/listings?area=MZANSI_BUSINESS">Verify my business</Link>
             </Button>
           }

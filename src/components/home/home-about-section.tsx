@@ -51,7 +51,7 @@ export function HomeAboutSection() {
           <Button
             asChild
             size="lg"
-            className="home-link-arrow btn-shine h-12 w-full shrink-0 rounded-full bg-brand-green-700 px-7 text-base font-semibold text-white hover:bg-brand-green-800 sm:w-auto"
+            className="home-link-arrow btn-shine h-12 w-full shrink-0 rounded-full bg-brand-green-700 px-7 text-base font-semibold text-white hover:bg-brand-green-800 dark:bg-brand-green-700 dark:text-white dark:hover:bg-brand-green-800 sm:w-auto"
           >
             <Link href="/post/create" prefetch={false}>
               Post for free

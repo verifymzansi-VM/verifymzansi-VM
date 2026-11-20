@@ -149,7 +149,8 @@ export default function SafetyCentrePage() {
               </h2>
               <p className="section-lede">Something not right? Tell us.</p>
               <div className="mt-5 flex flex-wrap gap-2.5">
-                <Button asChild variant="trust-verified">
+                {/* The hero's "Report a problem" is the filled one; here it is a link. */}
+                <Button asChild variant="link" className="h-10 px-1 underline">
                   <Link href="/contact?topic=fraud_report">Report a problem</Link>
                 </Button>
                 <Button asChild variant="outline">

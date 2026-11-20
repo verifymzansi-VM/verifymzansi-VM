@@ -31,7 +31,12 @@ import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { Reveal } from "@/components/marketing/reveal";
 import { SpotlightCard } from "@/components/marketing/spotlight-card";
 import { VideoShowcase } from "@/components/marketing/video-showcase";
-import { BrandSurface, VerificationEmblem, brandOutlineButtonClassName } from "@/components/brand";
+import {
+  BrandSurface,
+  VerificationEmblem,
+  brandGoldButtonClassName,
+  brandOutlineButtonClassName,
+} from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import {
   ADDON_PRICES,
@@ -396,7 +401,7 @@ function PackageSection({
           </div>
           {children}
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <Button asChild variant="ink" className="h-11 rounded-full">
+            <Button asChild variant="outline" className="h-11 rounded-full">
               <Link href={pkg.cta.href}>{pkg.cta.label}</Link>
             </Button>
             {PACKAGES_ON_SALE || pkg.id === "individual" ? (
@@ -537,8 +542,8 @@ export default async function AdvertisePage() {
                 <Button
                   asChild
                   size="lg"
-                  variant="trust-verified"
-                  className="h-12 rounded-full px-6"
+                  variant="trust-gold"
+                  className={cn("h-12 rounded-full px-6", brandGoldButtonClassName)}
                 >
                   <Link href="/post/create">Post for free</Link>
                 </Button>
@@ -608,7 +613,7 @@ export default async function AdvertisePage() {
                 ))}
               </ul>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <Button asChild variant="ink" className="h-11 rounded-full">
+                <Button asChild variant="outline" className="h-11 rounded-full">
                   <Link href="/post/create">Post with a video</Link>
                 </Button>
                 <p className="self-center text-sm text-muted-foreground">
@@ -944,7 +949,12 @@ export default async function AdvertisePage() {
               </p>
             </div>
             <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" variant="trust-verified" className="h-12 rounded-full px-6">
+              <Button
+                asChild
+                size="lg"
+                variant="trust-gold"
+                className={cn("h-12 rounded-full px-6", brandGoldButtonClassName)}
+              >
                 <Link href="/post/create">Post for free</Link>
               </Button>
               {SHOW_SPONSOR_OFFER ? (
@@ -964,7 +974,7 @@ export default async function AdvertisePage() {
           </div>
         </BrandSurface>
       </main>
-      <Footer />
+      <Footer showPostBand={false} />
     </>
   );
 }

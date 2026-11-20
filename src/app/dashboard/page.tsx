@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   BRAND_SHIELD_LARGE_SRC,
   BrandSurface,
+  brandGoldButtonClassName,
   brandOutlineButtonClassName,
 } from "@/components/brand";
 import { LayoutList, Plus } from "lucide-react";
@@ -166,6 +167,8 @@ export default async function DashboardPage({
     organisationAdministrator: (organisationAdminResult.count ?? 0) > 0,
   });
   const verStatus = verificationSummary.accountVerificationStatus;
+  // VerificationStatusCard shows (with its own button) until the ID review is done.
+  const verificationCardShown = verStatus !== "verified";
   const stepsRemaining = verificationSummary.stepsRemaining;
   const hasAnyPosts = posts.length > 0;
   const showDashboardOnboarding = !hasAnyPosts && businessCount === 0 && tourismEventsCount === 0;
@@ -220,9 +223,15 @@ export default async function DashboardPage({
         </div>
 
         <div className="relative grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:pr-40">
+          {/* One main action: until the ID review is done, the verification card's
+              button is the main one and New post is outlined here. */}
           <Button
             asChild
-            className="h-11 gap-1.5 rounded-full bg-brand-gold-300 px-5 font-semibold text-brand-gold-950 hover:bg-brand-gold-200"
+            variant={verificationCardShown ? "outline" : "trust-gold"}
+            className={cn(
+              "h-11 gap-1.5 rounded-full px-5 font-semibold",
+              verificationCardShown ? brandOutlineButtonClassName : brandGoldButtonClassName
+            )}
           >
             <Link href="/post/create">
               <Plus aria-hidden="true" className="h-4 w-4" />

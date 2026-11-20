@@ -1,7 +1,6 @@
 import { BrandShield } from "@/components/shared/brand-shield";
 import Link from "next/link";
-import { Check, Building2, ChevronRight, ImagePlus, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Check, Building2, ChevronRight, ImagePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AccountVerificationStatus } from "@/types/enums";
 
@@ -76,16 +75,7 @@ export function DashboardOnboarding({
             </p>
           </div>
         </div>
-        <Button
-          asChild
-          variant="trust-verified"
-          className="h-11 w-full shrink-0 rounded-full px-5 sm:w-auto"
-        >
-          <Link href="/post/create">
-            <Plus aria-hidden="true" className="h-4 w-4" />
-            Create your first post
-          </Link>
-        </Button>
+        {/* The dashboard banner's New post is the way to post; no second button here. */}
       </div>
 
       <ol aria-label="Getting started" className="space-y-1 p-2 sm:p-3">

@@ -541,9 +541,11 @@ export function ListingDetailContent({
               </a>
             </Button>
           ) : null}
+          {/* Only the first way to contact is filled; the others are outlined. */}
           {canCall ? (
             <Button
               type="button"
+              variant={revealable ? "outline" : "default"}
               className="h-12 flex-1 gap-2 rounded-full font-semibold"
               size="lg"
               asChild
@@ -558,11 +560,16 @@ export function ListingDetailContent({
             <Button
               asChild
               size="lg"
-              variant="outline"
-              className="h-12 flex-1 gap-2 rounded-full border-green-500/30 font-semibold"
+              variant={revealable || canCall ? "outline" : "default"}
+              className={cn(
+                "h-12 flex-1 gap-2 rounded-full font-semibold",
+                (revealable || canCall) && "border-green-500/30"
+              )}
             >
               <a href={sellerWhatsappUrl!} target="_blank" rel="noopener noreferrer nofollow ugc">
-                <MessageCircle className="h-4 w-4 text-green-600" />
+                <MessageCircle
+                  className={cn("h-4 w-4", (revealable || canCall) && "text-green-600")}
+                />
                 WhatsApp
               </a>
             </Button>

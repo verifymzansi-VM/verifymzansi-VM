@@ -187,7 +187,7 @@ export function EnterprisePricing({
             Includes {SPONSOR_PROGRAMME_ADMINS} named administrators. Nothing renews or charges
             automatically.
           </p>
-          <Button asChild variant="ink" className="h-11 w-full rounded-full sm:w-auto">
+          <Button asChild variant="outline" className="h-11 w-full rounded-full sm:w-auto">
             <Link href={PROPOSAL_HREF}>Request a sponsor proposal</Link>
           </Button>
         </div>

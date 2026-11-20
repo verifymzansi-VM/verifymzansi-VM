@@ -82,7 +82,7 @@ export default async function MzansiMarketPage() {
             <Button
               asChild
               size="sm"
-              variant="trust-verified"
+              variant="outline"
               className="h-11 gap-1 rounded-full px-4 font-semibold"
             >
               <Link href="/post/create-listing">
@@ -114,7 +114,7 @@ export default async function MzansiMarketPage() {
                 <Button
                   asChild
                   size="sm"
-                  variant="trust-verified"
+                  variant="outline"
                   className="h-11 gap-1 rounded-full px-4 font-semibold"
                 >
                   <Link href="/post/create-listing">

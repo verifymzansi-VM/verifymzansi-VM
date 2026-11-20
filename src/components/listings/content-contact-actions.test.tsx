@@ -71,6 +71,9 @@ describe("seller contact actions", () => {
     expect(link.getAttribute("href")).toContain("https://wa.me/27821234567?");
     expect(decodeURIComponent(link.getAttribute("href")!)).toContain("Garden cottage");
     expect(screen.queryByText("Show Contact")).toBeNull();
+    // Group 66: WhatsApp is a secondary (outlined) action in the contact card.
+    expect(link.className).toMatch(/border-input/);
+    expect(link.className).not.toMatch(/bg-brand-green-600/);
   });
   it("always offers a private enquiry on Market listings, so the empty-contact note never shows", () => {
     render(<ListingContactActions listingId="abc" />);

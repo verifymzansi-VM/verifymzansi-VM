@@ -111,7 +111,7 @@ function SlotBlockNotice({
             Your ID review must be accepted before you buy a slot, so you never pay for days you
             cannot use.
           </p>
-          <Button asChild variant="outline" className="h-11 rounded-full">
+          <Button asChild variant="default" className="h-11 rounded-full">
             <Link href="/verification">Go to my ID review</Link>
           </Button>
         </>
