@@ -107,19 +107,22 @@ test("an extension cannot silently widen the approved audience", async () => {
   );
   assert.equal(requested, false);
 });
+const postIdsArgument = [{ name: "p_post_ids", sqlType: "uuid[]", optional: false }];
+// A manifest holding one reviewed anonymous read with its approved audience.
+const publicRead = (name, args = postIdsArgument) => ({
+  ...manifest,
+  functions: [
+    {
+      name,
+      arguments: args,
+      returns: "jsonb",
+      volatility: "s",
+      execute: { anon: true, authenticated: true, service_role: false },
+    },
+  ],
+});
 test("the reviewed public Seen projection accepts only the empty anonymous probe response", async () => {
-  const input = {
-    ...manifest,
-    functions: [
-      {
-        name: "get_public_frontend_business_seen",
-        arguments: [{ name: "p_post_ids", sqlType: "uuid[]", optional: false }],
-        returns: "jsonb",
-        volatility: "s",
-        execute: { anon: true, authenticated: true, service_role: false },
-      },
-    ],
-  };
+  const input = publicRead("get_public_frontend_business_seen");
   assert.equal(
     await verifyFoundationRuntimeApi(
       connection,
@@ -140,19 +143,53 @@ test("the reviewed public Seen projection accepts only the empty anonymous probe
     /projection probe failed/
   );
 });
-test("the reviewed public payment limit accepts only its one-number answer", async () => {
-  const input = {
-    ...manifest,
-    functions: [
-      {
-        name: "get_payment_limits",
-        arguments: [],
-        returns: "jsonb",
-        volatility: "s",
-        execute: { anon: true, authenticated: true, service_role: false },
+test("the reviewed public engagement read accepts only its empty items answer", async () => {
+  const input = publicRead("get_post_engagement");
+  assert.equal(
+    await verifyFoundationRuntimeApi(
+      connection,
+      async (_url, init) => {
+        assert.deepEqual(JSON.parse(init.body), { p_post_ids: [] });
+        assert.equal(init.headers.Authorization, undefined);
+        return Response.json({ items: [] });
       },
-    ],
-  };
+      input
+    ),
+    1
+  );
+  for (const [status, answer] of [
+    [200, []],
+    [200, {}],
+    [200, null],
+    [200, { items: [], extra: 1 }],
+    [200, { items: {} }],
+    [200, { items: null }],
+    [200, { items: [{ post_id: "00000000-0000-4000-8000-000000000001", views: 0, likes: 0 }] }],
+    [200, { items: [{ post_id: "00000000-0000-4000-8000-000000000001", views: 3, likes: 1 }] }],
+    [201, { items: [] }],
+    [401, { code: "42501" }],
+    [503, { error: "unavailable" }],
+  ])
+    await assert.rejects(
+      verifyFoundationRuntimeApi(connection, async () => Response.json(answer, { status }), input),
+      /projection probe failed/
+    );
+  // Its audience and arguments stay as reviewed.
+  for (const changed of [
+    { execute: { anon: true, authenticated: false, service_role: true } },
+    { arguments: [] },
+    { volatility: "v" },
+  ])
+    await assert.rejects(
+      verifyFoundationRuntimeApi(connection, async () => Response.json({ items: [] }), {
+        ...input,
+        functions: [{ ...input.functions[0], ...changed }],
+      }),
+      (error) => error.code === "ERR_ASSERTION"
+    );
+});
+test("the reviewed public payment limit accepts only its one-number answer", async () => {
+  const input = publicRead("get_payment_limits", []);
   assert.equal(
     await verifyFoundationRuntimeApi(
       connection,
