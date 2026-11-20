@@ -14,11 +14,15 @@ import { limiterAddressKey } from "@/lib/foundation/limiter-key";
 
 export async function POST(request: NextRequest) {
   // The profile page's "Set Password" (signed in, no CAPTCHA token) has its
-  // own checks; every other request is a forgot-password request.
-  const probe = await parseJsonRequest(request.clone(), { maxBytes: 4096 });
-  if (isFoundationPasswordSetupInput(probe)) return handleFoundationPasswordSetup(request, probe);
+  // own checks; every other request is a forgot-password request. The body is
+  // read once, here, and handed to whichever path answers: a copy of the
+  // request (clone) cannot be refused early, as cancelling one copy's stream
+  // waits for the other copy to be read too.
+  const input = await parseJsonRequest(request, { maxBytes: 4096 });
+  if (isFoundationPasswordSetupInput(input)) return handleFoundationPasswordSetup(request, input);
   return handleFoundationAuthAttempt({
     request,
+    body: { input },
     action: "auth:forgot-password",
     enabled:
       process.env.FOUNDATION_RECOVERY_ENABLED === "true" &&

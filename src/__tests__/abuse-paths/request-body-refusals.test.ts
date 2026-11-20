@@ -195,8 +195,8 @@ const NO_BODY = new Set([
   // A page-view beacon: answers 200 to anything and counts nothing it cannot read.
   "engagement/view",
 ]);
-/** Covered by the skipped case at the end of this file. */
-const SEPARATE = new Set(["auth/forgot-password", "foundation/auth/recovery/request"]);
+/** Also checked with a body just past their small limit, at the end of this file. */
+const RECOVERY = ["auth/forgot-password", "foundation/auth/recovery/request"];
 /** High-risk routes whose configuration this test supplies: each must answer
  * 4xx itself, not fail later with 5xx. */
 const STRICT = new Set([
@@ -240,7 +240,7 @@ const STRICT = new Set([
 async function sweep(body: () => BodyInit, headers?: Record<string, string>) {
   const failures: string[] = [];
   for (const route of routes) {
-    if (NO_BODY.has(route.name) || SEPARATE.has(route.name)) continue;
+    if (NO_BODY.has(route.name)) continue;
     work.commands.length = 0;
     const response = await Promise.race([
       send(route, body(), headers),
@@ -290,14 +290,27 @@ describe("bodies no page sends are refused without running a command", () => {
 });
 
 describe("the password recovery request", () => {
-  it.skip("answers a large body promptly", async () => {
-    for (const name of SEPARATE) {
+  // Its limit is 4 KiB, far below the sweeps' sizes: a body just past it,
+  // declared or streamed, must be refused as promptly.
+  const LARGE = 8 * 1024;
+  it.each([
+    ["with its length declared", () => JSON.stringify({ text: "x".repeat(LARGE) }), true],
+    ["streamed without a declared length", () => streamed(LARGE), false],
+  ])("answers a large body promptly, %s", async (_label, body, declared) => {
+    for (const name of RECOVERY) {
       const route = routes.find((r) => r.name === name)!;
+      const sent = body();
+      const headers =
+        declared && typeof sent === "string"
+          ? { "content-length": String(new TextEncoder().encode(sent).byteLength) }
+          : undefined;
+      work.commands.length = 0;
       const response = await Promise.race([
-        send(route, JSON.stringify({ text: "x".repeat(8 * 1024) })),
+        send(route, sent, headers),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
       ]);
-      expect(response?.status, name).toBeGreaterThanOrEqual(400);
+      expect(response?.status, name).toBe(400);
+      expect(work.commands, name).toEqual([]);
     }
   });
 });
