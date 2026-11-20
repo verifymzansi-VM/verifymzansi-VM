@@ -154,6 +154,12 @@ export default function LoginPage() {
           "VerifyMzansi is open by invitation only for now. If you already have an account, sign in with the email you used.",
         variant: "destructive",
       });
+    } else if (loginPageFlags.error === "registration_unavailable") {
+      toast({
+        title: "This email can't be used to register",
+        description: "Sign up with a different email address or Google account.",
+        variant: "destructive",
+      });
     } else if (loginPageFlags.error === "google_cancelled") {
       toast({
         title: "Google sign-in was not completed",

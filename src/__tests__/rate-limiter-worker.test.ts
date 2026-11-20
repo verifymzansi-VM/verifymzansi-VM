@@ -347,6 +347,20 @@ describe("rate-limiter worker", () => {
     expect(res.status).toBe(200);
     expect(kvStore.get("auth:register:203.0.113.5:600")).toBe("1");
     expect(kvStore.get("auth:register:203.0.113.5:3600")).toBe("1");
+    expect(kvStore.get("auth:register:203.0.113.5:86400")).toBe("1");
+  });
+
+  it("gives the IPv6 /48 sign-up bucket ten times the per-address limits", async () => {
+    const { env, kvStore } = createWorkerEnv({ useDurableObject: false });
+
+    const res = await rateLimiterWorker.fetch(
+      createWorkerRequest("auth:register:network", "v6:2001:db8:1::/48"),
+      env as never
+    );
+
+    expect(res.status).toBe(200);
+    expect(kvStore.get("auth:register:network:v6:2001:db8:1::/48:600")).toBe("1");
+    expect(kvStore.get("auth:register:network:v6:2001:db8:1::/48:86400")).toBe("1");
   });
 
   it("applies the dedicated OTP tiers to the otp:send action", async () => {

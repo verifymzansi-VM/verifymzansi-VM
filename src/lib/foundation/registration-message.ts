@@ -1,9 +1,14 @@
+import type { FoundationSignupMode } from "./signup-mode";
+
 /** The one answer every registration request gets, whether or not an account
  * can be created for that address, so the reply never reveals who is invited
- * or already registered. While sign-up is by invitation only
- * (FOUNDATION_REGISTRATION_INVITE_ONLY), it says so plainly. */
-export function foundationRegistrationReply() {
-  const inviteOnly = process.env.FOUNDATION_REGISTRATION_INVITE_ONLY === "true";
+ * or already registered. While sign-up is by invitation only it says so
+ * plainly. The mode is the database's (readFoundationSignupMode); when it
+ * could not be read, FOUNDATION_REGISTRATION_INVITE_ONLY decides. */
+export function foundationRegistrationReply(mode: FoundationSignupMode | null = null) {
+  const inviteOnly = mode
+    ? mode === "invite_only"
+    : process.env.FOUNDATION_REGISTRATION_INVITE_ONLY === "true";
   return {
     ok: true as const,
     inviteOnly,

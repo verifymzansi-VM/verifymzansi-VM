@@ -5230,6 +5230,89 @@
         "service_role": false
       },
       "authority": "Public: view and like totals of up to 50 publicly live posts (the get_public_post rule); a hidden or unknown post is absent, so the answer never tells them apart; totals only, never who viewed or liked."
+    },
+    {
+      "name": "get_signup_mode",
+      "updates": ["updates/20261120040242_signup_mode_member_invitations.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public: the sign-up mode only (invite_only or open), which the registration page states anyway; changed only by the database owner in the SQL editor (internal.set_signup_mode, granted to no API role), with an append-only record of who and why."
+    },
+    {
+      "name": "invite_member",
+      "updates": ["updates/20261120040242_signup_mode_member_invitations.sql"],
+      "arguments": [
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current member:invite capability (admin role; 12-hour authenticator rule): adds or renews a member invitation that admits one sign-up for 30 days in either sign-up mode; refuses an address that already has an account (staff may learn that it has one); never grants a staff role (administrator invitations are a separate owner-only list); at most 200 invitations and renewals per staff member in 24 hours, counted from that staff member's own recorded events."
+    },
+    {
+      "name": "revoke_member_invitation",
+      "updates": ["updates/20261120040242_signup_mode_member_invitations.sql"],
+      "arguments": [
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current member:invite capability: revokes an open member invitation (idempotent); an account already created keeps working."
+    },
+    {
+      "name": "list_member_invitations",
+      "updates": ["updates/20261120040242_signup_mode_member_invitations.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current member:invite capability: the latest 500 member invitations with their status (open, used, expired, revoked), when each was used and whether the account that used it still exists; never who invited, never administrator invitations."
+    },
+    {
+      "name": "check_email_domain",
+      "updates": ["updates/20261120040242_signup_mode_member_invitations.sql"],
+      "arguments": [
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Any signed-in account: whether an email address may be used while sign-up is open (false only in open mode for a malformed, reserved, numeric or blocked domain, the same rule as the sign-up hook); always true while sign-up is by invitation. Used by the website's email change; says nothing about any account."
     }
   ]
 }
