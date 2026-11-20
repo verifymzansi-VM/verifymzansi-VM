@@ -82,9 +82,10 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Add slots part-way through a Multi-listing package, 20 November 2026
 
-`20261120045404_package_add_slots.sql` is **pending** (see the applied
-register). Roadmap P4b; the owner's decision D1 of 19 November 2026. It needs
-`20261114154823_slot_packages.sql`, `20261119025106_package_invoices.sql` and
+`20261120045404_package_add_slots.sql` was applied on 20 November 2026 at 10:45
+UTC (see the applied register). Roadmap P4b; the owner's decision D1 of 19
+November 2026. It needs `20261114154823_slot_packages.sql`,
+`20261119025106_package_invoices.sql` and
 `20261119151152_package_gap_fixes.sql`, and refuses (55000) unless the seventeen
 functions it replaces have their reviewed bodies (or this update's), the fifteen
 it adds are absent (or this update's) and `private.package_invoice_requests` has
@@ -5872,6 +5873,18 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   administrator invitations not yet used: 0"; production fingerprint after it
   (fingerprint.sql at cd725fb9) matched the full replay (except the known schema
   grant difference)
-- `20261120045404_package_add_slots.sql`: pending
+- `20261120045404_package_add_slots.sql`: applied 2026-11-20 10:45 UTC;
+  owner-approved, apply-first, Supabase SQL editor (browser, the owner's
+  signed-in session), preflight + fingerprint checked; update, preflight and
+  fingerprint.sql loaded from the reviewed files at 710fc91b (raw GitHub; pull
+  request #306) and checked in the browser before running; update sha256
+  starting 811b772f; preflight (sha256 starting 1afe4a19) before "package add
+  slots: update not applied; on sale: no; packages running: 0; package invoice
+  requests: 0; added-slots requests: none (column absent); added-slots payments:
+  0; invoices voided by the database: 0", after "package add slots: already
+  applied; on sale: no; packages running: 0; package invoice requests: 0;
+  added-slots requests: 0; added-slots payments: 0; invoices voided by the
+  database: 0"; production fingerprint after it (fingerprint.sql at cd725fb9)
+  matched the full replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
