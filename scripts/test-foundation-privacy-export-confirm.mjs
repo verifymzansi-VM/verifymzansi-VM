@@ -10,7 +10,7 @@
 // refused, recorded and spent; a second confirmation, even a parallel one, is
 // refused; only the preparing staff member (never the requester or subject)
 // can confirm, at the same revision, within 15 minutes; requests can be
-// exported while in progress or completed in the last 30 days and not
+// exported while open, or completed less than 720 hours ago and not
 // minimised; builds are limited to 10 an hour per staff member and request
 // (refused builds included) and confirmed exports to 5 a request; retention
 // clears unconfirmed digests a day after expiry. The old export command keeps
@@ -237,14 +237,31 @@ try {
     );
     assert.equal(fingerprint(), after);
     // A changed function the update relies on is refused too.
-    const notify = "internal.notify_account(uuid,text,uuid,uuid,uuid)";
-    const live = q(`select pg_get_functiondef('${notify}'::regprocedure);`);
+    const signal = "internal.signal_owner_inbox(uuid)";
+    const live = q(`select pg_get_functiondef('${signal}'::regprocedure);`);
     q(
-      `do $$begin execute replace(pg_get_functiondef('${notify}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
+      `do $$begin execute replace(pg_get_functiondef('${signal}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
     );
     assert.match(fails(step.sql, "55000"), /relies on is not the reviewed body/);
-    assert.ok(preflight().some((r) => r[1].startsWith(`${notify} is not the reviewed body`)));
+    assert.ok(preflight().some((r) => r[1].startsWith(`${signal} is not the reviewed body`)));
     q(`${live};`);
+    // Any trigger or rule on private.notifications but its update guard.
+    const unreviewed = /unreviewed trigger or rule/;
+    q(`create function vmtest.keep_notice() returns trigger language plpgsql as $$begin return new; end$$;
+      create trigger keep_notice before insert on private.notifications for each row execute function vmtest.keep_notice();`);
+    assert.match(fails(step.sql, "55000"), unreviewed);
+    assert.ok(
+      preflight().some((r) => unreviewed.test(r[1])),
+      JSON.stringify(preflight())
+    );
+    q(`drop trigger keep_notice on private.notifications;
+      create rule keep_notice as on insert to private.notifications do also notify vm_test_notice;`);
+    assert.match(fails(step.sql, "55000"), unreviewed);
+    q(`drop rule keep_notice on private.notifications;
+      alter table private.notifications disable trigger notification_guard;`);
+    assert.match(fails(step.sql, "55000"), unreviewed);
+    q(`alter table private.notifications enable trigger notification_guard;
+      drop function vmtest.keep_notice();`);
     applySteps(database, [step]);
     assert.equal(fingerprint(), after);
   });
@@ -472,7 +489,7 @@ try {
       0
     );
   });
-  await check("exports only while in progress or completed in the last 30 days", () => {
+  await check("exports only while open, or shortly after completion (720 hours)", () => {
     const requester = user("window");
     const id = approved(requester);
     json(confirm(admin, id, json(prepare(admin, id)).export_id));
@@ -487,7 +504,7 @@ try {
     const recent = json(prepare(admin, id)).export_id;
     // Completed 31 days ago, or minimised: not any more, nor confirmable.
     q(
-      `update private.privacy_requests set completed_at=now()-interval '31 days' where id='${id}';`
+      `update private.privacy_requests set completed_at=now()-interval '721 hours' where id='${id}';`
     );
     fails(prepare(admin, id), "PT409", /represented verified access request required/);
     fails(confirm(admin, id, recent), "PT409", /represented verified access request required/);
@@ -533,21 +550,113 @@ try {
     fails(prepare(governor, id), "PT429", /export limit for this request reached/);
     assert.equal(notices(requester), 5);
   });
-  await check("the old command notifies on every export and is limited per hour", () => {
+  /** An export of request `id` by `who` through the old command. */
+  const oldExport = (who, id) =>
+    staff(who, `select api.export_frontend_privacy_request('${id}',${privacy(id).revision});`);
+  await check("the old command: same requests, limits and notices as the new path", () => {
     const requester = user("old-command");
     const id = approved(requester);
-    const old = () =>
-      staff(admin, `select api.export_frontend_privacy_request('${id}',${privacy(id).revision});`);
-    const first = json(old());
+    const first = json(oldExport(admin, id));
     assert.equal(first.request_id, id);
     assert.equal("export_id" in first, false);
-    json(old());
+    json(oldExport(admin, id));
     assert.equal(events(id), "exported,exported");
     assert.equal(exportedJobs(id), 1);
     assert.equal(notices(requester), 2);
+    // 5 exports per request, counted with the new path.
+    for (let i = 0; i < 3; i += 1) json(confirm(admin, id, json(prepare(admin, id)).export_id));
+    fails(oldExport(governor, id), "PT429", /export limit for this request reached/);
+    assert.equal(notices(requester), 5);
+    // 10 an hour per staff member and request (checked before the 5).
+    const hourly = approved(user("old-hourly"));
     q(`insert into private.privacy_request_events(request_id,actor_id,action,represented_revision)
-      select '${id}','${admin.id}','exported',${privacy(id).revision} from generate_series(1,8);`);
-    fails(old(), "PT429", /export limit reached/);
+      select '${hourly}','${admin.id}','exported',${privacy(hourly).revision} from generate_series(1,10);`);
+    fails(oldExport(admin, hourly), "PT429", /export limit reached/);
+    // Not after the request is closed out.
+    const closed = approved(user("old-closed"));
+    q(
+      staff(
+        admin,
+        `select api.process_frontend_privacy_request('${closed}',${privacy(closed).revision},'complete');`
+      )
+    );
+    q(
+      `update private.privacy_requests set completed_at=now()-interval '721 hours' where id='${closed}';`
+    );
+    fails(oldExport(admin, closed), "PT409", /represented verified access request required/);
+  });
+  await check("an export whose bell notice is dropped is aborted as a whole", () => {
+    const requester = user("dropped-notice");
+    const id = approved(requester);
+    q(`create function vmtest.drop_notice() returns trigger language plpgsql as $$begin return null; end$$;
+      create trigger drop_notice before insert on private.notifications for each row execute function vmtest.drop_notice();`);
+    try {
+      const exportId = json(prepare(admin, id)).export_id;
+      fails(confirm(admin, id, exportId), "55000", /export notice could not be recorded/);
+      fails(oldExport(admin, id), "55000", /export notice could not be recorded/);
+      assert.equal(events(id), "export_prepared");
+      assert.equal(exportedJobs(id), 0);
+    } finally {
+      q(`drop trigger drop_notice on private.notifications; drop function vmtest.drop_notice();`);
+    }
+  });
+  await check("members who cannot sign in are emailed on every export", () => {
+    const job = (id) =>
+      json(`select jsonb_build_object('delivered',delivered_at is not null,'attempts',attempts)
+        from private.privacy_notice_jobs where request_id='${id}' and kind='exported';`);
+    const deliver = (id) =>
+      q(
+        `update private.privacy_notice_jobs set delivered_at=now(),attempts=1 where request_id='${id}' and kind='exported';`
+      );
+    // Signed in: one email per request, a bell notice for each export.
+    const active = user("email-active");
+    const activeId = approved(active);
+    json(confirm(admin, activeId, json(prepare(admin, activeId)).export_id));
+    deliver(activeId);
+    json(confirm(admin, activeId, json(prepare(admin, activeId)).export_id));
+    assert.deepEqual(job(activeId), { delivered: true, attempts: 1 });
+    assert.equal(notices(active), 2);
+    // Banned (no sign-in): every export arms the email again.
+    const banned = user("email-banned");
+    const bannedId = approved(banned);
+    q(`update auth.users set banned_until=now()+interval '1 day' where id='${banned.id}';`);
+    json(confirm(admin, bannedId, json(prepare(admin, bannedId)).export_id));
+    assert.deepEqual(job(bannedId), { delivered: false, attempts: 0 });
+    deliver(bannedId);
+    json(oldExport(admin, bannedId));
+    assert.deepEqual(job(bannedId), { delivered: false, attempts: 0 });
+    // An email still waiting covers the next export; an abandoned one is armed.
+    json(confirm(admin, bannedId, json(prepare(admin, bannedId)).export_id));
+    assert.deepEqual(job(bannedId), { delivered: false, attempts: 0 });
+    q(
+      `update private.privacy_notice_jobs set attempts=8 where request_id='${bannedId}' and kind='exported';`
+    );
+    json(confirm(admin, bannedId, json(prepare(admin, bannedId)).export_id));
+    assert.deepEqual(job(bannedId), { delivered: false, attempts: 0 });
+    assert.equal(exportedJobs(bannedId), 1);
+    assert.equal(notices(banned), 4);
+    // No account: the email is the only notice, on every export.
+    const intake = json(
+      staff(
+        admin,
+        "select api.record_frontend_privacy_intake('access','nobody-'||gen_random_uuid()||'@example.invalid',null,'Emailed access request','Recorded from the privacy mailbox');"
+      )
+    ).id;
+    for (const action of ["verify_identity", "approve"])
+      q(
+        staff(
+          admin,
+          `select api.process_frontend_privacy_request('${intake}',${privacy(intake).revision},'${action}');`
+        )
+      );
+    const plan = json(prepare(admin, intake));
+    assert.equal(plan.account_found, false);
+    assert.deepEqual(plan.datasets, []);
+    assert.deepEqual(json(confirm(admin, intake, plan.export_id)).datasets, {});
+    deliver(intake);
+    json(confirm(admin, intake, json(prepare(admin, intake)).export_id));
+    assert.deepEqual(job(intake), { delivered: false, attempts: 0 });
+    assert.equal(count(`private.notifications where subject_id='${intake}'`), 0);
   });
   await check("retention clears the digest of unconfirmed exports a day after expiry", () => {
     const requester = user("retention");

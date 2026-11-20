@@ -9,10 +9,12 @@
 -- The summary says whether the functions the update relies on or replaces are
 -- their reviewed bodies and none of the update's objects exist (update not
 -- applied), or every object is the update's exact definition (already
--- applied): function bodies (md5; internal.notify_account unchanged), the new
+-- applied): function bodies (md5; internal.signal_owner_inbox unchanged), the new
 -- functions' security definer, search path, owner and execute grants, the two
 -- columns (name and type), the unique index (unique, valid, pg_get_indexdef)
--- and the export check (pg_get_constraintdef md5). It counts:
+-- and the export check (pg_get_constraintdef md5). It also refuses while
+-- private.notifications has any trigger or rule but its reviewed update guard
+-- (the export's bell notice must not be dropped or changed). It counts:
 -- - "exports recorded": 'exported' events (the old command's and confirmed
 --   ones);
 -- - "export emails waiting": 'exported' email jobs not yet delivered;
@@ -25,17 +27,17 @@ with bodies as (
   select v.sig, v.reviewed, v.updated,
     (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)) as body
   from (values
-    ('internal.notify_account(uuid,text,uuid,uuid,uuid)',
-      '12f90f293a02f6fe022b32ee5736d7dc', '12f90f293a02f6fe022b32ee5736d7dc'),
+    ('internal.signal_owner_inbox(uuid)',
+      '2a7742d89598d62117a9b7620e0271e9', '2a7742d89598d62117a9b7620e0271e9'),
     ('internal.export_frontend_privacy_request(uuid,integer)',
-      '939737e433fcf800d5e98a3dd1569e5d', '8da19ec4f773a51f9b67fdf02996be3c'),
+      '939737e433fcf800d5e98a3dd1569e5d', 'fc93a2f693d79ddacb0cb36b6e65d44a'),
     ('internal.retention_privacy_requests(integer)',
       'ae00ab54c00fd3f6f64ac6b8061ba929', '65ca200080c2e6d9cf57ebc20bed96f7'),
     ('api.export_frontend_privacy_request(uuid,integer)',
       '251a62d1bb6d474172d02a2867b2556a', '251a62d1bb6d474172d02a2867b2556a'),
-    ('internal.prepare_frontend_privacy_export(uuid,integer)', null, '321e0c77d2b5c4b6399ee9a9aafe1932'),
+    ('internal.prepare_frontend_privacy_export(uuid,integer)', null, 'd36f1261ae7bf7225e87ab2dd6c9cac1'),
     ('api.prepare_frontend_privacy_export(uuid,integer)', null, '001f2fc46398c56fd2ac6d7b3bf2cf11'),
-    ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '8e6432f134027e6b71dd1a7d58b73c4e'),
+    ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '8452e29622998219f9e8802d2a5bb25d'),
     ('api.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '438d948a6a90a8fefd9c6bf49df8c99f')
   ) v(sig, reviewed, updated)
 ),
@@ -85,6 +87,12 @@ actions as (
     array['assigned','completed','erasure_ordered','export_prepared','export_refused','exported','extended',
       'identity_verified','recorded','rejected','started','submitted','unassigned']::text[] as updated
 ),
+notification_guards as (
+  select (select coalesce(string_agg(t.tgenabled::text || ' ' || pg_get_triggerdef(t.oid), ';' order by t.tgname), '')
+      from pg_trigger t where t.tgrelid = 'private.notifications'::regclass and not t.tgisinternal)
+      = 'O CREATE TRIGGER notification_guard BEFORE UPDATE ON private.notifications FOR EACH ROW EXECUTE FUNCTION internal.notification_guard()'
+    and not exists (select 1 from pg_rewrite w where w.ev_class = 'private.notifications'::regclass) as reviewed
+),
 verdict as (
   select
     (select bool_and(body is not distinct from updated) from bodies)
@@ -104,6 +112,9 @@ problems as (
   union all
   select 'problem', 'privacy_request_events_action_check is not the reviewed list; do not apply the update'
     from actions a where a.current is distinct from a.reviewed and a.current is distinct from a.updated
+  union all
+  select 'problem', 'private.notifications has an unreviewed trigger or rule; do not apply the update'
+    from notification_guards g where not g.reviewed
   union all
   select 'problem', 'only part of the update is present'
     from verdict v

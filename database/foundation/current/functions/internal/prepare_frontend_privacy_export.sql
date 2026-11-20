@@ -13,7 +13,7 @@ begin
   -- The row lock makes the limits below count one export at a time.
   select * into r from private.privacy_requests where id=p_case for no key update;
   if not found or r.revision is distinct from p_revision or r.type<>'access' or not r.identity_verified
-      or not (r.status='in_progress' or (r.status='completed' and r.completed_at>clock_timestamp()-interval '30 days'
+      or not (r.status='in_progress' or (r.status='completed' and r.completed_at>clock_timestamp()-interval '720 hours'
         and r.minimised_at is null))
     then raise exception 'represented verified access request required' using errcode='PT409';end if;
   actor:=internal.staff_actor('dsar:manage');

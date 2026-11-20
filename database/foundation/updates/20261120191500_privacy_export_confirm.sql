@@ -21,10 +21,12 @@
 --    command's rows have none) and never a digest; no other action has either.
 --    A unique index allows one row per (export_id, action).
 -- 2. Which requests can be exported (both new commands): a verified access
---    request at the represented revision that is in progress, or completed
---    within the last 30 days and not yet minimised; at most 5 confirmed
---    exports per request (PT429 'export limit for this request reached'),
---    counting the old command's exports.
+--    request at the represented revision that is open (in progress), or
+--    completed less than 720 hours ago (a fixed length, whatever the session
+--    time zone) and not yet minimised (in practice until retention closes it
+--    out, usually soon after completion); at most 5 confirmed exports per
+--    request (PT429 'export limit for this request reached'), counting the old
+--    command's exports.
 -- 3. api.prepare_frontend_privacy_export(p_case, p_revision): dsar:manage
 --    with a second factor from the last 15 minutes, never the requester or the
 --    data subject (as the old command). It builds the export and keeps its
@@ -45,17 +47,32 @@
 --    confirmed any more; staff prepare again). Otherwise, in the same
 --    transaction that returns the data, it records the 'exported' event (with
 --    the export_id), queues the requester's email (at most once per request,
---    as before) and adds a privacy_export_made notice to the account the
---    request names, for every confirmed export. A second confirmation of the
+--    as before; see point 7) and adds a privacy_export_made notice to the
+--    account the request names, for every confirmed export. A second confirmation of the
 --    same export, even at the same moment, is refused (PT409 'export already
 --    confirmed') and changes nothing.
--- 5. The old command (same signature, grants and owner): a notice to the
---    account on every export, and at most 10 exports per staff member and
---    request per hour (PT429 'export limit reached').
+-- 5. The old command (same signature, grants and owner): the same requests
+--    as point 2 and the 5 exports per request counted together with the new
+--    path, the same notices as point 4, and at most 10 exports per staff
+--    member and request per hour (PT429 'export limit reached').
 -- 6. internal.retention_privacy_requests (part of api.run_retention) also
 --    clears the digest of prepared exports never confirmed, one day after
---    they expired (16 minutes past preparation plus a day), and reports
---    'export_digests_cleared'.
+--    they expired (older than 1 day 15 minutes: the 15 minutes to confirm
+--    plus a day), and reports 'export_digests_cleared'.
+-- 7. The notices: every confirmed export (and every old-command export) adds
+--    a privacy_export_made bell notice to the account the request names; its
+--    insert must return the row, and the update refuses to install while
+--    private.notifications has any trigger or rule but its reviewed update
+--    guard. The requester's email goes once per request while that account
+--    can sign in, and on every export when it cannot (or there is none),
+--    since then nobody sees the bell.
+--
+-- The digest is stable between preparing and confirming because every
+-- dataset of internal.frontend_privacy_export_data is ordered with a unique
+-- tie-breaker or has at most one row: listing_drafts, signup_terms,
+-- locality_verification, profile, acquisition and account_closure read
+-- tables whose primary key is the account, account reads one auth.users row
+-- and post_likes_summary is one aggregate row.
 --
 -- The new commands are staff commands (authenticated with
 -- internal.staff_actor); no visitor, member without the capability or service
@@ -90,14 +107,22 @@ begin
     raise exception 'privacy export confirm precondition: % of 8 objects exist', present using errcode='55000';
   end if;
   if exists(select 1 from (values
-      ('internal.notify_account(uuid,text,uuid,uuid,uuid)','12f90f293a02f6fe022b32ee5736d7dc','12f90f293a02f6fe022b32ee5736d7dc'),
+      ('internal.signal_owner_inbox(uuid)','2a7742d89598d62117a9b7620e0271e9','2a7742d89598d62117a9b7620e0271e9'),
       ('api.export_frontend_privacy_request(uuid,integer)','251a62d1bb6d474172d02a2867b2556a','251a62d1bb6d474172d02a2867b2556a'),
-      ('internal.export_frontend_privacy_request(uuid,integer)','939737e433fcf800d5e98a3dd1569e5d','8da19ec4f773a51f9b67fdf02996be3c'),
+      ('internal.export_frontend_privacy_request(uuid,integer)','939737e433fcf800d5e98a3dd1569e5d','fc93a2f693d79ddacb0cb36b6e65d44a'),
       ('internal.retention_privacy_requests(integer)','ae00ab54c00fd3f6f64ac6b8061ba929','65ca200080c2e6d9cf57ebc20bed96f7')) v(sig,reviewed,updated)
     where (select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig))
       not in (v.reviewed,v.updated)
       or to_regprocedure(v.sig) is null) then
     raise exception 'privacy export confirm drift: a function this update relies on is not the reviewed body' using errcode='55000';
+  end if;
+  -- The bell notice must not be dropped or changed on its way in: only the
+  -- reviewed update guard on private.notifications, and no rule.
+  if (select coalesce(string_agg(t.tgenabled::text||' '||pg_get_triggerdef(t.oid),';' order by t.tgname),'') from pg_trigger t
+      where t.tgrelid='private.notifications'::regclass and not t.tgisinternal)
+      is distinct from 'O CREATE TRIGGER notification_guard BEFORE UPDATE ON private.notifications FOR EACH ROW EXECUTE FUNCTION internal.notification_guard()'
+    or exists(select 1 from pg_rewrite w where w.ev_class='private.notifications'::regclass) then
+    raise exception 'privacy export confirm drift: private.notifications has an unreviewed trigger or rule' using errcode='55000';
   end if;
   if (select array_agg(m[1] order by m[1])::text[] from pg_constraint c,
         regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m
@@ -108,9 +133,9 @@ begin
   end if;
   -- Run again: every new object must still be this update's definition.
   if present=8 and (exists(select 1 from (values
-      ('internal.prepare_frontend_privacy_export(uuid,integer)','321e0c77d2b5c4b6399ee9a9aafe1932','true'),
+      ('internal.prepare_frontend_privacy_export(uuid,integer)','d36f1261ae7bf7225e87ab2dd6c9cac1','true'),
       ('api.prepare_frontend_privacy_export(uuid,integer)','001f2fc46398c56fd2ac6d7b3bf2cf11','false'),
-      ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)','8e6432f134027e6b71dd1a7d58b73c4e','true'),
+      ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)','8452e29622998219f9e8802d2a5bb25d','true'),
       ('api.confirm_frontend_privacy_export(uuid,integer,uuid)','438d948a6a90a8fefd9c6bf49df8c99f','false')) v(sig,body,definer)
     where (select md5(replace(p.prosrc,E'\r\n',E'\n'))||' '||p.prosecdef::text||' '||coalesce(array_to_string(p.proconfig,','),'')
           ||' '||p.proowner::regrole::text||' '||has_function_privilege('anon',p.oid,'execute')::text
@@ -157,7 +182,7 @@ begin
   -- The row lock makes the limits below count one export at a time.
   select * into r from private.privacy_requests where id=p_case for no key update;
   if not found or r.revision is distinct from p_revision or r.type<>'access' or not r.identity_verified
-      or not (r.status='in_progress' or (r.status='completed' and r.completed_at>clock_timestamp()-interval '30 days'
+      or not (r.status='in_progress' or (r.status='completed' and r.completed_at>clock_timestamp()-interval '720 hours'
         and r.minimised_at is null))
     then raise exception 'represented verified access request required' using errcode='PT409';end if;
   actor:=internal.staff_actor('dsar:manage');
@@ -209,14 +234,14 @@ CREATE OR REPLACE FUNCTION internal.confirm_frontend_privacy_export(p_case uuid,
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid:=internal.staff_actor('dsar:manage');r private.privacy_requests;
-  prepared private.privacy_request_events;done private.privacy_request_events;data jsonb;
+  prepared private.privacy_request_events;done private.privacy_request_events;data jsonb;bell boolean;notice uuid;
 begin
   if p_export is null then raise exception 'export id required' using errcode='22023';end if;
   -- The row lock makes confirmations of one request (and the limit on them)
   -- happen one at a time.
   select * into r from private.privacy_requests where id=p_case for no key update;
   if not found or r.revision is distinct from p_revision or r.type<>'access' or not r.identity_verified
-      or not (r.status='in_progress' or (r.status='completed' and r.completed_at>clock_timestamp()-interval '30 days'
+      or not (r.status='in_progress' or (r.status='completed' and r.completed_at>clock_timestamp()-interval '720 hours'
         and r.minimised_at is null))
     then raise exception 'represented verified access request required' using errcode='PT409';end if;
   actor:=internal.staff_actor('dsar:manage');
@@ -254,11 +279,27 @@ begin
     on conflict (export_id,action) where export_id is not null do nothing
     returning * into done;
   if done.id is null then raise exception 'export already confirmed' using errcode='PT409';end if;
-  -- The requester is emailed once per request that an export was made; the
-  -- account the request names gets a notice for every export.
-  insert into private.privacy_notice_jobs(request_id,kind) values(r.id,'exported') on conflict(request_id,kind) do nothing;
+  -- The member is told of every export. The account the request names gets
+  -- a bell notice; the insert must return its row, so a trigger or rule that
+  -- drops it aborts the whole export. The requester is emailed: once per
+  -- request while the account can sign in (and so see the bell), on every
+  -- export otherwise (no account, or closed, banned, suspended or
+  -- restricted): a delivered (or abandoned) email is armed again, one still
+  -- waiting covers this export too.
+  bell:=r.subject_user_id is not null and exists(select 1 from private.current_account_access a where a.id=r.subject_user_id);
+  insert into private.privacy_notice_jobs(request_id,kind) values(r.id,'exported')
+    on conflict(request_id,kind) do update set delivered_at=null,attempts=0,next_attempt_at=clock_timestamp(),
+      claim_token=null,locked_until=null
+    where not bell and (privacy_notice_jobs.delivered_at is not null or (privacy_notice_jobs.attempts>=8
+      and (privacy_notice_jobs.locked_until is null or privacy_notice_jobs.locked_until<clock_timestamp())));
+  if not bell and not exists(select 1 from private.privacy_notice_jobs j where j.request_id=r.id and j.kind='exported'
+      and j.delivered_at is null and j.attempts<8)
+    then raise exception 'export email could not be queued' using errcode='55000';end if;
   if r.subject_user_id is not null then
-    perform internal.notify_account(r.subject_user_id,'privacy_export_made',r.id,null,null);
+    insert into private.notifications(account_id,kind,subject_id) values(r.subject_user_id,'privacy_export_made',r.id)
+      returning id into notice;
+    if notice is null then raise exception 'export notice could not be recorded' using errcode='55000';end if;
+    perform internal.signal_owner_inbox(r.subject_user_id);
   end if;
   return jsonb_build_object('request_id',r.id,'export_id',p_export,'reference','DSAR-'||upper(left(r.id::text,8)),
     'generated_at',done.occurred_at,'request_type',r.type,'received_at',r.received_at,'due_by',r.effective_due_at,
@@ -277,18 +318,21 @@ alter function api.confirm_frontend_privacy_export(uuid,integer,uuid) owner to p
 revoke all on function api.confirm_frontend_privacy_export(uuid,integer,uuid) from public,anon,authenticated,service_role;
 grant execute on function api.confirm_frontend_privacy_export(uuid,integer,uuid) to authenticated;
 
--- 5. The old command until the contract step: a notice on every export and
--- an hourly limit per staff member and request.
+-- 5. The old command until the contract step: the same requests, limits and
+-- notices as the new commands, and an hourly limit per staff member and
+-- request.
 CREATE OR REPLACE FUNCTION internal.export_frontend_privacy_request(p_case uuid, p_revision integer)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid:=internal.staff_actor('dsar:manage');r private.privacy_requests;result jsonb;
+declare actor uuid:=internal.staff_actor('dsar:manage');r private.privacy_requests;result jsonb;bell boolean;notice uuid;
 begin
   select * into r from private.privacy_requests where id=p_case for no key update;
-  if not found or r.revision is distinct from p_revision or r.type<>'access' or r.status not in('in_progress','completed') or not r.identity_verified
+  if not found or r.revision is distinct from p_revision or r.type<>'access' or not r.identity_verified
+      or not (r.status='in_progress' or (r.status='completed' and r.completed_at>clock_timestamp()-interval '720 hours'
+        and r.minimised_at is null))
     then raise exception 'represented verified access request required' using errcode='PT409';end if;
   actor:=internal.staff_actor('dsar:manage');
   if actor=r.subject_user_id or exists(select 1 from auth.users u where u.id=actor and lower(u.email)=lower(r.requester_email))
@@ -296,17 +340,35 @@ begin
   if (select count(*) from private.privacy_request_events e where e.request_id=r.id and e.actor_id=actor
       and e.action='exported' and e.occurred_at>clock_timestamp()-interval '1 hour')>=10
     then raise exception 'export limit reached' using errcode='PT429';end if;
+  if (select count(*) from private.privacy_request_events e where e.request_id=r.id and e.action='exported')>=5
+    then raise exception 'export limit for this request reached' using errcode='PT429';end if;
   result:=jsonb_build_object('request_id',r.id,'reference','DSAR-'||upper(left(r.id::text,8)),
     'generated_at',clock_timestamp(),'request_type',r.type,'received_at',r.received_at,'due_by',r.effective_due_at,
     'account_found',r.subject_user_id is not null,
     'datasets',case when r.subject_user_id is null then '{}'::jsonb else internal.frontend_privacy_export_data(r.subject_user_id) end);
   perform internal.staff_actor('dsar:manage');
   insert into private.privacy_request_events(request_id,actor_id,action,represented_revision) values(r.id,actor,'exported',r.revision);
-  -- The requester is emailed once per request that an export was made; the
-  -- account the request names gets a notice for every export.
-  insert into private.privacy_notice_jobs(request_id,kind) values(r.id,'exported') on conflict(request_id,kind) do nothing;
+  -- The member is told of every export. The account the request names gets
+  -- a bell notice; the insert must return its row, so a trigger or rule that
+  -- drops it aborts the whole export. The requester is emailed: once per
+  -- request while the account can sign in (and so see the bell), on every
+  -- export otherwise (no account, or closed, banned, suspended or
+  -- restricted): a delivered (or abandoned) email is armed again, one still
+  -- waiting covers this export too.
+  bell:=r.subject_user_id is not null and exists(select 1 from private.current_account_access a where a.id=r.subject_user_id);
+  insert into private.privacy_notice_jobs(request_id,kind) values(r.id,'exported')
+    on conflict(request_id,kind) do update set delivered_at=null,attempts=0,next_attempt_at=clock_timestamp(),
+      claim_token=null,locked_until=null
+    where not bell and (privacy_notice_jobs.delivered_at is not null or (privacy_notice_jobs.attempts>=8
+      and (privacy_notice_jobs.locked_until is null or privacy_notice_jobs.locked_until<clock_timestamp())));
+  if not bell and not exists(select 1 from private.privacy_notice_jobs j where j.request_id=r.id and j.kind='exported'
+      and j.delivered_at is null and j.attempts<8)
+    then raise exception 'export email could not be queued' using errcode='55000';end if;
   if r.subject_user_id is not null then
-    perform internal.notify_account(r.subject_user_id,'privacy_export_made',r.id,null,null);
+    insert into private.notifications(account_id,kind,subject_id) values(r.subject_user_id,'privacy_export_made',r.id)
+      returning id into notice;
+    if notice is null then raise exception 'export notice could not be recorded' using errcode='55000';end if;
+    perform internal.signal_owner_inbox(r.subject_user_id);
   end if;
   return result;
 end$function$;

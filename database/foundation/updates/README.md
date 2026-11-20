@@ -95,9 +95,12 @@ This is the expand step: two new staff commands, and the old command kept (same
 signature) until a later update removes it (contract step, with a
 `../contract-steps.json` entry) once no deployed website calls it.
 
-- **Which requests:** a verified access request at the represented revision, in
-  progress, or completed within the last 30 days and not minimised. At most 5
-  confirmed exports per request (old command's included), PT429.
+- **Which requests:** a verified access request at the represented revision,
+  while it is open, or shortly after it is completed (until it is closed out:
+  completed less than 720 hours ago, a fixed length, and not yet minimised;
+  retention usually minimises it soon after completion, and its timing is
+  unchanged). At most 5 exports per request, old and new commands counted
+  together (PT429).
 - **`api.prepare_frontend_privacy_export(p_case, p_revision)`** answers no
   personal data, digest or counts: the reference, dates, a new `export_id` and
   the dataset names. It keeps the export's SHA-256 digest in an
@@ -114,12 +117,20 @@ signature) until a later update removes it (contract step, with a
   `{refused: "changed" | "too_large"}`, records `export_refused` (the build
   counts toward the hourly limit, and that export id is spent). Otherwise, in
   the same transaction that returns the data, it records `exported` (with the
-  export id), queues the email (once per request, as before) and adds a notice
-  to the account the request names, for every confirmed export. A second
-  confirmation of the same export, even at the same moment, is refused (PT409)
-  and changes nothing.
-- **The old command** keeps its signature, grants and owner, now with a notice
-  on every export and at most 10 exports per staff member and request per hour.
+  export id) and tells the member (see "Notices" below). A second confirmation
+  of the same export, even at the same moment, is refused (PT409) and changes
+  nothing.
+- **The old command** keeps its signature, grants and owner, now with the same
+  requests, the 5 exports per request and the notices of the new path, and at
+  most 10 exports per staff member and request per hour.
+- **Notices:** every export adds a `privacy_export_made` bell notice to the
+  account the request names; the insert must return its row (a trigger or rule
+  that drops it aborts the export), and the update and its preflight refuse
+  while `private.notifications` has any trigger or rule but its reviewed update
+  guard. The requester's email goes once per request while that account can sign
+  in, and on every export when it cannot (no account, or closed, banned,
+  suspended or restricted), since nobody would see the bell: a delivered or
+  abandoned email is armed again, and one still waiting covers the export.
 - **Retention:** `internal.retention_privacy_requests` (run daily by
   `api.run_retention`) also clears the digest of prepared exports never
   confirmed, a day after they expired, and reports `export_digests_cleared`.
@@ -130,6 +141,10 @@ signature) until a later update removes it (contract step, with a
   been committed (no database error code, or an answer that fails the final
   check) says "The export may have been recorded. Check the request history
   before trying again."
+- **A stable digest:** every dataset is ordered with a unique tie-breaker or has
+  at most one row (`listing_drafts`, `signup_terms`, `locality_verification`,
+  `profile`, `acquisition` and `account_closure` read tables keyed by the
+  account), so an unchanged export has the same digest.
 - **Event log:** `private.privacy_request_events` gains `export_id` and
   `export_digest` (both nullable) and the actions `export_prepared` and
   `export_refused`, with a check (`export_prepared`: an export id, and a digest
@@ -144,9 +159,10 @@ commands; the website deployed now keeps working with the old command).
 
 1. Run `../preflight/20261120191500_privacy_export_confirm.check.sql` unchanged
    in the SQL editor. It is read only and compares definitions: function bodies
-   (md5, including `internal.notify_account`, which the update relies on), the
-   new functions' security definer, search path, owner and execute grants, the
-   column types, the index (unique, valid, `pg_get_indexdef`) and the check
+   (md5, including `internal.signal_owner_inbox`, which the update relies on),
+   the triggers and rules on `private.notifications`, the new functions'
+   security definer, search path, owner and execute grants, the column types,
+   the index (unique, valid, `pg_get_indexdef`) and the check
    (`pg_get_constraintdef`). Continue only if its result is the single "summary"
    row reading "privacy export confirm: update not applied; exports recorded: N;
    export emails waiting: M".

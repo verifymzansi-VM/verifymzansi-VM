@@ -8,14 +8,14 @@ CREATE OR REPLACE FUNCTION internal.confirm_frontend_privacy_export(p_case uuid,
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid:=internal.staff_actor('dsar:manage');r private.privacy_requests;
-  prepared private.privacy_request_events;done private.privacy_request_events;data jsonb;
+  prepared private.privacy_request_events;done private.privacy_request_events;data jsonb;bell boolean;notice uuid;
 begin
   if p_export is null then raise exception 'export id required' using errcode='22023';end if;
   -- The row lock makes confirmations of one request (and the limit on them)
   -- happen one at a time.
   select * into r from private.privacy_requests where id=p_case for no key update;
   if not found or r.revision is distinct from p_revision or r.type<>'access' or not r.identity_verified
-      or not (r.status='in_progress' or (r.status='completed' and r.completed_at>clock_timestamp()-interval '30 days'
+      or not (r.status='in_progress' or (r.status='completed' and r.completed_at>clock_timestamp()-interval '720 hours'
         and r.minimised_at is null))
     then raise exception 'represented verified access request required' using errcode='PT409';end if;
   actor:=internal.staff_actor('dsar:manage');
@@ -53,11 +53,27 @@ begin
     on conflict (export_id,action) where export_id is not null do nothing
     returning * into done;
   if done.id is null then raise exception 'export already confirmed' using errcode='PT409';end if;
-  -- The requester is emailed once per request that an export was made; the
-  -- account the request names gets a notice for every export.
-  insert into private.privacy_notice_jobs(request_id,kind) values(r.id,'exported') on conflict(request_id,kind) do nothing;
+  -- The member is told of every export. The account the request names gets
+  -- a bell notice; the insert must return its row, so a trigger or rule that
+  -- drops it aborts the whole export. The requester is emailed: once per
+  -- request while the account can sign in (and so see the bell), on every
+  -- export otherwise (no account, or closed, banned, suspended or
+  -- restricted): a delivered (or abandoned) email is armed again, one still
+  -- waiting covers this export too.
+  bell:=r.subject_user_id is not null and exists(select 1 from private.current_account_access a where a.id=r.subject_user_id);
+  insert into private.privacy_notice_jobs(request_id,kind) values(r.id,'exported')
+    on conflict(request_id,kind) do update set delivered_at=null,attempts=0,next_attempt_at=clock_timestamp(),
+      claim_token=null,locked_until=null
+    where not bell and (privacy_notice_jobs.delivered_at is not null or (privacy_notice_jobs.attempts>=8
+      and (privacy_notice_jobs.locked_until is null or privacy_notice_jobs.locked_until<clock_timestamp())));
+  if not bell and not exists(select 1 from private.privacy_notice_jobs j where j.request_id=r.id and j.kind='exported'
+      and j.delivered_at is null and j.attempts<8)
+    then raise exception 'export email could not be queued' using errcode='55000';end if;
   if r.subject_user_id is not null then
-    perform internal.notify_account(r.subject_user_id,'privacy_export_made',r.id,null,null);
+    insert into private.notifications(account_id,kind,subject_id) values(r.subject_user_id,'privacy_export_made',r.id)
+      returning id into notice;
+    if notice is null then raise exception 'export notice could not be recorded' using errcode='55000';end if;
+    perform internal.signal_owner_inbox(r.subject_user_id);
   end if;
   return jsonb_build_object('request_id',r.id,'export_id',p_export,'reference','DSAR-'||upper(left(r.id::text,8)),
     'generated_at',done.occurred_at,'request_type',r.type,'received_at',r.received_at,'due_by',r.effective_due_at,

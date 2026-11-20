@@ -27,7 +27,7 @@ do $$
 declare present integer;
 begin
   if exists(select 1 from (values
-      ('internal.export_frontend_privacy_request(uuid,integer)','939737e433fcf800d5e98a3dd1569e5d','8da19ec4f773a51f9b67fdf02996be3c'),
+      ('internal.export_frontend_privacy_request(uuid,integer)','939737e433fcf800d5e98a3dd1569e5d','fc93a2f693d79ddacb0cb36b6e65d44a'),
       ('api.export_frontend_privacy_request(uuid,integer)','251a62d1bb6d474172d02a2867b2556a','251a62d1bb6d474172d02a2867b2556a'),
       ('internal.retention_privacy_requests(integer)','ae00ab54c00fd3f6f64ac6b8061ba929','65ca200080c2e6d9cf57ebc20bed96f7')) v(sig,reviewed,updated)
     where to_regprocedure(v.sig) is null
@@ -47,7 +47,7 @@ begin
     + (exists(select 1 from pg_constraint c where c.conrelid='private.privacy_request_events'::regclass
         and c.conname='privacy_request_events_export_check'))::integer
     + ((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
-        where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)'))='8da19ec4f773a51f9b67fdf02996be3c')::integer
+        where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)'))='fc93a2f693d79ddacb0cb36b6e65d44a')::integer
     + ((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
         where oid=to_regprocedure('internal.retention_privacy_requests(integer)'))='65ca200080c2e6d9cf57ebc20bed96f7')::integer
   into present;
@@ -55,9 +55,9 @@ begin
     raise exception 'rollback precondition: the privacy export confirm update is not applied' using errcode='55000';
   end if;
   if exists(select 1 from (values
-      ('internal.prepare_frontend_privacy_export(uuid,integer)','321e0c77d2b5c4b6399ee9a9aafe1932'),
+      ('internal.prepare_frontend_privacy_export(uuid,integer)','d36f1261ae7bf7225e87ab2dd6c9cac1'),
       ('api.prepare_frontend_privacy_export(uuid,integer)','001f2fc46398c56fd2ac6d7b3bf2cf11'),
-      ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)','8e6432f134027e6b71dd1a7d58b73c4e'),
+      ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)','8452e29622998219f9e8802d2a5bb25d'),
       ('api.confirm_frontend_privacy_export(uuid,integer,uuid)','438d948a6a90a8fefd9c6bf49df8c99f')) v(sig,body)
     where to_regprocedure(v.sig) is not null
       and (select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)) is distinct from v.body) then

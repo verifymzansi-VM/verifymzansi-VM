@@ -21,7 +21,8 @@ const NOTHING = {
   mfa: "Verify your authenticator again. Nothing was exported.",
   forbidden:
     "Another staff member with data request access must export this request. Nothing was exported.",
-  stale: "The request changed or can no longer be exported. Reload it. Nothing was exported.",
+  stale:
+    "The request changed, or can no longer be exported: exports are possible while the request is open, or shortly after it is completed (until it is closed out). Reload it. Nothing was exported.",
   changed:
     "The member's records changed while the export was prepared. Nothing was exported. Start the export again.",
   tooLarge: "The export is too large for a direct download. Nothing was exported.",
