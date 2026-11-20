@@ -420,6 +420,25 @@
       ]
     },
     {
+      "id": "LIM-APP-event-video-length",
+      "title": "Event videos: at most 1 minute (checked by the browser only; the server applies the 2-minute limit)",
+      "value": 60,
+      "unit": "seconds",
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "src/lib/media/video-length.ts",
+          "contains": "export const MAX_EVENT_VIDEO_SECONDS = 60;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "src/lib/media/video-length.test.ts"
+        }
+      ]
+    },
+    {
       "id": "LIM-APP-foundation-_lib-organisation-route",
       "title": "Request body cap for /api/foundation/_lib/organisation-route.ts",
       "value": "action === \"organisation:manage\" ? 32768 : 8192",
@@ -1012,6 +1031,29 @@
         {
           "kind": "declaration",
           "mechanism": "LIM-SQL-media-upload-size"
+        }
+      ]
+    },
+    {
+      "id": "LIM-APP-video-length",
+      "title": "Post videos: at most 2 minutes (checked by the browser and again by the server on upload)",
+      "value": 120,
+      "unit": "seconds",
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "src/lib/media/video-length.ts",
+          "contains": "export const MAX_VIDEO_SECONDS = 120;"
+        },
+        {
+          "file": "src/lib/foundation/media-upload.ts",
+          "contains": "videoLengthProblem(await readVideoBytesSeconds(bytes), MAX_VIDEO_SECONDS)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "src/lib/media/video-length.test.ts"
         }
       ]
     },
