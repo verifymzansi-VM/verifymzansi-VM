@@ -1,13 +1,15 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { lightTealSelectedClassName } from "@/components/ui/selected-state";
 import { cn } from "@/lib/utils";
 import { AREA_LABELS, type MarketplaceArea } from "@/types/enums";
 
 const FILTER_AREAS: MarketplaceArea[] = ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"];
 
 const ACTIVE_CLASSES: Record<MarketplaceArea | "ALL", string> = {
-  ALL: "border-foreground bg-foreground text-background",
+  // No black chips (owner, group 66): "All areas" uses the light tourism teal.
+  ALL: lightTealSelectedClassName,
   MZANSI_MARKET:
     "border-brand-green-600 bg-brand-green-600 text-white dark:border-brand-green-500 dark:bg-brand-green-500 dark:text-brand-green-950",
   MZANSI_BUSINESS:

@@ -892,7 +892,7 @@ export default async function AdvertisePage() {
                 key={step.title}
                 className="flex gap-4 rounded-2xl border border-border/70 p-4 sm:flex-col sm:gap-0 sm:p-5"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-foreground font-display text-sm font-bold text-background">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-50 font-display text-sm font-bold text-teal-800 ring-1 ring-teal-500/40 dark:bg-teal-950/40 dark:text-teal-200">
                   {index + 1}
                 </span>
                 <div className="min-w-0">
