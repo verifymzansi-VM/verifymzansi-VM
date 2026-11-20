@@ -493,15 +493,17 @@ export function validateLaunchConfiguration(
         checks,
         "KYC provider",
         "pass",
-        "KYC_PROVIDER=manual routes submissions to human review"
+        "KYC_PROVIDER=manual: every identity check goes to staff review"
       );
     } else {
-      // No provider integration is built: identity checks go to staff review.
+      // No provider integration is built, so the value changes nothing:
+      // identity checks still go to staff review. The value itself is not
+      // repeated (it is free text from the environment).
       addCheck(
         checks,
         "KYC provider",
         "warn",
-        `KYC_PROVIDER=${kycProvider} has no integration; submissions go to human review`
+        "KYC_PROVIDER names a provider with no integration; identity checks still go to staff review. Set KYC_PROVIDER=manual"
       );
     }
   }

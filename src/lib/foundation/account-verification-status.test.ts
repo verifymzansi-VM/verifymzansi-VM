@@ -121,13 +121,14 @@ describe("accountVerificationStatusFromCase", () => {
 });
 
 describe("readFoundationAccountVerificationStatus", () => {
+  const ACCOUNT = "00000000-0000-4000-8000-000000000001";
   const apiWith = (...answers: Array<{ data: unknown; error: unknown }>) => {
     const rpc = vi.fn();
     for (const answer of answers) rpc.mockResolvedValueOnce(answer);
     return { api: { rpc } as unknown as FoundationAuthenticatedApi, rpc };
   };
   const identity = (decision: string | null, change: Record<string, unknown> = {}) => ({
-    account_id: "00000000-0000-4000-8000-000000000001",
+    account_id: ACCOUNT,
     case_id: caseId,
     case_version: 2,
     reason: decision ? "document_unreadable" : null,
@@ -143,7 +144,7 @@ describe("readFoundationAccountVerificationStatus", () => {
       data: { ...base, verified: true, phone_verified: true, locality_confirmed: true },
       error: null,
     });
-    await expect(readFoundationAccountVerificationStatus(api)).resolves.toBe("verified");
+    await expect(readFoundationAccountVerificationStatus(api, ACCOUNT)).resolves.toBe("verified");
     expect(rpc).toHaveBeenCalledExactlyOnceWith("get_my_verification_case", {}, { get: false });
   });
 
@@ -155,7 +156,7 @@ describe("readFoundationAccountVerificationStatus", () => {
       { data: { ...base, return_reason: "document_unreadable" }, error: null },
       { data: identity(decision), error: null }
     );
-    await expect(readFoundationAccountVerificationStatus(api)).resolves.toBe(expected);
+    await expect(readFoundationAccountVerificationStatus(api, ACCOUNT)).resolves.toBe(expected);
     expect(rpc).toHaveBeenLastCalledWith("get_my_frontend_identity_state", {}, { get: false });
   });
 
@@ -187,7 +188,7 @@ describe("readFoundationAccountVerificationStatus", () => {
     "counts finished uploads like the status route: %s",
     async (_name, rows, expected) => {
       const { api, rpc } = apiWith({ data: ready, error: null }, { data: rows, error: null });
-      await expect(readFoundationAccountVerificationStatus(api)).resolves.toBe(expected);
+      await expect(readFoundationAccountVerificationStatus(api, ACCOUNT)).resolves.toBe(expected);
       expect(rpc).toHaveBeenLastCalledWith(
         "get_my_frontend_verification_uploads",
         {},
@@ -201,7 +202,7 @@ describe("readFoundationAccountVerificationStatus", () => {
     ["a submission is registered", { ...ready, submission_pending: true }, "pending_review"],
   ] as const)("skips the uploads read when %s", async (_name, data, expected) => {
     const { api, rpc } = apiWith({ data, error: null });
-    await expect(readFoundationAccountVerificationStatus(api)).resolves.toBe(expected);
+    await expect(readFoundationAccountVerificationStatus(api, ACCOUNT)).resolves.toBe(expected);
     expect(rpc).toHaveBeenCalledOnce();
   });
 
@@ -223,6 +224,23 @@ describe("readFoundationAccountVerificationStatus", () => {
       ],
     ],
     [
+      "a decision about another account",
+      [
+        { data: { ...base, return_reason: "document_unreadable" }, error: null },
+        {
+          data: identity("rejected", { account_id: "00000000-0000-4000-8000-000000000002" }),
+          error: null,
+        },
+      ],
+    ],
+    [
+      "a decision without its account",
+      [
+        { data: { ...base, return_reason: "document_unreadable" }, error: null },
+        { data: identity("rejected", { account_id: undefined }), error: null },
+      ],
+    ],
+    [
       "unavailable uploads",
       [
         { data: { ...base, phone_verified: true, locality_confirmed: true }, error: null },
@@ -231,6 +249,6 @@ describe("readFoundationAccountVerificationStatus", () => {
     ],
   ] as const)("throws on %s", async (_name, answers) => {
     const { api } = apiWith(...answers);
-    await expect(readFoundationAccountVerificationStatus(api)).rejects.toThrow();
+    await expect(readFoundationAccountVerificationStatus(api, ACCOUNT)).rejects.toThrow();
   });
 });
