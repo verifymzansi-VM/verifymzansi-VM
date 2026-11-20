@@ -32,6 +32,7 @@ export type NavIcon =
   | "landmark"
   | "handshake"
   | "receipt"
+  | "user-plus"
   | "toggle";
 
 /** Keys of `staff_nav_counts()` shown as badges. */
@@ -266,6 +267,15 @@ export const ADMIN_NAV: readonly NavItem[] = [
     capability: "payments:view",
   },
 
+  // Member invitations: one normal member account each, never staff access
+  // (staff are made on Staff roles, administrators by the database owner).
+  {
+    href: "/admin/member-invitations",
+    label: "Member invitations",
+    icon: "user-plus",
+    section: "platform",
+    capability: "member:invite",
+  },
   {
     href: "/admin/feature-flags",
     label: "Feature flags",

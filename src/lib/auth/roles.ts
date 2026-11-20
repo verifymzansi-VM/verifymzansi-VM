@@ -45,7 +45,9 @@ export type Capability =
   | "organisations:manage"
   | "partners:manage"
   | "payments:view"
-  | "payments:refund";
+  | "payments:refund"
+  // Platform: lets one person create a normal member account (never staff).
+  | "member:invite";
 
 const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
   /* 3rd — Moderator: queue & case operations */
@@ -110,6 +112,8 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "partners:manage",
     "payments:view",
     "payments:refund",
+    // Admin-exclusive: member invitations (database capability member:invite).
+    "member:invite",
   ]),
 };
 
