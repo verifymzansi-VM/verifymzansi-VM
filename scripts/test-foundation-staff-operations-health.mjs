@@ -75,7 +75,11 @@ const JOBS = [
   ["api.sweep_sponsorships(integer)", "select api.sweep_sponsorships(100);", "sponsorships"],
   ["api.purge_expired_inbox(integer)", "select api.purge_expired_inbox(100);", "inbox_purge"],
   ["api.reconcile_intro_trials(integer)", "select api.reconcile_intro_trials(20);", "intro_trials"],
-  ["api.approve_due_commissions(integer)", "select api.approve_due_commissions(20);", "commissions"],
+  [
+    "api.approve_due_commissions(integer)",
+    "select api.approve_due_commissions(20);",
+    "commissions",
+  ],
   [
     "api.expire_waiting_bank_transfers(integer)",
     "select api.expire_waiting_bank_transfers(50);",
@@ -103,9 +107,17 @@ const JOBS = [
     "select api.purge_frontend_form_drafts(500);",
     "form_drafts",
   ],
-  ["api.claim_evidence_cleanup(integer)", "select api.claim_evidence_cleanup(4);", "evidence_cleanup"],
+  [
+    "api.claim_evidence_cleanup(integer)",
+    "select api.claim_evidence_cleanup(4);",
+    "evidence_cleanup",
+  ],
   ["api.claim_media_cleanup(integer)", "select api.claim_media_cleanup(100);", "media_cleanup"],
-  ["api.expire_stale_checkouts(integer)", "select api.expire_stale_checkouts(100);", "payment_checks"],
+  [
+    "api.expire_stale_checkouts(integer)",
+    "select api.expire_stale_checkouts(100);",
+    "payment_checks",
+  ],
   ["api.reconcile_ozow_refunds(jsonb)", "select api.reconcile_ozow_refunds('[]');", "refund_check"],
 ];
 const JOB_SIGNATURES = JOBS.map(([signature]) => signature);
@@ -137,11 +149,15 @@ try {
 
   const read = (who = admin, totpAt) => json(staff(who, `select ${READ};`, totpAt));
   const runs = () =>
-    json(`select coalesce(jsonb_object_agg(job,last_run_at),'{}') from private.scheduled_job_runs;`);
+    json(
+      `select coalesce(jsonb_object_agg(job,last_run_at),'{}') from private.scheduled_job_runs;`
+    );
   const runJob = (sql) => q(service(sql));
   /** Moves a job's recorded run back by `by` (an interval). */
   const age = (job, by) =>
-    q(`update private.scheduled_job_runs set last_run_at=clock_timestamp()-interval '${by}' where job='${job}';`);
+    q(
+      `update private.scheduled_job_runs set last_run_at=clock_timestamp()-interval '${by}' where job='${job}';`
+    );
   const lateOf = (job) => read().jobs.find((j) => j.job === job).late;
 
   // ------------------------------------------------------------ before
@@ -175,7 +191,10 @@ try {
     assert.equal(rows.length, 2, JSON.stringify(rows));
     assert.match(rows[0][1], /unexpected state/);
     assert.ok(rows[1][1].startsWith(`${target} is not the reviewed body`), rows[1][1]);
-    assert.match(fails(step.sql, "55000"), /operations health drift: not the reviewed body: api\.sweep_sponsorships/);
+    assert.match(
+      fails(step.sql, "55000"),
+      /operations health drift: not the reviewed body: api\.sweep_sponsorships/
+    );
     q(`${live};`);
     assert.equal(fingerprint(), before);
   });
@@ -194,10 +213,7 @@ try {
     const after = Object.fromEntries(JOB_SIGNATURES.map((s) => [s, bodyMd5(s)]));
     for (const signature of JOB_SIGNATURES) assert.notEqual(after[signature], reviewed[signature]);
     q(ROLLBACK);
-    assert.deepEqual(
-      Object.fromEntries(JOB_SIGNATURES.map((s) => [s, bodyMd5(s)])),
-      reviewed
-    );
+    assert.deepEqual(Object.fromEntries(JOB_SIGNATURES.map((s) => [s, bodyMd5(s)])), reviewed);
     assert.deepEqual(executeGrants(json, JOB_SIGNATURES), grants);
     applySteps(database, [step]);
     assert.deepEqual(Object.fromEntries(JOB_SIGNATURES.map((s) => [s, bodyMd5(s)])), after);
@@ -366,66 +382,75 @@ try {
       ('sms_codes_day','warning','2026-11-19',350,500,'${admin.id}',now());
     set session_replication_role=origin;`);
 
-  await check("the read: stuck emails and notices, payment problems, blocked deletions, alarms", () => {
-    const health = read();
-    assert.deepEqual(health.emails, {
-      waiting: 3,
-      stuck: 2,
-      items: [
-        {
-          kind: "post_expired",
-          attempts: 1,
-          queued_at: health.emails.items[0].queued_at,
-          last_error: null,
-        },
-        {
-          kind: "enquiry_received",
-          attempts: 8,
-          queued_at: health.emails.items[1].queued_at,
-          last_error: "delivery_failed",
-        },
-      ],
-    });
-    assert.deepEqual(
-      health.notices.items.map((n) => [n.kind, n.attempts]),
-      [
-        ["submitted", 3],
-        ["approved", 8],
-      ]
-    );
-    assert.equal(health.notices.stuck, 2);
-    assert.equal(health.payments.problems, 1);
-    assert.equal(health.payments.not_activated, 0);
-    assert.deepEqual(
-      health.payments.items.map((p) => [p.payment_ref, p.reason, p.source, p.occurrences, p.alerted]),
-      [[ids.payment.slice(0, 8), "amount_mismatch", "notice", 3, false]]
-    );
-    const { items, ...counts } = health.deletions;
-    assert.deepEqual(counts, {
-      accounts_blocked: 1,
-      files_stuck: 1,
-      files_queued: 2,
-      evidence_overdue: 1,
-      legal_holds: 1,
-    });
-    assert.deepEqual(
-      items.map((d) => [d.reason, d.closed_by]),
-      [["refund_open", "member"]]
-    );
-    assert.equal(health.incidents.open, 2);
-    assert.deepEqual(
-      health.incidents.items.map((a) => [a.metric, a.level]),
-      [
-        ["sms_codes_day", "critical"],
-        ["sms_codes_day", "warning"],
-      ]
-    );
-    // No account, subject, request or case ids; no full payment id.
-    const text = JSON.stringify(health);
-    for (const id of Object.values(ids)) assert.ok(!text.includes(id), id);
-    assert.ok(!text.includes(admin.id));
-    assert.ok(!/@/.test(text));
-  });
+  await check(
+    "the read: stuck emails and notices, payment problems, blocked deletions, alarms",
+    () => {
+      const health = read();
+      assert.deepEqual(health.emails, {
+        waiting: 3,
+        stuck: 2,
+        items: [
+          {
+            kind: "post_expired",
+            attempts: 1,
+            queued_at: health.emails.items[0].queued_at,
+            last_error: null,
+          },
+          {
+            kind: "enquiry_received",
+            attempts: 8,
+            queued_at: health.emails.items[1].queued_at,
+            last_error: "delivery_failed",
+          },
+        ],
+      });
+      assert.deepEqual(
+        health.notices.items.map((n) => [n.kind, n.attempts]),
+        [
+          ["submitted", 3],
+          ["approved", 8],
+        ]
+      );
+      assert.equal(health.notices.stuck, 2);
+      assert.equal(health.payments.problems, 1);
+      assert.equal(health.payments.not_activated, 0);
+      assert.deepEqual(
+        health.payments.items.map((p) => [
+          p.payment_ref,
+          p.reason,
+          p.source,
+          p.occurrences,
+          p.alerted,
+        ]),
+        [[ids.payment.slice(0, 8), "amount_mismatch", "notice", 3, false]]
+      );
+      const { items, ...counts } = health.deletions;
+      assert.deepEqual(counts, {
+        accounts_blocked: 1,
+        files_stuck: 1,
+        files_queued: 2,
+        evidence_overdue: 1,
+        legal_holds: 1,
+      });
+      assert.deepEqual(
+        items.map((d) => [d.reason, d.closed_by]),
+        [["refund_open", "member"]]
+      );
+      assert.equal(health.incidents.open, 2);
+      assert.deepEqual(
+        health.incidents.items.map((a) => [a.metric, a.level]),
+        [
+          ["sms_codes_day", "critical"],
+          ["sms_codes_day", "warning"],
+        ]
+      );
+      // No account, subject, request or case ids; no full payment id.
+      const text = JSON.stringify(health);
+      for (const id of Object.values(ids)) assert.ok(!text.includes(id), id);
+      assert.ok(!text.includes(admin.id));
+      assert.ok(!/@/.test(text));
+    }
+  );
   await check("at most 50 rows a list; counts are complete", () => {
     q(`set session_replication_role=replica;
       insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key,created_at,delivery_attempts)
