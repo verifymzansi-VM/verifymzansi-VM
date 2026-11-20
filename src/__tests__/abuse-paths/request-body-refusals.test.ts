@@ -188,6 +188,27 @@ function streamed(bytes: number) {
   });
 }
 
+const PIECE = 16 * 1024;
+/** Four times the largest route limit (256 KiB). */
+const HUGE = 1024 * 1024;
+/** The largest route limit, the piece that crosses it and the one the stream
+ * queues ahead. */
+const READ_LIMIT = 256 * 1024 + 2 * PIECE;
+/** Valid JSON ("{}" and then spaces) in 16 KiB pieces, counting what is read. */
+function counted(bytes: number) {
+  const encoder = new TextEncoder();
+  let sent = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (sent >= bytes) return controller.close();
+      const piece = encoder.encode((sent === 0 ? "{}" : "").padEnd(PIECE, " "));
+      sent += piece.byteLength;
+      controller.enqueue(piece);
+    },
+  });
+  return { stream, pulled: () => sent };
+}
+
 /** Routes that read no body, so any body is as good as none. */
 const NO_BODY = new Set([
   "verification/session/start",
@@ -263,11 +284,41 @@ describe("bodies no page sends are refused without running a command", () => {
 
   it("a body larger than the route's limit, with its length declared", async () => {
     const big = JSON.stringify({ text: "x".repeat(OVERSIZE) });
-    expect(await sweep(() => big)).toEqual([]);
+    const length = String(new TextEncoder().encode(big).byteLength);
+    expect(await sweep(() => big, { "content-length": length })).toEqual([]);
   });
 
   it("a body larger than the route's limit, streamed without a declared length", async () => {
     expect(await sweep(() => streamed(OVERSIZE))).toEqual([]);
+  });
+
+  // The two cases above would pass even if a route ignored its limit: such a
+  // body is no valid input anyway, so the schema refuses it after reading it
+  // all. These count what each route reads of a body that is valid JSON ("{}"
+  // padded with spaces) and far larger than any limit.
+  it.each([
+    ["with its length declared", true],
+    ["streamed without a declared length", false],
+  ])("a route reads no more than its limit of a large body, %s", async (_label, declared) => {
+    const failures: string[] = [];
+    for (const route of routes) {
+      if (NO_BODY.has(route.name)) continue;
+      work.commands.length = 0;
+      const body = counted(HUGE);
+      const response = await Promise.race([
+        send(route, body.stream, declared ? { "content-length": String(HUGE) } : {}),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+      ]);
+      const status = response?.status ?? 0;
+      // A declared length over the limit is refused before reading; the
+      // stream itself may have queued a piece or two ahead.
+      const allowed = declared ? 2 * PIECE : READ_LIMIT;
+      if (!response || status < 400 || work.commands.length > 0 || body.pulled() > allowed)
+        failures.push(
+          `${route.method} ${route.name}: ${status || "no answer"}, read ${body.pulled()} bytes`
+        );
+    }
+    expect(failures).toEqual([]);
   });
 
   it.each([
