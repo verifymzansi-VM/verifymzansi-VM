@@ -47,8 +47,14 @@ export async function handleFoundationAuthAttempt<T>({
   operation,
   refusal,
   countsAsAttempt,
+  body,
 }: {
   request: NextRequest;
+  /** The request's JSON body when the route has already read it (once, with
+   * parseJsonRequest and the same 4096-byte limit used here); the request's
+   * own body is then not read again. Every check below still runs before the
+   * operation sees it. */
+  body?: { input: unknown };
   action: "auth:login" | "auth:register" | "auth:forgot-password" | "auth:resend-confirmation";
   enabled?: boolean;
   unavailableMessage: string;
@@ -67,6 +73,8 @@ export async function handleFoundationAuthAttempt<T>({
     foundationAuthPrivateResponse(
       NextResponse.json({ error: unavailableMessage }, { status: 503 })
     );
+  const readInput = async () =>
+    body ? body.input : await parseJsonRequest(request, { maxBytes: 4096 });
   try {
     const blocked = enforceMutationRequest(request, log);
     if (blocked) return foundationAuthPrivateResponse(blocked);
@@ -83,7 +91,7 @@ export async function handleFoundationAuthAttempt<T>({
       // afterwards unless Auth refused the CAPTCHA (see below). It counts per
       // IPv4 address or IPv6 /64, and more loosely per IPv6 /48
       // (clientSignupKeys).
-      input = await parseJsonRequest(request, { maxBytes: 4096 });
+      input = await readInput();
       if (!hasCaptchaToken(input))
         return foundationAuthPrivateResponse(
           NextResponse.json(
@@ -112,7 +120,7 @@ export async function handleFoundationAuthAttempt<T>({
           )
         );
     }
-    if (action !== "auth:register") input = await parseJsonRequest(request, { maxBytes: 4096 });
+    if (action !== "auth:register") input = await readInput();
     const writes: Parameters<FoundationAuthCookies["setAll"]>[0] = [];
     let result: T;
     try {
