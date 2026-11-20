@@ -128,6 +128,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 62. Add slots part-way through a package (Pricing v2 P4b) | awaiting owner (with the group 62 part of 8 rows elsewhere) | Nothing today (packages are not on sale). Once they are: 'Add slots' on the package card of My slots while 7 or more days are left; the 'Add slots' page (approved drafts p4-03 and p4-04; the invoice variant, draft n2, new); 'Slots added' after paying; staff see added-slots invoice requests in the existing queue |
 | 63. Sign-up mode in the database (item 7) | approved by owner 2026-11-20 (no file rows: the group 63 part of 2 rows in group 2) | Nothing while sign-up is by invitation (today). Once the owner opens sign-up: a Google sign-up refused for a blocked or reserved email domain shows 'This email can't be used to register' on the sign-in page, and the profile page's email change refuses such an address with 'This email address can't be used. Use a different address.' |
 | 64. Toasts clear of form buttons on phones | approved by owner 2026-11-20 (with the group 64 part of 1 row elsewhere) | Phones (narrower than 768 px): a toast shows at the top of the screen instead of near the bottom, where it covered the button tapped next ('Verify', 'Update password'); while it shows (about 5 seconds) it covers the header (logo, search, menu). Tablets and desktops: same place and look (bottom right). Every screen size: a tap on the empty space around a toast now reaches the page |
+| 65. Member invitations (staff) | approved by owner 2026-11-20 (design and pictures; with the group 65 part of 1 row in group 57) | Admins only: a 'Member invitations' page under Platform in the staff menu. An admin types an email and presses Invite; the page says nobody is emailed and gives the sign-up link to copy and send. Each invitation shows Waiting to join, Joined, Withdrawn or Expired with one date; waiting ones can be withdrawn after a confirmation. An address that already has an account, today's limit of 200 and non-admins are refused with a plain message. It never gives staff access |
 | 66. One main button per screen (button hierarchy) | approved by owner 2026-11-20 (with the group 66 part of rows in other groups) | Every page: one filled main button per screen. Header 'Register' and '+ Post' light-green tinted; Pricing's three terms equal and outlined, no footer band; gold main buttons on dark-green bands (footer band, Advertise, the two verification help heroes, Trust & Safety); black buttons outlined; section pages' title buttons outlined; post page 'WhatsApp' outlined; dashboard, checkout and My slots: the ID review button is the main one until it is done; Terms and Privacy e-mail addresses are text links; Safety Centre's second 'Report a problem' a text link. Follow-ups: Home's About 'Post for free' outlined (the footer band's gold one is Home's main button); Safety Centre hero 'Report a problem' gold; My posts' 'New post' on every tab, filled when there are posts and outlined only beside the empty list's 'Create your first post'. No black (owner: no black, light tourism colour): selected chips and tabs and the former black buttons are light teal |
 
 Questions for the owner:
@@ -2383,7 +2384,7 @@ checks that each removed page and route answers 404.
 | `src/components/trials/extension-offer-card.tsx` | wording-behaviour | Removed (row A18): the trial extension offer card on an organisation's dashboard and the route behind it (/api/trial-extensions/<id>). The live backend has no extension offers, so it never showed (hidden in group 27). | Nothing (it never showed) | keep | awaiting owner | 2026-11-19 | deleted |
 | `src/components/showrooms/showroom-province-chip.tsx` | wording-behaviour | Removed (owner decision 19 November 2026, row A16): the 'Showing <province> first · Change' chip under the showrooms. The showroom does not order posts by province; it was hidden (group 6). The province filter in the filter bar and the viewer stays. | Nothing (it was hidden) | keep | awaiting owner | 2026-11-19 | deleted |
 | `src/components/admin/intelligence-panels.tsx` | helper | The 'Decision' panel, used only by the removed Intelligence pages, is removed; the chart panels the staff home's traffic card uses stay. | Nothing (same look and steps) | keep | awaiting owner | 2026-11-19 | 2ef9ef274605 |
-| `src/components/admin/admin-sidebar.tsx` | helper | The five menu icons only the removed staff pages used are dropped from the icon list. | Nothing (same look and steps) | keep | awaiting owner | 2026-11-19 | 96918140c1ec |
+| `src/components/admin/admin-sidebar.tsx` | helper | The five menu icons only the removed staff pages used are dropped from the icon list. Group 65: adds the person-plus icon for the new Member invitations menu entry. | Nothing from group 57 (same look and steps). Group 65, admins only: a person-plus icon beside Member invitations in the Platform section. | keep | awaiting owner (group 65 part approved by owner 2026-11-20) | 2026-11-20 | 219d3a880386 |
 | `src/components/immersive/immersive-top-bar.tsx` | wording-behaviour | The province picked in the viewer is no longer also saved in a cookie: only the removed 'province first' showroom read it (row A16). | Nothing (the province filter works as before) | keep | awaiting owner | 2026-11-19 | 910d0f8a714b |
 
 ### 58. 'Detect province and city' shown at launch
@@ -2683,6 +2684,49 @@ Decision: approved by owner 2026-11-20.
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/components/ui/toast.tsx` | visual | Group 64: on phones toasts covered the button tapped next ('Verify', 'Update password') and the empty strip under them caught taps. Below md the toast list sits at the top of the screen above the header; md and up keep the bottom-right place. At every size the list lets taps through outside the toasts. | Phones: toasts at the top of the screen instead of near the bottom, sliding in from the top, covering the header for about 5 seconds; same look. Tablets and desktops: same place and look; taps on the empty space around a toast reach the page. | keep | approved by owner 2026-11-20 | 2026-11-20 | 1e90302c7356 |
+
+### 65. Member invitations (staff)
+
+Database update 20261120040242_signup_mode_member_invitations (already
+applied, PR #304). A new staff page, `/admin/member-invitations`, for the
+commands `api.invite_member`, `api.revoke_member_invitation` and
+`api.list_member_invitations` (capability `member:invite`: admins only, with
+an authenticator check in the last 12 hours). Built from the plan and pictures
+the owner approved on 20 November 2026
+(`docs/engineering-review/MEMBER-INVITES-SCREEN-PLAN-2026-11-20.md`, not
+published).
+
+- Staff menu, Platform section, above Feature flags: 'Member invitations' with
+  a person-plus icon. Other roles do not see it; the page sends them to the
+  staff home.
+- Intro: 'Sign-up is by invitation only. To make someone staff, use Staff
+  roles.' (open sign-up: 'Sign-up is open to everyone, so invitations aren't
+  needed.'). A member invitation never gives staff access, and the page and
+  its code are kept apart from administrator invitations, which have no
+  screen.
+- 'Invite a member': one email field and an Invite button. On success: 'We
+  don't email them', the sign-up link and 'Copy link' (it says 'Copied' for
+  2 seconds after a copy); the new row is highlighted at the top. Inviting an
+  address still waiting renews it for 30 days and says so. Refusals: the
+  address has an account (the field is marked red), today's limit of 200,
+  not an admin, not a valid address. An expired authenticator check sends the
+  admin to verify again and back.
+- 'Invitations', newest first (up to 500): the email, one status (Waiting to
+  join, Joined, Withdrawn, Expired) and one date. 'Withdraw' only on waiting
+  rows, after 'Withdraw this invitation?'. Empty: 'No invitations yet'.
+
+Not in the pictures: the dialog has the site's usual close button in its
+corner, and a withdrawal that fails shows its reason inside the dialog.
+
+Decision: approved by owner 2026-11-20 (design and pictures); the built screen
+goes to the owner with after-pictures.
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/app/admin/member-invitations/page.tsx` | visual | Group 65: the new Member invitations page (admins only): reads the invitations and the sign-up mode through the foundation commands. | Admins: the page header with the intro and the Staff roles link; a message when the list cannot be loaded. | keep | approved by owner 2026-11-20 | 2026-11-20 | 234d436f5cc4 |
+| `src/app/admin/member-invitations/member-invitations-client.tsx` | visual | Group 65: the invite form, the result messages with the sign-up link, the invitations list and the withdraw confirmation. | Admins: everything described in group 65. | keep | approved by owner 2026-11-20 | 2026-11-20 | d66b867c369f |
+| `src/app/admin/member-invitations/member-invitations-client.test.tsx` | test | Group 65: checks the list, the empty state, inviting, renewing, each refusal, the re-verify redirect and withdrawing. | Nothing (not part of a page) | keep | approved by owner 2026-11-20 | 2026-11-20 | 10677f8a4c39 |
+| `src/app/admin/member-invitations/page.test.tsx` | test | Group 65: checks the page guard, both intros, the re-verify redirect and the failed-read message. | Nothing (not part of a page) | keep | approved by owner 2026-11-20 | 2026-11-20 | 4b2a5ff7c37c |
 
 ### 66. One main button per screen (button hierarchy)
 

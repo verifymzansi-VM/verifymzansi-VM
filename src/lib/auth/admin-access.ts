@@ -1,20 +1,36 @@
 import type { User } from "@supabase/supabase-js";
 import { asStaffRole, getRoleFromUser, hasCapability, type Capability } from "@/lib/auth/roles";
+import { nativeCapabilityFor } from "@/lib/auth/native-capabilities";
+import { readFoundationAccountContext } from "@/lib/foundation/account-context";
+import type { FoundationAuthenticatedApi } from "@/lib/foundation/authenticated-api";
 import type { StaffRole } from "@/types/enums";
 
 type MaybeUser = Pick<User, "app_metadata" | "is_anonymous"> | null | undefined;
-type MaybeUserWithId = Pick<User, "id" | "app_metadata" | "is_anonymous"> | null | undefined;
 
 /**
- * Staff authority lives in `public.staff_roles` (see the
- * 20260927110000_staff_roles_authority migration). The JWT role in
- * `app_metadata` is only a UI hint kept in sync after role changes: nothing
- * in this module authorises from it.
+ * Staff authority lives in the live backend's staff roles and capabilities,
+ * read through the caller's own account context (api.get_my_account_context).
+ * The JWT role in `app_metadata` is only a UI hint: nothing in this module
+ * authorises from it.
  */
 export interface StaffAccess {
   role: StaffRole;
-  /** Staff must have a verified second factor after this time. */
-  mfaRequiredAfter: Date;
+  /** The canonical capabilities the database assigns to this role. */
+  capabilities: readonly string[];
+  /**
+   * The database's staff check (internal.staff_actor) passes for this session
+   * now: live session raised with a second factor, active account, verified
+   * authenticator app, authenticator code within the last 12 hours.
+   */
+  canAccess: boolean;
+  /** The account has a verified authenticator app. */
+  totpEnrolled: boolean;
+}
+
+/** Which staff a request needs: any staff, administrators only, or a capability. */
+export interface StaffRequirement {
+  adminOnly?: boolean;
+  capability?: Capability;
 }
 
 /** Get the staff role from JWT (a hint only — never use it to authorise). */
@@ -33,78 +49,98 @@ export function getAdminActorRole(user: MaybeUser): "admin" | null {
 }
 
 /**
- * Read a user's current staff access from the database. Returns null for
- * non-staff, revoked staff, banned or suspended accounts, and on any error
- * (fail closed).
+ * Read the caller's current staff access from the database, using the
+ * caller's own verified session. Returns null for non-staff, revoked staff,
+ * suspended or closed accounts, an owner invitation that has not been
+ * accepted yet, and on any error (fail closed).
  */
-export async function readStaffAccessFromDb(userId: string): Promise<StaffAccess | null> {
-  let data: unknown;
+export async function readStaffAccessFromDb(
+  api: FoundationAuthenticatedApi
+): Promise<StaffAccess | null> {
   try {
-    const { createAdminClient } = await import("@/lib/supabase/admin");
-    const result = await createAdminClient().rpc("staff_access_of", { p_user: userId });
-    if (result.error) return null;
-    data = result.data;
+    const account = await readFoundationAccountContext(api);
+    const staff = account.staff;
+    // An unaccepted owner invitation shows the admin role as a setup hint
+    // with no capabilities; it carries no authority.
+    if (!staff || staff.assigned_capabilities.length === 0) return null;
+    const role = asStaffRole(staff.role === "governor" ? "governance_controller" : staff.role);
+    if (!role) return null;
+    return {
+      role,
+      capabilities: staff.assigned_capabilities,
+      canAccess: staff.can_access,
+      totpEnrolled: account.totp_enrolled,
+    };
   } catch {
     return null;
   }
-  if (!Array.isArray(data) || data.length === 0) return null;
+}
 
-  const row = data[0] as { role?: unknown; mfa_required_after?: unknown };
-  const role = asStaffRole(typeof row.role === "string" ? row.role : null);
-  const mfaRequiredAfter =
-    typeof row.mfa_required_after === "string" ? new Date(row.mfa_required_after) : null;
-  if (!role || !mfaRequiredAfter || Number.isNaN(mfaRequiredAfter.getTime())) return null;
+/** Whether staff access includes a capability, by the database's assignment. */
+export function staffAccessHasCapability(access: StaffAccess, capability: Capability): boolean {
+  return access.capabilities.includes(nativeCapabilityFor(capability));
+}
 
-  return { role, mfaRequiredAfter };
+/** The staff role that meets `requirement`, or null. */
+export function staffRoleMeeting(
+  access: StaffAccess | null,
+  { adminOnly = false, capability }: StaffRequirement = {}
+): StaffRole | null {
+  if (!access) return null;
+  if (adminOnly && access.role !== "admin") return null;
+  if (capability && !staffAccessHasCapability(access, capability)) return null;
+  return access.role;
 }
 
 /** Current staff role from the database, or null. */
-export async function verifyStaffActorRoleFromDb(user: MaybeUserWithId): Promise<StaffRole | null> {
-  if (!user || user.is_anonymous) return null;
-  return (await readStaffAccessFromDb(user.id))?.role ?? null;
+export async function verifyStaffActorRoleFromDb(
+  api: FoundationAuthenticatedApi
+): Promise<StaffRole | null> {
+  return staffRoleMeeting(await readStaffAccessFromDb(api));
 }
 
 /**
  * Re-verify the governance controller role against the database.
  */
 export async function verifyGovernanceActorRoleFromDb(
-  user: MaybeUserWithId
+  api: FoundationAuthenticatedApi
 ): Promise<"governance_controller" | null> {
-  const role = await verifyStaffActorRoleFromDb(user);
+  const role = await verifyStaffActorRoleFromDb(api);
   return role === "governance_controller" ? "governance_controller" : null;
 }
 
 /**
  * Re-verify the admin-only role against the database.
  */
-export async function verifyAdminActorRoleFromDb(user: MaybeUserWithId): Promise<"admin" | null> {
-  const role = await verifyStaffActorRoleFromDb(user);
+export async function verifyAdminActorRoleFromDb(
+  api: FoundationAuthenticatedApi
+): Promise<"admin" | null> {
+  const role = staffRoleMeeting(await readStaffAccessFromDb(api), { adminOnly: true });
   return role === "admin" ? "admin" : null;
 }
 
-/** Whether a staff role grants a capability. */
+/** Whether a staff role grants a capability (the preserved back-office map). */
 export function roleHasCapability(role: StaffRole, capability: Capability): boolean {
   return hasCapability({ app_metadata: { role }, is_anonymous: false }, capability);
 }
 
 /**
- * Verify that the user holds a specific capability according to the database.
+ * Verify that the caller holds a specific capability according to the database.
  */
 export async function verifyCapabilityFromDb(
-  user: MaybeUserWithId,
+  api: FoundationAuthenticatedApi,
   capability: Capability
 ): Promise<boolean> {
-  return (await verifyCapabilityRoleFromDb(user, capability)) !== null;
+  return (await verifyCapabilityRoleFromDb(api, capability)) !== null;
 }
 
 /**
- * Verify that the user holds a specific capability according to the database,
- * returning the DB-verified role for audit logs and decision records.
+ * Verify that the caller holds a specific capability according to the
+ * database, returning the DB-verified role for audit logs and decision records.
  */
 export async function verifyCapabilityRoleFromDb(
-  user: MaybeUserWithId,
+  api: FoundationAuthenticatedApi,
   capability: Capability
 ): Promise<StaffRole | null> {
-  const role = await verifyStaffActorRoleFromDb(user);
-  return role && roleHasCapability(role, capability) ? role : null;
+  return staffRoleMeeting(await readStaffAccessFromDb(api), { capability });
 }
