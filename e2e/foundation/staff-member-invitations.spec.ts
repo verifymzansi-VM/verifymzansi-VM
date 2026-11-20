@@ -90,7 +90,10 @@ test.describe("staff member invitations", () => {
     const existing = people.verifiedMember.email;
     await field.fill(existing);
     await page.getByRole("button", { name: "Invite", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("This email already has an account.");
+    const notice = page.getByRole("alert").filter({ hasText: "already has an account" });
+    await expect(notice).toContainText(
+      "This email already has an account. They can sign in at verifymzansi.com/login."
+    );
     await expect(field).toHaveAttribute("aria-invalid", "true");
 
     // Withdraw, after confirming.
