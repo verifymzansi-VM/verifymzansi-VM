@@ -43,6 +43,11 @@ export const DOCUMENTED_SKIPS: readonly { reason: string; why: string }[] = [
     reason: "The fake camera device is Chromium-only",
     why: "The verification camera checks use Chromium's fake media device flags; other browsers have no fake camera to capture from.",
   },
+  // This lane uses a fake canvas camera, so real Safari camera playback problems cannot show here; the real iPhone check stays required.
+  {
+    reason: "The WebKit fake camera is checked in mobile-safari only.",
+    why: "The test-only camera of e2e/support/webkit-fake-camera.ts is added to WebKit contexts only; Chromium projects use their fake device flags.",
+  },
   {
     reason: "WebKit media playback under headless CI is unreliable for autoplay assertions.",
     why: "Video autoplay and single-playback checks need media playback that headless WebKit on Linux does not provide reliably; they run in chromium and mobile-chrome.",
