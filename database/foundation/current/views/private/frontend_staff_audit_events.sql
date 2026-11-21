@@ -138,6 +138,39 @@ UNION ALL
     'payment:customer_invoice_voided'::text AS action,
     (('Invoice '::text || i.invoice_number) || ' voided: '::text) || i.void_reason AS reason
    FROM private.customer_invoices i
-  WHERE i.voided_by IS NOT NULL;
+  WHERE i.voided_by IS NOT NULL
+UNION ALL
+ SELECT 'identity_disclosure:'::text || d.id::text AS id,
+    d.opened_at AS occurred_at,
+    d.opened_by AS actor_id,
+        CASE
+            WHEN cardinality(d.subject_ids) = 1 THEN d.subject_ids[1]
+            ELSE NULL::uuid
+        END AS target_id,
+    'account'::text AS target_type,
+    'identity:disclosure_'::text || d.outcome AS action,
+    (((((('D-'::text || lpad(d.number::text, GREATEST(4, length(d.number::text)), '0'::text)) || ': '::text) ||
+        CASE d.request_type
+            WHEN 'subpoena'::text THEN 'subpoena'::text
+            WHEN 'court_order'::text THEN 'court order'::text
+            WHEN 'warrant'::text THEN 'warrant'::text
+            WHEN 'police_case'::text THEN 'police request'::text
+            ELSE 'regulator request'::text
+        END) || ' '::text) || d.request_reference) || ', searched by '::text) || replace(d.lookup_kind, '_'::text, ' '::text) AS reason
+   FROM private.identity_disclosures d
+UNION ALL
+ SELECT (('identity_disclosure_'::text || e.kind) || ':'::text) || e.id::text AS id,
+    e.occurred_at,
+    e.staff_id AS actor_id,
+    COALESCE(e.subject_id,
+        CASE
+            WHEN cardinality(d.subject_ids) = 1 THEN d.subject_ids[1]
+            ELSE NULL::uuid
+        END) AS target_id,
+    'account'::text AS target_type,
+    'identity:disclosure_'::text || e.kind AS action,
+    (('D-'::text || lpad(d.number::text, GREATEST(4, length(d.number::text)), '0'::text)) || ' '::text) || replace(e.kind, '_'::text, ' '::text) AS reason
+   FROM private.identity_disclosure_events e
+     JOIN private.identity_disclosures d ON d.id = e.disclosure_id;
 alter view private.frontend_staff_audit_events owner to postgres;
 revoke all on private.frontend_staff_audit_events from public;

@@ -16,6 +16,14 @@ function keyBytes(value: string): Buffer {
   return Buffer.from(value, "hex");
 }
 
+/** The one-way fingerprint of an ID number (identity-match-v1): the HMAC used
+ * at verification, so the same number always gives the same fingerprint. */
+export function identityNumberFingerprint(number: string, matchKey: Buffer) {
+  return sourceIdentityDigestToFingerprint(
+    createHmac("sha256", matchKey).update(number, "utf8").digest("hex")
+  );
+}
+
 /** Server processing primitive; no environment loading, logging or approval.
  * The authenticated adapter must supply the server-derived subject and keyring.
  * Staff still attest that this exact number matches the document/person.
@@ -42,13 +50,12 @@ export function processIdentityNumber(
   const matching = keyBytes(keys.identityMatchKey);
   const encryption = keyBytes(keys.numberEncryptionKey);
   if (matching.equals(encryption)) throw new Error("Separate identity key purposes required");
-  const digest = createHmac("sha256", matching).update(number, "utf8").digest("hex");
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", encryption, iv);
   cipher.setAAD(Buffer.from(`${ownerId}:id_doc`, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(number, "utf8"), cipher.final()]);
   return {
-    fingerprint: sourceIdentityDigestToFingerprint(digest),
+    fingerprint: identityNumberFingerprint(number, matching),
     identityKeyId: keys.identityKeyId,
     encryptedNumber: {
       ciphertext: ciphertext.toString("hex"),

@@ -31,6 +31,13 @@ export function sealPhoneChallenge(
   const payload = Buffer.from(JSON.stringify(value.data)).toString("base64url");
   return `${payload}.${signature(payload).toString("base64url")}`;
 }
+/** The bytes of a base64url segment, or null unless it is the one encoding of
+ * them. Buffer's decoder ignores the unused low bits of the last character, so
+ * a changed last character can decode to the same bytes. */
+function canonicalBase64url(text: string) {
+  const bytes = Buffer.from(text, "base64url");
+  return bytes.toString("base64url") === text ? bytes : null;
+}
 export function readPhoneChallenge(cookie: string | undefined, owner: string, phone: string) {
   if (!cookie || cookie.length > 1024) throw new FoundationPhoneError(400);
   const parts = cookie.split(".");
@@ -40,13 +47,13 @@ export function readPhoneChallenge(cookie: string | undefined, owner: string, ph
     !/^[A-Za-z0-9_-]{43}$/.test(parts[1])
   )
     throw new FoundationPhoneError(400);
-  const supplied = Buffer.from(parts[1], "base64url");
+  const supplied = canonicalBase64url(parts[1]);
   const expected = signature(parts[0]);
-  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected))
+  if (!supplied || supplied.length !== expected.length || !timingSafeEqual(supplied, expected))
     throw new FoundationPhoneError(400);
   let decoded: unknown;
   try {
-    decoded = JSON.parse(Buffer.from(parts[0], "base64url").toString());
+    decoded = JSON.parse(canonicalBase64url(parts[0])?.toString() ?? "");
   } catch {
     throw new FoundationPhoneError(400);
   }

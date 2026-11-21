@@ -21,6 +21,44 @@
       ]
     },
     {
+      "id": "LIM-APP-admin-authority-requests",
+      "title": "Request body cap for /api/admin/authority-requests",
+      "value": 8192,
+      "unit": "bytes",
+      "category": "size",
+      "enforcedAt": [
+        {
+          "file": "src/app/api/admin/authority-requests/route.ts",
+          "contains": "maxBytes: 8192"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-BODY-READER"
+        }
+      ]
+    },
+    {
+      "id": "LIM-APP-admin-authority-requests-selfie",
+      "title": "Request body cap for /api/admin/authority-requests/selfie",
+      "value": 1024,
+      "unit": "bytes",
+      "category": "size",
+      "enforcedAt": [
+        {
+          "file": "src/app/api/admin/authority-requests/selfie/route.ts",
+          "contains": "maxBytes: 1024"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-BODY-READER"
+        }
+      ]
+    },
+    {
       "id": "LIM-APP-admin-business-verification-id-message",
       "title": "Request body cap for /api/admin/business-verification/[id]/message",
       "value": 13500,
@@ -1128,8 +1166,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1166,8 +1204,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1185,8 +1223,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1261,8 +1299,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1280,8 +1318,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1299,8 +1337,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1337,8 +1375,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1356,8 +1394,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1375,8 +1413,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1394,8 +1432,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1413,8 +1451,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1432,8 +1470,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1451,8 +1489,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1508,8 +1546,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1527,8 +1565,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1546,8 +1584,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1565,8 +1603,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1584,8 +1622,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1603,8 +1641,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1622,8 +1660,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1641,8 +1679,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1660,8 +1698,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1679,8 +1717,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1717,8 +1755,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1831,8 +1869,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -1850,8 +1888,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2002,8 +2040,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2021,8 +2059,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2040,8 +2078,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2059,8 +2097,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2078,8 +2116,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2116,8 +2154,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2135,8 +2173,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2192,8 +2230,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2287,8 +2325,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2363,8 +2401,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2420,8 +2458,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2477,8 +2515,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2496,8 +2534,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2572,8 +2610,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2591,8 +2629,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2610,8 +2648,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2629,8 +2667,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2705,8 +2743,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2724,8 +2762,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2743,8 +2781,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2762,8 +2800,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2781,8 +2819,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2857,8 +2895,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2914,8 +2952,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2933,8 +2971,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2952,8 +2990,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -2971,8 +3009,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3123,8 +3161,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3237,8 +3275,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3256,8 +3294,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3294,8 +3332,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3332,8 +3370,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3351,8 +3389,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3389,8 +3427,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3427,8 +3465,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3514,8 +3552,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3590,8 +3628,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3605,6 +3643,44 @@
           "file": "database/foundation/current/functions/internal/get_staff_payment_list.sql",
           "symbol": "internal.get_staff_payment_list",
           "contains": "from (select * from listed order by created_at desc, id desc limit 50 offset (p_page-1)*50) p;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-identity_disclosure_record",
+      "title": "internal.identity_disclosure_record: at most 20 attempt dates shown",
+      "value": 20,
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/identity_disclosure_record.sql",
+          "symbol": "internal.identity_disclosure_record",
+          "contains": "order by x.created_at desc limit 20) t),'[]'::jsonb))"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-identity_disclosure_record-2",
+      "title": "internal.identity_disclosure_record: at most 20 verified phone numbers shown",
+      "value": 20,
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/identity_disclosure_record.sql",
+          "symbol": "internal.identity_disclosure_record",
+          "contains": "where y.owner_id=p_subject order by y.verified_at desc limit 20) v),'[]'::jsonb))"
         }
       ],
       "tests": [
@@ -3628,8 +3704,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3647,8 +3723,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3685,8 +3761,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3704,8 +3780,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3723,8 +3799,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3738,6 +3814,25 @@
           "file": "database/foundation/current/functions/internal/issue_staff_package_invoice.sql",
           "symbol": "internal.issue_staff_package_invoice",
           "contains": "if p_due_days is null or p_due_days not between 1 and 30 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-list_identity_disclosures",
+      "title": "internal.list_identity_disclosures: the latest 50 openings",
+      "value": 50,
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/list_identity_disclosures.sql",
+          "symbol": "internal.list_identity_disclosures",
+          "contains": "from (select x.* from private.identity_disclosures x order by x.opened_at desc,x.id desc limit 50) d"
         }
       ],
       "tests": [
@@ -3761,8 +3856,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3780,8 +3875,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3818,8 +3913,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3837,8 +3932,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3856,8 +3951,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3875,8 +3970,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3894,8 +3989,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3913,8 +4008,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3932,8 +4027,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3951,8 +4046,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -3989,8 +4084,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4008,8 +4103,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4046,8 +4141,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4065,8 +4160,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4124,6 +4219,25 @@
         {
           "kind": "declaration",
           "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-open_identity_disclosure",
+      "title": "internal.open_identity_disclosure: email search value",
+      "value": "<= 254",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/open_identity_disclosure.sql",
+          "symbol": "internal.open_identity_disclosure",
+          "contains": "else length(v_value)<=254 and v_value ~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$' end) then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4312,8 +4426,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4331,8 +4445,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4407,8 +4521,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4426,8 +4540,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4445,8 +4559,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4464,8 +4578,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4483,8 +4597,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4540,8 +4654,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4559,8 +4673,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4578,8 +4692,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4597,8 +4711,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4616,8 +4730,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4635,8 +4749,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4711,8 +4825,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4730,8 +4844,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4844,8 +4958,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4863,8 +4977,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4882,8 +4996,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4920,8 +5034,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -4996,8 +5110,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5015,8 +5129,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5053,8 +5167,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5072,8 +5186,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5091,8 +5205,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5110,8 +5224,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5129,8 +5243,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5148,8 +5262,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5167,8 +5281,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5205,8 +5319,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5319,8 +5433,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5566,8 +5680,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5585,8 +5699,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5604,8 +5718,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5623,8 +5737,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5718,8 +5832,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5737,8 +5851,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5756,8 +5870,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5775,8 +5889,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5813,8 +5927,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5870,8 +5984,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5889,8 +6003,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5908,8 +6022,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5965,8 +6079,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -5984,8 +6098,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6003,8 +6117,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6022,8 +6136,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6041,8 +6155,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6079,8 +6193,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6098,8 +6212,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6117,8 +6231,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6155,8 +6269,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6193,8 +6307,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6212,8 +6326,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6231,8 +6345,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6250,8 +6364,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6326,8 +6440,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6345,8 +6459,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6440,8 +6554,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6459,8 +6573,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6478,8 +6592,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6497,8 +6611,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6516,8 +6630,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6535,8 +6649,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6554,8 +6668,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6611,8 +6725,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6630,8 +6744,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6649,8 +6763,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6687,8 +6801,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6820,8 +6934,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6839,8 +6953,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6858,8 +6972,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6896,8 +7010,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6934,8 +7048,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -6972,8 +7086,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -9564,8 +9678,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ],
       "unit": "bytes"
@@ -9738,8 +9852,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -9925,8 +10039,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/limits-sql-bounds.test.mjs"
         }
       ]
     },
@@ -11237,6 +11351,82 @@
           "file": "database/foundation/current/tables/private/house_slot_events.sql",
           "symbol": "private.house_slot_events (house_slot_events_reason_check)",
           "contains": "constraint house_slot_events_reason_check CHECK (char_length(reason) >= 5 AND char_length(reason) <= 500)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-T-identity_disclosures_lookup_value_check",
+      "title": "private.identity_disclosures: search value 3 to 254 characters",
+      "value": "3 to 254",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/tables/private/identity_disclosures.sql",
+          "symbol": "private.identity_disclosures (identity_disclosures_lookup_value_check)",
+          "contains": "constraint identity_disclosures_lookup_value_check CHECK (length(lookup_value) >= 3 AND length(lookup_value) <= 254)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-T-identity_disclosures_reason_check",
+      "title": "private.identity_disclosures: reason 10 to 2000 characters",
+      "value": "10 to 2000",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/tables/private/identity_disclosures.sql",
+          "symbol": "private.identity_disclosures (identity_disclosures_reason_check)",
+          "contains": "constraint identity_disclosures_reason_check CHECK (length(reason) >= 10 AND length(reason) <= 2000)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-T-identity_disclosures_reference_check",
+      "title": "private.identity_disclosures: request reference 3 to 100 characters",
+      "value": "3 to 100",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/tables/private/identity_disclosures.sql",
+          "symbol": "private.identity_disclosures (identity_disclosures_reference_check)",
+          "contains": "constraint identity_disclosures_reference_check CHECK (length(request_reference) >= 3 AND length(request_reference) <= 100)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-T-identity_disclosures_subjects_check",
+      "title": "private.identity_disclosures: at most 5 accounts named per opening",
+      "value": "<= 5",
+      "category": "cap",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/tables/private/identity_disclosures.sql",
+          "symbol": "private.identity_disclosures (identity_disclosures_subjects_check)",
+          "contains": "constraint identity_disclosures_subjects_check CHECK (cardinality(subject_ids) <= 5 AND (outcome = 'no_match'::text) = (cardinality(subject_ids) = 0) AND (outcome <> 'attempt_only'::text OR lookup_kind = 'id_number'::text))"
         }
       ],
       "tests": [
