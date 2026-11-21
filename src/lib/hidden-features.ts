@@ -117,6 +117,15 @@ export const SHOW_SPONSOR_OFFER: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.
 export const SHOW_PACKAGE_TEAMS: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_PACKAGE_TEAMS;
 
 /**
+ * The redesigned partner page (/dashboard/partner, frontend ledger group 80):
+ * this month's earnings and next payout on the green band, sharing (link,
+ * code, WhatsApp, QR download), progress, money and help. The partner
+ * programme opens only once the partner agreement is signed, so this stays
+ * off at launch too (LAUNCH_VALUES). While off, partners see today's page.
+ */
+export const SHOW_PARTNER_PAGE: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_PARTNER_PAGE;
+
+/**
  * The storefront of a Multi-listing package (business tools plan section 1,
  * item 17b): "All stock" on the package owner's checked business page, and on
  * each listing in it the business's name and "See all N cars". Reads the live
