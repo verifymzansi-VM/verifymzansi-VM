@@ -2,8 +2,10 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import BusinessDetailPage from "./page";
 
-const { businessDetail } = vi.hoisted(() => ({
+const { businessDetail, storefrontRead, storefrontPage } = vi.hoisted(() => ({
   businessDetail: vi.fn(),
+  storefrontRead: vi.fn(async (_id: string): Promise<unknown> => null),
+  storefrontPage: vi.fn(),
 }));
 const { mockRedirect } = vi.hoisted(() => ({
   mockRedirect: vi.fn((href: string) => {
@@ -14,7 +16,11 @@ const { promotionCardSpy } = vi.hoisted(() => ({
   promotionCardSpy: vi.fn(),
 }));
 
-vi.mock("@/lib/foundation/marketplace-server", () => ({ restoredBusinessDetail: businessDetail }));
+vi.mock("@/lib/foundation/marketplace-server", () => ({
+  restoredBusinessDetail: businessDetail,
+  restoredStorefront: storefrontRead,
+  restoredStorefrontFirstPage: storefrontPage,
+}));
 vi.mock("@/lib/foundation/public-business-affiliations", () => ({
   readRestoredBusinessAffiliations: vi.fn().mockResolvedValue([]),
 }));
@@ -76,6 +82,38 @@ vi.mock("@/contexts/video-playback-context", () => ({
     releaseExclusive: vi.fn(),
   }),
 }));
+
+/** A business with a storefront (item 17b). */
+const SAMPLE_MOTORS = {
+  id: "11111111-1111-4111-8111-111111111111",
+  owner_id: "",
+  business_name: "Sample Motors",
+  description: "Family-run used car dealer.",
+  status: "live",
+  business_type: "standalone_shop",
+  category: "automotive",
+  cover_photo: null,
+  logo_url: null,
+  cover_video: null,
+  video_thumbnail: null,
+  gallery_photos: [],
+  social_links: {},
+  operating_hours: {},
+  services_offered: [],
+  payment_methods_accepted: [],
+  delivery_options: [],
+  service_areas: null,
+  location_city: "Richards Bay",
+  location_province: "KwaZulu-Natal",
+  phone: null,
+  whatsapp: null,
+  email: null,
+  website: null,
+  store_number: null,
+  map_directions: null,
+  business_details: null,
+  category_details: {},
+};
 
 /** Serves the business through the public business read. */
 function serveBusiness(
@@ -175,6 +213,72 @@ describe("BusinessDetailPage", () => {
     expect(screen.getByRole("button", { name: /Share/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Report/i })).toBeInTheDocument();
     expect(screen.queryByText("Get directions")).not.toBeInTheDocument();
+  });
+
+  // Item 17b: a checked business with a running package shows its stock.
+  it("shows the storefront's stock and hides the Live offers fact", async () => {
+    serveBusiness(SAMPLE_MOTORS);
+    storefrontRead.mockResolvedValueOnce({
+      businessId: "11111111-1111-4111-8111-111111111111",
+      businessName: "Sample Motors",
+      listings: 18,
+      categories: { vehicles: 18 },
+      makes: ["Toyota"],
+      areas: [],
+    });
+    storefrontPage.mockResolvedValueOnce({
+      cards: [
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          title: "Demo bakkie 2.4 GD-6",
+          price: "R289 900",
+          image: null,
+          hasVideo: true,
+          facts: "2019 · 98 000 km · Manual",
+        },
+      ],
+      total: 18,
+    });
+
+    render(
+      await BusinessDetailPage({
+        params: Promise.resolve({ id: "11111111-1111-4111-8111-111111111111" }),
+      })
+    );
+
+    expect(storefrontRead).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
+    expect(screen.getByRole("heading", { name: /All stock/ })).toHaveTextContent("18 cars");
+    expect(screen.getByRole("link", { name: /Demo bakkie 2.4 GD-6/ })).toHaveAttribute(
+      "href",
+      "/listing/22222222-2222-4222-8222-222222222222"
+    );
+    expect(screen.getByText("2019 · 98 000 km · Manual")).toBeInTheDocument();
+    expect(screen.getByText("Video")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show more" })).toBeInTheDocument();
+    expect(screen.queryByText("Live offers")).toBeNull();
+  });
+
+  it("is the page as before while the storefront has no live listings", async () => {
+    serveBusiness(SAMPLE_MOTORS);
+    storefrontRead.mockResolvedValueOnce({
+      businessId: "11111111-1111-4111-8111-111111111111",
+      businessName: "Sample Motors",
+      listings: 0,
+      categories: {},
+      makes: [],
+      areas: [],
+    });
+    storefrontPage.mockClear();
+
+    render(
+      await BusinessDetailPage({
+        params: Promise.resolve({ id: "11111111-1111-4111-8111-111111111111" }),
+      })
+    );
+
+    expect(storefrontPage).not.toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: /All stock/ })).toBeNull();
+    expect(screen.getByText("Live offers")).toBeInTheDocument();
   });
 
   it("returns notFound when the business is not public", async () => {
