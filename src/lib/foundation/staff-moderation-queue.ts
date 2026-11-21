@@ -7,6 +7,7 @@ import { claimTypeOf } from "../admin/moderation-items";
 import { getContentEditChanges } from "../content-edit-diff";
 import { FoundationStaffReadError } from "./staff-read";
 import { areaLabel, restoredArea, restoredContentType } from "./areas";
+import { readStaffCopyFacts } from "./post-copy";
 const instant = z.iso.datetime({ offset: true });
 const generation = z
   .string()
@@ -147,5 +148,16 @@ export async function readStaffModerationQueue(api: FoundationAuthenticatedApi, 
       result.error.code === "42501" ? 403 : 503,
       result.error.code === "42501"
     );
-  return parseStaffModerationQueue(result.data, accountId);
+  const queue = parseStaffModerationQueue(result.data, accountId);
+  // Copy a post (SHOW_POST_COPY): where each claimed listing was copied from
+  // and the seller's live posts with the same photo bytes.
+  const facts = await readStaffCopyFacts(
+    api,
+    queue.allItems.filter((i) => i.foundation && i.contentType === "listing").map((i) => i.id)
+  );
+  for (const item of queue.allItems) {
+    const found = facts.get(item.id);
+    if (found) item.copy_facts = found;
+  }
+  return queue;
 }

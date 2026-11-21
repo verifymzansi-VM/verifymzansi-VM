@@ -80,6 +80,83 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Copy a post, 21 November 2026
+
+`20261121150309_copy_a_post.sql` is pending (see the applied register). Launch
+checklist item 17b, business tools plan section 3 (owner-approved 20 November
+2026 with all 10 recommendations): a member whose Multi-listing package runs
+makes a new Market listing from one of their own.
+
+- **The copy:** `api.copy_my_post(post, request)` (members) copies one of the
+  caller's own Market listings that was submitted at least once (not a draft,
+  not held by staff: PT423) into a new draft, only while the caller's package
+  runs (`internal.slot_package_now`; PT402, detail `package_required`). The
+  draft is made by `internal.create_core_draft`, so its category rules and draft
+  allowance (5 plus the package's places, PT429) apply. It gets the category,
+  title, description, area, price, details, which contact buttons to show (never
+  a number), the presentation fields, the photos and the listing logo; never the
+  video or its cover. A repeated request returns the same copy.
+- **Photos:** the copy links the same stored files. A file is deleted only when
+  no post uses it (`internal.claim_media_cleanup` checks every link), so
+  deleting either post never removes the other's photos; post edits already
+  share files the same way.
+- **New photo:** trigger `copy_new_photo_required` refuses moving a copy of a
+  vehicle or property into review (22023, detail `copy_new_photo_required`)
+  unless one of its photos has bytes (sha256) not among the source's photos
+  (owner decision, question 5). Nothing is checked once the source is deleted.
+- **Reviewers:** `api.get_frontend_staff_copy_facts(posts)` (staff with
+  `queue:view`) returns, only for posts under review the caller has claimed (at
+  most 25 per call), the post each was copied from and the seller's other live
+  posts with a byte-identical photo (at most 10, with the number of such
+  photos).
+- **Unfinished copies:** `private.post_copies` records the source (null once it
+  is deleted) and the request. `internal.purge_copy_drafts`, run by
+  `internal.run_retention` (which now also returns `copy_drafts`), deletes a
+  copy still in draft 14 days after its last change, never during a legal hold.
+  Drafts that are not copies are untouched.
+- **Privacy export:** the `posts` rows gain `copied_from` (no new dataset).
+
+Expand only: two new commands, a table and a trigger; `run_retention` returns
+one more count and the export's posts rows one more field, both read without a
+strict field list. ORDER: apply first, then merge; the website offers Copy only
+while `SHOW_POST_COPY` is on (off until launch switch-on).
+
+**Applying.**
+
+1. Run `../preflight/20261121150309_copy_a_post.check.sql` unchanged in the SQL
+   editor. It is read only. Continue only if its result is the single "summary"
+   row reading "copy a post: update not applied; draft posts: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "copy a post: already applied; draft posts: N; copies: 0;
+   unfinished copies: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is `../rollback/20261121150309_copy_a_post.down.sql` (only
+with the owner's decision; prefer a forward fix; switch `SHOW_POST_COPY` off
+first). It refuses (55000) unless every piece of the update has the update's
+body; then it puts back `internal.run_retention` and
+`internal.frontend_privacy_export_data` byte for byte and drops the trigger, the
+six functions and `private.post_copies`. Copies already made stay as ordinary
+posts and drafts; only the record of their source goes.
+
+`node --import tsx scripts/test-foundation-copy-a-post.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drifted bodies and a premature rollback
+refused; apply, rollback and re-apply return the same fingerprints; the grants
+(members only, wrappers security invoker, helpers for nobody, no table access);
+a copy's fields, buttons, photos (same files, focal point kept) and logo,
+without the video, its cover, contact numbers or video layout; replay of a
+request; refusals for another member, a visitor, a draft, a business, a held
+post, no package and the draft allowance; the new-photo rule for vehicles and
+property (the same bytes again do not count; other categories, a deleted source
+and posts that are not copies are not checked); photos kept when either post is
+deleted; the reviewer read only for claimed posts, refused to members, visitors,
+above 25 posts and with a stale authenticator code; the 14-day deletion (and its
+bounds, the legal hold, other drafts and submitted copies kept); and
+`copied_from` in the privacy export.
+
 ## Authority requests: opening a kept identity record, 21 November 2026
 
 `20261121043124_identity_record_disclosure.sql` was applied on 21 November 2026
@@ -6311,5 +6388,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   sha256 starting a720f7d0; preflight sha256 starting 55a780b8; production
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
+
+- `20261121150309_copy_a_post.sql`: pending; apply-first
 
 <!-- applied-register:end -->

@@ -5720,6 +5720,49 @@
         "service_role": true
       },
       "authority": "Website server only, for a disclosure that is still open and was opened by that staff member: the encrypted ID number (unless erased) and the selfie stored object (unless deleted) of each named account with a kept record, so the server can decrypt the number and show the selfie."
+    },
+    {
+      "name": "copy_my_post",
+      "updates": ["updates/20261121150309_copy_a_post.sql"],
+      "arguments": [
+        {
+          "name": "p_post",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_request",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current live owner of a Market listing submitted at least once and not held by staff, while the owner's Multi-listing package runs: a new draft through the draft allowance with the listing's fields, contact buttons (never numbers), photos and logo (the same stored files), never the video; a repeated request returns the same copy."
+    },
+    {
+      "name": "get_frontend_staff_copy_facts",
+      "updates": ["updates/20261121150309_copy_a_post.sql"],
+      "arguments": [
+        {
+          "name": "p_posts",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Staff with queue:view (fresh authenticator code), only for posts under review that the caller has claimed (up to 25): the post it was copied from (id, title, status) and the seller's other live posts with a byte-identical photo (id, title, count)."
     }
   ]
 }

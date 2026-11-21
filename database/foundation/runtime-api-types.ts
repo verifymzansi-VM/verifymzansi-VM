@@ -720,6 +720,8 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       };
       list_identity_disclosures: { Args: Record<never, never>; Returns: Json };
       get_staff_operations_health: { Args: Record<never, never>; Returns: Json };
+      copy_my_post: { Args: { p_post: string; p_request: string }; Returns: Json };
+      get_frontend_staff_copy_facts: { Args: { p_posts: string[] }; Returns: Json };
     };
   };
 };
