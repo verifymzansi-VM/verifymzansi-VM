@@ -82,11 +82,12 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Business storefront, 21 November 2026
 
-`20261121131915_business_storefront.sql` is pending (see the applied register).
-Launch checklist item 17b, business tools plan section 1 (owner-approved 20
-November 2026): a Multi-listing package's live Market listings show on its
-owner's existing business page as "All stock", and each of those listings names
-the business and links to it. Nothing is stored; there is no set-up step.
+`20261121131915_business_storefront.sql` was applied on 21 November 2026 at
+17:34 UTC (see the applied register). Launch checklist item 17b, business tools
+plan section 1 (owner-approved 20 November 2026): a Multi-listing package's live
+Market listings show on its owner's existing business page as "All stock", and
+each of those listings names the business and links to it. Nothing is stored;
+there is no set-up step.
 
 - **Which business:** `internal.storefront_package(business)` gives the package
   whose listings a business page shows. A business has one only when it is
@@ -6858,6 +6859,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   (fingerprint.sql) matched the full replay (except the known schema grant
   difference)
 
-- `20261121131915_business_storefront.sql`: pending
+- `20261121131915_business_storefront.sql`: applied 2026-11-21 17:34 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #340); update
+  and preflight from the reviewed files at 1bb40c65 and checked in the page
+  before running; update sha256 starting ceebb2aa; preflight (sha256 starting
+  5129e999) before: update not applied (search_posts at its reviewed body, the 4
+  new functions absent), after: already applied (the 5 bodies as updated);
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
 
 <!-- applied-register:end -->
