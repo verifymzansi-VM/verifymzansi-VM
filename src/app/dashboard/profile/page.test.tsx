@@ -56,8 +56,13 @@ vi.mock("@/lib/foundation/restored-browser-client", () => ({
         challengeAndVerify: async () => ({ error: null }),
       },
     },
-    from: mockFrom,
   }),
+  // The page's two explicit reads, served from the per-test table stubs below.
+  readRestoredOwnProfile: async (_client: unknown, owner: string) =>
+    (await mockFrom("account_profiles").select().eq("user_id", owner).maybeSingle()).data,
+  readRestoredVerificationSteps: async (_client: unknown, owner: string, statuses: string[]) =>
+    (await mockFrom("verification_steps").select().eq("user_id", owner).in("status", statuses))
+      .data,
 }));
 
 describe("ProfilePage", () => {

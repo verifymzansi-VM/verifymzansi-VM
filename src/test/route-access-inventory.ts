@@ -192,7 +192,6 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/listings/[id]/urgent": { POST: "signed-in" },
   "api/media/serve/[...key]": { GET: "public" },
   "api/media/upload": { HEAD: "public", POST: "signed-in" },
-  "api/mock-ozow": { GET: "public" },
   "api/notifications": { GET: "signed-in", PATCH: "signed-in", DELETE: "signed-in" },
   "api/organisations/[id]/applicant-contact": { POST: "signed-in" },
   "api/organisations/[id]/manage": { POST: "signed-in" },
@@ -276,7 +275,6 @@ export const PUBLIC_ROUTE_REASONS: Record<string, string> = {
   "api/listings GET": "Public directory of live listings",
   "api/media/serve/[...key] GET": "Serves files from the public media bucket, rate limited",
   "api/media/upload HEAD": "Upload preflight probe; answers 200 with no body",
-  "api/mock-ozow GET": "Test-only payment stand-in; refuses outside test runs",
   "api/organisations/affiliations GET":
     "Public affiliation badges for the given business ids (at most 100), rate limited",
   "api/organisations/search GET": "Public organisation directory search, rate limited",

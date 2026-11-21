@@ -1445,43 +1445,19 @@ before changing code.
 
 ### Current Setup
 
-VerifyMzansi launches with `KYC_PROVIDER=stub`, meaning all KYC verifications
-are processed via **manual admin review** only. This is an intentional launch
-decision.
+There is no KYC provider integration: every identity check goes to staff review.
+The deploy workflow turns a missing `KYC_PROVIDER` or `stub` into `manual`; the
+launch check refuses `stub` in production and warns about any other value except
+`manual`. The unused `src/lib/services/kyc-provider.ts` stub was removed on 20
+November 2026.
 
 ### Adding a New KYC Provider
 
-1. Create a new provider module in `src/lib/services/`:
-
-   ```typescript
-   // src/lib/services/kyc-provider-<name>.ts
-   export async function verifyIdentity(
-     data: KycSubmission
-   ): Promise<KycResult> {
-     // Call external KYC API
-     // Return standardized result
-   }
-   ```
-
-2. Update `src/lib/services/kyc-provider.ts`:
-
-   ```typescript
-   const provider = process.env.KYC_PROVIDER ?? "stub";
-
-   switch (provider) {
-     case "stub":
-       return stubProvider;
-     case "<new-provider>":
-       return newProvider;
-     default:
-       throw new Error(`Unknown KYC provider: ${provider}`);
-   }
-   ```
-
-3. Set `KYC_PROVIDER=<new-provider>` in environment variables
-4. Add provider API keys as production secrets (see Secret Rotation)
-5. Update the KYC engine to handle automated results alongside manual review
-6. Test thoroughly in staging before enabling in production
+A provider integration will be built fresh (see `docs/kyc-audit-guide.md`): its
+own module and routes on the live backend, its keys as production secrets (see
+Secret Rotation), the launch check updated for its `KYC_PROVIDER` value, and
+staff review kept for every result it cannot decide. Test it on a non-production
+project before enabling it.
 
 ### Monitoring KYC Queue
 

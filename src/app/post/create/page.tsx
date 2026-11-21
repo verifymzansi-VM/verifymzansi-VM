@@ -22,10 +22,10 @@ const log = createLogger("PostCreatePage");
 /** The member's verification status, or null when it cannot be read: the page
  * then shows the "finish verification" note and the browser asks again. */
 async function readInitialVerificationStatus(
-  api: Awaited<ReturnType<typeof readFoundationServerSession>>["api"]
+  session: Awaited<ReturnType<typeof readFoundationServerSession>>
 ): Promise<AccountVerificationStatus | null> {
   try {
-    return await readFoundationAccountVerificationStatus(api);
+    return await readFoundationAccountVerificationStatus(session.api, session.account.account_id);
   } catch {
     // Category only: never ids, emails or raw error messages.
     log.warn("Post create verification status unavailable", { reason: "read_failed" });
@@ -48,7 +48,7 @@ export default async function PostCreatePage() {
   // redirect() throws, so it stays outside the try block above.
   if (!session) redirect("/login?returnUrl=%2Fpost%2Fcreate");
 
-  const initialVerificationStatus = await readInitialVerificationStatus(session.api);
+  const initialVerificationStatus = await readInitialVerificationStatus(session);
 
   return (
     <div className="flex min-h-screen flex-col">

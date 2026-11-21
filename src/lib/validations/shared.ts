@@ -115,9 +115,6 @@ export const optionalTrimmedStringSchema = z.preprocess(
   z.string().min(1).max(500).optional()
 );
 
-/** Zod schema for an optional UUID string that treats blank input as absent. */
-export const optionalUuidSchema = z.preprocess(trimToUndefined, uuidSchema.optional());
-
 export function externalUrlOrEmptySchema(message = "Enter a valid URL", max = 2000) {
   return z.preprocess(
     normalizeUserEnteredUrlInput,

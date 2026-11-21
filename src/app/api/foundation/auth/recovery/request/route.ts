@@ -6,8 +6,7 @@ import {
 } from "@/lib/foundation/password-recovery";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
-import { parseJsonRequest } from "@/lib/utils/api";
-import { handleFoundationAuthAttempt } from "../../_lib/attempt-route";
+import { handleFoundationAuthAttempt, readFoundationAuthBody } from "../../_lib/attempt-route";
 import { isFoundationPasswordSetupInput } from "@/lib/foundation/password-setup-input";
 import { handleFoundationPasswordSetup } from "../../_lib/password-setup";
 import { limiterAddressKey } from "@/lib/foundation/limiter-key";
@@ -18,11 +17,12 @@ export async function POST(request: NextRequest) {
   // read once, here, and handed to whichever path answers: a copy of the
   // request (clone) cannot be refused early, as cancelling one copy's stream
   // waits for the other copy to be read too.
-  const input = await parseJsonRequest(request, { maxBytes: 4096 });
-  if (isFoundationPasswordSetupInput(input)) return handleFoundationPasswordSetup(request, input);
+  const body = await readFoundationAuthBody(request);
+  if (isFoundationPasswordSetupInput(body.input))
+    return handleFoundationPasswordSetup(request, body.input);
   return handleFoundationAuthAttempt({
     request,
-    body: { input },
+    body,
     action: "auth:forgot-password",
     enabled:
       process.env.FOUNDATION_RECOVERY_ENABLED === "true" &&
