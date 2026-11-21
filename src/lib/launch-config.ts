@@ -37,6 +37,7 @@ export const LAUNCH_VALUES = {
   SHOW_PAID_ADDONS: true,
   SHOW_SPONSOR_OFFER: true,
   SHOW_PACKAGE_TEAMS: true,
+  SHOW_BUSINESS_STOREFRONT: true,
   PACKAGES_ON_SALE: true,
   // The pop-up is gone on launch day.
   PRELAUNCH_BANNER_ENABLED: false,

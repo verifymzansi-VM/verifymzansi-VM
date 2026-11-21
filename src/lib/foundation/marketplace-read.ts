@@ -23,7 +23,8 @@ import {
   type FrontendPostPresentation,
 } from "./post-presentation";
 import { readFoundationPostEngagement, type PostEngagement } from "./post-engagement";
-import { SHOW_ENGAGEMENT_TOTALS } from "../hidden-features";
+import { SHOW_BUSINESS_STOREFRONT, SHOW_ENGAGEMENT_TOTALS } from "../hidden-features";
+import { z } from "zod";
 
 export type PublicCollection = "listings" | "businesses" | "promotions";
 export class MarketplaceQueryError extends Error {
@@ -379,10 +380,26 @@ export async function readRestoredCollection(
     }
     const attributes: Record<string, unknown> = {};
     params.forEach((value, key) => {
-      if (key.startsWith("attr_"))
-        attributes[key.slice(5)] = value === "true" ? true : value === "false" ? false : value;
+      if (!key.startsWith("attr_")) return;
+      // attr_<field>_min / attr_<field>_max: a number range (year, bedrooms).
+      const range = /^attr_(.+)_(min|max)$/.exec(key);
+      if (range && /^\d{1,9}$/.test(value)) {
+        const bounds = (attributes[range[1]!] ?? {}) as Record<string, number>;
+        attributes[range[1]!] = { ...bounds, [range[2]!]: Number(value) };
+        return;
+      }
+      attributes[key.slice(5)] = value === "true" ? true : value === "false" ? false : value;
     });
     if (Object.keys(attributes).length) input.attributes = attributes;
+    // A business's storefront, with its vehicle make filter (item 17b).
+    const storefront = params.get("storefront");
+    const make = params.get("make");
+    if (storefront !== null || make !== null) {
+      if (!SHOW_BUSINESS_STOREFRONT || !storefront || !z.uuid().safeParse(storefront).success)
+        throw new MarketplaceQueryError("Invalid storefront");
+      input.storefront = storefront;
+      if (make !== null) input.make = make;
+    }
   }
   if (params.get("type") && collection === "businesses") input.business_type = params.get("type");
   const organisation = params.get("org");

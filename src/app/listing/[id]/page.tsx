@@ -1,5 +1,9 @@
 import { publicPersonName } from "@/lib/account/public-name";
-import { restoredListingDetail, restoredPublicDetail } from "@/lib/foundation/marketplace-server";
+import {
+  restoredListingDetail,
+  restoredPublicDetail,
+  restoredStorefrontSeller,
+} from "@/lib/foundation/marketplace-server";
 import { readRestoredCollection } from "@/lib/foundation/marketplace-read";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import { notFound } from "next/navigation";
@@ -17,6 +21,7 @@ import { normalizeOwnerRecord, normalizeOwnerRecords } from "@/lib/account/compa
 import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
 import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import { presentListingSlide } from "@/lib/feed/presenters";
+import { initialsOf } from "@/lib/utils/initials";
 
 interface ListingDetailPageProps {
   params: Promise<{ id: string }>;
@@ -81,6 +86,10 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       }
     : null;
 
+  // A listing in a checked business's storefront names the business and
+  // links to its stock (item 17b; null while SHOW_BUSINESS_STOREFRONT is off).
+  const sellerBusiness = await restoredStorefrontSeller(id);
+
   // Fetch similar listings (same category, excluding current)
   const similarListings = (
     await readRestoredCollection(
@@ -127,6 +136,14 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       shares: null,
     }
   );
+  // The desktop viewer's seller card names the storefront's business and opens it.
+  if (sellerBusiness)
+    immersiveSlide.owner = {
+      ...immersiveSlide.owner,
+      name: sellerBusiness.name,
+      initials: initialsOf(sellerBusiness.name, "B"),
+      href: `/mzansi-business/${sellerBusiness.id}`,
+    };
 
   // A job with no disclosed salary must not be published as a free (R0) offer.
   const hidesPrice = listing.category === "jobs_services" && !listing.price_cents;
@@ -142,7 +159,11 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
         priceCurrency: "ZAR",
         price: listing.price_cents ? (listing.price_cents / 100).toFixed(2) : "0",
         availability: "https://schema.org/InStock",
-        seller: safeSeller ? { "@type": "Person", name: safeSeller.display_name } : undefined,
+        seller: sellerBusiness
+          ? { "@type": "Organization", name: sellerBusiness.name }
+          : safeSeller
+            ? { "@type": "Person", name: safeSeller.display_name }
+            : undefined,
       },
     }),
   };
@@ -167,6 +188,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
               view_count: listingViewCount,
             }}
             seller={safeSeller}
+            sellerBusiness={sellerBusiness}
             similarItems={similarItems.map((item) => ({
               ...item,
               view_count: null,

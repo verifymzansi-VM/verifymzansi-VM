@@ -26,6 +26,9 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("lucide-react", () => ({
+  ArrowRight: () => <span data-testid="icon-arrow-right" />,
+  Building2: () => <span data-testid="icon-building" />,
+  IdCard: () => <span data-testid="icon-id-card" />,
   Calendar: () => <span data-testid="icon-calendar" />,
   Eye: () => <span data-testid="icon-eye" />,
   MapPin: () => <span data-testid="icon-map-pin" />,
@@ -264,6 +267,60 @@ describe("ListingDetailContent", () => {
       container.querySelector('img[src="/api/media/serve/media/listing/logo.jpg"]')
     ).toHaveAttribute("alt", "");
     expect(screen.queryByText("Shown on the marketplace card and detail page")).toBeNull();
+  });
+
+  // Item 17b: a listing in a checked business's storefront names the business.
+  it("names the storefront's business, its stickers and a link to its stock", () => {
+    listingDetailClientState.shouldThrow = false;
+    render(
+      <ListingDetailContent
+        listing={{
+          id: "listing-5",
+          owner_id: "owner-1",
+          title: "Demo bakkie 2.4 GD-6",
+          description: "A synthetic bakkie",
+          price_cents: 28990000,
+          price_negotiable: false,
+          category: "vehicles",
+          condition: "good",
+          attributes: { year: 2019 },
+          photos: [],
+          videos: [],
+          video_thumbnail: null,
+          logo_url: null,
+          location_province: "KwaZulu-Natal",
+          location_city: "Richards Bay",
+          location_suburb: null,
+          location_address: null,
+          contact_methods: ["call"],
+          created_at: new Date().toISOString(),
+        }}
+        seller={{
+          display_name: "Thando D.",
+          location_province: "KwaZulu-Natal",
+          location_city: "Richards Bay",
+          account_verification_status: "verified",
+          phone: null,
+        }}
+        sellerBusiness={{
+          id: "11111111-1111-4111-8111-111111111111",
+          name: "Sample Motors",
+          seeAllLabel: "See all 18 cars",
+          cipcCheckedAt: "2026-11-02T10:00:00.000Z",
+        }}
+        showContactActions={false}
+        showSimilarListings={false}
+      />
+    );
+
+    expect(screen.getByText("Sample Motors")).toBeInTheDocument();
+    expect(screen.getByText("SM")).toBeInTheDocument();
+    expect(screen.queryByText("Thando D.")).toBeNull();
+    expect(screen.getByText("CIPC registered")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /See all 18 cars/ })).toHaveAttribute(
+      "href",
+      "/mzansi-business/11111111-1111-4111-8111-111111111111#stock"
+    );
   });
 
   // Roadmap M10.6: the showroom card's caption on the main photo (phones).

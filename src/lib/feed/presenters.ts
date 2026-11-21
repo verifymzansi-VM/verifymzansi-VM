@@ -8,6 +8,7 @@ import type {
   BusinessPromotionRecord,
 } from "@/components/business/business-detail-content";
 import type { ListingDetailRecord } from "@/components/listings/listing-detail-content";
+import { initialsOf } from "@/lib/utils/initials";
 import type { PromotionDetailRecord } from "@/components/listings/promotion-detail-content";
 import { CATEGORY_CTA_CONFIG } from "@/lib/business/category-layout-map";
 import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
@@ -87,15 +88,6 @@ export interface EngagementInput {
   likes: number;
   viewerHasLiked: boolean;
   shares?: number | null;
-}
-
-function initialsOf(name: string | null | undefined, fallback: string) {
-  const words = (name ?? "").trim().split(/\s+/).filter(Boolean);
-  const letters = words
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() ?? "")
-    .join("");
-  return letters || fallback;
 }
 
 function trustOf(owner: OwnerSummaryInput | null) {

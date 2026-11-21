@@ -10,10 +10,13 @@ AS $function$
 declare
   req jsonb := coalesce(p_request, '{}');
   allowed text[] := array['q', 'sort', 'area', 'category', 'activity', 'province', 'city', 'price_mode',
-    'min_price_cents', 'max_price_cents', 'condition', 'attributes', 'cursor', 'limit', 'offset', 'post_id', 'business_type', 'event_state', 'event_order'];
+    'min_price_cents', 'max_price_cents', 'condition', 'attributes', 'cursor', 'limit', 'offset', 'post_id', 'business_type', 'event_state', 'event_order', 'storefront', 'make'];
   v_sort text;
   v_offset integer := 0;
   v_post_id uuid;
+  v_store uuid;
+  v_store_package uuid;
+  v_make text;
   v_business_type text;
   v_event_state text;
   v_event_order text;
@@ -77,6 +80,20 @@ begin
       raise exception 'invalid post id' using errcode='22023';
     end if;
     v_post_id := (req->>'post_id')::uuid;
+  end if;
+  -- A business's storefront: the live Market listings of the package it
+  -- represents (internal.storefront_package). A business without one has none.
+  if req ? 'storefront' then
+    if req->>'storefront' !~* '^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$' then
+      raise exception 'invalid storefront' using errcode='22023';
+    end if;
+    v_store := (req->>'storefront')::uuid;
+    v_store_package := internal.storefront_package(v_store);
+  end if;
+  -- A vehicle make, matched exactly (any case); only inside a storefront.
+  v_make := req->>'make';
+  if v_make is not null and (v_store is null or length(v_make) not between 1 and 80) then
+    raise exception 'make filter requires a storefront' using errcode='22023';
   end if;
   v_business_type := req->>'business_type';
   if v_business_type is not null and v_business_type not in
@@ -227,6 +244,11 @@ begin
     where d.is_visible
       and exists(select 1 from private.public_eligible_posts eligible where eligible.id=d.post_id)
       and (v_post_id is null or d.post_id=v_post_id)
+      and (v_store is null or (d.kind='listing' and exists(select 1 from private.post_activations a
+        join private.entitlements c on c.id=a.entitlement_id
+        where a.post_id=d.post_id and a.released_at is null and c.package_id=v_store_package)))
+      and (v_make is null or exists(select 1 from private.listing_details ld
+        where ld.post_id=d.post_id and lower(ld.attributes->>'make')=lower(v_make)))
       and (v_business_type is null or (d.kind='business' and b.business_type=v_business_type))
       and (v_event_state is null or (d.kind='event' and (
         v_event_state='all'

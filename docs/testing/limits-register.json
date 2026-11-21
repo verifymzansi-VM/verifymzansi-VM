@@ -9881,6 +9881,25 @@
       ]
     },
     {
+      "id": "LIM-SQL-search-make-length",
+      "title": "Storefront search: vehicle make filter 1 to 80 characters, only inside a storefront",
+      "value": "1 to 80",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/search_posts.sql",
+          "symbol": "internal.search_posts",
+          "contains": "if v_make is not null and (v_store is null or length(v_make) not between 1 and 80) then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-business-storefront.mjs"
+        }
+      ]
+    },
+    {
       "id": "LIM-SQL-search-query-length",
       "title": "Public search: query at most 200 characters",
       "value": 200,
@@ -13105,6 +13124,11 @@
       "file": "src/lib/utils/blurhash.ts",
       "contains": "const ENCODE_SIZE = 32;",
       "reason": "image size used to compute a blur placeholder"
+    },
+    {
+      "file": "src/lib/presentation/storefront.ts",
+      "contains": "export const STOREFRONT_PAGE_SIZE = 24;",
+      "reason": "cards a storefront page shows before Show more (a display choice); the enforced bound is LIM-SQL-search-page-size"
     }
   ]
 }

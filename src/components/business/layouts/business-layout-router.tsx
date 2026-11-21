@@ -19,6 +19,8 @@ interface BusinessLayoutRouterProps {
   showPromotions?: boolean;
   showPublicActions?: boolean;
   layoutMode?: "public" | "review";
+  /** Hides the "Live offers" fact while the page shows the business's stock. */
+  hideLiveOffers?: boolean;
   /** Kept for backward compat — single unified layout is always rendered (value is ignored). */
   layoutOverride?: LayoutTemplate;
 }
@@ -38,6 +40,7 @@ export function BusinessLayoutRouter({
   showPromotions = true,
   showPublicActions = true,
   layoutMode = "public",
+  hideLiveOffers = false,
 }: BusinessLayoutRouterProps) {
   const galleryPhotos = business.gallery_photos ?? [];
   const deliveryAvailable = hasBusinessDeliveryAvailable(
@@ -62,6 +65,7 @@ export function BusinessLayoutRouter({
       layoutMode={layoutMode}
       galleryPhotos={galleryPhotos}
       deliveryAvailable={deliveryAvailable}
+      hideLiveOffers={hideLiveOffers}
     />
   );
 }

@@ -1,4 +1,11 @@
-import { restoredBusinessDetail } from "@/lib/foundation/marketplace-server";
+import {
+  restoredBusinessDetail,
+  restoredStorefront,
+  restoredStorefrontFirstPage,
+} from "@/lib/foundation/marketplace-server";
+import { BusinessStorefront } from "@/components/business/business-storefront";
+import { STOREFRONT_PAGE_SIZE } from "@/lib/presentation/storefront";
+import reference from "@/lib/domains/taxonomy/reference.json";
 import { readRestoredBusinessAffiliations } from "@/lib/foundation/public-business-affiliations";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import { publicPageMetadata } from "@/lib/sharing/page-metadata";
@@ -151,15 +158,24 @@ export async function BusinessDetailPageContent({
     viewer_has_liked: false,
   }));
   const businessViewCount = business.view_count ?? 0;
-  // Owner previews of drafts keep the classic page with its preview banner.
-  const immersiveSlide = !isOwnerPreview
-    ? presentBusinessSlide(business, ownerProfile, promotions, {
-        views: businessViewCount,
-        likes: business.like_count ?? 0,
-        viewerHasLiked: false,
-        shares: null,
-      })
+  // A checked business with a running Multi-listing package shows its stock
+  // (item 17b; null while SHOW_BUSINESS_STOREFRONT is off or a read fails).
+  const storefront = isOwnerPreview ? null : await restoredStorefront(business.id);
+  const stock = storefront
+    ? await restoredStorefrontFirstPage(storefront, STOREFRONT_PAGE_SIZE)
     : null;
+  const shownStorefront = storefront && stock ? { summary: storefront, stock } : null;
+  // Owner previews of drafts keep the classic page with its preview banner; so
+  // does a business with a storefront, whose stock the viewer cannot show.
+  const immersiveSlide =
+    !isOwnerPreview && !shownStorefront
+      ? presentBusinessSlide(business, ownerProfile, promotions, {
+          views: businessViewCount,
+          likes: business.like_count ?? 0,
+          viewerHasLiked: false,
+          shares: null,
+        })
+      : null;
 
   const page = (
     <div>
@@ -190,7 +206,20 @@ export async function BusinessDetailPageContent({
           ownerProfile={ownerProfile}
           promotions={promotionsWithLikes}
           showPublicActions={!isOwnerPreview}
+          hideLiveOffers={Boolean(shownStorefront)}
         />
+        {shownStorefront ? (
+          <BusinessStorefront
+            storefront={shownStorefront.summary}
+            areaLabels={Object.fromEntries(
+              shownStorefront.summary.areas.map(({ province, city }) => [
+                `${province}:${city}`,
+                reference.cities.find((row) => row.id === city)?.label ?? city,
+              ])
+            )}
+            initial={shownStorefront.stock}
+          />
+        ) : null}
         <BusinessAffiliationsSection affiliations={affiliations} />
       </div>
     </div>
