@@ -10,8 +10,14 @@ import {
 
 const log = createLogger("MemberInvitations");
 
-// The database checks the address's form; this only bounds it.
-const address = z.string().trim().min(3).max(254);
+// The database checks the address's form; this only bounds it and turns away
+// control characters (a NUL byte cannot reach the database at all).
+const address = z
+  .string()
+  .trim()
+  .min(3)
+  .max(254)
+  .regex(/^[^\x00-\x1f\x7f]+$/);
 const body = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("invite"), email: address }),
   z.strictObject({ action: z.literal("withdraw"), email: address }),

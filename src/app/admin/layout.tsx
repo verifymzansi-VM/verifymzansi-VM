@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AdminMobileNav, AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminLiveNotifier } from "@/components/admin/admin-live-notifier";
 import { AdminRealtimeRefresh } from "@/components/admin/admin-realtime-refresh";
+import { StaffTwoStepReturn } from "@/components/admin/staff-two-step-return";
 import { NotificationBell } from "@/components/notification-bell";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import { requireStaff } from "@/lib/auth/require-staff";
@@ -70,6 +71,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
       <AdminLiveNotifier userId={staff.user.id} userRole={staff.role} />
       <AdminRealtimeRefresh userId={staff.user.id} />
+      <StaffTwoStepReturn />
 
       <div className="flex w-full min-w-0 flex-1 overflow-x-hidden">
         <AdminSidebar sections={sections} counts={counts} />

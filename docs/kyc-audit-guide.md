@@ -16,8 +16,9 @@ exist. Unsupported provider names fail instead of falling back silently.
 3. `src/lib/services/kyc-engine.ts` hashes IDs with HMAC, detects duplicates,
    velocity and document signals, and records risk and provider evidence. Raw
    IDs must not appear in public API results or ordinary logs.
-4. `kyc-provider.ts` supplies null scores and sends manual/stub submissions to
-   human review.
+4. There is no KYC provider module: the unused `kyc-provider.ts` stub (null
+   scores, every submission to human review) was removed on 20 November 2026.
+   Every identity check goes to staff review.
 5. The provider callback route (`src/app/api/webhooks/kyc/provider/route.ts`),
    its payload schema and its `KYC_WEBHOOK_SECRET` were removed on 20 November
    2026 (owner decision): they wrote only to the retired source backend. The

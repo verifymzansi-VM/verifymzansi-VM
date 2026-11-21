@@ -82,11 +82,15 @@ describe("LoginPage", () => {
     render(<LoginPage />);
 
     expect(await screen.findByText("Check your email")).toBeInTheDocument();
-    expect(screen.getByText(/Registration is by invitation only for now/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there after a few minutes? Resend it, or sign up with the email address your invitation was sent to."
+      )
+    ).toBeInTheDocument();
   });
 
   it.each([
-    ["registration_closed", "Registration is not open yet"],
+    ["registration_closed", "Sign-up is by invitation for now"],
     ["registration_unavailable", "This email can't be used to register"],
     ["google_cancelled", "Google sign-in was not completed"],
   ])("explains a Google sign-in that came back with %s", async (error, title) => {
@@ -98,6 +102,22 @@ describe("LoginPage", () => {
     expect(toastMock).not.toHaveBeenCalledWith(
       expect.objectContaining({ title: "Authentication failed" })
     );
+  });
+
+  it("shows the invitation-only Google refusal as information, not as an error", async () => {
+    window.history.pushState({}, "", "/login?error=registration_closed");
+
+    render(<LoginPage />);
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Sign-up is by invitation for now" })
+      )
+    );
+    const call = toastMock.mock.calls.find(
+      ([options]) => options.title === "Sign-up is by invitation for now"
+    );
+    expect(call?.[0]).not.toHaveProperty("variant");
   });
 
   it("shows the email confirmed banner when redirected from confirmation", async () => {

@@ -28,6 +28,7 @@ import {
 } from "@/lib/turnstile-client";
 import { TURNSTILE_AUTH_PAGE_LOAD_TIMEOUT_MS } from "@/lib/turnstile-constants";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
+import { INVITE_ONLY_REGISTRATION_MESSAGE } from "@/lib/foundation/registration-message";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
@@ -149,10 +150,9 @@ export default function LoginPage() {
       });
     } else if (loginPageFlags.error === "registration_closed") {
       toast({
-        title: "Registration is not open yet",
+        title: "Sign-up is by invitation for now",
         description:
-          "VerifyMzansi is open by invitation only for now. If you already have an account, sign in with the email you used.",
-        variant: "destructive",
+          "If you were invited, use the email address the invitation was sent to. Already have an account? Sign in with the email you used.",
       });
     } else if (loginPageFlags.error === "registration_unavailable") {
       toast({
@@ -436,7 +436,7 @@ export default function LoginPage() {
         <AuthNotice tone="info" icon={<Mail />} title="Check your email" role="status">
           <p>
             {loginPageFlags.invitedOnly
-              ? "Registration is by invitation only for now. If your email was invited, we've sent it a confirmation link."
+              ? INVITE_ONLY_REGISTRATION_MESSAGE
               : "We've sent a confirmation link to your email address."}
           </p>
           <Button

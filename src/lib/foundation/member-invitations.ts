@@ -131,15 +131,21 @@ export async function withdrawMemberInvitation(api: FoundationAuthenticatedApi, 
   return { email: result.email, withdrawn: result.revoked };
 }
 
-/** Route refusals: the screen's own reasons, the staff re-verify redirect,
- * and a malformed request as an invalid address. */
+/** Route refusals: the screen's own reasons, the staff re-verify redirect, a
+ * bad address as an invalid address, and any other malformed request as one. */
 export function memberInvitationRefusal(error: unknown): FoundationRefusal | null {
   if (error instanceof z.ZodError)
-    return {
-      status: 422,
-      error: MEMBER_INVITATION_MESSAGES.member_invitation_email_invalid,
-      reason: "member_invitation_email_invalid",
-    };
+    return error.issues.length > 0 && error.issues.every((issue) => issue.path[0] === "email")
+      ? {
+          status: 422,
+          error: MEMBER_INVITATION_MESSAGES.member_invitation_email_invalid,
+          reason: "member_invitation_email_invalid",
+        }
+      : {
+          status: 422,
+          error: "This request could not be read. Reload the page and try again.",
+          reason: "member_invitation_request_invalid",
+        };
   if (error instanceof MemberInvitationRefused)
     return { status: error.status, error: error.message, reason: error.reason };
   return staffCommandRefusal(error);
