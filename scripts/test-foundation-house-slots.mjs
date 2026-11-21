@@ -42,10 +42,10 @@ import {
   applyAndProveRollback,
   fingerprintOf,
   functionBodyMd5,
+  grantHouseSlotsSql,
   P30,
   psqlSessions,
   runTwoAdminUpdateCheck,
-  sqlValue,
 } from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261119082834_house_slots.sql";
@@ -157,8 +157,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   ready(admin);
   ready(admin2);
 
-  const grantSql = (recipient, slots, days, reason, approver) =>
-    `select internal.grant_house_slots(${sqlValue(recipient?.email ?? recipient)},${slots ?? "null"},${days ?? "null"},${sqlValue(reason)},${sqlValue(approver?.email ?? approver)});`;
+  const grantSql = grantHouseSlotsSql;
   const grant = (recipient, slots = 1, days = 90, approver = admin2, reason = REASON) =>
     json(grantSql(recipient, slots, days, reason, approver));
   const houseSlots = (person) =>

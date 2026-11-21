@@ -36,6 +36,7 @@ import {
   applyAndProveRollback,
   assertDriftRefused,
   functionBodyMd5,
+  grantHouseSlotsSql,
   runTwoAdminUpdateCheck,
   sqlValue,
 } from "./lib/foundation-staff-payment-world.mjs";
@@ -79,15 +80,11 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       insert into private.post_media(post_id,object_id,purpose,position) values(pid,cover,'cover',0);
       return pid;
     end$$;`);
-  const ready = (person) => {
-    q(`select vmtest.terms('${person.id}');`);
-    return person;
-  };
-  ready(admin);
-  ready(admin2);
+  // Each person has accepted the current posting terms.
+  const ready = (person) => (q(`select vmtest.terms('${person.id}');`), person);
+  [admin, admin2].forEach(ready);
 
-  const grantSql = (recipient, slots, days, reason, approver) =>
-    `select internal.grant_house_slots(${sqlValue(recipient?.email ?? recipient)},${slots ?? "null"},${days ?? "null"},${sqlValue(reason)},${sqlValue(approver?.email ?? approver)});`;
+  const grantSql = grantHouseSlotsSql;
   const grant = (recipient, slots, days, approver, reason = REASON) =>
     json(grantSql(recipient, slots, days, reason, approver));
   const activeSlots = (person) =>
