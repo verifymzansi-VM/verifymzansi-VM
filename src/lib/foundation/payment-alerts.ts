@@ -13,6 +13,8 @@ import {
   paymentAnomaly,
   type PaymentAnomaly,
 } from "./payment-problems";
+import { vatSalesPositionSchema, type VatSalesPosition } from "./staff-sales";
+import { formatZAR } from "../utils/format";
 
 /**
  * Staff emails about payment problems, sent by the email job (every minute,
@@ -145,6 +147,11 @@ const digestSchema = z.object({
   stale_pending: paymentList,
   unalerted: z.number().int().nonnegative(),
   outcomes: z.record(z.string().regex(/^[a-z_]{1,64}$/), z.number().int().nonnegative()),
+  // 20261121090305: the rolling 12-month sales and the VAT alert. Absent from
+  // a summary stored before that update. Read leniently: a field it does not
+  // know is ignored, and a sales part it cannot read is left out of the email
+  // instead of stopping the summary.
+  sales: vatSalesPositionSchema.loose().optional().catch(undefined),
 });
 type Digest = z.infer<typeof digestSchema>;
 
@@ -242,6 +249,20 @@ export function paymentAlertEmail(
   };
 }
 
+/** The daily summary's sales lines: the rolling 12-month total and, when
+ * the alert is on, what it means. */
+function salesRows(sales: VatSalesPosition): Array<[string, string]> {
+  const rows: Array<[string, string]> = [
+    ["Sales in the last 12 months (net of refunds)", formatZAR(sales.net_cents)],
+  ];
+  if (sales.alert)
+    rows.push([
+      "VAT alert",
+      `Over ${formatZAR(sales.alert_cents)}. VAT registration is compulsory from ${formatZAR(sales.compulsory_cents)} in 12 months: speak to the accountant.`,
+    ]);
+  return rows;
+}
+
 export function paymentSummaryEmail(recipients: readonly string[], digest: Digest) {
   const waiting = digest.not_activated.total + digest.stale_pending.total;
   const activity = Object.entries(digest.outcomes)
@@ -277,6 +298,8 @@ export function paymentSummaryEmail(recipients: readonly string[], digest: Diges
       ],
     },
   ];
+  if (digest.sales) sections.push({ heading: "Sales and VAT", rows: salesRows(digest.sales) });
+  const vatAlert = digest.sales?.alert === true;
   const headline =
     digest.problems.total === 0 && waiting === 0
       ? "no payment problems"
@@ -284,14 +307,15 @@ export function paymentSummaryEmail(recipients: readonly string[], digest: Diges
   return {
     to: recipients,
     idempotencyKey: `payment-summary/${digest.day}`,
-    subject: `VerifyMzansi payment summary ${digest.day}: ${headline}`,
+    subject: `VerifyMzansi payment summary ${digest.day}: ${headline}${vatAlert ? "; VAT alert" : ""}`,
     title: "Daily payment summary",
     intro: `Payments from ${sast(digest.window_start)} to ${sast(digest.window_end)} (South African time).`,
     sections,
     closing:
       "Problems that need a person are also emailed as soon as they are found. Look a payment up in the staff payments list by its payment number. This email holds no member details.",
     reason: "The VerifyMzansi email job sends this summary once a day to PAYMENT_ALERT_EMAILS.",
-    tone: (waiting > 0 || digest.unalerted > 0 ? "warning" : "info") as "warning" | "info",
+    tone: (waiting > 0 || digest.unalerted > 0 || vatAlert ? "warning" : "info") as
+      "warning" | "info",
   };
 }
 

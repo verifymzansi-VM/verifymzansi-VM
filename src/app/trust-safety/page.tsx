@@ -29,6 +29,7 @@ import {
   getTrustPublicConfig,
 } from "@/lib/trust-public-config";
 import type { TrustLevel } from "@/types/enums";
+import { readVatStatusWording } from "@/lib/foundation/vat-registration";
 
 export const metadata = {
   title: "Trust & Safety",
@@ -120,8 +121,9 @@ function ExampleProfileCard() {
   );
 }
 
-export default function TrustSafetyPage() {
+export default async function TrustSafetyPage() {
   const trustConfig = getTrustPublicConfig();
+  const vatStatus = await readVatStatusWording();
   const legalIdentityRows = getConfiguredLegalIdentityRows(trustConfig);
   const contactRows = getConfiguredContactRows(trustConfig);
 
@@ -323,7 +325,7 @@ export default function TrustSafetyPage() {
                   {trustConfig.ozowMerchantName ? ` or ${trustConfig.ozowMerchantName}` : ""} as the
                   merchant.
                 </p>
-                {trustConfig.vatStatus && <p>VAT status: {trustConfig.vatStatus}</p>}
+                {vatStatus && <p>VAT status: {vatStatus}</p>}
               </InfoCard>
 
               <InfoCard title="Support channels" icon={LifeBuoy}>

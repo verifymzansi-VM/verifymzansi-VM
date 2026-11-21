@@ -373,13 +373,9 @@ it("only permits the database policy that matches the shipped immutable document
   expect(() => assertPublishedPostingTerms({ ...policy, document_hash: "A".repeat(43) })).toThrow();
   expect(() => assertPublishedPostingTerms({ ...policy, document_path: "/terms" })).toThrow();
 });
-it("keeps the current Terms page's configured merchant and VAT paragraphs", () => {
-  const current = buildTermsTextSections({
-    ozowMerchantName: "Synthetic merchant",
-    vatStatus: "Synthetic status",
-  });
+it("keeps the current Terms page's configured merchant paragraph", () => {
+  const current = buildTermsTextSections({ ozowMerchantName: "Synthetic merchant" });
   expect(current.flatMap((section) => section.content).join("\n")).toContain("Synthetic merchant");
-  expect(current.flatMap((section) => section.content).join("\n")).toContain("Synthetic status");
   expect(
     getPublishedPostingTerms("posting-v1")!
       .sections.flatMap((section) => section.content)

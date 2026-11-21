@@ -281,6 +281,10 @@ const OWNER_TABLES = [
   ["listing_details", ownPosts],
   // Continue on your phone links (20261120131212_camera_capture_handoff).
   ["capture_handoffs", "owner_id=$1"],
+  // Automatic ID checks (20261121094003_automatic_identity_checks): A's checks,
+  // and setting changes A made as staff.
+  ["identity_checks", "owner_id=$1"],
+  ["identity_check_mode_events", "changed_by=$1"],
   // Authority requests (20261121043124_identity_record_disclosure): an opening
   // that names A, or one A opened as staff, and every later look at them.
   ["identity_disclosures", "$1=any(subject_ids) or opened_by=$1"],

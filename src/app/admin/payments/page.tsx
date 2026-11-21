@@ -18,6 +18,8 @@ import { PackageMoveAttention } from "@/components/admin/commercial/package-move
 import { PaymentsPanel } from "@/components/admin/commercial/partners-panel";
 import { OzowRefundAttention } from "@/components/admin/commercial/ozow-refund-actions";
 import { PageHeader } from "@/components/layout/page-header";
+import { SalesSummary } from "@/components/admin/commercial/sales-summary";
+import { readStaffSalesSummary } from "@/lib/foundation/staff-sales";
 import { readStaffOzowRefunds } from "@/lib/foundation/ozow-refunds";
 import { ozowApiRefundsEnabled } from "@/lib/payments/ozow-refunds";
 import { createLogger } from "@/lib/utils/logger";
@@ -55,6 +57,7 @@ export default async function PaymentsAdminPage({
     invoices,
     packageRequests,
     packageMoves,
+    sales,
   } = await (async () => {
     const { api } = await readFoundationServerSession();
     const result = await readStaffPaymentList(api, page, status);
@@ -95,6 +98,7 @@ export default async function PaymentsAdminPage({
       invoiceList,
       packageRequestList,
       packageMoveList,
+      salesSummary,
     ] = await Promise.all([
       readStaffBankTransfers(
         api,
@@ -130,6 +134,11 @@ export default async function PaymentsAdminPage({
         log.warn("Package moves unavailable", { error });
         return [];
       }),
+      // Sales and the VAT alert: the payments list still loads without them.
+      readStaffSalesSummary(api).catch((error: unknown) => {
+        log.warn("Sales figures unavailable", { error });
+        return null;
+      }),
     ]);
     const transfers = new Map(details.map((transfer) => [transfer.payment_id, transfer]));
     return {
@@ -156,6 +165,7 @@ export default async function PaymentsAdminPage({
       invoices: invoiceList,
       packageRequests: packageRequestList,
       packageMoves: packageMoveList,
+      sales: salesSummary,
     };
   })();
 
@@ -174,6 +184,7 @@ export default async function PaymentsAdminPage({
         description="Newest first. Refunds and chargebacks are for admins only."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Payments & Refunds" }]}
       />
+      <SalesSummary summary={sales} />
       <form method="get" className="flex flex-wrap items-end gap-2 text-sm">
         <label>
           Status
