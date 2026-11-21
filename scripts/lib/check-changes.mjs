@@ -334,6 +334,7 @@ export const CHECK_SCRIPT_LIBS = [
   "scripts/lib/frontend-freeze.mjs",
   "scripts/lib/legacy-surface.mjs",
   "scripts/lib/license-policy.ts",
+  "scripts/lib/limits-register.mjs",
   "scripts/lib/live-retry.ts",
   "scripts/lib/public-edge.ts",
   "scripts/lib/quality-policy.ts",

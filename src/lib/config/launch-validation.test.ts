@@ -202,10 +202,12 @@ describe("launch validation", () => {
       expect.objectContaining({
         name: "KYC provider",
         status: "warn",
-        detail: "KYC_PROVIDER=smileid has no integration; submissions go to human review",
+        detail:
+          "KYC_PROVIDER names a provider with no integration; identity checks still go to staff review. Set KYC_PROVIDER=manual",
       })
     );
     expect(JSON.stringify(summary)).not.toContain("KYC_WEBHOOK_SECRET");
+    expect(JSON.stringify(summary)).not.toContain("smileid");
   });
 
   it("warns in development mode when OZOW_API_BASE_URL is not an approved Ozow host", () => {

@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   expect,
   test,
@@ -7,8 +7,12 @@ import {
   type BrowserContext,
   type Page,
 } from "@playwright/test";
-import sharp from "sharp";
 import { E2E_FIXTURE, LOCAL_OPS_JOBS_SECRET } from "../../scripts/lib/foundation-e2e-target.mjs";
+import {
+  takeIdPhoto,
+  takeSelfieForManualReview,
+  withSyntheticCamera,
+} from "./support/synthetic-camera";
 import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
 import { isMultipartForm } from "./support/multipart";
 import { endedWithTest } from "./support/route-teardown";
@@ -44,8 +48,8 @@ import {
 //     sensitive action), in the database and on the staff pages;
 //   - an admin sends one member's ID back with a reason and accepts the other
 //     member's ID and selfie in the identity review; the identity viewer warns
-//     "Uploaded file" for the selfie sent as a file and not for the one sent
-//     as a camera capture (see asCameraSelfie);
+//     "Liveness not verified" for the selfie taken for manual review and not
+//     for the one sent with a completed face check (see asCameraSelfie);
 //   - a moderator approves a post in the moderation queue;
 //   - a report filed by the moderator can never be worked by the moderator
 //     (staff cannot review themselves), and an admin decides it;
@@ -197,25 +201,16 @@ async function otherBrowser(browser: Browser, person: Person, options: SessionOp
   return { context, page: await context.newPage(), ...guarded };
 }
 
-/** The camera is unavailable, so the photo steps offer their upload fallback,
- * exactly as on a device without a usable camera (today's capture rules). */
-async function withoutCamera(context: BrowserContext) {
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, "mediaDevices", { value: undefined, configurable: true });
-  });
-}
-
-/** The selfie upload as the live camera step sends it. The test browser has no
- * camera (and a face check would need a face), so for one member the selfie
- * request's two capture fields are changed from what the upload fallback sends
- * (captureMethod "file_upload") to what a camera capture with a completed
- * liveness challenge sends (captureMethod "camera", livenessPassed "true").
- * Nothing else in the request changes; other requests pass unchanged.
+/** The selfie upload as the live camera step sends it after a completed face
+ * check. The synthetic camera has no face, so the selfie is taken for manual
+ * review; for one member the selfie request gains what a completed liveness
+ * challenge adds (livenessPassed "true"). Nothing else in the request changes;
+ * other requests pass unchanged.
  *
  * The change is made in the page, to the form the page hands to fetch(), not
  * to the request on the network: Playwright's WebKit cannot read or rewrite a
  * multipart body with its files (see isMultipartForm). A selfie form that is
- * not the upload fallback's is refused in the page, so the step fails. */
+ * not the manual-review photo's is refused in the page, so the step fails. */
 async function asCameraSelfie(context: BrowserContext) {
   await context.addInitScript(() => {
     const send = window.fetch.bind(window);
@@ -227,23 +222,13 @@ async function asCameraSelfie(context: BrowserContext) {
         new URL(target, window.location.href).pathname === "/api/verification/upload" &&
         form.get("docType") === "selfie"
       ) {
-        if (form.get("captureMethod") !== "file_upload" || form.has("livenessPassed"))
-          return Promise.reject(new Error("the selfie form is not the upload fallback's"));
-        form.set("captureMethod", "camera");
+        if (form.get("captureMethod") !== "camera" || form.has("livenessPassed"))
+          return Promise.reject(new Error("the selfie form is not the manual-review photo's"));
         form.append("livenessPassed", "true");
       }
       return send(input, init);
     };
   });
-}
-
-/** A synthetic photo: random noise over a flat colour, never a face or a
- * document, and different on every run (the risk check rejects reused photos). */
-async function syntheticPhoto(width: number, height: number) {
-  const noise = randomBytes(width * height * 3);
-  return sharp(noise, { raw: { width, height, channels: 3 } })
-    .jpeg({ quality: 70 })
-    .toBuffer();
 }
 
 /** "Claim next 10" in a staff queue (as in member-post-publish.spec.ts): the
@@ -501,24 +486,20 @@ test.describe("staff review with an authenticator", () => {
     for (const member of [returned, poster]) {
       const context = await browser.newContext({ serviceWorkers: "block" });
       try {
-        await withoutCamera(context);
-        // One member's selfie arrives as a camera capture, the other's as an
-        // uploaded file (the staff viewer tells them apart later).
+        await withSyntheticCamera(context);
+        // Both selfies come from the camera on the page; one member's arrives
+        // with a completed face check, the other's for manual review (the
+        // staff viewer tells them apart later).
         if (member === returned) await asCameraSelfie(context);
         const { outside, failures, reply } = await guard(context);
         await signInBrowser(context, member);
         const page = await context.newPage();
         await page.goto("/verification");
-        await page.getByLabel("First name (as shown on ID)").fill(member.firstName);
-        await page.getByLabel("Surname (as shown on ID)").fill(member.lastName);
+        await page.getByLabel("All first names (as on your ID)").fill(member.firstName);
+        await page.getByLabel("Surname (as on your ID)").fill(member.lastName);
         await page.getByLabel("13-digit SA ID number").fill(member.idNumber);
         await expect(page.getByText("ID number valid")).toBeVisible();
-        await page.getByRole("button", { name: "Open camera" }).click();
-        await page.getByLabel("Or upload a photo").setInputFiles({
-          name: "id-front.jpg",
-          mimeType: "image/jpeg",
-          buffer: await syntheticPhoto(960, 600),
-        });
+        await takeIdPhoto(page);
         await page.getByRole("button", { name: "Continue" }).click();
         await expect
           .poll(() => reply("/api/verification/upload").length, { timeout: 30_000 })
@@ -526,12 +507,7 @@ test.describe("staff review with an authenticator", () => {
         await expect(page.getByRole("heading", { name: "Live selfie" })).toBeVisible({
           timeout: 20_000,
         });
-        await page.getByRole("button", { name: "Open camera" }).click();
-        await page.getByLabel("Or upload a photo").setInputFiles({
-          name: "selfie.jpg",
-          mimeType: "image/jpeg",
-          buffer: await syntheticPhoto(600, 800),
-        });
+        await takeSelfieForManualReview(page);
         await page.getByRole("button", { name: "Continue" }).click();
         await expect
           .poll(() => reply("/api/verification/upload").length, { timeout: 30_000 })
@@ -560,7 +536,7 @@ test.describe("staff review with an authenticator", () => {
               "join private.verification_current_submissions v on v.submission_id = u.submission_id " +
               `where u.owner_id = '${member.id}' and u.purpose = 'selfie' and v.case_id = u.case_id;`
           )
-        ).toBe(member === returned ? "camera:true" : "file_upload:false");
+        ).toBe(member === returned ? "camera:true" : "camera:false");
         expect(failures).toEqual([]);
         expect(outside).toEqual([]);
       } finally {
@@ -628,13 +604,13 @@ test.describe("staff review with an authenticator", () => {
     await expect(card).toHaveCount(1);
     // This member's selfie came from the camera step with a completed liveness
     // challenge: the viewer says so (as browser-reported context) and shows no
-    // "Uploaded file" warning.
+    // "Liveness not verified" warning.
     await card.getByRole("button", { name: "Review", exact: true }).first().click();
     const viewer = page.getByRole("dialog", { name: /^Identity Comparison/ });
     await expect(viewer.getByText("Selfie: Browser liveness check completed")).toBeVisible({
       timeout: 20_000,
     });
-    await expect(viewer.getByText("Selfie: Uploaded file")).toHaveCount(0);
+    await expect(viewer.getByText("Selfie: Liveness not verified")).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(viewer).toBeHidden();
     // The first step is the ID photo.
@@ -687,8 +663,10 @@ test.describe("staff review with an authenticator", () => {
       await card.getByRole("button", { name: "Review", exact: true }).first().click();
       const viewer = page.getByRole("dialog", { name: /^Identity Comparison/ });
       await expect(viewer).toBeVisible();
-      // This member's selfie was an uploaded file: the viewer warns about it.
-      await expect(viewer.getByText("Selfie: Uploaded file")).toBeVisible({ timeout: 20_000 });
+      // This member's selfie was taken for manual review: the viewer warns about it.
+      await expect(viewer.getByText("Selfie: Liveness not verified")).toBeVisible({
+        timeout: 20_000,
+      });
       for (const check of REVIEW_CHECKS) await viewer.getByLabel(check).check();
       const approve = viewer.getByRole("button", { name: `Approve ${step}` });
       await expect(approve).toBeEnabled({ timeout: 20_000 });

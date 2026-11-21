@@ -59,4 +59,8 @@ export const DOCUMENTED_SKIPS: readonly { reason: string; why: string }[] = [
     reason: "API-level account checks run once per run, in the chromium project",
     why: "Foundation test copy: database-level checks that do not depend on the browser.",
   },
+  {
+    reason: "Continue on your phone starts on a desktop computer, checked once in chromium.",
+    why: "Phones are not offered a phone link; the hand-off drives its own phone context, so it runs once, in the desktop chromium project.",
+  },
 ];

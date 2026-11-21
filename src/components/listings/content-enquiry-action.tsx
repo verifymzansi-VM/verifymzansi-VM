@@ -47,7 +47,7 @@ export function ContentEnquiryAction({
     if (!messageOpen) return;
     let cancelled = false;
     void (async () => {
-      const { getRestoredFoundationBrowserClient: createClient } =
+      const { getRestoredFoundationBrowserClient: createClient, readRestoredOwnProfile } =
         await import("@/lib/foundation/restored-browser-client");
       const client = createClient();
       const {
@@ -55,12 +55,9 @@ export function ContentEnquiryAction({
       } = await client.auth.getUser();
       if (!user || cancelled) return;
       setBuyerEmail((current) => current || user.email || "");
-      const { data } = await client
-        .from("account_profiles")
-        .select("display_name")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (!cancelled && data?.display_name) setBuyerName((current) => current || data.display_name);
+      const profile = await readRestoredOwnProfile(client, user.id);
+      const displayName = profile?.display_name;
+      if (!cancelled && displayName) setBuyerName((current) => current || displayName);
     })().catch(() => {
       // The form remains usable when profile details cannot be loaded.
     });

@@ -65,6 +65,10 @@ jobs:
       # (src/lib/foundation/error-reasons.ts) fails here (roadmap M6.6).
       - name: Check the shared error-reason list against the current schema
         run: node scripts/check-foundation-error-reasons.mjs
+      # Every enforced limit is in docs/testing/limits-register.json with its
+      # current value and a test that names it (launch checklist item 43).
+      - name: Check the limits register against the current schema and code
+        run: node scripts/check-limits-register.mjs
       # Safe order: every update file has an applied-register line, and an API
       # command or argument removed or renamed against the base commit needs a
       # recorded second step (database/foundation/contract-steps.json).
@@ -505,7 +509,7 @@ jobs:
             exit 1
           fi
           echo "All critical payment routes verified in build output."
-      # Payment and KYC provider callbacks, verification start and pricing
+      # The Ozow payment callback, verification start and pricing
       # (scripts/lib/built-routes.mjs), checked in the generated route manifest.
       - name: Verify required routes in the build manifest
         run: node scripts/check-built-routes.mjs

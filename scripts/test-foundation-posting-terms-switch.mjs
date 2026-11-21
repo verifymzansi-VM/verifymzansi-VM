@@ -156,6 +156,7 @@ try {
     );
     fails(`delete from private.plan_versions where id='${sellingBefore[0].id}';`, "23514");
   });
+  // LIM-SQL-intro-media-allowance (docs/testing/limits-register.json)
   await check("a draft without a slot still adds up to 10 photos (the free first post)", () => {
     const poster = user("free-poster");
     // The post and its listing details go in together (a deferred detail check).

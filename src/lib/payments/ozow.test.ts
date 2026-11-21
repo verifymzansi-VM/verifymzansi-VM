@@ -450,7 +450,7 @@ describe("ozow payments", () => {
     });
   });
 
-  it("falls back to the mock checkout flow when the Ozow client is unknown outside production", async () => {
+  it("reports an unknown Ozow client instead of switching to a mock checkout", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce({
       ok: false,
       status: 404,
@@ -467,17 +467,18 @@ describe("ozow payments", () => {
     const { createOzowHostedPayment, resetOzowTokenCacheForTesting } = await import("./ozow");
     resetOzowTokenCacheForTesting();
 
-    const result = await createOzowHostedPayment({
-      paymentId: "payment-1",
-      merchantReference: "payment1",
-      amountCents: 2500,
-      returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
-      cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-1",
+    await expect(
+      createOzowHostedPayment({
+        paymentId: "payment-1",
+        merchantReference: "payment1",
+        amountCents: 2500,
+        returnUrl: "https://verifymzansi.com/billing/success?payment=payment-1",
+        cancelUrl: "https://verifymzansi.com/billing/cancel?payment=payment-1",
+      })
+    ).rejects.toMatchObject({
+      code: "ozow_configuration_error",
+      context: expect.objectContaining({ reason: "consumer_not_found" }),
     });
-
-    expect(result.providerPaymentId).toBe("mock-payment-1");
-    expect(result.providerReference).toBe("payment1");
-    expect(result.redirectUrl).toContain("/api/mock-ozow");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -684,14 +685,16 @@ describe("mock checkout page (M0.8)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("stays on the website's own mock route outside the foundation test copy", async () => {
+  it("has no mock payment page outside the foundation test copy", async () => {
     stub({ ...copy, FOUNDATION_PROJECT_REF: "gntzjtuncsyefujajmjy", NODE_ENV: "test" });
-    vi.stubGlobal("fetch", vi.fn());
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
     const { createOzowHostedPayment } = await import("./ozow");
-    const result = await createOzowHostedPayment(input);
-    expect(new URL(result.redirectUrl).origin + new URL(result.redirectUrl).pathname).toBe(
-      "http://localhost:3000/api/mock-ozow"
-    );
+    await expect(createOzowHostedPayment(input)).rejects.toMatchObject({
+      code: "ozow_configuration_error",
+      context: { reason: "mock_outside_test_copy" },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   // NODE_ENV=test keeps the mock on, so only the test copy profile decides.
@@ -705,10 +708,9 @@ describe("mock checkout page (M0.8)", () => {
     stub({ ...copy, NODE_ENV: "test", ...change });
     vi.stubGlobal("fetch", vi.fn());
     const { createOzowHostedPayment } = await import("./ozow");
-    const result = await createOzowHostedPayment(input);
-    expect(new URL(result.redirectUrl).origin + new URL(result.redirectUrl).pathname).toBe(
-      "http://localhost:3000/api/mock-ozow"
-    );
+    await expect(createOzowHostedPayment(input)).rejects.toMatchObject({
+      context: { reason: "mock_outside_test_copy" },
+    });
   });
 
   it.each([

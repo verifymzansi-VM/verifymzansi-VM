@@ -1,5 +1,4 @@
 import { toContentEditModerationItem } from "@/lib/content-edit-moderation";
-import { withAllPrivateFields } from "@/lib/content/private-fields";
 import {
   BUSINESS_FIELDS,
   EDIT_FIELDS,
@@ -110,6 +109,8 @@ export async function getAreaReports(area: MarketplaceArea) {
 // getPendingContent, getSiteVisitStats and getShowroomExposureReport have no
 // foundation read yet: they still use the retired service client, which
 // reaches no tables in production, so the panels show their unavailable state.
+// (The old private-contact lookup that followed the business reads is gone:
+// it could only run after a read that always fails.)
 
 /** A failed read throws, so the page says so instead of showing an empty queue. */
 function rowsOrThrow<T>(result: { data: T[] | null; error: { message: string } | null }): T[] {
@@ -132,13 +133,11 @@ async function getPendingNewContent(area: MarketplaceArea) {
   }
 
   if (area === "MZANSI_BUSINESS") {
-    const businesses = rowsOrThrow(
+    return rowsOrThrow(
       await pending("businesses", BUSINESS_FIELDS)
         .eq("area", "MZANSI_BUSINESS")
         .or(MZANSI_BUSINESS_FILTER)
-    );
-    // Contact details and address come from the server-only private table.
-    return (await withAllPrivateFields("businesses", businesses)).map(businessItem);
+    ).map(businessItem);
   }
 
   if (area === "PROMOTIONS_EVENTS") {
@@ -148,9 +147,7 @@ async function getPendingNewContent(area: MarketplaceArea) {
     ]);
     return oldestFirst([
       ...rowsOrThrow(promotions).map(promotionItem),
-      ...(await withAllPrivateFields("businesses", rowsOrThrow(tourismBusinesses))).map(
-        businessItem
-      ),
+      ...rowsOrThrow(tourismBusinesses).map(businessItem),
     ]);
   }
 

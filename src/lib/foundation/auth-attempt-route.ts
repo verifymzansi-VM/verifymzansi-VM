@@ -26,6 +26,22 @@ function hasCaptchaToken(input: unknown) {
   return typeof token === "string" && token.trim().length > 0;
 }
 
+/** The largest JSON body an anonymous Auth request may send. */
+const AUTH_BODY_MAX_BYTES = 4096;
+
+declare const boundedAuthBody: unique symbol;
+/** A request body already read once within AUTH_BODY_MAX_BYTES. Only
+ * readFoundationAuthBody makes one, so a route cannot hand
+ * handleFoundationAuthAttempt a body it parsed without the limit. */
+export type FoundationAuthBody = { readonly input: unknown; readonly [boundedAuthBody]: true };
+
+/** Reads the request's JSON body once, with the Auth routes' size limit
+ * (null when it is missing, too large or not JSON). */
+export async function readFoundationAuthBody(request: NextRequest): Promise<FoundationAuthBody> {
+  const input = await parseJsonRequest(request, { maxBytes: AUTH_BODY_MAX_BYTES });
+  return { input } as FoundationAuthBody;
+}
+
 export function foundationAuthPrivateResponse(response: NextResponse) {
   response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate, max-age=0");
   response.headers.set("CDN-Cache-Control", "no-store");
@@ -50,11 +66,11 @@ export async function handleFoundationAuthAttempt<T>({
   body,
 }: {
   request: NextRequest;
-  /** The request's JSON body when the route has already read it (once, with
-   * parseJsonRequest and the same 4096-byte limit used here); the request's
+  /** The request's JSON body when the route has already read it
+   * (readFoundationAuthBody, with the same limit used here); the request's
    * own body is then not read again. Every check below still runs before the
    * operation sees it. */
-  body?: { input: unknown };
+  body?: FoundationAuthBody;
   action: "auth:login" | "auth:register" | "auth:forgot-password" | "auth:resend-confirmation";
   enabled?: boolean;
   unavailableMessage: string;
@@ -73,8 +89,7 @@ export async function handleFoundationAuthAttempt<T>({
     foundationAuthPrivateResponse(
       NextResponse.json({ error: unavailableMessage }, { status: 503 })
     );
-  const readInput = async () =>
-    body ? body.input : await parseJsonRequest(request, { maxBytes: 4096 });
+  const readInput = async () => (body ? body.input : (await readFoundationAuthBody(request)).input);
   try {
     const blocked = enforceMutationRequest(request, log);
     if (blocked) return foundationAuthPrivateResponse(blocked);
