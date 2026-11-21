@@ -37,6 +37,7 @@ export const LAUNCH_VALUES = {
   SHOW_PAID_ADDONS: true,
   SHOW_SPONSOR_OFFER: true,
   SHOW_PACKAGE_TEAMS: true,
+  SHOW_BUSINESS_STOREFRONT: true,
   PACKAGES_ON_SALE: true,
   // Off at launch: the partner programme opens once the partner agreement is
   // signed, which is not tied to launch day.

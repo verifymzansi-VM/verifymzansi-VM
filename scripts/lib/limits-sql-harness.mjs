@@ -1,0 +1,114 @@
+// Shared set-up for the database limit tests (scripts/limits-sql*.test.mjs):
+// the replayed production schema (candidate.sql plus every update) in the
+// embedded Postgres of the replay gate, synthetic members and staff, and
+// helpers that call the production API as a member, staff member, the service
+// role or a visitor. No Docker, no hosted database.
+import assert from "node:assert/strict";
+import { replayFoundation } from "./foundation-replay.mjs";
+
+const FIXTURES = `create schema vmtest;
+  create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
+  declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); begin
+    insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
+      values(uid,p_label||'-'||uid||'@example.invalid',now(),jsonb_build_object('display_name','Fixture '||p_label));
+    insert into auth.sessions(id,user_id,aal) values(sid,uid,'aal1');
+    return jsonb_build_object('id',uid,'session',sid);
+  end$$;
+  -- Staff: an AAL2 session, a verified authenticator app, a role and an
+  -- accepted ID review of their own (a synthetic identity fingerprint).
+  create function vmtest.staff(p_label text,p_role text) returns jsonb language plpgsql as $$
+  declare m jsonb:=vmtest.member(p_label); uid uuid:=(m->>'id')::uuid; begin
+    update auth.sessions set aal='aal2' where id=(m->>'session')::uuid;
+    insert into auth.mfa_factors(user_id,factor_type,status) values(uid,'totp','verified');
+    insert into private.staff_roles(user_id,role) values(uid,p_role);
+    perform set_config('session_replication_role','replica',true);
+    insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
+      values(uid,gen_random_uuid(),left(translate(encode(sha256(convert_to(uid::text,'UTF8')),'base64'),'+/=','-_'),42)||'A',gen_random_uuid());
+    perform set_config('session_replication_role','origin',true);
+    return m || jsonb_build_object('staff',true);
+  end$$;`;
+
+export const lit = (value) => `'${String(value).replaceAll("'", "''")}'`;
+
+/**
+ * An address of exactly `n` characters (n >= 7): a short local part and a long
+ * domain of labels of at most 50 characters, so only a length rule can refuse it.
+ */
+export function emailOfLength(n) {
+  const room = n - 2 - ".com".length;
+  let domain = "";
+  while (domain.length < room)
+    domain += `${domain ? "." : ""}${"d".repeat(Math.min(50, room - domain.length - (domain ? 1 : 0)))}`;
+  const value = `a@${domain}.com`;
+  assert.equal(value.length, n);
+  return value;
+}
+
+/** Opens the replayed schema with the fixtures; the caller closes `db`. */
+export async function openLimitsDb() {
+  const { db } = await replayFoundation();
+  await db.exec(FIXTURES);
+
+  const one = async (sql, params) => Object.values((await db.query(sql, params)).rows[0] ?? {})[0];
+  const member = (label) => one(`select vmtest.member($1)`, [label]);
+  const staff = (label, role = "admin") => one(`select vmtest.staff($1,$2)`, [label, role]);
+
+  /**
+   * Runs `sql` as `role` (null: the database owner, for internal helpers that
+   * no API role may call); with `user`, under that user's JWT claims (staff
+   * users carry AAL2 and a fresh authenticator-app proof; `user.amr` sets the
+   * sign-in methods).
+   */
+  async function as(role, sql, user) {
+    const claims = user
+      ? {
+          sub: user.id,
+          role: "authenticated",
+          session_id: user.session,
+          aal: user.staff ? "aal2" : "aal1",
+          is_anonymous: false,
+          ...(user.staff
+            ? { amr: [{ method: "totp", timestamp: Math.floor(Date.now() / 1000) }] }
+            : {}),
+          ...(user.amr ? { amr: user.amr } : {}),
+        }
+      : { role: role ?? "postgres" };
+    await db.exec(`select set_config('request.jwt.claim.sub',${lit(user?.id ?? "")},false),
+        set_config('request.jwt.claims',${lit(JSON.stringify(claims))},false);
+      ${role ? `set role ${role};` : ""}`);
+    try {
+      return (await db.query(sql)).rows;
+    } finally {
+      await db.exec(
+        `reset role; select set_config('request.jwt.claims','',false), set_config('request.jwt.claim.sub','',false);`
+      );
+    }
+  }
+
+  /** The owner writes `sql` with triggers and foreign-key checks off (fixtures). */
+  const seed = (sql) =>
+    db.exec(`set session_replication_role=replica;\n${sql}\nset session_replication_role=origin;`);
+
+  return {
+    db,
+    one,
+    member,
+    staff,
+    as,
+    seed,
+    asMember: (user, sql) => as("authenticated", sql, user),
+    asStaff: (user, sql) => as("authenticated", sql, user),
+    asService: (sql) => as("service_role", sql),
+    asVisitor: (sql) => as("anon", sql),
+    asOwner: (sql, user) => as(null, sql, user),
+  };
+}
+
+/** Asserts that `promise` is refused with `code` and, when given, `message`. */
+export async function refused(promise, code, message) {
+  await assert.rejects(promise, (error) => {
+    assert.equal(error.code, code, error.message);
+    if (message) assert.match(error.message, message);
+    return true;
+  });
+}

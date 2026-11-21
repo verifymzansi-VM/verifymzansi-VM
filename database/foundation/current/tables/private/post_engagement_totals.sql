@@ -5,7 +5,9 @@ create table private.post_engagement_totals (
   post_id uuid not null,
   views bigint default 0 not null,
   likes integer default 0 not null,
+  engaged_views bigint default 0 not null,
   constraint post_engagement_totals_counts_check CHECK (views >= 0 AND likes >= 0),
+  constraint post_engagement_totals_engaged_views_check CHECK (engaged_views >= 0),
   constraint post_engagement_totals_pkey PRIMARY KEY (post_id),
   constraint post_engagement_totals_post_id_fkey FOREIGN KEY (post_id) REFERENCES private.posts(id) ON DELETE CASCADE
 );

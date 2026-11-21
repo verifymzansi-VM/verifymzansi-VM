@@ -15,6 +15,8 @@ export type FoundationRuntimePublicDatabase = {
       get_payment_limits: { Args: Record<never, never>; Returns: Json };
       get_post_engagement: { Args: { p_post_ids: string[] }; Returns: Json };
       get_signup_mode: { Args: Record<never, never>; Returns: Json };
+      get_vat_registration: { Args: Record<never, never>; Returns: Json };
+      get_public_storefront: { Args: { p_post_id: string }; Returns: Json };
     };
   };
 };
@@ -70,6 +72,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       get_my_slot_package: { Args: Record<never, never>; Returns: Json };
       get_payment_limits: { Args: Record<never, never>; Returns: Json };
       get_post_engagement: { Args: { p_post_ids: string[] }; Returns: Json };
+      get_public_storefront: { Args: { p_post_id: string }; Returns: Json };
       get_my_communication_choices: { Args: Record<never, never>; Returns: Json };
       save_my_communication_choices: {
         Args: {
@@ -720,6 +723,24 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       };
       list_identity_disclosures: { Args: Record<never, never>; Returns: Json };
       get_staff_operations_health: { Args: Record<never, never>; Returns: Json };
+      get_staff_sales_summary: { Args: Record<never, never>; Returns: Json };
+      get_vat_registration: { Args: Record<never, never>; Returns: Json };
+      get_identity_check_availability: { Args: Record<never, never>; Returns: Json };
+      start_my_identity_check: { Args: Record<never, never>; Returns: Json };
+      ask_person_identity_check: {
+        Args: { p_check: string; p_reason: string };
+        Returns: Json;
+      };
+      get_identity_check_settings: { Args: Record<never, never>; Returns: Json };
+      set_identity_check_mode: {
+        Args: { p_mode: string; p_reason: string };
+        Returns: Json;
+      };
+      get_identity_check_for_case: {
+        Args: { p_case: string };
+        Returns: Json;
+      };
+      get_my_post_performance: { Args: Record<never, never>; Returns: Json };
     };
   };
 };
@@ -913,6 +934,51 @@ export type FoundationRuntimeServiceDatabase = {
         Args: { p_disclosure: string; p_staff: string };
         Returns: Json;
       };
+      attach_identity_check_session: {
+        Args: {
+          p_check: string;
+          p_session_id: string;
+          p_session_url: string;
+          p_network_hash: string;
+          p_device_kind: string;
+        };
+        Returns: Json;
+      };
+      report_identity_check_unavailable: {
+        Args: { p_check: string; p_reason: string };
+        Returns: Json;
+      };
+      begin_identity_check_evidence: {
+        Args: { p_check: string; p_session_id: string };
+        Returns: Json;
+      };
+      complete_identity_check: {
+        Args: {
+          p_check: string;
+          p_session_id: string;
+          p_outcome: string;
+          p_reasons?: string[];
+          p_id_front?: Json;
+          p_selfie?: Json;
+          p_identity?: Json;
+          p_names?: Json;
+          p_risk_score?: number;
+        };
+        Returns: Json;
+      };
+      claim_identity_check_deletions: {
+        Args: { p_limit: number };
+        Returns: Json;
+      };
+      mark_identity_check_provider_deleted: {
+        Args: { p_check: string };
+        Returns: Json;
+      };
+      record_post_activity: {
+        Args: { p_post_ids: string[]; p_metrics: string[]; p_device?: string; p_account?: string };
+        Returns: Json;
+      };
+      purge_post_engagement: { Args: Record<never, never>; Returns: Json };
     };
   };
 };

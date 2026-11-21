@@ -80,6 +80,516 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Business storefront, 21 November 2026
+
+`20261121131915_business_storefront.sql` was applied on 21 November 2026 at
+17:34 UTC (see the applied register). Launch checklist item 17b, business tools
+plan section 1 (owner-approved 20 November 2026): a Multi-listing package's live
+Market listings show on its owner's existing business page as "All stock", and
+each of those listings names the business and links to it. Nothing is stored;
+there is no set-up step.
+
+- **Which business:** `internal.storefront_package(business)` gives the package
+  whose listings a business page shows. A business has one only when it is
+  publicly live, holds a current CIPC sticker (the business check, owner
+  decision 12 of 14 November), its owner's package runs now
+  (`internal.slot_package_now`) and it is the owner's first such business
+  (earliest published, then id). An owner with several checked businesses has
+  one storefront, and every listing links to that one.
+- **Which listings:** the Market listings that hold a slot of that package (an
+  unreleased activation on one of its grants), as public search already shows
+  them. `internal.storefront_of_post(post)` goes the other way: for a live
+  listing in a storefront, the storefront's business; for a business, the
+  business itself.
+- **Search:** `internal.search_posts` (so `api.search_posts` and
+  `api.search_post_cards`) accepts `storefront` (a business id; a business
+  without a storefront matches nothing) and `make` (1 to 80 characters, only
+  with `storefront`; the vehicle make in any case). Every other filter, order,
+  page and count is unchanged and works inside a storefront.
+- **The read:** `api.get_public_storefront(post id)` (visitors and members,
+  security invoker over a security definer `internal` twin) returns, for a
+  business with a storefront or a listing in one, the business id and name, the
+  number of listings, their categories with counts, and the vehicle makes and
+  property areas (province and city) among them; null for any other post. Only
+  public card facts: no owner, package, slot, account or contact.
+
+New command and two optional search filters only (expand). A website without the
+matching code never sends the new filters. ORDER: apply first, then merge; the
+website reads the storefront only while `SHOW_BUSINESS_STOREFRONT` is on (off
+until launch switch-on).
+
+**Applying.**
+
+1. Run `../preflight/20261121131915_business_storefront.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "business storefront: update not applied; running
+   packages: N; checked businesses: M" (any counts).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "business storefront: already applied; running packages:
+   N; checked businesses: M; storefronts: K".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261121131915_business_storefront.down.sql` (only with the owner's
+decision; prefer a forward fix; switch `SHOW_BUSINESS_STOREFRONT` off first). It
+refuses (55000) unless every function of the update has the update's body; then
+it puts back `internal.search_posts` byte for byte and drops the read and the
+two helpers. No data is removed (the update stores none).
+
+`node --import tsx scripts/test-foundation-business-storefront.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; a drifted search body and a premature
+rollback refused; apply, rollback and re-apply return the same fingerprints; the
+grants (the read for visitors and members, never the server key; the helpers for
+nobody; the api wrapper security invoker); a package bought through checkout
+with a checked business shows only its live listings (not a draft or a deleted
+one), with the read's fields the same from the business, from each listing and
+for a member; every search filter inside the storefront (make in any case,
+category with gearbox and year, text, area, pages and totals); the malformed
+filters refused and the make's 80-character bound; only the owner's first
+checked business; none without a sticker, with an expired one, without a
+package, or after the package ended.
+
+## Post performance statistics for the owner's Performance page, 21 November 2026
+
+`20261121100028_post_performance_stats.sql` was applied on 21 November 2026 at
+17:33 UTC (see the applied register). Launch checklist item 2, the part after
+the views and likes update. **Order: apply-first** (the default): the website
+release from the same pull request names the three new commands, and the deploy
+preflight probes every command in `../runtime-api-manifest.json`. The website
+records only while `SHOW_ENGAGEMENT_TOTALS` is on and shows the page only while
+`SHOW_OWNER_METRICS` is on; both stay off in production until launch, so
+applying the update changes nothing anyone sees. It adds one table, one column,
+three API commands and two internal functions, and replaces three functions with
+full bodies: the retention job, the engagement clean-up and the scheduled job
+catalogue. It refuses (55000) unless its parts are all absent or all present and
+the three functions have their reviewed bodies (or this update's).
+
+- **What the page shows, and where each figure comes from.** The restored
+  Performance page (`/dashboard/metrics`, from the 27 October frontend) shows
+  posts and live posts, views with engaged views, leads and the lead rate; for
+  the last 30 days appearances in lists, search, the home page, the showrooms
+  and organisation pages, detail views, WhatsApp, phone, website, directions,
+  booking and ticket taps, shares, saves and unique viewers; the 10 busiest
+  posts; where detail views came from; and each live post's showroom turns over
+  the last 7 days next to the fair share. The pages already send the events to
+  `/api/analytics/events` (`src/lib/analytics/commercial-events.ts`): a card
+  counts as seen when half of it is on screen for one second (the IAB/MRC
+  viewable impression rule), a detail view on opening the post's page, a tap on
+  the click. Engaged views come from the video tracker (30 seconds, or 90% of a
+  shorter video) through `/api/engagement/view`.
+  - Views, unique viewers and saves reuse what the views and likes update
+    stores: views are the post's counted views (all time), unique viewers the
+    counted views of the last 30 days (one per browser per post per day, so a
+    visitor who comes back another day counts again, as in privacy-first
+    analytics with a daily salt), saves the likes made in the last 30 days that
+    still count. Leads are the enquiries received (kept 12 months).
+  - Everything else is a daily counter per post in the new table.
+- **What is stored.** `private.post_activity_days`: one row per post per day
+  (Africa/Johannesburg) with 21 counters (`list_impressions`,
+  `search_appearances`, `homepage_appearances`, `showroom_home`,
+  `showroom_business`, `showroom_market`, `showroom_tourism`,
+  `showroom_programme`, `directory_appearances`, `views_direct`,
+  `views_internal`, `views_search`, `views_social`, `views_referral`,
+  `whatsapp_taps`, `phone_taps`, `website_taps`, `directions_taps`,
+  `booking_taps`, `ticket_taps`, `shares`); deleted with the post, and after 31
+  days by the clean-up job. `private.post_engagement_totals.engaged_views`: the
+  post's engaged views (all time). An engaged view also keeps one mark
+  (`sha256(day salt || 'engaged:' || browser || post)`) in
+  `private.post_view_marks` for 24 hours. Never an account, browser identifier,
+  network address or user agent.
+- **`api.record_post_activity(p_post_ids, p_metrics, p_device, p_account)`**
+  (service only): 1 to 50 (post, counter) pairs of the same length (22023
+  `activity_invalid` otherwise); a counter is one of the 21 columns or
+  `engaged_views`, which needs `p_device`. Each distinct (post, counter) pair
+  counts at most once per call. Pairs of posts that do not count are skipped:
+  posts that are not publicly live, the signed-in owner's own events and every
+  event by an account with an active staff role (an inactive account counts as
+  signed out). An engaged view counts at most once per browser per post in 24
+  hours, and only when that browser's view of the post was counted in the last
+  24 hours, so engaged views never exceed views. One statement per request
+  updates each post's row for the day. Returns `{"posts", "engaged"}`.
+- **`api.get_my_post_performance()`** (authenticated, live session, the caller's
+  own posts only; edit copies are not posts): `posts`, `live_posts`, `views`,
+  `engaged_views`, `leads`, `last_30_days` (keyed as the page's event names,
+  plus `unique_viewers`), `top_posts` (at most 10: post, title, area,
+  appearances, views, unique viewers, contacts, saves, shares), `sources`
+  (`direct`, `internal`, `search`, `social`, `referral`, only those above zero)
+  and `showroom_turns` (each live post on the home showroom and its area's
+  showroom: appearances in the last 7 days, the fair share, which is that
+  showroom's appearances in the last 7 days divided by the posts now eligible
+  for it, and that number of posts). The fair share is an average over every
+  eligible post; no other owner's post is named or counted separately.
+- **The clean-up is its own job.** `api.purge_post_engagement()` (service only)
+  runs the engagement clean-up (view and engaged marks older than 24 hours,
+  salts older than yesterday, waiting likes that are due, and now activity days
+  older than 31 days) and records the run as scheduled job `engagement_purge`
+  (every minute, late after 10 minutes), which the staff operations page lists.
+  The website's minute job calls it (`src/lib/foundation/operation-jobs.ts`);
+  `internal.run_retention` no longer does. Between applying and deploying, old
+  marks wait for the new website's minute job; they stop counting after 24 hours
+  anyway.
+- **Website limits (not in the database).** `/api/analytics/events` needs no
+  sign-in or cookie (list pages never run the Turnstile check, so requiring the
+  signed browser identifier would drop most first visits). It refuses cross-site
+  requests, ignores crawlers, headless browsers and prefetches, reads at most
+  16,384 bytes and 50 events, and counts within `engagement:activity` per IPv4
+  address or IPv6 /48 (30 a minute, 600 an hour, 3,000 a day). Each (post,
+  counter) pair counts once per request. A post's page events (detail views,
+  contact taps, shares) count for at most 200 requests a day per address or /48
+  (`engagement:activity:post`; more is dropped silently), far above what one
+  person reaches and with room for a shared carrier address; card appearances
+  are not checked against it, so a page left open cannot use it up. Saves (the
+  like button), sponsor clicks and organisation events are not counted there.
+  Flooding one's own or another owner's figures only changes counts the owner
+  alone sees, within those limits, and the table's size does not grow with the
+  number of events.
+
+**Write cost against the Supabase free plan (500 MB database).** Assumptions per
+visitor a day: about 30 card appearances, 3 detail pages, 0.3 contact taps, 0.05
+shares and 0.3 engaged views, sent in about 10 beacons (the pages batch up to 50
+events and send every 2 seconds while someone browses); posts on the site grow
+with visitors (assumed 500, 3,000 and 20,000 posts, every one active every day,
+which over-counts). A row is about 300 bytes with its two indexes and update
+bloat.
+
+| Daily visitors | Activity requests a day | Row updates a day | New rows a day | Activity table (31 days) | Engaged marks (24 h) |
+| -------------- | ----------------------- | ----------------- | -------------- | ------------------------ | -------------------- |
+| 1,000          | 10,000                  | about 25,000      | 500            | about 5 MB               | 300 rows, 40 KB      |
+| 10,000         | 100,000                 | about 250,000     | 3,000          | about 28 MB              | 3,000 rows, 0.4 MB   |
+| 100,000        | 1,000,000               | about 2,500,000   | 20,000         | about 186 MB             | 30,000 rows, 4 MB    |
+
+The table's size depends on posts and days, not on visitors: visitors add
+updates of existing rows (no indexed column changes, so most are HOT updates),
+not rows. 1,000 and 10,000 daily visitors fit the free plan easily. At 100,000
+daily visitors and 20,000 posts the table alone would use over a third of the
+free plan's 500 MB, at about 29 updates a second on average; by then the project
+needs the Pro plan for its overall size anyway. On Cloudflare every beacon is
+one Worker request plus one rate limiter call for the address, and one more for
+each post with page events (1 or 2 on a post page, none on a list page; about
+1.35 limiter calls a beacon on average): about 0.4 million limiter calls a month
+at 1,000 daily visitors, 4 million at 10,000 and 40 million at 100,000, against
+the 10 million requests a month Workers Paid includes (shared with the rest of
+the site).
+
+Preflight `../preflight/20261121100028_post_performance_stats.check.sql`
+(summary "post performance stats: update not applied; publicly listed posts: N"
+before, "post performance stats: already applied; activity days: N; engaged
+views: N" after; a problem row for each replaced function without its reviewed
+body); rollback `../rollback/20261121100028_post_performance_stats.down.sql`
+(only with the owner's decision; switch the recording off instead where
+possible; it refuses once any activity or engaged view is recorded, and puts
+back the three earlier function bodies byte for byte, so the retention job runs
+the clean-up again). Behaviour test
+`scripts/test-foundation-post-performance-stats.mjs` (part of
+`pnpm db:foundation:lifecycle-test`).
+
+**Applying.**
+
+1. Run `../preflight/20261121100028_post_performance_stats.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "post performance stats: update not applied; publicly
+   listed posts: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "post performance stats: already applied; activity days:
+   0; engaged views: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+## Automatic ID checks by an independent verification partner, 21 November 2026
+
+`20261121094003_automatic_identity_checks.sql` was applied on 21 November 2026
+at 17:32 UTC (see the applied register). Didit plan, build step 5 (the database
+part of automatic ID checks). It changes nothing for members or staff while the
+new setting is `manual`, its starting value.
+
+**The setting stays `manual` until the retention update (Didit plan C1) is
+applied, and the database enforces it:** `api.set_identity_check_mode` refuses
+any other value (PT409 `identity_check_retention_pending`) until C1 replaces the
+function. This update deletes the partner's copy of a check only when it never
+finished and 5 days after an automatic decline nobody asked about. C1 must set
+`identity_checks.provider_delete_due` for checks staff reject or send back
+(`staff_final`, or after "ask a person") and for checks whose "ask a person"
+ends without the identity being accepted, and decide how long a check row (with
+its start names, network hash and device kind, which are kept only as long as
+the row) stays after a failed attempt.
+
+- **The setting:** one row in `private.identity_check_settings`: `manual` (staff
+  review the photos, as today), `staff_final` (a clean automatic pass verifies
+  at once, anything else goes to the staff queue) or `automatic` (a clean pass
+  verifies at once, anything else is declined and the member may ask a person to
+  look again). `api.set_identity_check_mode(mode, reason)` needs the new
+  capability `identity_check:configure` (admins, authenticator code from the
+  last 15 minutes) and a reason of 5 to 500 characters; each change is logged in
+  the append-only `private.identity_check_mode_events`. The reason may not hold
+  control or direction characters. `api.get_identity_check_settings` (staff with
+  `queue:view`) shows the setting, any pause, the last 7 days' counts and the
+  latest 5 changes. The setting is read when a result arrives.
+- **Pause:** `api.report_identity_check_unavailable(check, reason)` (server)
+  marks a check that could not start as `unavailable` and pauses automatic
+  checks for everyone: 15 minutes after an `outage`, 1 hour after `no_credit` or
+  `not_configured`. `newly_paused` is true only for the call that started the
+  pause, so the website sends one alert. Setting the mode, even to the current
+  value, ends a pause early (for example after a top-up).
+- **Spending guard:** 3 checks per member in 7 days and 60 checks a day
+  site-wide (unavailable checks are not counted). Above either, or while the
+  setting is `manual` or paused, `api.get_identity_check_availability` answers
+  route `manual` with reason `limit`, `paused` or `mode`, and
+  `api.start_my_identity_check` refuses a new check (PT409
+  `identity_check_<reason>`). An unfinished check is resumed whatever the
+  setting now says; if the setting is `manual` when its result arrives, the
+  result goes to staff.
+- **A check:** `private.identity_checks`, bound to the member's open identity
+  case; the partner only sees its random id. The start context stays on the row,
+  never with the partner: the typed legal names at start (recorded by
+  `api.start_my_identity_check`), and a keyed hash of the member's network (64
+  lowercase hex) and the device kind (`phone` or `computer`), given by the
+  server to `api.attach_identity_check_session`.
+  `api.begin_identity_check_evidence` returns them to the server. The member
+  starts it (`api.start_my_identity_check`, a verified phone and typed legal
+  names required); the server binds the partner session once
+  (`api.attach_identity_check_session`), reserves the two evidence files before
+  copying the photos (`api.begin_identity_check_evidence`) and records the
+  result once (`api.complete_identity_check`). A result after the check's
+  24-hour expiry is recorded as not finished.
+- **The result** becomes an ordinary identity submission through
+  `internal.complete_evidence_upload` and
+  `internal.register_identity_submission` (the same files, fingerprint,
+  encrypted ID number and names snapshot as the manual route). The server gives
+  the first and last names it compared with the ID (`p_names`); when they are
+  not exactly the names the new submission records (the member can change their
+  typed names during the check), the database adds `names_differ`, so a clean
+  pass always locks the names that were compared. It also adds `banned`,
+  `duplicate` (the ID number is verified on another account) and `high_risk`
+  (risk score above 50). The server may add `session_moved` when the result came
+  from another network or device; like the other findings it sends the result to
+  staff (`staff_final`) or declines it (`automatic`). A clean pass on a partner
+  setting writes the accepted identity fact with `automatic_check_id` instead of
+  a staff reviewer (`accepted_identity_facts.reviewed_by` is null only then,
+  enforced by a check), so the name lock and the "verified" notice work
+  unchanged.
+- **Declines** (`automatic` setting, including the partner's "in review"):
+  `internal.decline_automatic_identity_submission` keeps the submission but
+  removes it from the case's current place, so no staff queue shows it and the
+  member's page offers a new attempt.
+  `api.ask_person_identity_check(check, reason)` (within 5 days, before anything
+  replaced it; reason 20 to 2,000 characters) records the request on the check
+  (`asked_at`, `ask_reason`) and puts the submission back in the staff queue.
+  Staff decide it with the usual commands, and the existing "verified" or "sent
+  back" notice tells the member. No appeal is created. A new check cannot start
+  while the request waits.
+- **Reviewers:** `api.get_identity_check_for_case(case)` (staff with
+  `evidence:view` holding a current claim on that open case, logged as a
+  `routine_review` evidence access, like the identity review context) shows the
+  check's status, reason codes and the member's request.
+- **The partner's copy:** `api.claim_identity_check_deletions(limit)` returns
+  sessions to delete (a check that never finished at once, also one still
+  unfinished an hour after its 24-hour expiry; a declined check 5 days after the
+  decline unless the member asked a person), skipping fraud and legal holds,
+  each held for 5 minutes; `api.mark_identity_check_provider_deleted` records
+  the deletion. Deleting our own copies of failed attempts is part of C1.
+- **Retention:** a check row goes with its identity case and its submission
+  (`on delete cascade`), and a deleted evidence file only clears its reference
+  (`on delete set null`), so the five-year history sweep in
+  `internal.retention_verification` removes a closed account's checks with the
+  rest of its identity history.
+
+**For the server code (Didit plan, build step 6).**
+
+- **Session link lure:** the partner session link is a bearer link. Compare the
+  partner's network and device with the start context
+  `api.begin_identity_check_evidence` returns, pass `session_moved` on a
+  mismatch, and consider the partner's phone step. Send the partner no names or
+  network data.
+- **No bypass of the automatic route:** the website's photo upload and
+  submission routes must check `api.get_identity_check_availability` first, so
+  an automatic decline and the one "ask a person" per check cannot be bypassed
+  through the manual route while the automatic route is open.
+- **Names:** compare the typed names with the names on the ID without regard to
+  case in the website, and pass the typed names as `p_names` (the start names
+  `api.begin_identity_check_evidence` returns; the database still compares them
+  with the submission's snapshot).
+
+New tables, columns, constraints and commands only (expand); no existing
+function body changes. `reviewed_by` becomes nullable for automatic facts only;
+a website release without the matching code never calls the commands. ORDER:
+apply first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261121094003_automatic_identity_checks.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "automatic identity checks: update not
+   applied; admins: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "automatic identity checks: already applied; admins: N;
+   mode: manual; checks: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261121094003_automatic_identity_checks.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update is
+applied, and refuses once a check or a setting change was recorded. Otherwise it
+drops the commands, helpers and tables, puts back the widened constraint, makes
+`reviewed_by` required again and removes the capability.
+
+`node --import tsx scripts/test-foundation-automatic-identity-checks.mjs` (part
+of `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted body and a
+premature rollback; apply, rollback and re-apply return the same fingerprints;
+the capability and the grants; nothing starts on `manual`; who may change the
+setting (moderator, governor and an admin with a 20-minute-old code are refused)
+and its log; a clean pass verified by the check with the name lock and notice;
+an automatic fact never naming a reviewer; `staff_final` sending anything else
+to the queue with its reasons, the reviewer read only under a claim and logged,
+and a real staff return; a typed name changed during the check caught as
+`names_differ` (to staff, or declined) and never locked; `automatic` declining
+"in review", banned, duplicate and high-risk results out of every queue; asking
+a person (no appeal, the submission back in the queue, a new check refused
+meanwhile), then a real staff approval and a real staff return; the 5-day window
+and a replaced attempt; the partner deletions (at once, after 5 days, held by a
+legal hold, the expiry sweep, a late result not recorded); both spending limits
+at their bound; the pause and its resume; session binding and result rules; a
+result after the expiry; `manual` at the moment a result arrives; the setting
+command refusing anything but `manual` and a reason with control or direction
+characters; a new check needing a verified phone; and the five-year history
+sweep removing a closed account's checks.
+
+## Staff sales figures, the VAT alert and the VAT wording from the database, 21 November 2026
+
+`20261121090305_staff_sales_and_vat.sql` was applied on 21 November 2026 at
+17:30 UTC (see the applied register). Launch checklist item 16 (roadmap M8.7,
+remainder). Everything is computed from the existing payment records; no table
+is added.
+
+- **What a sale is.** A payment's amount, less the slots refunded or charged
+  back (reversed payment lines), and nothing once the whole payment was refunded
+  or charged back (`internal.payment_net_cents`). It counts on the day it was
+  paid, the way a sales report counts an order on its order date.
+- **The VAT position** (`internal.vat_sales_position`): sales paid in the last
+  12 months, the VAT setting (`private.invoice_merchant_config`, which the
+  invoices already check), the alert level R1.8 million and the compulsory level
+  R2.3 million (SARS, from 1 April 2026), and whether the alert is on (not
+  registered for VAT and the total at or above R1.8 million).
+- **The staff read** `api.get_staff_sales_summary()` (`payments:view`, the staff
+  payments page's own capability, with a recent authenticator code; read only):
+  the VAT position, sales of the last 12 months by product (Individual slot,
+  Multi-listing package, add-on, other) and term in days, and the online
+  checkouts sent to Ozow in the last 30 days with how many were paid, failed,
+  cancelled, expired or are still open (a checkout replaced before it reached
+  Ozow is not counted). Counts and amounts only.
+- **The public read** `api.get_vat_registration()` (visitors and members, like
+  the price catalogue): the VAT setting's status and, only when registered, the
+  VAT number. The pricing, billing and Trust & Safety pages state it instead of
+  a fixed sentence in the website.
+- **The daily payment summary** (`internal.claim_payment_digest`, service only)
+  keeps its signature and grants; the summary it stores gains one field,
+  `sales`, with the VAT position. The website reads the summary with a
+  non-strict reader, so an older release keeps sending it unchanged.
+
+New commands and one added summary field only. **Apply first, then merge:**
+until the update is applied, the release that uses it shows "Sales figures could
+not be loaded" on the staff payments page and leaves the VAT line out of the
+public pages.
+
+**Applying.**
+
+1. Run `../preflight/20261121090305_staff_sales_and_vat.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff sales and VAT: update not applied".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "staff sales and VAT: already applied; VAT setting:
+   not_registered".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261121090305_staff_sales_and_vat.down.sql` (only with the owner's
+decision; prefer a forward fix). It refuses (55000) unless the update is
+applied, every function it replaces or drops still has the update's body, and no
+other function uses what it drops; then it puts back
+`internal.claim_payment_digest` byte for byte and drops the two reads, their
+internal twins, `internal.vat_sales_position` and `internal.payment_net_cents`.
+
+`node --import tsx scripts/test-foundation-staff-sales-and-vat.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted summary
+command and a premature rollback, changing nothing; apply, rollback and re-apply
+return the same fingerprints; the rollback refuses while another function uses
+what it drops; who may run each function; sales net of a refunded slot and of a
+refunded payment, a bank transfer counted, a payment of 13 months ago left out;
+sales by product and term; online checkouts of the last 30 days by outcome (bank
+transfers, checkouts never sent to Ozow and older checkouts left out); the alert
+off one cent below R1.8 million, on at it, and off once registered for VAT; the
+daily summary's `sales` field; the public read for visitors and members; and
+only staff with `payments:view` and an authenticator code of the last 12 hours
+can read the figures (an admin whose code is 11 hours old can; a moderator, a
+member, an admin whose code is 13 hours old, the server key and a visitor are
+refused).
+
+## Privacy exports while a request is in progress, at most 5, every one notified, 21 November 2026
+
+`20261121053224_privacy_export_simple.sql` was applied on 21 November 2026 at
+17:15 UTC (see the applied register). It replaces only
+`internal.export_frontend_privacy_request` (same signature, owner and grants; no
+API, manifest or type change):
+
+- **Only an access request in progress** (identity verified, at the stated
+  revision) can be exported; a completed request can no longer be. A request not
+  in progress is refused with PT409 `privacy_export_not_in_progress`; the other
+  refusals, the staff and second-factor checks and the self-export refusal are
+  as before.
+- **The row lock is `FOR NO KEY UPDATE`** (was `FOR SHARE`): what is new is that
+  parallel exports of one request queue behind each other, so the cap of 5
+  holds. Completing the request (which bumps its revision) already waited for a
+  running export under `FOR SHARE`, and still does. The cap relies on READ
+  COMMITTED (PostgREST's default); staff have no direct SQL. Retention, which
+  minimises only completed or rejected requests, is unchanged.
+- **At most 5 exports per request**: the 6th is refused with PT429
+  `privacy_export_limit`. The website's per-staff rate limit stays.
+- **The member is told about every export**: each adds a bell notice
+  (`privacy_export_made`); the requester's email is still queued once per
+  request. A too large export (PT413) is raised before anything is recorded.
+
+Accepted risks: a dataset-name mismatch the website refuses after the export was
+recorded gives the member one extra notice and uses up one of the 5 places; a
+completed request cannot be exported again (open a new request).
+
+The website words the two new refusals ("Only a request in progress can be
+exported…", "…already been exported 5 times…"); a release without that code
+shows its generic refusal. As usual: apply first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261121053224_privacy_export_simple.check.sql` unchanged
+   in the SQL editor (read only). Continue only if its single row reads "privacy
+   export simple: update not applied; exports recorded: N".
+2. Run the update (waits at most 5 seconds for a lock). The preflight then reads
+   "privacy export simple: already applied; exports recorded: N".
+3. Run `set search_path to "$user", public;` and `../fingerprint.sql`, compare
+   with `../fingerprint.json`, and record it as described above.
+
+The reviewed rollback
+`../rollback/20261121053224_privacy_export_simple.down.sql` (only with the
+owner's decision) refuses (55000) unless the update's body is in place, then
+puts back the previous body byte for byte. Recorded exports and notices stay.
+
+`node --import tsx scripts/test-foundation-privacy-export-simple.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drift and a premature rollback refused;
+apply, rollback and re-apply give the same fingerprints and the rollback
+restores the previous definition exactly; only in-progress, verified access
+requests at their revision; the staff, second-factor and self-export checks; 5
+exports with a notice each and one email, the 6th refused, also with two exports
+racing at 4; a too large export records nothing; completing waits for a running
+export, and an export waiting for a completion is refused.
+
 ## Authority requests: opening a kept identity record, 21 November 2026
 
 `20261121043124_identity_record_disclosure.sql` was applied on 21 November 2026
@@ -518,17 +1028,19 @@ it is applied**: packages stay off sale and every new command refuses with PT403
   staff queue shows the days priced, the days left now and the package's end;
   the invoice gains `days_added` and `package_ends_at`. A new package's request,
   read and checkout never take an add request or an add order for theirs (the
-  checkout closes any add order still pending, even one open at Ozow: its
-  package has ended). An unpaid add invoice of a package that has ended blocks
-  no other package order (`internal.package_invoice_blocking`) and is voided by
-  the website's minute operations job (`api.void_ended_package_add_invoices`,
-  service only, no staff member, one fixed reason, which the trigger
-  `customer_invoices_system_void` refuses on any other invoice; an invoice with
-  a payment open at Ozow or a transfer waiting is left for staff). The privacy
-  export lists each request's kind, package and days.
-  `api.get_my_package_add_offer()` gives the member's running package, the days
-  left, one slot's price, the most that can be added, which ways are open, an
-  unpaid package invoice, their latest add request and the adds so far.
+  checkout closes any add order still pending, even one open at Ozow, and a Pay
+  now attempt on an add invoice: its package has ended, so it can no longer be
+  delivered; the sweep below then voids that invoice). An unpaid add invoice of
+  a package that has ended blocks no other package order
+  (`internal.package_invoice_blocking`) and is voided by the website's minute
+  operations job (`api.void_ended_package_add_invoices`, service only, no staff
+  member, one fixed reason, which the trigger `customer_invoices_system_void`
+  refuses on any other invoice; an invoice with a payment open at Ozow or a
+  transfer waiting is left for staff). The privacy export lists each request's
+  kind, package and days. `api.get_my_package_add_offer()` gives the member's
+  running package, the days left, one slot's price, the most that can be added,
+  which ways are open, an unpaid package invoice, their latest add request and
+  the adds so far.
 - **Delivery and late money.** Every way an add is paid (the Ozow notice, staff
   activation, Pay now, a bank transfer) delivers it only to the package it was
   bought for while that package runs and has room
@@ -538,7 +1050,12 @@ it is applied**: packages stay off sale and every new command refuses with PT403
   Money that arrives after the package ended is not delivered: an Ozow payment
   goes to reconciliation (staff refund it in full; staff activation refuses it,
   PT409 `package_ended`); Pay now and a bank transfer are refused (PT409
-  `package_ended`; staff void the invoice and return the money).
+  `package_ended`; staff void the invoice and return the money). The same holds
+  for an order or Pay now attempt the new-package checkout closed while it was
+  open at Ozow: the 10-minute status check keeps asking Ozow about a closed
+  order with an Ozow request for 14 days, and a success reported by the notice
+  or that check is kept as paid and goes to reconciliation
+  (`complete_unfulfillable_target`), which emails staff at once.
 - **Refunds.** An add is its own line, refunded alone with the existing tools.
   When any package grant is revoked, the posts in it that still fit in the
   package's other running grants stay, the most recently approved first
@@ -594,12 +1111,13 @@ issued at the price asked for and paid by a confirmed bank transfer or Pay now;
 late money refused, the ended package's invoice blocking no new package and
 voided by the sweep; an invoice issued later for the fewer days left, due by the
 package's end, and none issued with fewer than 10 days; a new-package request,
-read and checkout never taking an add's; the 245 and 250-slot limits; the
-privacy export; a refunded add keeps the posts that fit (the most recently
-approved first) and ends only the others; two adds paid at once near 250 (one
-delivered, one to reconciliation); a refund while an activation holds the
-package refused at once and going through after; and the rollback refused once
-slots were added.
+read and checkout never taking an add's, and an order or Pay now attempt it
+closed while open at Ozow still checked and, paid late, sent to reconciliation;
+the 245 and 250-slot limits; the privacy export; a refunded add keeps the posts
+that fit (the most recently approved first) and ends only the others; two adds
+paid at once near 250 (one delivered, one to reconciliation); a refund while an
+activation holds the package refused at once and going through after; and the
+rollback refused once slots were added.
 
 ## Sign-up mode in the database, and member invitations, 20 November 2026
 
@@ -6303,5 +6821,51 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   sha256 starting a720f7d0; preflight sha256 starting 55a780b8; production
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
+
+- `20261121053224_privacy_export_simple.sql`: applied 2026-11-21 17:15 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #331); update
+  and preflight from the reviewed files at 6824f7ae and checked in the page
+  before running; update sha256 starting e26d63d2; preflight (sha256 starting
+  0e2c7bf3) before "privacy export simple: update not applied; exports recorded:
+  0", after "privacy export simple: already applied; exports recorded: 0";
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
+
+- `20261121090305_staff_sales_and_vat.sql`: applied 2026-11-21 17:30 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #333); update
+  and preflight from the reviewed files at 9ea47fcd and checked in the page
+  before running; update sha256 starting 136e84ca; preflight (sha256 starting
+  69b7a139) before "staff sales and VAT: update not applied", after "staff sales
+  and VAT: already applied; VAT setting: not_registered"; production fingerprint
+  after it (fingerprint.sql) matched the full replay (except the known schema
+  grant difference)
+
+- `20261121094003_automatic_identity_checks.sql`: applied 2026-11-21 17:32 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #335); update
+  and preflight from the reviewed files at dd710894 and checked in the page
+  before running; update sha256 starting a18f7793; preflight (sha256 starting
+  6871c179) before: update not applied (no drift, none of the update's objects,
+  the reviewed check in place; admins: 2), after: already applied (mode: manual;
+  checks: 0); production fingerprint after it (fingerprint.sql) matched the full
+  replay (except the known schema grant difference)
+
+- `20261121100028_post_performance_stats.sql`: applied 2026-11-21 17:33 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #336); update
+  and preflight from the reviewed files at 669f4ae3 and checked in the page
+  before running; update sha256 starting bbcf0ccb; preflight (sha256 starting
+  742c3ba5) before: update not applied (the 3 replaced bodies as before, none of
+  the update's objects), after: already applied (the 3 bodies as updated, 7 of 7
+  objects; activity days: 0; engaged views: 0); production fingerprint after it
+  (fingerprint.sql) matched the full replay (except the known schema grant
+  difference)
+
+- `20261121131915_business_storefront.sql`: applied 2026-11-21 17:34 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #340); update
+  and preflight from the reviewed files at 1bb40c65 and checked in the page
+  before running; update sha256 starting ceebb2aa; preflight (sha256 starting
+  5129e999) before: update not applied (search_posts at its reviewed body, the 4
+  new functions absent), after: already applied (the 5 bodies as updated);
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
 
 <!-- applied-register:end -->

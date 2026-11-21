@@ -22,6 +22,10 @@ const publicBusinessProjections = new Map([
       isEmptyArray(data.items),
   ],
 ]);
+// Reviewed public reads of one post (20261121131915_business_storefront.sql:
+// the storefront of a public business or listing, card facts only). The
+// probe's unknown post id answers exactly null.
+const publicPostReads = new Map([["get_public_storefront", (data) => data === null]]);
 // Reviewed public settings (20261117082020_online_payment_limit.sql): no
 // arguments, no account data, readable by visitors like the price catalogue.
 const publicSettingReads = new Map([
@@ -45,6 +49,19 @@ const publicSettingReads = new Map([
       Object.keys(data).join() === "mode" &&
       ["invite_only", "open"].includes(data.mode),
   ],
+  // 20261121090305_staff_sales_and_vat.sql: the VAT setting only (the number
+  // only when registered).
+  [
+    "get_vat_registration",
+    (data) =>
+      data !== null &&
+      typeof data === "object" &&
+      !Array.isArray(data) &&
+      Object.keys(data).sort().join() === "status,vat_number" &&
+      ["not_registered", "registered", "undecided"].includes(data.status) &&
+      (data.vat_number === null ||
+        (data.status === "registered" && typeof data.vat_number === "string")),
+  ],
 ]);
 function validateRuntimeAudience(fn) {
   assert.deepEqual(Object.keys(fn.execute).sort(), ["anon", "authenticated", "service_role"]);
@@ -56,6 +73,11 @@ function validateRuntimeAudience(fn) {
     assert.equal(fn.volatility, "s");
     assert.equal(fn.returns, "jsonb");
     assert.deepEqual(fn.arguments, [{ name: "p_post_ids", sqlType: "uuid[]", optional: false }]);
+  } else if (publicPostReads.has(fn.name)) {
+    assert.deepEqual(fn.execute, { anon: true, authenticated: true, service_role: false });
+    assert.equal(fn.volatility, "s");
+    assert.equal(fn.returns, "jsonb");
+    assert.deepEqual(fn.arguments, [{ name: "p_post_id", sqlType: "uuid", optional: false }]);
   } else if (publicSettingReads.has(fn.name)) {
     assert.deepEqual(fn.execute, { anon: true, authenticated: true, service_role: false });
     assert.equal(fn.volatility, "s");
@@ -137,7 +159,7 @@ export async function probeFoundationRuntimeApi(
       signal: AbortSignal.timeout(5000),
     });
     const data = await response.json().catch(() => null);
-    const publicSetting = publicSettingReads.get(fn.name);
+    const publicSetting = publicSettingReads.get(fn.name) ?? publicPostReads.get(fn.name);
     const emptyProjection = publicBusinessProjections.get(fn.name);
     const publicProjection = emptyProjection !== undefined || publicSetting !== undefined;
     let state = "unexpected";
