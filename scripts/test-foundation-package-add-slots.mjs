@@ -22,7 +22,8 @@
 // grant of the package ending with it (4 new posts per added slot, the partner
 // commission of 20%); the 30-minute price hold and the 7-day rule when the
 // order is sent to Ozow; an add paid after the package ended goes to
-// reconciliation and staff cannot activate it; "Ask for an invoice" for added
+// reconciliation and staff cannot activate it, as does one a new-package
+// checkout closed while it was open at Ozow; "Ask for an invoice" for added
 // slots (10 or more days, the price kept, repeats, the staff queue, the
 // invoice's price and words), paid by bank transfer (two staff members) or Pay
 // now, and refused once the package has ended; the 250-slot limit; a refunded
@@ -684,6 +685,60 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin,
         scalar(`select status from private.payments where id='${open.payment_id}';`),
         "cancelled"
       );
+      // Money that still arrives for that closed order is never lost: the
+      // 10-minute status check keeps asking Ozow about it, and a late success
+      // (notice or status check) is kept as paid, not delivered, and goes to
+      // reconciliation (the website alerts staff at once on this outcome).
+      assert.ok(
+        json(service(`select api.claim_payment_reconciliation('${open.payment_id}');`)),
+        "the status check still asks Ozow about a closed order"
+      );
+      const late = json(ozowNoticeSql(kit, open.payment_id));
+      assert.equal(late.outcome, "complete_unfulfillable_target", JSON.stringify(late));
+      assert.equal(late.fulfillment_status, "needs_reconciliation");
+      assert.equal(
+        scalar(`select status from private.payments where id='${open.payment_id}';`),
+        "complete"
+      );
+      assert.equal(count(`private.entitlements where payment_id='${open.payment_id}'`), 0);
+      assert.equal(
+        count(
+          `private.outbox_events where kind='payment_reconciliation_required' and subject_id='${open.payment_id}'`
+        ),
+        1
+      );
+      // A Pay now attempt open at Ozow on an ended package's add invoice is
+      // closed the same way; the minute job then voids the invoice, and money
+      // that still arrives for the attempt goes to reconciliation.
+      const nandi = packageHolder("adds-nandi").owner;
+      const invoice = issue(ask(nandi, offer(nandi).package.id, 2).request_id).invoice;
+      billing(nandi, invoice.invoice_number);
+      const attempt = json(
+        member(
+          nandi,
+          `select api.start_invoice_payment('${invoice.invoice_number}',${invoice.total_cents},true);`
+        )
+      );
+      ozowOpen(kit, nandi, attempt.payment_id);
+      travel(nandi, "21 days");
+      json(
+        member(nandi, `select api.start_package_checkout('${K30.id}',5,${K30.cents * 5},true);`)
+      );
+      assert.equal(
+        scalar(`select status from private.payments where id='${attempt.payment_id}';`),
+        "cancelled"
+      );
+      assert.ok(json(service("select api.void_ended_package_add_invoices(50);")).voided >= 1);
+      assert.equal(
+        scalar(
+          `select status from private.customer_invoices where invoice_number='${invoice.invoice_number}';`
+        ),
+        "void"
+      );
+      const latePayNow = json(ozowNoticeSql(kit, attempt.payment_id));
+      assert.equal(latePayNow.outcome, "complete_unfulfillable_target", JSON.stringify(latePayNow));
+      assert.equal(latePayNow.fulfillment_status, "needs_reconciliation");
+      assert.equal(count(`private.entitlements where payment_id='${attempt.payment_id}'`), 0);
     }
   );
 

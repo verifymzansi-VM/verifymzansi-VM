@@ -180,6 +180,8 @@ export const FOUNDATION_ERROR_REASONS = {
   posting_terms_required: ["PT409"],
   posting_terms_unavailable: ["PT503"],
   posting_verification_required: ["42501"],
+  privacy_export_limit: ["PT429"],
+  privacy_export_not_in_progress: ["PT409"],
   profile_changed: ["PT409"],
   programme_inactive: ["PT409"],
   programme_unavailable: ["PT404"],

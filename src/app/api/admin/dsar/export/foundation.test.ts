@@ -108,3 +108,22 @@ it("returns no datasets when no account matches the request", async () => {
   rpc.mockResolvedValueOnce({ data: exported(false, registryCount), error: null });
   expect((await POST(request())).status).toBe(503);
 });
+it("words the refusals for a request not in progress, the 5-export cap and a too large export", async () => {
+  for (const [error, status, message] of [
+    [
+      { code: "PT409", details: "privacy_export_not_in_progress" },
+      409,
+      /^Only a request in progress/,
+    ],
+    [{ code: "PT429", details: "privacy_export_limit" }, 429, /exported 5 times/],
+    [{ code: "PT413" }, 413, /too large/],
+  ] as const) {
+    rpc.mockResolvedValueOnce({ data: null, error });
+    const response = await POST(request());
+    expect(response.status).toBe(status);
+    const body = await response.json();
+    expect(body.error).toMatch(message);
+    expect(body.error).toMatch(/Nothing was exported\.$/);
+    expect(body).not.toHaveProperty("datasets");
+  }
+});

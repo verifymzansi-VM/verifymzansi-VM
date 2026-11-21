@@ -49,9 +49,28 @@ and one byte more and checks the larger one is refused before any database call.
 A new `maxBytes` route gets a row there. Browser pre-checks are tested next to
 their page or component.
 
-Behaviour tests for database limits run on the replayed production schema in
-`scripts/limits-sql.test.mjs` (embedded Postgres, part of `pnpm test:tooling`)
-or in the Docker suites named in the register.
+Behaviour tests for database limits run on the replayed production schema
+(embedded Postgres, part of `pnpm test:tooling`; set-up in
+`scripts/lib/limits-sql-harness.mjs`) or in the Docker suites named in the
+register:
+
+- `scripts/limits-sql.test.mjs`: the register-driven checks and the curated
+  `LIM-SQL` limits;
+- `scripts/limits-sql-bounds.test.mjs`: one table with a row per input limit of
+  a command (a page size, a batch size, a length, a size, the number of ids in a
+  list), called through the production API as the role that uses it: each value
+  at the bound passes the guard (the call succeeds, or fails later with the
+  named different error) and each value past it is refused with the guard's
+  error. Below the table, limits on what is already stored (counts in a window,
+  delivery attempts and back-off, allowances) and read caps (a read returns at
+  most N rows when N + 1 exist), each with its fixtures. A new database guard on
+  a command's input gets a row there.
+
+The database entries still marked `LIM-MECH-SQL-GUARD` need a fixture this lane
+does not have yet: a claimed identity, CIPC or visit case; the Multi-listing
+package world (packages on sale, a verified buyer, payments over time), which
+the Docker package suites exercise; refund sends; or a read cap over a table
+with many required links.
 
 ## Adding or changing a limit
 
