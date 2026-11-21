@@ -201,6 +201,31 @@ describe("ProfilePage", () => {
     }
   });
 
+  it("LIM-APP-avatar-precheck: uploads a 2 MB photo, refuses one byte more before uploading", async () => {
+    const avatarUploads = () =>
+      vi.mocked(global.fetch).mock.calls.filter(([url]) => url === "/api/profile/avatar");
+    const choose = (bytes: number) => {
+      const file = new File(["png"], "me.png", { type: "image/png" });
+      Object.defineProperty(file, "size", { value: bytes });
+      fireEvent.change(screen.getByLabelText("Upload avatar image"), {
+        target: { files: [file] },
+      });
+    };
+    render(<ProfilePage />);
+    await screen.findByText("Legal first name");
+
+    choose(2 * 1024 * 1024 + 1);
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "File too large" }))
+    );
+    expect(avatarUploads()).toHaveLength(0);
+
+    choose(2 * 1024 * 1024);
+    await waitFor(() => expect(avatarUploads()).toHaveLength(1));
+    const tooLarge = mockToast.mock.calls.filter(([toast]) => toast.title === "File too large");
+    expect(tooLarge).toHaveLength(1);
+  });
+
   it("shows locked legal first name and surname fields when present", async () => {
     render(<ProfilePage />);
 

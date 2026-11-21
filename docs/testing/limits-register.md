@@ -42,6 +42,13 @@ schema snapshot is regenerated) fails when the register and the code disagree.
   behaviour-test backlog; the check prints their count on every run, and moving
   one to a behaviour test means adding the test and replacing its `tests` item.
 
+Every website and worker limit has a behaviour test. Route body caps are checked
+in `src/__tests__/limits/route-body-limits.test.ts`: one table, with a row per
+route (id, cap, handler), that sends each real route a body of exactly the cap
+and one byte more and checks the larger one is refused before any database call.
+A new `maxBytes` route gets a row there. Browser pre-checks are tested next to
+their page or component.
+
 Behaviour tests for database limits run on the replayed production schema in
 `scripts/limits-sql.test.mjs` (embedded Postgres, part of `pnpm test:tooling`)
 or in the Docker suites named in the register.
