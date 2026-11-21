@@ -523,7 +523,7 @@
       "enforcedAt": [
         {
           "file": "src/lib/foundation/auth-attempt-route.ts",
-          "contains": "maxBytes: 4096"
+          "contains": "const AUTH_BODY_MAX_BYTES = 4096"
         }
       ],
       "tests": [
@@ -541,8 +541,8 @@
       "category": "size",
       "enforcedAt": [
         {
-          "file": "src/app/api/foundation/auth/recovery/request/route.ts",
-          "contains": "maxBytes: 4096"
+          "file": "src/lib/foundation/auth-attempt-route.ts",
+          "contains": "const AUTH_BODY_MAX_BYTES = 4096"
         }
       ],
       "tests": [
