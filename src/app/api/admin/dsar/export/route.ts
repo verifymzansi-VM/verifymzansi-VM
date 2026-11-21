@@ -6,7 +6,7 @@ import { uuidSchema } from "@/lib/validations/shared";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { isAcceptedPrivacyExportDatasetSet } from "@/lib/foundation/privacy-export-datasets";
 import { privacyRevision } from "@/lib/foundation/privacy-requests";
-import { isStaffSecondFactorRefusal } from "@/lib/foundation/error-reasons";
+import { hasDatabaseReason, isStaffSecondFactorRefusal } from "@/lib/foundation/error-reasons";
 import { FoundationStaffCommandError, staffCommandRefusal } from "@/lib/foundation/staff-command";
 
 const log = createLogger("DSARExport");
@@ -63,7 +63,7 @@ function definiteRefusal(
     // A member who cannot see the bell and whose export email could not be
     // delivered (20261120191500_privacy_export_confirm.sql).
     case "55000":
-      return error.details === "member_not_notifiable"
+      return hasDatabaseReason(error, "member_not_notifiable")
         ? new FoundationStaffCommandError(409, NOTHING.unreachable)
         : new FoundationStaffCommandError(503, NOTHING.unavailable);
     default:

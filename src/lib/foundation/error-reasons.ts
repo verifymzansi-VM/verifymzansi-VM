@@ -109,6 +109,7 @@ export const FOUNDATION_ERROR_REASONS = {
   location_invalid: ["22023"],
   logo_unavailable: ["22023"],
   member_invitation_account_exists: ["PT409"],
+  member_not_notifiable: ["55000"],
   no_account: ["PT409"],
   notification_ids_invalid: ["22023"],
   online_payment_above_limit: ["PT413"],
