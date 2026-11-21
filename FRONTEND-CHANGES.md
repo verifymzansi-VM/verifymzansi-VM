@@ -143,7 +143,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 77. Authority requests (staff) | approved by owner 2026-11-21 | Governors and admins only: a new Authority requests page (Compliance menu) to open a member's kept identity record for a police or court request, with the request form, the logged record page and a watermarked print disclosure sheet. Members see nothing new. |
 | 78. Staff privacy requests: no Export on completed requests (no file rows: the group 78 part of 2 rows elsewhere) | approved by owner 2026-11-21 | Staff only: on a completed access request the Export JSON button is greyed out instead of clickable and always refused. A completed request can no longer be exported; staff open a new request. |
 | 79. Sales and VAT for staff (item 16) | approved by owner 2026-11-21 (with the group 79 part of 4 rows elsewhere) | Staff only: a 'Sales and VAT' card at the top of Payments & Refunds (sales of the last 12 months less refunds, VAT status, online checkout drop-off over 30 days, sales by product and term) and a red VAT alert from R1.8 million. Visitors: nothing changes today; the 'VAT status' line on Pricing, Billing and Trust & Safety now comes from the database setting and is left out if it cannot be read. |
-| 82. Automatic ID checks: hidden until it works (no file rows) | hidden until it works (awaiting owner) | Nothing. The database part of automatic ID checks (update 20261121094003) is in, with the switch at Manual; members keep the in-page camera and staff review. The database keeps the switch at Manual until the retention update (C1) is applied |
+| 82. Automatic ID checks: hidden until it works (no file rows) | hidden until it works (approved by owner 2026-11-21) | Nothing. The database part of automatic ID checks (update 20261121094003) is in, with the switch at Manual; members keep the in-page camera and staff review. The database keeps the switch at Manual until the retention update (C1) is applied |
 
 Questions for the owner:
 
@@ -3267,7 +3267,7 @@ request ends without the identity being accepted. This update only deletes the
 partner's copy of checks that never finished, and of automatic declines 5 days
 after the decline when nobody asked a person.
 
-Decision: hidden until it works; awaiting owner.
+Decision: hidden until it works; approved by owner 2026-11-21 (answering the away brief: 'everything else, I approve').
 
 <!-- frontend-ledger:end -->
 
