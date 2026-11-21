@@ -244,7 +244,7 @@ export type AuthorityRequestInput = {
 };
 
 /** The ID number's one-way fingerprint, made exactly as at verification. */
-export function identityNumberFingerprint(number: string, matchKey: Buffer) {
+function identityNumberFingerprint(number: string, matchKey: Buffer) {
   return sourceIdentityDigestToFingerprint(
     createHmac("sha256", matchKey).update(number, "utf8").digest("hex")
   );
