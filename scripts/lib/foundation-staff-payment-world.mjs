@@ -352,7 +352,7 @@ export async function runTwoAdminUpdateCheck({ update, label, title }, body) {
 }
 
 /** The Multi-listing package terms (20261114154823_slot_packages.sql). */
-export const K30 = { id: "5b0f4c1e-2a7d-4c43-9b51-7e0d3f6a9c11", cents: 10000 };
+const K30 = { id: "5b0f4c1e-2a7d-4c43-9b51-7e0d3f6a9c11", cents: 10000 };
 
 /**
  * A running Multi-listing package of `slots` places for `owner`: the package
