@@ -8,10 +8,7 @@ import {
 } from "@/lib/foundation/identity-disclosures";
 import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
 
-const { authenticateCaller, checkRateLimit } = vi.hoisted(() => ({
-  authenticateCaller: vi.fn(),
-  checkRateLimit: vi.fn(),
-}));
+const { authenticateCaller } = vi.hoisted(() => ({ authenticateCaller: vi.fn() }));
 vi.mock("@/lib/utils/mutation-guard", () => ({ enforceMutationRequest: vi.fn(() => null) }));
 vi.mock("@/lib/foundation/runtime-connection", () => ({
   readFoundationRuntimeConnection: vi.fn(() => ({})),
@@ -23,7 +20,6 @@ vi.mock("@/lib/foundation/request-route", () => ({
   })),
 }));
 vi.mock("@/lib/foundation/service-api", () => ({ createFoundationServiceApi: vi.fn(() => ({})) }));
-vi.mock("@/lib/utils/rate-limit", () => ({ checkRateLimit }));
 vi.mock("@/lib/foundation/identity-disclosures", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   readIdentityDisclosureSelfie: vi.fn(),
@@ -45,7 +41,6 @@ const post = (body: unknown) =>
 beforeEach(() => {
   vi.clearAllMocks();
   authenticateCaller.mockResolvedValue({ api: { rpc: vi.fn() }, accountId: STAFF });
-  checkRateLimit.mockResolvedValue({ limited: false, degraded: false });
 });
 
 describe("/api/admin/authority-requests/selfie", () => {
@@ -69,9 +64,6 @@ describe("/api/admin/authority-requests/selfie", () => {
       DISCLOSURE,
       SUBJECT
     );
-    expect(checkRateLimit).toHaveBeenCalledWith(
-      expect.objectContaining({ key: STAFF, action: "admin:evidence:view" })
-    );
   });
 
   it("answers 404 when no selfie is kept, 410 once the record closed", async () => {
@@ -94,10 +86,8 @@ describe("/api/admin/authority-requests/selfie", () => {
     expect(await response.json()).toMatchObject({ code: "step_up_required" });
   });
 
-  it("refuses malformed bodies and rate-limited callers without reading", async () => {
+  it("refuses malformed bodies without reading", async () => {
     expect((await post({ disclosureId: DISCLOSURE })).status).toBe(422);
-    checkRateLimit.mockResolvedValueOnce({ limited: true, degraded: false });
-    expect((await post({ disclosureId: DISCLOSURE, subject: SUBJECT })).status).toBe(429);
     expect(readIdentityDisclosureSelfie).not.toHaveBeenCalled();
   });
 });

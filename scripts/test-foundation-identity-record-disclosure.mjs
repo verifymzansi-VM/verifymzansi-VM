@@ -20,7 +20,7 @@
 // person, name, number, fingerprint and encrypted ID number is synthetic; no
 // object storage is involved.
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomInt, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   applyStepsBefore,
@@ -70,7 +70,7 @@ try {
   const { steps, index, step } = applyStepsBefore(database, UPDATE);
   const fp = (label) =>
     `${createHash("sha256").update(`person-${label}-${randomUUID()}`).digest("base64url").slice(0, 42)}A`;
-  const phoneNumber = () => `+2782${String(Math.floor(Math.random() * 1e7)).padStart(7, "0")}`;
+  const phoneNumber = () => `+2782${String(randomInt(1e7)).padStart(7, "0")}`;
   const today = () =>
     new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(new Date());
 

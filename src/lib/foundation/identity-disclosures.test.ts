@@ -31,7 +31,7 @@ const OWNER = id("3");
 const CASE = id("4");
 const AT = "2026-11-21T08:00:00.123456+00:00";
 const ID_NUMBER = "8001015009087";
-const MATCH_KEY = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f91";
+const MATCH_KEY = randomBytes(32).toString("hex");
 
 const rpc = vi.fn();
 const machine = vi.fn();

@@ -13,7 +13,6 @@ import { evidenceViewResponse } from "@/lib/services/evidence-serving";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
-import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { logRequestFailure } from "@/lib/utils/request-failure";
 
 const log = createLogger("AuthorityRequestSelfie");
@@ -42,7 +41,7 @@ export async function GET() {
  *
  * The selfie of one person an open authority request names, decrypted for the
  * opener's screen. The database logs the look first and checks the caller
- * opened the record, on this sign-in session, less than 15 minutes ago, with
+ * opened the record less than 15 minutes ago, with
  * an authenticator code from the last 15 minutes. Never cached.
  */
 export async function POST(request: NextRequest) {
@@ -56,18 +55,6 @@ export async function POST(request: NextRequest) {
   }
   try {
     const caller = await context.authenticateCaller();
-    const limit = await checkRateLimit({
-      key: caller.accountId,
-      action: "admin:evidence:view",
-      degradedMode: "block",
-    });
-    if (limit.limited)
-      return context.respond(
-        NextResponse.json(
-          { error: "Evidence protection unavailable or too many requests" },
-          { status: limit.degraded ? 503 : 429, headers }
-        )
-      );
     const input = body.parse(await parseJsonRequest(request, { maxBytes: 1024 }));
     const bytes = await readIdentityDisclosureSelfie(
       caller.api,
