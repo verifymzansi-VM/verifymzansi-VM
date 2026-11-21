@@ -82,10 +82,10 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Authority requests: opening a kept identity record, 21 November 2026
 
-`20261121043124_identity_record_disclosure.sql` is pending (see the applied
-register). Didit plan, build step 4: a governor or admin opens a member's kept
-identity record to answer a police or court request, and every opening is logged
-before anything is shown.
+`20261121043124_identity_record_disclosure.sql` was applied on 21 November 2026
+at 08:55 UTC (see the applied register). Didit plan, build step 4: a governor or
+admin opens a member's kept identity record to answer a police or court request,
+and every opening is logged before anything is shown.
 
 - **Who:** the new staff capability `identity:disclose`, held by the governor
   and admin roles with `requires_recent_mfa`, so `internal.staff_actor` needs an
@@ -6298,6 +6298,10 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   fingerprint after it (fingerprint.sql at cd725fb9) matched the full replay
   (except the known schema grant difference)
 
-- `20261121043124_identity_record_disclosure.sql`: pending
+- `20261121043124_identity_record_disclosure.sql`: applied 2026-11-21 08:55 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #328); update
+  sha256 starting a720f7d0; preflight sha256 starting 55a780b8; production
+  fingerprint after it (fingerprint.sql) matched the full replay (except the
+  known schema grant difference)
 
 <!-- applied-register:end -->
