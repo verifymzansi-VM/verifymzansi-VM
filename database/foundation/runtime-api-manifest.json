@@ -5720,6 +5720,86 @@
         "service_role": true
       },
       "authority": "Website server only, for a disclosure that is still open and was opened by that staff member: the encrypted ID number (unless erased) and the selfie stored object (unless deleted) of each named account with a kept record, so the server can decrypt the number and show the selfie."
+    },
+    {
+      "name": "save_my_post_template",
+      "updates": ["updates/20261121162018_post_templates.sql"],
+      "arguments": [
+        {
+          "name": "p_name",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_data",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current live member while their Multi-listing package runs: saves a Market post template (name 1 to 60 characters; only category, condition, repeating details without year or mileage, description, location and contact button names), replacing the caller's own template with the same name; at most 20 per account."
+    },
+    {
+      "name": "list_my_post_templates",
+      "updates": ["updates/20261121162018_post_templates.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current live member: their own post templates (name, form fields, last change) and whether their Multi-listing package runs."
+    },
+    {
+      "name": "rename_my_post_template",
+      "updates": ["updates/20261121162018_post_templates.sql"],
+      "arguments": [
+        {
+          "name": "p_template",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_name",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current live member, for their own post template only: a new name not used by another of their templates."
+    },
+    {
+      "name": "delete_my_post_template",
+      "updates": ["updates/20261121162018_post_templates.sql"],
+      "arguments": [
+        {
+          "name": "p_template",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current live member, for their own post template only: deletes it."
     }
   ]
 }

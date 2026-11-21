@@ -12,5 +12,6 @@ create table private.account_closures (
 alter table private.account_closures owner to postgres;
 alter table private.account_closures enable row level security;
 CREATE TRIGGER frontend_form_drafts_account_closed AFTER INSERT ON private.account_closures FOR EACH ROW EXECUTE FUNCTION internal.clear_closed_account_form_drafts();
+CREATE TRIGGER post_templates_account_closed AFTER INSERT ON private.account_closures FOR EACH ROW EXECUTE FUNCTION internal.clear_closed_account_post_templates();
 CREATE TRIGGER verification_closure_invalidation AFTER INSERT ON private.account_closures FOR EACH ROW EXECUTE FUNCTION internal.verification_closure_invalidation();
 revoke all on private.account_closures from public;

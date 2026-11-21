@@ -1,0 +1,123 @@
+import { z } from "zod";
+import { CATEGORIES } from "@/lib/constants/categories";
+import { DEFAULT_LISTING_CONTACT_METHODS, withListingEnquiry } from "@/lib/forms/listing-form";
+import type { ListingDraftData } from "@/lib/post-drafts/storage";
+
+/**
+ * Post templates (business tools plan section 4, SHOW_POST_TEMPLATES): a
+ * reusable starting point for Market listings. A template keeps the "Post an
+ * item" form's fields the plan lists (the autosaved draft's shape, see
+ * ListingDraftData), never photos, video, title, price, year, mileage or
+ * numbers. The database enforces the same rule (api.save_my_post_template).
+ */
+
+export const POST_TEMPLATE_LIMIT = 20;
+export const POST_TEMPLATE_NAME_MAX = 60;
+
+/** Details that differ for every item: the poster fills them in each time. */
+const PER_ITEM_DETAILS = new Set(["year", "mileage_km"]);
+const CONTACT_BUTTONS = ["call", "whatsapp", "in_app"] as const;
+
+const detailValue = z.union([z.string(), z.boolean(), z.array(z.string())]);
+
+export const postTemplateData = z.strictObject({
+  category: z.string().min(1),
+  condition: z.string().optional(),
+  categoryAttributes: z
+    .record(z.string(), detailValue)
+    .refine((details) => Object.keys(details).every((key) => !PER_ITEM_DETAILS.has(key)))
+    .optional(),
+  description: z.string().optional(),
+  province: z.string().optional(),
+  city: z.string().optional(),
+  town: z.string().optional(),
+  address: z.string().optional(),
+  contactMethods: z.array(z.enum(CONTACT_BUTTONS)).optional(),
+});
+export type PostTemplateData = z.infer<typeof postTemplateData>;
+
+export const postTemplate = z.strictObject({
+  id: z.uuid(),
+  kind: z.literal("listing"),
+  name: z.string().min(1).max(POST_TEMPLATE_NAME_MAX),
+  data: postTemplateData,
+  updated_at: z.string(),
+});
+export type PostTemplate = z.infer<typeof postTemplate>;
+
+export const postTemplateList = z.strictObject({
+  package_running: z.boolean(),
+  templates: z.array(postTemplate).max(POST_TEMPLATE_LIMIT),
+});
+export type PostTemplateList = z.infer<typeof postTemplateList>;
+
+const isFilled = (value: unknown) =>
+  !(value === undefined || value === null || value === "" || value === false) &&
+  !(Array.isArray(value) && value.length === 0);
+
+/** The template fields from the form's fields: empty values and per-item details left out. */
+export function templateDataFromForm(
+  form: Pick<
+    ListingDraftData,
+    | "category"
+    | "condition"
+    | "categoryAttributes"
+    | "description"
+    | "province"
+    | "city"
+    | "town"
+    | "address"
+    | "contactMethods"
+  >
+): PostTemplateData {
+  // Saved posts can hold numbers (bedrooms: 3); the form's fields are text.
+  const details = Object.fromEntries(
+    Object.entries(form.categoryAttributes ?? {})
+      .filter(([key, value]) => !PER_ITEM_DETAILS.has(key) && isFilled(value))
+      .map(([key, value]) => [key, typeof value === "number" ? String(value) : value])
+  );
+  const text = (value: string | undefined) => value?.trim() || undefined;
+  const data: PostTemplateData = {
+    category: form.category,
+    condition: text(form.condition),
+    categoryAttributes: Object.keys(details).length ? details : undefined,
+    description: text(form.description),
+    province: text(form.province),
+    city: text(form.city),
+    town: text(form.town),
+    address: text(form.address),
+    contactMethods: form.contactMethods.filter((method) =>
+      (CONTACT_BUTTONS as readonly string[]).includes(method)
+    ) as PostTemplateData["contactMethods"],
+  };
+  return Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined)
+  ) as PostTemplateData;
+}
+
+/** The form's fields a template fills in (the rest stays as the form starts). */
+export function formFieldsFromTemplate(data: PostTemplateData) {
+  return {
+    category: data.category,
+    condition: data.condition ?? "",
+    categoryAttributes: data.categoryAttributes ?? {},
+    description: data.description ?? "",
+    province: data.province ?? "",
+    city: data.city ?? "",
+    town: data.town ?? "",
+    address: data.address ?? "",
+    contactMethods: data.contactMethods?.length
+      ? withListingEnquiry(data.contactMethods)
+      : DEFAULT_LISTING_CONTACT_METHODS,
+  };
+}
+
+/** "Market · Vehicles · 6 details" for a template card. */
+export function templateSummary(data: PostTemplateData): string {
+  // "Vehicles (Cars, Bakkies & Commercial)" reads "Vehicles" on a card.
+  const label = CATEGORIES.find((c) => c.value === data.category)?.label ?? "Other";
+  const category = label.replace(/ \(.*\)$/, "");
+  const details =
+    Object.values(data.categoryAttributes ?? {}).filter(isFilled).length + (data.condition ? 1 : 0);
+  return `Market · ${category} · ${details} ${details === 1 ? "detail" : "details"}`;
+}

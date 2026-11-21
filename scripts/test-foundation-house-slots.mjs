@@ -65,6 +65,8 @@ const EXPORT_LATER = [
   "3dfe35ae5e93f0661ecd7dbf710cf45d",
   // 20261120045404_package_add_slots.sql (the request's kind, package and days)
   "e543b105fe264d5a683b5c570bf68cb5",
+  // 20261121162018_post_templates.sql (the post_templates dataset)
+  "ab02f76bb5bb62b58521df6d584cf93b",
 ];
 const LIFECYCLE = "internal.run_post_lifecycle(integer)";
 const LIFECYCLE_BEFORE = "cb5770e3e71e9e6ed31d1eff3e06e3fc";

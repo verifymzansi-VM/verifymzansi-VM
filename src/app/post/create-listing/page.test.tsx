@@ -7,6 +7,15 @@ import {
   expectFoundationPostFields,
   installFoundationPostFetch,
 } from "@/test/foundation-post-transport";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+
+const switches = vi.hoisted(() => ({ SHOW_POST_TEMPLATES: false }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_POST_TEMPLATES() {
+    return switches.SHOW_POST_TEMPLATES;
+  },
+}));
 
 type MockAuthState = {
   user: { id: string; email?: string | null } | null;
@@ -932,6 +941,59 @@ describe("CreateListingPage", () => {
       expect(screen.getByLabelText("Title (Required)")).toHaveValue("");
       expect(screen.getByLabelText("Description (Required)")).toHaveValue("");
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft discarded" }));
+    });
+
+    it("post templates: ?template fills the form instead of the saved draft", async () => {
+      const id = "00000000-0000-4000-8000-0000000000e1";
+      const list = {
+        package_running: true,
+        templates: [
+          {
+            id,
+            kind: "listing",
+            name: "Used phone",
+            data: {
+              category: "electronics",
+              categoryAttributes: { device_type: "Smartphone", brand: "Samsung" },
+              description: "Template wording that every phone post repeats.",
+              province: "Gauteng",
+              city: "Pretoria",
+              contactMethods: ["whatsapp"],
+            },
+            updated_at: "2026-11-21T10:00:00Z",
+          },
+        ],
+      };
+      const base = global.fetch;
+      global.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+        String(input).includes("/api/post-templates")
+          ? Promise.resolve(new Response(JSON.stringify(list), { status: 200 }))
+          : base(input, init)
+      ) as typeof fetch;
+      switches.SHOW_POST_TEMPLATES = true;
+      seedDraft();
+      window.history.replaceState(null, "", `/post/create-listing?template=${id}`);
+      try {
+        render(<CreateListingPage />);
+        await waitFor(() => {
+          expect(screen.getByLabelText("Description (Required)")).toHaveValue(
+            "Template wording that every phone post repeats."
+          );
+        });
+        expect(screen.getByTestId("category-picker")).toHaveAttribute("data-value", "electronics");
+        expect(screen.getByLabelText("Title (Required)")).toHaveValue("");
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({ title: 'Started from "Used phone"' })
+        );
+        expect(mockToast).not.toHaveBeenCalledWith(
+          expect.objectContaining({ title: "Draft restored" })
+        );
+        expect(window.location.search).toBe("");
+      } finally {
+        switches.SHOW_POST_TEMPLATES = false;
+        global.fetch = base;
+        window.history.replaceState(null, "", "/");
+      }
     });
 
     it("still validates missing category after restoring a draft", async () => {

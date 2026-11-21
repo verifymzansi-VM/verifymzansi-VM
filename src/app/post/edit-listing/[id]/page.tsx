@@ -56,6 +56,8 @@ import { createLogger } from "@/lib/utils/logger";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
+import { SaveTemplateButton } from "@/components/post-templates/save-template-button";
+import { templateDataFromForm } from "@/lib/post-templates";
 
 const log = createLogger("EditListingPage");
 const TITLE_MAX = 100;
@@ -627,9 +629,28 @@ export default function EditListingPage() {
 
             <form noValidate onSubmit={handleSubmit} className="space-y-4">
               <div className="surface-card space-y-6 p-4 sm:p-6">
-                <span className="inline-flex items-center rounded-full border border-brand-green-200 bg-brand-green-50 px-2.5 py-0.5 text-xs font-semibold text-brand-green-800 dark:border-brand-green-800 dark:bg-brand-green-950/60 dark:text-brand-gold-200">
-                  Mzansi Market
-                </span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center rounded-full border border-brand-green-200 bg-brand-green-50 px-2.5 py-0.5 text-xs font-semibold text-brand-green-800 dark:border-brand-green-800 dark:bg-brand-green-950/60 dark:text-brand-gold-200">
+                    Mzansi Market
+                  </span>
+                  {/* Post templates (SHOW_POST_TEMPLATES, running package only). */}
+                  <SaveTemplateButton
+                    defaultName={title}
+                    data={() =>
+                      templateDataFromForm({
+                        category,
+                        condition,
+                        categoryAttributes,
+                        description,
+                        province,
+                        city,
+                        town,
+                        address: locationAddress,
+                        contactMethods,
+                      })
+                    }
+                  />
+                </div>
                 {formError && (
                   <div
                     role="alert"
