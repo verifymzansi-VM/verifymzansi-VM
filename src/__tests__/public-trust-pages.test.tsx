@@ -28,6 +28,10 @@ vi.mock("@/lib/supabase/admin", () => ({
     throw new Error("No database in unit tests");
   },
 }));
+// The VAT status comes from the database setting (api.get_vat_registration).
+vi.mock("@/lib/foundation/vat-registration", () => ({
+  readVatStatusWording: vi.fn(async () => "not registered for VAT"),
+}));
 vi.mock("@/components/billing/pricing-offers", () => ({
   PricingOffers: () => <div>Plan grid</div>,
 }));
@@ -38,8 +42,8 @@ describe("public trust pages", () => {
     vi.mocked(readCurrentPublishedPostingTerms).mockReset();
   });
 
-  it("renders Trust & Safety with public legal identity details", () => {
-    render(<TrustSafetyPage />);
+  it("renders Trust & Safety with public legal identity details", async () => {
+    render(await TrustSafetyPage());
 
     expect(screen.getByRole("heading", { name: "Trust & Safety" })).toBeInTheDocument();
     expect(screen.getByText(/Verification helps reduce risk/i)).toBeInTheDocument();
@@ -51,6 +55,7 @@ describe("public trust pages", () => {
     expect(screen.getByText("privacy@verifymzansi.com")).toBeInTheDocument();
     expect(screen.getAllByText("security@verifymzansi.com").length).toBeGreaterThan(0);
     expect(screen.getByText(/VerifyMzansi verifies people who post/i)).toBeInTheDocument();
+    expect(screen.getByText("VAT status: not registered for VAT")).toBeInTheDocument();
     // The verification journey and every trust tier label are explained.
     for (const step of ["Phone verified", "ID & selfie reviewed", "Area shared"]) {
       expect(screen.getByRole("heading", { name: step })).toBeInTheDocument();
@@ -60,11 +65,11 @@ describe("public trust pages", () => {
     }
   });
 
-  it("renders configured legal details on Trust & Safety", () => {
+  it("renders configured legal details on Trust & Safety", async () => {
     vi.stubEnv("VERIFYMZANSI_LEGAL_NAME", "VerifyMzansi (Pty) Ltd");
     vi.stubEnv("VERIFYMZANSI_CIPC_NUMBER", "2026/123456/07");
 
-    render(<TrustSafetyPage />);
+    render(await TrustSafetyPage());
 
     expect(screen.getByText("Registered name")).toBeInTheDocument();
     expect(screen.getByText("VerifyMzansi (Pty) Ltd")).toBeInTheDocument();
@@ -161,6 +166,7 @@ describe("public trust pages", () => {
     expect(screen.getByText("How billing works")).toBeInTheDocument();
     expect(screen.getByText("How do I pay?")).toBeInTheDocument();
     expect(screen.getByText("What if my paid post is rejected?")).toBeInTheDocument();
+    expect(screen.getByText(/VAT status: not registered for VAT\./)).toBeInTheDocument();
   });
 
   it("renders PAIA request guidance", () => {
