@@ -38,6 +38,9 @@ export const LAUNCH_VALUES = {
   SHOW_SPONSOR_OFFER: true,
   SHOW_PACKAGE_TEAMS: true,
   PACKAGES_ON_SALE: true,
+  // Off at launch: the partner programme opens once the partner agreement is
+  // signed, which is not tied to launch day.
+  SHOW_PARTNER_PAGE: false,
   // The pop-up is gone on launch day.
   PRELAUNCH_BANNER_ENABLED: false,
 } as const satisfies Record<string, boolean>;
