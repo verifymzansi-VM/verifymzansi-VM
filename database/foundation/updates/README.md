@@ -80,6 +80,107 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Authority requests: opening a kept identity record, 21 November 2026
+
+`20261121043124_identity_record_disclosure.sql` is pending (see the applied
+register). Didit plan, build step 4: a governor or admin opens a member's kept
+identity record to answer a police or court request, and every opening is logged
+before anything is shown.
+
+- **Who:** the new staff capability `identity:disclose`, held by the governor
+  and admin roles with `requires_recent_mfa`, so `internal.staff_actor` needs an
+  authenticator code from the last 15 minutes on every command. Moderators never
+  hold it.
+- **The request:** `api.open_identity_disclosure` takes the request type (closed
+  list: `subpoena`, `court_order`, `warrant`, `police_case`, `regulator`), the
+  reference (3 to 100 characters), who is asking (3 to 200), the date of the
+  request (YYYY-MM-DD, not in the future, at most 5 years old), the reason (10
+  to 2,000) and the confirmation that the request is genuine and signed. Each
+  missing part is refused with 22023 and its own detail (`disclosure_*`).
+- **Never by name:** the search is by `post` (post id or link slug), `id_number`
+  (the one-way fingerprint the website's server makes with the verification key;
+  the number itself never reaches the database here), `phone` (+27 form) or
+  `email`. Any other kind is refused (`disclosure_lookup_invalid`), and each
+  value must have its kind's form (`disclosure_lookup_value_invalid`).
+- **Log first:** the new append-only table `private.identity_disclosures` gets
+  the row (staff member, sign-in session, time, the request, the search and the
+  outcome `record`, `no_record`, `attempt_only` or `no_match`, with up to 5
+  account ids, the most recent first, and the total) before anything is
+  answered. A search that finds nobody is logged too. The opening answers only
+  the row's id, number, outcome, match count and closing time. At most 20
+  openings per staff member in 24 hours (PT429 `disclosure_rate_limited`).
+- **The record:** `api.read_identity_disclosure(disclosure, purpose, subject)`
+  first writes a `viewed`, `printed` or `selfie_viewed` row to the append-only
+  `private.identity_disclosure_events`, then returns the request and, per
+  account, the full names as on the ID, the verification date, whether the ID
+  number and the selfie are still kept, the ID photo's state and every verified
+  phone number with its dates. Only the staff member who opened it, on the same
+  sign-in session, until 15 minutes after it was opened (fixed by a check) or an
+  early `api.close_identity_disclosure`; otherwise PT409
+  `disclosure_unavailable` or `disclosure_closed`. An ID number that was only
+  tried (never accepted) returns the account and the dates of the attempts,
+  nothing more.
+- **Server only:** `api.identity_disclosure_material(disclosure, staff)`
+  (service role) gives the website's server the encrypted ID number and the
+  selfie's stored object of an open disclosure opened by that staff member, so
+  it can decrypt the number and show the selfie. Browsers never receive object
+  keys or ciphertext. `api.list_identity_disclosures` lists the latest 50
+  openings without the person or the search value.
+- **Audit log:** `private.frontend_staff_audit_events` (the staff Audit log)
+  gains every opening (`identity:disclosure_<outcome>`) and every later look
+  (`identity:disclosure_<kind>`), with target type `account` (one the live
+  website already reads) and a reason giving only the disclosure number, the
+  request type and reference, and the kind of search.
+- **Keeping:** both logs refuse update, delete and truncate
+  (`internal.append_only_guard`); a delete is possible only under the retention
+  setting `vm.retention`. No retention job deletes them: their keeping period is
+  for the owner (and the lawyer list) to decide.
+
+New commands only (expand); the only replaced object is the audit trail view,
+which keeps its columns and adds two branches. A website release without the
+matching code never calls the commands, and its Audit log reads the new rows.
+ORDER: apply first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261121043124_identity_record_disclosure.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "identity record disclosure: update not
+   applied; governors and admins: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "identity record disclosure: already applied; governors
+   and admins: N; disclosures: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261121043124_identity_record_disclosure.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update is
+applied, and refuses while the disclosure log holds any row (authority request
+records are kept). Otherwise it puts back the audit trail view as it was,
+removes the capability and drops the five commands, their helpers and both logs.
+
+`node --import tsx scripts/test-foundation-identity-record-disclosure.mjs` (part
+of `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted body and a
+premature rollback; apply, rollback and re-apply return the same fingerprints;
+the capability (governor and admin, recent code; never moderator); the grants
+and that nothing is security definer at the `api` layer; who may open, read,
+list and close (a visitor, a member, a moderator, an admin or governor whose
+code is 16 or 20 minutes old are refused; a governor and an admin with a fresh
+code succeed) and that a refusal logs nothing; every request rule; never by name
+(name kinds and names typed as any kind are refused, and a raw ID number too);
+log before show (the opening answers only the row, the row exists before the
+read, and when either log cannot be written nothing is answered); the record's
+content and that it never carries the stored object or ciphertext; the server
+material only for the opener; every way of searching (post id and slug, ID
+number fingerprint, current and earlier phone, email in any case); no match
+logged; an ID number only tried; only the opener on the same session; closing
+after 15 minutes and early; the list and the Audit log never show the person;
+both logs append-only with the retention exception; the rollback refused with a
+row; the 20-in-24-hours limit; and a staff member who loses the role.
+
 ## ID photos with the camera only, and Continue on your phone, 20 November 2026
 
 `20261120131212_camera_capture_handoff.sql` was applied on 21 November 2026 at
@@ -6079,5 +6180,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   "already applied; selfies said to be uploaded files: 0; phone links: 0";
   production fingerprint after it (fingerprint.sql at cd725fb9) matched the full
   replay (except the known schema grant difference)
+
+- `20261121043124_identity_record_disclosure.sql`: pending
 
 <!-- applied-register:end -->

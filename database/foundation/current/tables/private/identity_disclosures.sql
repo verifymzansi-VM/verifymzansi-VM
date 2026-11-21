@@ -1,0 +1,44 @@
+-- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
+-- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
+
+create table private.identity_disclosures (
+  id uuid default gen_random_uuid() not null,
+  number bigint generated always as identity not null,
+  opened_by uuid not null,
+  opened_session uuid not null,
+  opened_at timestamp with time zone not null,
+  closes_at timestamp with time zone not null,
+  request_type text not null,
+  request_reference text not null,
+  requested_by text not null,
+  request_date date not null,
+  reason text not null,
+  attested boolean not null,
+  lookup_kind text not null,
+  lookup_value text not null,
+  outcome text not null,
+  subject_ids uuid[] default '{}'::uuid[] not null,
+  match_count integer not null,
+  constraint identity_disclosures_attested_check CHECK (attested),
+  constraint identity_disclosures_closes_check CHECK (closes_at = (opened_at + '00:15:00'::interval)),
+  constraint identity_disclosures_lookup_kind_check CHECK (lookup_kind = ANY (ARRAY['post'::text, 'id_number'::text, 'phone'::text, 'email'::text])),
+  constraint identity_disclosures_lookup_value_check CHECK (length(lookup_value) >= 3 AND length(lookup_value) <= 254),
+  constraint identity_disclosures_match_count_check CHECK (match_count >= cardinality(subject_ids)),
+  constraint identity_disclosures_number_key UNIQUE (number),
+  constraint identity_disclosures_opened_by_fkey FOREIGN KEY (opened_by) REFERENCES auth.users(id) ON DELETE RESTRICT,
+  constraint identity_disclosures_outcome_check CHECK (outcome = ANY (ARRAY['record'::text, 'no_record'::text, 'attempt_only'::text, 'no_match'::text])),
+  constraint identity_disclosures_pkey PRIMARY KEY (id),
+  constraint identity_disclosures_reason_check CHECK (length(reason) >= 10 AND length(reason) <= 2000),
+  constraint identity_disclosures_reference_check CHECK (length(request_reference) >= 3 AND length(request_reference) <= 100),
+  constraint identity_disclosures_request_type_check CHECK (request_type = ANY (ARRAY['subpoena'::text, 'court_order'::text, 'warrant'::text, 'police_case'::text, 'regulator'::text])),
+  constraint identity_disclosures_requested_by_check CHECK (length(requested_by) >= 3 AND length(requested_by) <= 200),
+  constraint identity_disclosures_subjects_check CHECK (cardinality(subject_ids) <= 5 AND (outcome = 'no_match'::text) = (cardinality(subject_ids) = 0) AND (outcome <> 'attempt_only'::text OR lookup_kind = 'id_number'::text))
+);
+alter table private.identity_disclosures owner to postgres;
+alter table private.identity_disclosures enable row level security;
+CREATE INDEX identity_disclosures_opened_at_idx ON private.identity_disclosures USING btree (opened_at DESC, id DESC);
+CREATE INDEX identity_disclosures_opened_by_idx ON private.identity_disclosures USING btree (opened_by, opened_at DESC);
+CREATE TRIGGER identity_disclosures_append_only BEFORE DELETE OR UPDATE ON private.identity_disclosures FOR EACH ROW EXECUTE FUNCTION internal.append_only_guard();
+CREATE TRIGGER identity_disclosures_no_truncate BEFORE TRUNCATE ON private.identity_disclosures FOR EACH STATEMENT EXECUTE FUNCTION internal.append_only_guard();
+revoke all on private.identity_disclosures from public;
+comment on table private.identity_disclosures is 'Authority requests: one append-only row per opening of a member''s kept identity record by a governor or admin, written before anything is shown; a search that finds nobody is logged too. Closes 15 minutes after opening.';

@@ -63,6 +63,8 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/admin/governance/decide": { POST: "staff" },
   "api/admin/governance/restrictions/lift": { POST: "staff" },
   "api/admin/governance/roles": { POST: "staff" },
+  "api/admin/authority-requests": { POST: "staff" },
+  "api/admin/authority-requests/selfie": { GET: "staff", POST: "staff" },
   "api/admin/member-invitations": { POST: "staff" },
   "api/admin/ops/jobs/retry": { POST: "staff" },
   "api/admin/payments/ozow-refunds": { POST: "staff" },
@@ -288,6 +290,9 @@ export const PUBLIC_ROUTE_REASONS: Record<string, string> = {
 /** Every back-office page (each page.tsx under src/app/admin): all are staff pages. */
 export const STAFF_PAGES = [
   "admin/audit-log",
+  "admin/authority-requests/[id]/sheet",
+  "admin/authority-requests/[id]",
+  "admin/authority-requests",
   "admin/business-verification/[id]",
   "admin/business-verification",
   "admin/businesses",

@@ -41,6 +41,10 @@ export type Capability =
   | "audit:view"
   | "feature_flag:toggle"
   | "dsar:manage"
+  /** Open a kept identity record for an authority request (database capability
+   * identity:disclose: governors and admins, authenticator code from the last
+   * 15 minutes). */
+  | "identity:disclose"
   // Commercial model
   | "organisations:manage"
   | "partners:manage"
@@ -77,6 +81,7 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "oversight:view",
     "audit:view",
     "dsar:manage",
+    "identity:disclose",
     "organisations:manage",
     "partners:manage",
   ]),
@@ -100,6 +105,7 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "enforcement:execute",
     "oversight:view",
     "dsar:manage",
+    "identity:disclose",
     // Admin-exclusive: role management
     "role:assign",
     "role:revoke",
