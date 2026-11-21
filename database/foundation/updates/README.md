@@ -165,11 +165,12 @@ the three functions have their reviewed bodies (or this update's).
   requests, ignores crawlers, headless browsers and prefetches, reads at most
   16,384 bytes and 50 events, and counts within `engagement:activity` per IPv4
   address or IPv6 /48 (30 a minute, 600 an hour, 3,000 a day). Each (post,
-  counter) pair counts once per request, and each post at most 200 requests a
-  day per address or /48 (`engagement:activity:post`; more is dropped silently),
-  above what one person browsing all day reaches, though a home page left open
-  with its rotating showroom reaches it after about 5 hours. Saves (the like
-  button), sponsor clicks and organisation events are not counted there.
+  counter) pair counts once per request. A post's page events (detail views,
+  contact taps, shares) count for at most 200 requests a day per address or /48
+  (`engagement:activity:post`; more is dropped silently), far above what one
+  person reaches and with room for a shared carrier address; card appearances
+  are not checked against it, so a page left open cannot use it up. Saves (the
+  like button), sponsor clicks and organisation events are not counted there.
   Flooding one's own or another owner's figures only changes counts the owner
   alone sees, within those limits, and the table's size does not grow with the
   number of events.
@@ -194,11 +195,12 @@ not rows. 1,000 and 10,000 daily visitors fit the free plan easily. At 100,000
 daily visitors and 20,000 posts the table alone would use over a third of the
 free plan's 500 MB, at about 29 updates a second on average; by then the project
 needs the Pro plan for its overall size anyway. On Cloudflare every beacon is
-one Worker request plus one rate limiter call for the address and one for each
-post it names (about 15 on a list page, 1 or 2 on a post page; about 10 on
-average): about 3.3 million limiter calls a month at 1,000 daily visitors, 33
-million at 10,000 and 330 million at 100,000, against the 10 million requests a
-month Workers Paid includes.
+one Worker request plus one rate limiter call for the address, and one more for
+each post with page events (1 or 2 on a post page, none on a list page; about
+1.35 limiter calls a beacon on average): about 0.4 million limiter calls a month
+at 1,000 daily visitors, 4 million at 10,000 and 40 million at 100,000, against
+the 10 million requests a month Workers Paid includes (shared with the rest of
+the site).
 
 Preflight `../preflight/20261121100028_post_performance_stats.check.sql`
 (summary "post performance stats: update not applied; publicly listed posts: N"

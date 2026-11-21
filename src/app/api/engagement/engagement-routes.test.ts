@@ -391,6 +391,36 @@ describe("Performance page events (/api/analytics/events)", () => {
     expect(db.rpc).not.toHaveBeenCalled();
   });
 
+  it("the per-post limit covers page events only: appearances are never checked or dropped by it", async () => {
+    mocks.rate.mockImplementation(async ({ action }: { action: string }) => ({
+      limited: action === "engagement:activity:post",
+    }));
+    await events([
+      card("impression", { surface: "market_list" }),
+      card("showroom_appearance", { surface: "showroom:home" }, OTHER_ID),
+      card("detail_view", { surface: "detail" }),
+      card("whatsapp_click"),
+    ]);
+    // The post's page events are over the limit; its appearance and the other
+    // post's showroom turn still count.
+    expect(db.state.activity).toEqual([
+      [POST_ID, "list_impressions"],
+      [OTHER_ID, "showroom_home"],
+    ]);
+    const perPost = mocks.rate.mock.calls
+      .map(([options]) => options as { action: string; key: string })
+      .filter((options) => options.action === "engagement:activity:post");
+    expect(perPost.map((options) => options.key.split("|")[1])).toEqual([POST_ID]);
+    // A batch of appearances alone makes one limiter call, for the address.
+    mocks.rate.mockClear();
+    await events(
+      Array.from({ length: 20 }, (_, n) =>
+        card("impression", {}, `aaaaaaaa-aaaa-4aaa-8aaa-0000000001${String(n).padStart(2, "0")}`)
+      )
+    );
+    expect(mocks.rate).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     ["a crawler", { "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" }],
     ["a prefetch", { "sec-purpose": "prefetch" }],

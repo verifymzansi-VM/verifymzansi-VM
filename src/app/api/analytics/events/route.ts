@@ -38,6 +38,9 @@ const eventBatch = z.object({
 
 const accepted = () => new NextResponse(null, { status: 204 });
 
+/** Events of a post's own page: a detail view (by source), a tap or a share. */
+const isPageEvent = (counter: ActivityCounter) => /^views_|_taps$|^shares$/.test(counter);
+
 /**
  * POST /api/analytics/events
  *
@@ -53,9 +56,11 @@ const accepted = () => new NextResponse(null, { status: 204 });
  * No sign-in or cookie needed. Each (post, counter) pair counts at most once
  * per request. Never counted: a crawler or headless browser, a prefetch,
  * requests over the per-source limit (`engagement:activity` per IPv4 address
- * or IPv6 /48), a post's events over its per-source daily limit
- * (`engagement:activity:post`, one per request that names the post; dropped
- * silently), and (in the database) the signed-in owner's own
+ * or IPv6 /48), a post's page events (detail views, taps, shares) over its
+ * per-source daily limit (`engagement:activity:post`, one per request with
+ * such an event for the post; dropped silently; appearances are not checked
+ * against it, so a page left open never uses it up), and (in the database) the
+ * signed-in owner's own
  * events, staff events and posts that are not publicly live. Nothing about
  * the visitor is sent to the database except the GoTrue-verified account,
  * which only decides whether the event counts.
@@ -86,8 +91,14 @@ export async function POST(request: NextRequest) {
     degradedMode: "local",
   });
   if (limit.limited) return accepted();
-  // Each post: at most a few hundred requests naming it per address and day.
-  const posts = [...new Set([...pairs.values()].map((pair) => pair.postId))];
+  // Each post's page events (detail views, taps, shares): at most a few hundred
+  // requests per address and day. Appearances come many posts at a time and
+  // rely on the per-request dedupe and the address limit above.
+  const posts = [
+    ...new Set(
+      [...pairs.values()].filter((pair) => isPageEvent(pair.counter)).map((pair) => pair.postId)
+    ),
+  ];
   const allowed = new Set(
     (
       await Promise.all(
@@ -102,7 +113,9 @@ export async function POST(request: NextRequest) {
       )
     ).filter((id): id is string => id !== null)
   );
-  const events = [...pairs.values()].filter((pair) => allowed.has(pair.postId));
+  const events = [...pairs.values()].filter(
+    (pair) => !isPageEvent(pair.counter) || allowed.has(pair.postId)
+  );
   if (events.length === 0) return accepted();
 
   const caller = await engagementCaller(request);

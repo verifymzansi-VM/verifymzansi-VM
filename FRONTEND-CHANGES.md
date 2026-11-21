@@ -3225,7 +3225,7 @@ health page. Decision: awaiting owner.
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/analytics/analytics-impressions.tsx` | helper | Group 81: its comment said appearances were deduplicated on the server hourly, which was never true; it now says what happens (each card once per mount; the server counts each post once per request, within a per-network daily limit per post). Comment only. | Nothing | keep | awaiting owner | 2026-11-21 | 6c177fbca442 |
+| `src/components/analytics/analytics-impressions.tsx` | helper | Group 81: its comment said appearances were deduplicated on the server hourly, which was never true; it now says what happens (each card once per mount; the server counts each post once per request, within a per-network request limit). Comment only. | Nothing | keep | awaiting owner | 2026-11-21 | 6c5c0efdebf5 |
 
 <!-- frontend-ledger:end -->
 
