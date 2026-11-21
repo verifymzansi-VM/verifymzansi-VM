@@ -248,6 +248,43 @@ describe("uploadVideoWithFastPath", () => {
     expect(uploadViaServer).not.toHaveBeenCalled();
   });
 
+  it("LIM-APP-video-upload-size: uploads a converted video of exactly 50 MB, not one byte more", async () => {
+    for (const [bytes, uploaded] of [
+      [50 * 1024 * 1024, true],
+      [50 * 1024 * 1024 + 1, false],
+    ] as const) {
+      const file = new File(["video"], `clip-${bytes}.mov`, { type: "video/quicktime" });
+      const output = new File(["mp4"], "clip.mp4", { type: "video/mp4" });
+      Object.defineProperty(output, "size", { value: bytes });
+      mockCompressVideoForUpload.mockResolvedValueOnce(output);
+      const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/clip.mp4");
+      const upload = uploadVideoWithFastPath({ file, area: "promotion", uploadViaServer });
+      if (uploaded) await expect(upload).resolves.toBe("https://media.example.com/clip.mp4");
+      else await expect(upload).rejects.toThrow("50 MB");
+      expect(uploadViaServer).toHaveBeenCalledTimes(uploaded ? 1 : 0);
+    }
+  });
+
+  it("LIM-APP-video-original-size: converts an original of exactly 300 MB, not one byte more", async () => {
+    const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/large.mp4");
+    const atLimit = new File(["large"], "at-limit.mp4", { type: "video/mp4" });
+    Object.defineProperty(atLimit, "size", { value: 300 * 1024 * 1024 });
+    mockCompressVideoForUpload.mockResolvedValueOnce(
+      new File(["small"], "at-limit.mp4", { type: "video/mp4" })
+    );
+    await uploadVideoWithFastPath({ file: atLimit, area: "listing", uploadViaServer });
+    expect(mockCompressVideoForUpload.mock.calls.map(([file]) => file)).toEqual([atLimit]);
+    expect(uploadViaServer).toHaveBeenCalledTimes(1);
+
+    const over = new File(["huge"], "over.mp4", { type: "video/mp4" });
+    Object.defineProperty(over, "size", { value: 300 * 1024 * 1024 + 1 });
+    await expect(
+      uploadVideoWithFastPath({ file: over, area: "listing", uploadViaServer })
+    ).rejects.toThrow("300 MB");
+    expect(mockCompressVideoForUpload).toHaveBeenCalledTimes(1);
+    expect(uploadViaServer).toHaveBeenCalledTimes(1);
+  });
+
   it("accepts a phone original over 50 MB for conversion, but not over 300 MB", async () => {
     const large = new File(["large"], "large.mp4", { type: "video/mp4" });
     Object.defineProperty(large, "size", { value: 200 * 1024 * 1024 });

@@ -20,6 +20,21 @@ import { validateUploadedFile } from "@/lib/validations/verification";
 
 const MB = 1024 * 1024;
 
+/** A PDF with one compressed object stream per entry, each inflating to that many bytes. */
+function pdf(inflatedBytes: number[]) {
+  const parts = inflatedBytes.flatMap((bytes, index) => {
+    const compressed = deflateSync(Buffer.alloc(bytes, 0x20));
+    const head = Buffer.from(
+      `${index + 7} 0 obj << /Type /ObjStm /N 1 /First 4 /Filter /FlateDecode /Length ${compressed.length} >>\nstream\n`,
+      "latin1"
+    );
+    return [head, compressed, Buffer.from("\nendstream\nendobj\n", "latin1")];
+  });
+  return new Uint8Array(
+    Buffer.concat([Buffer.from("%PDF-1.7\n", "latin1"), ...parts, Buffer.from("%%EOF\n", "latin1")])
+  );
+}
+
 afterEach(() => {
   vi.useRealTimers();
   clearCache();
@@ -83,17 +98,17 @@ describe("limits register: website limits", () => {
   });
 
   it("LIM-APP-pdf-inflate-stream: a PDF object stream inflating past 4 MB is treated as unsafe", () => {
-    const pdf = (inflatedBytes: number) => {
-      const compressed = deflateSync(Buffer.alloc(inflatedBytes, 0x20));
-      const head = Buffer.from(
-        `%PDF-1.7\n7 0 obj << /Type /ObjStm /N 1 /First 4 /Filter /FlateDecode /Length ${compressed.length} >>\nstream\n`,
-        "latin1"
-      );
-      const tail = Buffer.from("\nendstream\nendobj\n%%EOF\n", "latin1");
-      return new Uint8Array(Buffer.concat([head, compressed, tail]));
-    };
-    expect(scanForMalware(pdf(4 * MB), "application/pdf")).toEqual({ safe: true });
-    expect(scanForMalware(pdf(4 * MB + 1), "application/pdf")).toEqual({
+    expect(scanForMalware(pdf([4 * MB]), "application/pdf")).toEqual({ safe: true });
+    expect(scanForMalware(pdf([4 * MB + 1]), "application/pdf")).toEqual({
+      safe: false,
+      threat: "pdf-active-content-objstm",
+    });
+  });
+
+  it("LIM-APP-pdf-inflate-total: object streams inflating past 16 MB in all are treated as unsafe", () => {
+    const fourStreams = [4 * MB, 4 * MB, 4 * MB, 4 * MB];
+    expect(scanForMalware(pdf(fourStreams), "application/pdf")).toEqual({ safe: true });
+    expect(scanForMalware(pdf([...fourStreams, 1]), "application/pdf")).toEqual({
       safe: false,
       threat: "pdf-active-content-objstm",
     });
