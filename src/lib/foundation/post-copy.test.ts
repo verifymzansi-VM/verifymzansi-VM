@@ -123,7 +123,6 @@ describe("readStaffCopyFacts", () => {
   const facts = {
     post_id: draft,
     copied_from: { id, title: "Demo bakkie", status: "live" },
-    same_photos: [{ id, title: "Demo bakkie", photos: 3 }],
   };
 
   it("reads the facts of the claimed posts", async () => {
@@ -134,10 +133,7 @@ describe("readStaffCopyFacts", () => {
       { p_posts: [draft] },
       { get: false }
     );
-    expect(read.get(draft)).toEqual({
-      copied_from: facts.copied_from,
-      same_photos: facts.same_photos,
-    });
+    expect(read.get(draft)).toEqual({ copied_from: facts.copied_from });
   });
 
   it("leaves the hint out when the read fails or is malformed", async () => {

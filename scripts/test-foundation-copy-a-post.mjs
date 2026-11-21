@@ -375,7 +375,7 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
     assert.equal(q(`select internal.media_object_in_use('${keep}');`), "t");
   });
 
-  await check("reviewers see the source and identical photos of claimed posts only", () => {
+  await check("reviewers see where a claimed copy came from, and nothing else", () => {
     const moderator = world.staffUser("copy-moderator", "moderator");
     const source = listing(sipho);
     const made = copy(sipho, source);
@@ -388,8 +388,7 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
           `select api.get_frontend_staff_copy_facts(array[${posts.map((p) => `'${p}'`).join(",")}]::uuid[]);`
         )
       );
-    // LIM-SQL-copy-facts-posts (at most 25 posts) and LIM-SQL-copy-facts-same-photos
-    // (at most 10 live posts per reviewed post) are checked below.
+    // LIM-SQL-copy-facts-posts (at most 25 posts) is checked below.
     // Not claimed: nothing.
     assert.deepEqual(facts([made.id]), { items: [] });
     q(`insert into private.queue_claims(post_id,claimed_by,claim_generation,claim_nonce,claimed_at,claim_expires_at)
@@ -405,12 +404,12 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
       title: "Demo bakkie 2.4 GD-6",
       status: "live",
     });
-    // The source and every other live post of the seller sharing a photo.
-    const shared = item.same_photos.find((p) => p.id === source);
-    assert.equal(shared.photos, 3);
-    assert.equal(shared.title, "Demo bakkie 2.4 GD-6");
-    assert.ok(item.same_photos.length <= 10);
-    assert.ok(item.same_photos.every((p) => p.id !== made.id));
+    assert.deepEqual(Object.keys(item).sort(), ["copied_from", "post_id"]);
+    // A claimed post under review that is not a copy has no copy facts.
+    const plain = listing(sipho, "vehicles", VEHICLE, "pending_moderation");
+    q(`insert into private.queue_claims(post_id,claimed_by,claim_generation,claim_nonce,claimed_at,claim_expires_at)
+       values('${plain}','${moderator.id}',1,gen_random_uuid(),now(),now()+interval '15 minutes');`);
+    assert.deepEqual(facts([plain]), { items: [] });
     // A deleted source still shows where the copy came from, without a page.
     q(`delete from private.posts where id='${source}';`);
     assert.deepEqual(facts([made.id]).items[0].copied_from, {

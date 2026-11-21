@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import CreateListingPage from "./page";
 import type * as HiddenFeatures from "@/lib/hidden-features";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import {
+  SERVED_POSTING_TERMS,
   expectFoundationPostFields,
   installFoundationPostFetch,
 } from "@/test/foundation-post-transport";
@@ -980,31 +981,46 @@ describe("CreateListingPage", () => {
       focal_x: 0.5,
       focal_y: 0.5,
     });
-    function serveCopy(listing: Record<string, unknown>) {
+    const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
+    /** The copy's read, its save (revision 2, then 3) and the submissions in turn. */
+    function serveCopy(listing: Record<string, unknown>, submissions: unknown[] = []) {
+      let saves = 0;
       fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
         if (input === `/api/listings/${copyId}` && (init?.method ?? "GET") === "GET")
-          return { ok: true, status: 200, json: async () => ({ listing }) };
+          return ok({ listing });
         if (input === `/api/listings/${copyId}`)
-          return {
-            ok: true,
-            status: 200,
-            json: async () => ({ success: true, status: "draft", revision: 2 }),
-          };
+          return ok({ success: true, status: "draft", revision: 2 + saves++ });
         if (input === "/api/content/resubmit")
-          return {
-            ok: true,
-            status: 200,
-            json: async () => ({ id: copyId, status: "pending_moderation", success: true }),
-          };
-        return { ok: true, status: 200, json: async () => ({ success: true }) };
+          return (
+            submissions.shift() ?? ok({ id: copyId, status: "pending_moderation", success: true })
+          );
+        return ok({ success: true });
       });
     }
+    /** The member's terms: accepted (or not yet); an acceptance answers accepted. */
+    function serveTerms(acceptedAt: string | null) {
+      postingTermsFetch.mockImplementation(async (_input: unknown, init?: RequestInit) =>
+        ok({
+          ...SERVED_POSTING_TERMS,
+          accepted_at: init?.method === "POST" ? "2026-11-21T10:00:00.000Z" : acceptedAt,
+        })
+      );
+    }
+    async function termsReady() {
+      await waitFor(() => expect(postingTermsFetch).toHaveBeenCalled());
+      await act(async () => {});
+    }
+    const saves = () =>
+      fetchMock.mock.calls
+        .filter((call) => call[0] === `/api/listings/${copyId}` && call[1]?.method === "PUT")
+        .map((call) => JSON.parse(call[1].body as string));
     beforeEach(() => {
       switches.SHOW_POST_COPY = true;
       useAuthMock.mockReturnValue({ user: { id: "owner-1" }, profile: null, isLoading: false });
       vi.mocked(useSearchParams).mockReturnValue(
         new URLSearchParams(`copy=${copyId}`) as unknown as ReturnType<typeof useSearchParams>
       );
+      serveTerms("2026-11-01T10:00:00.000Z");
     });
     afterEach(() => {
       switches.SHOW_POST_COPY = false;
@@ -1020,16 +1036,14 @@ describe("CreateListingPage", () => {
       expect(await screen.findByText(/Copy of .Used iPhone 15/)).toBeInTheDocument();
       expect(screen.getByText(/Video not copied/)).toBeInTheDocument();
       expect(screen.getByText(/Same title as the post you copied/)).toBeInTheDocument();
+      await termsReady();
+      // The terms were accepted with the first post: no tick on a copy.
       expect(screen.queryByLabelText(/I accept the VerifyMzansi posting terms/i)).toBeNull();
-      await termsLoaded();
 
       fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
       await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboard/listings"));
-      const save = fetchMock.mock.calls.find(
-        (call) => call[0] === `/api/listings/${copyId}` && call[1]?.method === "PUT"
-      );
-      const payload = JSON.parse(save![1].body as string);
+      const [payload] = saves();
       expect(payload.images).toEqual([photo]);
       expect(payload.videos).toEqual([]);
       expect(payload.expectedRevision).toBe(1);
@@ -1040,11 +1054,46 @@ describe("CreateListingPage", () => {
         contentType: "listing",
       });
       expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(false);
+      expect(postingTermsFetch.mock.calls.some((call) => call[1]?.method === "POST")).toBe(false);
       // The form's own autosaved draft is never touched by a copy.
       expect(localStorage.length).toBe(0);
     });
 
-    it("asks for one new photo of a vehicle before saving anything", async () => {
+    it("asks for the current terms on a copy when they are not accepted yet", async () => {
+      serveTerms(null);
+      serveCopy(draft("electronics", { device_type: "Smartphone", brand: "Apple" }));
+      render(<CreateListingPage />);
+      expect(await screen.findByText(/Copy of/)).toBeInTheDocument();
+      await termsReady();
+
+      fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+      expect(
+        (await screen.findAllByText("Accept the posting terms before submitting.")).length
+      ).toBeGreaterThan(0);
+      expect(saves()).toHaveLength(0);
+
+      fireEvent.click(screen.getByLabelText(/I accept the VerifyMzansi posting terms/i));
+      fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboard/listings"));
+      const acceptance = postingTermsFetch.mock.calls.find((call) => call[1]?.method === "POST");
+      expect(JSON.parse(acceptance![1].body as string)).toEqual({
+        version: SERVED_POSTING_TERMS.version,
+        document_hash: SERVED_POSTING_TERMS.document_hash,
+        accepted: true,
+      });
+      expect(saves()).toHaveLength(1);
+    });
+
+    it("a refused submission can be sent again: a new request at the saved version", async () => {
+      const photoRefusal = {
+        ok: false,
+        status: 422,
+        json: async () => ({
+          error: "Add at least one new photo of this item. Each car or home is a different item.",
+          reason: "copy_new_photo_required",
+        }),
+      };
       serveCopy(
         draft("vehicles", {
           make: "Toyota",
@@ -1055,29 +1104,33 @@ describe("CreateListingPage", () => {
           fuel_type: "diesel",
           service_history: "full",
           condition: "used",
-        })
+        }),
+        [photoRefusal]
       );
       render(<CreateListingPage />);
       expect(await screen.findByText(/Copy of/)).toBeInTheDocument();
-      await termsLoaded();
+      await termsReady();
 
       fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
-
       expect(
         (await screen.findAllByText(/Add at least one new photo of this item/)).length
       ).toBeGreaterThan(0);
-      expect(
-        fetchMock.mock.calls.some(
-          (call) => call[0] === `/api/listings/${copyId}` && call[1]?.method === "PUT"
-        )
-      ).toBe(false);
+
+      // The member adds a photo (not uploaded in this test) and sends it again.
+      fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboard/listings"));
+      const [first, second] = saves();
+      expect(first.expectedRevision).toBe(1);
+      expect(second.expectedRevision).toBe(2);
+      expect(second.postRequestId).not.toBe(first.postRequestId);
     });
 
     it("ignores ?copy= while the switch is off", async () => {
       switches.SHOW_POST_COPY = false;
       serveCopy(draft("electronics", {}));
       render(<CreateListingPage />);
-      await termsLoaded();
+      await termsReady();
       expect(screen.queryByText(/Copy of/)).toBeNull();
       expect(
         fetchMock.mock.calls.some((call) => String(call[0]).startsWith("/api/listings/"))

@@ -106,7 +106,7 @@ export const SHOW_PACKAGE_TEAMS: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.
  * Copy a post (business tools plan section 3, item 17b): "More", then "Copy
  * this post" on My posts for a member whose Multi-listing package runs; the
  * copy opens in the "Post an item" form as a draft, unfinished copies wait under
- * "Drafts" on My posts, and reviewers see "Copied from" and identical photos.
+ * "Drafts" on My posts, and reviewers see "Copied from".
  * Calls the live backend's api.copy_my_post and
  * api.get_frontend_staff_copy_facts (database update
  * 20261121150309_copy_a_post.sql). Off until launch switch-on (item 60;

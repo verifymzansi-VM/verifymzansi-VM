@@ -108,10 +108,9 @@ makes a new Market listing from one of their own.
   nothing. Copying a draft or a business is refused with detail
   `copy_source_invalid`.
 - **Reviewers:** `api.get_frontend_staff_copy_facts(posts)` (staff with
-  `queue:view`) returns, only for posts under review the caller has claimed (at
+  `queue:view`) returns, only for copies under review the caller has claimed (at
   most 25 per call), the post each was copied from (status `deleted` and no
-  title once it is gone) and the seller's other live posts with a byte-identical
-  photo (at most 10, with the number of such photos).
+  title once it is gone).
 - **Unfinished copies:** `private.post_copies` records the source (a plain id,
   kept after the source is deleted), its photo bytes and the request.
   `api.list_my_copy_drafts()` (members) lists the caller's unfinished copies and

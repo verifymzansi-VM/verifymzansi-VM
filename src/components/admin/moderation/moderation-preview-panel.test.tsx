@@ -394,16 +394,14 @@ describe("ModerationPreviewPanel", () => {
 
 describe("ModerationPreviewPanel copy facts", () => {
   const source = "11111111-1111-4111-8111-111111111111";
-  const other = "22222222-2222-4222-8222-222222222222";
 
-  it("links a live source and the seller's live posts with the same photo", () => {
+  it("links a live source", () => {
     render(
       <ModerationPreviewPanel
         item={{
           ...baseItem,
           copy_facts: {
             copied_from: { id: source, title: "Demo bakkie", status: "live" },
-            same_photos: [{ id: other, title: "Sample hatchback", photos: 2 }],
           },
         }}
       />
@@ -412,8 +410,6 @@ describe("ModerationPreviewPanel copy facts", () => {
       "href",
       `/listing/${source}`
     );
-    expect(screen.getByRole("link", { name: /Sample hatchback/ })).toBeInTheDocument();
-    expect(screen.getByText(/2 photos/)).toBeInTheDocument();
   });
 
   it("does not link a source that is not live, or one that was deleted", () => {
@@ -423,7 +419,6 @@ describe("ModerationPreviewPanel copy facts", () => {
           ...baseItem,
           copy_facts: {
             copied_from: { id: source, title: "Demo bakkie", status: "expired" },
-            same_photos: [],
           },
         }}
       />
@@ -438,7 +433,6 @@ describe("ModerationPreviewPanel copy facts", () => {
           ...baseItem,
           copy_facts: {
             copied_from: { id: source, title: null, status: "deleted" },
-            same_photos: [],
           },
         }}
       />

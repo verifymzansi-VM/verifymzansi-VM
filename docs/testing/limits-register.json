@@ -4679,25 +4679,6 @@
       ]
     },
     {
-      "id": "LIM-SQL-copy-facts-same-photos",
-      "title": "Staff copy facts: at most 10 live posts with an identical photo per reviewed post",
-      "value": "10",
-      "category": "cap",
-      "enforcedAt": [
-        {
-          "file": "database/foundation/current/functions/internal/get_frontend_staff_copy_facts.sql",
-          "symbol": "internal.get_frontend_staff_copy_facts",
-          "contains": "limit 10) o), '[]'::jsonb))"
-        }
-      ],
-      "tests": [
-        {
-          "kind": "behaviour",
-          "file": "scripts/test-foundation-copy-a-post.mjs"
-        }
-      ]
-    },
-    {
       "id": "LIM-SQL-copy-draft-age",
       "title": "Copy a post: an unfinished copy is deleted 14 days after its last change",
       "value": "14 days",

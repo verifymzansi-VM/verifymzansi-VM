@@ -22,13 +22,7 @@ import {
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { usePostActionFields } from "@/hooks/use-post-action-fields";
 import { loadOwnListing } from "@/app/post/edit-listing/[id]/load-own-listing";
-import {
-  COPY_NEW_PHOTO_CATEGORIES,
-  COPY_NEW_PHOTO_MESSAGE,
-  listingCopyFields,
-  parseCopyId,
-  submitListingCopy,
-} from "./listing-copy";
+import { listingCopyFields, parseCopyId, submitListingCopy } from "./listing-copy";
 import { CopyFinalCheck, CopyNotice, CopyVideoNote } from "./copy-notes";
 import { SHOW_POST_COPY } from "@/lib/hidden-features";
 import { Input } from "@/components/ui/input";
@@ -292,7 +286,13 @@ export default function CreateListingPage() {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   const router = useRouter();
-  const { fields: postFields, captureRevision } = usePostTransport();
+  const {
+    fields: postFields,
+    captureRevision,
+    needsTerms,
+    acceptTerms,
+    renewRequest,
+  } = usePostTransport();
   // Copy a post (SHOW_POST_COPY): the form opened on a copy, a draft the server
   // made (?copy=<id>). It never touches the form's autosaved draft.
   const searchParams = useSearchParams();
@@ -656,15 +656,15 @@ export default function CreateListingPage() {
       if (photoCount > maxPhotos) {
         errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
       }
-      if (copyId && COPY_NEW_PHOTO_CATEGORIES.includes(category) && photoFiles.length === 0)
-        errors.images = COPY_NEW_PHOTO_MESSAGE;
+
       if (videoFile.length > 0 && !videoAllowed) {
         errors.videos = "Video upload is not available on your current plan.";
       } else if (videoFile.length > maxVideos) {
         errors.videos = `You can upload up to ${maxVideos} videos on this plan.`;
       }
-      // A copy is saved like an edit: the terms were accepted with the first post.
-      if (!copyId && !termsAccepted)
+      // A copy is saved like an edit: the tick shows only when the current terms
+      // are not accepted yet.
+      if ((!copyId || needsTerms) && !termsAccepted)
         errors.termsAccepted = "Accept the posting terms before submitting.";
     }
 
@@ -844,9 +844,17 @@ export default function CreateListingPage() {
 
         trialDays,
       };
+      if (copyId && needsTerms) await acceptTerms();
       const res = copyId
-        ? await submitListingCopy(copyId, body, (revision) =>
-            copyActionFields(copyId, revision, "resubmit", "MZANSI_MARKET", "listing")
+        ? await submitListingCopy(
+            copyId,
+            body,
+            (revision) =>
+              copyActionFields(copyId, revision, "resubmit", "MZANSI_MARKET", "listing"),
+            (savedRevision) => {
+              if (savedRevision !== null) captureRevision({ revision: savedRevision });
+              renewRequest();
+            }
           )
         : await fetch("/api/listings", {
             method: "POST",
@@ -1633,7 +1641,7 @@ export default function CreateListingPage() {
                         <CopyFinalCheck sameTitle={title.trim() === copyOf.trim()} />
                       ) : null}
 
-                      {!copyId && (
+                      {(!copyId || needsTerms) && (
                         <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6">
                           <input
                             id="listing-terms-checkbox"

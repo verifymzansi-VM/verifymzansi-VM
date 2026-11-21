@@ -150,7 +150,7 @@ export async function readStaffModerationQueue(api: FoundationAuthenticatedApi, 
     );
   const queue = parseStaffModerationQueue(result.data, accountId);
   // Copy a post (SHOW_POST_COPY): where each listing the reviewer holds was
-  // copied from and the seller's live posts with the same photo bytes. Only
+  // copied from. Only
   // the reviewer's own current claims (at most 20) are asked for.
   const facts = await readStaffCopyFacts(
     api,

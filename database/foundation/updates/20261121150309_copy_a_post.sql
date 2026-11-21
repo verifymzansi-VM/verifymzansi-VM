@@ -30,11 +30,9 @@
 --    A copy uses a slot only when approved and counts towards the new-post
 --    allowance like any new post (unchanged rules).
 -- 4. api.get_frontend_staff_copy_facts(posts) (staff with queue:view): for
---    each given post under review that the caller has claimed, the post it
---    was copied from (id, title, status; status 'deleted' and no title once
---    it is gone) and the seller's other live posts
---    with a byte-identical photo (id, title, number of such photos, at most
---    10 posts). Posts not claimed by the caller are left out.
+--    each given post under review that the caller has claimed and that is a
+--    copy, the post it was copied from (id, title, status; status 'deleted'
+--    and no title once it is gone). Other posts are left out.
 -- 5. Unfinished copies are deleted 14 days after their last change
 --    (internal.purge_copy_drafts, run by internal.run_retention, which now
 --    also returns 'copy_drafts'); never during a legal hold.
@@ -206,7 +204,7 @@ create or replace trigger copy_new_photo_required before update of status on pri
   for each row when (new.status = 'pending_moderation' and old.status is distinct from new.status)
   execute function internal.copy_new_photo_guard();
 
--- 4. What a reviewer sees about a claimed post: its source and identical photos.
+-- 4. What a reviewer sees about a claimed copy: where it was copied from.
 create or replace function internal.get_frontend_staff_copy_facts(p_posts uuid[])
 returns jsonb
 language plpgsql
@@ -219,26 +217,13 @@ begin
     raise exception 'up to 25 posts' using errcode='22023'; end if;
   select coalesce(jsonb_agg(jsonb_build_object(
       'post_id', p.id,
-      'copied_from', (select jsonb_build_object('id', c.source_post_id, 'title', s.title,
-          'status', coalesce(s.status, 'deleted'))
-        from private.post_copies c left join private.posts s on s.id = c.source_post_id where c.post_id = p.id),
-      'same_photos', coalesce((select jsonb_agg(jsonb_build_object('id', o.id, 'title', o.title, 'photos', o.n)
-          order by o.n desc, o.id)
-        from (select op.id, op.title, count(distinct m.sha256)::integer as n
-          from private.post_media pm
-          join private.media_objects m on m.id = pm.object_id
-          join private.media_objects om on om.owner_id = p.owner_id and om.sha256 = m.sha256
-          join private.post_media opm on opm.object_id = om.id and opm.purpose in ('cover', 'gallery')
-          join private.posts op on op.id = opm.post_id
-          where pm.post_id = p.id and pm.purpose in ('cover', 'gallery') and m.kind = 'image'
-            and op.owner_id = p.owner_id and op.status = 'live' and op.id <> p.id
-            and op.id is distinct from p.edit_of
-          group by op.id, op.title
-          order by n desc, op.id
-          limit 10) o), '[]'::jsonb))
+      'copied_from', jsonb_build_object('id', c.source_post_id, 'title', s.title,
+        'status', coalesce(s.status, 'deleted')))
     order by p.id), '[]'::jsonb)
   into items
   from private.posts p
+  join private.post_copies c on c.post_id = p.id
+  left join private.posts s on s.id = c.source_post_id
   where p.id = any(p_posts) and p.status = 'pending_moderation'
     and exists(select 1 from private.queue_claims q where q.post_id = p.id and q.claimed_by = actor
       and q.claim_expires_at > clock_timestamp());

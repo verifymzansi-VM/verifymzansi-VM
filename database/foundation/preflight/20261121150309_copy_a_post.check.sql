@@ -29,7 +29,7 @@ with bodies as (
     ('internal.copy_my_post(uuid,uuid)', null, '2195159d14323575798a6ce2421e2c47'),
     ('api.copy_my_post(uuid,uuid)', null, '6e3e0f2b5320f23666814c7b798981a6'),
     ('internal.copy_new_photo_guard()', null, '43f568afc879ca564314f64ae7e3ba6f'),
-    ('internal.get_frontend_staff_copy_facts(uuid[])', null, '426567f2fded7296eaf6bf0ca9528495'),
+    ('internal.get_frontend_staff_copy_facts(uuid[])', null, '7944945fd7c86be18d5dbb69d09639a4'),
     ('api.get_frontend_staff_copy_facts(uuid[])', null, 'c003659259239c0aed61f88adee6de55'),
     ('internal.purge_copy_drafts(integer)', null, '7eb58b557ed311b33b9087918dc21c9d'),
     ('internal.list_my_copy_drafts()', null, '7e7841deb0d75dbb6112c486a474978c'),

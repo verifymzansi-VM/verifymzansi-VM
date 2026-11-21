@@ -291,7 +291,6 @@ describe("readStaffModerationQueue", () => {
   it("asks for copy facts only of the listings the reviewer holds, and attaches them", async () => {
     const facts = {
       copied_from: { id: uuid(50), title: "Source", status: "live" },
-      same_photos: [],
     };
     vi.mocked(readStaffCopyFacts).mockResolvedValueOnce(new Map([[uuid(101), facts]]));
     rpc.mockResolvedValueOnce({

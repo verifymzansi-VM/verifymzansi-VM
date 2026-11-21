@@ -99,11 +99,9 @@ export interface ModerationItem {
   /** Owner's other recent listings, for duplicate hints. */
   owner_recent_titles?: string[];
   owner_photo_urls?: string[];
-  /** Copy a post: the post this one was copied from, and the seller's live
-   * posts with a byte-identical photo (claimed posts only). */
+  /** Copy a post: the post this one was copied from (claimed posts only). */
   copy_facts?: {
-    copied_from: { id: string; title: string | null; status: string } | null;
-    same_photos: { id: string; title: string | null; photos: number }[];
+    copied_from: { id: string; title: string | null; status: string };
   };
 }
 
@@ -985,61 +983,34 @@ function QualitySummary({ score, issues }: ReturnType<typeof scoreListingQuality
   );
 }
 
-/** Copy a post: where the post was copied from and which of the seller's live
- * posts have the same photo (identical file). */
+/** Copy a post: where the post was copied from. */
 function CopyFactsNotice({ facts }: { facts: NonNullable<ModerationItem["copy_facts"]> }) {
-  if (!facts.copied_from && facts.same_photos.length === 0) return null;
-  const postLink = (post: { id: string; title: string | null }) => (
-    <a
-      href={`/listing/${post.id}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="font-medium underline underline-offset-2"
-    >
-      {post.title || "Untitled post"}
-      <span className="sr-only"> (opens in a new tab)</span>
-    </a>
-  );
+  const source = facts.copied_from;
   return (
-    <div className="space-y-1.5 rounded-lg border border-border bg-muted/40 p-3 text-sm">
-      {facts.copied_from ? (
-        <p>
-          <span className="font-medium">Copied from </span>
+    <p className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+      <span className="font-medium">Copied from </span>
+      {source.status === "deleted" ? (
+        <span className="text-muted-foreground">a post that has since been deleted</span>
+      ) : (
+        <>
           {/* Only a live post has a public page to open. */}
-          {facts.copied_from.status === "deleted" ? (
-            <span className="text-muted-foreground">a post that has since been deleted</span>
+          {source.status === "live" ? (
+            <a
+              href={`/listing/${source.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium underline underline-offset-2"
+            >
+              {source.title || "Untitled post"}
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
           ) : (
-            <>
-              {facts.copied_from.status === "live" ? (
-                postLink(facts.copied_from)
-              ) : (
-                <span className="font-medium">{facts.copied_from.title || "Untitled post"}</span>
-              )}
-              <span className="text-muted-foreground">
-                {" "}
-                ({formatEnumLabel(facts.copied_from.status)})
-              </span>
-            </>
+            <span className="font-medium">{source.title || "Untitled post"}</span>
           )}
-        </p>
-      ) : null}
-      {facts.same_photos.length > 0 ? (
-        <div>
-          <p className="font-medium">Same photo in the seller's live posts</p>
-          <ul className="mt-1 space-y-0.5">
-            {facts.same_photos.map((post) => (
-              <li key={post.id}>
-                {postLink(post)}
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {post.photos} {post.photos === 1 ? "photo" : "photos"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </div>
+          <span className="text-muted-foreground"> ({formatEnumLabel(source.status)})</span>
+        </>
+      )}
+    </p>
   );
 }
 

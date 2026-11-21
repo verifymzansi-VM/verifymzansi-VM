@@ -11,18 +11,11 @@ const staffCopyFacts = z.strictObject({
     .array(
       z.strictObject({
         post_id: z.uuid(),
-        copied_from: z
-          .strictObject({ id: z.uuid(), title: z.string().nullable(), status: z.string() })
-          .nullable(),
-        same_photos: z
-          .array(
-            z.strictObject({
-              id: z.uuid(),
-              title: z.string().nullable(),
-              photos: z.number().int().positive(),
-            })
-          )
-          .max(10),
+        copied_from: z.strictObject({
+          id: z.uuid(),
+          title: z.string().nullable(),
+          status: z.string(),
+        }),
       })
     )
     .max(25),
@@ -30,8 +23,7 @@ const staffCopyFacts = z.strictObject({
 export type StaffCopyFacts = Omit<z.infer<typeof staffCopyFacts>["items"][number], "post_id">;
 
 /**
- * For posts the reviewer has claimed: the post each was copied from and the
- * seller's live posts with a byte-identical photo
+ * For the copies the reviewer has claimed: the post each was copied from
  * (api.get_frontend_staff_copy_facts). A hint for the reviewer only, so a
  * failed read leaves it out instead of failing the queue.
  */

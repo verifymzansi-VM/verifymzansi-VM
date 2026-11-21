@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, it, expect, vi } from "vitest";
 import { usePostTransport } from "./use-post-transport";
 beforeEach(() => {
@@ -41,4 +41,42 @@ it("requires the actually loaded revision for edits without inventing consent", 
   expect(() => result.current.captureRevision({ revision: "8" })).toThrow(
     "revision could not be loaded"
   );
+});
+it("records consent for a form that saves an existing post, and renews the request", async () => {
+  const { result } = renderHook(() => usePostTransport());
+  await waitFor(() => expect(result.current.needsTerms).toBe(true));
+  const before = result.current.fields().postRequestId;
+  vi.mocked(fetch).mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      version: "posting-v1",
+      document_hash: "a".repeat(43),
+      document_path: "/terms/versions/posting-v1",
+      accepted_at: "2026-11-21T10:00:00.000Z",
+    }),
+  } as Response);
+  await act(async () => {
+    await result.current.acceptTerms();
+  });
+  expect(result.current.needsTerms).toBe(false);
+  expect(fetch).toHaveBeenLastCalledWith(
+    "/api/foundation/posting-terms",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        version: "posting-v1",
+        document_hash: "a".repeat(43),
+        accepted: true,
+      }),
+    })
+  );
+  result.current.renewRequest();
+  expect(result.current.fields().postRequestId).not.toBe(before);
+});
+it("refuses to continue when the acceptance is not confirmed", async () => {
+  const { result } = renderHook(() => usePostTransport());
+  await waitFor(() => expect(result.current.needsTerms).toBe(true));
+  vi.mocked(fetch).mockResolvedValueOnce({ ok: false, json: async () => ({}) } as Response);
+  await expect(result.current.acceptTerms()).rejects.toThrow("could not be accepted");
+  expect(result.current.needsTerms).toBe(true);
 });

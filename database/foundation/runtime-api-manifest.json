@@ -5762,7 +5762,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Staff with queue:view (fresh authenticator code), only for posts under review that the caller has claimed (up to 25): the post it was copied from (id, title, status; status deleted and no title once it is gone) and the seller's other live posts with a byte-identical photo (id, title, count)."
+      "authority": "Staff with queue:view (fresh authenticator code), only for copies under review that the caller has claimed (up to 25): the post each was copied from (id, title, status; status deleted and no title once it is gone)."
     },
     {
       "name": "list_my_copy_drafts",

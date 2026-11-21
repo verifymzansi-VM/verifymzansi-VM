@@ -48,31 +48,33 @@ export function listingCopyFields(row: Record<string, unknown>) {
   };
 }
 
-/** A copy of a vehicle or property needs one new photo (owner decision). */
-export const COPY_NEW_PHOTO_CATEGORIES: readonly string[] = ["vehicles", "property"];
-export const COPY_NEW_PHOTO_MESSAGE =
-  "Add at least one new photo of this item. Each car or home is a different item.";
-
 /**
  * Saves the copy (PUT /api/listings/[id], which keeps a draft a draft) and
  * submits it for review (POST /api/content/resubmit). Returns the first
  * refusal as a response the form already knows how to show, or the
- * submission's response.
+ * submission's response. `onAnswered` hears every definite answer to the
+ * save (the saved revision, or null for a refusal) so a retry after a refused
+ * submission is a new request at the current revision.
  */
 export async function submitListingCopy(
   id: string,
   body: Record<string, unknown>,
-  resubmitFields: (revision: number) => Record<string, unknown>
+  resubmitFields: (revision: number) => Record<string, unknown>,
+  onAnswered: (savedRevision: number | null) => void = () => {}
 ): Promise<Response> {
   const saved = await fetch(`/api/listings/${id}`, {
     method: "PUT",
     headers: withCsrfHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
-  if (!saved.ok) return saved;
+  if (!saved.ok) {
+    if (saved.status >= 400 && saved.status < 500 && saved.status !== 401) onAnswered(null);
+    return saved;
+  }
   const { revision } = (await saved.json().catch(() => ({}))) as { revision?: unknown };
   if (typeof revision !== "number")
     return Response.json({ error: "Reload your posts before trying again." }, { status: 409 });
+  onAnswered(revision);
   const submitted = await fetch("/api/content/resubmit", {
     method: "POST",
     headers: withCsrfHeaders({ "Content-Type": "application/json" }),
