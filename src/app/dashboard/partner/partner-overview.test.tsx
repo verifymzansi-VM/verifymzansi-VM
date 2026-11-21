@@ -60,6 +60,17 @@ describe("PartnerOverview", () => {
     expect(within(band).getByText("Includes commission still in its 30-day wait.")).toBeVisible();
   });
 
+  it("keeps the 30-day wait line when the latest 50 commissions are all from this month", () => {
+    const row = partner().recent[0]!;
+    const recent = Array.from({ length: 50 }, (_, i) => ({ ...row, id: `r${i}` }));
+    render(
+      <PartnerOverview partner={partner({ recent })} appUrl="https://verifymzansi.com" now={NOW} />
+    );
+    const band = screen.getByRole("region", { name: "This month" });
+    expect(within(band).getByText("Includes commission still in its 30-day wait.")).toBeVisible();
+    expect(within(band).getByText("From your latest 50 commissions.")).toBeVisible();
+  });
+
   it("shows progress counts and money by stage", () => {
     const { container } = render(
       <PartnerOverview partner={partner()} appUrl="https://verifymzansi.com" now={NOW} />
@@ -71,11 +82,11 @@ describe("PartnerOverview", () => {
     expect(figure(container, "Paid")).toBe("R300");
   });
 
-  it("offers a downloadable QR code of the referral link, drawn on the server", () => {
+  it("offers the referral link's QR code as a PNG download, drawn on the server", () => {
     render(<PartnerOverview partner={partner()} appUrl="https://verifymzansi.com" now={NOW} />);
-    const href = screen.getByRole("link", { name: "Download QR code" }).getAttribute("href") ?? "";
-    expect(href.startsWith("data:image/svg+xml;charset=utf-8,")).toBe(true);
-    expect(decodeURIComponent(href.split(",")[1] ?? "")).toMatch(/^<svg [^>]*>.*<\/svg>$/);
+    const link = screen.getByRole("link", { name: "Download QR code" });
+    expect(link.getAttribute("href")).toMatch(/^data:image\/png;base64,/);
+    expect(link).toHaveAttribute("download", "verifymzansi-partner-THANDO1.png");
   });
 
   it("links to the partner rules and contact, and shows no booklet or statements", () => {

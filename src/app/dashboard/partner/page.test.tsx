@@ -92,7 +92,7 @@ describe("partner page with the switch on", () => {
     );
     expect(screen.getByRole("link", { name: "Download QR code" })).toHaveAttribute(
       "download",
-      "verifymzansi-partner-THANDO1.svg"
+      "verifymzansi-partner-THANDO1.png"
     );
     expect(screen.getByText("Eligible", { exact: false })).toBeInTheDocument();
   });

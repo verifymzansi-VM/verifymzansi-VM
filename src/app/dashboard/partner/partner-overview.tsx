@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPlanPrice } from "@/lib/constants/pricing";
-import { qrCodeSvg } from "@/lib/qr-code";
+import { qrCodePngDataUrl } from "@/lib/qr-code";
 import {
   earnedThisMonth,
   nextPayoutCents,
@@ -38,7 +38,7 @@ export function PartnerOverview({
 }) {
   const link = partnerReferralLink(appUrl, partner.code);
   const earned = earnedThisMonth(partner.recent, now);
-  const qrHref = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qrCodeSvg(link))}`;
+  const qrHref = qrCodePngDataUrl(link);
 
   return (
     <div className="min-w-0 space-y-6">
@@ -56,10 +56,11 @@ export function PartnerOverview({
               {formatPlanPrice(earned.cents)}
             </dd>
             <dd className="mt-1 text-xs text-white/60">
-              {earned.complete
-                ? "Includes commission still in its 30-day wait."
-                : "From your latest 50 commissions."}
+              Includes commission still in its 30-day wait.
             </dd>
+            {earned.complete ? null : (
+              <dd className="text-xs text-white/60">From your latest 50 commissions.</dd>
+            )}
           </div>
           <div className="min-w-0">
             <dt className="text-sm text-white/70">Next payout</dt>
@@ -96,7 +97,7 @@ export function PartnerOverview({
                 </a>
               </Button>
               <Button asChild variant="outline" className="gap-1.5">
-                <a href={qrHref} download={`verifymzansi-partner-${partner.code}.svg`}>
+                <a href={qrHref} download={`verifymzansi-partner-${partner.code}.png`}>
                   <Download aria-hidden="true" className="h-4 w-4" />
                   Download QR code
                 </a>
