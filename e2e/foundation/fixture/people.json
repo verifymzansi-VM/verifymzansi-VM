@@ -18,7 +18,7 @@
     "lastName": "Fixture"
   },
   "moderator": {
-    "description": "Staff role moderator, granted by the admin through a trusted local SQL step, with an authenticator app. Approves the seeded posts.",
+    "description": "Staff role moderator, granted by the admin through a trusted local SQL step, with an authenticator app; identity accepted by the admin, phone and area confirmed (staff review posts only with an accepted ID review). Approves the seeded posts.",
     "email": "moderator@verifymzansi.test",
     "password": "Local-fixture-moderator-3",
     "firstName": "Sipho",

@@ -3,19 +3,43 @@
 -- owner has decided so; prefer a forward fix. No website release depends on
 -- the update (it changes no API command), so no deploy is needed first.
 -- It puts back the staff audit view and the five functions as they were
--- (house slots 1 to 15, approval by a second ID-verified administrator only,
--- every own post a conflict), drops internal.single_administrator and the
--- two new columns. It refuses while any house slot event is marked
--- self_granted or any decision self_approved: those records are kept, so a
--- rollback after the first one needs a forward fix instead.
+-- (house slots 1 to 15 in all, approval by a second ID-verified administrator
+-- only, every own post a conflict, and staff without an ID review reviewing
+-- posts again), drops internal.single_administrator and the two new columns.
+-- It refuses unless the five functions still have this update's bodies, and
+-- while any house slot event is marked self_granted or any decision
+-- self_approved: those records are kept, so a rollback after the first one
+-- needs a forward fix instead. Both records are locked against new rows
+-- before that check.
 begin;
 set local lock_timeout='5s';
+-- No new marked row can be written between the check below and the drop.
+lock table private.moderation_log, private.house_slot_events in share mode;
 
-do $$begin
+do $$
+declare shape text;
+begin
   if to_regprocedure('internal.single_administrator(uuid)') is null or not exists(select 1 from pg_attribute a
       where a.attrelid='private.moderation_log'::regclass and a.attname='self_approved' and not a.attisdropped) then
     raise exception 'rollback precondition: the one-person admin mode update is not applied' using errcode='55000';
   end if;
+  for shape in
+    select v.sig||' '||coalesce((select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)),'absent')
+    from (values ('internal.grant_house_slots(text,integer,integer,text,text)'),
+      ('internal.queue_conflict(uuid,uuid,uuid)'),
+      ('internal.claim_queue_items(text,integer)'),
+      ('internal.moderate_post(uuid,integer,text,text,text,uuid)'),
+      ('internal.assert_posting_verification_ready(uuid,boolean)')) v(sig)
+  loop
+    if shape not in (
+        'internal.grant_house_slots(text,integer,integer,text,text) 6d72e0bc6a5f2bee76a43563f19278ac',
+        'internal.queue_conflict(uuid,uuid,uuid) d4c268547c2cd0fe91f8b8726a95b061',
+        'internal.claim_queue_items(text,integer) f9de196ff57fbb40b2e39d587e8d5db8',
+        'internal.moderate_post(uuid,integer,text,text,text,uuid) ee85c4cab471daa9f2d04c242d264573',
+        'internal.assert_posting_verification_ready(uuid,boolean) 45e28fa96d190f50aa15b1a106685680') then
+      raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
+    end if;
+  end loop;
   if exists(select 1 from private.house_slot_events where self_granted)
     or exists(select 1 from private.moderation_log where self_approved) then
     raise exception 'rollback precondition: self-granted or self-approved records exist; keep them and fix forward' using errcode='55000';

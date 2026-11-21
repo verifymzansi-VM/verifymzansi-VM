@@ -2018,6 +2018,9 @@ try {
   });
 
   applySteps(database, steps.slice(returnedIndex + 1));
+  // Staff review posts only with an accepted ID review of their own since
+  // 20261121143000_one_person_admin_mode.sql (in the steps just applied).
+  scalar(`select vmtest.verified('${moderator.id}','${staff.id}');`);
   console.log(`Applied ${TRIAL}, ${RETURNED} and any later updates.`);
   // A later update may make a newer posting terms version current (posting-v4,
   // 20261112173841_switch_posting_terms_v4.sql): every member accepts it once.

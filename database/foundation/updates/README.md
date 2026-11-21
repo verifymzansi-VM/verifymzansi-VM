@@ -104,18 +104,25 @@ second ID-verified administrator, and staff never review their own posts.
   `self_granted` (new column of the append-only `private.house_slot_events`,
   check: only on `granted` and `extended`), and the result has
   `self_granted: true`.
-- **Cap 25.** A grant makes the recipient hold 1 to 25 house slots (was 15);
-  outside that, 22023 `house_slots_count_invalid`. LIM-SQL-house-slots-count in
+- **Cap 25 in total.** The cap is on the account's total house slots: a grant
+  makes the recipient hold 1 to 25 house slots in all (was 15); outside that,
+  22023 `house_slots_count_invalid`. LIM-SQL-house-slots-count in
   `docs/testing/limits-register.json` follows.
+- **Staff review posts only with an ID review.** `internal.queue_conflict`
+  counts every post as a conflict for a staff member without an accepted ID
+  review of their own (`internal.current_verified_identity`), so such an account
+  (the owner's second admin account, for one) can neither list, claim, open nor
+  approve posts. Reports are unchanged.
 - **Self-approval.** `internal.queue_conflict` no longer counts the
-  administrator's own pending post as a conflict when one of their own house
-  slots funds it (for an edit, the live post it edits) and the mode holds, so
-  the moderation queue lists it and `claim_queue_items` (which now asks
-  `queue_conflict` instead of comparing the owner), `claim_queue_item`,
-  `staff_review_post` and `assert_posting_verification_ready` (likewise) accept
-  it. `internal.moderate_post` lets them approve it, never reject it
-  ("self-review is not allowed"). The admin role's `post:moderate` already needs
-  an authenticator code from the last 15 minutes (`internal.staff_actor`); the
+  administrator's own pending post as a conflict when one of their own current
+  house slots (active, not ended) funds it (for an edit, the live post it edits)
+  and the mode holds, so the moderation queue lists it and `claim_queue_items`
+  (which now asks `queue_conflict` instead of comparing the owner),
+  `claim_queue_item`, `staff_review_post` and
+  `assert_posting_verification_ready` (likewise) accept it.
+  `internal.moderate_post` lets them approve it, never reject it ("self-review
+  is not allowed"). The admin role's `post:moderate` already needs an
+  authenticator code from the last 15 minutes (`internal.staff_actor`); the
   update refuses to run unless it still does. The decision is recorded with
   `self_approved` (new column of the append-only `private.moderation_log`,
   check: approvals only) and the staff Audit log shows it as
@@ -149,10 +156,11 @@ admin account's own address in both places:
 
 The reviewed rollback is
 `../rollback/20261121143000_one_person_admin_mode.down.sql` (only with the
-owner's decision; prefer a forward fix). It refuses unless the update is
-applied, and while any event is `self_granted` or any decision `self_approved`
-(those records are kept). Otherwise it puts back the five function bodies and
-the audit view, drops `internal.single_administrator` and the two columns.
+owner's decision; prefer a forward fix). It refuses unless the update is applied
+and the five functions still have its bodies (both records are locked first),
+and while any event is `self_granted` or any decision `self_approved` (those
+records are kept). Otherwise it puts back the five function bodies and the audit
+view, drops `internal.single_administrator` and the two columns.
 
 `node --import tsx scripts/test-foundation-one-person-admin-mode.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
@@ -168,7 +176,11 @@ logged `self_approved` and shown as `post_self_approved`; an edit of it is
 self-approved too; an own post on the free first post stays a conflict; another
 member's post is approved as before; a second ID-verified staff member ends the
 mode for grants, listing, claims and a claimed item, and removing or suspending
-them brings it back; the rollback refuses once a marked record exists.
+them brings it back; an own post on a paid slot stays a conflict; the second
+admin account without an ID review can neither claim nor approve the owner's
+post; the owner's own ID review ending turns the mode off; the rollback refuses
+a changed function and once a marked record exists; and after every later update
+a 16-minute-old code is still refused.
 
 ## Post performance statistics for the owner's Performance page, 21 November 2026
 

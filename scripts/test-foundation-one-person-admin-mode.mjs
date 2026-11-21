@@ -20,11 +20,14 @@
 // of their house slots is listed, claimed and approved (never rejected) with
 // an authenticator code from the last 15 minutes, logged as self_approved and
 // shown as post:self_approved in the staff Audit log, while their own post
-// without a house slot stays a conflict; another member's post is approved as
-// before; a second ID-verified staff member ends the mode at once, for grants,
+// without a house slot (free first post or paid slot) stays a conflict; an
+// admin account without an ID review can neither claim nor approve a post;
+// another member's post is approved as before; the owner's own ID review
+// ending turns the mode off; a second ID-verified staff member ends the mode at once, for grants,
 // listing, claims and an item already claimed, and removing them brings it
-// back; the rollback refuses once a self-granted or self-approved record
-// exists.
+// back; the rollback refuses a changed function and once a self-granted or
+// self-approved record exists; after every later update a self-approval still
+// needs an authenticator code from the last 15 minutes.
 //
 //   node --import tsx scripts/test-foundation-one-person-admin-mode.mjs
 //
@@ -35,8 +38,11 @@ import { applySteps } from "./lib/foundation-sql-lint.mjs";
 import {
   applyAndProveRollback,
   assertDriftRefused,
+  fingerprintOf,
   functionBodyMd5,
   grantHouseSlotsSql,
+  ozowPurchase,
+  P30,
   runTwoAdminUpdateCheck,
   sqlValue,
 } from "./lib/foundation-staff-payment-world.mjs";
@@ -192,7 +198,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   // ------------------------------------------------ one ID-verified staff
   // The owner's case: one ID-verified admin and a second admin account of the
   // same person without an ID review of its own.
-  let second, ownFree;
+  let second, ownFree, ownPaid;
   await check("one ID-verified staff member: the mode is on for that admin only", () => {
     revokeRole(admin2); // ends admin2's house slots (their role is gone)
     assert.equal(activeSlots(admin2).length, 0);
@@ -201,6 +207,36 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     // Their own post funded by the free first post (no house slot yet).
     ownFree = submitted(admin);
     assert.equal(fundedBy(ownFree), "");
+    // And one funded by a paid Individual slot.
+    ozowPurchase(kit, admin, P30, 1);
+    ownPaid = submitted(admin);
+    assert.equal(
+      q(
+        `select e.source from private.entitlements e join private.post_activations a on a.entitlement_id=e.id
+          where a.post_id='${ownPaid}' and a.released_at is null;`
+      ),
+      "retail_paid"
+    );
+  });
+  await check("staff without an ID review never review posts: the second admin account", () => {
+    // The owner's second admin account has an authenticator app and every
+    // staff capability, but no ID review of its own.
+    assert.ok(!listed(second).includes(ownFree));
+    assert.deepEqual(claimed(second), []);
+    fails(
+      staff(second, `select api.claim_queue_item('post','${ownFree}');`),
+      "42501",
+      /self-review is not allowed/
+    );
+    // Even holding a lease (written directly here), it cannot approve.
+    const lease = json(
+      `select to_jsonb(c) from internal.take_queue_claim('${second.id}','${ownFree}',null) c;`
+    );
+    fails(decideSql(second, ownFree, lease, "approve"), "42501", /caller cannot publish this post/);
+    q(`update private.queue_claims set claimed_by=null,claim_nonce=null,claimed_at=null,
+      claim_expires_at=null,renewals=0 where post_id='${ownFree}';`);
+    assert.equal(row(ownFree).status, "pending_moderation");
+    assert.equal(count(`private.moderation_log where post_id='${ownFree}'`), 0);
   });
   await check(
     "a self-grant needs the mode, a reason, the admin's own verified account and at most 25",
@@ -338,11 +374,15 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   await check(
     "their own post without a house slot stays a conflict; others' posts are as before",
     () => {
-      fails(
-        staff(admin, `select api.claim_queue_item('post','${ownFree}');`),
-        "42501",
-        /self-review is not allowed/
-      );
+      // Funded by the free first post or by a paid slot: never their own review.
+      for (const id of [ownFree, ownPaid]) {
+        assert.ok(!listed(admin).includes(id));
+        fails(
+          staff(admin, `select api.claim_queue_item('post','${id}');`),
+          "42501",
+          /self-review is not allowed/
+        );
+      }
       fails(
         staff(admin, `select api.staff_review_post('${ownFree}','1','${admin.session}');`),
         "42501",
@@ -395,6 +435,21 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       revokeRole(governor);
     }
   );
+  await check("the owner's own ID review ending turns the mode off", () => {
+    q(`set session_replication_role=replica;
+      update private.accepted_identity_facts set revoked_at=now() where owner_id='${admin.id}' and revoked_at is null;
+      set session_replication_role=origin;`);
+    assert.equal(single(admin), "f");
+    // No review of any post, own or not, and no self-grant.
+    assert.deepEqual(listed(admin), []);
+    fails(grantSql(admin, 25, 90, REASON, admin), "42501", /house_slots_identity_required/);
+    // A new accepted review brings it back.
+    q(`set session_replication_role=replica;
+      insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
+        values('${admin.id}',gen_random_uuid(),'${fingerprintOf("solo-admin-again")}','${second.id}');
+      set session_replication_role=origin;`);
+    assert.equal(single(admin), "t");
+  });
 
   await check(
     "the preflight counts; the rollback refuses once a self-granted record exists",
@@ -405,16 +460,33 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       );
       const before = fingerprint();
       assert.match(fails(kit.rollbackSql, "55000"), /self-granted or self-approved records exist/);
+      // A function changed after the update is refused first.
+      const live = q(`select pg_get_functiondef('${MODERATE}'::regprocedure);`);
+      q(
+        `do $$begin execute replace(pg_get_functiondef('${MODERATE}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
+      );
+      assert.match(fails(kit.rollbackSql, "55000"), /is not this update's body/);
+      q(`${live};`);
       assert.equal(fingerprint(), before);
     }
   );
 
   const later = kit.steps.slice(kit.index + 1);
-  if (later.length) {
-    applySteps(database, later);
-    await check("later updates keep single-administrator mode", () => {
+  if (later.length) applySteps(database, later);
+  await check(
+    "after every later update: the mode holds and a self-approval still needs a code from the last 15 minutes",
+    () => {
       assert.equal(single(admin), "t");
       assert.notEqual(bodyMd5(SINGLE), "missing");
-    });
-  }
+      const post = submitted(admin);
+      const [lease] = claimed(admin);
+      assert.equal(lease.id, post);
+      fails(
+        decideSql(admin, post, lease, "approve", now() - 16 * MINUTE),
+        "42501",
+        /recent second-factor verification required/
+      );
+      assert.equal(row(post).status, "pending_moderation");
+    }
+  );
 });

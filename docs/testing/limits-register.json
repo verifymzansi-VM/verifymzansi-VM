@@ -9605,7 +9605,7 @@
     },
     {
       "id": "LIM-SQL-house-slots-count",
-      "title": "House slots: 1 to 25 per grant",
+      "title": "House slots: an account holds 1 to 25 in total",
       "value": "1 to 25",
       "category": "cap",
       "enforcedAt": [

@@ -14,10 +14,15 @@
 --    review, verified authenticator app, a written reason of 5 to 500
 --    characters, read committed). Each slot event it records is marked
 --    self_granted (new column of the append-only private.house_slot_events).
--- 2. The house-slot cap rises from 15 to 25 for every grant (a count outside
---    1 to 25 is refused with 22023 house_slots_count_invalid).
--- 3. That staff member may review their own pending post when one of their
---    own house slots funds it (for an edit: the live post it edits):
+-- 2. The cap on an account's total house slots rises from 15 to 25 for
+--    every grant: a grant makes the account hold 1 to 25 house slots in all
+--    (a total outside 1 to 25 is refused with 22023 house_slots_count_invalid).
+-- 3. Staff review posts only with an accepted ID review of their own
+--    (internal.current_verified_identity): internal.queue_conflict counts
+--    every post as a conflict for a staff member without one.
+--    The single ID-verified staff member may review their own pending post
+--    when one of their own current house slots funds it (for an edit: the
+--    live post it edits):
 --    internal.queue_conflict no longer counts it as a conflict, so it is
 --    listed, claimed and opened like any other post (the moderation queue,
 --    internal.claim_queue_items, internal.claim_queue_item,
@@ -69,11 +74,11 @@ begin
         'internal.grant_house_slots(text,integer,integer,text,text) 77527fd29f2348e228441612a842cce2',
         'internal.grant_house_slots(text,integer,integer,text,text) 6d72e0bc6a5f2bee76a43563f19278ac',
         'internal.queue_conflict(uuid,uuid,uuid) 7ef9b54c11a14dfe2f71b4e7ec474b44',
-        'internal.queue_conflict(uuid,uuid,uuid) 87bdbc5e0894a7bdb5b7db6c2c88b32d',
+        'internal.queue_conflict(uuid,uuid,uuid) d4c268547c2cd0fe91f8b8726a95b061',
         'internal.claim_queue_items(text,integer) fc822bf9b962527b0fba39c22d364735',
         'internal.claim_queue_items(text,integer) f9de196ff57fbb40b2e39d587e8d5db8',
         'internal.moderate_post(uuid,integer,text,text,text,uuid) 1f127647b461014ddc3d6d6ef6d086c7',
-        'internal.moderate_post(uuid,integer,text,text,text,uuid) f8530350bc34d6191ba35d62cc74087b',
+        'internal.moderate_post(uuid,integer,text,text,text,uuid) ee85c4cab471daa9f2d04c242d264573',
         'internal.assert_posting_verification_ready(uuid,boolean) c54fe760620720d67cf17c644623bd6f',
         'internal.assert_posting_verification_ready(uuid,boolean) 45e28fa96d190f50aa15b1a106685680',
         'internal.single_administrator(uuid) absent',
@@ -265,16 +270,19 @@ create or replace function internal.queue_conflict(p_actor uuid, p_post_id uuid,
  set search_path to 'pg_catalog'
 as $function$
   select case when p_post_id is not null
-    then exists(select 1 from private.posts p where p.id=p_post_id and p.owner_id=p_actor)
-      -- Single-administrator mode: the only ID-verified staff member may
-      -- review their own post when one of their house slots funds it (for an
-      -- edit, the live post it edits).
-      and not (exists(select 1 from private.posts p
-          join private.post_activations a on a.post_id=coalesce(p.edit_of, p.id) and a.released_at is null
-          join private.entitlements e on e.id=a.entitlement_id
-          where p.id=p_post_id and e.owner_id=p_actor and e.source='staff_grant'
-            and exists(select 1 from private.house_slot_events h where h.entitlement_id=e.id))
-        and internal.single_administrator(p_actor))
+    -- Staff review posts only with an accepted ID review of their own.
+    then internal.current_verified_identity(p_actor) is null
+      or (exists(select 1 from private.posts p where p.id=p_post_id and p.owner_id=p_actor)
+        -- Single-administrator mode: the only ID-verified staff member may
+        -- review their own post when one of their current house slots funds
+        -- it (for an edit, the live post it edits).
+        and not (exists(select 1 from private.posts p
+            join private.post_activations a on a.post_id=coalesce(p.edit_of, p.id) and a.released_at is null
+            join private.entitlements e on e.id=a.entitlement_id
+            where p.id=p_post_id and e.owner_id=p_actor and e.source='staff_grant'
+              and e.status='active' and e.ends_at>statement_timestamp()
+              and exists(select 1 from private.house_slot_events h where h.entitlement_id=e.id))
+          and internal.single_administrator(p_actor)))
     else exists(select 1 from private.reports r where r.id=p_report_id and
       (r.reporter_id=p_actor or r.subject_account_id=p_actor
        or r.duplicate_owner_b=p_actor or r.duplicate_created_by=p_actor))
@@ -357,7 +365,7 @@ declare
   video_limit integer;
   rev integer;
   merged jsonb;
-  self_approved boolean;
+  v_self boolean;
 begin
   perform internal.assert_post_revision(p_expected_revision);
   if p_decision is null or p_decision not in ('approve', 'reject')
@@ -381,8 +389,8 @@ begin
   -- staff member may approve, never reject, their own post funded by one of
   -- their house slots. post:moderate already needs an authenticator code from
   -- the last 15 minutes (internal.staff_actor, requires_recent_mfa).
-  self_approved := post.owner_id = actor;
-  if self_approved and (p_decision <> 'approve' or internal.queue_conflict(actor, post.id, null)) then
+  v_self := post.owner_id = actor;
+  if v_self and (p_decision <> 'approve' or internal.queue_conflict(actor, post.id, null)) then
     raise exception 'self-review is not allowed' using errcode = '42501';
   end if;
   perform internal.consume_queue_claim('post', post.id, actor, p_claim_generation, p_claim_nonce);
@@ -439,7 +447,7 @@ begin
   insert into private.moderation_log (post_id, edit_id, staff_id, decision, post_revision, reason, price_only, self_approved)
   values (coalesce(original_id, post.id), case when original_id is not null then post.id end, actor, p_decision,
     p_expected_revision, nullif(btrim(coalesce(p_reason, '')), ''), coalesce((merged->>'price_only')::boolean, false),
-    self_approved);
+    v_self);
   if original_id is not null then
     return jsonb_build_object('id', post.id, 'edit_of', original_id,
       'status', case when p_decision = 'approve' then 'merged' else 'rejected' end, 'post_revision', rev,
