@@ -6098,6 +6098,25 @@
       "authority": "Scheduled job only (the website's minute job): deletes view and engaged marks older than 24 hours, salts older than yesterday and activity days older than 31 days, and lets waiting likes that are due count; records the run as scheduled job engagement_purge."
     },
     {
+      "name": "get_public_storefront",
+      "updates": ["updates/20261121131915_business_storefront.sql"],
+      "arguments": [
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public: for a publicly live business with a storefront (current CIPC sticker, its owner's package running, the owner's first such business) or a live listing holding that package's slot, the business id and name, the listing count, categories, vehicle makes and property areas; null for any other post. Card facts only: no owner, package, slot, account or contact."
+    },
+    {
       "name": "save_my_post_template",
       "updates": ["updates/20261121162018_post_templates.sql"],
       "arguments": [

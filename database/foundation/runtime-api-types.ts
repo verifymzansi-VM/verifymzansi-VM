@@ -16,6 +16,7 @@ export type FoundationRuntimePublicDatabase = {
       get_post_engagement: { Args: { p_post_ids: string[] }; Returns: Json };
       get_signup_mode: { Args: Record<never, never>; Returns: Json };
       get_vat_registration: { Args: Record<never, never>; Returns: Json };
+      get_public_storefront: { Args: { p_post_id: string }; Returns: Json };
     };
   };
 };
@@ -71,6 +72,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       get_my_slot_package: { Args: Record<never, never>; Returns: Json };
       get_payment_limits: { Args: Record<never, never>; Returns: Json };
       get_post_engagement: { Args: { p_post_ids: string[] }; Returns: Json };
+      get_public_storefront: { Args: { p_post_id: string }; Returns: Json };
       get_my_communication_choices: { Args: Record<never, never>; Returns: Json };
       save_my_communication_choices: {
         Args: {
