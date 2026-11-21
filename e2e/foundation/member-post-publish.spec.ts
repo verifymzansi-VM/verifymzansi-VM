@@ -81,7 +81,7 @@ test.use({ serviceWorkers: "block" });
 /** The one registration reply while sign-up is by invitation only (the
  * database's sign-up mode, invite only by default, as in production). */
 const INVITE_ONLY_REPLY =
-  "Registration is by invitation only for now. If this email was invited, check your inbox to continue.";
+  "VerifyMzansi is open by invitation for now. If this email was invited, we've sent it a confirmation link. Nothing there after a few minutes? Resend it, or sign up with the email address your invitation was sent to.";
 
 test.describe.configure({ mode: "serial" });
 
@@ -303,7 +303,7 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     });
     await page.waitForURL(`${APP_ORIGIN}/login?registered=invite`);
     await expect(
-      page.getByText(/Registration is by invitation only for now/).first()
+      page.getByText(/VerifyMzansi is open by invitation for now/).first()
     ).toBeVisible();
     expect(captchaTokens).toEqual(["dev-turnstile-bypass"]);
     expect(queryTestCopy(`select count(*) from auth.users where email = ${sql(email)};`)).toBe("0");
