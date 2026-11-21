@@ -951,6 +951,28 @@ describe("payment problems", () => {
     );
   });
 
+  it("a successful notice for an order that was closed (cancelled) is still settled and kept for staff at once", async () => {
+    // For example an added-slots order closed by a new-package checkout after
+    // the member had already opened it at Ozow.
+    machine.mockImplementation(async (name) => ({
+      data:
+        name === "get_checkout_payment"
+          ? { ...paymentDto(), status: "cancelled" }
+          : name === "apply_provider_event"
+            ? { outcome: "complete_unfulfillable_target", payment_id: payment }
+            : { new: true, alert: true },
+      error: null,
+    }));
+    await applyFoundationOzowNotification(
+      { ...notification(), status: "Successful", format: "full" },
+      "signed",
+      service
+    );
+    const applied = machine.mock.calls.find(([name]) => name === "apply_provider_event");
+    expect(applied?.[1]).toMatchObject({ p_event: { status: "complete" } });
+    expect(recorded()).toEqual([problem("complete_unfulfillable_target", "notice", true)]);
+  });
+
   it.each(["completed", "already_complete", "duplicate_event", "late_status_ignored"])(
     "a routine outcome %s is not a problem",
     async (outcome) => {
