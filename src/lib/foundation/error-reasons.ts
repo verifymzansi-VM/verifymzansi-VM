@@ -53,7 +53,6 @@ export const FOUNDATION_ERROR_REASONS = {
   disclosure_lookup_invalid: ["22023"],
   disclosure_lookup_value_invalid: ["22023"],
   disclosure_purpose_invalid: ["22023"],
-  disclosure_rate_limited: ["PT429"],
   disclosure_reason_required: ["22023"],
   disclosure_reference_required: ["22023"],
   disclosure_request_date_invalid: ["22023"],

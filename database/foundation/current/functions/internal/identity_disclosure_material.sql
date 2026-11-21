@@ -11,7 +11,7 @@ declare d private.identity_disclosures; records jsonb:='[]'::jsonb;
 begin
   if p_disclosure is null or p_staff is null then
     raise exception 'disclosure and staff member required' using errcode='22023'; end if;
-  d:=internal.identity_disclosure_open_for(p_disclosure,p_staff,null);
+  d:=internal.identity_disclosure_open_for(p_disclosure,p_staff);
   if d.outcome='record' then
     select coalesce(jsonb_agg(x.material order by u.ord),'[]'::jsonb) into records
       from unnest(d.subject_ids) with ordinality u(subject,ord)

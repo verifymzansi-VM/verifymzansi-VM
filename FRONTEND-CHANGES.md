@@ -3083,9 +3083,7 @@ from the authority request pictures the owner approved on 20 November 2026
   name, the reference and the time to the Audit log. A search that finds nobody
   is logged too.' Each refusal is shown under the form and marks its field.
   'Earlier requests': reference, disclosure number, date, who opened it, and
-  Printed, Viewed only, No match found (or the result); 'Back to the record'
-  while one of your own is still open. 'The record closed.' after a record
-  closes.
+  Printed, Viewed only, No match found (or the result).
 - `/admin/authority-requests/[id]`: the amber line 'Logged as disclosure D-0042.
   Opened by … on … for …. This record closes by itself 15 minutes after it was
   opened; opening it again is logged again.' 'Kept identity record': the
@@ -3104,8 +3102,7 @@ from the authority request pictures the owner approved on 20 November 2026
 
 Not in the pictures: 'How the ID was checked' reads 'Staff review' (automatic
 checks come with a later update); 'Account' shows the account id; the 'kept
-until' date waits for the retention update; the list's 'Back to the record'
-link and the 'The record closed.' line.
+until' date waits for the retention update.
 
 Pictures (synthetic test people only, not published):
 `docs/engineering-review/screenshots/didit-pr4/` (desktop and phone).
@@ -3114,14 +3111,14 @@ Decision: awaiting owner (built from the approved pictures).
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/app/admin/authority-requests/page.tsx` | visual | Group 76: the new Authority requests page (governors and admins): the intro, the 2-step line and the earlier requests. | Governors and admins: the page described in group 76; a message when the list cannot be loaded. | keep | awaiting owner | 2026-11-21 | 66b629cc2307 |
+| `src/app/admin/authority-requests/page.tsx` | visual | Group 76: the new Authority requests page (governors and admins): the intro, the 2-step line and the earlier requests. | Governors and admins: the page described in group 76; a message when the list cannot be loaded. | keep | awaiting owner | 2026-11-21 | ea4cd6674461 |
 | `src/app/admin/authority-requests/authority-request-form.tsx` | visual | Group 76: the request form (request, search, confirmation, Open record). | Governors and admins: the form described in group 76. | keep | awaiting owner | 2026-11-21 | dd25564fa75a |
 | `src/app/admin/authority-requests/[id]/page.tsx` | visual | Group 76: the record page (logged line, kept identity record, Close record, Print disclosure sheet). | Governors and admins: the record described in group 76. | keep | awaiting owner | 2026-11-21 | 8aa9fd67be4c |
-| `src/app/admin/authority-requests/[id]/record-view.tsx` | visual | Group 76: one person's record (selfie, names, ID number, phones, how checked, ID photo, account), used on the page and the sheet. | Governors and admins: the record rows described in group 76. | keep | awaiting owner | 2026-11-21 | 8577d1873c42 |
-| `src/app/admin/authority-requests/[id]/record-parts.tsx` | visual | Group 76: the selfie, Close record and Print buttons, and the 15-minute close. | Governors and admins: the selfie and the buttons described in group 76. | keep | awaiting owner | 2026-11-21 | 5ceaf986cb16 |
+| `src/app/admin/authority-requests/[id]/record-view.tsx` | visual | Group 76: one person's record (selfie, names, ID number, phones, how checked, ID photo, account), used on the page and the sheet. | Governors and admins: the record rows described in group 76. | keep | awaiting owner | 2026-11-21 | 1470e17b35b6 |
+| `src/app/admin/authority-requests/[id]/record-parts.tsx` | visual | Group 76: the selfie, Close record and Print buttons, and the 15-minute close. | Governors and admins: the selfie and the buttons described in group 76. | keep | awaiting owner | 2026-11-21 | 7b8abb1c8c00 |
 | `src/app/admin/authority-requests/[id]/sheet/page.tsx` | visual | Group 76: the watermarked print disclosure sheet. | Governors and admins: the sheet described in group 76. | keep | awaiting owner | 2026-11-21 | eab97da19627 |
-| `src/app/admin/authority-requests/page.test.tsx` | test | Group 76: checks the guard, the 2-step line, the searches (never by name), opening, refusals, the earlier requests and the re-verify redirect. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | 298bff6ea424 |
-| `src/app/admin/authority-requests/[id]/page.test.tsx` | test | Group 76: checks the record, no match, an ID number only tried, closing and the re-verify redirect, and the sheet's watermark and stamp. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | 1fc59bef2e13 |
+| `src/app/admin/authority-requests/page.test.tsx` | test | Group 76: checks the guard, the 2-step line, the searches (never by name), opening, refusals, the earlier requests and the re-verify redirect. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | 4dfc5e92ae5c |
+| `src/app/admin/authority-requests/[id]/page.test.tsx` | test | Group 76: checks the record, no match, an ID number only tried, closing and the re-verify redirect, and the sheet's watermark and stamp. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | d4ed12688923 |
 
 <!-- frontend-ledger:end -->
 

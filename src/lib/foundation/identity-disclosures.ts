@@ -15,6 +15,7 @@ import { sourceIdentityDigestToFingerprint } from "../domains/verification/ident
 import { validateSaIdChecksum } from "../utils/sa-id-validation";
 import { getR2ObjectBytes } from "../services/storage";
 import { decryptData } from "../utils/encryption";
+import { createLogger } from "../utils/logger";
 import { detectMimeFromMagicBytes } from "../utils/file-validation";
 import {
   AUTHORITY_REQUEST_MESSAGES,
@@ -83,8 +84,6 @@ function refuse(error: NonNullable<DatabaseError>): never {
   if (error.code === "22023")
     for (const reason of REASONS_22023)
       if (hasDatabaseReason(error, reason)) throw new AuthorityRequestRefused(422, reason);
-  if (error.code === "PT429" && hasDatabaseReason(error, "disclosure_rate_limited"))
-    throw new AuthorityRequestRefused(429, "disclosure_rate_limited");
   if (error.code === "PT409" && hasDatabaseReason(error, "disclosure_closed"))
     throw new AuthorityRequestRefused(410, "disclosure_closed");
   if (error.code === "PT409" && hasDatabaseReason(error, "disclosure_unavailable"))
@@ -113,13 +112,11 @@ const listResult = z.strictObject({
         number,
         opened_at: timestamp,
         opened_by_name: publicName,
-        mine: z.boolean(),
         request_type: requestType,
         reference: z.string().min(3).max(100),
         outcome,
         viewed: z.boolean(),
         printed: z.boolean(),
-        open: z.boolean(),
       })
     )
     .max(50),
@@ -218,7 +215,12 @@ const materialResult = z.strictObject({
 
 export type DisclosureListItem = z.infer<typeof listResult>["items"][number];
 export type DisclosureRead = z.infer<typeof readResult>;
-export type DisclosureKeptRecord = z.infer<typeof keptRecord> & { id_number: string | null };
+/** `id_number_unreadable`: the number is kept but this server could not
+ * decrypt it (a key mismatch); the rest of the record is still shown. */
+export type DisclosureKeptRecord = z.infer<typeof keptRecord> & {
+  id_number: string | null;
+  id_number_unreadable: boolean;
+};
 export type DisclosureRecord =
   DisclosureKeptRecord | z.infer<typeof attempts> | z.infer<typeof noRecord>;
 
@@ -380,13 +382,19 @@ export async function readIdentityDisclosure(
     records: shown.records.map((record) => {
       if (!("verified_at" in record)) return record;
       const found = material.find((item) => item.account_id === record.account_id);
-      return {
-        ...record,
-        id_number:
-          record.id_number_kept && found?.encrypted_number
-            ? decryptNumber(record.account_id, found.encrypted_number)
-            : null,
-      };
+      let number: string | null = null;
+      let unreadable = false;
+      if (record.id_number_kept && found?.encrypted_number) {
+        try {
+          number = decryptNumber(record.account_id, found.encrypted_number);
+        } catch {
+          // Logged without the record; the page says the number is kept but
+          // could not be read, so staff never mistake it for "not kept".
+          unreadable = true;
+          createLogger("AuthorityRequests").error("Kept ID number could not be decrypted");
+        }
+      }
+      return { ...record, id_number: number, id_number_unreadable: unreadable };
     }),
   };
 }

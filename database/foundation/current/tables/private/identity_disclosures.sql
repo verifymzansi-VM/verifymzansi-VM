@@ -5,7 +5,6 @@ create table private.identity_disclosures (
   id uuid default gen_random_uuid() not null,
   number bigint generated always as identity not null,
   opened_by uuid not null,
-  opened_session uuid not null,
   opened_at timestamp with time zone not null,
   closes_at timestamp with time zone not null,
   request_type text not null,

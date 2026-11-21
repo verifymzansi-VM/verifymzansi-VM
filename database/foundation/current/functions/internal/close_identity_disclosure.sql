@@ -10,8 +10,7 @@ AS $function$
 declare actor uuid:=internal.staff_actor('identity:disclose'); d private.identity_disclosures;
 begin
   select x.* into d from private.identity_disclosures x where x.id=p_disclosure;
-  if not found or d.opened_by is distinct from actor
-    or d.opened_session is distinct from (auth.jwt()->>'session_id')::uuid then
+  if not found or d.opened_by is distinct from actor then
     raise exception 'disclosure unavailable' using errcode='PT409',detail='disclosure_unavailable'; end if;
   if d.closes_at>clock_timestamp() and not exists(select 1 from private.identity_disclosure_events e
       where e.disclosure_id=d.id and e.kind='closed') then

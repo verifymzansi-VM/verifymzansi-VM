@@ -174,7 +174,7 @@ drop function if exists internal.list_identity_disclosures();
 drop function if exists api.identity_disclosure_material(uuid,uuid);
 drop function if exists internal.identity_disclosure_material(uuid,uuid);
 drop function if exists internal.identity_disclosure_record(private.identity_disclosures,uuid);
-drop function if exists internal.identity_disclosure_open_for(uuid,uuid,uuid);
+drop function if exists internal.identity_disclosure_open_for(uuid,uuid);
 drop function if exists internal.identity_disclosure_text_ok(text,integer,integer);
 drop table if exists private.identity_disclosure_events;
 drop table if exists private.identity_disclosures;

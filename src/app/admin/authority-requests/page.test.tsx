@@ -44,13 +44,11 @@ const item = (overrides: Record<string, unknown> = {}) => ({
   number: 42,
   opened_at: "2026-11-18T08:00:00Z",
   opened_by_name: "Senzo N.",
-  mine: true,
   request_type: "subpoena",
   reference: "CAS 88/11/2026",
   outcome: "record",
   viewed: true,
   printed: true,
-  open: false,
   ...overrides,
 });
 
@@ -63,20 +61,20 @@ describe("AuthorityRequestsPage", () => {
   });
 
   it("needs identity:disclose (governors and admins)", async () => {
-    render(await AuthorityRequestsPage({}));
+    render(await AuthorityRequestsPage());
     expect(staffGuard.requireStaff).toHaveBeenCalledWith("identity:disclose");
     expect(screen.getByRole("heading", { level: 1, name: "Authority requests" })).toBeVisible();
     expect(screen.getByText(/Every opening is logged/)).toBeVisible();
   });
 
   it("shows how long the 2-step check still lets staff open a record", async () => {
-    render(await AuthorityRequestsPage({}));
+    render(await AuthorityRequestsPage());
     expect(screen.getByText("2-step check done 3 minutes ago.")).toBeVisible();
     expect(screen.getByText(/open a record for 12 more minutes/)).toBeVisible();
   });
 
   it("offers post, ID number, phone and email searches, never a name", async () => {
-    render(await AuthorityRequestsPage({}));
+    render(await AuthorityRequestsPage());
     const options = Array.from(
       (screen.getByLabelText("Search by") as HTMLSelectElement).options
     ).map((option) => option.value);
@@ -91,7 +89,7 @@ describe("AuthorityRequestsPage", () => {
       Response.json({ id: "00000000-0000-4000-8000-000000000009", number: 43 })
     );
     vi.stubGlobal("fetch", fetchMock);
-    render(await AuthorityRequestsPage({}));
+    render(await AuthorityRequestsPage());
     fireEvent.change(screen.getByLabelText("Request reference"), {
       target: { value: "CAS 123/11/2026" },
     });
@@ -125,7 +123,7 @@ describe("AuthorityRequestsPage", () => {
         )
       )
     );
-    render(await AuthorityRequestsPage({}));
+    render(await AuthorityRequestsPage());
     fireEvent.click(screen.getByRole("button", { name: "Open record" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("genuine, signed");
     expect(screen.getByRole("checkbox")).toHaveAttribute("aria-invalid", "true");
@@ -149,32 +147,18 @@ describe("AuthorityRequestsPage", () => {
         reference: "CAS 301/10/2026",
       }),
     ]);
-    render(await AuthorityRequestsPage({}));
+    render(await AuthorityRequestsPage());
     expect(screen.getByText("Printed")).toBeVisible();
     expect(screen.getByText("Viewed only")).toBeVisible();
     expect(screen.getByText("No match found")).toBeVisible();
     expect(screen.getByText(/D-0042 · .* · opened by Senzo N\./)).toBeVisible();
   });
 
-  it("links back to a record that is still open for this staff member", async () => {
-    listIdentityDisclosures.mockResolvedValue([item({ open: true })]);
-    render(await AuthorityRequestsPage({}));
-    expect(screen.getByRole("link", { name: "Back to the record" })).toHaveAttribute(
-      "href",
-      "/admin/authority-requests/00000000-0000-4000-8000-000000000001"
-    );
-  });
-
-  it("says when a record closed", async () => {
-    render(await AuthorityRequestsPage({ searchParams: Promise.resolve({ closed: "1" }) }));
-    expect(screen.getByText("The record closed.")).toBeVisible();
-  });
-
   it("sends staff to confirm their authenticator, then back here", async () => {
     listIdentityDisclosures.mockRejectedValue(
       new FoundationStaffCommandError(403, "Verify again", true)
     );
-    await expect(AuthorityRequestsPage({})).rejects.toThrow("NEXT_REDIRECT");
+    await expect(AuthorityRequestsPage()).rejects.toThrow("NEXT_REDIRECT");
     expect(redirectMock).toHaveBeenCalledWith(
       "/staff/two-step?confirm=1&next=%2Fadmin%2Fauthority-requests"
     );
@@ -182,7 +166,7 @@ describe("AuthorityRequestsPage", () => {
 
   it("does not claim an empty list when the read fails", async () => {
     listIdentityDisclosures.mockRejectedValue(new Error("down"));
-    render(await AuthorityRequestsPage({}));
+    render(await AuthorityRequestsPage());
     expect(screen.getByRole("alert")).toHaveTextContent("could not be loaded");
     expect(screen.queryByText(/No record has been opened yet/)).toBeNull();
   });

@@ -7,7 +7,7 @@
 --    authenticator code from the last 15 minutes). Moderators never hold it.
 -- 2. New append-only log private.identity_disclosures: one row per opening,
 --    written before anything about the person is returned. It records who
---    opened it, on which sign-in session, when, the request (type from a
+--    opened it, when, the request (type from a
 --    closed list, reference, who is asking, the date of the request, the
 --    reason, and the staff member's confirmation that the request is genuine
 --    and signed), what was searched (kind and value: a post id or link, the ID
@@ -28,14 +28,13 @@
 -- 4. Commands, all through internal.staff_actor('identity:disclose'):
 --    - api.open_identity_disclosure(...) writes the log row and returns only
 --      its id, number, outcome, match count and closing time: no personal
---      data. At most 20 openings per staff member in 24 hours (PT429, detail
---      disclosure_rate_limited).
+--      data.
 --    - api.read_identity_disclosure(disclosure, purpose, subject) returns the
 --      record of an open disclosure (full names as on the ID, whether the ID
 --      number and the selfie are still kept, the ID photo's state, every
 --      verified phone number with its dates, the verification date) and logs
 --      the look first (purpose view, print or selfie). Only the staff member
---      who opened it, on the same sign-in session, until it closes (PT409,
+--      who opened it, until it closes (PT409,
 --      details disclosure_unavailable and disclosure_closed). For an ID number
 --      that was only tried, it returns the accounts and dates of the attempts
 --      and nothing more.
@@ -102,7 +101,6 @@ create table if not exists private.identity_disclosures (
   id uuid not null default gen_random_uuid(),
   number bigint generated always as identity,
   opened_by uuid not null,
-  opened_session uuid not null,
   opened_at timestamptz not null,
   closes_at timestamptz not null,
   request_type text not null,
@@ -201,10 +199,9 @@ $function$;
 alter function internal.identity_disclosure_text_ok(text,integer,integer) owner to postgres;
 revoke all on function internal.identity_disclosure_text_ok(text,integer,integer) from public, anon, authenticated, service_role;
 
--- The disclosure, still open, for the staff member who opened it (and, when
--- given, on the same sign-in session). Another staff member's disclosure and
--- an unknown one give the same answer.
-CREATE OR REPLACE FUNCTION internal.identity_disclosure_open_for(p_disclosure uuid, p_staff uuid, p_session uuid)
+-- The disclosure, still open, for the staff member who opened it. Another
+-- staff member's disclosure and an unknown one give the same answer.
+CREATE OR REPLACE FUNCTION internal.identity_disclosure_open_for(p_disclosure uuid, p_staff uuid)
  RETURNS private.identity_disclosures
  LANGUAGE plpgsql
  SET search_path TO 'pg_catalog'
@@ -212,8 +209,7 @@ AS $function$
 declare d private.identity_disclosures;
 begin
   select x.* into d from private.identity_disclosures x where x.id=p_disclosure;
-  if not found or d.opened_by is distinct from p_staff
-    or (p_session is not null and d.opened_session is distinct from p_session) then
+  if not found or d.opened_by is distinct from p_staff then
     raise exception 'disclosure unavailable' using errcode='PT409',detail='disclosure_unavailable'; end if;
   if d.closes_at<=clock_timestamp() or exists(select 1 from private.identity_disclosure_events e
       where e.disclosure_id=d.id and e.kind='closed') then
@@ -221,8 +217,8 @@ begin
   return d;
 end;
 $function$;
-alter function internal.identity_disclosure_open_for(uuid,uuid,uuid) owner to postgres;
-revoke all on function internal.identity_disclosure_open_for(uuid,uuid,uuid) from public, anon, authenticated, service_role;
+alter function internal.identity_disclosure_open_for(uuid,uuid) owner to postgres;
+revoke all on function internal.identity_disclosure_open_for(uuid,uuid) from public, anon, authenticated, service_role;
 
 -- What a disclosure shows about one named account. A kept record: the newest
 -- accepted identity of the account. An ID number that was only tried: the
@@ -311,11 +307,6 @@ begin
       else length(v_value)<=254 and v_value ~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$' end) then
     raise exception 'valid search value required' using errcode='22023',detail='disclosure_lookup_value_invalid'; end if;
 
-  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('identity_disclosure:'||actor::text,0));
-  actor:=internal.staff_actor('identity:disclose');
-  if (select count(*) from private.identity_disclosures x where x.opened_by=actor
-      and x.opened_at>clock_timestamp()-interval '24 hours')>=20 then
-    raise exception 'too many authority request openings' using errcode='PT429',detail='disclosure_rate_limited'; end if;
 
   if p_lookup_kind='post' then
     if v_value ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then post:=v_value::uuid;
@@ -346,9 +337,9 @@ begin
 
   -- The log row is written before anything about the person is answered.
   made:=clock_timestamp();
-  insert into private.identity_disclosures(opened_by,opened_session,opened_at,closes_at,request_type,
+  insert into private.identity_disclosures(opened_by,opened_at,closes_at,request_type,
       request_reference,requested_by,request_date,reason,attested,lookup_kind,lookup_value,outcome,subject_ids,match_count)
-    values(actor,(auth.jwt()->>'session_id')::uuid,made,made+interval '15 minutes',p_request_type,
+    values(actor,made,made+interval '15 minutes',p_request_type,
       btrim(p_reference),btrim(p_requested_by),asked,btrim(p_reason),true,p_lookup_kind,v_value,outcome,
       matched[1:5],cardinality(matched))
     returning * into d;
@@ -385,7 +376,7 @@ begin
     raise exception 'valid purpose required' using errcode='22023',detail='disclosure_purpose_invalid'; end if;
   if p_disclosure is null or (p_purpose='selfie')<>(p_subject is not null) then
     raise exception 'valid disclosure required' using errcode='22023',detail='disclosure_subject_invalid'; end if;
-  d:=internal.identity_disclosure_open_for(p_disclosure,actor,(auth.jwt()->>'session_id')::uuid);
+  d:=internal.identity_disclosure_open_for(p_disclosure,actor);
   if p_subject is not null and (d.outcome<>'record' or not p_subject=any(d.subject_ids)) then
     raise exception 'valid disclosure required' using errcode='22023',detail='disclosure_subject_invalid'; end if;
   -- The look is logged before anything is answered.
@@ -430,8 +421,7 @@ AS $function$
 declare actor uuid:=internal.staff_actor('identity:disclose'); d private.identity_disclosures;
 begin
   select x.* into d from private.identity_disclosures x where x.id=p_disclosure;
-  if not found or d.opened_by is distinct from actor
-    or d.opened_session is distinct from (auth.jwt()->>'session_id')::uuid then
+  if not found or d.opened_by is distinct from actor then
     raise exception 'disclosure unavailable' using errcode='PT409',detail='disclosure_unavailable'; end if;
   if d.closes_at>clock_timestamp() and not exists(select 1 from private.identity_disclosure_events e
       where e.disclosure_id=d.id and e.kind='closed') then
@@ -462,15 +452,14 @@ CREATE OR REPLACE FUNCTION internal.list_identity_disclosures()
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid:=internal.staff_actor('identity:disclose'); v_session uuid:=(auth.jwt()->>'session_id')::uuid; items jsonb;
+declare items jsonb;
 begin
+  perform internal.staff_actor('identity:disclose');
   select coalesce(jsonb_agg(jsonb_build_object('id',d.id,'number',d.number,'opened_at',d.opened_at,
-      'opened_by_name',internal.profile_public_name(p.display_name),'mine',d.opened_by=actor,
+      'opened_by_name',internal.profile_public_name(p.display_name),
       'request_type',d.request_type,'reference',d.request_reference,'outcome',d.outcome,
       'viewed',exists(select 1 from private.identity_disclosure_events e where e.disclosure_id=d.id and e.kind='viewed'),
-      'printed',exists(select 1 from private.identity_disclosure_events e where e.disclosure_id=d.id and e.kind='printed'),
-      'open',d.opened_by=actor and d.opened_session=v_session and d.closes_at>clock_timestamp()
-        and not exists(select 1 from private.identity_disclosure_events e where e.disclosure_id=d.id and e.kind='closed'))
+      'printed',exists(select 1 from private.identity_disclosure_events e where e.disclosure_id=d.id and e.kind='printed'))
     order by d.opened_at desc,d.id desc),'[]'::jsonb) into items
   from (select x.* from private.identity_disclosures x order by x.opened_at desc,x.id desc limit 50) d
   left join private.profiles p on p.account_id=d.opened_by;
@@ -504,7 +493,7 @@ declare d private.identity_disclosures; records jsonb:='[]'::jsonb;
 begin
   if p_disclosure is null or p_staff is null then
     raise exception 'disclosure and staff member required' using errcode='22023'; end if;
-  d:=internal.identity_disclosure_open_for(p_disclosure,p_staff,null);
+  d:=internal.identity_disclosure_open_for(p_disclosure,p_staff);
   if d.outcome='record' then
     select coalesce(jsonb_agg(x.material order by u.ord),'[]'::jsonb) into records
       from unnest(d.subject_ids) with ordinality u(subject,ord)

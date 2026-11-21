@@ -249,7 +249,7 @@ try {
     assert.deepEqual(
       executeGrants(json, [
         "internal.identity_disclosure_material(uuid,uuid)",
-        "internal.identity_disclosure_open_for(uuid,uuid,uuid)",
+        "internal.identity_disclosure_open_for(uuid,uuid)",
         "internal.identity_disclosure_record(private.identity_disclosures,uuid)",
       ]),
       {
@@ -258,7 +258,7 @@ try {
           authenticated: false,
           service_role: true,
         },
-        "internal.identity_disclosure_open_for(uuid,uuid,uuid)": {
+        "internal.identity_disclosure_open_for(uuid,uuid)": {
           anon: false,
           authenticated: false,
           service_role: false,
@@ -406,7 +406,6 @@ try {
       assert.equal(logCount(), before + 1);
       const row = logRow(opened.disclosure_id);
       assert.equal(row.opened_by, admin.id);
-      assert.equal(row.opened_session, admin.session);
       assert.equal(row.request_type, "subpoena");
       assert.equal(row.request_reference, "CAS 123/11/2026");
       assert.equal(row.lookup_kind, "phone");
@@ -591,7 +590,7 @@ try {
       ]);
     }
   );
-  await check("only the opener, on the same sign-in session, can read or close it", () => {
+  await check("only the opener can read or close it", () => {
     const opened = open(admin, thandoRequest);
     for (const sql of [
       readSql(opened.disclosure_id),
@@ -600,13 +599,6 @@ try {
       assert.match(fails(staff(otherAdmin, sql), "PT409"), /DETAIL:\s+disclosure_unavailable/);
       assert.match(fails(staff(governor, sql), "PT409"), /DETAIL:\s+disclosure_unavailable/);
     }
-    const otherSession =
-      json(`with s as (insert into auth.sessions(id,user_id,aal) values(gen_random_uuid(),'${admin.id}','aal2') returning id)
-      select jsonb_build_object('id','${admin.id}','session',id) from s;`);
-    assert.match(
-      fails(staff(otherSession, readSql(opened.disclosure_id)), "PT409"),
-      /DETAIL:\s+disclosure_unavailable/
-    );
     assert.match(
       fails(staff(admin, readSql(randomUUID())), "PT409"),
       /DETAIL:\s+disclosure_unavailable/
@@ -631,18 +623,8 @@ try {
       ),
       /DETAIL:\s+disclosure_closed/
     );
-    const listed = json(staff(admin, `select api.list_identity_disclosures();`)).items.find(
-      (item) => item.id === opened.disclosure_id
-    );
-    assert.equal(listed.open, false);
     // Closing early.
     const early = open(admin, thandoRequest);
-    assert.equal(
-      json(staff(admin, `select api.list_identity_disclosures();`)).items.find(
-        (i) => i.id === early.disclosure_id
-      ).open,
-      true
-    );
     assert.deepEqual(
       json(staff(admin, `select api.close_identity_disclosure('${early.disclosure_id}');`)),
       {
@@ -677,9 +659,7 @@ try {
       assert.ok(!text.includes(secret), `the list shows ${secret}`);
     assert.deepEqual(Object.keys(items[0]).sort(), [
       "id",
-      "mine",
       "number",
-      "open",
       "opened_at",
       "opened_by_name",
       "outcome",
@@ -743,28 +723,6 @@ try {
     assert.match(fails(ROLLBACK, "55000"), /the disclosure log is not empty/);
     assert.equal(fingerprint(), before);
   });
-  await check(
-    "LIM-SQL-identity-disclosure-rate: at most 20 openings per staff member in 24 hours",
-    () => {
-      const busy = staffMember("busy", "governor");
-      const statements = Array.from({ length: 20 }, () =>
-        openSql(request({ value: "+27827777777" }))
-      ).join("\n");
-      q(staff(busy, statements));
-      const stderr = fails(staff(busy, openSql(request({ value: "+27827777777" }))), "PT429");
-      assert.match(stderr, /DETAIL:\s+disclosure_rate_limited/);
-      assert.equal(
-        q(`select count(*) from private.identity_disclosures where opened_by='${busy.id}';`),
-        "20"
-      );
-      // Another staff member is not affected; a day later the openings count no more.
-      open(admin, request({ value: "+27827777777" }));
-      q(`begin; set local session_replication_role=replica;
-      update private.identity_disclosures set opened_at=opened_at-interval '24 hours',
-        closes_at=closes_at-interval '24 hours' where opened_by='${busy.id}'; commit;`);
-      open(busy, request({ value: "+27827777777" }));
-    }
-  );
   await check("a staff member who loses the role can no longer read an open record", () => {
     const leaving = staffMember("leaving", "admin");
     const opened = open(leaving, thandoRequest);

@@ -36,7 +36,7 @@ export async function loadDisclosureRecord(id: string, purpose: "view" | "print"
     if (error instanceof FoundationStaffCommandError && error.mfaRequired)
       redirect(staffVerifyHref("/staff/two-step?confirm=1", path));
     if (error instanceof AuthorityRequestRefused) {
-      if (error.reason === "disclosure_closed") redirect(`${AUTHORITY_REQUESTS_PATH}?closed=1`);
+      if (error.reason === "disclosure_closed") redirect(AUTHORITY_REQUESTS_PATH);
       if (error.reason === "disclosure_unavailable") notFound();
     }
     throw error;

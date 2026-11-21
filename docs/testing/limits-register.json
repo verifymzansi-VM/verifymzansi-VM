@@ -9992,25 +9992,6 @@
       ]
     },
     {
-      "id": "LIM-SQL-identity-disclosure-rate",
-      "title": "Authority requests: at most 20 openings per staff member in 24 hours",
-      "value": ">= 20 in 24 hours",
-      "category": "rate",
-      "enforcedAt": [
-        {
-          "file": "database/foundation/current/functions/internal/open_identity_disclosure.sql",
-          "symbol": "internal.open_identity_disclosure",
-          "contains": "and x.opened_at>clock_timestamp()-interval '24 hours')>=20 then"
-        }
-      ],
-      "tests": [
-        {
-          "kind": "behaviour",
-          "file": "scripts/test-foundation-identity-record-disclosure.mjs"
-        }
-      ]
-    },
-    {
       "id": "LIM-SQL-inbox-page-size",
       "title": "Owner inbox pages: 1 to 50 items",
       "value": "1 to 50",

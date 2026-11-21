@@ -21,7 +21,7 @@ export function RecordCloser({ closesAt }: { closesAt: string }) {
   useEffect(() => {
     const wait = Math.max(0, new Date(closesAt).getTime() - Date.now());
     const timer = window.setTimeout(
-      () => router.replace(`${AUTHORITY_REQUESTS_PATH}?closed=1`),
+      () => router.replace(AUTHORITY_REQUESTS_PATH),
       Math.min(wait, 2147483647)
     );
     return () => window.clearTimeout(timer);

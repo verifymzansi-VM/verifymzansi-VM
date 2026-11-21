@@ -13,7 +13,7 @@ begin
     raise exception 'valid purpose required' using errcode='22023',detail='disclosure_purpose_invalid'; end if;
   if p_disclosure is null or (p_purpose='selfie')<>(p_subject is not null) then
     raise exception 'valid disclosure required' using errcode='22023',detail='disclosure_subject_invalid'; end if;
-  d:=internal.identity_disclosure_open_for(p_disclosure,actor,(auth.jwt()->>'session_id')::uuid);
+  d:=internal.identity_disclosure_open_for(p_disclosure,actor);
   if p_subject is not null and (d.outcome<>'record' or not p_subject=any(d.subject_ids)) then
     raise exception 'valid disclosure required' using errcode='22023',detail='disclosure_subject_invalid'; end if;
   -- The look is logged before anything is answered.

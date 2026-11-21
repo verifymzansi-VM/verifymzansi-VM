@@ -5631,7 +5631,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Governor or admin (identity:disclose) with an authenticator code from the last 15 minutes: checks an authority request (type from a closed list, reference, who is asking, a request date within 5 years and not in the future, a reason, and the confirmation that it is genuine and signed), looks the person up by post id or link slug, ID number fingerprint, phone number or email address (never by name), and writes the append-only log row before answering. Returns only the log row id, number, outcome, match count and closing time (15 minutes); a search that finds nobody is logged too. At most 20 openings per staff member in 24 hours."
+      "authority": "Governor or admin (identity:disclose) with an authenticator code from the last 15 minutes: checks an authority request (type from a closed list, reference, who is asking, a request date within 5 years and not in the future, a reason, and the confirmation that it is genuine and signed), looks the person up by post id or link slug, ID number fingerprint, phone number or email address (never by name), and writes the append-only log row before answering. Returns only the log row id, number, outcome, match count and closing time (15 minutes); a search that finds nobody is logged too."
     },
     {
       "name": "read_identity_disclosure",
@@ -5660,7 +5660,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Governor or admin (identity:disclose, authenticator code from the last 15 minutes), only the staff member who opened the disclosure, on the same sign-in session, until it closes: logs the look (view, print or selfie) first, then returns the request and, per named account, the kept identity record (full names as on the ID, verification date, whether the ID number and selfie are still kept, the ID photo state, verified phone numbers with dates) or, for an ID number only ever tried, the dates of the attempts. Never object keys or the encrypted number."
+      "authority": "Governor or admin (identity:disclose, authenticator code from the last 15 minutes), only the staff member who opened the disclosure, until it closes: logs the look (view, print or selfie) first, then returns the request and, per named account, the kept identity record (full names as on the ID, verification date, whether the ID number and selfie are still kept, the ID photo state, verified phone numbers with dates) or, for an ID number only ever tried, the dates of the attempts. Never object keys or the encrypted number."
     },
     {
       "name": "close_identity_disclosure",
@@ -5679,7 +5679,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Governor or admin (identity:disclose, authenticator code from the last 15 minutes), only the staff member who opened the disclosure, on the same sign-in session: closes it early and logs the close; repeating it changes nothing."
+      "authority": "Governor or admin (identity:disclose, authenticator code from the last 15 minutes), only the staff member who opened the disclosure: closes it early and logs the close; repeating it changes nothing."
     },
     {
       "name": "list_identity_disclosures",

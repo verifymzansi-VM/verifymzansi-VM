@@ -78,7 +78,14 @@ export function DisclosureRecordView({
           <span className="font-semibold">{name || "Not kept"}</span>
         </Row>
         <Row label="SA ID number">
-          {record.id_number ? (
+          {record.id_number_unreadable ? (
+            <>
+              <span className="font-semibold">Kept, but it could not be read here</span>
+              <Sub>
+                Report this to the platform owner; don&apos;t answer the request without it.
+              </Sub>
+            </>
+          ) : record.id_number ? (
             <span className="font-semibold tabular-nums">{formatIdNumber(record.id_number)}</span>
           ) : (
             <>

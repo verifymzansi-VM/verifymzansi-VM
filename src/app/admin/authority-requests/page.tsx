@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { KeyRound } from "lucide-react";
 import { requireStaff } from "@/lib/auth/require-staff";
@@ -32,11 +31,7 @@ export const dynamic = "force-dynamic";
 
 const CONFIRM = staffVerifyHref("/staff/two-step?confirm=1", AUTHORITY_REQUESTS_PATH);
 
-export default async function AuthorityRequestsPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ closed?: string | string[] }>;
-}) {
+export default async function AuthorityRequestsPage() {
   await requireStaff("identity:disclose");
   let items: DisclosureListItem[];
   try {
@@ -52,7 +47,6 @@ export default async function AuthorityRequestsPage({
       </div>
     );
   }
-  const closed = (await searchParams)?.closed === "1";
   const authenticatorAt = await readStaffAuthenticatorHint();
   const left =
     authenticatorAt === null
@@ -63,12 +57,6 @@ export default async function AuthorityRequestsPage({
   return (
     <div className="space-y-6">
       <Header />
-      {closed && (
-        <p role="status" className="max-w-4xl rounded-2xl border bg-muted/60 p-4 text-sm">
-          <strong className="font-semibold">The record closed.</strong> Records close 15 minutes
-          after they are opened. Opening it again is logged again.
-        </p>
-      )}
       <div
         role="status"
         className="flex max-w-4xl items-start gap-3 rounded-2xl border border-brand-green-200 bg-brand-green-50 p-4 text-sm text-brand-green-900"
@@ -136,14 +124,6 @@ function EarlierRequests({ items }: { items: DisclosureListItem[] }) {
                     {item.opened_by_name ?? "a staff member"}
                   </p>
                 </div>
-                {item.open && (
-                  <Link
-                    href={`${AUTHORITY_REQUESTS_PATH}/${item.id}`}
-                    className="inline-flex h-11 items-center rounded-lg px-3 text-sm font-medium text-primary underline underline-offset-4 sm:h-9"
-                  >
-                    Back to the record
-                  </Link>
-                )}
                 <Badge variant={status.tone === "success" ? "live" : "draft"}>{status.label}</Badge>
               </li>
             );

@@ -38,11 +38,6 @@ begin
       else length(v_value)<=254 and v_value ~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$' end) then
     raise exception 'valid search value required' using errcode='22023',detail='disclosure_lookup_value_invalid'; end if;
 
-  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('identity_disclosure:'||actor::text,0));
-  actor:=internal.staff_actor('identity:disclose');
-  if (select count(*) from private.identity_disclosures x where x.opened_by=actor
-      and x.opened_at>clock_timestamp()-interval '24 hours')>=20 then
-    raise exception 'too many authority request openings' using errcode='PT429',detail='disclosure_rate_limited'; end if;
 
   if p_lookup_kind='post' then
     if v_value ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then post:=v_value::uuid;
@@ -73,9 +68,9 @@ begin
 
   -- The log row is written before anything about the person is answered.
   made:=clock_timestamp();
-  insert into private.identity_disclosures(opened_by,opened_session,opened_at,closes_at,request_type,
+  insert into private.identity_disclosures(opened_by,opened_at,closes_at,request_type,
       request_reference,requested_by,request_date,reason,attested,lookup_kind,lookup_value,outcome,subject_ids,match_count)
-    values(actor,(auth.jwt()->>'session_id')::uuid,made,made+interval '15 minutes',p_request_type,
+    values(actor,made,made+interval '15 minutes',p_request_type,
       btrim(p_reference),btrim(p_requested_by),asked,btrim(p_reason),true,p_lookup_kind,v_value,outcome,
       matched[1:5],cardinality(matched))
     returning * into d;

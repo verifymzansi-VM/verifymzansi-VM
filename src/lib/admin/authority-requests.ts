@@ -151,10 +151,8 @@ export const AUTHORITY_REQUEST_MESSAGES = {
   disclosure_lookup_invalid: "Search by post link, ID number, phone number or email address.",
   disclosure_lookup_value_invalid:
     "Check the search value: a link to a post, a 13-digit SA ID number, an SA phone number or an email address.",
-  disclosure_rate_limited:
-    "You have opened 20 records in the last 24 hours. Ask another governor or admin, or try again later.",
   disclosure_unavailable:
-    "This record isn't open for you. Records open only for the person who opened them, on the same sign-in.",
+    "This record isn't open for you. A record opens only for the person who opened it.",
   disclosure_closed:
     "This record has closed. Open it again from Authority requests; that is logged again.",
   disclosure_not_allowed: "Only governors and admins can open authority requests.",

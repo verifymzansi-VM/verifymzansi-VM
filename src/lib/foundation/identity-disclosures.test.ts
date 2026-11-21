@@ -224,7 +224,6 @@ describe("authority requests: refusals", () => {
       ["22023", "disclosure_attestation_required", 422],
       ["22023", "disclosure_lookup_invalid", 422],
       ["22023", "disclosure_reference_required", 422],
-      ["PT429", "disclosure_rate_limited", 429],
       ["PT409", "disclosure_closed", 410],
       ["PT409", "disclosure_unavailable", 404],
     ] as const) {
@@ -268,13 +267,11 @@ describe("authority requests: reading a record", () => {
             number: 42,
             opened_at: AT,
             opened_by_name: "Senzo N.",
-            mine: true,
             request_type: "subpoena",
             reference: "CAS 123/11/2026",
             outcome: "record",
             viewed: true,
             printed: false,
-            open: true,
           },
         ],
       },
@@ -303,6 +300,20 @@ describe("authority requests: reading a record", () => {
     // The read comes before the material: nothing is shown without the log.
     expect(rpc.mock.invocationCallOrder[0]).toBeLessThan(machine.mock.invocationCallOrder[0]);
     expect(result.records[0]).toMatchObject({ id_number: ID_NUMBER, legal_last_name: "Dlamini" });
+  });
+
+  it("still shows the record when the kept number cannot be decrypted, and says so", async () => {
+    rpc.mockResolvedValue({
+      data: { disclosure: disclosure(), records: [keptRecord] },
+      error: null,
+    });
+    vi.stubEnv("ID_ENCRYPTION_KEY", randomBytes(32).toString("hex"));
+    const result = await readIdentityDisclosure(api, service, STAFF, DISCLOSURE, "view");
+    expect(result.records[0]).toMatchObject({
+      id_number: null,
+      id_number_unreadable: true,
+      legal_last_name: "Dlamini",
+    });
   });
 
   it("fetches no material when nothing is kept", async () => {

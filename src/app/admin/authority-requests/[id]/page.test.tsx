@@ -69,6 +69,7 @@ const record = {
   id_number_kept: true,
   id_number_erased_at: null,
   id_number: "8001015009087",
+  id_number_unreadable: false,
   selfie: { kept: true, taken_at: AT, deleted_at: null },
   id_photo: { kept: false, taken_at: AT, deleted_at: "2026-04-02T08:00:00Z" },
   phones: [
@@ -151,7 +152,7 @@ describe("Authority request record and disclosure sheet", () => {
       new AuthorityRequestRefused(410, "disclosure_closed")
     );
     await expect(RecordPage({ params })).rejects.toThrow("NEXT_REDIRECT");
-    expect(redirectMock).toHaveBeenLastCalledWith("/admin/authority-requests?closed=1");
+    expect(redirectMock).toHaveBeenLastCalledWith("/admin/authority-requests");
     readIdentityDisclosure.mockRejectedValueOnce(
       new FoundationStaffCommandError(403, "Verify", true)
     );

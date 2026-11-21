@@ -103,23 +103,21 @@ before anything is shown.
   `email`. Any other kind is refused (`disclosure_lookup_invalid`), and each
   value must have its kind's form (`disclosure_lookup_value_invalid`).
 - **Log first:** the new append-only table `private.identity_disclosures` gets
-  the row (staff member, sign-in session, time, the request, the search and the
-  outcome `record`, `no_record`, `attempt_only` or `no_match`, with up to 5
-  account ids, the most recent first, and the total) before anything is
-  answered. A search that finds nobody is logged too. The opening answers only
-  the row's id, number, outcome, match count and closing time. At most 20
-  openings per staff member in 24 hours (PT429 `disclosure_rate_limited`).
+  the row (staff member, time, the request, the search and the outcome `record`,
+  `no_record`, `attempt_only` or `no_match`, with up to 5 account ids, the most
+  recent first, and the total) before anything is answered. A search that finds
+  nobody is logged too. The opening answers only the row's id, number, outcome,
+  match count and closing time.
 - **The record:** `api.read_identity_disclosure(disclosure, purpose, subject)`
   first writes a `viewed`, `printed` or `selfie_viewed` row to the append-only
   `private.identity_disclosure_events`, then returns the request and, per
   account, the full names as on the ID, the verification date, whether the ID
   number and the selfie are still kept, the ID photo's state and every verified
-  phone number with its dates. Only the staff member who opened it, on the same
-  sign-in session, until 15 minutes after it was opened (fixed by a check) or an
-  early `api.close_identity_disclosure`; otherwise PT409
-  `disclosure_unavailable` or `disclosure_closed`. An ID number that was only
-  tried (never accepted) returns the account and the dates of the attempts,
-  nothing more.
+  phone number with its dates. Only the staff member who opened it, until 15
+  minutes after it was opened (fixed by a check) or an early
+  `api.close_identity_disclosure`; otherwise PT409 `disclosure_unavailable` or
+  `disclosure_closed`. An ID number that was only tried (never accepted) returns
+  the account and the dates of the attempts, nothing more.
 - **Server only:** `api.identity_disclosure_material(disclosure, staff)`
   (service role) gives the website's server the encrypted ID number and the
   selfie's stored object of an open disclosure opened by that staff member, so
@@ -176,10 +174,10 @@ read, and when either log cannot be written nothing is answered); the record's
 content and that it never carries the stored object or ciphertext; the server
 material only for the opener; every way of searching (post id and slug, ID
 number fingerprint, current and earlier phone, email in any case); no match
-logged; an ID number only tried; only the opener on the same session; closing
-after 15 minutes and early; the list and the Audit log never show the person;
-both logs append-only with the retention exception; the rollback refused with a
-row; the 20-in-24-hours limit; and a staff member who loses the role.
+logged; an ID number only tried; only the opener; closing after 15 minutes and
+early; the list and the Audit log never show the person; both logs append-only
+with the retention exception; the rollback refused with a row; and a staff
+member who loses the role.
 
 ## ID photos with the camera only, and Continue on your phone, 20 November 2026
 

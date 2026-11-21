@@ -49,8 +49,8 @@
       "fingerprint": "5e5623672e80b927048d8553487d5442"
     },
     "columns": {
-      "items": 1426,
-      "fingerprint": "d5042cc55babd3688240190b7b16f546"
+      "items": 1425,
+      "fingerprint": "0ee6e673c49408193556a5a961493b79"
     },
     "constraints": {
       "items": 1268,
@@ -62,7 +62,7 @@
     },
     "function_bodies": {
       "items": 1092,
-      "fingerprint": "cbb7c5e6966c0094b18f59a4773fab38"
+      "fingerprint": "7823819d155d534dcd4592a7c59d72e2"
     },
     "function_grants": {
       "items": 788,
@@ -70,7 +70,7 @@
     },
     "function_metadata": {
       "items": 1092,
-      "fingerprint": "9cc9c7d5e32312651227125c36562e13"
+      "fingerprint": "6ed5e20ba2ccc2d215380b118950ea9a"
     },
     "indexes": {
       "items": 577,
