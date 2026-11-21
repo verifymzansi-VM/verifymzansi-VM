@@ -7,6 +7,7 @@ import { claimTypeOf } from "../admin/moderation-items";
 import { getContentEditChanges } from "../content-edit-diff";
 import { FoundationStaffReadError } from "./staff-read";
 import { areaLabel, restoredArea, restoredContentType } from "./areas";
+import { readStaffCopyFacts } from "./staff-copy-facts";
 const instant = z.iso.datetime({ offset: true });
 const generation = z
   .string()
@@ -147,5 +148,19 @@ export async function readStaffModerationQueue(api: FoundationAuthenticatedApi, 
       result.error.code === "42501" ? 403 : 503,
       result.error.code === "42501"
     );
-  return parseStaffModerationQueue(result.data, accountId);
+  const queue = parseStaffModerationQueue(result.data, accountId);
+  // Copy a post (SHOW_POST_COPY): where each listing the reviewer holds was
+  // copied from and the seller's live posts with the same photo bytes. Only
+  // the reviewer's own current claims (at most 20) are asked for.
+  const facts = await readStaffCopyFacts(
+    api,
+    queue.allItems
+      .filter((i) => i.contentType === "listing" && queue.claims[`${claimTypeOf(i)}:${i.id}`]?.mine)
+      .map((i) => i.id)
+  );
+  for (const item of queue.allItems) {
+    const found = facts.get(item.id);
+    if (found) item.copy_facts = found;
+  }
+  return queue;
 }

@@ -5,10 +5,32 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 import { ListingQualityHint } from "@/components/post/listing-quality-hint";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { usePostTransport } from "@/hooks/use-post-transport";
 import Link from "next/link";
-import { Camera, Check, Eye, FileText, Inbox, MessageCircle, Phone, Tag } from "lucide-react";
+import {
+  Camera,
+  Check,
+  Eye,
+  FileText,
+  Inbox,
+  Loader2,
+  MessageCircle,
+  Phone,
+  Tag,
+} from "lucide-react";
+import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { usePostActionFields } from "@/hooks/use-post-action-fields";
+import { loadOwnListing } from "@/app/post/edit-listing/[id]/load-own-listing";
+import {
+  COPY_NEW_PHOTO_CATEGORIES,
+  COPY_NEW_PHOTO_MESSAGE,
+  listingCopyFields,
+  parseCopyId,
+  submitListingCopy,
+} from "./listing-copy";
+import { CopyFinalCheck, CopyNotice, CopyVideoNote } from "./copy-notes";
+import { SHOW_POST_COPY } from "@/lib/hidden-features";
 import { Input } from "@/components/ui/input";
 import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
@@ -270,7 +292,16 @@ export default function CreateListingPage() {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   const router = useRouter();
-  const { fields: postFields } = usePostTransport();
+  const { fields: postFields, captureRevision } = usePostTransport();
+  // Copy a post (SHOW_POST_COPY): the form opened on a copy, a draft the server
+  // made (?copy=<id>). It never touches the form's autosaved draft.
+  const searchParams = useSearchParams();
+  const copyId = SHOW_POST_COPY ? parseCopyId(searchParams?.get("copy")) : null;
+  const [copyOf, setCopyOf] = useState<string | null>(null);
+  const [copyLoading, setCopyLoading] = useState(copyId !== null);
+  const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
+  const [existingLogo, setExistingLogo] = useState<string | null>(null);
+  const copyActionFields = usePostActionFields();
   const { toast } = useToast();
   const {
     save: saveDraft,
@@ -289,6 +320,12 @@ export default function CreateListingPage() {
     () => photoFiles.map((file) => URL.createObjectURL(file)),
     [photoFiles]
   );
+  // A copy's photos (already stored) come first, then new ones.
+  const allPhotoPreviewUrls = useMemo(
+    () => [...existingPhotos.map((url) => normalizeMediaUrl(url)), ...photoPreviewUrls],
+    [existingPhotos, photoPreviewUrls]
+  );
+  const cardLogoUrl = logoPreviewUrl ?? (existingLogo ? normalizeMediaUrl(existingLogo) : null);
   const videoPreviewUrl = useMemo(
     () => (videoFile.length > 0 ? URL.createObjectURL(videoFile[0]) : null),
     [videoFile]
@@ -306,7 +343,7 @@ export default function CreateListingPage() {
       !!category,
       !!province,
       !!city,
-      photoFiles.length > 0,
+      photoFiles.length + existingPhotos.length > 0,
       contactMethods.length > 0,
     ];
     const catDef = category ? CATEGORIES.find((c) => c.value === category) : undefined;
@@ -341,6 +378,7 @@ export default function CreateListingPage() {
     province,
     city,
     photoFiles,
+    existingPhotos,
     contactMethods,
     categoryAttributes,
   ]);
@@ -395,6 +433,50 @@ export default function CreateListingPage() {
   }, []);
 
   useEffect(() => {
+    if (!copyId) return;
+    let cancelled = false;
+    void loadOwnListing(copyId)
+      .then(({ data }) => {
+        if (cancelled) return;
+        if (!data || data.status !== "draft") throw new Error("Copy unavailable");
+        const copy = listingCopyFields(data as Record<string, unknown>);
+        captureRevision(data);
+        setCopyOf(copy.title);
+        setTitle(copy.title);
+        setDescription(copy.description);
+        setPrice(copy.price);
+        setNegotiable(copy.negotiable);
+        setCategory(copy.category);
+        setCondition(copy.condition);
+        setCategoryAttributes(copy.attributes);
+        setProvince(copy.province);
+        setCity(copy.city);
+        setTown(copy.town);
+        setAddress(copy.address);
+        setContactMethods(copy.contactMethods);
+        setExistingPhotos(copy.photos);
+        setExistingLogo(copy.logo);
+        setFocalPoint(copy.focal);
+        setStep(STEPS.length - 1);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        toast({
+          title: "This copy can't be opened",
+          description: "It may have been submitted or deleted. Check My posts.",
+          variant: "destructive",
+        });
+        router.push("/dashboard/listings");
+      })
+      .finally(() => {
+        if (!cancelled) setCopyLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [copyId, captureRevision, router, toast]);
+
+  useEffect(() => {
     // Preselect the category picked on /post/create (e.g. ?category=vehicles).
     // A restored draft still wins because it loads after this runs.
     const requested = new URLSearchParams(window.location.search).get("category");
@@ -410,7 +492,7 @@ export default function CreateListingPage() {
   }, []);
 
   useEffect(() => {
-    if (!user?.id || isLoading || submitSucceeded) return;
+    if (copyId || !user?.id || isLoading || submitSucceeded) return;
 
     void Promise.resolve(restoreDraft()).then((restored) => {
       if (!restored) return;
@@ -442,10 +524,10 @@ export default function CreateListingPage() {
         });
       });
     });
-  }, [user?.id, isLoading, submitSucceeded, restoreDraft, toast]);
+  }, [copyId, user?.id, isLoading, submitSucceeded, restoreDraft, toast]);
 
   useEffect(() => {
-    if (!user?.id || isLoading || isSubmitting || submitSucceeded) return;
+    if (copyId || !user?.id || isLoading || isSubmitting || submitSucceeded) return;
 
     saveDraft(step, {
       category,
@@ -465,6 +547,7 @@ export default function CreateListingPage() {
       setLastSavedAt(Date.now());
     });
   }, [
+    copyId,
     user?.id,
     isLoading,
     isSubmitting,
@@ -567,17 +650,22 @@ export default function CreateListingPage() {
     }
 
     if (targetStep === 2) {
-      if (category !== "jobs_services" && photoFiles.length === 0)
+      const photoCount = existingPhotos.length + photoFiles.length;
+      if (category !== "jobs_services" && photoCount === 0)
         errors.images = "Upload at least one photo.";
-      if (photoFiles.length > maxPhotos) {
+      if (photoCount > maxPhotos) {
         errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
       }
+      if (copyId && COPY_NEW_PHOTO_CATEGORIES.includes(category) && photoFiles.length === 0)
+        errors.images = COPY_NEW_PHOTO_MESSAGE;
       if (videoFile.length > 0 && !videoAllowed) {
         errors.videos = "Video upload is not available on your current plan.";
       } else if (videoFile.length > maxVideos) {
         errors.videos = `You can upload up to ${maxVideos} videos on this plan.`;
       }
-      if (!termsAccepted) errors.termsAccepted = "Accept the posting terms before submitting.";
+      // A copy is saved like an edit: the terms were accepted with the first post.
+      if (!copyId && !termsAccepted)
+        errors.termsAccepted = "Accept the posting terms before submitting.";
     }
 
     return errors;
@@ -727,39 +815,44 @@ export default function CreateListingPage() {
       const primaryMediaFile = videoFile[0] ?? photoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
-      const res = await fetch("/api/listings", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          ...postFields(),
-          title: title.trim(),
-          description: description.trim(),
-          price_zar: price ? parseFloat(price) : 0,
-          negotiable: category === "jobs_services" ? false : negotiable,
-          category: mapListingCategory(category),
-          condition:
-            category === "jobs_services" || category === "auto_parts"
-              ? undefined
-              : condition || undefined,
-          attributes: normalizedAttributes,
-          province,
-          city,
-          town,
-          address,
-          logo_url: logoUrls[0] || null,
-          images: photoUrls,
-          videos: videoUrls,
-          videoThumbnail: videoThumbnailUrl,
-          contactMethods,
-          media_width: mediaDimensions?.width,
-          media_height: mediaDimensions?.height,
-          focal_x: focalPoint.x,
-          focal_y: focalPoint.y,
-          termsAccepted,
+      const body = {
+        ...postFields(copyId !== null),
+        title: title.trim(),
+        description: description.trim(),
+        price_zar: price ? parseFloat(price) : 0,
+        negotiable: category === "jobs_services" ? false : negotiable,
+        category: mapListingCategory(category),
+        condition:
+          category === "jobs_services" || category === "auto_parts"
+            ? undefined
+            : condition || undefined,
+        attributes: normalizedAttributes,
+        province,
+        city,
+        town,
+        address,
+        logo_url: logoUrls[0] || existingLogo || null,
+        images: [...existingPhotos, ...photoUrls],
+        videos: videoUrls,
+        videoThumbnail: videoThumbnailUrl,
+        contactMethods,
+        media_width: mediaDimensions?.width,
+        media_height: mediaDimensions?.height,
+        focal_x: focalPoint.x,
+        focal_y: focalPoint.y,
+        termsAccepted,
 
-          trialDays,
-        }),
-      });
+        trialDays,
+      };
+      const res = copyId
+        ? await submitListingCopy(copyId, body, (revision) =>
+            copyActionFields(copyId, revision, "resubmit", "MZANSI_MARKET", "listing")
+          )
+        : await fetch("/api/listings", {
+            method: "POST",
+            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify(body),
+          });
 
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
@@ -837,9 +930,12 @@ export default function CreateListingPage() {
         return;
       }
 
-      toast({ title: "Listing submitted for review.", variant: "success" });
+      toast({
+        title: copyId ? "Copy submitted for review." : "Listing submitted for review.",
+        variant: "success",
+      });
       setSubmitSucceeded(true);
-      discardDraft();
+      if (!copyId) discardDraft();
       setUploadStatuses((current) => ({ ...current, saving: "done" }));
       router.push("/dashboard/listings");
     } catch (error: unknown) {
@@ -894,8 +990,8 @@ export default function CreateListingPage() {
     const normalizedAttributes = category
       ? coerceListingAttributes(category, categoryAttributes)
       : {};
-    const cardMediaUrl = videoPreviewUrl || photoPreviewUrls[0];
-    const cardPosterUrl = videoCoverPreviewUrl || photoPreviewUrls[0] || undefined;
+    const cardMediaUrl = videoPreviewUrl || allPhotoPreviewUrls[0];
+    const cardPosterUrl = videoCoverPreviewUrl || allPhotoPreviewUrls[0] || undefined;
 
     return (
       <ListingCard
@@ -906,7 +1002,7 @@ export default function CreateListingPage() {
         posterUrl={cardPosterUrl}
         isVideo={videoFile.length > 0}
         fitStrategy="contain"
-        logoUrl={logoPreviewUrl}
+        logoUrl={cardLogoUrl}
         province={province || "Province"}
         city={city || "City"}
         category={category || "property"}
@@ -968,10 +1064,10 @@ export default function CreateListingPage() {
             category: category || null,
             condition: condition || null,
             attributes: normalizedAttributes,
-            photos: photoPreviewUrls,
+            photos: allPhotoPreviewUrls,
             videos: videoPreviewUrl ? [videoPreviewUrl] : [],
             video_thumbnail: videoCoverPreviewUrl,
-            logo_url: logoPreviewUrl,
+            logo_url: cardLogoUrl,
             location_province: province || null,
             location_city: city || null,
             location_suburb: town || null,
@@ -987,11 +1083,27 @@ export default function CreateListingPage() {
           }}
           showContactActions={false}
           showSimilarListings={false}
-          photoCount={photoPreviewUrls.length}
+          photoCount={allPhotoPreviewUrls.length}
           trackView={false}
           layoutMode="review"
         />
       </section>
+    );
+  }
+
+  if (copyLoading) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header isAuthenticated />
+        <main
+          id="main-content"
+          aria-busy="true"
+          className="flex flex-1 flex-col items-center justify-center gap-3"
+        >
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">Loading your copy…</p>
+        </main>
+      </div>
     );
   }
 
@@ -1020,6 +1132,7 @@ export default function CreateListingPage() {
                 currentStep={step}
                 completeness={listingCompleteness}
                 aside={renderPreviewAside()}
+                notice={copyOf !== null ? <CopyNotice title={copyOf} /> : undefined}
                 error={formError}
                 fieldErrors={fieldErrors}
                 fieldLabels={LISTING_FIELD_LABELS}
@@ -1039,7 +1152,7 @@ export default function CreateListingPage() {
                 }
                 footer={
                   <>
-                    {user?.id && !isSubmitting && (
+                    {user?.id && !isSubmitting && !copyId && (
                       <PostDraftStatus lastSavedAt={lastSavedAt} onDiscard={handleDiscardDraft} />
                     )}
 
@@ -1371,6 +1484,14 @@ export default function CreateListingPage() {
                           error={fieldErrors.images}
                           maxFiles={maxPhotos}
                           files={photoFiles}
+                          existing={existingPhotos.map((url, i) => ({
+                            url: normalizeMediaUrl(url),
+                            label: `Photo ${i + 1}`,
+                          }))}
+                          onRemoveExisting={(index) => {
+                            setExistingPhotos((prev) => prev.filter((_, i) => i !== index));
+                            clearErrors("images");
+                          }}
                           onChange={(files) => {
                             setPhotoFiles(files);
                             clearErrors("images");
@@ -1383,14 +1504,17 @@ export default function CreateListingPage() {
                         <PhotoOrderList files={photoFiles} onReorder={setPhotoFiles} />
                       </div>
 
-                      {photoFiles.length > 0 && videoFile.length === 0 && (
-                        <MediaCropPreview
-                          file={photoFiles[0]}
-                          value={focalPoint}
-                          onChange={setFocalPoint}
-                        />
-                      )}
+                      {photoFiles.length > 0 &&
+                        videoFile.length === 0 &&
+                        existingPhotos.length === 0 && (
+                          <MediaCropPreview
+                            file={photoFiles[0]}
+                            value={focalPoint}
+                            onChange={setFocalPoint}
+                          />
+                        )}
 
+                      {copyId ? <CopyVideoNote /> : null}
                       <div id="listing-video" tabIndex={-1} className="space-y-2 rounded-lg">
                         <MediaUpload
                           id="listing-video-input"
@@ -1477,6 +1601,12 @@ export default function CreateListingPage() {
                           description="Square image, shown small on listing cards."
                           maxFiles={1}
                           files={logoFile}
+                          existing={
+                            existingLogo
+                              ? [{ url: normalizeMediaUrl(existingLogo), label: "Current logo" }]
+                              : []
+                          }
+                          onRemoveExisting={() => setExistingLogo(null)}
                           error={fieldErrors.logo_url}
                           onChange={(files) => {
                             setLogoFile(files);
@@ -1496,39 +1626,45 @@ export default function CreateListingPage() {
                         priceExpected
                         category={category || null}
                         location={city || null}
-                        pendingPhotoCount={photoFiles.length}
+                        pendingPhotoCount={photoFiles.length + existingPhotos.length}
                       />
 
-                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6">
-                        <input
-                          id="listing-terms-checkbox"
-                          type="checkbox"
-                          checked={termsAccepted}
-                          onChange={(event) => {
-                            setTermsAccepted(event.target.checked);
-                            clearErrors("termsAccepted");
-                          }}
-                          className="mt-1 h-4 w-4 shrink-0 rounded accent-brand-green-600"
-                          aria-invalid={!!fieldErrors.termsAccepted}
-                        />
-                        <span>
-                          I accept the VerifyMzansi posting terms, including the free-post
-                          visibility period and my responsibility for the accuracy and legality of
-                          this post.{" "}
-                          <a
-                            className="font-semibold text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
-                            href="/terms"
-                          >
-                            View terms
-                          </a>
-                          .
-                          {fieldErrors.termsAccepted && (
-                            <span className="mt-1 block text-destructive">
-                              {fieldErrors.termsAccepted}
-                            </span>
-                          )}
-                        </span>
-                      </label>
+                      {copyOf !== null ? (
+                        <CopyFinalCheck sameTitle={title.trim() === copyOf.trim()} />
+                      ) : null}
+
+                      {!copyId && (
+                        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4 text-sm leading-6">
+                          <input
+                            id="listing-terms-checkbox"
+                            type="checkbox"
+                            checked={termsAccepted}
+                            onChange={(event) => {
+                              setTermsAccepted(event.target.checked);
+                              clearErrors("termsAccepted");
+                            }}
+                            className="mt-1 h-4 w-4 shrink-0 rounded accent-brand-green-600"
+                            aria-invalid={!!fieldErrors.termsAccepted}
+                          />
+                          <span>
+                            I accept the VerifyMzansi posting terms, including the free-post
+                            visibility period and my responsibility for the accuracy and legality of
+                            this post.{" "}
+                            <a
+                              className="font-semibold text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
+                              href="/terms"
+                            >
+                              View terms
+                            </a>
+                            .
+                            {fieldErrors.termsAccepted && (
+                              <span className="mt-1 block text-destructive">
+                                {fieldErrors.termsAccepted}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      )}
                     </PostFormSection>
 
                     {renderPreview()}

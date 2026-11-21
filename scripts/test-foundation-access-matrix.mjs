@@ -288,6 +288,8 @@ const OWNER_TABLES = [
     "identity_disclosure_events",
     "subject_id=$1 or staff_id=$1 or disclosure_id in (select id from private.identity_disclosures where $1=any(subject_ids) or opened_by=$1)",
   ],
+  // Copy a post (20261121150309_copy_a_post): which of A's posts a copy came from.
+  ["post_copies", ownPosts],
   ["listing_price_drafts", "owner_id=$1"],
   ["moderation_log", ownPosts],
   [

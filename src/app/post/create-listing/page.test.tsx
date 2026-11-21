@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import CreateListingPage from "./page";
-import { useRouter } from "next/navigation";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import {
   expectFoundationPostFields,
@@ -21,6 +22,14 @@ const { listingCardSpy, useAuthMock } = vi.hoisted(() => ({
     profile: null,
     isLoading: false,
   })),
+}));
+
+const switches = vi.hoisted(() => ({ SHOW_POST_COPY: false }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_POST_COPY() {
+    return switches.SHOW_POST_COPY;
+  },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -945,6 +954,140 @@ describe("CreateListingPage", () => {
       fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
       expect(screen.getAllByText("Select a category.").length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("copy a post (?copy=)", () => {
+    const copyId = "33333333-3333-4333-8333-333333333333";
+    const photo = "https://media.verifymzansi.com/media/11111111-1111-4111-8111-111111111111";
+    const draft = (category: string, attributes: Record<string, unknown>) => ({
+      id: copyId,
+      owner_id: "owner-1",
+      status: "draft",
+      revision: 1,
+      title: "Used iPhone 15",
+      description: "A clean listing description with enough detail to continue.",
+      price_cents: 150000,
+      price_negotiable: false,
+      category,
+      attributes,
+      location_province: "Gauteng",
+      location_city: "Johannesburg",
+      contact_methods: ["call"],
+      photos: [photo],
+      videos: [],
+      logo_url: null,
+      focal_x: 0.5,
+      focal_y: 0.5,
+    });
+    function serveCopy(listing: Record<string, unknown>) {
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (input === `/api/listings/${copyId}` && (init?.method ?? "GET") === "GET")
+          return { ok: true, status: 200, json: async () => ({ listing }) };
+        if (input === `/api/listings/${copyId}`)
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ success: true, status: "draft", revision: 2 }),
+          };
+        if (input === "/api/content/resubmit")
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ id: copyId, status: "pending_moderation", success: true }),
+          };
+        return { ok: true, status: 200, json: async () => ({ success: true }) };
+      });
+    }
+    beforeEach(() => {
+      switches.SHOW_POST_COPY = true;
+      useAuthMock.mockReturnValue({ user: { id: "owner-1" }, profile: null, isLoading: false });
+      vi.mocked(useSearchParams).mockReturnValue(
+        new URLSearchParams(`copy=${copyId}`) as unknown as ReturnType<typeof useSearchParams>
+      );
+    });
+    afterEach(() => {
+      switches.SHOW_POST_COPY = false;
+      vi.mocked(useSearchParams).mockReturnValue(
+        new URLSearchParams() as unknown as ReturnType<typeof useSearchParams>
+      );
+      useAuthMock.mockReturnValue({ user: null, profile: null, isLoading: false });
+    });
+
+    it("opens the copy on the last step with the note, and submits it for review", async () => {
+      serveCopy(draft("electronics", { device_type: "Smartphone", brand: "Apple" }));
+      render(<CreateListingPage />);
+      expect(await screen.findByText(/Copy of .Used iPhone 15/)).toBeInTheDocument();
+      expect(screen.getByText(/Video not copied/)).toBeInTheDocument();
+      expect(screen.getByText(/Same title as the post you copied/)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/I accept the VerifyMzansi posting terms/i)).toBeNull();
+      await termsLoaded();
+
+      fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboard/listings"));
+      const save = fetchMock.mock.calls.find(
+        (call) => call[0] === `/api/listings/${copyId}` && call[1]?.method === "PUT"
+      );
+      const payload = JSON.parse(save![1].body as string);
+      expect(payload.images).toEqual([photo]);
+      expect(payload.videos).toEqual([]);
+      expect(payload.expectedRevision).toBe(1);
+      const submit = fetchMock.mock.calls.find((call) => call[0] === "/api/content/resubmit");
+      expect(JSON.parse(submit![1].body as string)).toMatchObject({
+        itemId: copyId,
+        expectedRevision: 2,
+        contentType: "listing",
+      });
+      expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(false);
+      // The form's own autosaved draft is never touched by a copy.
+      expect(localStorage.length).toBe(0);
+    });
+
+    it("asks for one new photo of a vehicle before saving anything", async () => {
+      serveCopy(
+        draft("vehicles", {
+          make: "Toyota",
+          model: "Hilux",
+          year: "2019",
+          mileage_km: "98000",
+          transmission: "manual",
+          fuel_type: "diesel",
+          service_history: "full",
+          condition: "used",
+        })
+      );
+      render(<CreateListingPage />);
+      expect(await screen.findByText(/Copy of/)).toBeInTheDocument();
+      await termsLoaded();
+
+      fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+
+      expect(
+        (await screen.findAllByText(/Add at least one new photo of this item/)).length
+      ).toBeGreaterThan(0);
+      expect(
+        fetchMock.mock.calls.some(
+          (call) => call[0] === `/api/listings/${copyId}` && call[1]?.method === "PUT"
+        )
+      ).toBe(false);
+    });
+
+    it("ignores ?copy= while the switch is off", async () => {
+      switches.SHOW_POST_COPY = false;
+      serveCopy(draft("electronics", {}));
+      render(<CreateListingPage />);
+      await termsLoaded();
+      expect(screen.queryByText(/Copy of/)).toBeNull();
+      expect(
+        fetchMock.mock.calls.some((call) => String(call[0]).startsWith("/api/listings/"))
+      ).toBe(false);
+    });
+
+    it("goes back to My posts when the copy is no longer a draft", async () => {
+      serveCopy({ ...draft("electronics", {}), status: "pending_moderation" });
+      render(<CreateListingPage />);
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/dashboard/listings"));
     });
   });
 });
