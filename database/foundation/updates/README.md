@@ -170,6 +170,136 @@ member's post is approved as before; a second ID-verified staff member ends the
 mode for grants, listing, claims and a claimed item, and removing or suspending
 them brings it back; the rollback refuses once a marked record exists.
 
+## Staff sales figures, the VAT alert and the VAT wording from the database, 21 November 2026
+
+`20261121090305_staff_sales_and_vat.sql` was applied on 21 November 2026 at
+17:30 UTC (see the applied register). Launch checklist item 16 (roadmap M8.7,
+remainder). Everything is computed from the existing payment records; no table
+is added.
+
+- **What a sale is.** A payment's amount, less the slots refunded or charged
+  back (reversed payment lines), and nothing once the whole payment was refunded
+  or charged back (`internal.payment_net_cents`). It counts on the day it was
+  paid, the way a sales report counts an order on its order date.
+- **The VAT position** (`internal.vat_sales_position`): sales paid in the last
+  12 months, the VAT setting (`private.invoice_merchant_config`, which the
+  invoices already check), the alert level R1.8 million and the compulsory level
+  R2.3 million (SARS, from 1 April 2026), and whether the alert is on (not
+  registered for VAT and the total at or above R1.8 million).
+- **The staff read** `api.get_staff_sales_summary()` (`payments:view`, the staff
+  payments page's own capability, with a recent authenticator code; read only):
+  the VAT position, sales of the last 12 months by product (Individual slot,
+  Multi-listing package, add-on, other) and term in days, and the online
+  checkouts sent to Ozow in the last 30 days with how many were paid, failed,
+  cancelled, expired or are still open (a checkout replaced before it reached
+  Ozow is not counted). Counts and amounts only.
+- **The public read** `api.get_vat_registration()` (visitors and members, like
+  the price catalogue): the VAT setting's status and, only when registered, the
+  VAT number. The pricing, billing and Trust & Safety pages state it instead of
+  a fixed sentence in the website.
+- **The daily payment summary** (`internal.claim_payment_digest`, service only)
+  keeps its signature and grants; the summary it stores gains one field,
+  `sales`, with the VAT position. The website reads the summary with a
+  non-strict reader, so an older release keeps sending it unchanged.
+
+New commands and one added summary field only. **Apply first, then merge:**
+until the update is applied, the release that uses it shows "Sales figures could
+not be loaded" on the staff payments page and leaves the VAT line out of the
+public pages.
+
+**Applying.**
+
+1. Run `../preflight/20261121090305_staff_sales_and_vat.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff sales and VAT: update not applied".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "staff sales and VAT: already applied; VAT setting:
+   not_registered".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261121090305_staff_sales_and_vat.down.sql` (only with the owner's
+decision; prefer a forward fix). It refuses (55000) unless the update is
+applied, every function it replaces or drops still has the update's body, and no
+other function uses what it drops; then it puts back
+`internal.claim_payment_digest` byte for byte and drops the two reads, their
+internal twins, `internal.vat_sales_position` and `internal.payment_net_cents`.
+
+`node --import tsx scripts/test-foundation-staff-sales-and-vat.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted summary
+command and a premature rollback, changing nothing; apply, rollback and re-apply
+return the same fingerprints; the rollback refuses while another function uses
+what it drops; who may run each function; sales net of a refunded slot and of a
+refunded payment, a bank transfer counted, a payment of 13 months ago left out;
+sales by product and term; online checkouts of the last 30 days by outcome (bank
+transfers, checkouts never sent to Ozow and older checkouts left out); the alert
+off one cent below R1.8 million, on at it, and off once registered for VAT; the
+daily summary's `sales` field; the public read for visitors and members; and
+only staff with `payments:view` and an authenticator code of the last 12 hours
+can read the figures (an admin whose code is 11 hours old can; a moderator, a
+member, an admin whose code is 13 hours old, the server key and a visitor are
+refused).
+
+## Privacy exports while a request is in progress, at most 5, every one notified, 21 November 2026
+
+`20261121053224_privacy_export_simple.sql` was applied on 21 November 2026 at
+17:15 UTC (see the applied register). It replaces only
+`internal.export_frontend_privacy_request` (same signature, owner and grants; no
+API, manifest or type change):
+
+- **Only an access request in progress** (identity verified, at the stated
+  revision) can be exported; a completed request can no longer be. A request not
+  in progress is refused with PT409 `privacy_export_not_in_progress`; the other
+  refusals, the staff and second-factor checks and the self-export refusal are
+  as before.
+- **The row lock is `FOR NO KEY UPDATE`** (was `FOR SHARE`): what is new is that
+  parallel exports of one request queue behind each other, so the cap of 5
+  holds. Completing the request (which bumps its revision) already waited for a
+  running export under `FOR SHARE`, and still does. The cap relies on READ
+  COMMITTED (PostgREST's default); staff have no direct SQL. Retention, which
+  minimises only completed or rejected requests, is unchanged.
+- **At most 5 exports per request**: the 6th is refused with PT429
+  `privacy_export_limit`. The website's per-staff rate limit stays.
+- **The member is told about every export**: each adds a bell notice
+  (`privacy_export_made`); the requester's email is still queued once per
+  request. A too large export (PT413) is raised before anything is recorded.
+
+Accepted risks: a dataset-name mismatch the website refuses after the export was
+recorded gives the member one extra notice and uses up one of the 5 places; a
+completed request cannot be exported again (open a new request).
+
+The website words the two new refusals ("Only a request in progress can be
+exported…", "…already been exported 5 times…"); a release without that code
+shows its generic refusal. As usual: apply first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261121053224_privacy_export_simple.check.sql` unchanged
+   in the SQL editor (read only). Continue only if its single row reads "privacy
+   export simple: update not applied; exports recorded: N".
+2. Run the update (waits at most 5 seconds for a lock). The preflight then reads
+   "privacy export simple: already applied; exports recorded: N".
+3. Run `set search_path to "$user", public;` and `../fingerprint.sql`, compare
+   with `../fingerprint.json`, and record it as described above.
+
+The reviewed rollback
+`../rollback/20261121053224_privacy_export_simple.down.sql` (only with the
+owner's decision) refuses (55000) unless the update's body is in place, then
+puts back the previous body byte for byte. Recorded exports and notices stay.
+
+`node --import tsx scripts/test-foundation-privacy-export-simple.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drift and a premature rollback refused;
+apply, rollback and re-apply give the same fingerprints and the rollback
+restores the previous definition exactly; only in-progress, verified access
+requests at their revision; the staff, second-factor and self-export checks; 5
+exports with a notice each and one email, the 6th refused, also with two exports
+racing at 4; a too large export records nothing; completing waits for a running
+export, and an export waiting for a completion is refused.
+
 ## Authority requests: opening a kept identity record, 21 November 2026
 
 `20261121043124_identity_record_disclosure.sql` was applied on 21 November 2026
@@ -6401,6 +6531,24 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   sha256 starting a720f7d0; preflight sha256 starting 55a780b8; production
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
+
+- `20261121053224_privacy_export_simple.sql`: applied 2026-11-21 17:15 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #331); update
+  and preflight from the reviewed files at 6824f7ae and checked in the page
+  before running; update sha256 starting e26d63d2; preflight (sha256 starting
+  0e2c7bf3) before "privacy export simple: update not applied; exports recorded:
+  0", after "privacy export simple: already applied; exports recorded: 0";
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
+
+- `20261121090305_staff_sales_and_vat.sql`: applied 2026-11-21 17:30 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #333); update
+  and preflight from the reviewed files at 9ea47fcd and checked in the page
+  before running; update sha256 starting 136e84ca; preflight (sha256 starting
+  69b7a139) before "staff sales and VAT: update not applied", after "staff sales
+  and VAT: already applied; VAT setting: not_registered"; production fingerprint
+  after it (fingerprint.sql) matched the full replay (except the known schema
+  grant difference)
 
 - `20261121181953_one_person_admin_mode.sql`: pending; apply-first
 

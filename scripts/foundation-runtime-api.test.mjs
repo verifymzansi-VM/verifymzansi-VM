@@ -201,6 +201,30 @@ test("the reviewed public sign-up mode accepts only its one-word answer", async 
       /projection probe failed/
     );
 });
+test("the reviewed public VAT setting accepts only its status and number", async () => {
+  const input = publicRead("get_vat_registration", []);
+  for (const answer of [
+    { status: "not_registered", vat_number: null },
+    { status: "undecided", vat_number: null },
+    { status: "registered", vat_number: "4123456789" },
+  ])
+    assert.equal(
+      await verifyFoundationRuntimeApi(connection, async () => Response.json(answer), input),
+      1
+    );
+  for (const answer of [
+    { status: "not_registered", vat_number: "4123456789" },
+    { status: "exempt", vat_number: null },
+    { status: "not_registered", vat_number: null, extra: 1 },
+    { status: "not_registered" },
+    [],
+    null,
+  ])
+    await assert.rejects(
+      verifyFoundationRuntimeApi(connection, async () => Response.json(answer), input),
+      /projection probe failed/
+    );
+});
 test("the reviewed public payment limit accepts only its one-number answer", async () => {
   const input = publicRead("get_payment_limits", []);
   assert.equal(
