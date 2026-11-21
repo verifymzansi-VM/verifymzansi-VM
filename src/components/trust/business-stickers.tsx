@@ -16,12 +16,15 @@ function monthYear(iso: string): string {
 const SHORT = { id: "ID reviewed", cipc: "CIPC registered", seen: "Seen" } as const;
 
 /** Tooltip copy for each sticker, in display order. Missing stickers are omitted. */
-function businessStickerLabels(state: BusinessStickerState): Array<{
+function businessStickerLabels(
+  state: BusinessStickerState,
+  idLabel: string
+): Array<{
   key: "id" | "cipc" | "seen";
   label: string;
 }> {
   const labels: Array<{ key: "id" | "cipc" | "seen"; label: string }> = [];
-  if (state.idReviewed) labels.push({ key: "id", label: "ID reviewed" });
+  if (state.idReviewed) labels.push({ key: "id", label: idLabel });
   if (state.cipcCheckedAt) {
     labels.push({
       key: "cipc",
@@ -71,12 +74,15 @@ export function BusinessStickers({
   state,
   size = "sm",
   className,
+  idLabel = SHORT.id,
 }: {
   state: BusinessStickerState;
   size?: "sm" | "md";
   className?: string;
+  /** The ID sticker's words; a post's seller block says "Poster ID reviewed". */
+  idLabel?: string;
 }) {
-  const labels = businessStickerLabels(state);
+  const labels = businessStickerLabels(state, idLabel);
   if (!labels.length) return null;
   const box = size === "md" ? "h-8 w-8" : "h-6 w-6";
   const icon = size === "md" ? "h-4 w-4" : "h-3.5 w-3.5";
@@ -96,7 +102,7 @@ export function BusinessStickers({
                 className="inline-flex h-8 items-center gap-1.5 rounded-full bg-brand-green-700 px-3 text-xs font-semibold text-brand-gold-200 ring-1 ring-brand-gold-400/50 dark:bg-brand-green-800"
               >
                 <Icon aria-hidden="true" className={icon} />
-                <span aria-hidden="true">{SHORT[key]}</span>
+                <span aria-hidden="true">{key === "id" ? idLabel : SHORT[key]}</span>
                 <span className="sr-only">{label}</span>
               </span>
             ) : (

@@ -37,7 +37,12 @@ const request = z
     business_type: foundationBusinessTypeSchema.optional(),
     event_state: z.enum(["active", "upcoming", "ongoing", "ended", "all"]).optional(),
     event_order: z.enum(["start_asc", "end_desc"]).optional(),
+    // A business's storefront (its package's listings) and, inside it, a
+    // vehicle make (20261121131915_business_storefront.sql).
+    storefront: z.uuid().optional(),
+    make: z.string().min(1).max(80).optional(),
   })
+  .refine((value) => !value.make || Boolean(value.storefront))
   .refine((value) => value.offset === undefined || !value.cursor)
   .refine(
     (value) =>
