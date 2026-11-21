@@ -96,13 +96,37 @@ describe("POST /api/admin/member-invitations", () => {
     for (const input of [
       { action: "grant", email: "a@b.co" },
       { action: "invite", email: "a@b.co", role: "admin" },
-      { action: "invite", email: "x".repeat(255) },
-      { action: "invite" },
+      "not an object",
     ]) {
       const thrown = await route.command(api, input).catch((error: unknown) => error);
       expect(thrown).toBeInstanceOf(z.ZodError);
-      expect(route.refusal(thrown)).toMatchObject({
+      // Not the address's fault, so the screen does not blame the address.
+      expect(route.refusal(thrown)).toEqual({
         status: 422,
+        error: "This request could not be read. Reload the page and try again.",
+        reason: "member_invitation_request_invalid",
+      });
+    }
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses a bad address as an invalid address before calling the database", async () => {
+    const route = await options();
+    for (const input of [
+      { action: "invite", email: "x".repeat(255) },
+      { action: "invite" },
+      { action: "invite", email: "a" },
+      // A NUL byte or another control character never reaches the database
+      // (it answered 503 before; now the screen's own 422).
+      { action: "invite", email: "thandi\u0000@example.co.za" },
+      { action: "withdraw", email: "thandi@example.co.za\u0007" },
+      { action: "invite", email: "thandi\u0009x@example.co.za" },
+    ]) {
+      const thrown = await route.command(api, input).catch((error: unknown) => error);
+      expect(thrown).toBeInstanceOf(z.ZodError);
+      expect(route.refusal(thrown)).toEqual({
+        status: 422,
+        error: "Enter a valid email address.",
         reason: "member_invitation_email_invalid",
       });
     }

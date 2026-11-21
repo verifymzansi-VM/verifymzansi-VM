@@ -3,6 +3,9 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { readBoundedRequestText, RequestBodyTooLargeError } from "./request-body";
 
+// LIM-MECH-BODY-READER (docs/testing/limits-register.json): the bounded body
+// reader behind every route's maxBytes request body cap.
+
 // Property test for the bounded body reader every JSON route uses (see
 // request-body.test.ts for named examples): it returns the text exactly when
 // its UTF-8 size is within the limit, however the body arrives.

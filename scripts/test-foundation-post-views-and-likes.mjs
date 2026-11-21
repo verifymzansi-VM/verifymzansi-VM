@@ -293,6 +293,7 @@ try {
     fails(service(`select api.record_post_views(${ids([post])},null);`), "22023");
     fails(service(`select api.record_post_views('{}'::uuid[],'${randomUUID()}');`), "22023");
   });
+  // LIM-SQL-views-day-valve (docs/testing/limits-register.json)
   await check(
     "the views valve: alarms at 70% and 300,000; then only established viewers count",
     () => {
@@ -509,6 +510,7 @@ try {
       totalsMatchRows();
     }
   );
+  // LIM-SQL-likes-day-valve (docs/testing/limits-register.json)
   await check(
     "the likes valve: alarms at 70% and 50,000; then only established likers' likes are stored",
     () => {

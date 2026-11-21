@@ -94,6 +94,8 @@ docs/*
 !docs/runbooks/admin-provisioning.md
 !docs/testing/
 !docs/testing/mutation-trial.md
+!docs/testing/limits-register.json
+!docs/testing/limits-register.md
 # Publish implementation tools and prototypes; keep detailed audits private.
 !docs/backend-foundation/
 docs/backend-foundation/*
