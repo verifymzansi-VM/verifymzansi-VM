@@ -5912,7 +5912,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Website server only, for an unfinished check with that partner session whose member has no accepted identity or pending independent review: reserves the ID photo and selfie evidence files of the check's case (object keys; cleaned up after an hour if not completed), a repeat within 30 minutes returning the same files, and returns the check's start context (typed legal names at start, network hash, device kind) for the server's own comparisons."
+      "authority": "Website server only, for an unfinished check with that partner session whose member has no accepted identity or pending independent review: reserves the ID photo and selfie evidence files of the check's case (object keys; cleaned up after an hour if not completed), a repeat within 30 minutes returning the same files, and returns the check's owner account and start context (typed legal names at start, network hash, device kind) for the server's own comparisons."
     },
     {
       "name": "complete_identity_check",

@@ -638,7 +638,7 @@ grant execute on function api.report_identity_check_unavailable(uuid,text) to se
 -- evidence files of the check's case, reserved like a member's upload (the
 -- same object keys, cleaned up after an hour if never completed). A repeat
 -- call within 30 minutes returns the same files. Also returns the check's
--- start context (typed legal names at start, network hash, device kind) for
+-- owner account and start context (typed legal names at start, network hash, device kind) for
 -- the website's own comparisons.
 CREATE OR REPLACE FUNCTION internal.begin_identity_check_evidence(p_check uuid, p_session_id uuid)
  RETURNS jsonb
@@ -673,6 +673,7 @@ begin
   end if;
   return jsonb_build_object('id_front',jsonb_build_object('artifact_id',id_art.id,'object_key',id_art.object_key),
     'selfie',jsonb_build_object('artifact_id',selfie_art.id,'object_key',selfie_art.object_key),
+    'owner_id',k.owner_id,
     'start',jsonb_build_object('first_name',k.start_first_name,'last_name',k.start_last_name,
       'network_hash',k.network_hash,'device_kind',k.device_kind));
 end$function$;

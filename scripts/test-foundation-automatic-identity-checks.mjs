@@ -884,6 +884,7 @@ try {
       files
     );
     assert.match(files.id_front.object_key, /^evidence\//);
+    assert.equal(files.owner_id, m.id);
     assert.deepEqual(files.start, {
       first_name: "Thando Sipho",
       last_name: "Dlamini",
