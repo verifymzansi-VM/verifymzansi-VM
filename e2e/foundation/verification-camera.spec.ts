@@ -29,8 +29,8 @@ import { registerConfirmedMember, syntheticIdNumber } from "./support/verified-m
 //     not detect them), then "Verification submitted", announced once.
 //
 // The ID, selfie and area steps are the same as in member-post-publish.spec.ts
-// and staff-review.spec.ts, which use the upload fallback; this spec covers the
-// camera itself. One new member per project run; their identity case stays
+// and staff-review.spec.ts, which use a synthetic camera stream; this spec
+// covers Chromium's fake camera device itself. One new member per project run; their identity case stays
 // waiting for review (staff specs find their own members by name).
 //
 // Network: browser requests may only reach the copy's website and its local
@@ -206,9 +206,15 @@ test.describe("verification wizard with the camera", () => {
     await expect(page.getByRole("button", { name: /take photo/i })).toBeInViewport();
 
     await page.getByRole("button", { name: /take photo/i }).click();
+    // The member checks the photo before it is used (no gallery or file
+    // upload is offered anywhere).
+    await expect(page.getByRole("img", { name: "Your ID photo" })).toBeVisible();
+    await expect(page.getByText(/can you read your name and id number/i)).toBeVisible();
+    await expect(video).toHaveCount(0);
+    await page.getByRole("button", { name: /use this photo/i }).click();
     await expect(page.getByRole("button", { name: /retake/i })).toBeVisible();
     await expect(page.getByRole("img", { name: "Captured photo" })).toBeVisible();
-    await expect(video).toHaveCount(0);
+    await expect(page.locator('input[type="file"]')).toHaveCount(0);
 
     // The captured photo is what the website uploads for the ID.
     const idUpload = page.waitForRequest(

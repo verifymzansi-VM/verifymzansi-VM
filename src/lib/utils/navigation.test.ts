@@ -37,6 +37,16 @@ describe("sanitizeReturnUrl", () => {
     expect(sanitizeReturnUrl("/unknown/route")).toBe("/");
   });
 
+  it("allows the phone hand-off page exactly, with no query or sub-path", () => {
+    expect(sanitizeReturnUrl("/verify/continue")).toBe("/verify/continue");
+    expect(sanitizeReturnUrl("/verify/continue?token=x")).toBe("/");
+    expect(sanitizeReturnUrl("/verify/continue/x")).toBe("/");
+    expect(sanitizeReturnUrl("/verify/continue#x")).toBe("/");
+    expect(sanitizeReturnUrl("/verify")).toBe("/");
+    expect(sanitizeReturnUrl("/verify/other")).toBe("/");
+    expect(buildLoginUrl("/verify/continue")).toBe("/login?returnUrl=%2Fverify%2Fcontinue");
+  });
+
   it("allows the home page", () => {
     expect(sanitizeReturnUrl("/")).toBe("/");
   });

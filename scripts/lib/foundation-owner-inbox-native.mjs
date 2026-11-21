@@ -246,6 +246,7 @@ export async function testOwnerInbox({
   );
   record("native-inbox-idempotent-submission-confirmed-email-derived-and-private-signal");
 
+  // LIM-SQL-enquiry-per-sender-post-day (docs/testing/limits-register.json)
   stage("owner inbox flood limits");
   for (let n = 0; n < 2; n++)
     assert.equal((await submit({ ...enquiry, buyer_email: "flood@example.org" })).status, 200);

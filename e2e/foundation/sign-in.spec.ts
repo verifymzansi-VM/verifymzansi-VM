@@ -1,5 +1,6 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { E2E_FIXTURE } from "../../scripts/lib/foundation-e2e-target.mjs";
+import { submitSignInForm, watchSignIn } from "./support/sign-in-form";
 import { registerUnreviewedMember, type VerifiedMember } from "./support/verified-member";
 
 // Sign-in through the restored login form against the real website routes and
@@ -10,15 +11,9 @@ import { registerUnreviewedMember, type VerifiedMember } from "./support/verifie
 // empty-form, protected-page and "registered" checks are in public-forms.spec.ts
 // and public-pages.spec.ts.
 //
-// The CAPTCHA: the site's test mode hands the form its bypass token, which the
-// foundation sign-in route refuses by design (production Auth verifies real
-// tokens). As in account-recovery.spec.ts, the test swaps that one token in the
-// /api/auth/login request for a stand-in token; the copy's local Auth has no
-// CAPTCHA secret and accepts it, as hosted Auth accepts a real widget token.
+// The CAPTCHA stand-in token: see support/sign-in-form.ts.
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
-const LOGIN_PATH = "/api/auth/login";
-const CAPTCHA_STAND_IN = "local-fixture-captcha-stand-in";
 
 // The site registers its service worker in the browser tests too. Playwright's
 // page.route can miss requests from a page that worker controls (WebKit routes
@@ -36,34 +31,6 @@ test.beforeAll(async () => {
   member = await registerUnreviewedMember("signin");
 });
 
-/** Waits until React has hydrated the element, so a click runs the page's
- * handler and not a plain form post. */
-async function hydrated(locator: Locator) {
-  await expect(locator).toBeVisible();
-  await expect
-    .poll(() =>
-      locator.evaluate((element) => Object.keys(element).some((key) => key.startsWith("__react")))
-    )
-    .toBe(true);
-}
-
-/** Swaps the test-mode CAPTCHA token in sign-in requests and records the
- * statuses the website answered. */
-async function watchSignIn(page: Page) {
-  const statuses: number[] = [];
-  await page.route(`**${LOGIN_PATH}`, async (route) => {
-    const request = route.request();
-    if (request.method() !== "POST") return route.continue();
-    const body = JSON.parse(request.postData() ?? "{}");
-    const response = await route.fetch({
-      postData: JSON.stringify({ ...body, turnstileToken: CAPTCHA_STAND_IN }),
-    });
-    statuses.push(response.status());
-    await route.fulfill({ response });
-  });
-  return statuses;
-}
-
 async function signInThroughForm(
   page: Page,
   path: string,
@@ -71,19 +38,7 @@ async function signInThroughForm(
   email = member.email
 ) {
   await page.goto(path, { waitUntil: "domcontentloaded" });
-  const submit = page.getByRole("button", { name: /^Sign in$/ });
-  await hydrated(submit);
-  await page.getByLabel("Email", { exact: true }).fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(password);
-  // Wait for the website's answer itself, so a slow answer is reported as
-  // such and not as a missing message.
-  const answered = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === LOGIN_PATH && response.request().method() === "POST",
-    { timeout: 45_000 }
-  );
-  await submit.click();
-  await answered;
+  await submitSignInForm(page, email, password);
 }
 
 test("a wrong password and an unknown address get the same refusal and stay signed out", async ({

@@ -222,7 +222,8 @@ async function uploadCheckedMedia(
     // Every video on the platform is at most 2 minutes (whole seconds, so the
     // phone's rounding passes). The event limit (1 minute) needs the post's
     // kind, which this upload does not carry (a file may be reused by any of
-    // the member's posts): the database enforces it at submit (part B of M4.4).
+    // the member's posts). That limit is checked only in the browser for now:
+    // the database does not check it at submit; a server check is planned.
     const problem = videoLengthProblem(await readVideoBytesSeconds(bytes), MAX_VIDEO_SECONDS);
     if (problem) {
       log.info("Video refused at upload", {

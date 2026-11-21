@@ -381,3 +381,31 @@ export function applyWithRollbackCheck(
     repeatRollback,
   });
 }
+
+/**
+ * A premature rollback and an update over a drifted body are both refused,
+ * changing nothing: the rollback with its precondition, and for each function
+ * in `signatures` (given one extra space at the start of its body) the
+ * preflight names it and the update fails with `drift`.
+ */
+export function assertDriftRefused(
+  { q, fails, fingerprint, preflightRows },
+  { rollback, updateSql, signatures, drift }
+) {
+  const before = fingerprint();
+  assert.match(fails(rollback, "55000"), /rollback precondition/);
+  assert.equal(fingerprint(), before);
+  for (const sig of signatures) {
+    const live = q(`select pg_get_functiondef('${sig}'::regprocedure);`);
+    q(
+      `do $$begin execute replace(pg_get_functiondef('${sig}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
+    );
+    const rows = preflightRows();
+    assert.equal(rows.length, 2, JSON.stringify(rows));
+    assert.match(rows[0][1], /unexpected state/);
+    assert.ok(rows[1][1].startsWith(`${sig} is not the reviewed body`), rows[1][1]);
+    assert.match(fails(updateSql, "55000"), drift);
+    q(`${live};`);
+  }
+  assert.equal(fingerprint(), before);
+}
