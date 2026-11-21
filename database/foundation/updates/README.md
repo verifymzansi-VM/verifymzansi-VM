@@ -82,9 +82,10 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Staff sales figures, the VAT alert and the VAT wording from the database, 21 November 2026
 
-`20261121090305_staff_sales_and_vat.sql` is **pending** (see the applied
-register). Launch checklist item 16 (roadmap M8.7, remainder). Everything is
-computed from the existing payment records; no table is added.
+`20261121090305_staff_sales_and_vat.sql` was applied on 21 November 2026 at
+17:30 UTC (see the applied register). Launch checklist item 16 (roadmap M8.7,
+remainder). Everything is computed from the existing payment records; no table
+is added.
 
 - **What a sale is.** A payment's amount, less the slots refunded or charged
   back (reversed payment lines), and nothing once the whole payment was refunded
@@ -6450,6 +6451,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
 
-- `20261121090305_staff_sales_and_vat.sql`: pending
+- `20261121090305_staff_sales_and_vat.sql`: applied 2026-11-21 17:30 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #333); update
+  and preflight from the reviewed files at 9ea47fcd and checked in the page
+  before running; update sha256 starting 136e84ca; preflight (sha256 starting
+  69b7a139) before "staff sales and VAT: update not applied", after "staff sales
+  and VAT: already applied; VAT setting: not_registered"; production fingerprint
+  after it (fingerprint.sql) matched the full replay (except the known schema
+  grant difference)
 
 <!-- applied-register:end -->
