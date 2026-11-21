@@ -19,23 +19,21 @@
     ],
     "notYetCompared": [],
     "howToCompare": "In the Supabase SQL editor (read-only), run `set search_path to \"$user\", public;` first, so pg_get_indexdef prints `extensions.gin_trgm_ops` as the replay does, then run database/foundation/fingerprint.sql unchanged and compare each row with categories below.",
-    "matchedThroughUpdate": "20261121090305_staff_sales_and_vat.sql",
+    "matchedThroughUpdate": "20261121094003_automatic_identity_checks.sql",
     "matchedFingerprints": {
       "column_grants": "5e5623672e80b927048d8553487d5442",
-      "columns": "eadece944ca698a8773a8105c50aafa8",
-      "constraints": "952b0db3a337b4c13d35a22f274b379e",
+      "columns": "8a5089b18d69f328ccd5a6ede5881ddf",
+      "constraints": "5b1717668549c6822f8282e95e105e4d",
       "event_triggers": "821f7d069c595c075754fad9309136ac",
-      "function_bodies": "e9a0b487499bff56829a6af5e4ef5d51",
-      "function_grants": "02321030f2934369347a1c0f561b12e6",
-      "function_metadata": "b92b138d65c973d42eee2f4c70c6ddc6",
-      "indexes": "bc08bed3c6e32132273c677ea0cdcdf0",
+      "function_bodies": "5fe2f609519064678a575a3afe802415",
+      "function_grants": "7814fd70e09e9c18ef52feae48b824ab",
+      "function_metadata": "4684ac8f901211089c821d11b4bb484f",
+      "indexes": "7945f271cfa88943eb51be1f53f1ccfd",
       "policies": "085a305fbc41d38d34eb40c3748c0793",
-      "row_level_security": "8b1899fdc009987a139d975d4a5315cb",
-      "triggers": "521fb8002d5e19e9a0a0aeac8de97886"
+      "row_level_security": "a26ef417b87e66f5797d7b8f009c052f",
+      "triggers": "0b81a3de04dfca42c0cb4331a846c985"
     },
-    "pendingApplication": [
-      "20261121094003_automatic_identity_checks.sql"
-    ]
+    "pendingApplication": []
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",

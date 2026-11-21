@@ -82,10 +82,10 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Automatic ID checks by an independent verification partner, 21 November 2026
 
-`20261121094003_automatic_identity_checks.sql` is pending (see the applied
-register). Didit plan, build step 5 (the database part of automatic ID checks).
-It changes nothing for members or staff while the new setting is `manual`, its
-starting value.
+`20261121094003_automatic_identity_checks.sql` was applied on 21 November 2026
+at 17:32 UTC (see the applied register). Didit plan, build step 5 (the database
+part of automatic ID checks). It changes nothing for members or staff while the
+new setting is `manual`, its starting value.
 
 **The setting stays `manual` until the retention update (Didit plan C1) is
 applied, and the database enforces it:** `api.set_identity_check_mode` refuses
@@ -6621,6 +6621,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   after it (fingerprint.sql) matched the full replay (except the known schema
   grant difference)
 
-- `20261121094003_automatic_identity_checks.sql`: pending
+- `20261121094003_automatic_identity_checks.sql`: applied 2026-11-21 17:32 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #335); update
+  and preflight from the reviewed files at dd710894 and checked in the page
+  before running; update sha256 starting a18f7793; preflight (sha256 starting
+  6871c179) before: update not applied (no drift, none of the update's objects,
+  the reviewed check in place; admins: 2), after: already applied (mode: manual;
+  checks: 0); production fingerprint after it (fingerprint.sql) matched the full
+  replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
