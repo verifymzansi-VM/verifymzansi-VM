@@ -5,13 +5,13 @@ import { NextRequest } from "next/server";
 // that the live backend does not have. They now answer 204 and touch nothing.
 // The view and like routes store views and likes on the live backend
 // (20261119172135_post_views_and_likes.sql), but only while
-// SHOW_ENGAGEMENT_TOTALS is on; while it is off (production today, and unit
-// tests) they too answer 204 without reading the request.
+// SHOW_ENGAGEMENT_TOTALS is on, and so does the Performance page events route
+// (20261121100028_post_performance_stats.sql); while it is off (production
+// today, and unit tests) they too answer 204 without reading the request.
 const { databaseClient } = vi.hoisted(() => ({ databaseClient: vi.fn() }));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: databaseClient,
-  tryCreateAdminClient: databaseClient,
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: databaseClient }));
 vi.mock("@/lib/foundation/restored-browser-client", () => ({
@@ -27,7 +27,6 @@ import { POST as postView } from "@/app/api/engagement/view/route";
 import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 
 const routes = [
-  ["/api/analytics/events", postEvents],
   ["/api/analytics/visit", postVisit],
   ["/api/engagement/share", postShare],
 ] as const;
@@ -52,6 +51,7 @@ describe.each(routes)("POST %s", (_path, post) => {
 });
 
 describe.each([
+  ["/api/analytics/events", postEvents],
   ["/api/engagement/like", postLike],
   ["/api/engagement/view", postView],
 ] as const)("POST %s while the counters are hidden", (path, post) => {

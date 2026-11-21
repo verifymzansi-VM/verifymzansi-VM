@@ -420,6 +420,25 @@
       ]
     },
     {
+      "id": "LIM-APP-analytics-events",
+      "title": "Request body cap for /api/analytics/events",
+      "value": 16384,
+      "unit": "bytes",
+      "category": "size",
+      "enforcedAt": [
+        {
+          "file": "src/app/api/analytics/events/route.ts",
+          "contains": "maxBytes: 16384"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "src/__tests__/limits/route-body-limits.test.ts"
+        }
+      ]
+    },
+    {
       "id": "LIM-APP-engagement-viewer",
       "title": "Request body cap for /api/engagement/viewer",
       "value": 8192,
@@ -8424,6 +8443,40 @@
       ]
     },
     {
+      "id": "LIM-RL-engagement-activity",
+      "title": "Shared rate limit for \"engagement:activity\"",
+      "value": "30 per minute, 600 per hour, 3000 per day",
+      "category": "rate",
+      "action": "engagement:activity",
+      "tiers": [
+        {
+          "limit": 30,
+          "ttl": 60
+        },
+        {
+          "limit": 600,
+          "ttl": 3600
+        },
+        {
+          "limit": 3000,
+          "ttl": 86400
+        }
+      ],
+      "enforcedAt": [
+        {
+          "file": "workers/rate-limiter.ts",
+          "symbol": "ACTION_LIMITS",
+          "contains": "\"engagement:activity\": ["
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
+        }
+      ]
+    },
+    {
       "id": "LIM-RL-inbox-read",
       "title": "Shared rate limit for \"inbox:read\"",
       "value": "60 per minute",
@@ -10078,6 +10131,25 @@
           "file": "database/foundation/current/functions/internal/record_post_views.sql",
           "symbol": "internal.record_post_views",
           "contains": "if p_post_ids is null or p_device is null or cardinality(p_post_ids) not between 1 and 5"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "behaviour",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "LIM-SQL-activity-per-request",
+      "title": "Post activity: 1 to 50 events per request",
+      "value": "1 to 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/record_post_activity.sql",
+          "symbol": "internal.record_post_activity",
+          "contains": "if p_post_ids is null or p_metrics is null or cardinality(p_post_ids) not between 1 and 50"
         }
       ],
       "tests": [
@@ -13105,6 +13177,11 @@
       "file": "src/lib/utils/blurhash.ts",
       "contains": "const ENCODE_SIZE = 32;",
       "reason": "image size used to compute a blur placeholder"
+    },
+    {
+      "file": "database/foundation/current/functions/internal/get_my_post_performance.sql",
+      "contains": "order by detail_views + contacts desc, appearances desc, id limit 10) t), '[]'::jsonb),",
+      "reason": "display cap: the Performance page lists the owner's 10 busiest posts (the restored page shows 10)"
     }
   ]
 }
