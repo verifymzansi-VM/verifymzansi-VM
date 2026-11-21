@@ -69,6 +69,20 @@ describe("BusinessStorefront", () => {
     expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
   });
 
+  it("calls mixed stock listings, even when most of it is cars", () => {
+    render(
+      <BusinessStorefront
+        storefront={summary({ vehicles: 29, property: 1 })}
+        areaLabels={{}}
+        initial={{ cards: [card(1)], total: 30 }}
+      />
+    );
+    expect(screen.getByRole("heading", { name: /All stock/ })).toHaveTextContent("30 listings");
+    expect(screen.getByPlaceholderText("Search Sample Motors' listings")).toBeInTheDocument();
+    // The filters still follow what most posts are.
+    expect(screen.getByLabelText("Gearbox")).toBeInTheDocument();
+  });
+
   it("adds the next page with Show more", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

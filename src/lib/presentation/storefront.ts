@@ -30,13 +30,21 @@ export function storefrontTrade(categories: Record<string, number>): StorefrontT
 const NOUNS: Record<StorefrontTrade, [string, string]> = {
   vehicles: ["car", "cars"],
   property: ["property", "properties"],
-  other: ["item", "items"],
+  other: ["listing", "listings"],
 };
 
-/** "18 cars", "1 property", "6 items". */
-export function stockCount(trade: StorefrontTrade, count: number) {
+/** What the stock is called: the trade's word only when every listing is of
+ * that trade ("cars", "properties"); otherwise "listings". */
+export function stockNoun(categories: Record<string, number>, count = 2) {
+  const keys = Object.keys(categories);
+  const trade = keys.length === 1 && keys[0] !== undefined ? storefrontTrade(categories) : "other";
   const [one, many] = NOUNS[trade];
-  return `${count} ${count === 1 ? one : many}`;
+  return count === 1 ? one : many;
+}
+
+/** "18 cars", "1 property", "6 listings". */
+export function stockCount(categories: Record<string, number>, count: number) {
+  return `${count} ${stockNoun(categories, count)}`;
 }
 
 /** The fields a storefront card shows; plain values, safe to send to the browser. */

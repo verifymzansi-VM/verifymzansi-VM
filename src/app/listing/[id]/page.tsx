@@ -142,6 +142,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       ...immersiveSlide.owner,
       name: sellerBusiness.name,
       initials: initialsOf(sellerBusiness.name, "B"),
+      logoUrl: sellerBusiness.logoUrl ?? null,
       href: `/mzansi-business/${sellerBusiness.id}`,
     };
 

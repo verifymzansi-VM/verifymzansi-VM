@@ -161,10 +161,11 @@ export async function BusinessDetailPageContent({
   // A checked business with a running Multi-listing package shows its stock
   // (item 17b; null while SHOW_BUSINESS_STOREFRONT is off or a read fails).
   const storefront = isOwnerPreview ? null : await restoredStorefront(business.id);
-  const stock = storefront
+  // A storefront with no live listings yet shows nothing: the page is as before.
+  const stock = storefront?.listings
     ? await restoredStorefrontFirstPage(storefront, STOREFRONT_PAGE_SIZE)
     : null;
-  const shownStorefront = storefront && stock ? { summary: storefront, stock } : null;
+  const shownStorefront = storefront && stock?.cards.length ? { summary: storefront, stock } : null;
   // Owner previews of drafts keep the classic page with its preview banner; so
   // does a business with a storefront, whose stock the viewer cannot show.
   const immersiveSlide =

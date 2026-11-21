@@ -9,6 +9,7 @@ import { getListingCategoryLabel } from "@/lib/presentation/listing-facts";
 import {
   STOREFRONT_PAGE_SIZE,
   stockCount,
+  stockNoun,
   storefrontCard,
   storefrontTrade,
   type StorefrontCardData,
@@ -202,7 +203,7 @@ export function BusinessStorefront({
   }
 
   const filtered = JSON.stringify(filters) !== JSON.stringify(NO_FILTERS);
-  // "Sample Motors' cars", "Thandi's Homes' properties", "Zola's stock".
+  // "Sample Motors' cars", "Zola's listings".
   const owned = `${storefront.businessName}${/s$/i.test(storefront.businessName) ? "'" : "'s"}`;
   const categories = Object.keys(storefront.categories).sort((a, b) =>
     (getListingCategoryLabel(a) ?? a).localeCompare(getListingCategoryLabel(b) ?? b)
@@ -214,7 +215,7 @@ export function BusinessStorefront({
         <h2 id="stock-heading" className="font-display text-2xl font-semibold tracking-tight">
           All stock{" "}
           <span className="font-sans text-base font-normal text-muted-foreground">
-            {stockCount(trade, storefront.listings)}
+            {stockCount(storefront.categories, storefront.listings)}
           </span>
         </h2>
         <FilterSelect
@@ -239,7 +240,7 @@ export function BusinessStorefront({
             maxLength={200}
             onChange={(event) => setQuery(event.target.value)}
             onBlur={() => query !== filters.q && change({ q: query })}
-            placeholder={`Search ${owned} ${trade === "vehicles" ? "cars" : trade === "property" ? "properties" : "stock"}`}
+            placeholder={`Search ${owned} ${stockNoun(storefront.categories)}`}
             aria-label={`Search ${owned} stock`}
             className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />

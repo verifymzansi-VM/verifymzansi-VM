@@ -100,4 +100,45 @@ describe("the storefront filters of /api/listings", () => {
     expect(rpc).not.toHaveBeenCalled();
     switches.storefront = true;
   });
+
+  it("refuses a bad make or range before it reaches the database (400, not 503)", async () => {
+    switches.storefront = true;
+    const rpc = vi.fn().mockResolvedValue({ data: emptyPage, error: null });
+    const read = (params: Record<string, string>) =>
+      readRestoredCollection(
+        apiWith(rpc),
+        "listings",
+        new URLSearchParams({ storefront: BUSINESS, ...params })
+      );
+    const cases: Array<Record<string, string>> = [
+      { make: "" },
+      { make: "   " },
+      { make: "Toy\u0000ota" },
+      { make: "Toy\nota" },
+      { make: "x".repeat(81) },
+      { category: "vehicles", attr_year: "2019", attr_year_min: "2018" },
+      { category: "vehicles", attr_year_min: "2018", attr_year: "2019" },
+      { category: "vehicles", attr_year_min: "1234567890" },
+      { category: "vehicles", attr_year_max: "-1" },
+    ];
+    for (const params of cases)
+      await expect(read(params), JSON.stringify(params)).rejects.toBeInstanceOf(
+        MarketplaceQueryError
+      );
+    expect(rpc).not.toHaveBeenCalled();
+    await read({ make: "x".repeat(80) });
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves attr_<field>_min as an ordinary attribute while switched off", async () => {
+    switches.storefront = false;
+    const rpc = vi.fn().mockResolvedValue({ data: emptyPage, error: null });
+    await readRestoredCollection(
+      apiWith(rpc),
+      "listings",
+      new URLSearchParams({ category: "vehicles", attr_year_min: "1234567890" })
+    );
+    expect(rpc.mock.calls[0]?.[1].p_request.attributes).toEqual({ year_min: "1234567890" });
+    switches.storefront = true;
+  });
 });

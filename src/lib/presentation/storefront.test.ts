@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { stockCount, storefrontCard, storefrontFacts, storefrontTrade } from "./storefront";
+import {
+  stockCount,
+  stockNoun,
+  storefrontCard,
+  storefrontFacts,
+  storefrontTrade,
+} from "./storefront";
 
 describe("storefront presentation", () => {
   it("takes the trade from what most posts are", () => {
@@ -9,11 +15,16 @@ describe("storefront presentation", () => {
     expect(storefrontTrade({})).toBe("other");
   });
 
-  it("counts the stock in the trade's words", () => {
-    expect(stockCount("vehicles", 18)).toBe("18 cars");
-    expect(stockCount("vehicles", 1)).toBe("1 car");
-    expect(stockCount("property", 2)).toBe("2 properties");
-    expect(stockCount("other", 6)).toBe("6 items");
+  it("names the stock by its trade only when every listing is of that trade", () => {
+    expect(stockCount({ vehicles: 18 }, 18)).toBe("18 cars");
+    expect(stockCount({ vehicles: 1 }, 1)).toBe("1 car");
+    expect(stockCount({ property: 2 }, 2)).toBe("2 properties");
+    expect(stockCount({ electronics: 6 }, 6)).toBe("6 listings");
+    // Mixed stock: listings, even when most are cars.
+    expect(stockCount({ vehicles: 17, property: 1 }, 18)).toBe("18 listings");
+    expect(stockCount({ vehicles: 1, auto_parts: 1 }, 2)).toBe("2 listings");
+    expect(stockNoun({ vehicles: 3 })).toBe("cars");
+    expect(stockNoun({ vehicles: 3, property: 1 })).toBe("listings");
   });
 
   it("shows year, km and gearbox for cars, beds, baths and parking for homes", () => {

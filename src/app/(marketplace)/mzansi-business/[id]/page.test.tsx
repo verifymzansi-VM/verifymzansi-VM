@@ -83,6 +83,38 @@ vi.mock("@/contexts/video-playback-context", () => ({
   }),
 }));
 
+/** A business with a storefront (item 17b). */
+const SAMPLE_MOTORS = {
+  id: "11111111-1111-4111-8111-111111111111",
+  owner_id: "",
+  business_name: "Sample Motors",
+  description: "Family-run used car dealer.",
+  status: "live",
+  business_type: "standalone_shop",
+  category: "automotive",
+  cover_photo: null,
+  logo_url: null,
+  cover_video: null,
+  video_thumbnail: null,
+  gallery_photos: [],
+  social_links: {},
+  operating_hours: {},
+  services_offered: [],
+  payment_methods_accepted: [],
+  delivery_options: [],
+  service_areas: null,
+  location_city: "Richards Bay",
+  location_province: "KwaZulu-Natal",
+  phone: null,
+  whatsapp: null,
+  email: null,
+  website: null,
+  store_number: null,
+  map_directions: null,
+  business_details: null,
+  category_details: {},
+};
+
 /** Serves the business through the public business read. */
 function serveBusiness(
   business: Record<string, unknown>,
@@ -185,36 +217,7 @@ describe("BusinessDetailPage", () => {
 
   // Item 17b: a checked business with a running package shows its stock.
   it("shows the storefront's stock and hides the Live offers fact", async () => {
-    serveBusiness({
-      id: "11111111-1111-4111-8111-111111111111",
-      owner_id: "",
-      business_name: "Sample Motors",
-      description: "Family-run used car dealer.",
-      status: "live",
-      business_type: "standalone_shop",
-      category: "automotive",
-      cover_photo: null,
-      logo_url: null,
-      cover_video: null,
-      video_thumbnail: null,
-      gallery_photos: [],
-      social_links: {},
-      operating_hours: {},
-      services_offered: [],
-      payment_methods_accepted: [],
-      delivery_options: [],
-      service_areas: null,
-      location_city: "Richards Bay",
-      location_province: "KwaZulu-Natal",
-      phone: null,
-      whatsapp: null,
-      email: null,
-      website: null,
-      store_number: null,
-      map_directions: null,
-      business_details: null,
-      category_details: {},
-    });
+    serveBusiness(SAMPLE_MOTORS);
     storefrontRead.mockResolvedValueOnce({
       businessId: "11111111-1111-4111-8111-111111111111",
       businessName: "Sample Motors",
@@ -253,6 +256,29 @@ describe("BusinessDetailPage", () => {
     expect(screen.getByText("Video")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show more" })).toBeInTheDocument();
     expect(screen.queryByText("Live offers")).toBeNull();
+  });
+
+  it("is the page as before while the storefront has no live listings", async () => {
+    serveBusiness(SAMPLE_MOTORS);
+    storefrontRead.mockResolvedValueOnce({
+      businessId: "11111111-1111-4111-8111-111111111111",
+      businessName: "Sample Motors",
+      listings: 0,
+      categories: {},
+      makes: [],
+      areas: [],
+    });
+    storefrontPage.mockClear();
+
+    render(
+      await BusinessDetailPage({
+        params: Promise.resolve({ id: "11111111-1111-4111-8111-111111111111" }),
+      })
+    );
+
+    expect(storefrontPage).not.toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: /All stock/ })).toBeNull();
+    expect(screen.getByText("Live offers")).toBeInTheDocument();
   });
 
   it("returns notFound when the business is not public", async () => {

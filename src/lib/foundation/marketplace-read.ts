@@ -379,17 +379,24 @@ export async function readRestoredCollection(
       }
     }
     const attributes: Record<string, unknown> = {};
+    const ranges = new Set<string>();
     params.forEach((value, key) => {
       if (!key.startsWith("attr_")) return;
-      // attr_<field>_min / attr_<field>_max: a number range (year, bedrooms).
-      const range = /^attr_(.+)_(min|max)$/.exec(key);
-      if (range && /^\d{1,9}$/.test(value)) {
+      // The storefront's number ranges (item 17b): attr_<field>_min and
+      // attr_<field>_max (year, bedrooms), whole numbers of up to 9 digits.
+      const range = SHOW_BUSINESS_STOREFRONT ? /^attr_(.+)_(min|max)$/.exec(key) : null;
+      if (range) {
+        if (!/^\d{1,9}$/.test(value)) throw new MarketplaceQueryError("Invalid range");
         const bounds = (attributes[range[1]!] ?? {}) as Record<string, number>;
         attributes[range[1]!] = { ...bounds, [range[2]!]: Number(value) };
+        ranges.add(range[1]!);
         return;
       }
       attributes[key.slice(5)] = value === "true" ? true : value === "false" ? false : value;
     });
+    // A field filtered both by value and by range is refused, whatever the order.
+    for (const field of ranges)
+      if (params.has(`attr_${field}`)) throw new MarketplaceQueryError("Invalid range");
     if (Object.keys(attributes).length) input.attributes = attributes;
     // A business's storefront, with its vehicle make filter (item 17b).
     const storefront = params.get("storefront");
@@ -398,7 +405,11 @@ export async function readRestoredCollection(
       if (!SHOW_BUSINESS_STOREFRONT || !storefront || !z.uuid().safeParse(storefront).success)
         throw new MarketplaceQueryError("Invalid storefront");
       input.storefront = storefront;
-      if (make !== null) input.make = make;
+      if (make !== null) {
+        if (!make.trim() || make.length > 80 || /[\u0000-\u001f\u007f]/.test(make))
+          throw new MarketplaceQueryError("Invalid make");
+        input.make = make;
+      }
     }
   }
   if (params.get("type") && collection === "businesses") input.business_type = params.get("type");

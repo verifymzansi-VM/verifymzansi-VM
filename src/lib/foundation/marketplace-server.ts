@@ -12,6 +12,7 @@ import {
 import type { PostEngagement } from "./post-engagement";
 import { SHOW_BUSINESS_STOREFRONT, SHOW_ENGAGEMENT_TOTALS } from "../hidden-features";
 import { readFoundationStorefront } from "./storefront";
+import { searchFoundationPresentedCards } from "./public-cards";
 import {
   stockCount,
   storefrontCard,
@@ -177,15 +178,20 @@ export const restoredStorefront = cache(async (id: string) => {
 export async function restoredStorefrontSeller(id: string) {
   const storefront = await restoredStorefront(id);
   if (!storefront) return null;
-  const sticker = (
-    await readPublicBusinessStickers(foundationServerPublicApi(), [storefront.businessId]).catch(
-      () => new Map<string, object>()
-    )
-  ).get(storefront.businessId) as Record<string, unknown> | undefined;
+  const api = foundationServerPublicApi();
+  const [stickers, card] = await Promise.all([
+    readPublicBusinessStickers(api, [storefront.businessId]).catch(() => new Map<string, object>()),
+    // The business's logo, from its public card (owner decision 6: name and logo).
+    searchFoundationPresentedCards(api, { post_id: storefront.businessId, limit: 1 })
+      .then((page) => page.items[0] ?? null)
+      .catch(() => null),
+  ]);
+  const sticker = stickers.get(storefront.businessId) as Record<string, unknown> | undefined;
   return {
     id: storefront.businessId,
     name: storefront.businessName,
-    seeAllLabel: `See all ${stockCount(storefrontTrade(storefront.categories), storefront.listings)}`,
+    logoUrl: card ? (restoredPublicRow(card, undefined, card.presentation).logo_url ?? null) : null,
+    seeAllLabel: `See all ${stockCount(storefront.categories, storefront.listings)}`,
     cipcCheckedAt: stickerText(sticker?.cipc_verified_at),
   };
 }

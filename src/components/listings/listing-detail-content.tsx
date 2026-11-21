@@ -119,6 +119,8 @@ export interface SimilarSellerRow {
 export interface ListingSellerBusiness {
   id: string;
   name: string;
+  /** The business's logo; its initials when it has none. */
+  logoUrl?: string | null;
   /** "See all 18 cars". */
   seeAllLabel: string;
   cipcCheckedAt: string | null;
@@ -452,12 +454,24 @@ export function ListingDetailContent({
               {sellerBusiness ? (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
-                    <div
-                      aria-hidden="true"
-                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-brand-green-800 font-display text-xl font-bold text-brand-gold-300"
-                    >
-                      {initialsOf(sellerBusiness.name, "B")}
-                    </div>
+                    {sellerBusiness.logoUrl ? (
+                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border bg-white p-1 dark:bg-warm-900">
+                        <Image
+                          src={normalizeMediaUrl(sellerBusiness.logoUrl)}
+                          alt=""
+                          width={56}
+                          height={56}
+                          className="h-full w-full rounded-lg object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        aria-hidden="true"
+                        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-brand-green-800 font-display text-xl font-bold text-brand-gold-300"
+                      >
+                        {initialsOf(sellerBusiness.name, "B")}
+                      </div>
+                    )}
                     <div className="min-w-0 space-y-1.5">
                       <p className="break-words font-medium">{sellerBusiness.name}</p>
                       <BusinessStickers
