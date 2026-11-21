@@ -7,7 +7,7 @@ import { claimTypeOf } from "../admin/moderation-items";
 import { getContentEditChanges } from "../content-edit-diff";
 import { FoundationStaffReadError } from "./staff-read";
 import { areaLabel, restoredArea, restoredContentType } from "./areas";
-import { readStaffCopyFacts } from "./post-copy";
+import { readStaffCopyFacts } from "./staff-copy-facts";
 const instant = z.iso.datetime({ offset: true });
 const generation = z
   .string()

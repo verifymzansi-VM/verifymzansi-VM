@@ -1,7 +1,8 @@
 /** @vitest-environment node */
 import { NextRequest, type NextResponse } from "next/server";
 import { it, beforeEach, afterEach, expect, vi, describe } from "vitest";
-import { handlePostCopy, readStaffCopyFacts } from "./post-copy";
+import { handlePostCopy } from "./post-copy";
+import { readStaffCopyFacts } from "./staff-copy-facts";
 import { createFoundationRouteContext } from "./request-route";
 import { checkRateLimit } from "../utils/rate-limit";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
