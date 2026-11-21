@@ -6036,6 +6036,85 @@
         "service_role": true
       },
       "authority": "Website server only, for a finished check with a partner session: records that the partner deleted the session; idempotent."
+    },
+    {
+      "name": "record_post_activity",
+      "updates": ["updates/20261121100028_post_performance_stats.sql"],
+      "arguments": [
+        {
+          "name": "p_post_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        },
+        {
+          "name": "p_metrics",
+          "sqlType": "text[]",
+          "optional": false
+        },
+        {
+          "name": "p_device",
+          "sqlType": "uuid",
+          "optional": true
+        },
+        {
+          "name": "p_account",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only, with the GoTrue-verified account or none and, for engaged views, the browser identifier from its own signed first-party cookie: adds 1 to 50 (post, counter) events to the daily counters of publicly live posts (appearances, detail views by where the visitor came from, contact taps, shares); never the signed-in owner's own events or any event by an account with an active staff role (an inactive account counts as signed out). An engaged view counts at most once per browser per post in 24 hours, and only after that browser's view of the post was counted. Stores counts per post per day (kept 31 days) and an all-time engaged total; never an account, browser identifier, address or user agent (an engaged view keeps a keyed hash under the daily salt for 24 hours). Returns how many posts moved and how many engaged views counted."
+    },
+    {
+      "name": "get_my_post_performance",
+      "updates": ["updates/20261121100028_post_performance_stats.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Active member with a live session, own posts only: post and live counts, all-time views and engaged views, enquiries received, the last 30 days of appearances, detail views, contact taps, shares, saves and unique viewers, the top 10 posts, where detail views came from, and each live post's showroom appearances in the last 7 days next to the showroom's fair share (an average over every eligible post; no other owner's data)."
+    },
+    {
+      "name": "purge_post_engagement",
+      "updates": ["updates/20261121100028_post_performance_stats.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Scheduled job only (the website's minute job): deletes view and engaged marks older than 24 hours, salts older than yesterday and activity days older than 31 days, and lets waiting likes that are due count; records the run as scheduled job engagement_purge."
+    },
+    {
+      "name": "get_public_storefront",
+      "updates": ["updates/20261121131915_business_storefront.sql"],
+      "arguments": [
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public: for a publicly live business with a storefront (current CIPC sticker, its owner's package running, the owner's first such business) or a live listing holding that package's slot, the business id and name, the listing count, categories, vehicle makes and property areas; null for any other post. Card facts only: no owner, package, slot, account or contact."
     }
   ]
 }

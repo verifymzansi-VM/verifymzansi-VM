@@ -37,6 +37,7 @@ const SWEEPS = [
   "approve_due_commissions",
   "expire_waiting_bank_transfers",
   "void_ended_package_add_invoices",
+  "purge_post_engagement",
 ];
 const PAYMENT = ["payment_completed", "payment_reversed", "payment_reconciliation_required"];
 const job = (extra: Record<string, unknown> = {}) => ({

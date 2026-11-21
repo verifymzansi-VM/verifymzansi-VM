@@ -20,6 +20,7 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/foundation/marketplace-server", () => ({
   restoredListingDetail: listingDetail,
   restoredPublicDetail: publicDetail,
+  restoredStorefrontSeller: async () => null,
 }));
 vi.mock("@/lib/foundation/marketplace-read", () => ({ readRestoredCollection: readCollection }));
 vi.mock("@/lib/foundation/server-public", () => ({ foundationServerPublicApi: () => "api" }));

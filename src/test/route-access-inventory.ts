@@ -231,7 +231,7 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
 export const PUBLIC_ROUTE_REASONS: Record<string, string> = {
   "(auth)/auth/callback GET": "Email confirmation and email-change links land here before sign-in",
   "api/analytics/events POST":
-    "Closed: answers 204 without reading the request or calling the database",
+    "Visitors' card appearances, page opens, contact taps and shares for the owner's Performance page; 204 while SHOW_ENGAGEMENT_TOTALS is off, otherwise origin checked, per-network limit, daily counts only",
   "api/analytics/visit POST":
     "Closed: answers 204 without reading the request or calling the database",
   "api/auth/forgot-password POST": "Starts password recovery for a signed-out visitor",

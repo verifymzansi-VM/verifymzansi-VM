@@ -110,13 +110,14 @@ const SERVER_TO_SERVER: Record<string, string> = {
 };
 /** Closed routes: pages still call them, and they answer 204 without reading
  * the request, calling a database or setting a cookie. */
-const CLOSED = ["analytics/events", "analytics/visit", "engagement/share"];
+const CLOSED = ["analytics/visit", "engagement/share"];
 /** Routes a signed-out visitor's page calls without the token; the origin
  * check still applies (with a Turnstile check or a signed browser identifier
  * behind it). */
 const ORIGIN_ONLY: Record<string, string> = {
   "contact/general": "Turnstile",
   "engagement/view": "signed browser identifier",
+  "analytics/events": "per-source limit; adds to daily counts only",
 };
 
 type Handler = (request: NextRequest, context: unknown) => Promise<Response>;

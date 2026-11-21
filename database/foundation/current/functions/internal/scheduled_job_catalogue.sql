@@ -27,7 +27,8 @@ AS $function$
     (14, 'evidence_cleanup', '5_minutes', interval '30 minutes'),
     (15, 'media_cleanup', '5_minutes', interval '30 minutes'),
     (16, 'payment_checks', '10_minutes', interval '40 minutes'),
-    (17, 'refund_check', 'day', interval '26 hours')
+    (17, 'refund_check', 'day', interval '26 hours'),
+    (18, 'engagement_purge', 'minute', interval '10 minutes')
   ) v(ord, job, every, late_after)
 $function$;
 alter function internal.scheduled_job_catalogue() owner to postgres;

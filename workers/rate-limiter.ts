@@ -328,6 +328,18 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 300, ttl: 3600 },
     { limit: 3000, ttl: 86400 },
   ],
+  // Performance page events (src/app/api/analytics/events): a beacon of at
+  // most 50 card appearances, page opens, contact taps and shares every few
+  // seconds while someone browses. The database keeps daily counts per post.
+  "engagement:activity": [
+    { limit: 30, ttl: 60 },
+    { limit: 600, ttl: 3600 },
+    { limit: 3000, ttl: 86400 },
+  ],
+  // Per address and post: requests with a post's page events (detail views,
+  // contact taps, shares) a day; card appearances are not checked against it.
+  // Far above what one person reaches; room for a shared carrier address.
+  "engagement:activity:post": [{ limit: 200, ttl: 86400 }],
   "engagement:like": [
     { limit: 30, ttl: 60 },
     { limit: 300, ttl: 3600 },

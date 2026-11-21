@@ -10,7 +10,15 @@ import {
   type PublicCollection,
 } from "./marketplace-read";
 import type { PostEngagement } from "./post-engagement";
-import { SHOW_ENGAGEMENT_TOTALS } from "../hidden-features";
+import { SHOW_BUSINESS_STOREFRONT, SHOW_ENGAGEMENT_TOTALS } from "../hidden-features";
+import { readFoundationStorefront } from "./storefront";
+import { searchFoundationPresentedCards } from "./public-cards";
+import {
+  stockCount,
+  storefrontCard,
+  storefrontTrade,
+  type StorefrontSummary,
+} from "../presentation/storefront";
 import type { FoundationPublicPostCore } from "./public-post-contract";
 import { readPublicBusinessStickers } from "./business-seen";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
@@ -144,6 +152,71 @@ export const restoredBusinessDetail = cache(async (id: string) => {
     isOwnerPreview: false,
   };
 });
+
+/**
+ * The storefront a public business or listing belongs to (item 17b), or null:
+ * always null while SHOW_BUSINESS_STOREFRONT is off (no read is made), and
+ * when the read fails, so the page renders as without a storefront.
+ */
+export const restoredStorefront = cache(async (id: string) => {
+  if (!SHOW_BUSINESS_STOREFRONT || !z.uuid().safeParse(id).success) return null;
+  try {
+    return await readFoundationStorefront(foundationServerPublicApi(), id);
+  } catch (error) {
+    log.warn("Storefront unavailable", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return null;
+  }
+});
+
+/**
+ * The checked business a public listing's storefront belongs to, for the
+ * listing's seller block: its name, "See all 18 cars" and its CIPC check
+ * date. Null without a storefront.
+ */
+export async function restoredStorefrontSeller(id: string) {
+  const storefront = await restoredStorefront(id);
+  if (!storefront) return null;
+  const api = foundationServerPublicApi();
+  const [stickers, card] = await Promise.all([
+    readPublicBusinessStickers(api, [storefront.businessId]).catch(() => new Map<string, object>()),
+    // The business's logo, from its public card (owner decision 6: name and logo).
+    searchFoundationPresentedCards(api, { post_id: storefront.businessId, limit: 1 })
+      .then((page) => page.items[0] ?? null)
+      .catch(() => null),
+  ]);
+  const sticker = stickers.get(storefront.businessId) as Record<string, unknown> | undefined;
+  return {
+    id: storefront.businessId,
+    name: storefront.businessName,
+    logoUrl: card ? (restoredPublicRow(card, undefined, card.presentation).logo_url ?? null) : null,
+    seeAllLabel: `See all ${stockCount(storefront.categories, storefront.listings)}`,
+    cipcCheckedAt: stickerText(sticker?.cipc_verified_at),
+  };
+}
+
+/** The first page of a storefront's cards, newest first; null when it fails. */
+export async function restoredStorefrontFirstPage(storefront: StorefrontSummary, pageSize: number) {
+  const trade = storefrontTrade(storefront.categories);
+  try {
+    const { rows, total } = await readRestoredCollection(
+      foundationServerPublicApi(),
+      "listings",
+      new URLSearchParams({
+        storefront: storefront.businessId,
+        sort: "newest",
+        limit: String(pageSize),
+      })
+    );
+    return { cards: rows.map((row) => storefrontCard(trade, row)), total };
+  } catch (error) {
+    log.warn("Storefront stock unavailable", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return null;
+  }
+}
 
 export const restoredEventDetail = cache(async (id: string) => {
   const post = await restoredPublicDetail(id);
