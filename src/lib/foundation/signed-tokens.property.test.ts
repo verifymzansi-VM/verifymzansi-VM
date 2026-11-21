@@ -88,6 +88,24 @@ describe("the phone-code challenge cookie", () => {
     );
   });
 
+  it("is refused when the signature's last character only changes unused bits", () => {
+    const owner = "00000000-0000-4000-8000-000000000000";
+    const phone = "+27600000000";
+    const cookie = sealPhoneChallenge(
+      owner,
+      phone,
+      "00000000-0000-1000-8000-000000000000",
+      expires()
+    );
+    // 43 characters carry 258 bits for 32 bytes: the last two bits are unused.
+    const last = BASE64URL.indexOf(cookie.at(-1)!);
+    const changed = cookie.slice(0, -1) + BASE64URL[last ^ 1];
+    const signatureOf = (value: string) => Buffer.from(value.split(".")[1]!, "base64url");
+    expect(signatureOf(changed).equals(signatureOf(cookie))).toBe(true);
+    expect(readPhoneChallenge(cookie, owner, phone)).toBe("00000000-0000-1000-8000-000000000000");
+    expect(refuses(() => readPhoneChallenge(changed, owner, phone))).toBe(true);
+  });
+
   it("is refused once expired, and never lives longer than five minutes", () => {
     fc.assert(
       fc.property(
