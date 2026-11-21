@@ -160,7 +160,8 @@ try {
     label: "automatic identity checks",
     fingerprint,
     preflightRows: preflight,
-    appliedSummary: /^automatic identity checks: already applied; admins: \d+; mode: manual; checks: 0$/,
+    appliedSummary:
+      /^automatic identity checks: already applied; admins: \d+; mode: manual; checks: 0$/,
   });
 
   const admin = staffMember("admin", "admin");
@@ -239,28 +240,52 @@ try {
   await check("manual (the starting value): manual route, no check can start", () => {
     const m = namedMember("manual");
     assert.deepEqual(availability(m), { route: "manual", reason: "mode", check: null });
-    assert.match(fails(member(m, "select api.start_my_identity_check();"), "PT409"), /identity_check_mode/);
+    assert.match(
+      fails(member(m, "select api.start_my_identity_check();"), "PT409"),
+      /identity_check_mode/
+    );
     assert.equal(q(`select count(*) from private.identity_checks;`), "0");
   });
 
   // ------------------------------------------------------------ setting
   await check("the setting: admin with a recent second factor and a reason; logged", () => {
     assert.match(
-      fails(staff(moderator, "select api.set_identity_check_mode('automatic','Moderators may not.');"), "42501"),
+      fails(
+        staff(moderator, "select api.set_identity_check_mode('automatic','Moderators may not.');"),
+        "42501"
+      ),
       /capability|staff/
     );
     assert.match(
-      fails(staff(governor, "select api.set_identity_check_mode('automatic','Governors may not.');"), "42501"),
+      fails(
+        staff(governor, "select api.set_identity_check_mode('automatic','Governors may not.');"),
+        "42501"
+      ),
       /capability|staff/
     );
     fails(
-      staff(admin, "select api.set_identity_check_mode('automatic','A stale code.');", totpMinutesAgo(20)),
+      staff(
+        admin,
+        "select api.set_identity_check_mode('automatic','A stale code.');",
+        totpMinutesAgo(20)
+      ),
       "42501"
     );
     fails(staff(admin, "select api.set_identity_check_mode('automatic','abc');"), "22023");
-    fails(staff(admin, "select api.set_identity_check_mode('sometimes','Not a mode at all.');"), "22023");
-    assert.deepEqual(setMode("staff_final"), { mode: "staff_final", changed: true, resumed: false });
-    assert.deepEqual(setMode("staff_final"), { mode: "staff_final", changed: false, resumed: false });
+    fails(
+      staff(admin, "select api.set_identity_check_mode('sometimes','Not a mode at all.');"),
+      "22023"
+    );
+    assert.deepEqual(setMode("staff_final"), {
+      mode: "staff_final",
+      changed: true,
+      resumed: false,
+    });
+    assert.deepEqual(setMode("staff_final"), {
+      mode: "staff_final",
+      changed: false,
+      resumed: false,
+    });
     assert.equal(
       q(`select string_agg(from_mode||'>'||to_mode,',') from private.identity_check_mode_events;`),
       "manual>staff_final"
@@ -287,20 +312,28 @@ try {
     });
     const result = finish(c, "approved");
     assert.equal(result.status, "approved");
-    const fact = json(`select to_jsonb(f) from private.accepted_identity_facts f where f.owner_id='${m.id}';`);
+    const fact = json(
+      `select to_jsonb(f) from private.accepted_identity_facts f where f.owner_id='${m.id}';`
+    );
     assert.equal(fact.reviewed_by, null);
     assert.equal(fact.automatic_check_id, c.check);
     assert.equal(fact.revoked_at, null);
     assert.equal(
-      q(`select legal_name_locked_at is not null and display_name='Thando Sipho Dlamini' from private.profiles where account_id='${m.id}';`),
+      q(
+        `select legal_name_locked_at is not null and display_name='Thando Sipho Dlamini' from private.profiles where account_id='${m.id}';`
+      ),
       "t"
     );
     assert.equal(
-      q(`select status from private.evidence_cases where id=(select case_id from private.identity_checks where id='${c.check}');`),
+      q(
+        `select status from private.evidence_cases where id=(select case_id from private.identity_checks where id='${c.check}');`
+      ),
       "decided"
     );
     assert.equal(
-      q(`select count(*) from private.outbox_events where kind='identity_accepted' and owner_id='${m.id}';`),
+      q(
+        `select count(*) from private.outbox_events where kind='identity_accepted' and owner_id='${m.id}';`
+      ),
       "1"
     );
     // The result is recorded once.
@@ -308,7 +341,9 @@ try {
     assert.match(fails(member(m, "select api.start_my_identity_check();"), "PT409"), /accepted/);
   });
   await check("an automatic fact never names a reviewer and a staff fact always does", () => {
-    const sub = q(`select submission_id from private.accepted_identity_facts where automatic_check_id is not null limit 1;`);
+    const sub = q(
+      `select submission_id from private.accepted_identity_facts where automatic_check_id is not null limit 1;`
+    );
     fails(
       `update private.accepted_identity_facts set reviewed_by='${admin.id}' where submission_id='${sub}';`,
       "23514"
@@ -321,7 +356,9 @@ try {
     const row = checkRow(c.check);
     assert.deepEqual(row.reasons, ["names_differ", "provider_declined"]);
     assert.ok(queueCases().includes(row.case_id));
-    const forCase = json(staff(moderator, `select api.get_identity_check_for_case('${row.case_id}');`));
+    const forCase = json(
+      staff(moderator, `select api.get_identity_check_for_case('${row.case_id}');`)
+    );
     assert.equal(forCase.check.status, "with_staff");
     assert.deepEqual(forCase.check.reasons, ["names_differ", "provider_declined"]);
     fails(member(m, `select api.get_identity_check_for_case('${row.case_id}');`), "42501");
@@ -341,7 +378,9 @@ try {
     const row = checkRow(c.check);
     assert.deepEqual(row.reasons, ["provider_in_review"]);
     assert.equal(
-      q(`select count(*) from private.verification_current_submissions where case_id='${row.case_id}';`),
+      q(
+        `select count(*) from private.verification_current_submissions where case_id='${row.case_id}';`
+      ),
       "0"
     );
     assert.ok(!queueCases().includes(row.case_id));
@@ -381,145 +420,225 @@ try {
     assert.equal(finish(b, "approved", { fingerprint: bannedPrint }).status, "declined");
     assert.deepEqual(checkRow(b.check).reasons, ["banned"]);
   });
-  await check("ask a person: an identity_check appeal puts the submission back in the queue", () => {
-    const m = declined.member;
-    fails(member(m, `select api.ask_person_identity_check('${declined.check}','Too short.');`), "22023");
-    // The generic appeal path and the appeals screen never take these.
-    assert.match(
-      fails(member(m, `select api.submit_my_frontend_appeal('${declined.check}','Please look at my ID again, it is mine.');`), "PT409"),
-      /cannot be appealed/
-    );
-    const reason = "Please look at my ID again, the photo was taken in poor light.";
-    const asked = json(member(m, `select api.ask_person_identity_check('${declined.check}',${sqlLiteral(reason)});`));
-    assert.equal(asked.status, "submitted");
-    assert.equal(
-      json(member(m, `select api.ask_person_identity_check('${declined.check}',${sqlLiteral(reason)});`)).reused,
-      true
-    );
-    assert.equal(
-      q(`select kind||':'||status from private.frontend_appeals where id='${asked.appeal_id}';`),
-      "identity_check:submitted"
-    );
-    assert.ok(queueCases().includes(declined.case));
-    assert.equal(checkRow(declined.check).provider_delete_due, null);
-    assert.match(fails(member(m, "select api.start_my_identity_check();"), "PT409"), /identity_check_with_person/);
-    const seen = availability(m);
-    assert.equal(seen.check.can_ask_person, false);
-    assert.equal(seen.check.asked_person.status, "submitted");
-    const queue = json(staff(admin, "select api.get_frontend_appeal_queue();"));
-    const item = queue.items.find((i) => i.id === asked.appeal_id);
-    assert.equal(item.can_resolve, false);
-    assert.match(
-      fails(staff(admin, `select api.resolve_frontend_appeal('${asked.appeal_id}','overturned','Looked again at the ID photo.');`), "PT409"),
-      /appealed decision changed/
-    );
-    const forCase = json(staff(moderator, `select api.get_identity_check_for_case('${declined.case}');`));
-    assert.equal(forCase.check.asked_person.reason, reason);
-    declined.appeal = asked.appeal_id;
-  });
-  await check("the staff decision closes the appeal: approval overturns it and tells the member", () => {
-    // A staff approval writes the accepted fact (as internal.accept_identity_submission does).
-    q(`insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
+  await check(
+    "ask a person: an identity_check appeal puts the submission back in the queue",
+    () => {
+      const m = declined.member;
+      fails(
+        member(m, `select api.ask_person_identity_check('${declined.check}','Too short.');`),
+        "22023"
+      );
+      // The generic appeal path and the appeals screen never take these.
+      assert.match(
+        fails(
+          member(
+            m,
+            `select api.submit_my_frontend_appeal('${declined.check}','Please look at my ID again, it is mine.');`
+          ),
+          "PT409"
+        ),
+        /cannot be appealed/
+      );
+      const reason = "Please look at my ID again, the photo was taken in poor light.";
+      const asked = json(
+        member(
+          m,
+          `select api.ask_person_identity_check('${declined.check}',${sqlLiteral(reason)});`
+        )
+      );
+      assert.equal(asked.status, "submitted");
+      assert.equal(
+        json(
+          member(
+            m,
+            `select api.ask_person_identity_check('${declined.check}',${sqlLiteral(reason)});`
+          )
+        ).reused,
+        true
+      );
+      assert.equal(
+        q(`select kind||':'||status from private.frontend_appeals where id='${asked.appeal_id}';`),
+        "identity_check:submitted"
+      );
+      assert.ok(queueCases().includes(declined.case));
+      assert.equal(checkRow(declined.check).provider_delete_due, null);
+      assert.match(
+        fails(member(m, "select api.start_my_identity_check();"), "PT409"),
+        /identity_check_with_person/
+      );
+      const seen = availability(m);
+      assert.equal(seen.check.can_ask_person, false);
+      assert.equal(seen.check.asked_person.status, "submitted");
+      const queue = json(staff(admin, "select api.get_frontend_appeal_queue();"));
+      const item = queue.items.find((i) => i.id === asked.appeal_id);
+      assert.equal(item.can_resolve, false);
+      assert.match(
+        fails(
+          staff(
+            admin,
+            `select api.resolve_frontend_appeal('${asked.appeal_id}','overturned','Looked again at the ID photo.');`
+          ),
+          "PT409"
+        ),
+        /appealed decision changed/
+      );
+      const forCase = json(
+        staff(moderator, `select api.get_identity_check_for_case('${declined.case}');`)
+      );
+      assert.equal(forCase.check.asked_person.reason, reason);
+      declined.appeal = asked.appeal_id;
+    }
+  );
+  await check(
+    "the staff decision closes the appeal: approval overturns it and tells the member",
+    () => {
+      // A staff approval writes the accepted fact (as internal.accept_identity_submission does).
+      q(`insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
       select owner_id,id,identity_hmac,'${moderator.id}' from private.verification_identity_submissions where id='${declined.submission}';`);
-    assert.equal(
-      q(`select status||':'||reviewer_id from private.frontend_appeals where id='${declined.appeal}';`),
-      `overturned:${moderator.id}`
-    );
-    assert.equal(
-      q(`select count(*) from private.notifications where kind='appeal_decided' and subject_id='${declined.appeal}';`),
-      "1"
-    );
-  });
+      assert.equal(
+        q(
+          `select status||':'||reviewer_id from private.frontend_appeals where id='${declined.appeal}';`
+        ),
+        `overturned:${moderator.id}`
+      );
+      assert.equal(
+        q(
+          `select count(*) from private.notifications where kind='appeal_decided' and subject_id='${declined.appeal}';`
+        ),
+        "1"
+      );
+    }
+  );
   await check("a return or rejection upholds the appeal", () => {
     const m = namedMember("upheld");
     const c = startWithSession(m);
     finish(c, "declined");
     const row = checkRow(c.check);
     const asked = json(
-      member(m, `select api.ask_person_identity_check('${c.check}','My ID is genuine, please check it by hand.');`)
+      member(
+        m,
+        `select api.ask_person_identity_check('${c.check}','My ID is genuine, please check it by hand.');`
+      )
     );
     q(`insert into private.verification_return_requests(case_id,case_version,reason,reviewer_id,decision)
       select '${row.case_id}',version,'Photo unclear, retake it.','${moderator.id}','needs_resubmission'
       from private.evidence_cases where id='${row.case_id}';`);
     assert.equal(
-      q(`select status||':'||reviewer_id from private.frontend_appeals where id='${asked.appeal_id}';`),
+      q(
+        `select status||':'||reviewer_id from private.frontend_appeals where id='${asked.appeal_id}';`
+      ),
       `upheld:${moderator.id}`
     );
   });
-  await check("ask a person closes 5 days after the decline, and when a new attempt replaces it", () => {
-    const late = namedMember("late");
-    const c = startWithSession(late);
-    finish(c, "declined");
-    age(c.check, "5 days 1 minute");
-    assert.equal(availability(late).check.can_ask_person, false);
-    assert.match(
-      fails(member(late, `select api.ask_person_identity_check('${c.check}','Please look again at my ID photo.');`), "PT409"),
-      /ask_person_unavailable/
-    );
-    const again = namedMember("again");
-    const first = startWithSession(again);
-    finish(first, "declined");
-    const second = startWithSession(again);
-    finish(second, "declined");
-    assert.match(
-      fails(member(again, `select api.ask_person_identity_check('${first.check}','Please look again at my ID photo.');`), "PT409"),
-      /ask_person_unavailable/
-    );
-    const stranger = namedMember("stranger");
-    assert.match(
-      fails(member(stranger, `select api.ask_person_identity_check('${second.check}','Please look again at my ID photo.');`), "PT409"),
-      /ask_person_unavailable/
-    );
-  });
+  await check(
+    "ask a person closes 5 days after the decline, and when a new attempt replaces it",
+    () => {
+      const late = namedMember("late");
+      const c = startWithSession(late);
+      finish(c, "declined");
+      age(c.check, "5 days 1 minute");
+      assert.equal(availability(late).check.can_ask_person, false);
+      assert.match(
+        fails(
+          member(
+            late,
+            `select api.ask_person_identity_check('${c.check}','Please look again at my ID photo.');`
+          ),
+          "PT409"
+        ),
+        /ask_person_unavailable/
+      );
+      const again = namedMember("again");
+      const first = startWithSession(again);
+      finish(first, "declined");
+      const second = startWithSession(again);
+      finish(second, "declined");
+      assert.match(
+        fails(
+          member(
+            again,
+            `select api.ask_person_identity_check('${first.check}','Please look again at my ID photo.');`
+          ),
+          "PT409"
+        ),
+        /ask_person_unavailable/
+      );
+      const stranger = namedMember("stranger");
+      assert.match(
+        fails(
+          member(
+            stranger,
+            `select api.ask_person_identity_check('${second.check}','Please look again at my ID photo.');`
+          ),
+          "PT409"
+        ),
+        /ask_person_unavailable/
+      );
+    }
+  );
 
   // ------------------------------------------------- partner deletions
-  await check("not finished: the partner's copy is due at once, held for 5 minutes, then marked", () => {
-    const m = namedMember("abandoned");
-    const c = startWithSession(m);
-    assert.equal(finish(c, "not_finished").status, "not_finished");
-    // LIM-F-claim_identity_check_deletions: 1 to 100 per call.
-    fails(service(`select api.claim_identity_check_deletions(0);`), "22023");
-    fails(service(`select api.claim_identity_check_deletions(101);`), "22023");
-    const claimed = json(service("select api.claim_identity_check_deletions(100);"));
-    assert.deepEqual(claimed, [{ check_id: c.check, session_id: c.session }]);
-    assert.deepEqual(json(service("select api.claim_identity_check_deletions(100);")), []);
-    const marked = json(service(`select api.mark_identity_check_provider_deleted('${c.check}');`));
-    assert.equal(marked.reused, false);
-    assert.equal(
-      json(service(`select api.mark_identity_check_provider_deleted('${c.check}');`)).reused,
-      true
-    );
-    q(`update private.identity_checks set provider_delete_due=now()-interval '1 minute' where id='${c.check}';`);
-    assert.deepEqual(json(service("select api.claim_identity_check_deletions(100);")), []);
-  });
-  await check("a declined check is due 5 days later; holds keep it; an unfinished one expires", () => {
-    const m = namedMember("old-decline");
-    const c = startWithSession(m);
-    finish(c, "declined");
-    assert.deepEqual(json(service("select api.claim_identity_check_deletions(100);")), []);
-    age(c.check, "5 days 1 minute");
-    q(`update private.identity_checks set provider_delete_due=declined_at+interval '5 days' where id='${c.check}';`);
-    q(`insert into private.legal_holds(subject_id,reason,placed_by)
+  await check(
+    "not finished: the partner's copy is due at once, held for 5 minutes, then marked",
+    () => {
+      const m = namedMember("abandoned");
+      const c = startWithSession(m);
+      assert.equal(finish(c, "not_finished").status, "not_finished");
+      // LIM-F-claim_identity_check_deletions: 1 to 100 per call.
+      fails(service(`select api.claim_identity_check_deletions(0);`), "22023");
+      fails(service(`select api.claim_identity_check_deletions(101);`), "22023");
+      const claimed = json(service("select api.claim_identity_check_deletions(100);"));
+      assert.deepEqual(claimed, [{ check_id: c.check, session_id: c.session }]);
+      assert.deepEqual(json(service("select api.claim_identity_check_deletions(100);")), []);
+      const marked = json(
+        service(`select api.mark_identity_check_provider_deleted('${c.check}');`)
+      );
+      assert.equal(marked.reused, false);
+      assert.equal(
+        json(service(`select api.mark_identity_check_provider_deleted('${c.check}');`)).reused,
+        true
+      );
+      q(
+        `update private.identity_checks set provider_delete_due=now()-interval '1 minute' where id='${c.check}';`
+      );
+      assert.deepEqual(json(service("select api.claim_identity_check_deletions(100);")), []);
+    }
+  );
+  await check(
+    "a declined check is due 5 days later; holds keep it; an unfinished one expires",
+    () => {
+      const m = namedMember("old-decline");
+      const c = startWithSession(m);
+      finish(c, "declined");
+      assert.deepEqual(json(service("select api.claim_identity_check_deletions(100);")), []);
+      age(c.check, "5 days 1 minute");
+      q(
+        `update private.identity_checks set provider_delete_due=declined_at+interval '5 days' where id='${c.check}';`
+      );
+      q(`insert into private.legal_holds(subject_id,reason,placed_by)
       values('${m.id}','Synthetic legal hold for the check.','${admin.id}');`);
-    assert.deepEqual(json(service("select api.claim_identity_check_deletions(100);")), []);
-    q(`update private.legal_holds set released_at=now(),released_by='${admin.id}' where subject_id='${m.id}';`);
-    assert.deepEqual(
-      json(service("select api.claim_identity_check_deletions(100);")).map((r) => r.check_id),
-      [c.check]
-    );
+      assert.deepEqual(json(service("select api.claim_identity_check_deletions(100);")), []);
+      q(
+        `update private.legal_holds set released_at=now(),released_by='${admin.id}' where subject_id='${m.id}';`
+      );
+      assert.deepEqual(
+        json(service("select api.claim_identity_check_deletions(100);")).map((r) => r.check_id),
+        [c.check]
+      );
 
-    const idle = namedMember("idle");
-    const i = startWithSession(idle);
-    age(i.check, "25 hours 1 minute");
-    assert.equal(availability(idle).check.status, "not_finished");
-    assert.deepEqual(
-      json(service("select api.claim_identity_check_deletions(100);")).map((r) => r.check_id),
-      [i.check]
-    );
-    assert.equal(checkRow(i.check).status, "not_finished");
-    // A late result is not recorded over it.
-    assert.equal(json(service(completeSql(i, "approved"))).reused, true);
-  });
+      const idle = namedMember("idle");
+      const i = startWithSession(idle);
+      age(i.check, "25 hours 1 minute");
+      assert.equal(availability(idle).check.status, "not_finished");
+      assert.deepEqual(
+        json(service("select api.claim_identity_check_deletions(100);")).map((r) => r.check_id),
+        [i.check]
+      );
+      assert.equal(checkRow(i.check).status, "not_finished");
+      // A late result is not recorded over it.
+      assert.equal(json(service(completeSql(i, "approved"))).reused, true);
+    }
+  );
 
   // ---------------------------------------------------- spending guard
   await check("LIM-SQL-IDENTITY-CHECK-MEMBER-7D: 3 checks per member in 7 days", () => {
@@ -530,87 +649,129 @@ try {
     }
     assert.deepEqual(availability(m).route, "manual");
     assert.equal(availability(m).reason, "limit");
-    assert.match(fails(member(m, "select api.start_my_identity_check();"), "PT409"), /identity_check_limit/);
+    assert.match(
+      fails(member(m, "select api.start_my_identity_check();"), "PT409"),
+      /identity_check_limit/
+    );
     q(`update private.identity_checks set created_at=created_at-interval '7 days',expires_at=expires_at-interval '7 days',
       finished_at=finished_at-interval '7 days' where id=(select id from private.identity_checks where owner_id='${m.id}'
       order by created_at limit 1);`);
     assert.equal(availability(m).route, "automatic");
   });
-  await check("LIM-SQL-IDENTITY-CHECK-DAY: 60 checks a day site-wide; unavailable ones do not count", () => {
-    const counted = Number(
-      q(`select count(*) from private.identity_checks where status<>'unavailable' and created_at>now()-interval '1 day';`)
-    );
-    q(`set session_replication_role=replica;
+  await check(
+    "LIM-SQL-IDENTITY-CHECK-DAY: 60 checks a day site-wide; unavailable ones do not count",
+    () => {
+      const counted = Number(
+        q(
+          `select count(*) from private.identity_checks where status<>'unavailable' and created_at>now()-interval '1 day';`
+        )
+      );
+      q(`set session_replication_role=replica;
       insert into private.identity_checks(owner_id,case_id,status,created_at,expires_at,finished_at)
       select c.subject_id,c.id,'not_finished',now()-interval '1 hour',now()-interval '1 hour'+interval '24 hours',now()
         from private.evidence_cases c, generate_series(1,${59 - counted}) g
         where c.id=(select case_id from private.identity_checks order by created_at limit 1);
       set session_replication_role=origin;`);
-    const m = namedMember("daily");
-    assert.equal(availability(m).route, "automatic");
-    const c = startWithSession(m);
-    finish(c, "not_finished");
-    const next = namedMember("daily-next");
-    assert.deepEqual(availability(next), { route: "manual", reason: "limit", check: null });
-    assert.match(fails(member(next, "select api.start_my_identity_check();"), "PT409"), /identity_check_limit/);
-    q(`update private.identity_checks set status='unavailable' where id='${c.check}';`);
-    assert.equal(availability(next).route, "automatic");
-    q(`delete from private.identity_checks where status='not_finished' and created_at>now()-interval '2 hours' and session_id is null;`);
-  });
-  await check("a partner outage pauses everyone (15 minutes, 1 hour for credit); setting the mode resumes", () => {
-    const m = namedMember("outage");
-    const c = start(m).check_id;
-    const first = json(service(`select api.report_identity_check_unavailable('${c}','outage');`));
-    assert.equal(first.newly_paused, true);
-    assert.equal(
-      q(`select paused_until between now()+interval '14 minutes' and now()+interval '15 minutes' from private.identity_check_settings;`),
-      "t"
-    );
-    assert.equal(checkRow(c).status, "unavailable");
-    const other = namedMember("outage-2");
-    assert.deepEqual(availability(other), { route: "manual", reason: "paused", check: null });
-    fails(member(other, "select api.start_my_identity_check();"), "PT409");
-    q(`update private.identity_check_settings set paused_until=null,pause_reason=null;`);
-    const d = start(other).check_id;
-    q(`update private.identity_check_settings set paused_until=now()+interval '1 minute',pause_reason='outage';`);
-    const second = json(service(`select api.report_identity_check_unavailable('${d}','no_credit');`));
-    assert.equal(second.newly_paused, false);
-    assert.equal(
-      q(`select paused_until between now()+interval '59 minutes' and now()+interval '1 hour' from private.identity_check_settings;`),
-      "t"
-    );
-    const resumed = setMode("automatic", "Topped up the partner balance.");
-    assert.deepEqual(resumed, { mode: "automatic", changed: false, resumed: true });
-    assert.equal(availability(other).route, "automatic");
-    // A check with a session is not "unavailable".
-    const s = startWithSession(namedMember("outage-3"));
-    fails(service(`select api.report_identity_check_unavailable('${s.check}','outage');`), "PT409");
-  });
+      const m = namedMember("daily");
+      assert.equal(availability(m).route, "automatic");
+      const c = startWithSession(m);
+      finish(c, "not_finished");
+      const next = namedMember("daily-next");
+      assert.deepEqual(availability(next), { route: "manual", reason: "limit", check: null });
+      assert.match(
+        fails(member(next, "select api.start_my_identity_check();"), "PT409"),
+        /identity_check_limit/
+      );
+      q(`update private.identity_checks set status='unavailable' where id='${c.check}';`);
+      assert.equal(availability(next).route, "automatic");
+      q(
+        `delete from private.identity_checks where status='not_finished' and created_at>now()-interval '2 hours' and session_id is null;`
+      );
+    }
+  );
+  await check(
+    "a partner outage pauses everyone (15 minutes, 1 hour for credit); setting the mode resumes",
+    () => {
+      const m = namedMember("outage");
+      const c = start(m).check_id;
+      const first = json(service(`select api.report_identity_check_unavailable('${c}','outage');`));
+      assert.equal(first.newly_paused, true);
+      assert.equal(
+        q(
+          `select paused_until between now()+interval '14 minutes' and now()+interval '15 minutes' from private.identity_check_settings;`
+        ),
+        "t"
+      );
+      assert.equal(checkRow(c).status, "unavailable");
+      const other = namedMember("outage-2");
+      assert.deepEqual(availability(other), { route: "manual", reason: "paused", check: null });
+      fails(member(other, "select api.start_my_identity_check();"), "PT409");
+      q(`update private.identity_check_settings set paused_until=null,pause_reason=null;`);
+      const d = start(other).check_id;
+      q(
+        `update private.identity_check_settings set paused_until=now()+interval '1 minute',pause_reason='outage';`
+      );
+      const second = json(
+        service(`select api.report_identity_check_unavailable('${d}','no_credit');`)
+      );
+      assert.equal(second.newly_paused, false);
+      assert.equal(
+        q(
+          `select paused_until between now()+interval '59 minutes' and now()+interval '1 hour' from private.identity_check_settings;`
+        ),
+        "t"
+      );
+      const resumed = setMode("automatic", "Topped up the partner balance.");
+      assert.deepEqual(resumed, { mode: "automatic", changed: false, resumed: true });
+      assert.equal(availability(other).route, "automatic");
+      // A check with a session is not "unavailable".
+      const s = startWithSession(namedMember("outage-3"));
+      fails(
+        service(`select api.report_identity_check_unavailable('${s.check}','outage');`),
+        "PT409"
+      );
+    }
+  );
 
   // ---------------------------------------------------- server commands
   await check("sessions bind once; results need the bound session and reserved files", () => {
     const m = namedMember("binding");
     const c = startWithSession(m);
     assert.equal(
-      json(service(`select api.attach_identity_check_session('${c.check}','${c.session}','https://verify.didit.me/session/${c.session}');`)).reused,
+      json(
+        service(
+          `select api.attach_identity_check_session('${c.check}','${c.session}','https://verify.didit.me/session/${c.session}');`
+        )
+      ).reused,
       true
     );
     fails(
-      service(`select api.attach_identity_check_session('${c.check}','${randomUUID()}','https://verify.didit.me/session/x');`),
+      service(
+        `select api.attach_identity_check_session('${c.check}','${randomUUID()}','https://verify.didit.me/session/x');`
+      ),
       "PT409"
     );
     fails(
-      service(`select api.attach_identity_check_session('${c.check}','${randomUUID()}','https://example.com/session/x');`),
+      service(
+        `select api.attach_identity_check_session('${c.check}','${randomUUID()}','https://example.com/session/x');`
+      ),
       "22023"
     );
     fails(service(completeSql({ ...c, session: randomUUID() }, "approved")), "PT409");
     assert.match(fails(service(completeSql(c, "approved")), "PT409"), /not reserved/);
-    fails(service(`select api.complete_identity_check('${c.check}','${c.session}','approved');`), "22023");
     fails(
-      service(`select api.complete_identity_check('${c.check}','${c.session}','approved',array['banned']::text[]);`),
+      service(`select api.complete_identity_check('${c.check}','${c.session}','approved');`),
       "22023"
     );
-    const files = json(service(`select api.begin_identity_check_evidence('${c.check}','${c.session}');`));
+    fails(
+      service(
+        `select api.complete_identity_check('${c.check}','${c.session}','approved',array['banned']::text[]);`
+      ),
+      "22023"
+    );
+    const files = json(
+      service(`select api.begin_identity_check_evidence('${c.check}','${c.session}');`)
+    );
     assert.deepEqual(
       json(service(`select api.begin_identity_check_evidence('${c.check}','${c.session}');`)),
       files
@@ -634,7 +795,6 @@ try {
   await check("later updates apply after this one", () => {
     assert.equal(q(`select to_regclass('private.identity_checks') is not null;`), "t");
   });
-
 } catch (error) {
   console.error(`FAIL ${current()}`);
   throw error;
