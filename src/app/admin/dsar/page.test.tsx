@@ -79,11 +79,17 @@ vi.mock("./dsar-action-buttons", () => ({
 }));
 
 vi.mock("./dsar-case-controls", () => ({
-  DsarCaseControls: (props: { requestId: string; canExtend: boolean; isOpen: boolean }) => (
+  DsarCaseControls: (props: {
+    requestId: string;
+    canExtend: boolean;
+    isOpen: boolean;
+    canExport: boolean;
+  }) => (
     <div
       data-testid={`dsar-controls-${props.requestId}`}
       data-can-extend={String(props.canExtend)}
       data-open={String(props.isOpen)}
+      data-can-export={String(props.canExport)}
     />
   ),
 }));
@@ -184,6 +190,26 @@ describe("AdminDSARPage", () => {
     expect(
       screen.getByTestId("dsar-controls-cccccccc-0000-4000-8000-000000000003")
     ).toHaveAttribute("data-can-extend", "true");
+  });
+
+  it("offers the export only for a verified access request in progress", async () => {
+    const access = { ...baseCase, type: "access", identity_verified: true };
+    queue({
+      items: [
+        { ...access, id: "dddddddd-0000-4000-8000-000000000004", status: "in_progress" },
+        { ...access, id: "eeeeeeee-0000-4000-8000-000000000005", status: "completed" },
+      ].map((item) => ({ ...item, due_by: inDays(10), effective_due_at: inDays(10) })),
+    });
+
+    render(await AdminDSARPage({ searchParams: Promise.resolve({}) }));
+
+    expect(
+      screen.getByTestId("dsar-controls-dddddddd-0000-4000-8000-000000000004")
+    ).toHaveAttribute("data-can-export", "true");
+    // A completed request can no longer be exported (open a new request).
+    expect(
+      screen.getByTestId("dsar-controls-eeeeeeee-0000-4000-8000-000000000005")
+    ).toHaveAttribute("data-can-export", "false");
   });
 
   it.each(["overdue", "due_soon", "mine", "closed"])("reads the %s view", async (view) => {
