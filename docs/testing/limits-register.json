@@ -2097,8 +2097,8 @@
       ],
       "tests": [
         {
-          "kind": "declaration",
-          "mechanism": "LIM-MECH-SQL-GUARD"
+          "kind": "behaviour",
+          "file": "scripts/test-foundation-privacy-export-simple.mjs"
         }
       ]
     },

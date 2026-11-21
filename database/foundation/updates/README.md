@@ -91,10 +91,12 @@ signature, owner and grants; no API, manifest or type change):
   in progress is refused with PT409 `privacy_export_not_in_progress`; the other
   refusals, the staff and second-factor checks and the self-export refusal are
   as before.
-- **The row lock is `FOR NO KEY UPDATE`** (was `FOR SHARE`): parallel exports of
-  one request run one at a time, and completing the request (which bumps its
-  revision) waits for a running export. Retention, which minimises only
-  completed or rejected requests, is unchanged.
+- **The row lock is `FOR NO KEY UPDATE`** (was `FOR SHARE`): what is new is that
+  parallel exports of one request queue behind each other, so the cap of 5
+  holds. Completing the request (which bumps its revision) already waited for a
+  running export under `FOR SHARE`, and still does. The cap relies on READ
+  COMMITTED (PostgREST's default); staff have no direct SQL. Retention, which
+  minimises only completed or rejected requests, is unchanged.
 - **At most 5 exports per request**: the 6th is refused with PT429
   `privacy_export_limit`. The website's per-staff rate limit stays.
 - **The member is told about every export**: each adds a bell notice
@@ -102,8 +104,8 @@ signature, owner and grants; no API, manifest or type change):
   request. A too large export (PT413) is raised before anything is recorded.
 
 Accepted risks: a dataset-name mismatch the website refuses after the export was
-recorded gives the member one extra notice; a completed request cannot be
-exported again (open a new request).
+recorded gives the member one extra notice and uses up one of the 5 places; a
+completed request cannot be exported again (open a new request).
 
 The website words the two new refusals ("Only a request in progress can be
 exported…", "…already been exported 5 times…"); a release without that code

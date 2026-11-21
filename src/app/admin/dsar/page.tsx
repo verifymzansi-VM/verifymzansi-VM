@@ -255,7 +255,7 @@ export default async function AdminDSARPage({
                               ? req.identity_verified
                               : req.identity_verified &&
                                 req.type === "access" &&
-                                ["in_progress", "completed"].includes(req.status)
+                                req.status === "in_progress"
                           }
                         />
                       )}

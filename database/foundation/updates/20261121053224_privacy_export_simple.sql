@@ -4,10 +4,13 @@
 -- Replaces only internal.export_frontend_privacy_request (same signature,
 -- owner and grants; api.export_frontend_privacy_request is unchanged). From
 -- this update the export:
--- 1. Locks the request row FOR NO KEY UPDATE (was FOR SHARE). Parallel exports
---    of one request run one at a time, so the cap below is exact, and
---    completing the request (which bumps its revision under FOR UPDATE) waits
---    for a running export.
+-- 1. Locks the request row FOR NO KEY UPDATE (was FOR SHARE). What is new:
+--    parallel exports of one request now queue behind each other, so the cap
+--    of 5 below holds. Completing the request (which bumps its revision under
+--    FOR UPDATE) already waited for a running export under FOR SHARE, and
+--    still does. The cap relies on READ COMMITTED (PostgREST's default), where
+--    the count after the lock sees every committed export; staff have no
+--    direct SQL.
 -- 2. Accepts only an access request that is in progress (no longer a
 --    completed one), identity verified, at the stated revision. A request that
 --    is not in progress is refused with PT409 detail
@@ -25,7 +28,8 @@
 --
 -- Accepted risks:
 -- - If the website refuses the answer after it was recorded (a dataset-name
---   mismatch), the member gets one extra notice for an export staff never got.
+--   mismatch), the member gets one extra notice for an export staff never got,
+--   and that export also uses up one of the 5 places.
 -- - A completed request cannot be exported again; open a new request.
 --
 -- A website release without the matching code shows its generic refusal for

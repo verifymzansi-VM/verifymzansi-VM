@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Behaviour checks for 20261121053224_privacy_export_simple.sql: staff export
 // an access request only while it is in progress, identity verified and at
-// the stated revision; never their own request; at most 5 times per request
-// (also when two exports run at once); every export adds a bell notice and the
-// first queues the one email; a too large export records nothing; completing
-// the request waits for a running export; the rollback restores the previous
-// body exactly.
+// the stated revision; never their own request; at most 5 times per request,
+// also when two exports run at once (LIM-F-export_frontend_privacy_request);
+// every export adds a bell notice and the first queues the one email; a too
+// large export records nothing; completing the request waits for a running
+// export; the rollback restores the previous body exactly.
 //
 // Replays database/foundation into the throwaway, network-less Postgres 17
 // container of the SQL lint gate. Requests are recorded through the production
