@@ -7336,36 +7336,6 @@
       ]
     },
     {
-      "id": "LIM-RL-admin-flagging-enforce",
-      "title": "Shared rate limit for \"admin:flagging:enforce\"",
-      "value": "10 per minute, 100 per hour",
-      "category": "rate",
-      "action": "admin:flagging:enforce",
-      "tiers": [
-        {
-          "limit": 10,
-          "ttl": 60
-        },
-        {
-          "limit": 100,
-          "ttl": 3600
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"admin:flagging:enforce\": ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
       "id": "LIM-RL-admin-governance-decide",
       "title": "Shared rate limit for \"admin:governance:decide\"",
       "value": "10 per minute, 60 per hour",
@@ -7416,36 +7386,6 @@
           "file": "workers/rate-limiter.ts",
           "symbol": "ACTION_LIMITS",
           "contains": "\"admin:role:assign\": ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-admin-verification-override",
-      "title": "Shared rate limit for \"admin:verification:override\"",
-      "value": "10 per minute, 60 per hour",
-      "category": "rate",
-      "action": "admin:verification:override",
-      "tiers": [
-        {
-          "limit": 10,
-          "ttl": 60
-        },
-        {
-          "limit": 60,
-          "ttl": 3600
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"admin:verification:override\": ["
         }
       ],
       "tests": [
@@ -7606,32 +7546,6 @@
       ]
     },
     {
-      "id": "LIM-RL-auth-lockout",
-      "title": "Shared rate limit for \"auth:lockout\"",
-      "value": "5 per hour",
-      "category": "rate",
-      "action": "auth:lockout",
-      "tiers": [
-        {
-          "limit": 5,
-          "ttl": 3600
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"auth:lockout\": [{ limit: 5, ttl: 3600 }], // 5 failed logins per email per hour"
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
       "id": "LIM-RL-auth-login",
       "title": "Shared rate limit for \"auth:login\"",
       "value": "10 per minute, 30 per hour",
@@ -7652,66 +7566,6 @@
           "file": "workers/rate-limiter.ts",
           "symbol": "ACTION_LIMITS",
           "contains": "\"auth:login\": ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-auth-login-nocaptcha",
-      "title": "Shared rate limit for \"auth:login:nocaptcha\"",
-      "value": "5 per minute, 15 per hour",
-      "category": "rate",
-      "action": "auth:login:nocaptcha",
-      "tiers": [
-        {
-          "limit": 5,
-          "ttl": 60
-        },
-        {
-          "limit": 15,
-          "ttl": 3600
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"auth:login:nocaptcha\": ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-auth-login-nocaptcha-global",
-      "title": "Shared rate limit for \"auth:login:nocaptcha:global\"",
-      "value": "30 per minute, 300 per hour",
-      "category": "rate",
-      "action": "auth:login:nocaptcha:global",
-      "tiers": [
-        {
-          "limit": 30,
-          "ttl": 60
-        },
-        {
-          "limit": 300,
-          "ttl": 3600
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"auth:login:nocaptcha:global\": ["
         }
       ],
       "tests": [
@@ -7930,96 +7784,6 @@
           "file": "workers/rate-limiter.ts",
           "symbol": "ACTION_LIMITS",
           "contains": "\"auth:reset-password\": ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-billing-cancel",
-      "title": "Shared rate limit for \"billing:cancel\"",
-      "value": "5 per minute, 10 per hour",
-      "category": "rate",
-      "action": "billing:cancel",
-      "tiers": [
-        {
-          "limit": 5,
-          "ttl": 60
-        },
-        {
-          "limit": 10,
-          "ttl": 3600
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"billing:cancel\": ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-billing-cancel-pending",
-      "title": "Shared rate limit for \"billing:cancel-pending\"",
-      "value": "5 per minute, 10 per hour",
-      "category": "rate",
-      "action": "billing:cancel-pending",
-      "tiers": [
-        {
-          "limit": 5,
-          "ttl": 60
-        },
-        {
-          "limit": 10,
-          "ttl": 3600
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"billing:cancel-pending\": ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-billing-change-plan",
-      "title": "Shared rate limit for \"billing:change-plan\"",
-      "value": "5 per minute, 10 per hour",
-      "category": "rate",
-      "action": "billing:change-plan",
-      "tiers": [
-        {
-          "limit": 5,
-          "ttl": 60
-        },
-        {
-          "limit": 10,
-          "ttl": 3600
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"billing:change-plan\": ["
         }
       ],
       "tests": [
@@ -8400,36 +8164,6 @@
       ]
     },
     {
-      "id": "LIM-RL-dsar-request",
-      "title": "Shared rate limit for \"dsar:request\"",
-      "value": "3 per hour, 5 per day",
-      "category": "rate",
-      "action": "dsar:request",
-      "tiers": [
-        {
-          "limit": 3,
-          "ttl": 3600
-        },
-        {
-          "limit": 5,
-          "ttl": 86400
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"dsar:request\": ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
       "id": "LIM-RL-engagement-like",
       "title": "Shared rate limit for \"engagement:like\"",
       "value": "30 per minute, 300 per hour",
@@ -8648,92 +8382,6 @@
           "file": "workers/rate-limiter.ts",
           "symbol": "ACTION_LIMITS",
           "contains": "listing_create: ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-listing_update",
-      "title": "Shared rate limit for \"listing_update\"",
-      "value": "20 per minute, 60 per hour",
-      "category": "rate",
-      "action": "listing_update",
-      "tiers": [
-        {
-          "limit": 20,
-          "ttl": 60
-        },
-        {
-          "limit": 60,
-          "ttl": 3600
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "listing_update: ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-listing-create",
-      "title": "Shared rate limit for \"listing:create\"",
-      "value": "10 per minute, 30 per hour",
-      "category": "rate",
-      "action": "listing:create",
-      "tiers": [
-        {
-          "limit": 10,
-          "ttl": 60
-        },
-        {
-          "limit": 30,
-          "ttl": 3600
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"listing:create\": ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-listings-read",
-      "title": "Shared rate limit for \"listings:read\"",
-      "value": "120 per minute",
-      "category": "rate",
-      "action": "listings:read",
-      "tiers": [
-        {
-          "limit": 120,
-          "ttl": 60
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"listings:read\": [{ limit: 120, ttl: 60 }], // 120 per minute"
         }
       ],
       "tests": [
@@ -9188,62 +8836,6 @@
       ]
     },
     {
-      "id": "LIM-RL-promotion_create",
-      "title": "Shared rate limit for \"promotion_create\"",
-      "value": "10 per minute, 30 per hour",
-      "category": "rate",
-      "action": "promotion_create",
-      "tiers": [
-        {
-          "limit": 10,
-          "ttl": 60
-        },
-        {
-          "limit": 30,
-          "ttl": 3600
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "promotion_create: ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-promotion-boost",
-      "title": "Shared rate limit for \"promotion:boost\"",
-      "value": "10 per minute",
-      "category": "rate",
-      "action": "promotion:boost",
-      "tiers": [
-        {
-          "limit": 10,
-          "ttl": 60
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"promotion:boost\": [{ limit: 10, ttl: 60 }],"
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
       "id": "LIM-RL-promotion-create",
       "title": "Shared rate limit for \"promotion:create\"",
       "value": "10 per minute, 30 per hour",
@@ -9264,114 +8856,6 @@
           "file": "workers/rate-limiter.ts",
           "symbol": "ACTION_LIMITS",
           "contains": "\"promotion:create\": ["
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-promotion-featured",
-      "title": "Shared rate limit for \"promotion:featured\"",
-      "value": "10 per minute",
-      "category": "rate",
-      "action": "promotion:featured",
-      "tiers": [
-        {
-          "limit": 10,
-          "ttl": 60
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"promotion:featured\": [{ limit: 10, ttl: 60 }],"
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-promotion-urgent",
-      "title": "Shared rate limit for \"promotion:urgent\"",
-      "value": "10 per minute",
-      "category": "rate",
-      "action": "promotion:urgent",
-      "tiers": [
-        {
-          "limit": 10,
-          "ttl": 60
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"promotion:urgent\": [{ limit: 10, ttl: 60 }],"
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-promotions-read",
-      "title": "Shared rate limit for \"promotions:read\"",
-      "value": "120 per minute",
-      "category": "rate",
-      "action": "promotions:read",
-      "tiers": [
-        {
-          "limit": 120,
-          "ttl": 60
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"promotions:read\": [{ limit: 120, ttl: 60 }], // 120 per minute"
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
-        }
-      ]
-    },
-    {
-      "id": "LIM-RL-report-submit",
-      "title": "Shared rate limit for \"report:submit\"",
-      "value": "5 per minute, 15 per hour",
-      "category": "rate",
-      "action": "report:submit",
-      "tiers": [
-        {
-          "limit": 5,
-          "ttl": 60
-        },
-        {
-          "limit": 15,
-          "ttl": 3600
-        }
-      ],
-      "enforcedAt": [
-        {
-          "file": "workers/rate-limiter.ts",
-          "symbol": "ACTION_LIMITS",
-          "contains": "\"report:submit\": ["
         }
       ],
       "tests": [
