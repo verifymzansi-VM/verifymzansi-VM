@@ -82,12 +82,12 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Post performance statistics for the owner's Performance page, 21 November 2026
 
-`20261121100028_post_performance_stats.sql` is **pending** (see the applied
-register). Launch checklist item 2, the part after the views and likes update.
-**Order: apply-first** (the default): the website release from the same pull
-request names the three new commands, and the deploy preflight probes every
-command in `../runtime-api-manifest.json`. The website records only while
-`SHOW_ENGAGEMENT_TOTALS` is on and shows the page only while
+`20261121100028_post_performance_stats.sql` was applied on 21 November 2026 at
+17:33 UTC (see the applied register). Launch checklist item 2, the part after
+the views and likes update. **Order: apply-first** (the default): the website
+release from the same pull request names the three new commands, and the deploy
+preflight probes every command in `../runtime-api-manifest.json`. The website
+records only while `SHOW_ENGAGEMENT_TOTALS` is on and shows the page only while
 `SHOW_OWNER_METRICS` is on; both stay off in production until launch, so
 applying the update changes nothing anyone sees. It adds one table, one column,
 three API commands and two internal functions, and replaces three functions with
@@ -6777,6 +6777,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   checks: 0); production fingerprint after it (fingerprint.sql) matched the full
   replay (except the known schema grant difference)
 
-- `20261121100028_post_performance_stats.sql`: pending
+- `20261121100028_post_performance_stats.sql`: applied 2026-11-21 17:33 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #336); update
+  and preflight from the reviewed files at 669f4ae3 and checked in the page
+  before running; update sha256 starting bbcf0ccb; preflight (sha256 starting
+  742c3ba5) before: update not applied (the 3 replaced bodies as before, none of
+  the update's objects), after: already applied (the 3 bodies as updated, 7 of 7
+  objects; activity days: 0; engaged views: 0); production fingerprint after it
+  (fingerprint.sql) matched the full replay (except the known schema grant
+  difference)
 
 <!-- applied-register:end -->
