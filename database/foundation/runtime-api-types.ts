@@ -949,6 +949,7 @@ export type FoundationRuntimeServiceDatabase = {
           p_id_front?: Json;
           p_selfie?: Json;
           p_identity?: Json;
+          p_names?: Json;
           p_risk_score?: number;
         };
         Returns: Json;

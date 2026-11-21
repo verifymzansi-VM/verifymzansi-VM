@@ -1,7 +1,7 @@
 -- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
 -- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
 
-CREATE OR REPLACE FUNCTION internal.complete_identity_check(p_check uuid, p_session_id uuid, p_outcome text, p_reasons text[] DEFAULT '{}'::text[], p_id_front jsonb DEFAULT NULL::jsonb, p_selfie jsonb DEFAULT NULL::jsonb, p_identity jsonb DEFAULT NULL::jsonb, p_risk_score integer DEFAULT NULL::integer)
+CREATE OR REPLACE FUNCTION internal.complete_identity_check(p_check uuid, p_session_id uuid, p_outcome text, p_reasons text[] DEFAULT '{}'::text[], p_id_front jsonb DEFAULT NULL::jsonb, p_selfie jsonb DEFAULT NULL::jsonb, p_identity jsonb DEFAULT NULL::jsonb, p_names jsonb DEFAULT NULL::jsonb, p_risk_score integer DEFAULT NULL::integer)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -14,8 +14,10 @@ begin
     or p_outcome not in('approved','declined','in_review','not_finished')
     or p_reasons is null or not (p_reasons <@ array['names_differ','document_not_accepted','id_number_invalid','under_18']::text[]) then
     raise exception 'identity check result required' using errcode='22023'; end if;
-  if (p_outcome='not_finished') <> (p_id_front is null and p_selfie is null and p_identity is null and p_risk_score is null)
+  if (p_outcome='not_finished') <> (p_id_front is null and p_selfie is null and p_identity is null and p_names is null and p_risk_score is null)
     or (p_outcome<>'not_finished' and (jsonb_typeof(p_id_front) is distinct from 'object' or jsonb_typeof(p_selfie) is distinct from 'object'
+      or jsonb_typeof(p_names) is distinct from 'object' or p_names-array['first_name','last_name']<>'{}'::jsonb
+      or jsonb_typeof(p_names->'first_name') is distinct from 'string' or jsonb_typeof(p_names->'last_name') is distinct from 'string'
       or jsonb_typeof(p_identity) is distinct from 'object' or p_identity-array['fingerprint','encrypted_number']<>'{}'::jsonb
       or not(p_identity ?& array['fingerprint','encrypted_number'])
       or p_id_front-array['stored_sha256','content_sha256','size']<>'{}'::jsonb
@@ -31,7 +33,7 @@ begin
   if k.status<>'started' then
     return jsonb_build_object('status',k.status,'submission_id',k.submission_id,'reused',true); end if;
   now_at:=clock_timestamp();
-  if p_outcome='not_finished' then
+  if p_outcome='not_finished' or k.expires_at<=now_at then
     update private.identity_checks set status='not_finished',finished_at=now_at,reasons=p_reasons,provider_delete_due=now_at
       where id=k.id;
     return jsonb_build_object('status','not_finished','submission_id',null);
@@ -46,6 +48,9 @@ begin
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(s.identity_hmac,2701));
   select array_agg(r order by r) into found_reasons from (select distinct r from unnest(p_reasons
     ||case p_outcome when 'declined' then array['provider_declined'] when 'in_review' then array['provider_in_review'] else '{}'::text[] end
+    ||case when exists(select 1 from private.identity_submission_names n where n.submission_id=s.id
+      and n.legal_first_name=p_names->>'first_name' and n.legal_last_name=p_names->>'last_name') then '{}'::text[]
+      else array['names_differ'] end
     ||case when exists(select 1 from private.banned_identities b where b.identity_hmac=s.identity_hmac
       and b.retain_until>clock_timestamp()) then array['banned'] else '{}'::text[] end
     ||case when exists(select 1 from private.accepted_identity_facts f where f.identity_hmac=s.identity_hmac
@@ -65,6 +70,6 @@ begin
   end if;
   return jsonb_build_object('status',(select x.status from private.identity_checks x where x.id=k.id),'submission_id',s.id);
 end$function$;
-alter function internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,integer) owner to postgres;
-revoke all on function internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,integer) from public;
-grant execute on function internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,integer) to service_role;
+alter function internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer) owner to postgres;
+revoke all on function internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer) from public;
+grant execute on function internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer) to service_role;

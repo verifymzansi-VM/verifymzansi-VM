@@ -5745,7 +5745,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Signed-in active member with a live session, typed legal names, an identity case that is not accepted or under independent review and no identity check appeal waiting: returns their unfinished check, or starts one when the automatic route is open (setting not manual, not paused, within the spending guard; one start at a time site-wide)."
+      "authority": "Signed-in active member with a live session: returns their unfinished check whatever the setting now says; otherwise, with no request to a person still waiting, typed legal names, an identity case that is not accepted or under independent review and the automatic route open (setting not manual, not paused, within the spending guard; one start at a time site-wide), starts one."
     },
     {
       "name": "ask_person_identity_check",
@@ -5769,7 +5769,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "The member who owns a check declined on the automatic setting, within 5 days of the decline, before anything replaced it and with no newer unfinished check: records an appeal of kind identity_check (reason 20 to 2000 characters) and puts the declined submission back in the staff identity queue. Idempotent for the same reason."
+      "authority": "The member who owns a check declined on the automatic setting, within 5 days of the decline, before anything replaced it and with no newer unfinished check: records the request on the check (reason 20 to 2000 characters) and puts the declined submission back in the staff identity queue; the staff decision is the answer. Idempotent for the same reason."
     },
     {
       "name": "get_identity_check_settings",
@@ -5825,7 +5825,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Staff with case:claim, never for their own case: the latest automatic check of an identity case, its status, the reason codes it did not pass and the member's ask-a-person request."
+      "authority": "Staff with evidence:view holding a current claim on that open identity case (never their own), logged as a routine_review evidence access: the latest automatic check of the case, its status, the reason codes it did not pass and the member's ask-a-person request."
     },
     {
       "name": "attach_identity_check_session",
@@ -5944,6 +5944,11 @@
           "optional": true
         },
         {
+          "name": "p_names",
+          "sqlType": "jsonb",
+          "optional": true
+        },
+        {
           "name": "p_risk_score",
           "sqlType": "integer",
           "optional": true
@@ -5956,7 +5961,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Website server only, for the check's bound partner session, once: records not_finished, or completes the reserved evidence files and registers the identity submission (fingerprint, encrypted ID number, risk score), adds banned, duplicate and high-risk findings, then verifies a clean pass at once on a partner setting (an accepted identity fact decided by the check), sends anything else to staff (staff_final, or manual at that moment) or declines it (automatic)."
+      "authority": "Website server only, for the check's bound partner session, once: records not_finished (also for any result after the 24-hour expiry), or completes the reserved evidence files and registers the identity submission (fingerprint, encrypted ID number, risk score), adds names_differ when the names the website compared with the ID are not exactly the names the submission records, and banned, duplicate and high-risk findings, then verifies a clean pass at once on a partner setting (an accepted identity fact decided by the check), sends anything else to staff (staff_final, or manual at that moment) or declines it (automatic)."
     },
     {
       "name": "claim_identity_check_deletions",

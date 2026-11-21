@@ -13,7 +13,7 @@ begin
   select jsonb_build_object('checks',count(*) filter(where k.status<>'unavailable'),
       'approved',count(*) filter(where k.status='approved'),'with_staff',count(*) filter(where k.status='with_staff'),
       'declined',count(*) filter(where k.status='declined'),
-      'asked_person',count(*) filter(where exists(select 1 from private.frontend_appeals a where a.action_id=k.id)),
+      'asked_person',count(*) filter(where k.asked_at is not null),
       'unavailable',count(*) filter(where k.status='unavailable'))
     into counts from private.identity_checks k where k.created_at>clock_timestamp()-interval '7 days';
   select coalesce(jsonb_agg(jsonb_build_object('from_mode',e.from_mode,'to_mode',e.to_mode,'changed_by',e.changed_by,

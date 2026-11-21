@@ -21,7 +21,7 @@ create table private.frontend_appeals (
   constraint frontend_appeals_check1 CHECK ((resolved_at IS NULL) = (reviewer_rationale IS NULL)),
   constraint frontend_appeals_check2 CHECK ((status = 'partially_overturned'::text) = (shorten_to IS NOT NULL)),
   constraint frontend_appeals_effects_changed_check CHECK (effects_changed >= 0 AND effects_changed <= 1),
-  constraint frontend_appeals_kind_check CHECK (kind = ANY (ARRAY['suspension'::text, 'ban'::text, 'warning'::text, 'content_hidden'::text, 'identity_check'::text])),
+  constraint frontend_appeals_kind_check CHECK (kind = ANY (ARRAY['suspension'::text, 'ban'::text, 'warning'::text, 'content_hidden'::text])),
   constraint frontend_appeals_pkey PRIMARY KEY (id),
   constraint frontend_appeals_reason_check CHECK (length(reason) >= 20 AND length(reason) <= 2000),
   constraint frontend_appeals_resolution_effect_version_check CHECK (resolution_effect_version > 0),

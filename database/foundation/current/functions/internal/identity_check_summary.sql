@@ -14,8 +14,7 @@ AS $function$
     'session_url',case when k.status='started' and k.expires_at>statement_timestamp() then k.session_url end,
     'declined_at',k.declined_at,'ask_person_until',k.declined_at+interval '5 days',
     'can_ask_person',internal.identity_check_askable(k),
-    'asked_person',(select jsonb_build_object('status',a.status,'created_at',a.created_at,'resolved_at',a.resolved_at)
-      from private.frontend_appeals a where a.action_id=k.id and a.kind='identity_check'));
+    'asked_at',k.asked_at,'with_person',internal.identity_check_with_person(k));
 $function$;
 alter function internal.identity_check_summary(private.identity_checks) owner to postgres;
 revoke all on function internal.identity_check_summary(private.identity_checks) from public;

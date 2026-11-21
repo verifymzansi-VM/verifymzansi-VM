@@ -141,6 +141,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 75. Old backend retired: Complete profile read (item 10) (no file rows: the group 75 part of 2 rows elsewhere) | approved by owner 2026-11-21 | Nothing (pixel-identical, no visible change). 'Verify your phone number' reads the same profile through the named live-backend read; before and after pictures match pixel for pixel. |
 | 76. Limits register: size limits tested at their bound (and the group 76 part of 3 rows elsewhere) | keep | Nothing; tests only |
 | 77. Authority requests (staff) | approved by owner 2026-11-21 | Governors and admins only: a new Authority requests page (Compliance menu) to open a member's kept identity record for a police or court request, with the request form, the logged record page and a watermarked print disclosure sheet. Members see nothing new. |
+| 82. Automatic ID checks: hidden until it works (no file rows) | hidden until it works (awaiting owner) | Nothing. The database part of automatic ID checks (update 20261121094003) is in, with the switch at Manual; members keep the in-page camera and staff review. The switch stays Manual until the retention update (C1) is applied |
 
 Questions for the owner:
 
@@ -3185,6 +3186,24 @@ Decision: approved by owner 2026-11-21 (owner question: 'Approve the authority-r
 | `src/app/admin/authority-requests/[id]/sheet/page.tsx` | visual | Group 77: the watermarked print disclosure sheet. | Governors and admins: the sheet described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | f79abc610d41 |
 | `src/app/admin/authority-requests/page.test.tsx` | test | Group 77: checks the guard, the 2-step line, the searches (never by name), opening, refusals, the earlier requests and the re-verify redirect. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | 8b8e024b8924 |
 | `src/app/admin/authority-requests/[id]/page.test.tsx` | test | Group 77: checks the record, no match, an ID number only tried, the closed record and the re-verify redirect, and the sheet's watermark and stamp. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | bdbbb9b0f78f |
+
+### 82. Automatic ID checks: hidden until it works
+
+No page changes. Database update 20261121094003_automatic_identity_checks
+(Didit plan, build step 5) adds automatic ID checks with an admin setting that
+starts at Manual (staff review the photos, as today). While it is Manual,
+members and staff see nothing new: members keep the in-page camera, and staff
+review every submission as before. The member and staff screens come in a
+later pull request, with pictures for the owner.
+
+Hidden until it works: the setting must stay Manual until the retention update
+(Didit plan C1) is applied. That update must also delete the partner's copy of
+a check when staff reject or send it back, and when a member's "ask a person"
+request ends without the identity being accepted. This update only deletes the
+partner's copy of checks that never finished, and of automatic declines 5 days
+after the decline when nobody asked a person.
+
+Decision: hidden until it works; awaiting owner.
 
 <!-- frontend-ledger:end -->
 

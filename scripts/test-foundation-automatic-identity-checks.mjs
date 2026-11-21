@@ -2,7 +2,8 @@
 // Behaviour checks for 20261121094003_automatic_identity_checks.sql: automatic
 // ID checks by the independent verification partner, the admin setting
 // (manual, staff_final, automatic), the spending guard, declines with "ask a
-// person to look again" (an appeal of kind identity_check, 5 days), and the
+// person to look again" (5 days), the names tie between the website's
+// comparison and the lock, real staff decisions on automatic results, and the
 // deletion of the partner's copy.
 //
 // Replays database/foundation (prelude, candidate.sql, every update before this
@@ -62,7 +63,7 @@ const SERVICE_COMMANDS = [
   "api.attach_identity_check_session(uuid,uuid,text)",
   "api.report_identity_check_unavailable(uuid,text)",
   "api.begin_identity_check_evidence(uuid,uuid)",
-  "api.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,integer)",
+  "api.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer)",
   "api.claim_identity_check_deletions(integer)",
   "api.mark_identity_check_provider_deleted(uuid)",
 ];
@@ -72,7 +73,7 @@ const HELPERS = [
   "internal.identity_check_summary(private.identity_checks)",
   "internal.accept_automatic_identity_submission(uuid,uuid)",
   "internal.decline_automatic_identity_submission(uuid,uuid)",
-  "internal.settle_identity_check_appeal()",
+  "internal.identity_check_with_person(private.identity_checks)",
 ];
 
 const {
@@ -185,11 +186,16 @@ try {
     );
     return { check: started.check_id, session };
   };
-  const completeSql = (c, outcome, { reasons = [], risk = 10, fingerprint: f = fp() } = {}) =>
+  const TYPED = { first_name: "Thando Sipho", last_name: "Dlamini" };
+  const completeSql = (
+    c,
+    outcome,
+    { reasons = [], risk = 10, fingerprint: f = fp(), names = TYPED } = {}
+  ) =>
     outcome === "not_finished"
       ? `select api.complete_identity_check('${c.check}','${c.session}','not_finished',array[${reasons.map(sqlLiteral).join(",")}]::text[]);`
       : `select api.complete_identity_check('${c.check}','${c.session}','${outcome}',array[${reasons.map(sqlLiteral).join(",")}]::text[],
-        ${sqlJsonb(receipt())},${sqlJsonb(receipt())},${sqlJsonb({ fingerprint: f, encrypted_number: encrypted() })},${risk});`;
+        ${sqlJsonb(receipt())},${sqlJsonb(receipt())},${sqlJsonb({ fingerprint: f, encrypted_number: encrypted() })},${sqlJsonb(names)},${risk});`;
   /** Reserves the evidence files and records the result as the server would. */
   const finish = (c, outcome, options) => {
     if (outcome !== "not_finished")
@@ -203,6 +209,8 @@ try {
         "select coalesce(jsonb_agg(g->>'case_id'),'[]'::jsonb) from jsonb_array_elements((api.get_frontend_staff_verification_queue(100,'{}'))->'groups') g;"
       )
     );
+  /** A staff claim on a case (claim_generation, claim_nonce, version). */
+  const claim = (who, caseId) => json(staff(who, `select api.claim_evidence_case('${caseId}');`));
   /** Moves a check's clock back (owner only). */
   const age = (id, interval) =>
     q(`update private.identity_checks set created_at=created_at-interval '${interval}',
@@ -356,17 +364,66 @@ try {
     const row = checkRow(c.check);
     assert.deepEqual(row.reasons, ["names_differ", "provider_declined"]);
     assert.ok(queueCases().includes(row.case_id));
+    // Only a reviewer holding a current claim on the case, and it is logged.
+    fails(staff(moderator, `select api.get_identity_check_for_case('${row.case_id}');`), "42501");
+    fails(member(m, `select api.get_identity_check_for_case('${row.case_id}');`), "42501");
+    const held = claim(moderator, row.case_id);
+    const logged = Number(
+      q(`select count(*) from private.evidence_access_log where case_id='${row.case_id}';`)
+    );
     const forCase = json(
       staff(moderator, `select api.get_identity_check_for_case('${row.case_id}');`)
     );
     assert.equal(forCase.check.status, "with_staff");
     assert.deepEqual(forCase.check.reasons, ["names_differ", "provider_declined"]);
-    fails(member(m, `select api.get_identity_check_for_case('${row.case_id}');`), "42501");
+    assert.equal(
+      q(`select count(*)||':'||max(purpose) from private.evidence_access_log where case_id='${row.case_id}'
+        and staff_id='${moderator.id}';`),
+      `${logged + 1}:routine_review`
+    );
+    fails(staff(governor, `select api.get_identity_check_for_case('${row.case_id}');`), "42501");
+    // A real staff return (Resubmit) sends it back to the member.
+    const returned = json(
+      staff(
+        moderator,
+        `select api.return_identity_submission('${row.case_id}',${held.version},'${held.claim_generation}','${held.claim_nonce}','Photo unclear, please retake it.');`
+      )
+    );
+    assert.equal(returned.status, "needs_resubmission");
+    assert.ok(!queueCases().includes(row.case_id));
     assert.equal(
       q(`select count(*) from private.accepted_identity_facts where owner_id='${m.id}';`),
       "0"
     );
   });
+  await check(
+    "the names the website compared are the names locked: a change mid-check is caught",
+    () => {
+      const m = namedMember("renamed");
+      const c = startWithSession(m);
+      const revision = q(`select revision from private.profiles where account_id='${m.id}';`);
+      json(member(m, `select api.save_my_legal_name(${revision},'Thandiwe','Dlamini');`));
+      json(service(`select api.begin_identity_check_evidence('${c.check}','${c.session}');`));
+      assert.equal(json(service(completeSql(c, "approved"))).status, "with_staff");
+      assert.deepEqual(checkRow(c.check).reasons, ["names_differ"]);
+      assert.equal(
+        q(`select count(*) from private.accepted_identity_facts where owner_id='${m.id}';`),
+        "0"
+      );
+      assert.equal(
+        q(`select legal_name_locked_at is null from private.profiles where account_id='${m.id}';`),
+        "t"
+      );
+      // The names must come with every result.
+      const d = startWithSession(namedMember("no-names"));
+      json(service(`select api.begin_identity_check_evidence('${d.check}','${d.session}');`));
+      fails(service(completeSql(d, "approved", { names: null })), "22023");
+      fails(
+        service(completeSql(d, "approved", { names: { first_name: "Thando Sipho" } })),
+        "22023"
+      );
+    }
+  );
 
   // --------------------------------------------------------- automatic
   let declined;
@@ -396,6 +453,18 @@ try {
     assert.equal(seen.check.reasons, undefined);
     declined = { member: m, ...c, case: row.case_id, submission: row.submission_id };
   });
+  await check("automatic: a name changed mid-check is declined, never locked", () => {
+    const m = namedMember("renamed-auto");
+    const c = startWithSession(m);
+    const revision = q(`select revision from private.profiles where account_id='${m.id}';`);
+    json(member(m, `select api.save_my_legal_name(${revision},'Thando','Dlamini');`));
+    assert.equal(finish(c, "approved").status, "declined");
+    assert.deepEqual(checkRow(c.check).reasons, ["names_differ"]);
+    assert.equal(
+      q(`select legal_name_locked_at is null from private.profiles where account_id='${m.id}';`),
+      "t"
+    );
+  });
   await check("automatic: banned, already verified and high risk IDs are declined", () => {
     const shared = fp();
     const first = namedMember("first-holder");
@@ -420,115 +489,117 @@ try {
     assert.equal(finish(b, "approved", { fingerprint: bannedPrint }).status, "declined");
     assert.deepEqual(checkRow(b.check).reasons, ["banned"]);
   });
-  await check(
-    "ask a person: an identity_check appeal puts the submission back in the queue",
-    () => {
-      const m = declined.member;
+  await check("ask a person: the request puts the submission back in the staff queue", () => {
+    const m = declined.member;
+    fails(
+      member(m, `select api.ask_person_identity_check('${declined.check}','Too short.');`),
+      "22023"
+    );
+    // No appeal is involved: the generic appeal path does not take a check.
+    assert.match(
       fails(
-        member(m, `select api.ask_person_identity_check('${declined.check}','Too short.');`),
-        "22023"
-      );
-      // The generic appeal path and the appeals screen never take these.
-      assert.match(
-        fails(
-          member(
-            m,
-            `select api.submit_my_frontend_appeal('${declined.check}','Please look at my ID again, it is mine.');`
-          ),
-          "PT409"
+        member(
+          m,
+          `select api.submit_my_frontend_appeal('${declined.check}','Please look at my ID again, it is mine.');`
         ),
-        /cannot be appealed/
-      );
-      const reason = "Please look at my ID again, the photo was taken in poor light.";
-      const asked = json(
+        "PT409"
+      ),
+      /cannot be appealed/
+    );
+    const reason = "Please look at my ID again, the photo was taken in poor light.";
+    const asked = json(
+      member(m, `select api.ask_person_identity_check('${declined.check}',${sqlLiteral(reason)});`)
+    );
+    assert.equal(asked.reused, false);
+    assert.equal(
+      json(
         member(
           m,
           `select api.ask_person_identity_check('${declined.check}',${sqlLiteral(reason)});`
         )
-      );
-      assert.equal(asked.status, "submitted");
-      assert.equal(
-        json(
-          member(
-            m,
-            `select api.ask_person_identity_check('${declined.check}',${sqlLiteral(reason)});`
-          )
-        ).reused,
-        true
-      );
-      assert.equal(
-        q(`select kind||':'||status from private.frontend_appeals where id='${asked.appeal_id}';`),
-        "identity_check:submitted"
-      );
-      assert.ok(queueCases().includes(declined.case));
-      assert.equal(checkRow(declined.check).provider_delete_due, null);
-      assert.match(
-        fails(member(m, "select api.start_my_identity_check();"), "PT409"),
-        /identity_check_with_person/
-      );
-      const seen = availability(m);
-      assert.equal(seen.check.can_ask_person, false);
-      assert.equal(seen.check.asked_person.status, "submitted");
-      const queue = json(staff(admin, "select api.get_frontend_appeal_queue();"));
-      const item = queue.items.find((i) => i.id === asked.appeal_id);
-      assert.equal(item.can_resolve, false);
-      assert.match(
-        fails(
-          staff(
-            admin,
-            `select api.resolve_frontend_appeal('${asked.appeal_id}','overturned','Looked again at the ID photo.');`
-          ),
-          "PT409"
+      ).reused,
+      true
+    );
+    assert.match(
+      fails(
+        member(
+          m,
+          `select api.ask_person_identity_check('${declined.check}','A different reason for the same check.');`
         ),
-        /appealed decision changed/
-      );
-      const forCase = json(
-        staff(moderator, `select api.get_identity_check_for_case('${declined.case}');`)
-      );
-      assert.equal(forCase.check.asked_person.reason, reason);
-      declined.appeal = asked.appeal_id;
-    }
-  );
-  await check(
-    "the staff decision closes the appeal: approval overturns it and tells the member",
-    () => {
-      // A staff approval writes the accepted fact (as internal.accept_identity_submission does).
-      q(`insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
-      select owner_id,id,identity_hmac,'${moderator.id}' from private.verification_identity_submissions where id='${declined.submission}';`);
-      assert.equal(
-        q(
-          `select status||':'||reviewer_id from private.frontend_appeals where id='${declined.appeal}';`
-        ),
-        `overturned:${moderator.id}`
-      );
-      assert.equal(
-        q(
-          `select count(*) from private.notifications where kind='appeal_decided' and subject_id='${declined.appeal}';`
-        ),
-        "1"
-      );
-    }
-  );
-  await check("a return or rejection upholds the appeal", () => {
-    const m = namedMember("upheld");
+        "PT409"
+      ),
+      /ask_person_unavailable/
+    );
+    assert.equal(
+      q(`select count(*) from private.frontend_appeals where action_id='${declined.check}';`),
+      "0"
+    );
+    const row = checkRow(declined.check);
+    assert.equal(row.ask_reason, reason);
+    assert.equal(row.provider_delete_due, null);
+    assert.ok(queueCases().includes(declined.case));
+    assert.match(
+      fails(member(m, "select api.start_my_identity_check();"), "PT409"),
+      /identity_check_with_person/
+    );
+    const seen = availability(m);
+    assert.equal(seen.check.can_ask_person, false);
+    assert.equal(seen.check.with_person, true);
+    assert.equal(
+      json(staff(moderator, "select api.get_identity_check_settings();")).last_7_days.asked_person,
+      1
+    );
+  });
+  await check("a re-queued submission goes through the real staff approval", () => {
+    const held = claim(moderator, declined.case);
+    const forCase = json(
+      staff(moderator, `select api.get_identity_check_for_case('${declined.case}');`)
+    );
+    assert.equal(forCase.check.ask_reason, checkRow(declined.check).ask_reason);
+    const reviewed = json(
+      staff(
+        moderator,
+        `select api.review_identity_submission('${declined.submission}',${held.version},'${held.claim_generation}','${held.claim_nonce}',true,true);`
+      )
+    );
+    assert.equal(reviewed.status, "accepted");
+    const fact = json(
+      `select to_jsonb(f) from private.accepted_identity_facts f where f.owner_id='${declined.member.id}';`
+    );
+    assert.equal(fact.reviewed_by, moderator.id);
+    assert.equal(fact.automatic_check_id, null);
+    assert.equal(fact.submission_id, declined.submission);
+    assert.equal(availability(declined.member).check.with_person, false);
+    assert.equal(
+      q(
+        `select count(*) from private.outbox_events where kind='identity_accepted' and owner_id='${declined.member.id}';`
+      ),
+      "1"
+    );
+  });
+  await check("a re-queued submission sent back by staff frees the member to try again", () => {
+    const m = namedMember("sent-back");
     const c = startWithSession(m);
     finish(c, "declined");
     const row = checkRow(c.check);
-    const asked = json(
+    json(
       member(
         m,
         `select api.ask_person_identity_check('${c.check}','My ID is genuine, please check it by hand.');`
       )
     );
-    q(`insert into private.verification_return_requests(case_id,case_version,reason,reviewer_id,decision)
-      select '${row.case_id}',version,'Photo unclear, retake it.','${moderator.id}','needs_resubmission'
-      from private.evidence_cases where id='${row.case_id}';`);
+    const held = claim(moderator, row.case_id);
     assert.equal(
-      q(
-        `select status||':'||reviewer_id from private.frontend_appeals where id='${asked.appeal_id}';`
-      ),
-      `upheld:${moderator.id}`
+      json(
+        staff(
+          moderator,
+          `select api.return_identity_submission('${row.case_id}',${held.version},'${held.claim_generation}','${held.claim_nonce}','Photo unclear, please retake it.');`
+        )
+      ).status,
+      "needs_resubmission"
     );
+    assert.equal(availability(m).check.with_person, false);
+    assert.equal(start(m).created, true);
   });
   await check(
     "ask a person closes 5 days after the decline, and when a new attempt replaces it",
@@ -777,6 +848,16 @@ try {
       files
     );
     assert.match(files.id_front.object_key, /^evidence\//);
+  });
+  await check("a result after the 24-hour expiry is recorded as not finished", () => {
+    const m = namedMember("too-late");
+    const c = startWithSession(m);
+    json(service(`select api.begin_identity_check_evidence('${c.check}','${c.session}');`));
+    age(c.check, "24 hours 1 minute");
+    assert.equal(json(service(completeSql(c, "approved"))).status, "not_finished");
+    const row = checkRow(c.check);
+    assert.equal(row.submission_id, null);
+    assert.notEqual(row.provider_delete_due, null);
   });
   await check("manual at the moment the result arrives: the result goes to staff", () => {
     const m = namedMember("switched");

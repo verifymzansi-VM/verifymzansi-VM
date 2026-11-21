@@ -38,6 +38,5 @@ CREATE UNIQUE INDEX accepted_identity_fingerprint_active_idx ON private.accepted
 CREATE INDEX accepted_identity_history_owner_idx ON private.accepted_identity_facts USING btree (owner_id, reviewed_at DESC, id DESC);
 CREATE UNIQUE INDEX accepted_identity_owner_active_idx ON private.accepted_identity_facts USING btree (owner_id) WHERE (revoked_at IS NULL);
 CREATE TRIGGER lock_reviewed_legal_name AFTER INSERT ON private.accepted_identity_facts FOR EACH ROW EXECUTE FUNCTION internal.lock_reviewed_legal_name();
-CREATE TRIGGER settle_identity_check_appeal AFTER INSERT ON private.accepted_identity_facts FOR EACH ROW WHEN (new.revoked_at IS NULL) EXECUTE FUNCTION internal.settle_identity_check_appeal();
 CREATE TRIGGER verification_identity_fact_guard BEFORE UPDATE ON private.accepted_identity_facts FOR EACH ROW EXECUTE FUNCTION internal.verification_identity_fact_guard();
 revoke all on private.accepted_identity_facts from public;

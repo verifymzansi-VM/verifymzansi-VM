@@ -13145,6 +13145,25 @@
           "file": "scripts/limits-sql.test.mjs"
         }
       ]
+    },
+    {
+      "id": "LIM-T-identity_checks_ask_reason_check",
+      "title": "private.identity_checks: char_length(ask_reason) >= 20 AND char_length(ask_reason) <= 2000",
+      "value": ">= 20, <= 2000",
+      "category": "length",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/tables/private/identity_checks.sql",
+          "symbol": "private.identity_checks (identity_checks_ask_reason_check)",
+          "contains": "constraint identity_checks_ask_reason_check CHECK (char_length(ask_reason) >= 20 AND char_length(ask_reason) <= 2000)"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "scripts/limits-sql.test.mjs"
+        }
+      ]
     }
   ],
   "notLimits": [

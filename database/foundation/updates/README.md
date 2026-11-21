@@ -87,6 +87,13 @@ register). Didit plan, build step 5 (the database part of automatic ID checks).
 It changes nothing for members or staff while the new setting is `manual`, its
 starting value.
 
+**The setting must stay `manual` until the retention update (Didit plan C1) is
+applied.** This update deletes the partner's copy of a check only when it never
+finished and 5 days after an automatic decline nobody asked about. C1 must set
+`identity_checks.provider_delete_due` for checks staff reject or send back
+(`staff_final`, or after "ask a person") and for checks whose "ask a person"
+ends without the identity being accepted.
+
 - **The setting:** one row in `private.identity_check_settings`: `manual` (staff
   review the photos, as today), `staff_final` (a clean automatic pass verifies
   at once, anything else goes to the staff queue) or `automatic` (a clean pass
@@ -108,49 +115,56 @@ starting value.
   site-wide (unavailable checks are not counted). Above either, or while the
   setting is `manual` or paused, `api.get_identity_check_availability` answers
   route `manual` with reason `limit`, `paused` or `mode`, and
-  `api.start_my_identity_check` refuses (PT409 `identity_check_<reason>`).
+  `api.start_my_identity_check` refuses a new check (PT409
+  `identity_check_<reason>`). An unfinished check is resumed whatever the
+  setting now says; if the setting is `manual` when its result arrives, the
+  result goes to staff.
 - **A check:** `private.identity_checks`, bound to the member's open identity
   case; the partner only sees its random id. The member starts it
-  (`api.start_my_identity_check`, typed legal names required, an unfinished
-  check is returned again); the server binds the partner session once
-  (`api.attach_identity_check_session`), reserves the two evidence files before
-  copying the photos (`api.begin_identity_check_evidence`) and records the
-  result once (`api.complete_identity_check`).
+  (`api.start_my_identity_check`, typed legal names required); the server binds
+  the partner session once (`api.attach_identity_check_session`), reserves the
+  two evidence files before copying the photos
+  (`api.begin_identity_check_evidence`) and records the result once
+  (`api.complete_identity_check`). A result after the check's 24-hour expiry is
+  recorded as not finished.
 - **The result** becomes an ordinary identity submission through
   `internal.complete_evidence_upload` and
   `internal.register_identity_submission` (the same files, fingerprint,
-  encrypted ID number and names snapshot as the manual route). The database adds
-  `banned`, `duplicate` (the ID number is verified on another account) and
-  `high_risk` (risk score above 50) to the website's findings. A clean pass on a
-  partner setting writes the accepted identity fact with `automatic_check_id`
-  instead of a staff reviewer (`accepted_identity_facts.reviewed_by` is null
-  only then, enforced by a check), so the name lock and the "verified" notice
-  work unchanged.
+  encrypted ID number and names snapshot as the manual route). The server gives
+  the first and last names it compared with the ID (`p_names`); when they are
+  not exactly the names the new submission records (the member can change their
+  typed names during the check), the database adds `names_differ`, so a clean
+  pass always locks the names that were compared. It also adds `banned`,
+  `duplicate` (the ID number is verified on another account) and `high_risk`
+  (risk score above 50). A clean pass on a partner setting writes the accepted
+  identity fact with `automatic_check_id` instead of a staff reviewer
+  (`accepted_identity_facts.reviewed_by` is null only then, enforced by a
+  check), so the name lock and the "verified" notice work unchanged.
 - **Declines** (`automatic` setting, including the partner's "in review"):
   `internal.decline_automatic_identity_submission` keeps the submission but
   removes it from the case's current place, so no staff queue shows it and the
   member's page offers a new attempt.
   `api.ask_person_identity_check(check, reason)` (within 5 days, before anything
-  replaced it) records an appeal of the new kind `identity_check` in
-  `private.frontend_appeals` and puts the submission back in the staff queue. A
-  staff approval closes the appeal as `overturned`, a return or rejection as
-  `upheld` (trigger `internal.settle_identity_check_appeal`), and the existing
-  appeal notice tells the member. The appeals screen cannot resolve these
-  appeals; a new check cannot start while one is waiting.
-  `api.get_identity_check_for_case` shows reviewers the check's reason codes and
-  the member's request.
+  replaced it; reason 20 to 2,000 characters) records the request on the check
+  (`asked_at`, `ask_reason`) and puts the submission back in the staff queue.
+  Staff decide it with the usual commands, and the existing "verified" or "sent
+  back" notice tells the member. No appeal is created. A new check cannot start
+  while the request waits.
+- **Reviewers:** `api.get_identity_check_for_case(case)` (staff with
+  `evidence:view` holding a current claim on that open case, logged as a
+  `routine_review` evidence access, like the identity review context) shows the
+  check's status, reason codes and the member's request.
 - **The partner's copy:** `api.claim_identity_check_deletions(limit)` returns
   sessions to delete (a check that never finished at once, also one still
   unfinished an hour after its 24-hour expiry; a declined check 5 days after the
   decline unless the member asked a person), skipping fraud and legal holds,
   each held for 5 minutes; `api.mark_identity_check_provider_deleted` records
-  the deletion. Deleting our own copies of failed attempts is part of the later
-  retention update.
+  the deletion. Deleting our own copies of failed attempts is part of C1.
 
 New tables, columns, constraints and commands only (expand); no existing
-function body changes. `reviewed_by` becomes nullable and the appeal kinds gain
-`identity_check`; a website release without the matching code never calls the
-commands. ORDER: apply first, then merge.
+function body changes. `reviewed_by` becomes nullable for automatic facts only;
+a website release without the matching code never calls the commands. ORDER:
+apply first, then merge.
 
 **Applying.**
 
@@ -168,10 +182,9 @@ commands. ORDER: apply first, then merge.
 The reviewed rollback is
 `../rollback/20261121094003_automatic_identity_checks.down.sql` (only with the
 owner's decision; prefer a forward fix). It refuses unless the update is
-applied, and refuses once a check, an identity check appeal or a setting change
-was recorded. Otherwise it drops the commands, helpers, trigger and tables, puts
-back the two widened constraints, makes `reviewed_by` required again and removes
-the capability.
+applied, and refuses once a check or a setting change was recorded. Otherwise it
+drops the commands, helpers and tables, puts back the widened constraint, makes
+`reviewed_by` required again and removes the capability.
 
 `node --import tsx scripts/test-foundation-automatic-identity-checks.mjs` (part
 of `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
@@ -181,15 +194,16 @@ the capability and the grants; nothing starts on `manual`; who may change the
 setting (moderator, governor and an admin with a 20-minute-old code are refused)
 and its log; a clean pass verified by the check with the name lock and notice;
 an automatic fact never naming a reviewer; `staff_final` sending anything else
-to the queue with its reasons; `automatic` declining "in review", banned,
-duplicate and high-risk results out of every queue; asking a person (the generic
-appeal path and the appeals screen refused, the submission back in the queue, a
-new check refused meanwhile), closed by an approval (overturned, with the
-notice) or a return (upheld); the 5-day window and a replaced attempt; the
-partner deletions (at once, after 5 days, held by a legal hold, the expiry
-sweep, a late result not recorded); both spending limits at their bound; the
-pause and its resume; session binding and result rules; and `manual` at the
-moment a result arrives.
+to the queue with its reasons, the reviewer read only under a claim and logged,
+and a real staff return; a typed name changed during the check caught as
+`names_differ` (to staff, or declined) and never locked; `automatic` declining
+"in review", banned, duplicate and high-risk results out of every queue; asking
+a person (no appeal, the submission back in the queue, a new check refused
+meanwhile), then a real staff approval and a real staff return; the 5-day window
+and a replaced attempt; the partner deletions (at once, after 5 days, held by a
+legal hold, the expiry sweep, a late result not recorded); both spending limits
+at their bound; the pause and its resume; session binding and result rules; a
+result after the expiry; and `manual` at the moment a result arrives.
 
 ## Authority requests: opening a kept identity record, 21 November 2026
 

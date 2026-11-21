@@ -11,8 +11,6 @@ declare actor uuid:=internal.price_draft_actor(); k private.identity_checks; ope
 begin
   perform internal.lock_verification_subject(actor);
   actor:=internal.price_draft_actor();
-  if exists(select 1 from private.frontend_appeals a where a.appellant_id=actor and a.kind='identity_check' and a.status='submitted') then
-    raise exception 'a person is checking your identity' using errcode='PT409',detail='identity_check_with_person'; end if;
   now_at:=clock_timestamp();
   select x.* into k from private.identity_checks x where x.owner_id=actor and x.status='started' for update;
   if found then
@@ -21,6 +19,8 @@ begin
     update private.identity_checks set status='not_finished',finished_at=now_at,
       provider_delete_due=case when session_id is not null then now_at end where id=k.id;
   end if;
+  if exists(select 1 from private.identity_checks x where x.owner_id=actor and internal.identity_check_with_person(x)) then
+    raise exception 'a person is checking your identity' using errcode='PT409',detail='identity_check_with_person'; end if;
   if not exists(select 1 from private.profiles p where p.account_id=actor
       and p.legal_first_name is not null and p.legal_last_name is not null) then
     raise exception 'legal name required' using errcode='PT409',detail='legal_name_required'; end if;

@@ -31,16 +31,16 @@
 --    (accepted_identity_facts.automatic_check_id; reviewed_by is null only
 --    then), so the name lock, the outbox notice and everything downstream work
 --    unchanged. Bans and the one-account-per-ID rule are checked exactly as in
---    a staff approval.
+--    a staff approval. The names the website compared with the ID must be
+--    exactly the names the submission records (and a clean pass locks);
+--    otherwise the result is not clean (names_differ).
 -- 5. A declined check (internal.decline_automatic_identity_submission) keeps
 --    its submission but takes it out of the case's current place, so the staff
 --    queue never shows it and the member's page offers a new attempt.
---    api.ask_person_identity_check records an appeal of the new kind
---    identity_check (private.frontend_appeals) and puts the submission back in
---    the staff queue. The staff decision closes the appeal by itself: an
---    approval as overturned, a return or rejection as upheld (trigger
---    internal.settle_identity_check_appeal; the existing appeal notice tells
---    the member). The appeals screen cannot resolve these appeals.
+--    Within 5 days, api.ask_person_identity_check records the member's request
+--    (identity_checks.asked_at and ask_reason) and puts the submission back in
+--    the staff queue. The staff decision is the answer: the existing "verified"
+--    or "sent back" notice tells the member.
 -- 6. The partner's copy of a check is deleted through
 --    api.claim_identity_check_deletions and
 --    api.mark_identity_check_provider_deleted: a check that never finished at
@@ -52,7 +52,9 @@
 -- New tables, columns, constraints and commands only (expand); no existing
 -- function body changes. reviewed_by becomes nullable for automatic facts
 -- only (a check enforces it). Nothing changes for members or staff while the
--- setting is manual. ORDER: apply first, then merge.
+-- setting is manual, and it must stay manual until the retention update is
+-- applied (that update deletes the partner's copy after a staff rejection and
+-- after an unanswered "ask a person"). ORDER: apply first, then merge.
 -- Read-only preflight: ../preflight/20261121094003_automatic_identity_checks.check.sql.
 -- Rollback: ../rollback/20261121094003_automatic_identity_checks.down.sql.
 begin;
@@ -60,15 +62,15 @@ begin;
 set local lock_timeout='5s';
 
 -- Precondition: nothing of this update exists yet, or all of it does; the
--- functions it relies on have their reviewed bodies; the two constraints it
--- widens are the reviewed ones (or this update's).
+-- functions it relies on have their reviewed bodies; the constraint it widens
+-- is the reviewed one (or this update's).
 do $$
 declare present integer; body record;
 begin
   select (to_regclass('private.identity_checks') is not null)::integer
     + (to_regclass('private.identity_check_settings') is not null)::integer
     + (to_regclass('private.identity_check_mode_events') is not null)::integer
-    + (to_regprocedure('api.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,integer)') is not null)::integer
+    + (to_regprocedure('api.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer)') is not null)::integer
   into present;
   if present not in (0, 4) then
     raise exception 'automatic identity checks precondition: % of 4 objects exist', present using errcode='55000';
@@ -79,22 +81,18 @@ begin
       ('internal.append_only_guard()', 'dfac5657b00f4d86a399e04e44d2ea59'),
       ('internal.open_verification_case()', '5da4c2f247cfcb5718366e4315d23fa8'),
       ('internal.complete_evidence_upload(uuid,text,text,integer)', '4ee99e8aba3021a021f9a52d05936083'),
-      ('internal.register_identity_submission(uuid,integer,uuid,uuid,text,text,jsonb,uuid,integer)', 'b8d825cea8120b23aebfc42bb3f3b1ce')
+      ('internal.register_identity_submission(uuid,integer,uuid,uuid,text,text,jsonb,uuid,integer)', 'b8d825cea8120b23aebfc42bb3f3b1ce'),
+      ('internal.staff_evidence_metadata(uuid,text,uuid,text)', 'd3d00fec5facacc1da7496142c2c56f4')
     ) v(sig, reviewed) loop
     if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
         where oid=to_regprocedure(body.sig)) is distinct from body.reviewed then
       raise exception 'automatic identity checks drift: % is not the reviewed body', body.sig using errcode='55000';
     end if;
   end loop;
-  if (select pg_get_constraintdef(oid) from pg_constraint where conrelid='private.frontend_appeals'::regclass
-      and conname='frontend_appeals_kind_check') not in (
-      'CHECK ((kind = ANY (ARRAY[''suspension''::text, ''ban''::text, ''warning''::text, ''content_hidden''::text])))',
-      'CHECK ((kind = ANY (ARRAY[''suspension''::text, ''ban''::text, ''warning''::text, ''content_hidden''::text, ''identity_check''::text])))') then
-    raise exception 'automatic identity checks drift: frontend_appeals_kind_check is not the reviewed constraint' using errcode='55000';
-  end if;
   if (select pg_get_constraintdef(oid) from pg_constraint where conrelid='private.accepted_identity_facts'::regclass
-      and conname='accepted_identity_facts_check2') is distinct from 'CHECK ((second_reviewer IS DISTINCT FROM reviewed_by))'
-    and present = 0 then
+      and conname='accepted_identity_facts_check2') is distinct from (case when present=0
+      then 'CHECK ((second_reviewer IS DISTINCT FROM reviewed_by))'
+      else 'CHECK (((reviewed_by IS NULL) OR (second_reviewer IS DISTINCT FROM reviewed_by)))' end) then
     raise exception 'automatic identity checks drift: accepted_identity_facts_check2 is not the reviewed constraint' using errcode='55000';
   end if;
 end$$;
@@ -171,6 +169,8 @@ create table if not exists private.identity_checks (
   declined_at timestamptz,
   provider_delete_due timestamptz,
   provider_deleted_at timestamptz,
+  asked_at timestamptz,
+  ask_reason text,
   constraint identity_checks_pkey primary key (id),
   constraint identity_checks_session_id_key unique (session_id),
   constraint identity_checks_submission_id_key unique (submission_id),
@@ -194,7 +194,10 @@ create table if not exists private.identity_checks (
   constraint identity_checks_reasons_check check (reasons <@ array['provider_declined','provider_in_review',
     'names_differ','document_not_accepted','id_number_invalid','under_18','banned','duplicate','high_risk']::text[]),
   constraint identity_checks_provider_deleted_check
-    check (provider_deleted_at is null or (session_id is not null and status <> 'started'))
+    check (provider_deleted_at is null or (session_id is not null and status <> 'started')),
+  constraint identity_checks_asked_check check ((asked_at is null) = (ask_reason is null)
+    and (asked_at is null or status = 'declined')),
+  constraint identity_checks_ask_reason_check check (char_length(ask_reason) between 20 and 2000)
 );
 alter table private.identity_checks owner to postgres;
 alter table private.identity_checks enable row level security;
@@ -241,11 +244,6 @@ do $$begin
 end$$;
 alter table private.accepted_identity_facts alter column reviewed_by drop not null;
 
--- 5. Appeals of a declined automatic check.
-alter table private.frontend_appeals drop constraint if exists frontend_appeals_kind_check;
-alter table private.frontend_appeals add constraint frontend_appeals_kind_check
-  check (kind in ('suspension','ban','warning','content_hidden','identity_check'));
-
 -- ------------------------------------------------------------------ helpers
 
 -- Where a member's next check goes: automatic, or manual with the reason.
@@ -285,7 +283,7 @@ CREATE OR REPLACE FUNCTION internal.identity_check_askable(k private.identity_ch
  SET search_path TO 'pg_catalog'
 AS $function$
   select k.status='declined' and k.declined_at+interval '5 days'>statement_timestamp()
-    and not exists(select 1 from private.frontend_appeals a where a.action_id=k.id)
+    and k.asked_at is null
     and exists(select 1 from private.evidence_cases c join private.verification_identity_submissions s on s.id=k.submission_id
       where c.id=k.case_id and c.status='open' and c.version=s.case_version)
     and not exists(select 1 from private.verification_current_submissions v where v.case_id=k.case_id)
@@ -295,6 +293,22 @@ AS $function$
 $function$;
 alter function internal.identity_check_askable(private.identity_checks) owner to postgres;
 revoke all on function internal.identity_check_askable(private.identity_checks) from public, anon, authenticated, service_role;
+
+-- Whether a person is still to decide a check the member asked about: its
+-- submission is still the open case's current, unchanged one.
+CREATE OR REPLACE FUNCTION internal.identity_check_with_person(k private.identity_checks)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select k.asked_at is not null and exists(select 1 from private.evidence_cases c
+    join private.verification_current_submissions v on v.case_id=c.id and v.submission_id=k.submission_id
+    join private.verification_identity_submissions s on s.id=k.submission_id
+    where c.id=k.case_id and c.status='open' and c.version=s.case_version);
+$function$;
+alter function internal.identity_check_with_person(private.identity_checks) owner to postgres;
+revoke all on function internal.identity_check_with_person(private.identity_checks) from public, anon, authenticated, service_role;
 
 -- What the member's page shows about a check (no reasons: those are for staff).
 CREATE OR REPLACE FUNCTION internal.identity_check_summary(k private.identity_checks)
@@ -310,8 +324,7 @@ AS $function$
     'session_url',case when k.status='started' and k.expires_at>statement_timestamp() then k.session_url end,
     'declined_at',k.declined_at,'ask_person_until',k.declined_at+interval '5 days',
     'can_ask_person',internal.identity_check_askable(k),
-    'asked_person',(select jsonb_build_object('status',a.status,'created_at',a.created_at,'resolved_at',a.resolved_at)
-      from private.frontend_appeals a where a.action_id=k.id and a.kind='identity_check'));
+    'asked_at',k.asked_at,'with_person',internal.identity_check_with_person(k));
 $function$;
 alter function internal.identity_check_summary(private.identity_checks) owner to postgres;
 revoke all on function internal.identity_check_summary(private.identity_checks) from public, anon, authenticated, service_role;
@@ -364,40 +377,6 @@ end$function$;
 alter function internal.decline_automatic_identity_submission(uuid,uuid) owner to postgres;
 revoke all on function internal.decline_automatic_identity_submission(uuid,uuid) from public, anon, authenticated, service_role;
 
--- A staff decision on the member's identity closes their open identity check
--- appeal: an accepted identity as overturned, a return or rejection as upheld.
--- The existing appeal trigger then notifies the member.
-CREATE OR REPLACE FUNCTION internal.settle_identity_check_appeal()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'pg_catalog'
-AS $function$
-declare subject uuid; reviewer uuid; outcome text;
-begin
-  if tg_table_name='accepted_identity_facts' then
-    subject:=new.owner_id; reviewer:=new.reviewed_by; outcome:='overturned';
-  elsif tg_table_name='verification_return_requests' then
-    select c.subject_id into subject from private.evidence_cases c where c.id=new.case_id and c.kind='kyc';
-    reviewer:=new.reviewer_id; outcome:='upheld';
-  else raise exception 'unknown identity decision source';
-  end if;
-  if subject is not null then
-    update private.frontend_appeals set status=outcome,reviewer_id=reviewer,
-      reviewer_rationale='Decided in the identity review queue.',resolved_at=clock_timestamp()
-      where appellant_id=subject and kind='identity_check' and status='submitted';
-  end if;
-  return new;
-end$function$;
-alter function internal.settle_identity_check_appeal() owner to postgres;
-revoke all on function internal.settle_identity_check_appeal() from public, anon, authenticated, service_role;
-drop trigger if exists settle_identity_check_appeal on private.accepted_identity_facts;
-create trigger settle_identity_check_appeal after insert on private.accepted_identity_facts
-  for each row when (new.revoked_at is null) execute function internal.settle_identity_check_appeal();
-drop trigger if exists settle_identity_check_appeal on private.verification_return_requests;
-create trigger settle_identity_check_appeal after insert on private.verification_return_requests
-  for each row execute function internal.settle_identity_check_appeal();
-
 -- ------------------------------------------------------------------ members
 
 -- The member's route (automatic or manual, with the reason) and their latest
@@ -432,9 +411,12 @@ alter function api.get_identity_check_availability() owner to postgres;
 revoke all on function api.get_identity_check_availability() from public, anon, authenticated, service_role;
 grant execute on function api.get_identity_check_availability() to authenticated;
 
--- Starts (or resumes) the member's automatic check. Needs the typed legal
--- names, an identity case that is not accepted or under independent review,
--- no identity check appeal waiting for a person, and the automatic route.
+-- Starts the member's automatic check, or returns their unfinished one. An
+-- unfinished check is resumed whatever the setting, pause or spending guard
+-- now say (it was counted when it started; if the setting is manual when the
+-- result arrives, the result goes to staff). A new check needs no request to a
+-- person still waiting, the typed legal names, an identity case that is not
+-- accepted or under independent review, and the automatic route.
 CREATE OR REPLACE FUNCTION internal.start_my_identity_check()
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -445,8 +427,6 @@ declare actor uuid:=internal.price_draft_actor(); k private.identity_checks; ope
 begin
   perform internal.lock_verification_subject(actor);
   actor:=internal.price_draft_actor();
-  if exists(select 1 from private.frontend_appeals a where a.appellant_id=actor and a.kind='identity_check' and a.status='submitted') then
-    raise exception 'a person is checking your identity' using errcode='PT409',detail='identity_check_with_person'; end if;
   now_at:=clock_timestamp();
   select x.* into k from private.identity_checks x where x.owner_id=actor and x.status='started' for update;
   if found then
@@ -455,6 +435,8 @@ begin
     update private.identity_checks set status='not_finished',finished_at=now_at,
       provider_delete_due=case when session_id is not null then now_at end where id=k.id;
   end if;
+  if exists(select 1 from private.identity_checks x where x.owner_id=actor and internal.identity_check_with_person(x)) then
+    raise exception 'a person is checking your identity' using errcode='PT409',detail='identity_check_with_person'; end if;
   if not exists(select 1 from private.profiles p where p.account_id=actor
       and p.legal_first_name is not null and p.legal_last_name is not null) then
     raise exception 'legal name required' using errcode='PT409',detail='legal_name_required'; end if;
@@ -491,38 +473,37 @@ alter function api.start_my_identity_check() owner to postgres;
 revoke all on function api.start_my_identity_check() from public, anon, authenticated, service_role;
 grant execute on function api.start_my_identity_check() to authenticated;
 
--- "Ask a person to look again": an appeal of kind identity_check for a
--- declined check (reason 20 to 2000 characters, as other appeals), which puts
--- the declined submission back in the staff queue.
+-- "Ask a person to look again" for a declined check (reason 20 to 2000
+-- characters, as appeals): records the request on the check and puts the
+-- declined submission back in the staff queue. The staff decision is the
+-- answer, told by the existing "verified" or "sent back" notice.
 CREATE OR REPLACE FUNCTION internal.ask_person_identity_check(p_check uuid, p_reason text)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid:=internal.price_draft_actor(); explanation text; k private.identity_checks; a private.frontend_appeals;
+declare actor uuid:=internal.price_draft_actor(); explanation text; k private.identity_checks;
 begin
   explanation:=internal.validate_attribute_value('{"type":"string","minLength":20,"maxLength":2000}'::jsonb,to_jsonb(p_reason)) #>> '{}';
   if p_check is null or explanation is null
     or explanation ~ U&'[\0001-\0008\000B-\000C\000E-\001F\007F\202A-\202E\2066-\2069\FEFF]' then
-    raise exception 'appeal reason required' using errcode='22023'; end if;
+    raise exception 'reason required' using errcode='22023'; end if;
   perform internal.lock_verification_subject(actor);
   actor:=internal.price_draft_actor();
   select x.* into k from private.identity_checks x where x.id=p_check and x.owner_id=actor for update;
   if not found then raise exception 'identity check unavailable' using errcode='PT409',detail='ask_person_unavailable'; end if;
-  select x.* into a from private.frontend_appeals x where x.action_id=p_check;
-  if found then
-    if a.appellant_id=actor and a.reason=explanation and a.status='submitted' then
-      return jsonb_build_object('appeal_id',a.id,'status','submitted','reused',true); end if;
-    raise exception 'decision already appealed' using errcode='PT409'; end if;
+  if k.asked_at is not null then
+    if k.ask_reason=explanation then
+      return jsonb_build_object('check_id',k.id,'asked_at',k.asked_at,'reused',true); end if;
+    raise exception 'a person was already asked' using errcode='PT409',detail='ask_person_unavailable'; end if;
   if not internal.identity_check_askable(k) then
     raise exception 'identity check cannot go to a person' using errcode='PT409',detail='ask_person_unavailable'; end if;
-  insert into private.frontend_appeals(action_id,appellant_id,kind,reason)
-    values(p_check,actor,'identity_check',explanation) returning * into a;
   insert into private.verification_current_submissions(case_id,submission_id) values(k.case_id,k.submission_id);
-  update private.identity_checks set provider_delete_due=null where id=k.id;
+  update private.identity_checks set asked_at=clock_timestamp(),ask_reason=explanation,provider_delete_due=null
+    where id=k.id returning * into k;
   perform internal.price_draft_actor();
-  return jsonb_build_object('appeal_id',a.id,'status','submitted');
+  return jsonb_build_object('check_id',k.id,'asked_at',k.asked_at,'reused',false);
 end$function$;
 alter function internal.ask_person_identity_check(uuid,text) owner to postgres;
 revoke all on function internal.ask_person_identity_check(uuid,text) from public, anon, authenticated, service_role;
@@ -682,13 +663,17 @@ grant execute on function api.begin_identity_check_evidence(uuid,uuid) to servic
 -- the other outcomes the website has copied both photos into the reserved
 -- files and gives their receipts (as complete_evidence_upload takes them), the
 -- fingerprint and encrypted ID number (as the manual upload gives them) and
--- the risk score from assess_identity_upload. The database adds banned,
--- duplicate and high_risk. A clean pass (approved, no reason) on a partner
+-- the risk score from assess_identity_upload, and p_names, the first and last
+-- names it compared with the ID ({first_name, last_name}). The database adds
+-- names_differ when those are not exactly the names the new submission
+-- records (the member's names may change during the check), banned,
+-- duplicate and high_risk. A check past its 24-hour expiry is recorded as
+-- not_finished whatever the outcome. A clean pass (approved, no reason) on a partner
 -- setting verifies at once; otherwise the result goes to staff (staff_final,
 -- or manual at this moment) or is declined (automatic).
 CREATE OR REPLACE FUNCTION internal.complete_identity_check(p_check uuid, p_session_id uuid, p_outcome text,
   p_reasons text[] DEFAULT '{}'::text[], p_id_front jsonb DEFAULT NULL::jsonb, p_selfie jsonb DEFAULT NULL::jsonb,
-  p_identity jsonb DEFAULT NULL::jsonb, p_risk_score integer DEFAULT NULL::integer)
+  p_identity jsonb DEFAULT NULL::jsonb, p_names jsonb DEFAULT NULL::jsonb, p_risk_score integer DEFAULT NULL::integer)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -701,8 +686,10 @@ begin
     or p_outcome not in('approved','declined','in_review','not_finished')
     or p_reasons is null or not (p_reasons <@ array['names_differ','document_not_accepted','id_number_invalid','under_18']::text[]) then
     raise exception 'identity check result required' using errcode='22023'; end if;
-  if (p_outcome='not_finished') <> (p_id_front is null and p_selfie is null and p_identity is null and p_risk_score is null)
+  if (p_outcome='not_finished') <> (p_id_front is null and p_selfie is null and p_identity is null and p_names is null and p_risk_score is null)
     or (p_outcome<>'not_finished' and (jsonb_typeof(p_id_front) is distinct from 'object' or jsonb_typeof(p_selfie) is distinct from 'object'
+      or jsonb_typeof(p_names) is distinct from 'object' or p_names-array['first_name','last_name']<>'{}'::jsonb
+      or jsonb_typeof(p_names->'first_name') is distinct from 'string' or jsonb_typeof(p_names->'last_name') is distinct from 'string'
       or jsonb_typeof(p_identity) is distinct from 'object' or p_identity-array['fingerprint','encrypted_number']<>'{}'::jsonb
       or not(p_identity ?& array['fingerprint','encrypted_number'])
       or p_id_front-array['stored_sha256','content_sha256','size']<>'{}'::jsonb
@@ -718,7 +705,7 @@ begin
   if k.status<>'started' then
     return jsonb_build_object('status',k.status,'submission_id',k.submission_id,'reused',true); end if;
   now_at:=clock_timestamp();
-  if p_outcome='not_finished' then
+  if p_outcome='not_finished' or k.expires_at<=now_at then
     update private.identity_checks set status='not_finished',finished_at=now_at,reasons=p_reasons,provider_delete_due=now_at
       where id=k.id;
     return jsonb_build_object('status','not_finished','submission_id',null);
@@ -733,6 +720,9 @@ begin
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(s.identity_hmac,2701));
   select array_agg(r order by r) into found_reasons from (select distinct r from unnest(p_reasons
     ||case p_outcome when 'declined' then array['provider_declined'] when 'in_review' then array['provider_in_review'] else '{}'::text[] end
+    ||case when exists(select 1 from private.identity_submission_names n where n.submission_id=s.id
+      and n.legal_first_name=p_names->>'first_name' and n.legal_last_name=p_names->>'last_name') then '{}'::text[]
+      else array['names_differ'] end
     ||case when exists(select 1 from private.banned_identities b where b.identity_hmac=s.identity_hmac
       and b.retain_until>clock_timestamp()) then array['banned'] else '{}'::text[] end
     ||case when exists(select 1 from private.accepted_identity_facts f where f.identity_hmac=s.identity_hmac
@@ -752,22 +742,22 @@ begin
   end if;
   return jsonb_build_object('status',(select x.status from private.identity_checks x where x.id=k.id),'submission_id',s.id);
 end$function$;
-alter function internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,integer) owner to postgres;
-revoke all on function internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,integer) from public, anon, authenticated, service_role;
-grant execute on function internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,integer) to service_role;
+alter function internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer) owner to postgres;
+revoke all on function internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer) from public, anon, authenticated, service_role;
+grant execute on function internal.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer) to service_role;
 
 CREATE OR REPLACE FUNCTION api.complete_identity_check(p_check uuid, p_session_id uuid, p_outcome text,
   p_reasons text[] DEFAULT '{}'::text[], p_id_front jsonb DEFAULT NULL::jsonb, p_selfie jsonb DEFAULT NULL::jsonb,
-  p_identity jsonb DEFAULT NULL::jsonb, p_risk_score integer DEFAULT NULL::integer)
+  p_identity jsonb DEFAULT NULL::jsonb, p_names jsonb DEFAULT NULL::jsonb, p_risk_score integer DEFAULT NULL::integer)
  RETURNS jsonb
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.complete_identity_check(p_check,p_session_id,p_outcome,p_reasons,p_id_front,p_selfie,p_identity,p_risk_score);
+  select internal.complete_identity_check(p_check,p_session_id,p_outcome,p_reasons,p_id_front,p_selfie,p_identity,p_names,p_risk_score);
 $function$;
-alter function api.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,integer) owner to postgres;
-revoke all on function api.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,integer) from public, anon, authenticated, service_role;
-grant execute on function api.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,integer) to service_role;
+alter function api.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer) owner to postgres;
+revoke all on function api.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer) from public, anon, authenticated, service_role;
+grant execute on function api.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer) to service_role;
 
 -- Partner sessions to delete now (for the 5-minute job). First closes checks
 -- still unfinished an hour after their 24-hour expiry. Each returned session
@@ -862,7 +852,7 @@ begin
   select jsonb_build_object('checks',count(*) filter(where k.status<>'unavailable'),
       'approved',count(*) filter(where k.status='approved'),'with_staff',count(*) filter(where k.status='with_staff'),
       'declined',count(*) filter(where k.status='declined'),
-      'asked_person',count(*) filter(where exists(select 1 from private.frontend_appeals a where a.action_id=k.id)),
+      'asked_person',count(*) filter(where k.asked_at is not null),
       'unavailable',count(*) filter(where k.status='unavailable'))
     into counts from private.identity_checks k where k.created_at>clock_timestamp()-interval '7 days';
   select coalesce(jsonb_agg(jsonb_build_object('from_mode',e.from_mode,'to_mode',e.to_mode,'changed_by',e.changed_by,
@@ -931,24 +921,29 @@ alter function api.set_identity_check_mode(text,text) owner to postgres;
 revoke all on function api.set_identity_check_mode(text,text) from public, anon, authenticated, service_role;
 grant execute on function api.set_identity_check_mode(text,text) to authenticated;
 
--- For a reviewer opening an identity case: its latest automatic check, the
--- reasons it did not pass and the member's "ask a person" request.
+-- For a reviewer holding a current claim on an open identity case: its latest
+-- automatic check, the reasons it did not pass and the member's "ask a
+-- person" request. Logged like the identity review context
+-- (internal.staff_evidence_metadata, routine_review).
 CREATE OR REPLACE FUNCTION internal.get_identity_check_for_case(p_case uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid:=internal.staff_actor('case:claim'); k private.identity_checks;
+declare actor uuid:=internal.staff_actor('evidence:view'); c private.evidence_cases; k private.identity_checks;
 begin
   if p_case is null then raise exception 'identity case required' using errcode='22023'; end if;
-  select x.* into k from private.identity_checks x where x.case_id=p_case and x.status<>'unavailable'
+  select e.* into c from private.evidence_cases e where e.id=p_case and e.kind='kyc' and e.status='open'
+    and e.claimed_by=actor and e.claim_expires_at>clock_timestamp() and e.subject_id<>actor;
+  if not found then raise exception 'one current independent held case required' using errcode='42501'; end if;
+  perform internal.staff_evidence_metadata(c.id,c.claim_generation::text,c.claim_nonce,'routine_review');
+  select x.* into k from private.identity_checks x where x.case_id=c.id and x.status<>'unavailable'
     order by x.created_at desc,x.id desc limit 1;
-  if not found or k.owner_id=actor then return jsonb_build_object('check',null); end if;
+  if k.id is null then return jsonb_build_object('check',null); end if;
   return jsonb_build_object('check',jsonb_build_object('id',k.id,'status',k.status,'submission_id',k.submission_id,
     'reasons',to_jsonb(k.reasons),'created_at',k.created_at,'finished_at',k.finished_at,'declined_at',k.declined_at,
-    'asked_person',(select jsonb_build_object('appeal_id',a.id,'reason',a.reason,'status',a.status,'created_at',a.created_at)
-      from private.frontend_appeals a where a.action_id=k.id and a.kind='identity_check')));
+    'asked_at',k.asked_at,'ask_reason',k.ask_reason));
 end$function$;
 alter function internal.get_identity_check_for_case(uuid) owner to postgres;
 revoke all on function internal.get_identity_check_for_case(uuid) from public, anon, authenticated, service_role;
