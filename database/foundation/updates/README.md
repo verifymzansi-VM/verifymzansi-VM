@@ -241,6 +241,63 @@ command refusing anything but `manual` and a reason with control or direction
 characters; a new check needing a verified phone; and the five-year history
 sweep removing a closed account's checks.
 
+## Privacy exports while a request is in progress, at most 5, every one notified, 21 November 2026
+
+`20261121053224_privacy_export_simple.sql` was applied on 21 November 2026 at
+17:15 UTC (see the applied register). It replaces only
+`internal.export_frontend_privacy_request` (same signature, owner and grants; no
+API, manifest or type change):
+
+- **Only an access request in progress** (identity verified, at the stated
+  revision) can be exported; a completed request can no longer be. A request not
+  in progress is refused with PT409 `privacy_export_not_in_progress`; the other
+  refusals, the staff and second-factor checks and the self-export refusal are
+  as before.
+- **The row lock is `FOR NO KEY UPDATE`** (was `FOR SHARE`): what is new is that
+  parallel exports of one request queue behind each other, so the cap of 5
+  holds. Completing the request (which bumps its revision) already waited for a
+  running export under `FOR SHARE`, and still does. The cap relies on READ
+  COMMITTED (PostgREST's default); staff have no direct SQL. Retention, which
+  minimises only completed or rejected requests, is unchanged.
+- **At most 5 exports per request**: the 6th is refused with PT429
+  `privacy_export_limit`. The website's per-staff rate limit stays.
+- **The member is told about every export**: each adds a bell notice
+  (`privacy_export_made`); the requester's email is still queued once per
+  request. A too large export (PT413) is raised before anything is recorded.
+
+Accepted risks: a dataset-name mismatch the website refuses after the export was
+recorded gives the member one extra notice and uses up one of the 5 places; a
+completed request cannot be exported again (open a new request).
+
+The website words the two new refusals ("Only a request in progress can be
+exported…", "…already been exported 5 times…"); a release without that code
+shows its generic refusal. As usual: apply first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261121053224_privacy_export_simple.check.sql` unchanged
+   in the SQL editor (read only). Continue only if its single row reads "privacy
+   export simple: update not applied; exports recorded: N".
+2. Run the update (waits at most 5 seconds for a lock). The preflight then reads
+   "privacy export simple: already applied; exports recorded: N".
+3. Run `set search_path to "$user", public;` and `../fingerprint.sql`, compare
+   with `../fingerprint.json`, and record it as described above.
+
+The reviewed rollback
+`../rollback/20261121053224_privacy_export_simple.down.sql` (only with the
+owner's decision) refuses (55000) unless the update's body is in place, then
+puts back the previous body byte for byte. Recorded exports and notices stay.
+
+`node --import tsx scripts/test-foundation-privacy-export-simple.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drift and a premature rollback refused;
+apply, rollback and re-apply give the same fingerprints and the rollback
+restores the previous definition exactly; only in-progress, verified access
+requests at their revision; the staff, second-factor and self-export checks; 5
+exports with a notice each and one email, the 6th refused, also with two exports
+racing at 4; a too large export records nothing; completing waits for a running
+export, and an export waiting for a completion is refused.
+
 ## Authority requests: opening a kept identity record, 21 November 2026
 
 `20261121043124_identity_record_disclosure.sql` was applied on 21 November 2026
@@ -6472,6 +6529,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   sha256 starting a720f7d0; preflight sha256 starting 55a780b8; production
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
+- `20261121053224_privacy_export_simple.sql`: applied 2026-11-21 17:15 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #331); update
+  and preflight from the reviewed files at 6824f7ae and checked in the page
+  before running; update sha256 starting e26d63d2; preflight (sha256 starting
+  0e2c7bf3) before "privacy export simple: update not applied; exports recorded:
+  0", after "privacy export simple: already applied; exports recorded: 0";
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
 - `20261121094003_automatic_identity_checks.sql`: pending; section Automatic ID
   checks by an independent verification partner
 
