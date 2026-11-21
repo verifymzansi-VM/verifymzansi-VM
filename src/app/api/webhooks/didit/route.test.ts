@@ -2,14 +2,14 @@
 import { createHmac } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { verifyDiditWebhookSignature as verifyDiditWebhook } from "./didit-webhook";
-import { POST as handleDiditWebhook } from "@/app/api/webhooks/didit/route";
-import { recordIdentityCheckResult } from "./identity-check-result";
-import { checkRateLimit } from "../utils/rate-limit";
+import { verifyDiditWebhookSignature as verifyDiditWebhook } from "@/lib/foundation/didit-webhook";
+import { POST as handleDiditWebhook } from "./route";
+import { recordIdentityCheckResult } from "@/lib/foundation/identity-check-result";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 vi.mock("server-only", () => ({}));
-vi.mock("./identity-check-result", () => ({ recordIdentityCheckResult: vi.fn() }));
-vi.mock("./service-api", () => ({ createFoundationServiceApi: vi.fn(() => ({})) }));
-vi.mock("../utils/rate-limit", () => ({
+vi.mock("@/lib/foundation/identity-check-result", () => ({ recordIdentityCheckResult: vi.fn() }));
+vi.mock("@/lib/foundation/service-api", () => ({ createFoundationServiceApi: vi.fn(() => ({})) }));
+vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: vi.fn(),
   getClientIp: () => "198.51.100.1",
 }));

@@ -12,7 +12,7 @@ import { createLogger } from "../utils/logger";
 const log = createLogger("DiditWebhook");
 
 /** Didit's recommended window for X-Timestamp, in seconds. */
-export const DIDIT_WEBHOOK_WINDOW_S = 300;
+const DIDIT_WEBHOOK_WINDOW_S = 300;
 
 /**
  * True when the body carries Didit's signature: X-Signature, the HMAC-SHA256

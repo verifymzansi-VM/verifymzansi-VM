@@ -12,7 +12,7 @@ import { IDENTITY_CHECK_FRAME_ORIGIN } from "../verification/identity-check-fram
 const API = "https://verification.didit.me";
 const TIMEOUT_MS = 10_000;
 /** A larger photo is refused (the verification limit). */
-export const DIDIT_IMAGE_LIMIT = 5 * 1024 * 1024;
+const DIDIT_IMAGE_LIMIT = 5 * 1024 * 1024;
 
 export type DiditConfig = { apiKey: string; workflowId: string };
 /** Why a check could not start: the database pause reasons. */

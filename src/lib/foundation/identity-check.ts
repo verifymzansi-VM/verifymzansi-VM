@@ -32,7 +32,7 @@ const route = z.object({ route: z.enum(["manual", "automatic"]) });
 
 /** Refused photo uploads while the automatic route is open, so its decline
  * and the one "ask a person" cannot be bypassed through the manual route. */
-export const AUTOMATIC_CHECK_MESSAGE =
+const AUTOMATIC_CHECK_MESSAGE =
   "Use the ID check on the Get verified page to verify your identity.";
 
 export async function refuseWhileAutomaticCheckOpen(api: FoundationAuthenticatedApi) {

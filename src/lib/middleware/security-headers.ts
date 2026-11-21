@@ -132,7 +132,7 @@ export const IDENTITY_CHECK_PERMISSIONS_POLICY = DEFAULT_PERMISSIONS_POLICY.repl
 );
 
 /** The page that embeds the automatic ID check. */
-export function isIdentityCheckPage(pathname: string) {
+function isIdentityCheckPage(pathname: string) {
   return pathname === "/verification" || pathname.startsWith("/verification/");
 }
 
