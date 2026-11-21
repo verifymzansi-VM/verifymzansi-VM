@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 import { uuidSchema } from "@/lib/validations/shared";
+import { hasDatabaseReason } from "@/lib/foundation/error-reasons";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { privacyRevision } from "@/lib/foundation/privacy-requests";
 import {
@@ -28,8 +29,9 @@ const FOUNDATION_EXPORT_DATASET_COUNT = 42;
  *
  * Build the complete export of a data subject's records as a download.
  * Needs dsar:manage, a second factor verified in the last 15 minutes, and a
- * verified requester identity. Nothing is stored: the file goes straight to
- * the staff member, who sends it to the requester.
+ * verified access request in progress (at most 5 exports per request). Nothing
+ * is stored: the file goes straight to the staff member, who sends it to the
+ * requester; the database records the export and tells the member.
  */
 export async function POST(request: NextRequest) {
   return handleFoundationOwnerRoute<{ request_id: string }>({
@@ -66,6 +68,16 @@ export async function POST(request: NextRequest) {
         throw new FoundationStaffCommandError(
           413,
           "The export is too large for a direct download. Nothing was exported."
+        );
+      if (hasDatabaseReason(rpc.error, "privacy_export_not_in_progress"))
+        throw new FoundationStaffCommandError(
+          409,
+          "Only a request in progress can be exported. Open a new access request to export again. Nothing was exported."
+        );
+      if (hasDatabaseReason(rpc.error, "privacy_export_limit"))
+        throw new FoundationStaffCommandError(
+          429,
+          "This request has already been exported 5 times, the most allowed. Open a new access request to export again. Nothing was exported."
         );
       const date = z.iso.datetime({ offset: true });
       const result = await settleStaffCommand(

@@ -80,6 +80,60 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Privacy exports while a request is in progress, at most 5, every one notified, 21 November 2026
+
+`20261121053224_privacy_export_simple.sql` is pending (see the applied
+register). It replaces only `internal.export_frontend_privacy_request` (same
+signature, owner and grants; no API, manifest or type change):
+
+- **Only an access request in progress** (identity verified, at the stated
+  revision) can be exported; a completed request can no longer be. A request not
+  in progress is refused with PT409 `privacy_export_not_in_progress`; the other
+  refusals, the staff and second-factor checks and the self-export refusal are
+  as before.
+- **The row lock is `FOR NO KEY UPDATE`** (was `FOR SHARE`): parallel exports of
+  one request run one at a time, and completing the request (which bumps its
+  revision) waits for a running export. Retention, which minimises only
+  completed or rejected requests, is unchanged.
+- **At most 5 exports per request**: the 6th is refused with PT429
+  `privacy_export_limit`. The website's per-staff rate limit stays.
+- **The member is told about every export**: each adds a bell notice
+  (`privacy_export_made`); the requester's email is still queued once per
+  request. A too large export (PT413) is raised before anything is recorded.
+
+Accepted risks: a dataset-name mismatch the website refuses after the export was
+recorded gives the member one extra notice; a completed request cannot be
+exported again (open a new request).
+
+The website words the two new refusals ("Only a request in progress can be
+exported…", "…already been exported 5 times…"); a release without that code
+shows its generic refusal. As usual: apply first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261121053224_privacy_export_simple.check.sql` unchanged
+   in the SQL editor (read only). Continue only if its single row reads "privacy
+   export simple: update not applied; exports recorded: N".
+2. Run the update (waits at most 5 seconds for a lock). The preflight then reads
+   "privacy export simple: already applied; exports recorded: N".
+3. Run `set search_path to "$user", public;` and `../fingerprint.sql`, compare
+   with `../fingerprint.json`, and record it as described above.
+
+The reviewed rollback
+`../rollback/20261121053224_privacy_export_simple.down.sql` (only with the
+owner's decision) refuses (55000) unless the update's body is in place, then
+puts back the previous body byte for byte. Recorded exports and notices stay.
+
+`node --import tsx scripts/test-foundation-privacy-export-simple.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; drift and a premature rollback refused;
+apply, rollback and re-apply give the same fingerprints and the rollback
+restores the previous definition exactly; only in-progress, verified access
+requests at their revision; the staff, second-factor and self-export checks; 5
+exports with a notice each and one email, the 6th refused, also with two exports
+racing at 4; a too large export records nothing; completing waits for a running
+export, and an export waiting for a completion is refused.
+
 ## Staff operations health and a last-run record for every scheduled job, 20 November 2026
 
 `20261120163500_staff_operations_health.sql` was applied on 21 November 2026 at
@@ -6193,5 +6247,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   health: already applied; jobs with a recorded run: 0 of 17"; production
   fingerprint after it (fingerprint.sql at cd725fb9) matched the full replay
   (except the known schema grant difference)
+
+- `20261121053224_privacy_export_simple.sql`: pending
 
 <!-- applied-register:end -->
