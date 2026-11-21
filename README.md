@@ -309,6 +309,24 @@ secret for production:
 pnpm wrangler secret put OZOW_WEBHOOK_SECRET
 ```
 
+### Automatic ID check settings (Didit)
+
+Automatic ID checks stay off while the staff setting in Verify accounts is
+"manual" (its starting value). Before choosing another setting, the owner
+creates these in the Didit Business Console and stores them as Worker settings
+(never in the repository):
+
+```bash
+pnpm wrangler secret put DIDIT_API_KEY         # scopes: create sessions, read decisions, delete sessions
+pnpm wrangler secret put DIDIT_WEBHOOK_SECRET  # the webhook's secret (v3, status.updated, to /api/webhooks/didit)
+pnpm wrangler secret put DIDIT_WORKFLOW_ID     # the published workflow's id
+```
+
+Without the key or the workflow id, a started check pauses automatic checks for
+an hour (one alert to the support address) and members take their photos on the
+page instead. The 5-minute retention job deletes due Didit sessions only when
+the key is set.
+
 ## Key Commands
 
 | Command                        | Purpose                                              |

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ensureCsrfCookie, CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import { env } from "@/lib/config/env";
+import { IDENTITY_CHECK_FRAME_ORIGIN } from "@/lib/verification/identity-check-frame";
 
 // -- Nonce & CSP helpers -----------------------------------------------------
 
@@ -16,7 +17,13 @@ export function shouldUseStrictNonceCsp(): boolean {
 /** Build a nonce-based Content-Security-Policy string. */
 export function buildCsp(
   nonce: string | null,
-  options?: { allowDevWebSocket?: boolean; allowDevEval?: boolean; enforceHttps?: boolean }
+  options?: {
+    allowDevWebSocket?: boolean;
+    allowDevEval?: boolean;
+    enforceHttps?: boolean;
+    /** The verification page may frame the automatic ID check. */
+    allowIdentityCheckFrame?: boolean;
+  }
 ): string {
   const supabaseOrigin = env("NEXT_PUBLIC_SUPABASE_URL") ?? "";
   const cdnOrigin = env("R2_PUBLIC_URL") ?? "";
@@ -90,7 +97,7 @@ export function buildCsp(
     connectSrc,
     // blob: lets staff read decrypted PDF evidence in an iframe (KYC and CIPC
     // case files are fetched, then shown from a same-origin blob URL).
-    "frame-src https://challenges.cloudflare.com blob:",
+    `frame-src https://challenges.cloudflare.com blob:${options?.allowIdentityCheckFrame ? ` ${IDENTITY_CHECK_FRAME_ORIGIN}` : ""}`,
     "form-action 'self'",
     "worker-src 'self' blob:",
   ];
@@ -112,6 +119,22 @@ export const DEFAULT_PERMISSIONS_POLICY =
   // another route first, so camera must be allowed for same-origin documents up
   // front or the browser blocks getUserMedia without showing a prompt.
   "camera=(self), microphone=(), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=()";
+
+/**
+ * The verification page also lends the camera (only the camera) to the
+ * automatic ID check's frame. Both policies are bound to the document that
+ * was loaded, so the frame works only when the verification page itself was
+ * loaded as a document, not reached by an in-app navigation.
+ */
+export const IDENTITY_CHECK_PERMISSIONS_POLICY = DEFAULT_PERMISSIONS_POLICY.replace(
+  "camera=(self)",
+  `camera=(self "${IDENTITY_CHECK_FRAME_ORIGIN}")`
+);
+
+/** The page that embeds the automatic ID check. */
+export function isIdentityCheckPage(pathname: string) {
+  return pathname === "/verification" || pathname.startsWith("/verification/");
+}
 
 // -- Header application -----------------------------------------------------
 
@@ -244,10 +267,12 @@ export function withSecurityHeaders(
   const nonce = shouldUseStrictNonceCsp() ? generateNonce() : null;
   const isSecureRequest =
     request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
+  const identityCheckPage = isIdentityCheckPage(pathname);
   const csp = buildCsp(nonce, {
     allowDevWebSocket: process.env.NODE_ENV !== "production",
     allowDevEval: process.env.NODE_ENV === "development",
     enforceHttps: isSecureRequest,
+    allowIdentityCheckFrame: identityCheckPage,
   });
 
   // Cacheable asset routes should not receive a CSRF bootstrap cookie from middleware.
@@ -347,7 +372,11 @@ export function withSecurityHeaders(
     response.headers.set(headerName, headerValue);
   }
 
-  applySecurityHeaders(response, csp);
+  applySecurityHeaders(
+    response,
+    csp,
+    identityCheckPage ? IDENTITY_CHECK_PERMISSIONS_POLICY : DEFAULT_PERMISSIONS_POLICY
+  );
   if (
     shouldRelaxDocumentCache(request.nextUrl.pathname) &&
     !response.headers.has("Cache-Control") &&

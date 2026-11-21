@@ -193,6 +193,11 @@ service = "verifymzansi-offload"
 #   pnpm wrangler secret put RATE_LIMITER_API_KEY
 # Optional (the app keeps working and logs instead when unset):
 #   pnpm wrangler secret put PAYMENT_ALERT_EMAILS   # staff payment alert addresses
+#   # Automatic ID checks (src/lib/foundation/didit-client.ts); never in code.
+#   # Unset, automatic checks pause and members take photos on the page:
+#   pnpm wrangler secret put DIDIT_API_KEY         # create/read/delete sessions only
+#   pnpm wrangler secret put DIDIT_WEBHOOK_SECRET  # the status.updated webhook's secret
+#   pnpm wrangler secret put DIDIT_WORKFLOW_ID     # the published workflow's id
 #   # Only when turning on API refunds (OZOW_API_REFUNDS_ENABLED); never in code:
 #   pnpm wrangler secret put OZOW_REFUND_CLIENT_ID      # Ozow API key with the refunds scope
 #   pnpm wrangler secret put OZOW_REFUND_CLIENT_SECRET

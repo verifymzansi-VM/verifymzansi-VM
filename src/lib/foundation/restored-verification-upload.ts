@@ -29,6 +29,7 @@ import { createLogger } from "../utils/logger";
 import { logRequestFailure } from "../utils/request-failure";
 import { foundationNoStore } from "@/lib/foundation/owner-route";
 import { checkCaptureToken, sessionChannel, type CaptureBinding } from "./capture-token";
+import { refuseWhileAutomaticCheckOpen } from "./identity-check";
 const log = createLogger("RestoredIdentityUpload");
 const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 const doneSchema = z.object({
@@ -299,6 +300,7 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
         limit.degraded ? 503 : 429,
         PHOTO_LIMIT_MESSAGES[limit.degraded ? "busy" : "limited"]
       );
+    await refuseWhileAutomaticCheckOpen(caller.api);
     const form = await readBoundedRequestFormData(request, 5 * 1024 * 1024 + 16384);
     const allowed = [
       "file",
