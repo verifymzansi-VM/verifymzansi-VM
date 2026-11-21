@@ -66,6 +66,12 @@ const EXPORT_LATER = [
   // 20261120045404_package_add_slots.sql (the request's kind, package and days)
   "e543b105fe264d5a683b5c570bf68cb5",
 ];
+/** The grant after later reviewed updates. */
+const GRANT_LATER = [
+  ADDED[GRANT],
+  // 20261121181953_one_person_admin_mode.sql (up to 25; single-administrator mode)
+  "6d72e0bc6a5f2bee76a43563f19278ac",
+];
 const LIFECYCLE = "internal.run_post_lifecycle(integer)";
 const LIFECYCLE_BEFORE = "cb5770e3e71e9e6ed31d1eff3e06e3fc";
 const LIFECYCLE_AFTER = "9496376abcf65c764efe02d4971bba5e";
@@ -815,7 +821,8 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     applySteps(database, later);
     await check("later updates keep the house slots", () => {
       for (const [signature, md5] of Object.entries(ADDED))
-        assert.equal(bodyMd5(signature), md5, signature);
+        if (signature !== GRANT) assert.equal(bodyMd5(signature), md5, signature);
+      assert.ok(GRANT_LATER.includes(bodyMd5(GRANT)), bodyMd5(GRANT));
       // 20261119172135_post_views_and_likes.sql adds the like datasets to the
       // export; house_slot_events stays.
       assert.ok(EXPORT_LATER.includes(bodyMd5(EXPORT)), bodyMd5(EXPORT));

@@ -16,6 +16,7 @@ declare
   video_limit integer;
   rev integer;
   merged jsonb;
+  self_approved boolean;
 begin
   perform internal.assert_post_revision(p_expected_revision);
   if p_decision is null or p_decision not in ('approve', 'reject')
@@ -35,7 +36,14 @@ begin
     raise exception 'post is not awaiting moderation' using errcode = '22023';
   end if;
   actor := internal.staff_actor('post:moderate'); -- authority after any lock wait
-  if post.owner_id = actor then raise exception 'self-review is not allowed' using errcode = '42501'; end if;
+  -- Single-administrator mode (internal.queue_conflict): the only ID-verified
+  -- staff member may approve, never reject, their own post funded by one of
+  -- their house slots. post:moderate already needs an authenticator code from
+  -- the last 15 minutes (internal.staff_actor, requires_recent_mfa).
+  self_approved := post.owner_id = actor;
+  if self_approved and (p_decision <> 'approve' or internal.queue_conflict(actor, post.id, null)) then
+    raise exception 'self-review is not allowed' using errcode = '42501';
+  end if;
   perform internal.consume_queue_claim('post', post.id, actor, p_claim_generation, p_claim_nonce);
   if post.revision <> p_expected_revision then raise exception 'post changed since review' using errcode = 'PT409'; end if;
   if p_decision='approve' then
@@ -87,9 +95,10 @@ begin
     perform internal.assert_posting_verification_ready(coalesce(original_id,post.id),true);
   end if;
   perform internal.staff_actor('post:moderate'); -- authority after claim-row and media waits
-  insert into private.moderation_log (post_id, edit_id, staff_id, decision, post_revision, reason, price_only)
+  insert into private.moderation_log (post_id, edit_id, staff_id, decision, post_revision, reason, price_only, self_approved)
   values (coalesce(original_id, post.id), case when original_id is not null then post.id end, actor, p_decision,
-    p_expected_revision, nullif(btrim(coalesce(p_reason, '')), ''), coalesce((merged->>'price_only')::boolean, false));
+    p_expected_revision, nullif(btrim(coalesce(p_reason, '')), ''), coalesce((merged->>'price_only')::boolean, false),
+    self_approved);
   if original_id is not null then
     return jsonb_build_object('id', post.id, 'edit_of', original_id,
       'status', case when p_decision = 'approve' then 'merged' else 'rejected' end, 'post_revision', rev,
