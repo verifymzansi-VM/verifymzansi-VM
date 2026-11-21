@@ -123,10 +123,23 @@ describe("decisions, deletions and photos", () => {
       "https://images.example/a.jpg",
       "https://didit.me.evil.example/a.jpg",
       "https://evil-didit.me/a.jpg",
+      "https://s3.amazonaws.com/a.jpg",
+      "https://bucket.s3.a.b.c.amazonaws.com/a.jpg",
+      "https://execute-api.amazonaws.com/a.jpg",
       "not a link",
     ])
       await expect(fetchDiditImage(url)).rejects.toMatchObject({ reason: "outage" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("checks a long hostile host name quickly (no pattern backtracking)", async () => {
+    const hostile = `a${"-.s3-".repeat(2000)}${"--".repeat(5000)}.example`;
+    const started = performance.now();
+    await expect(fetchDiditImage(`https://${hostile}/a.jpg`)).rejects.toMatchObject({
+      detail: "media_host",
+    });
+    expect(performance.now() - started).toBeLessThan(200);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("stops reading a photo at the size limit, declared or not", async () => {

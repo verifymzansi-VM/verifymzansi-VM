@@ -151,8 +151,15 @@ export async function deleteDiditSession(
  * real host (a refused host fails as a temporary error, "media_host", so the
  * result is recorded once the list is corrected).
  */
-const MEDIA_HOST =
-  /^(?:[a-z0-9-]+\.)*didit\.me$|^[a-z0-9.-]+\.s3(?:[.-][a-z0-9-]+)*\.amazonaws\.com$/;
+function allowedMediaHost(hostname: string) {
+  // Plain suffix checks (no pattern matching): Didit's own domain, or an
+  // Amazon S3 host ("<bucket>.s3.amazonaws.com", "<bucket>.s3.<region>.amazonaws.com").
+  if (hostname === "didit.me" || hostname.endsWith(".didit.me")) return true;
+  if (!hostname.endsWith(".amazonaws.com")) return false;
+  const labels = hostname.split(".");
+  const s3 = labels.indexOf("s3");
+  return s3 > 0 && s3 >= labels.length - 4;
+}
 
 const stopReading = (cancelled: Promise<void>) =>
   cancelled.catch(() => {
@@ -173,7 +180,7 @@ export async function fetchDiditImage(url: string) {
     parsed.username ||
     parsed.password ||
     parsed.port ||
-    !MEDIA_HOST.test(parsed.hostname)
+    !allowedMediaHost(parsed.hostname)
   )
     throw new DiditError("outage", undefined, "media_host");
   let response: Response;
