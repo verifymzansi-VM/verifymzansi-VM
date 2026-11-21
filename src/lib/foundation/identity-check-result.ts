@@ -3,13 +3,18 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type { FoundationServiceApi } from "./service-api";
 import {
+  DiditError,
   fetchDiditDecision,
   fetchDiditImage,
   type DiditConfig,
   type DiditDecision,
 } from "./didit-client";
 import { sessionMoved } from "./identity-check-context";
-import { cleanEvidence, verificationSecret } from "./verification-runtime";
+import {
+  cleanEvidence,
+  FoundationVerificationError,
+  verificationSecret,
+} from "./verification-runtime";
 import { processIdentityNumber } from "../domains/verification/identity-processing";
 import { isUnder18FromSaId, validateSaIdChecksum } from "../utils/sa-id-validation";
 import { detectMimeFromMagicBytes } from "../utils/file-validation";
@@ -82,13 +87,28 @@ const stored = /^evidence\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/;
 const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 
 /** A photo copied into our own encrypted storage, as the manual route stores it. */
+/**
+ * A failure that the same delivery can never get past (the partner should
+ * stop retrying): the reason is a short code for the logs.
+ */
+export class PermanentResultError extends Error {
+  override name = "PermanentResultError";
+  constructor(readonly reason: "decision_not_found" | "photo_unsupported" | "evidence_mismatch") {
+    super(`Identity check result cannot be recorded: ${reason}`);
+  }
+}
+
 async function storePhoto(key: string, url: string, selfie: boolean) {
   const original = await fetchDiditImage(url);
   const mime = detectMimeFromMagicBytes(original) ?? "application/octet-stream";
   const bytes = await cleanEvidence(
     new File([new Uint8Array(original)], "photo", { type: mime }),
     selfie
-  );
+  ).catch((error: unknown) => {
+    if (error instanceof FoundationVerificationError && [400, 413].includes(error.status))
+      throw new PermanentResultError("photo_unsupported");
+    throw error;
+  });
   const encrypted = await putImmutableR2Bytes(
     process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
     key,
@@ -96,7 +116,7 @@ async function storePhoto(key: string, url: string, selfie: boolean) {
   );
   const actual = await decryptData(encrypted);
   if (actual.length !== bytes.length || !timingSafeEqual(actual, bytes))
-    throw new Error("Stored evidence does not match the check");
+    throw new PermanentResultError("evidence_mismatch");
   return {
     content: sha256(bytes),
     receipt: {
@@ -114,7 +134,13 @@ export async function recordIdentityCheckResult(
   config: DiditConfig,
   sessionId: string
 ): Promise<IdentityCheckResult> {
-  const decision: DiditDecision = await fetchDiditDecision(config, sessionId);
+  const decision: DiditDecision = await fetchDiditDecision(config, sessionId).catch(
+    (error: unknown) => {
+      if (error instanceof DiditError && error.status === 404)
+        throw new PermanentResultError("decision_not_found");
+      throw error;
+    }
+  );
   if (decision.session_id !== sessionId) throw new Error("Identity check session changed");
   // A session this site did not start (for example a test in the partner's
   // console) carries no check id: nothing to record.

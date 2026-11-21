@@ -12,7 +12,7 @@ import { IDENTITY_CHECK_FRAME_ORIGIN } from "../verification/identity-check-fram
 const API = "https://verification.didit.me";
 const TIMEOUT_MS = 10_000;
 /** A larger photo is refused (the verification limit). */
-const DIDIT_IMAGE_LIMIT = 5 * 1024 * 1024;
+const IMAGE_LIMIT = 5 * 1024 * 1024;
 
 export type DiditConfig = { apiKey: string; workflowId: string };
 /** Why a check could not start: the database pause reasons. */
@@ -22,7 +22,9 @@ export class DiditError extends Error {
   override name = "DiditError";
   constructor(
     readonly reason: DiditUnavailableReason,
-    readonly status?: number
+    readonly status?: number,
+    /** A short code for the logs (never member data). */
+    readonly detail?: string
   ) {
     super(`Identity check partner unavailable: ${reason}`);
   }
@@ -142,18 +144,63 @@ export async function deleteDiditSession(
   if (!response.ok && response.status !== 404) return refused(response);
 }
 
-/** A photo from the decision's short-lived signed link (https only). */
+/**
+ * Hosts the decision's photo links may point to. Didit's documentation shows
+ * only a placeholder ("<media-host>"), so this allows Didit's own domain and
+ * Amazon S3 bucket hosts; the sandbox check before switch-on confirms the
+ * real host (a refused host fails as a temporary error, "media_host", so the
+ * result is recorded once the list is corrected).
+ */
+const MEDIA_HOST =
+  /^(?:[a-z0-9-]+\.)*didit\.me$|^[a-z0-9.-]+\.s3(?:[.-][a-z0-9-]+)*\.amazonaws\.com$/;
+
+const stopReading = (cancelled: Promise<void>) =>
+  cancelled.catch(() => {
+    // Only stops the download; the refusal that follows is what matters.
+  });
+
+/** A photo from the decision's short-lived signed link: https, an allowed
+ * host, no user name or password in the link, read up to the size limit. */
 export async function fetchDiditImage(url: string) {
-  if (!/^https:\/\/[^/?#]+\//.test(url)) throw new DiditError("outage");
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new DiditError("outage", undefined, "media_url");
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username ||
+    parsed.password ||
+    parsed.port ||
+    !MEDIA_HOST.test(parsed.hostname)
+  )
+    throw new DiditError("outage", undefined, "media_host");
   let response: Response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), redirect: "error" });
+    response = await fetch(parsed, { signal: AbortSignal.timeout(TIMEOUT_MS), redirect: "error" });
   } catch {
-    throw new DiditError("outage");
+    throw new DiditError("outage", undefined, "media_fetch");
   }
-  const declared = Number(response.headers.get("content-length") ?? "0");
-  if (!response.ok || declared > DIDIT_IMAGE_LIMIT) throw new DiditError("outage", response.status);
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length === 0 || bytes.length > DIDIT_IMAGE_LIMIT) throw new DiditError("outage");
-  return bytes;
+  if (!response.ok || !response.body)
+    throw new DiditError("outage", response.status, "media_fetch");
+  if (Number(response.headers.get("content-length") ?? "0") > IMAGE_LIMIT) {
+    await stopReading(response.body.cancel());
+    throw new DiditError("outage", response.status, "media_size");
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > IMAGE_LIMIT) {
+      await stopReading(reader.cancel());
+      throw new DiditError("outage", response.status, "media_size");
+    }
+    chunks.push(value);
+  }
+  if (size === 0) throw new DiditError("outage", response.status, "media_size");
+  return Buffer.concat(chunks);
 }

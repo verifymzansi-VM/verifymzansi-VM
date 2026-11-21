@@ -5,6 +5,7 @@ import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationServiceApi } from "./service-api";
 import {
   handleIdentityCheckAsk,
+  handleIdentityCheckAvailability,
   handleIdentityCheckStart,
   pauseAutomaticChecks,
   refuseWhileAutomaticCheckOpen,
@@ -13,11 +14,13 @@ import { createDiditSession, DiditError } from "./didit-client";
 import { networkHash } from "./identity-check-context";
 import { FoundationVerificationError } from "./verification-runtime";
 import { sendStaffOperationsEmail } from "../services/email";
+import { recordIdentityCheckResult } from "./identity-check-result";
 vi.mock("server-only", () => ({}));
 vi.mock("./didit-client", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   createDiditSession: vi.fn(),
 }));
+vi.mock("./identity-check-result", () => ({ recordIdentityCheckResult: vi.fn() }));
 vi.mock("../services/email", () => ({ sendStaffOperationsEmail: vi.fn() }));
 vi.mock("./service-api", () => ({ createFoundationServiceApi: () => ({ rpc: serviceRpc }) }));
 // The shared owner route (origin, CSRF, rate limit, session) is tested on its
@@ -48,6 +51,7 @@ const session = "33333333-3333-4333-8333-333333333333";
 const rpc = vi.fn();
 const serviceRpc = vi.fn();
 const api = { rpc } as unknown as FoundationAuthenticatedApi;
+const noCheck = { route: "automatic", reason: null, check: null };
 const post = (path: string, body: unknown = {}) =>
   new NextRequest(`https://verifymzansi.com${path}`, {
     method: "POST",
@@ -151,9 +155,17 @@ describe("starting a check", () => {
   });
   const memberRpc = (first: unknown) =>
     rpc.mockImplementation(async (name: string) => {
+      if (name === "get_identity_check_availability") return { data: noCheck, error: null };
       if (name !== "start_my_identity_check") throw new Error(`unexpected ${name}`);
       return first;
     });
+
+  it("makes the start record before the partner session, so a missing secret creates nothing there", async () => {
+    memberRpc(started());
+    vi.stubEnv("HMAC_SECRET", "");
+    await expect(start()).rejects.toBeInstanceOf(FoundationVerificationError);
+    expect(createDiditSession).not.toHaveBeenCalled();
+  });
 
   it("creates the partner session with the check id only, and records where the member started", async () => {
     memberRpc(started());
@@ -213,6 +225,48 @@ describe("starting a check", () => {
       p_reason: "not_configured",
     });
     expect(createDiditSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("a check whose result was lost", () => {
+  const availability = (minutesAgo: number, status = "started") => ({
+    route: "automatic",
+    reason: null,
+    check: {
+      id: check,
+      status,
+      created_at: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+      session_id: status === "started" ? session : null,
+    },
+  });
+  const read = () =>
+    handleIdentityCheckAvailability(
+      new NextRequest("https://verifymzansi.com/api/verification/identity-check")
+    ) as unknown as Promise<{ data?: { check?: { status: string } } }>;
+
+  it("is looked at again when the member asks after 10 minutes, then read again", async () => {
+    rpc
+      .mockResolvedValueOnce({ data: availability(11), error: null })
+      .mockResolvedValueOnce({ data: availability(11, "approved"), error: null });
+    vi.mocked(recordIdentityCheckResult).mockResolvedValue({ recorded: true, status: "approved" });
+    expect((await read()).data?.check?.status).toBe("approved");
+    expect(recordIdentityCheckResult).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      expect.objectContaining({ apiKey: "fixture-key" }),
+      session
+    );
+  });
+
+  it("is left alone when younger than 10 minutes, finished, or when looking again fails", async () => {
+    rpc.mockResolvedValue({ data: availability(5), error: null });
+    expect((await read()).data?.check?.status).toBe("started");
+    rpc.mockResolvedValue({ data: availability(60, "declined"), error: null });
+    await read();
+    expect(recordIdentityCheckResult).not.toHaveBeenCalled();
+    rpc.mockResolvedValue({ data: availability(60), error: null });
+    vi.mocked(recordIdentityCheckResult).mockRejectedValueOnce(new Error("partner"));
+    expect((await read()).data?.check?.status).toBe("started");
+    expect(recordIdentityCheckResult).toHaveBeenCalledTimes(1);
   });
 });
 

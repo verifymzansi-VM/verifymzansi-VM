@@ -108,18 +108,45 @@ describe("decisions, deletions and photos", () => {
     await expect(deleteDiditSession(config, session)).rejects.toBeInstanceOf(DiditError);
   });
 
-  it("fetches a photo over https only, within the size limit, without our key", async () => {
+  it("fetches a photo from an allowed host only, without our key", async () => {
     fetchMock.mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
-    expect(await fetchDiditImage("https://images.example/a.jpg?sig=1")).toEqual(
+    expect(await fetchDiditImage("https://media.didit.me/a.jpg?sig=1")).toEqual(
       Buffer.from([1, 2, 3])
     );
     expect(fetchMock.mock.calls[0]![1].headers).toBeUndefined();
-    await expect(fetchDiditImage("http://images.example/a.jpg")).rejects.toBeInstanceOf(DiditError);
+    fetchMock.mockResolvedValueOnce(new Response(new Uint8Array([4]), { status: 200 }));
+    await fetchDiditImage("https://bucket.s3.eu-west-1.amazonaws.com/a.jpg?X-Amz-Signature=1");
+    for (const url of [
+      "http://media.didit.me/a.jpg",
+      "https://user:pass@media.didit.me/a.jpg",
+      "https://media.didit.me:8443/a.jpg",
+      "https://images.example/a.jpg",
+      "https://didit.me.evil.example/a.jpg",
+      "https://evil-didit.me/a.jpg",
+      "not a link",
+    ])
+      await expect(fetchDiditImage(url)).rejects.toMatchObject({ reason: "outage" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops reading a photo at the size limit, declared or not", async () => {
     fetchMock.mockResolvedValueOnce(
       new Response("x", { status: 200, headers: { "content-length": String(6 * 1024 * 1024) } })
     );
-    await expect(fetchDiditImage("https://images.example/big.jpg")).rejects.toBeInstanceOf(
-      DiditError
-    );
+    await expect(fetchDiditImage("https://media.didit.me/big.jpg")).rejects.toMatchObject({
+      detail: "media_size",
+    });
+    let pulled = 0;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++;
+        controller.enqueue(new Uint8Array(1024 * 1024));
+      },
+    });
+    fetchMock.mockResolvedValueOnce(new Response(endless, { status: 200 }));
+    await expect(fetchDiditImage("https://media.didit.me/stream.jpg")).rejects.toMatchObject({
+      detail: "media_size",
+    });
+    expect(pulled).toBeLessThanOrEqual(8);
   });
 });

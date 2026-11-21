@@ -1,12 +1,19 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FoundationServiceApi } from "./service-api";
-import { fetchDiditDecision, fetchDiditImage, type DiditDecision } from "./didit-client";
+import {
+  DiditError,
+  fetchDiditDecision,
+  fetchDiditImage,
+  type DiditDecision,
+} from "./didit-client";
+import { cleanEvidence, FoundationVerificationError } from "./verification-runtime";
 import { networkHash } from "./identity-check-context";
 import {
   comparableName,
   namesMatch,
   outcomeOf,
+  PermanentResultError,
   recordIdentityCheckResult,
 } from "./identity-check-result";
 import { putImmutableR2Bytes } from "../services/storage";
@@ -272,6 +279,28 @@ describe("recording a result", () => {
     });
     expect(completion().p_outcome).toBe("not_finished");
     expect(fetchDiditImage).not.toHaveBeenCalled();
+  });
+
+  it("names the failures a repeated delivery can never get past", async () => {
+    vi.mocked(fetchDiditDecision).mockRejectedValueOnce(new DiditError("not_configured", 404));
+    await expect(recordIdentityCheckResult(service, config, session)).rejects.toEqual(
+      new PermanentResultError("decision_not_found")
+    );
+    vi.mocked(fetchDiditDecision).mockResolvedValue(decision());
+    vi.mocked(cleanEvidence).mockRejectedValueOnce(new FoundationVerificationError(400));
+    await expect(recordIdentityCheckResult(service, config, session)).rejects.toMatchObject({
+      reason: "photo_unsupported",
+    });
+    vi.mocked(putImmutableR2Bytes).mockImplementation(async () => Buffer.from("enc:other"));
+    await expect(recordIdentityCheckResult(service, config, session)).rejects.toMatchObject({
+      reason: "evidence_mismatch",
+    });
+    // A partner or storage outage stays temporary (the webhook asks again).
+    vi.mocked(fetchDiditDecision).mockRejectedValueOnce(new DiditError("outage", 502));
+    await expect(recordIdentityCheckResult(service, config, session)).rejects.toBeInstanceOf(
+      DiditError
+    );
+    expect(rpc).not.toHaveBeenCalledWith("complete_identity_check", expect.anything());
   });
 
   it("reports an unknown check as not recorded, and fails on anything else", async () => {

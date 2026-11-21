@@ -13,6 +13,7 @@ import {
   type DiditUnavailableReason,
 } from "./didit-client";
 import { deviceOfUserAgent, networkHash } from "./identity-check-context";
+import { recordIdentityCheckResult } from "./identity-check-result";
 import { sendStaffOperationsEmail } from "../services/email";
 import { SUPPORT_CONTACT_EMAIL } from "../contact-email";
 import { getClientIp } from "../utils/rate-limit";
@@ -126,7 +127,60 @@ const started = z.object({
   created: z.boolean(),
 });
 
+const availability = route.passthrough().extend({
+  check: z
+    .object({
+      status: z.string(),
+      created_at: z.string(),
+      session_id: z.uuid().nullable(),
+    })
+    .passthrough()
+    .nullable(),
+});
+/** A started check older than this is looked at again when its member asks. */
+const LOOK_AGAIN_AFTER_MS = 10 * 60_000;
+
+async function readAvailability(api: FoundationAuthenticatedApi) {
+  const { data, error } = await api.rpc("get_identity_check_availability", {}, { get: false });
+  if (error) throw error;
+  return availability.parse(data);
+}
+
+/**
+ * The partner retries a webhook only twice. When the member's own page asks
+ * about a check that started more than 10 minutes ago and still has no
+ * result, the server looks at the session once more. Best effort: a failure
+ * leaves the check as it was. Answers the member's availability, read again
+ * when a result was recorded.
+ */
+async function lookAgainIfStale(api: FoundationAuthenticatedApi, now = Date.now()) {
+  const current = await readAvailability(api);
+  const check = current.check;
+  const config = diditConfig();
+  if (
+    !config ||
+    check?.status !== "started" ||
+    !check.session_id ||
+    now - Date.parse(check.created_at) < LOOK_AGAIN_AFTER_MS
+  )
+    return current;
+  try {
+    const result = await recordIdentityCheckResult(
+      createFoundationServiceApi(),
+      config,
+      check.session_id
+    );
+    return result.recorded ? readAvailability(api) : current;
+  } catch (error) {
+    log.warn("Identity check look-again failed", {
+      error: error instanceof Error ? error.name : "unknown",
+    });
+    return current;
+  }
+}
+
 async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest) {
+  await lookAgainIfStale(api);
   const { data, error } = await api.rpc("start_my_identity_check", {}, { get: false });
   if (error) {
     if (error.code === "PT409")
@@ -147,6 +201,13 @@ async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest)
     return new IdentityCheckRefusal(409, "identity_check_paused", UNAVAILABLE);
   };
   if (!config) throw await unavailable("not_configured");
+  // Where the member started (compared with where the partner saw the check):
+  // a keyed hash of the network and the kind of device only. Made before the
+  // partner session, so a missing server secret creates nothing there.
+  const startedFrom = {
+    p_network_hash: networkHash(getClientIp(request)),
+    p_device_kind: deviceOfUserAgent(request.headers.get("user-agent")),
+  };
   let session: Awaited<ReturnType<typeof createDiditSession>>;
   try {
     session = await createDiditSession(config, check.check_id);
@@ -158,10 +219,7 @@ async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest)
     p_check: check.check_id,
     p_session_id: session.sessionId,
     p_session_url: session.url,
-    // Where the member started (compared with where the partner saw the
-    // check): a keyed hash of the network and the kind of device only.
-    p_network_hash: networkHash(getClientIp(request)),
-    p_device_kind: deviceOfUserAgent(request.headers.get("user-agent")),
+    ...startedFrom,
   });
   if (attached.error) throw new Error("Identity check session was not attached");
   return { checkId: check.check_id, url: session.url };
@@ -186,11 +244,7 @@ export function handleIdentityCheckAvailability(request: NextRequest) {
     mutate: false,
     unavailableMessage: "Verification is temporarily unavailable",
     signInMessage: "Sign in to manage verification",
-    command: async (api) => {
-      const { data, error } = await api.rpc("get_identity_check_availability", {}, { get: false });
-      if (error) throw error;
-      return route.passthrough().parse(data);
-    },
+    command: (api) => lookAgainIfStale(api),
     refusal,
   });
 }

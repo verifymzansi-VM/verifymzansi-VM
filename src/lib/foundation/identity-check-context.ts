@@ -41,21 +41,13 @@ export function networkOf(address: string | null | undefined): string | null {
 
 /**
  * The keyed hash (HMAC-SHA256 with HMAC_SECRET, domain-separated) of an
- * address's network, as 64 hex characters. The first character is replaced by
- * the address kind ("4", "6", or "0" when the address cannot be read), so two
- * networks are compared only when they are of the same kind: a browser can
- * reach this site over IPv6 and the partner over IPv4.
+ * address's network, as 64 hex characters. An address that cannot be read
+ * hashes the word "none", which never equals a real network's hash.
  */
 export function networkHash(address: string | null | undefined) {
-  const network = networkOf(address);
-  const digest = createHmac("sha256", verificationSecret("HMAC_SECRET"))
-    .update(`identity-check-network-v1\0${network ?? "none"}`)
+  return createHmac("sha256", verificationSecret("HMAC_SECRET"))
+    .update(`identity-check-network-v1\0${networkOf(address) ?? "none"}`)
     .digest("hex");
-  // Address-kind marker: the database stores only this hash, so the first hex
-  // character carries the kind ("4" IPv4, "6" IPv6, "0" unreadable) in place of
-  // one hash character (252 bits of HMAC remain). sessionMoved compares two
-  // hashes only when their markers are equal and not "0".
-  return (network ? network[0] : "0") + digest.slice(1);
 }
 
 /** Phone or tablet versus computer, from the browser's own description. */
@@ -74,22 +66,21 @@ export function deviceOfPlatform(platform: string | null | undefined): DeviceKin
 }
 
 /**
- * True when the check did not happen on the network and kind of device that
- * started it. The partner's IP analysis is required (fail closed when it is
- * missing or the start was not recorded); networks are compared only when
- * both are known and of the same kind, and the device only when the partner
- * names it.
+ * True unless the partner saw the check on the same network and the same
+ * kind of device that started it. Fails closed (owner rule: a different
+ * network or device means a person looks): a missing IP analysis or start
+ * record, an address that cannot be read on either side, an address of
+ * another kind (IPv6 here, IPv4 there) and a device the partner does not name
+ * all count as moved.
  */
 export function sessionMoved(
   start: { network_hash: string | null; device_kind: string | null },
   seen: { ip_address?: string | null; platform?: string | null } | undefined
 ) {
   if (!seen || !start.network_hash || !start.device_kind) return true;
-  const network = networkHash(seen.ip_address);
-  const device = deviceOfPlatform(seen.platform);
-  const networkMoved =
-    start.network_hash[0] !== "0" &&
-    network[0] === start.network_hash[0] &&
-    network !== start.network_hash;
-  return networkMoved || (device !== null && device !== start.device_kind);
+  if (networkOf(seen.ip_address) === null) return true;
+  return (
+    networkHash(seen.ip_address) !== start.network_hash ||
+    deviceOfPlatform(seen.platform) !== start.device_kind
+  );
 }

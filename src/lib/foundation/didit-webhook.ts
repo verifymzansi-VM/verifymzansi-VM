@@ -4,21 +4,22 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createFoundationServiceApi } from "./service-api";
 import { diditConfig, DiditError } from "./didit-client";
-import { recordIdentityCheckResult } from "./identity-check-result";
+import { PermanentResultError, recordIdentityCheckResult } from "./identity-check-result";
 import { checkRateLimit, getClientIp } from "../utils/rate-limit";
 import { readBoundedRequestText, RequestBodyTooLargeError } from "../utils/request-body";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("DiditWebhook");
 
-/** Didit's recommended window for X-Timestamp, in seconds. */
+/** Didit's recommended window for X-Timestamp (and the body's timestamp), in seconds. */
 const DIDIT_WEBHOOK_WINDOW_S = 300;
 
 /**
  * True when the body carries Didit's signature: X-Signature, the HMAC-SHA256
  * (hex) of the exact body with DIDIT_WEBHOOK_SECRET, or X-Signature-Previous
- * during the 24 hours after a secret rotation; and X-Timestamp within five
- * minutes of now.
+ * during the 24 hours after a secret rotation; and both X-Timestamp and the
+ * signed body's `timestamp` (Didit refreshes it on each retry) within five
+ * minutes of now, so an old signed body cannot be replayed with a new header.
  */
 export function verifyDiditWebhookSignature(
   body: string,
@@ -31,10 +32,22 @@ export function verifyDiditWebhookSignature(
   if (!Number.isInteger(timestamp) || Math.abs(nowMs / 1000 - timestamp) > DIDIT_WEBHOOK_WINDOW_S)
     return false;
   const expected = Buffer.from(createHmac("sha256", secret).update(body, "utf8").digest("hex"));
-  return [headers.get("x-signature"), headers.get("x-signature-previous")].some((value) => {
+  const signed = [headers.get("x-signature"), headers.get("x-signature-previous")].some((value) => {
     const given = Buffer.from((value ?? "").trim().toLowerCase());
     return given.length === expected.length && timingSafeEqual(given, expected);
   });
+  if (!signed) return false;
+  let sent: unknown;
+  try {
+    sent = (JSON.parse(body) as { timestamp?: unknown } | null)?.timestamp;
+  } catch {
+    return false;
+  }
+  return (
+    typeof sent === "number" &&
+    Number.isInteger(sent) &&
+    Math.abs(nowMs / 1000 - sent) <= DIDIT_WEBHOOK_WINDOW_S
+  );
 }
 
 const event = z.object({ session_id: z.uuid(), webhook_type: z.string() });
@@ -84,10 +97,15 @@ export async function handleSignedDiditWebhook(body: string) {
     );
     return NextResponse.json(result);
   } catch (error) {
+    // The same delivery can never succeed: answer 200 so Didit stops retrying.
+    if (error instanceof PermanentResultError) {
+      log.warn("Identity check result cannot be recorded", { reason: error.reason });
+      return NextResponse.json({ recorded: false, status: error.reason });
+    }
     log.error("Identity check result was not recorded", {
       error:
         error instanceof DiditError
-          ? `didit_${error.reason}`
+          ? `didit_${error.reason}${error.detail ? `_${error.detail}` : ""}`
           : error instanceof Error
             ? error.name
             : "unknown",

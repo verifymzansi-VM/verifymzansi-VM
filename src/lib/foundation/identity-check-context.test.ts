@@ -24,13 +24,13 @@ describe("network and device", () => {
       expect(networkOf(bad)).toBeNull();
   });
 
-  it("keeps only a keyed hash of the network, marked with the address kind", () => {
+  it("keeps only a keyed hash of the network", () => {
     const hash = networkHash("198.51.100.7");
-    expect(hash).toMatch(/^4[a-f0-9]{63}$/);
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
     expect(hash).toBe(networkHash("198.51.100.200"));
     expect(hash).not.toBe(networkHash("198.51.101.7"));
-    expect(networkHash("2001:db8::1")).toMatch(/^6[a-f0-9]{63}$/);
-    expect(networkHash("unknown")).toMatch(/^0[a-f0-9]{63}$/);
+    expect(networkHash("2001:db8::1")).toMatch(/^[a-f0-9]{64}$/);
+    expect(networkHash("unknown")).not.toBe(hash);
     // Another key gives another hash: the network cannot be read back.
     vi.stubEnv("HMAC_SECRET", "fedcba9876543210".repeat(4));
     expect(networkHash("198.51.100.7")).not.toBe(hash);
@@ -76,20 +76,23 @@ describe("a check that moved away from where it started (scam lure)", () => {
     ).toBe(true);
   });
 
-  it("compares a network only between known addresses of the same kind", () => {
-    expect(sessionMoved(start(), { ip_address: "2001:db8::1", platform: "mobile" })).toBe(false);
-    expect(sessionMoved(start(), { ip_address: null, platform: "mobile" })).toBe(false);
-    expect(
-      sessionMoved(
-        { network_hash: networkHash("unknown"), device_kind: "computer" },
-        { ip_address: "203.0.113.5", platform: "desktop" }
-      )
-    ).toBe(false);
-    expect(
-      sessionMoved(
-        { network_hash: networkHash("2001:db8:0::5"), device_kind: "computer" },
-        { ip_address: "2001:db8:1::1", platform: "desktop" }
-      )
-    ).toBe(true);
+  it("moved when either address is unreadable, missing or of another kind (fail closed)", () => {
+    for (const ip_address of ["2001:db8::1", null, "unknown", ""])
+      expect(sessionMoved(start(), { ip_address, platform: "mobile" })).toBe(true);
+    const unreadableStart = { network_hash: networkHash("unknown"), device_kind: "computer" };
+    expect(sessionMoved(unreadableStart, { ip_address: "203.0.113.5", platform: "desktop" })).toBe(
+      true
+    );
+    expect(sessionMoved(unreadableStart, { ip_address: "unknown", platform: "desktop" })).toBe(
+      true
+    );
+    const v6 = { network_hash: networkHash("2001:db8:0::5"), device_kind: "computer" };
+    expect(sessionMoved(v6, { ip_address: "2001:db8:0:9::1", platform: "desktop" })).toBe(false);
+    expect(sessionMoved(v6, { ip_address: "2001:db8:1::1", platform: "desktop" })).toBe(true);
+  });
+
+  it("moved when the partner does not name the device", () => {
+    expect(sessionMoved(start(), { ip_address: "198.51.100.99", platform: "tv" })).toBe(true);
+    expect(sessionMoved(start(), { ip_address: "198.51.100.99" })).toBe(true);
   });
 });

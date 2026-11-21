@@ -4,10 +4,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { verifyDiditWebhookSignature as verifyDiditWebhook } from "@/lib/foundation/didit-webhook";
 import { POST as handleDiditWebhook } from "./route";
-import { recordIdentityCheckResult } from "@/lib/foundation/identity-check-result";
+import {
+  PermanentResultError,
+  recordIdentityCheckResult,
+} from "@/lib/foundation/identity-check-result";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/foundation/identity-check-result", () => ({ recordIdentityCheckResult: vi.fn() }));
+vi.mock("@/lib/foundation/identity-check-result", async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  recordIdentityCheckResult: vi.fn(),
+}));
 vi.mock("@/lib/foundation/service-api", () => ({ createFoundationServiceApi: vi.fn(() => ({})) }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: vi.fn(),
@@ -46,6 +52,7 @@ describe("the signature", () => {
     session_id: session,
     status: "Approved",
     webhook_type: "status.updated",
+    timestamp: now / 1000,
   });
   const at = String(now / 1000);
 
@@ -98,6 +105,22 @@ describe("the signature", () => {
       false
     );
     expect(verifyDiditWebhook(body, headers(ok), undefined, now)).toBe(false);
+    // The signed body's own timestamp: an old body with a fresh header is refused.
+    for (const stale of [
+      { session_id: session, webhook_type: "status.updated", timestamp: now / 1000 - 301 },
+      { session_id: session, webhook_type: "status.updated" },
+      { session_id: session, webhook_type: "status.updated", timestamp: String(now / 1000) },
+    ]) {
+      const old = JSON.stringify(stale);
+      expect(
+        verifyDiditWebhook(
+          old,
+          headers({ "x-timestamp": at, "x-signature": sign(old) }),
+          secret,
+          now
+        )
+      ).toBe(false);
+    }
     expect(verifyDiditWebhook(body, headers(ok), "", now)).toBe(false);
   });
 });
@@ -107,6 +130,7 @@ describe("POST /api/webhooks/didit", () => {
     session_id: session,
     status: "Approved",
     webhook_type: "status.updated",
+    timestamp: Math.floor(Date.now() / 1000),
   });
 
   it("only tells the server to look at the session again", async () => {
@@ -123,8 +147,12 @@ describe("POST /api/webhooks/didit", () => {
   it("refuses an unsigned delivery and ignores other events", async () => {
     expect(
       (await handleDiditWebhook(request(status, { "x-signature": "0".repeat(64) }))).status
-    ).toBe(401);
-    const edit = JSON.stringify({ session_id: session, webhook_type: "data.updated" });
+    ).toBe(400);
+    const edit = JSON.stringify({
+      session_id: session,
+      webhook_type: "data.updated",
+      timestamp: Math.floor(Date.now() / 1000),
+    });
     const ignored = await handleDiditWebhook(request(edit));
     expect(await ignored.json()).toEqual({ ignored: true });
     expect(recordIdentityCheckResult).not.toHaveBeenCalled();
@@ -135,6 +163,19 @@ describe("POST /api/webhooks/didit", () => {
     expect((await handleDiditWebhook(request(status))).status).toBe(503);
     vi.stubEnv("DIDIT_API_KEY", "");
     expect((await handleDiditWebhook(request(status))).status).toBe(503);
+  });
+
+  it("answers 200 to a delivery that can never be recorded, so it is not retried", async () => {
+    for (const reason of [
+      "decision_not_found",
+      "photo_unsupported",
+      "evidence_mismatch",
+    ] as const) {
+      vi.mocked(recordIdentityCheckResult).mockRejectedValueOnce(new PermanentResultError(reason));
+      const res = await handleDiditWebhook(request(status));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ recorded: false, status: reason });
+    }
   });
 
   it("is rate limited", async () => {
