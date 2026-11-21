@@ -2,21 +2,19 @@
   "$comment": "Ratchet for pnpm check:legacy-surface (roadmap M0.11). Every value may only go down. Lower it with `pnpm check:legacy-surface --update` after removing old-backend code; raising any value needs a reviewed reason. legacyClientImporters is also the frozen import list read by .dependency-cruiser.cjs.",
   "counts": {
     "backendSwitches": 0,
-    "legacyClientImports": 10,
+    "legacyClientImports": 8,
     "retiredCommandNames": 14,
     "retiredCommandCalls": 14,
-    "retiredTableReads": 19
+    "retiredTableReads": 11
   },
   "legacyClientImporters": [
     "src/app/admin/operations/page.tsx",
     "src/app/api/admin/ops/jobs/retry/route.ts",
-    "src/app/api/mock-ozow/route.ts",
     "src/app/api/organisations/[id]/report/route.ts",
     "src/app/appeals/new/page.tsx",
     "src/app/appeals/page.tsx",
     "src/app/dashboard/metrics/page.tsx",
     "src/app/organisation-invite/page.tsx",
-    "src/lib/content/private-fields.ts",
     "src/lib/utils/admin-queries.ts"
   ],
   "retiredCommandNames": [
@@ -36,21 +34,15 @@
     "retry_operation_job"
   ],
   "retiredTableNames": [
-    "account_profiles",
-    "business_private",
     "businesses",
     "contact_events",
     "content_edit_requests",
     "decision_records",
-    "listing_private",
     "listings",
     "operation_jobs",
     "ops_events",
     "ops_heartbeats",
     "organisations",
-    "payments",
-    "plans",
-    "promotions",
-    "verification_steps"
+    "promotions"
   ]
 }
