@@ -108,6 +108,7 @@ it("tells the member when photo uploads are paused for the month, keeping the ol
   );
   expect(setFoundationAvatar).not.toHaveBeenCalled();
 });
+// LIM-APP-avatar-size (docs/testing/limits-register.json): 2 MB + 1 byte is refused.
 it("refuses CSRF failures, invalid revisions, oversized files and caller-selected ownership before upload", async () => {
   expect((await POST(request({ csrfValid: false }))).status).toBe(403);
   for (const input of [
