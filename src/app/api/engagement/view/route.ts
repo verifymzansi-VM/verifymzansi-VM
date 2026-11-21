@@ -8,6 +8,7 @@ import {
   readViewerId,
 } from "@/lib/engagement-route";
 import { recordFoundationPostViews } from "@/lib/foundation/post-engagement";
+import { recordFoundationPostActivity } from "@/lib/foundation/post-performance";
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 import { parseJsonRequest } from "@/lib/utils/api";
@@ -70,7 +71,14 @@ export async function POST(request: NextRequest) {
   const pageViews = [
     ...new Set(parsed.data.events.filter((e) => e.source === "page").map((e) => e.id)),
   ].slice(0, MAX_PAGE_VIEWS);
-  if (pageViews.length === 0) return notCounted();
+  // Engaged video views (30 seconds, or 90% of a shorter video): counted for
+  // the owner's Performance page only, once the post's view was counted.
+  const engaged = [
+    ...new Set(
+      parsed.data.events.filter((e) => e.source === "video" && e.engaged).map((e) => e.id)
+    ),
+  ].slice(0, MAX_PAGE_VIEWS);
+  if (pageViews.length === 0 && engaged.length === 0) return notCounted();
 
   const viewer = await readViewerId(request);
   if (!viewer)
@@ -96,16 +104,28 @@ export async function POST(request: NextRequest) {
       })
     )
   ).filter((id): id is string => id !== null);
-  if (allowed.length === 0) return notCounted();
+  if (allowed.length === 0 && engaged.length === 0) return notCounted();
 
   const caller = await engagementCaller(request);
   try {
-    const counted = await recordFoundationPostViews(createFoundationServiceApi(), {
-      postIds: allowed,
-      device: viewer.id,
-      account: caller.account,
-      deviceIssuedAt: viewer.issuedAt,
-    });
+    const service = createFoundationServiceApi();
+    const counted =
+      allowed.length === 0
+        ? []
+        : await recordFoundationPostViews(service, {
+            postIds: allowed,
+            device: viewer.id,
+            account: caller.account,
+            deviceIssuedAt: viewer.issuedAt,
+          });
+    // After the views, so a view and its engaged signal in one request count
+    // in that order.
+    if (engaged.length > 0)
+      await recordFoundationPostActivity(service, {
+        events: engaged.map((postId) => ({ postId, counter: "engaged_views" as const })),
+        device: viewer.id,
+        account: caller.account,
+      });
     return caller.respond(NextResponse.json({ ok: true, counted }));
   } catch (error) {
     log.error("Failed to record post views", {

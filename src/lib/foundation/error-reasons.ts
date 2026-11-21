@@ -16,6 +16,7 @@ export const FOUNDATION_ERROR_REASONS = {
   account_not_closed: ["PT404"],
   account_unavailable: ["PT404"],
   acquisition_invalid: ["22023"],
+  activity_invalid: ["22023"],
   addon_target_ineligible: ["PT409"],
   admin_exists: ["PT409"],
   admin_limit: ["PT409"],

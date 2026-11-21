@@ -338,6 +338,8 @@ const OWNER_TABLES = [
   ["post_likes", `account_id=$1 or ${ownPosts}`],
   ["post_view_days", ownPosts],
   ["post_engagement_totals", ownPosts],
+  // Daily activity counts of A's posts (20261121100028_post_performance_stats.sql).
+  ["post_activity_days", ownPosts],
   ["post_presentations", ownPosts],
   ["post_presentation_media", ownPosts],
   ["post_search_documents", ownPosts],
