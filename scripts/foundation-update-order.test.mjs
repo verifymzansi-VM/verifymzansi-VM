@@ -37,6 +37,7 @@ const publicProbeAnswer = (name) =>
     get_payment_limits: { online_max_cents: 130000 },
     get_post_engagement: { items: [] },
     get_signup_mode: { mode: "invite_only" },
+    get_vat_registration: { status: "not_registered", vat_number: null },
   })[name] ?? (name === "get_public_storefront" ? null : []);
 
 const fn = (name, args = [], extra = {}) => ({
