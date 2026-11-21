@@ -17,6 +17,7 @@ import {
 import { syntheticMp4, syntheticWebm } from "@/test/synthetic-video";
 
 describe("video length rule (owner decision 11 Nov 2026)", () => {
+  // LIM-APP-video-length and LIM-APP-event-video-length (docs/testing/limits-register.json)
   it("follows the post's kind: events 1 minute, everything else 2 minutes", () => {
     expect(videoLimitSeconds("event")).toBe(60);
     expect(videoLimitSeconds("other")).toBe(120);

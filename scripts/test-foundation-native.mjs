@@ -5507,6 +5507,7 @@ commit;`);
       );
       const eventResults = [];
       for (const id of eventIds) eventResults.push((await submit(id, 1)).status);
+      // LIM-SQL-events-active (docs/testing/limits-register.json): the 6th pending event is refused.
       assert.deepEqual(eventResults, [200, 200, 200, 200, 200, 429]);
       const eventApproved = await moderate(eventIds[0], 2, "approve", staff.governorC.token);
       assert.equal(eventApproved.status, 200);

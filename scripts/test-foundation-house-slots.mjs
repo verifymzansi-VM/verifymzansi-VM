@@ -345,6 +345,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   await check("refused: no written reason, a count or term outside the rules", () => {
     for (const reason of [null, "", "ok", " padded reason ", "x".repeat(501)])
       fails(grantSql(admin, 1, 90, reason, admin2), "22023", /house_slots_reason_required/);
+    // LIM-SQL-house-slots-count and LIM-SQL-house-slots-term (docs/testing/limits-register.json)
     for (const slots of [null, 0, 16, -1])
       fails(grantSql(admin, slots, 90, REASON, admin2), "22023", /house_slots_count_invalid/);
     for (const days of [null, 6, 181])

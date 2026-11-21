@@ -296,6 +296,7 @@ try {
   });
 
   // ------------------------------------------------------------ 3. search
+  // LIM-SQL-search-offset (docs/testing/limits-register.json)
   await check("visitors can page to offset 4,800, not deeper", () => {
     const search = (offset) =>
       `set role anon;\nselect api.search_posts('{"area":"market","limit":48,"offset":${offset}}'::jsonb);`;
