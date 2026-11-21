@@ -52,9 +52,11 @@
 -- New tables, columns, constraints and commands only (expand); no existing
 -- function body changes. reviewed_by becomes nullable for automatic facts
 -- only (a check enforces it). Nothing changes for members or staff while the
--- setting is manual, and it must stay manual until the retention update is
--- applied (that update deletes the partner's copy after a staff rejection and
--- after an unanswered "ask a person"). ORDER: apply first, then merge.
+-- setting is manual, and the database keeps it manual until the retention
+-- update is applied: api.set_identity_check_mode refuses any other value
+-- (PT409 identity_check_retention_pending) and that update replaces it (it
+-- deletes the partner's copy after a staff rejection and after an unanswered
+-- "ask a person"). ORDER: apply first, then merge.
 -- Read-only preflight: ../preflight/20261121094003_automatic_identity_checks.check.sql.
 -- Rollback: ../rollback/20261121094003_automatic_identity_checks.down.sql.
 begin;
@@ -174,14 +176,17 @@ create table if not exists private.identity_checks (
   constraint identity_checks_pkey primary key (id),
   constraint identity_checks_session_id_key unique (session_id),
   constraint identity_checks_submission_id_key unique (submission_id),
+  -- A check goes with its case and its submission (the five-year history
+  -- sweep of internal.retention_verification deletes those), and a deleted
+  -- evidence file only clears the reference.
   constraint identity_checks_case_fkey foreign key (case_id, owner_id)
-    references private.evidence_cases(id, subject_id) on delete restrict,
+    references private.evidence_cases(id, subject_id) on delete cascade,
   constraint identity_checks_id_artifact_fkey foreign key (id_artifact_id)
-    references private.evidence_artifacts(id) on delete restrict,
+    references private.evidence_artifacts(id) on delete set null,
   constraint identity_checks_selfie_artifact_fkey foreign key (selfie_artifact_id)
-    references private.evidence_artifacts(id) on delete restrict,
+    references private.evidence_artifacts(id) on delete set null,
   constraint identity_checks_submission_fkey foreign key (submission_id, owner_id)
-    references private.verification_identity_submissions(id, owner_id) on delete restrict,
+    references private.verification_identity_submissions(id, owner_id) on delete cascade,
   constraint identity_checks_status_check
     check (status in ('started','unavailable','not_finished','approved','with_staff','declined')),
   constraint identity_checks_expires_check check (expires_at = created_at + interval '24 hours'),
@@ -415,8 +420,9 @@ grant execute on function api.get_identity_check_availability() to authenticated
 -- unfinished check is resumed whatever the setting, pause or spending guard
 -- now say (it was counted when it started; if the setting is manual when the
 -- result arrives, the result goes to staff). A new check needs no request to a
--- person still waiting, the typed legal names, an identity case that is not
--- accepted or under independent review, and the automatic route.
+-- person still waiting, a verified phone (the phone step comes first), the
+-- typed legal names, an identity case that is not accepted or under
+-- independent review, and the automatic route.
 CREATE OR REPLACE FUNCTION internal.start_my_identity_check()
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -437,6 +443,8 @@ begin
   end if;
   if exists(select 1 from private.identity_checks x where x.owner_id=actor and internal.identity_check_with_person(x)) then
     raise exception 'a person is checking your identity' using errcode='PT409',detail='identity_check_with_person'; end if;
+  if not exists(select 1 from private.verification_phone_proofs p where p.owner_id=actor and p.revoked_at is null) then
+    raise exception 'verified phone required' using errcode='PT409',detail='verified_phone_required'; end if;
   if not exists(select 1 from private.profiles p where p.account_id=actor
       and p.legal_first_name is not null and p.legal_last_name is not null) then
     raise exception 'legal name required' using errcode='PT409',detail='legal_name_required'; end if;
@@ -879,8 +887,9 @@ revoke all on function api.get_identity_check_settings() from public, anon, auth
 grant execute on function api.get_identity_check_settings() to authenticated;
 
 -- Changes the setting (admin, recent second factor, a reason of 5 to 500
--- characters). Setting a mode, even the current one, ends a pause early (for
--- example after a top-up).
+-- characters without control or direction characters). Setting a mode, even
+-- the current one, ends a pause early (for example after a top-up). Until the
+-- retention update replaces this function, only manual is accepted.
 CREATE OR REPLACE FUNCTION internal.set_identity_check_mode(p_mode text, p_reason text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -892,8 +901,12 @@ declare actor uuid:=internal.staff_actor('identity_check:configure'); clean_reas
 begin
   if p_mode is null or p_mode not in('manual','staff_final','automatic') then
     raise exception 'identity check mode required' using errcode='22023'; end if;
-  if clean_reason is null or char_length(clean_reason) not between 5 and 500 or clean_reason ~ '[[:cntrl:]]' then
+  if clean_reason is null or char_length(clean_reason) not between 5 and 500
+    or clean_reason ~ U&'[\0001-\001F\007F\202A-\202E\2066-\2069\FEFF]' then
     raise exception 'identity check mode reason required' using errcode='22023'; end if;
+  if p_mode<>'manual' then
+    raise exception 'automatic identity checks wait for the retention update' using errcode='PT409',
+      detail='identity_check_retention_pending'; end if;
   select x.* into s from private.identity_check_settings x where x.id for update;
   if not found then raise exception 'identity check settings missing' using errcode='55000'; end if;
   resumed:=s.paused_until>clock_timestamp();

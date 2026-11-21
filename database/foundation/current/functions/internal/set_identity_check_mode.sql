@@ -12,8 +12,12 @@ declare actor uuid:=internal.staff_actor('identity_check:configure'); clean_reas
 begin
   if p_mode is null or p_mode not in('manual','staff_final','automatic') then
     raise exception 'identity check mode required' using errcode='22023'; end if;
-  if clean_reason is null or char_length(clean_reason) not between 5 and 500 or clean_reason ~ '[[:cntrl:]]' then
+  if clean_reason is null or char_length(clean_reason) not between 5 and 500
+    or clean_reason ~ U&'[\0001-\001F\007F\202A-\202E\2066-\2069\FEFF]' then
     raise exception 'identity check mode reason required' using errcode='22023'; end if;
+  if p_mode<>'manual' then
+    raise exception 'automatic identity checks wait for the retention update' using errcode='PT409',
+      detail='identity_check_retention_pending'; end if;
   select x.* into s from private.identity_check_settings x where x.id for update;
   if not found then raise exception 'identity check settings missing' using errcode='55000'; end if;
   resumed:=s.paused_until>clock_timestamp();

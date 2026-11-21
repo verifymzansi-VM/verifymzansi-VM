@@ -141,7 +141,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 75. Old backend retired: Complete profile read (item 10) (no file rows: the group 75 part of 2 rows elsewhere) | approved by owner 2026-11-21 | Nothing (pixel-identical, no visible change). 'Verify your phone number' reads the same profile through the named live-backend read; before and after pictures match pixel for pixel. |
 | 76. Limits register: size limits tested at their bound (and the group 76 part of 3 rows elsewhere) | keep | Nothing; tests only |
 | 77. Authority requests (staff) | approved by owner 2026-11-21 | Governors and admins only: a new Authority requests page (Compliance menu) to open a member's kept identity record for a police or court request, with the request form, the logged record page and a watermarked print disclosure sheet. Members see nothing new. |
-| 82. Automatic ID checks: hidden until it works (no file rows) | hidden until it works (awaiting owner) | Nothing. The database part of automatic ID checks (update 20261121094003) is in, with the switch at Manual; members keep the in-page camera and staff review. The switch stays Manual until the retention update (C1) is applied |
+| 82. Automatic ID checks: hidden until it works (no file rows) | hidden until it works (awaiting owner) | Nothing. The database part of automatic ID checks (update 20261121094003) is in, with the switch at Manual; members keep the in-page camera and staff review. The database keeps the switch at Manual until the retention update (C1) is applied |
 
 Questions for the owner:
 
@@ -3196,8 +3196,10 @@ members and staff see nothing new: members keep the in-page camera, and staff
 review every submission as before. The member and staff screens come in a
 later pull request, with pictures for the owner.
 
-Hidden until it works: the setting must stay Manual until the retention update
-(Didit plan C1) is applied. That update must also delete the partner's copy of
+Hidden until it works: the setting stays Manual until the retention update
+(Didit plan C1) is applied, and the database enforces it (the command that
+changes the setting refuses anything but Manual until C1 replaces it). That
+update must also delete the partner's copy of
 a check when staff reject or send it back, and when a member's "ask a person"
 request ends without the identity being accepted. This update only deletes the
 partner's copy of checks that never finished, and of automatic declines 5 days

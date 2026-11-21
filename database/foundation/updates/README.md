@@ -87,8 +87,10 @@ register). Didit plan, build step 5 (the database part of automatic ID checks).
 It changes nothing for members or staff while the new setting is `manual`, its
 starting value.
 
-**The setting must stay `manual` until the retention update (Didit plan C1) is
-applied.** This update deletes the partner's copy of a check only when it never
+**The setting stays `manual` until the retention update (Didit plan C1) is
+applied, and the database enforces it:** `api.set_identity_check_mode` refuses
+any other value (PT409 `identity_check_retention_pending`) until C1 replaces the
+function. This update deletes the partner's copy of a check only when it never
 finished and 5 days after an automatic decline nobody asked about. C1 must set
 `identity_checks.provider_delete_due` for checks staff reject or send back
 (`staff_final`, or after "ask a person") and for checks whose "ask a person"
@@ -101,10 +103,10 @@ ends without the identity being accepted.
   look again). `api.set_identity_check_mode(mode, reason)` needs the new
   capability `identity_check:configure` (admins, authenticator code from the
   last 15 minutes) and a reason of 5 to 500 characters; each change is logged in
-  the append-only `private.identity_check_mode_events`.
-  `api.get_identity_check_settings` (staff with `queue:view`) shows the setting,
-  any pause, the last 7 days' counts and the latest 5 changes. The setting is
-  read when a result arrives.
+  the append-only `private.identity_check_mode_events`. The reason may not hold
+  control or direction characters. `api.get_identity_check_settings` (staff with
+  `queue:view`) shows the setting, any pause, the last 7 days' counts and the
+  latest 5 changes. The setting is read when a result arrives.
 - **Pause:** `api.report_identity_check_unavailable(check, reason)` (server)
   marks a check that could not start as `unavailable` and pauses automatic
   checks for everyone: 15 minutes after an `outage`, 1 hour after `no_credit` or
@@ -121,12 +123,12 @@ ends without the identity being accepted.
   result goes to staff.
 - **A check:** `private.identity_checks`, bound to the member's open identity
   case; the partner only sees its random id. The member starts it
-  (`api.start_my_identity_check`, typed legal names required); the server binds
-  the partner session once (`api.attach_identity_check_session`), reserves the
-  two evidence files before copying the photos
-  (`api.begin_identity_check_evidence`) and records the result once
-  (`api.complete_identity_check`). A result after the check's 24-hour expiry is
-  recorded as not finished.
+  (`api.start_my_identity_check`, a verified phone and typed legal names
+  required); the server binds the partner session once
+  (`api.attach_identity_check_session`), reserves the two evidence files before
+  copying the photos (`api.begin_identity_check_evidence`) and records the
+  result once (`api.complete_identity_check`). A result after the check's
+  24-hour expiry is recorded as not finished.
 - **The result** becomes an ordinary identity submission through
   `internal.complete_evidence_upload` and
   `internal.register_identity_submission` (the same files, fingerprint,
@@ -160,6 +162,24 @@ ends without the identity being accepted.
   decline unless the member asked a person), skipping fraud and legal holds,
   each held for 5 minutes; `api.mark_identity_check_provider_deleted` records
   the deletion. Deleting our own copies of failed attempts is part of C1.
+- **Retention:** a check row goes with its identity case and its submission
+  (`on delete cascade`), and a deleted evidence file only clears its reference
+  (`on delete set null`), so the five-year history sweep in
+  `internal.retention_verification` removes a closed account's checks with the
+  rest of its identity history.
+
+**For the server code (Didit plan, build step 6).**
+
+- **Session link lure:** the partner session link is a bearer link. Compare the
+  partner's IP address and device with the member's session, treat a mismatch as
+  `in_review`, and consider the partner's phone step.
+- **No bypass of the automatic route:** the website's photo upload and
+  submission routes must check `api.get_identity_check_availability` first, so
+  an automatic decline and the one "ask a person" per check cannot be bypassed
+  through the manual route while the automatic route is open.
+- **Names:** compare the typed names with the names on the ID without regard to
+  case in the website, and pass the typed names (from the member's profile, as
+  the database snapshots them) as `p_names`.
 
 New tables, columns, constraints and commands only (expand); no existing
 function body changes. `reviewed_by` becomes nullable for automatic facts only;
@@ -203,7 +223,10 @@ meanwhile), then a real staff approval and a real staff return; the 5-day window
 and a replaced attempt; the partner deletions (at once, after 5 days, held by a
 legal hold, the expiry sweep, a late result not recorded); both spending limits
 at their bound; the pause and its resume; session binding and result rules; a
-result after the expiry; and `manual` at the moment a result arrives.
+result after the expiry; `manual` at the moment a result arrives; the setting
+command refusing anything but `manual` and a reason with control or direction
+characters; a new check needing a verified phone; and the five-year history
+sweep removing a closed account's checks.
 
 ## Authority requests: opening a kept identity record, 21 November 2026
 

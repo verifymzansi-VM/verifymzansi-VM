@@ -48,6 +48,7 @@ const RELIED_ON = [
   "internal.open_verification_case()",
   "internal.complete_evidence_upload(uuid,text,text,integer)",
   "internal.register_identity_submission(uuid,integer,uuid,uuid,text,text,jsonb,uuid,integer)",
+  "internal.staff_evidence_metadata(uuid,text,uuid,text)",
 ];
 const MEMBER_COMMANDS = [
   "api.get_identity_check_availability()",
@@ -120,6 +121,8 @@ try {
       perform set_config('session_replication_role','replica',true);
       insert into private.profiles(account_id) values((m->>'id')::uuid) on conflict(account_id) do nothing;
       update private.profiles set legal_first_name='Thando Sipho',legal_last_name='Dlamini' where account_id=(m->>'id')::uuid;
+      insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
+        values((m->>'id')::uuid,gen_random_uuid(),'+2783'||lpad((floor(random()*1e7))::bigint::text,7,'0'));
       perform set_config('session_replication_role','origin',true);
       return m;
     end$$;`);
@@ -171,8 +174,11 @@ try {
 
   const availability = (who) => json(member(who, "select api.get_identity_check_availability();"));
   const start = (who) => json(member(who, "select api.start_my_identity_check();"));
-  const setMode = (mode, reason = "Owner decision for automatic ID checks.") =>
+  const setModeApi = (mode, reason = "Owner decision for automatic ID checks.") =>
     json(staff(admin, `select api.set_identity_check_mode('${mode}',${sqlLiteral(reason)});`));
+  // Until the retention update, the command accepts only manual; the checks
+  // of the other settings set the row as the database owner.
+  const setMode = (mode) => q(`update private.identity_check_settings set mode='${mode}';`);
   const checkRow = (id) =>
     json(`select to_jsonb(k) from private.identity_checks k where k.id='${id}';`);
   /** Starts a check for `who` and binds a synthetic partner session. */
@@ -284,24 +290,42 @@ try {
       staff(admin, "select api.set_identity_check_mode('sometimes','Not a mode at all.');"),
       "22023"
     );
-    assert.deepEqual(setMode("staff_final"), {
-      mode: "staff_final",
+    fails(
+      staff(
+        admin,
+        `select api.set_identity_check_mode('manual',${sqlLiteral("Bidi \u202e trick")});`
+      ),
+      "22023"
+    );
+    fails(staff(admin, "select api.set_identity_check_mode('manual',E'Line\\none');"), "22023");
+    // The database keeps the setting manual until the retention update.
+    for (const mode of ["staff_final", "automatic"])
+      assert.match(
+        fails(
+          staff(
+            admin,
+            `select api.set_identity_check_mode('${mode}','Owner decision for automatic ID checks.');`
+          ),
+          "PT409"
+        ),
+        /identity_check_retention_pending/
+      );
+    assert.deepEqual(setModeApi("manual"), { mode: "manual", changed: false, resumed: false });
+    setMode("staff_final");
+    assert.deepEqual(setModeApi("manual", "Back to staff review."), {
+      mode: "manual",
       changed: true,
-      resumed: false,
-    });
-    assert.deepEqual(setMode("staff_final"), {
-      mode: "staff_final",
-      changed: false,
       resumed: false,
     });
     assert.equal(
       q(`select string_agg(from_mode||'>'||to_mode,',') from private.identity_check_mode_events;`),
-      "manual>staff_final"
+      "staff_final>manual"
     );
     const settings = json(staff(moderator, "select api.get_identity_check_settings();"));
-    assert.equal(settings.mode, "staff_final");
+    assert.equal(settings.mode, "manual");
     assert.equal(settings.recent_changes.length, 1);
     assert.equal(settings.recent_changes[0].changed_by, admin.id);
+    setMode("staff_final");
     const plain = namedMember("plain");
     fails(member(plain, "select api.get_identity_check_settings();"), "42501");
     fails("update private.identity_check_mode_events set reason='Changed later on.';", "23514");
@@ -792,8 +816,10 @@ try {
         ),
         "t"
       );
-      const resumed = setMode("automatic", "Topped up the partner balance.");
-      assert.deepEqual(resumed, { mode: "automatic", changed: false, resumed: true });
+      const resumed = setModeApi("manual", "Topped up the partner balance.");
+      assert.deepEqual(resumed, { mode: "manual", changed: true, resumed: true });
+      assert.equal(q(`select paused_until is null from private.identity_check_settings;`), "t");
+      setMode("automatic");
       assert.equal(availability(other).route, "automatic");
       // A check with a session is not "unavailable".
       const s = startWithSession(namedMember("outage-3"));
@@ -862,11 +888,58 @@ try {
   await check("manual at the moment the result arrives: the result goes to staff", () => {
     const m = namedMember("switched");
     const c = startWithSession(m);
-    setMode("manual", "Back to staff review for now.");
+    setMode("manual");
     json(service(`select api.begin_identity_check_evidence('${c.check}','${c.session}');`));
     assert.equal(json(service(completeSql(c, "approved"))).status, "with_staff");
     assert.equal(
       q(`select count(*) from private.accepted_identity_facts where owner_id='${m.id}';`),
+      "0"
+    );
+  });
+
+  await check("a new check needs a verified phone", () => {
+    setMode("automatic");
+    const m = namedMember("no-phone");
+    q(`update private.verification_phone_proofs set revoked_at=now() where owner_id='${m.id}';`);
+    assert.match(
+      fails(member(m, "select api.start_my_identity_check();"), "PT409"),
+      /verified_phone_required/
+    );
+    setMode("manual");
+  });
+  await check("the five-year history sweep removes a closed account's checks", () => {
+    setMode("automatic");
+    q(`update private.identity_checks set created_at=created_at-interval '8 days',expires_at=expires_at-interval '8 days',
+      finished_at=finished_at-interval '8 days',declined_at=declined_at-interval '8 days'
+      where created_at>clock_timestamp()-interval '8 days';`);
+    const a = namedMember("sweep-declined");
+    finish(startWithSession(a), "declined");
+    const b = namedMember("sweep-unavailable");
+    json(service(`select api.report_identity_check_unavailable('${start(b).check_id}','outage');`));
+    q(
+      `update private.identity_check_settings set paused_until=null,pause_reason=null,mode='manual';`
+    );
+    const ids = `'${a.id}','${b.id}'`;
+    q(`set session_replication_role=replica;
+      insert into private.account_closures(user_id,closed_at,evidence_delete_after)
+        select u,now()-interval '6 years',now()-interval '6 years'+interval '90 days' from unnest(array[${ids}]::uuid[]) u;
+      update private.evidence_artifacts set state='deleted',deleted_at=now()-interval '6 years' where owner_id in (${ids});
+      update private.evidence_cases set status='closed' where subject_id in (${ids}) and status='open';
+      set session_replication_role=origin;`);
+    assert.equal(
+      q(`select count(*) from private.identity_checks where owner_id in (${ids});`),
+      "2"
+    );
+    const swept = json(service("select api.run_retention(100);"));
+    assert.ok(swept.verification.closed_account_verification_histories >= 2, JSON.stringify(swept));
+    assert.equal(
+      q(`select count(*) from private.identity_checks where owner_id in (${ids});`),
+      "0"
+    );
+    assert.equal(
+      q(
+        `select count(*) from private.verification_identity_submissions where owner_id in (${ids});`
+      ),
       "0"
     );
   });

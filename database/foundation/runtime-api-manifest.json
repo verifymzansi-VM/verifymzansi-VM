@@ -5745,7 +5745,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Signed-in active member with a live session: returns their unfinished check whatever the setting now says; otherwise, with no request to a person still waiting, typed legal names, an identity case that is not accepted or under independent review and the automatic route open (setting not manual, not paused, within the spending guard; one start at a time site-wide), starts one."
+      "authority": "Signed-in active member with a live session: returns their unfinished check whatever the setting now says; otherwise, with no request to a person still waiting, a verified phone, typed legal names, an identity case that is not accepted or under independent review and the automatic route open (setting not manual, not paused, within the spending guard; one start at a time site-wide), starts one."
     },
     {
       "name": "ask_person_identity_check",
@@ -5806,7 +5806,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Admin (identity_check:configure) with an authenticator code from the last 15 minutes: sets the automatic ID check setting (manual, staff_final or automatic) with a reason of 5 to 500 characters; a change is logged append-only. Setting a mode, even the current one, ends a pause."
+      "authority": "Admin (identity_check:configure) with an authenticator code from the last 15 minutes: sets the automatic ID check setting with a reason of 5 to 500 characters (no control or direction characters); a change is logged append-only and setting a mode, even the current one, ends a pause. Until the retention update replaces it, only manual is accepted (PT409 identity_check_retention_pending)."
     },
     {
       "name": "get_identity_check_for_case",

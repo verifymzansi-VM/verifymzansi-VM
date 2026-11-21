@@ -21,6 +21,8 @@ begin
   end if;
   if exists(select 1 from private.identity_checks x where x.owner_id=actor and internal.identity_check_with_person(x)) then
     raise exception 'a person is checking your identity' using errcode='PT409',detail='identity_check_with_person'; end if;
+  if not exists(select 1 from private.verification_phone_proofs p where p.owner_id=actor and p.revoked_at is null) then
+    raise exception 'verified phone required' using errcode='PT409',detail='verified_phone_required'; end if;
   if not exists(select 1 from private.profiles p where p.account_id=actor
       and p.legal_first_name is not null and p.legal_last_name is not null) then
     raise exception 'legal name required' using errcode='PT409',detail='legal_name_required'; end if;
