@@ -179,6 +179,110 @@ early; the list and the Audit log never show the person; both logs append-only
 with the retention exception; the rollback refused with a row; and a staff
 member who loses the role.
 
+## Staff operations health and a last-run record for every scheduled job, 20 November 2026
+
+`20261120163500_staff_operations_health.sql` was applied on 21 November 2026 at
+04:53 UTC (see the applied register). Launch checklist item 8 (roadmap M5.5,
+first part). The staff page `/admin/operations` read job, incident and retention
+records that only the retired backend had; it now reads one staff command over
+what this database holds. The page stays switched off (`SHOW_STAFF_OPERATIONS`)
+until launch.
+
+- **Every scheduled job records its last successful run.** Fifteen service-only
+  commands the timed Workers start through the website (every minute: slot
+  renewals, post lifecycle, sponsorships, inbox purge, intro trials, partner
+  commissions, bank transfer expiry, added-slot invoices, email delivery,
+  payment alerts, privacy notices; every 5 minutes: retention, form drafts,
+  evidence and media cleanup) keep their signatures, grants and results; each
+  passes its result through `internal.note_scheduled_job_run`, which writes the
+  job's time in the new `private.scheduled_job_runs` (one row per job, no
+  account data, no API role access, RLS on). The record is written in the same
+  transaction as the job's work, so a failed command records nothing. At most
+  one write per job every 20 seconds, and never a time later than now (a future
+  time written by hand shows as late and is pulled back on the next run). Only
+  the api wrappers change; `internal.run_retention` and the other internal
+  functions are untouched.
+- **The two payment jobs** run several steps in the website, so their commands
+  are not changed. The website calls the new service-only command
+  `api.record_scheduled_job_run(job)` only after the whole run succeeded: the
+  10-minute payment status check when no payment failed (`payment_checks`), and
+  the daily Ozow refund check when Ozow's whole list was read (`refund_check`).
+  It accepts only those two jobs (22023 otherwise). A run that fails records
+  nothing, so the job turns late.
+- **Late jobs.** `internal.scheduled_job_catalogue()` lists each job, how often
+  it runs and when it counts as late (10 minutes for the minute jobs, 30 for the
+  5-minute jobs, 40 for the payment checks, 26 hours for the daily refund
+  check). Until a job's first run after the update it shows as late with no run
+  recorded. The refund check runs only while the Ozow refund key is set.
+- **The staff read** `api.get_staff_operations_health()` (governor and admin,
+  `audit:view`, with a recent authenticator code; read only) returns each job's
+  last run and whether it is late; stuck emails (unsent after the last of 8
+  attempts, or a day after queuing) with the size of the unsent queue; stuck
+  privacy request notices (same rule, only notices the notice job can still
+  send), and apart the number queued in the last 30 days that it can never send
+  (the request was minimised, or the account's address changed or is not
+  confirmed; retention minimises closed requests after 30 days, so older ones
+  are not counted); payment problems seen in the past 7 days and paid payments
+  not activated; account deletions held back, file deletions stuck over a day or
+  queued, ID evidence past its deletion date outside legal and fraud holds, and
+  accounts on legal hold; and open cost alarms. Lists have at most 50 rows;
+  counts are complete. It returns kinds, reasons, counts, times and an
+  8-character payment reference, never an account id, name, email, phone or
+  message text.
+
+The job commands keep their signatures, so a website release without the
+matching code works with the update, and the release with it shows "could not be
+loaded" on the (switched-off) page until the update is applied. As usual: apply
+first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261120163500_staff_operations_health.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff operations health: update not applied".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "staff operations health: already applied; jobs with a
+   recorded run: N of 17" (N grows to 15 within about 10 minutes as the timed
+   jobs run; the payment checks follow once the matching website release is
+   live, and the refund check after its next daily run).
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261120163500_staff_operations_health.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses (55000) unless the update is
+applied, every function it replaces or drops still has the update's body, and no
+other function uses what it drops (the run table, the catalogue, the note and
+record helpers or the read; matched as exact text); then it puts back the
+fifteen job commands byte for byte and drops the read, the record command, their
+internal twins, `internal.note_scheduled_job_run`,
+`internal.scheduled_job_catalogue` and `private.scheduled_job_runs`.
+
+`node --import tsx scripts/test-foundation-staff-operations-health.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted body and a
+premature rollback, changing nothing; apply, rollback and re-apply return the
+same fingerprints, and the rollback restores every job command byte for byte
+with its grants, leaving the two payment commands untouched; the rollback
+refuses once a job command changed later or another function uses the run table,
+the catalogue, the helpers or the read (an underscore in a name is not a
+wildcard); each of the fifteen commands, called as the timed jobs call it,
+records only its own job and returns its result unchanged, while the two payment
+commands record nothing and the record command records only those two jobs; a
+failed command records nothing, and a failed payment run turns late; at most one
+write per job every 20 seconds; a future time shows late and is pulled back to
+now; only catalogued jobs can be recorded, and members and visitors can run
+neither the commands nor the helpers; every job is listed in order and turns
+late after its limit (9 and 11 minutes, 29 and 31, 39 and 41, 25 and 27 hours);
+stuck emails and notices (notices of the last 30 days that can never be sent
+counted apart, older ones not), payment problems, blocked deletions, evidence
+past its date (a held account's excluded) and open alarms are counted and listed
+as described, with no account, subject, request or case id; lists stop at 50
+while counts stay complete; and only governor and admin with a recent
+authenticator code can read it (a moderator, a member, an admin whose code is 20
+minutes old, the server key and a visitor are refused).
+
 ## ID photos with the camera only, and Continue on your phone, 20 November 2026
 
 `20261120131212_camera_capture_handoff.sql` was applied on 21 November 2026 at
@@ -6178,6 +6282,16 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   "already applied; selfies said to be uploaded files: 0; phone links: 0";
   production fingerprint after it (fingerprint.sql at cd725fb9) matched the full
   replay (except the known schema grant difference)
+
+- `20261120163500_staff_operations_health.sql`: applied 2026-11-21 04:53 UTC;
+  owner-approved, apply-first, Supabase SQL editor (the owner's signed-in
+  session), preflight + fingerprint checked; update and preflight from the
+  reviewed files at a04ace88 (pull request #319) and checked in the page before
+  running; update sha256 starting d75e3442; preflight (sha256 starting 37ac91bd)
+  before "staff operations health: update not applied", after "staff operations
+  health: already applied; jobs with a recorded run: 0 of 17"; production
+  fingerprint after it (fingerprint.sql at cd725fb9) matched the full replay
+  (except the known schema grant difference)
 
 - `20261121043124_identity_record_disclosure.sql`: pending
 

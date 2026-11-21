@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.run_slot_renewals(p_limit integer)
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.run_slot_renewals(p_limit);
+  select internal.note_scheduled_job_run('slot_renewals', internal.run_slot_renewals(p_limit));
 $function$;
 alter function api.run_slot_renewals(integer) owner to postgres;
 revoke all on function api.run_slot_renewals(integer) from public;

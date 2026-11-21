@@ -6,6 +6,7 @@ import {
 } from "@/lib/foundation/billing-runtime";
 import { runOzowRefundJobs } from "@/lib/foundation/ozow-refunds";
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
+import { recordScheduledJobRun } from "@/lib/foundation/scheduled-job-runs";
 import {
   createOzowRefundClient,
   ozowApiRefundsEnabled,
@@ -55,6 +56,9 @@ export async function POST(request: Request) {
     await runRefundJobs();
     return NextResponse.json({ error: "Payment reconciliation unavailable" }, { status: 503 });
   }
+  // Only a run in which every payment check succeeded counts as a run on the
+  // staff operations page (20261120163500_staff_operations_health.sql).
+  if (!result.failures) await recordScheduledJobRun(createFoundationServiceApi(), "payment_checks");
   const refunds = await runRefundJobs();
   // Refund job failures are reported on their own (logged, and counted in
   // refundJobs): they never fail the payment check or its heartbeat. Refunds

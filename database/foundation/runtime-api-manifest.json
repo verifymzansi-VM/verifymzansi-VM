@@ -5580,6 +5580,38 @@
       "authority": "Website server only, for a phone capture grant whose link still works and whose phone is signed in as the link owner: reserves an ID photo or selfie upload for that link's case only, on the computer's session, with the same case, pairing and unfinished-upload rules as reserve_frontend_verification_upload; the selfie is stored as taken with the camera (browser-reported review context, not a proof). Refused once the link has both photos. Returns the encrypted ID number receipt for an ID photo so the server can complete it."
     },
     {
+      "name": "get_staff_operations_health",
+      "updates": ["updates/20261120163500_staff_operations_health.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current audit:view capability (governor, admin) and recent authenticator proof: every scheduled job with how often it runs, its last recorded run and whether it is late; counts and at most 50 rows each of stuck emails (kind, attempts, queued time, error code), stuck privacy request notices the notice job can still send (kind, attempts, queued time) with a separate count of notices from the last 30 days it can never send, payment problems seen in the past 7 days (an 8-character payment reference, reason, source, times, occurrences, whether staff were alerted), paid payments not activated, account deletions held back (reason and dates), file deletions stuck or queued, ID evidence past its deletion date outside holds, accounts on legal hold and open cost alarms; never an account id, name, email, phone or message text. Read only."
+    },
+    {
+      "name": "record_scheduled_job_run",
+      "updates": ["updates/20261120163500_staff_operations_health.sql"],
+      "arguments": [
+        {
+          "name": "p_job",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "boolean",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted server only (service_role): records that a timed job whose success the website decides ran and succeeded, after the whole run succeeded; only payment_checks and refund_check (22023 otherwise). Writes the job name and the time (never later than now), nothing else."
+    },
+    {
       "name": "open_identity_disclosure",
       "updates": ["updates/20261121043124_identity_record_disclosure.sql"],
       "arguments": [

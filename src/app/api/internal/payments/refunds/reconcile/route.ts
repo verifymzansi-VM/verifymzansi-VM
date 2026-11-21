@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { runOzowRefundReconciliation } from "@/lib/foundation/ozow-refunds";
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
+import { recordScheduledJobRun } from "@/lib/foundation/scheduled-job-runs";
 import { createOzowRefundClient, ozowRefundKeyConfigured } from "@/lib/payments/ozow-refunds";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -29,15 +30,17 @@ export async function POST(request: Request) {
       { headers: { "Cache-Control": "no-store" } }
     );
   try {
-    const result = await runOzowRefundReconciliation(
-      createFoundationServiceApi(),
-      createOzowRefundClient()
-    );
+    const service = createFoundationServiceApi();
+    const result = await runOzowRefundReconciliation(service, createOzowRefundClient());
     log.info("Ozow refund check finished", result);
+    const succeeded = result.listed && result.unreadable === 0;
+    // Only a check that read Ozow's whole list counts as a run on the staff
+    // operations page (20261120163500_staff_operations_health.sql).
+    if (succeeded) await recordScheduledJobRun(service, "refund_check");
     // A list that could not be read (or had entries this site cannot read)
     // fails the run, so the Worker records it; the stuck check still ran.
     return NextResponse.json(result, {
-      status: result.listed && result.unreadable === 0 ? 200 : 503,
+      status: succeeded ? 200 : 503,
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {
