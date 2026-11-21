@@ -15,12 +15,11 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { SHOW_PACKAGE_TEAMS } from "@/lib/hidden-features";
 import { POST_TEMPLATE_NAME_MAX, type PostTemplateData } from "@/lib/post-templates";
 
 const KEEPS = [
   "Section and category",
-  "Details: make, model, gearbox, fuel",
+  "Details for this category",
   "Description",
   "Location",
   "Which contact buttons to show (the numbers are always those of the person posting)",
@@ -47,7 +46,7 @@ export function SaveTemplateDialog({
 }) {
   const nameId = useId();
   const { toast } = useToast();
-  const [name, setName] = useState(defaultName.slice(0, POST_TEMPLATE_NAME_MAX));
+  const [name, setName] = useState([...defaultName].slice(0, POST_TEMPLATE_NAME_MAX).join(""));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -133,9 +132,7 @@ export function SaveTemplateDialog({
               </li>
             ))}
           </ul>
-          <p className="text-xs text-muted-foreground">
-            {SHOW_PACKAGE_TEAMS ? "Your team can use it too. " : ""}You can keep up to 20.
-          </p>
+          <p className="text-xs text-muted-foreground">You can keep up to 20.</p>
           {error ? (
             <p role="alert" className="inline-form-error">
               {error}

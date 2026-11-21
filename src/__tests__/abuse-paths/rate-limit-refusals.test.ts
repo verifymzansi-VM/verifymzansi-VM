@@ -109,7 +109,6 @@ const OUTSIDE = new Set([
   "internal/retention/run",
   "csp-report",
   // Closed: answer 204 without reading the request.
-  "analytics/events",
   "analytics/visit",
   "engagement/share",
 ]);

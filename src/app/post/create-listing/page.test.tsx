@@ -996,6 +996,38 @@ describe("CreateListingPage", () => {
       }
     });
 
+    it("post templates: a template that fails to load restores the saved draft", async () => {
+      const base = global.fetch;
+      global.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+        String(input).includes("/api/post-templates")
+          ? Promise.resolve(new Response("{}", { status: 503 }))
+          : base(input, init)
+      ) as typeof fetch;
+      switches.SHOW_POST_TEMPLATES = true;
+      seedDraft();
+      window.history.replaceState(
+        null,
+        "",
+        "/post/create-listing?template=00000000-0000-4000-8000-0000000000e1"
+      );
+      try {
+        render(<CreateListingPage />);
+        await waitFor(() => {
+          expect(screen.getByLabelText("Title (Required)")).toHaveValue("Saved iPhone 15");
+        });
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({ title: "This template can't be opened" })
+        );
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({ title: "Draft restored" })
+        );
+      } finally {
+        switches.SHOW_POST_TEMPLATES = false;
+        global.fetch = base;
+        window.history.replaceState(null, "", "/");
+      }
+    });
+
     it("still validates missing category after restoring a draft", async () => {
       seedDraft({ category: "" });
       render(<CreateListingPage />);

@@ -10,7 +10,7 @@ AS $function$
 declare actor uuid := internal.price_draft_actor(); clean text := btrim(p_name); renamed uuid;
 begin
   if clean is null or char_length(clean) not between 1 and 60 or clean ~ '[[:cntrl:]]' then
-    raise exception 'template name 1 to 60 characters' using errcode='22023', detail='template_invalid'; end if;
+    raise exception 'template name 1 to 60 characters' using errcode='22023', detail='template_name_invalid'; end if;
   perform internal.lock_evidence_subject(actor);
   if exists(select 1 from private.post_templates t where t.owner_id = actor and lower(t.name) = lower(clean)
       and t.id is distinct from p_template) then

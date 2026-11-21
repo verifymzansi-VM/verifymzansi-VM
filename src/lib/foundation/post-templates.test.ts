@@ -57,9 +57,13 @@ describe("/api/post-templates", () => {
       package_running: true,
       templates: [{ id, kind: "listing", name: "Used bakkie", data, updated_at: "2026-11-21" }],
     };
-    rpc.mockResolvedValueOnce({ data: list, error: null });
+    rpc.mockResolvedValueOnce({
+      data: { ...list, templates: [...list.templates, { ...list.templates[0], data: {} }] },
+      error: null,
+    });
     const response = await handleListPostTemplates(request("GET"));
     expect(response.status).toBe(200);
+    // A template that no longer parses is left out; the others stay.
     expect(await response.json()).toEqual(list);
     expect(rpc).toHaveBeenCalledExactlyOnceWith("list_my_post_templates", {}, { get: false });
   });
@@ -97,11 +101,20 @@ describe("/api/post-templates", () => {
       ["22023", 422, "template_invalid"],
     ];
     for (const [code, status, reason] of cases) {
-      rpc.mockResolvedValueOnce({ data: null, error: { code } });
+      rpc.mockResolvedValueOnce({ data: null, error: { code, details: reason } });
       const response = await handleSavePostTemplate(request("POST", { name: "A", data }));
       expect(response.status).toBe(status);
       expect((await response.json()).reason).toBe(reason);
     }
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "22023", details: "template_name_invalid" },
+    });
+    const badName = await handleSavePostTemplate(request("POST", { name: "A", data }));
+    expect(await badName.json()).toMatchObject({
+      reason: "template_name_invalid",
+      error: "Give the template a name of 1 to 60 characters.",
+    });
     rpc.mockResolvedValueOnce({ data: null, error: { code: "PT409" } });
     const taken = await handleRenamePostTemplate(request("PATCH", { name: "B" }), id);
     expect(taken.status).toBe(409);

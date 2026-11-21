@@ -194,6 +194,29 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
         { ...BAKKIE, description: 5 },
         { description: "No category" },
         { ...BAKKIE, category: 3 },
+        { ...BAKKIE, category: "" },
+        // Prices and details of one item (the website leaves them out too).
+        ...[
+          "monthly_rent_zar",
+          "salary_min",
+          "salary_max",
+          "levy_zar",
+          "rates_taxes_zar",
+          "number_of_owners",
+          "battery_health_pct",
+          "colour",
+          "accident_free",
+          "registration_province",
+          "available_from",
+          "application_deadline",
+          "age_months",
+          "quantity",
+        ].map((key) => ({ ...BAKKIE, categoryAttributes: { make: "Toyota", [key]: "1" } })),
+        // A detail is text, yes/no or a list of text.
+        { ...BAKKIE, categoryAttributes: { bedrooms: 3 } },
+        { ...BAKKIE, categoryAttributes: { extras: { tow_bar: true } } },
+        { ...BAKKIE, categoryAttributes: { extras: ["tow_bar", 2] } },
+        { ...BAKKIE, categoryAttributes: { extras: null } },
       ];
       for (const data of refusedData)
         fails(saveSql(sipho, "Refused", data), "22023", /template details invalid/);
@@ -202,6 +225,13 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
         "22023",
         /template details invalid/
       );
+      // Text, yes/no and lists of text are kept.
+      const kept = save(sipho, "Detail kinds", {
+        category: "property",
+        categoryAttributes: { bedrooms: "3", pool: true, security_features: ["alarm", "cctv"] },
+      });
+      assert.equal(kept.replaced, false);
+      json(deleteSql(sipho, kept.id));
       assert.equal(stored(sipho), 1);
     }
   );

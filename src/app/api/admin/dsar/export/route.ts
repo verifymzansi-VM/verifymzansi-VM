@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 import { uuidSchema } from "@/lib/validations/shared";
+import { hasDatabaseReason } from "@/lib/foundation/error-reasons";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { privacyRevision } from "@/lib/foundation/privacy-requests";
 import {
@@ -15,20 +16,23 @@ const log = createLogger("DSARExport");
 
 const exportSchema = z.object({ requestId: uuidSchema });
 
-/** Datasets in a foundation access export: the registry entries of
- * internal.frontend_privacy_export_data (43 since database update
- * 20261121162018_post_templates.sql added post_templates; 42 before). An update that adds a dataset must first ship a website
- * that accepts the new count (website-first); foundation.test.ts checks this
- * number against database/foundation/current. */
-const FOUNDATION_EXPORT_DATASET_COUNT = 43;
+/** The fewest datasets a foundation access export holds: the registry entries
+ * of internal.frontend_privacy_export_data in production (42 since database
+ * update 20261119172135_post_views_and_likes.sql added post_likes and
+ * post_likes_summary). Fewer means a partial export and is refused; more is
+ * accepted, so an update that adds a dataset needs no website change first.
+ * Raise it once such an update is applied. foundation.test.ts checks it is
+ * not above the committed registry (database/foundation/current). */
+const FOUNDATION_EXPORT_DATASET_COUNT = 42;
 
 /**
  * POST /api/admin/dsar/export  { requestId }
  *
  * Build the complete export of a data subject's records as a download.
  * Needs dsar:manage, a second factor verified in the last 15 minutes, and a
- * verified requester identity. Nothing is stored: the file goes straight to
- * the staff member, who sends it to the requester.
+ * verified access request in progress (at most 5 exports per request). Nothing
+ * is stored: the file goes straight to the staff member, who sends it to the
+ * requester; the database records the export and tells the member.
  */
 export async function POST(request: NextRequest) {
   return handleFoundationOwnerRoute<{ request_id: string }>({
@@ -66,6 +70,16 @@ export async function POST(request: NextRequest) {
           413,
           "The export is too large for a direct download. Nothing was exported."
         );
+      if (hasDatabaseReason(rpc.error, "privacy_export_not_in_progress"))
+        throw new FoundationStaffCommandError(
+          409,
+          "Only a request in progress can be exported. Open a new access request to export again. Nothing was exported."
+        );
+      if (hasDatabaseReason(rpc.error, "privacy_export_limit"))
+        throw new FoundationStaffCommandError(
+          429,
+          "This request has already been exported 5 times, the most allowed. Open a new access request to export again. Nothing was exported."
+        );
       const date = z.iso.datetime({ offset: true });
       const result = await settleStaffCommand(
         Promise.resolve(rpc),
@@ -85,7 +99,7 @@ export async function POST(request: NextRequest) {
           })
           .refine((v) =>
             v.account_found
-              ? Object.keys(v.datasets).length === FOUNDATION_EXPORT_DATASET_COUNT
+              ? Object.keys(v.datasets).length >= FOUNDATION_EXPORT_DATASET_COUNT
               : Object.keys(v.datasets).length === 0
           )
       );

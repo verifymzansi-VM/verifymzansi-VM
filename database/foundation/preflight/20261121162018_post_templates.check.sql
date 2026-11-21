@@ -7,7 +7,8 @@
 -- summary is the only row and reads "update not applied".
 --
 -- The summary says whether internal.frontend_privacy_export_data is the
--- reviewed body and the new table and nine new functions are absent (update
+-- reviewed body and the new table, the nine new functions and the trigger
+-- post_templates_account_closed are absent (update
 -- not applied), or everything is the update's (already applied), and counts
 -- "slot packages" (Multi-listing packages ever bought) and, after the update,
 -- "templates" and the "accounts with templates".
@@ -18,16 +19,22 @@ with bodies as (
   select v.sig, v.reviewed, v.updated,
     case when v.sig = 'private.post_templates'
       then case when to_regclass('private.post_templates') is not null then 'table' end
+      when v.sig = 'trigger post_templates_account_closed'
+      then case when exists(select 1 from pg_trigger t where t.tgname = 'post_templates_account_closed'
+          and t.tgrelid = 'private.account_closures'::regclass and not t.tgisinternal
+          and t.tgfoid = to_regprocedure('internal.clear_closed_account_post_templates()')::oid)
+        then 'trigger' end
       else (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig))
     end as body
   from (values
     ('internal.frontend_privacy_export_data(uuid)', 'e543b105fe264d5a683b5c570bf68cb5', 'ab02f76bb5bb62b58521df6d584cf93b'),
     ('private.post_templates', null, 'table'),
-    ('internal.save_my_post_template(text,jsonb)', null, '3100f052478a97422f57d031ae36d158'),
+    ('trigger post_templates_account_closed', null, 'trigger'),
+    ('internal.save_my_post_template(text,jsonb)', null, '47c9a728c99a913ce45a38705f4ab11c'),
     ('api.save_my_post_template(text,jsonb)', null, '7b7c38ccb53d847bdbf5fbb5c7ac6ff2'),
     ('internal.list_my_post_templates()', null, '4ffe9bdfc9c0b380f2b6e59c0f8efa88'),
     ('api.list_my_post_templates()', null, 'f85908247e26dadcc725375bc1679bae'),
-    ('internal.rename_my_post_template(uuid,text)', null, 'a94351e00965b9c1e889f93fb4143d3b'),
+    ('internal.rename_my_post_template(uuid,text)', null, '006edc09d2c6cb3cc33355ae952d7a95'),
     ('api.rename_my_post_template(uuid,text)', null, 'b40de85a9040f0f014d4190312f817ad'),
     ('internal.delete_my_post_template(uuid)', null, 'ebfc6a0e2486f3b78df0aff1542f96c8'),
     ('api.delete_my_post_template(uuid)', null, '574ff2124c9b9cffe12c02ef79b6261d'),

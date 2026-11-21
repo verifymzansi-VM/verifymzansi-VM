@@ -5,14 +5,17 @@ import { handleFoundationOwnerRoute, type FoundationRefusal } from "./owner-rout
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { SHOW_POST_TEMPLATES } from "../hidden-features";
 import { createLogger } from "../utils/logger";
+import { hasDatabaseReason } from "./error-reasons";
 import {
-  POST_TEMPLATE_NAME_MAX,
+  parsePostTemplateList,
   postTemplateData,
-  postTemplateList,
+  postTemplateName,
   type PostTemplateList,
 } from "../post-templates";
 
 const log = createLogger("PostTemplates");
+
+type DatabaseError = { code?: string | null; details?: string | null; message?: string | null };
 
 class TemplateRefusal extends Error {
   override name = "TemplateRefusal";
@@ -21,7 +24,8 @@ class TemplateRefusal extends Error {
   }
 }
 
-function refuse(code: string | undefined): never {
+function refuse(error: DatabaseError): never {
+  const code = error.code;
   if (code === "PT402")
     throw new TemplateRefusal({
       status: 403,
@@ -46,16 +50,22 @@ function refuse(code: string | undefined): never {
       error: "This template was deleted. Reload the page.",
       reason: "template_unavailable",
     });
+  if (code === "22023" && hasDatabaseReason(error, "template_name_invalid"))
+    throw new TemplateRefusal({
+      status: 422,
+      error: "Give the template a name of 1 to 60 characters.",
+      reason: "template_name_invalid",
+    });
   if (code === "22023")
     throw new TemplateRefusal({
       status: 422,
-      error: "Check the template name and try again.",
+      error: "This post's details can't be kept in a template. Check the form and try again.",
       reason: "template_invalid",
     });
   throw new Error("Post template command unavailable");
 }
 
-const name = z.string().trim().min(1).max(POST_TEMPLATE_NAME_MAX);
+const name = postTemplateName;
 const templateId = z.uuid();
 
 /** One owner route for the template commands, off (404) while SHOW_POST_TEMPLATES is off. */
@@ -83,8 +93,8 @@ function templateRoute<T>(
   });
 }
 
-function unwrap(result: { data: unknown; error: { code?: string } | null }) {
-  if (result.error) refuse(result.error.code);
+function unwrap(result: { data: unknown; error: DatabaseError | null }) {
+  if (result.error) refuse(result.error);
   return result.data;
 }
 
@@ -92,9 +102,12 @@ function unwrap(result: { data: unknown; error: { code?: string } | null }) {
 export async function readMyPostTemplates(
   api: FoundationAuthenticatedApi
 ): Promise<PostTemplateList> {
-  return postTemplateList.parse(
+  const { dropped, ...list } = parsePostTemplateList(
     unwrap(await api.rpc("list_my_post_templates", {}, { get: false }))
   );
+  // A template that no longer parses is left out; the others stay usable.
+  if (dropped > 0) log.warn("Post templates left out", { reason: "template_unreadable", dropped });
+  return list;
 }
 
 /** GET /api/post-templates */
@@ -125,7 +138,7 @@ export function handleSavePostTemplate(request: NextRequest) {
 export function handleRenamePostTemplate(request: NextRequest, id: string) {
   return templateRoute(request, true, async (api, input) => {
     const body = z.strictObject({ name }).parse(input);
-    if (!templateId.safeParse(id).success) refuse("PT404");
+    if (!templateId.safeParse(id).success) refuse({ code: "PT404" });
     return z
       .strictObject({ id: templateId, name: z.string() })
       .parse(
@@ -144,7 +157,7 @@ export function handleRenamePostTemplate(request: NextRequest, id: string) {
 export function handleDeletePostTemplate(request: NextRequest, id: string) {
   return templateRoute(request, true, async (api, input) => {
     z.strictObject({}).parse(input);
-    if (!templateId.safeParse(id).success) refuse("PT404");
+    if (!templateId.safeParse(id).success) refuse({ code: "PT404" });
     return z
       .strictObject({ id: templateId })
       .parse(

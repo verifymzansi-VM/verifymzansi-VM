@@ -26,11 +26,11 @@ begin
     if shape not in (
         'internal.frontend_privacy_export_data(uuid) ab02f76bb5bb62b58521df6d584cf93b',
         'private.post_templates table',
-        'internal.save_my_post_template(text,jsonb) 3100f052478a97422f57d031ae36d158',
+        'internal.save_my_post_template(text,jsonb) 47c9a728c99a913ce45a38705f4ab11c',
         'api.save_my_post_template(text,jsonb) 7b7c38ccb53d847bdbf5fbb5c7ac6ff2',
         'internal.list_my_post_templates() 4ffe9bdfc9c0b380f2b6e59c0f8efa88',
         'api.list_my_post_templates() f85908247e26dadcc725375bc1679bae',
-        'internal.rename_my_post_template(uuid,text) a94351e00965b9c1e889f93fb4143d3b',
+        'internal.rename_my_post_template(uuid,text) 006edc09d2c6cb3cc33355ae952d7a95',
         'api.rename_my_post_template(uuid,text) b40de85a9040f0f014d4190312f817ad',
         'internal.delete_my_post_template(uuid) ebfc6a0e2486f3b78df0aff1542f96c8',
         'api.delete_my_post_template(uuid) 574ff2124c9b9cffe12c02ef79b6261d',

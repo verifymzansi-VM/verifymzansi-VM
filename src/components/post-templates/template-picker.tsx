@@ -182,15 +182,16 @@ function ChangeTemplateDialog({ change, onClose }: { change: Change; onClose: ()
         if (!open && !busy) onClose();
       }}
     >
-      <DialogContent>
+      {/* Rename has no description; Radix then needs aria-describedby unset. */}
+      <DialogContent {...(renaming ? { "aria-describedby": undefined } : {})}>
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{renaming ? "Rename template" : "Delete this template?"}</DialogTitle>
-            <DialogDescription>
-              {renaming
-                ? "Posts made from it keep their wording."
-                : `"${change.template.name}" goes for good. Posts made from it stay as they are.`}
-            </DialogDescription>
+            {renaming ? null : (
+              <DialogDescription>
+                {`"${change.template.name}" goes for good. Posts made from it stay as they are.`}
+              </DialogDescription>
+            )}
           </DialogHeader>
           {renaming ? (
             <div className="space-y-2">

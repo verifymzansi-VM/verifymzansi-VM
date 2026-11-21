@@ -34,6 +34,7 @@ export const SCHEDULED_JOBS = [
   "media_cleanup",
   "payment_checks",
   "refund_check",
+  "engagement_purge",
 ] as const;
 export type ScheduledJob = (typeof SCHEDULED_JOBS)[number];
 

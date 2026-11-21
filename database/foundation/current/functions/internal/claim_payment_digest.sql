@@ -55,7 +55,9 @@ begin
         and p.alert_raised_at>period_end-interval '7 days'),
       'outcomes',(select coalesce(jsonb_object_agg(o.outcome,o.total),'{}'::jsonb) from
         (select e.outcome, count(*) as total from private.provider_events e
-          where e.received_at>since and e.received_at<=period_end group by e.outcome) o))
+          where e.received_at>since and e.received_at<=period_end group by e.outcome) o),
+      -- 20261121090305: the rolling 12-month sales and the VAT alert.
+      'sales',internal.vat_sales_position())
     where day=today
     returning * into digest;
   end if;

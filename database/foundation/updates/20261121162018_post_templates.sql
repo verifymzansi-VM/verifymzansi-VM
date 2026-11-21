@@ -16,8 +16,11 @@
 --    replaces the one with the same name ("save again under the same name").
 --    Only while the caller's Multi-listing package runs (PT402, detail
 --    package_required); a 21st template is refused (PT429, detail
---    template_limit); a name of more than 60 characters or data with any other
---    field, a year, a mileage or an unknown contact button is refused (22023,
+--    template_limit). A name that is empty, longer than 60 characters or holds
+--    a control character is refused (22023, detail template_name_invalid);
+--    data with any other field, an empty category, a detail that is not text,
+--    yes/no or a list of text, a price detail or a detail of one item (see the
+--    list in the command) or an unknown contact button is refused (22023,
 --    detail template_invalid).
 -- 3. api.list_my_post_templates() (members): the caller's templates and
 --    whether their package runs.
@@ -34,11 +37,10 @@
 --
 -- Expand only: four new API commands, a new table, a trigger; the privacy
 -- export gains one dataset. No command, argument or grant changes. ORDER:
--- website first: the staff access export (/api/admin/dsar/export) accepts
--- exactly the registry's number of datasets, 43 from this update, so the
--- website that expects 43 is merged and deployed first, then this update is
--- applied straight after. The website calls the new commands only while
--- SHOW_POST_TEMPLATES is on (off until launch switch-on).
+-- website first: the website calls the new commands only while
+-- SHOW_POST_TEMPLATES is on (off until launch switch-on), and the staff access
+-- export (/api/admin/dsar/export) accepts at least the live number of datasets
+-- (42), so it takes the 43rd once this update is applied.
 -- Read-only preflight: ../preflight/20261121162018_post_templates.check.sql.
 -- Rollback: ../rollback/20261121162018_post_templates.down.sql.
 begin;
@@ -94,22 +96,37 @@ security definer
 set search_path to 'pg_catalog'
 as $$
 declare actor uuid := internal.price_draft_actor(); clean text := btrim(p_name); saved private.post_templates;
-  replaced boolean;
+  replaced boolean; bad boolean;
 begin
   if clean is null or char_length(clean) not between 1 and 60 or clean ~ '[[:cntrl:]]' then
-    raise exception 'template name 1 to 60 characters' using errcode='22023', detail='template_invalid'; end if;
-  -- Only the fields the plan keeps: no photos, video, title, price, year,
-  -- mileage or numbers; contact buttons by name only.
-  if jsonb_typeof(p_data) is distinct from 'object' or octet_length(p_data::text) > 16384
-    or jsonb_typeof(p_data->'category') is distinct from 'string'
-    or exists(select 1 from jsonb_each(p_data) f where f.key not in
-      ('category','condition','categoryAttributes','description','province','city','town','address','contactMethods')
-      or (f.key not in ('categoryAttributes','contactMethods') and jsonb_typeof(f.value) <> 'string'))
-    or (p_data ? 'categoryAttributes' and (jsonb_typeof(p_data->'categoryAttributes') <> 'object'
-      or p_data->'categoryAttributes' ?| array['year','mileage_km']))
-    or (p_data ? 'contactMethods' and (jsonb_typeof(p_data->'contactMethods') <> 'array'
-      or exists(select 1 from jsonb_array_elements(p_data->'contactMethods') c
-        where c not in ('"call"','"whatsapp"','"in_app"')))) then
+    raise exception 'template name 1 to 60 characters' using errcode='22023', detail='template_name_invalid'; end if;
+  -- Only the fields the plan keeps: no photos, video, title, prices, numbers
+  -- or details that belong to one item (year, mileage, colour and the like);
+  -- details are text, yes/no or lists of text; contact buttons by name only.
+  -- Checked in steps, so each step only reads a shape the one before allowed.
+  bad := jsonb_typeof(p_data) is distinct from 'object';
+  if not bad then
+    bad := octet_length(p_data::text) > 16384
+      or jsonb_typeof(p_data->'category') is distinct from 'string' or p_data->>'category' = ''
+      or exists(select 1 from jsonb_each(p_data) f where f.key not in
+        ('category','condition','categoryAttributes','description','province','city','town','address','contactMethods')
+        or (f.key not in ('categoryAttributes','contactMethods') and jsonb_typeof(f.value) <> 'string'))
+      or jsonb_typeof(coalesce(p_data->'categoryAttributes', '{}'::jsonb)) <> 'object'
+      or jsonb_typeof(coalesce(p_data->'contactMethods', '[]'::jsonb)) <> 'array';
+  end if;
+  if not bad then
+    bad := coalesce(p_data->'categoryAttributes', '{}'::jsonb) ?| array['year','mileage_km','number_of_owners',
+        'battery_health_pct','colour','accident_free','registration_province','available_from',
+        'application_deadline','age_months','quantity','monthly_rent_zar','salary_min','salary_max','levy_zar',
+        'rates_taxes_zar']
+      or exists(select 1 from jsonb_each(coalesce(p_data->'categoryAttributes', '{}'::jsonb)) a
+        where case jsonb_typeof(a.value) when 'string' then false when 'boolean' then false
+          when 'array' then exists(select 1 from jsonb_array_elements(a.value) e where jsonb_typeof(e) <> 'string')
+          else true end)
+      or exists(select 1 from jsonb_array_elements(coalesce(p_data->'contactMethods', '[]'::jsonb)) c
+        where c not in ('"call"','"whatsapp"','"in_app"'));
+  end if;
+  if bad then
     raise exception 'template details invalid' using errcode='22023', detail='template_invalid'; end if;
   perform internal.lock_evidence_subject(actor);
   if not exists(select 1 from internal.slot_package_now(actor)) then
@@ -157,7 +174,7 @@ as $$
 declare actor uuid := internal.price_draft_actor(); clean text := btrim(p_name); renamed uuid;
 begin
   if clean is null or char_length(clean) not between 1 and 60 or clean ~ '[[:cntrl:]]' then
-    raise exception 'template name 1 to 60 characters' using errcode='22023', detail='template_invalid'; end if;
+    raise exception 'template name 1 to 60 characters' using errcode='22023', detail='template_name_invalid'; end if;
   perform internal.lock_evidence_subject(actor);
   if exists(select 1 from private.post_templates t where t.owner_id = actor and lower(t.name) = lower(clean)
       and t.id is distinct from p_template) then

@@ -426,8 +426,9 @@ export default function CreateListingPage() {
   useEffect(() => {
     if (!user?.id || isLoading || submitSucceeded) return;
 
-    void Promise.resolve(restoreDraft()).then((restored) => {
-      if (!restored || fromTemplate.current) return;
+    void Promise.resolve(restoreDraft()).then(async (restored) => {
+      // Opened with a template: an older draft only when the template failed.
+      if (!restored || (await fromTemplate.current)) return;
 
       const restoredData = restored.data;
       queueMicrotask(() => {

@@ -7,18 +7,50 @@ import type { ListingDraftData } from "@/lib/post-drafts/storage";
  * Post templates (business tools plan section 4, SHOW_POST_TEMPLATES): a
  * reusable starting point for Market listings. A template keeps the "Post an
  * item" form's fields the plan lists (the autosaved draft's shape, see
- * ListingDraftData), never photos, video, title, price, year, mileage or
- * numbers. The database enforces the same rule (api.save_my_post_template).
+ * ListingDraftData), never photos, video, title, prices, numbers or the
+ * details of one item. The database enforces the same rule
+ * (api.save_my_post_template).
  */
 
 export const POST_TEMPLATE_LIMIT = 20;
 export const POST_TEMPLATE_NAME_MAX = 60;
 
-/** Details that differ for every item: the poster fills them in each time. */
-const PER_ITEM_DETAILS = new Set(["year", "mileage_km"]);
+/**
+ * Details a template never keeps (the database refuses them too): prices, and
+ * details that belong to one item, which the poster fills in each time.
+ */
+const PER_ITEM_DETAILS = new Set([
+  // Prices
+  "monthly_rent_zar",
+  "salary_min",
+  "salary_max",
+  "levy_zar",
+  "rates_taxes_zar",
+  // One item
+  "year",
+  "mileage_km",
+  "number_of_owners",
+  "battery_health_pct",
+  "colour",
+  "accident_free",
+  "registration_province",
+  "available_from",
+  "application_deadline",
+  "age_months",
+  "quantity",
+]);
 const CONTACT_BUTTONS = ["call", "whatsapp", "in_app"] as const;
 
 const detailValue = z.union([z.string(), z.boolean(), z.array(z.string())]);
+
+/** A name as the database counts it: 1 to 60 characters (code points), trimmed. */
+export const postTemplateName = z
+  .string()
+  .trim()
+  .refine((name) => {
+    const length = [...name].length;
+    return length >= 1 && length <= POST_TEMPLATE_NAME_MAX;
+  });
 
 export const postTemplateData = z.strictObject({
   category: z.string().min(1),
@@ -39,17 +71,36 @@ export type PostTemplateData = z.infer<typeof postTemplateData>;
 export const postTemplate = z.strictObject({
   id: z.uuid(),
   kind: z.literal("listing"),
-  name: z.string().min(1).max(POST_TEMPLATE_NAME_MAX),
+  name: postTemplateName,
   data: postTemplateData,
   updated_at: z.string(),
 });
 export type PostTemplate = z.infer<typeof postTemplate>;
 
-export const postTemplateList = z.strictObject({
-  package_running: z.boolean(),
-  templates: z.array(postTemplate).max(POST_TEMPLATE_LIMIT),
-});
-export type PostTemplateList = z.infer<typeof postTemplateList>;
+export type PostTemplateList = { package_running: boolean; templates: PostTemplate[] };
+
+/**
+ * The list answer, template by template: one that does not parse (saved
+ * before a rule changed, say) is left out and named in `dropped`, so the rest
+ * stay usable. Throws only when the answer itself is malformed.
+ */
+export function parsePostTemplateList(body: unknown): PostTemplateList & { dropped: number } {
+  const list = z
+    .strictObject({
+      package_running: z.boolean(),
+      templates: z.array(z.unknown()).max(POST_TEMPLATE_LIMIT),
+    })
+    .parse(body);
+  const templates = list.templates.flatMap((item) => {
+    const parsed = postTemplate.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
+  return {
+    package_running: list.package_running,
+    templates,
+    dropped: list.templates.length - templates.length,
+  };
+}
 
 const isFilled = (value: unknown) =>
   !(value === undefined || value === null || value === "" || value === false) &&
