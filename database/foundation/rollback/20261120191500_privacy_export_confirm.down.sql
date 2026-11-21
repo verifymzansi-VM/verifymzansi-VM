@@ -12,9 +12,10 @@
 -- update changed it). It runs when only some of the update's objects exist,
 -- so a half-applied or partly removed state can be cleared.
 --
--- The rollback drops the two new commands; puts back the old export command
--- (one notice for the first export only, no hourly limit) and the privacy
--- request retention byte for byte; deletes the 'export_prepared' and
+-- The rollback drops the two new commands and the shared delivery rule; puts
+-- back the old export command (one notice for the first export only, no
+-- limits), the privacy notice claim and the privacy request retention byte
+-- for byte; deletes the 'export_prepared' and
 -- 'export_refused' events (the staff audit of prepared and refused exports;
 -- the 'exported' events stay, without their export id); drops the unique
 -- index, the export check and the export_id and export_digest columns of
@@ -27,13 +28,14 @@ do $$
 declare present integer;
 begin
   if exists(select 1 from (values
-      ('internal.export_frontend_privacy_request(uuid,integer)','939737e433fcf800d5e98a3dd1569e5d','fc93a2f693d79ddacb0cb36b6e65d44a'),
+      ('internal.export_frontend_privacy_request(uuid,integer)','939737e433fcf800d5e98a3dd1569e5d','46cc7ed7289c283e04804faaa38bb156'),
       ('api.export_frontend_privacy_request(uuid,integer)','251a62d1bb6d474172d02a2867b2556a','251a62d1bb6d474172d02a2867b2556a'),
-      ('internal.retention_privacy_requests(integer)','ae00ab54c00fd3f6f64ac6b8061ba929','65ca200080c2e6d9cf57ebc20bed96f7')) v(sig,reviewed,updated)
+      ('internal.retention_privacy_requests(integer)','ae00ab54c00fd3f6f64ac6b8061ba929','036cf32ba918a30fa0480b7fcd4a6615'),
+      ('internal.claim_frontend_privacy_notice()','ab583eeac94d2d46cee6344b5e0d6ef6','98f8a3f23b7509881aa6dfc8b1e7a335')) v(sig,reviewed,updated)
     where to_regprocedure(v.sig) is null
       or (select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig))
         not in (v.reviewed,v.updated)) then
-    raise exception 'rollback precondition: the old export command or the privacy retention is missing or changed' using errcode='55000';
+    raise exception 'rollback precondition: the old export command, the privacy retention or the notice claim is missing or changed' using errcode='55000';
   end if;
   select (to_regprocedure('internal.prepare_frontend_privacy_export(uuid,integer)') is not null)::integer
     + (to_regprocedure('api.prepare_frontend_privacy_export(uuid,integer)') is not null)::integer
@@ -47,18 +49,22 @@ begin
     + (exists(select 1 from pg_constraint c where c.conrelid='private.privacy_request_events'::regclass
         and c.conname='privacy_request_events_export_check'))::integer
     + ((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
-        where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)'))='fc93a2f693d79ddacb0cb36b6e65d44a')::integer
+        where oid=to_regprocedure('internal.export_frontend_privacy_request(uuid,integer)'))='46cc7ed7289c283e04804faaa38bb156')::integer
     + ((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
-        where oid=to_regprocedure('internal.retention_privacy_requests(integer)'))='65ca200080c2e6d9cf57ebc20bed96f7')::integer
+        where oid=to_regprocedure('internal.retention_privacy_requests(integer)'))='036cf32ba918a30fa0480b7fcd4a6615')::integer
+    + ((select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
+        where oid=to_regprocedure('internal.claim_frontend_privacy_notice()'))='98f8a3f23b7509881aa6dfc8b1e7a335')::integer
+    + (to_regprocedure('internal.privacy_notice_deliverable(private.privacy_requests)') is not null)::integer
   into present;
   if present=0 then
     raise exception 'rollback precondition: the privacy export confirm update is not applied' using errcode='55000';
   end if;
   if exists(select 1 from (values
-      ('internal.prepare_frontend_privacy_export(uuid,integer)','d36f1261ae7bf7225e87ab2dd6c9cac1'),
+      ('internal.prepare_frontend_privacy_export(uuid,integer)','3d75ecc26ff4d4a499a1e2ca3b678a49'),
       ('api.prepare_frontend_privacy_export(uuid,integer)','001f2fc46398c56fd2ac6d7b3bf2cf11'),
-      ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)','8452e29622998219f9e8802d2a5bb25d'),
-      ('api.confirm_frontend_privacy_export(uuid,integer,uuid)','438d948a6a90a8fefd9c6bf49df8c99f')) v(sig,body)
+      ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)','5fbb8a6db23bbdb1b77e81a221ec6e4d'),
+      ('api.confirm_frontend_privacy_export(uuid,integer,uuid)','438d948a6a90a8fefd9c6bf49df8c99f'),
+      ('internal.privacy_notice_deliverable(private.privacy_requests)','07d09e5b62485aebc0bd4d1b16e04809')) v(sig,body)
     where to_regprocedure(v.sig) is not null
       and (select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig)) is distinct from v.body) then
     raise exception 'rollback precondition: a new export command is not the reviewed body' using errcode='55000';
@@ -102,6 +108,40 @@ end$function$;
 alter function internal.export_frontend_privacy_request(uuid,integer) owner to postgres;
 revoke all on function internal.export_frontend_privacy_request(uuid,integer) from public;
 grant execute on function internal.export_frontend_privacy_request(uuid,integer) to authenticated;
+
+-- The privacy notice claim as it was before the update.
+CREATE OR REPLACE FUNCTION internal.claim_frontend_privacy_notice()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare now_at timestamptz:=clock_timestamp();result jsonb;
+begin
+  with due as (
+    select j.id from private.privacy_notice_jobs j join private.privacy_requests r on r.id=j.request_id
+    where j.delivered_at is null and j.attempts<8 and j.next_attempt_at<=now_at
+      and (j.locked_until is null or j.locked_until<now_at)
+      and r.minimised_at is null -- a minimised request has no address left
+      -- An erased account's request goes to the address stored with it.
+      and (r.identity_check='manual' or exists(select 1 from private.account_erasure_requests l where l.request_id=r.id)
+        or exists(select 1 from auth.users u where u.id=r.subject_user_id and u.email_confirmed_at is not null
+        and not u.is_anonymous and u.deleted_at is null and lower(u.email)=lower(r.requester_email)))
+    order by j.next_attempt_at,j.id limit 1 for update of j skip locked
+  ), claimed as (
+    update private.privacy_notice_jobs j set claim_token=gen_random_uuid(),locked_until=now_at+interval '90 seconds',attempts=attempts+1
+    from due where j.id=due.id returning j.*
+  )
+  select jsonb_build_object('id',j.id,'request_id',r.id,'kind',j.kind,'recipient',r.requester_email,'claim_token',j.claim_token,'locked_until',j.locked_until,
+    'due',case when j.kind='extended' then r.extended_due_at when j.kind='submitted' then r.due_by end,
+    'reason',case when j.kind='extended' then r.extension_reason end)
+    into result from claimed j join private.privacy_requests r on r.id=j.request_id;
+  return result;
+end$function$;
+alter function internal.claim_frontend_privacy_notice() owner to postgres;
+revoke all on function internal.claim_frontend_privacy_notice() from public;
+grant execute on function internal.claim_frontend_privacy_notice() to service_role;
+drop function if exists internal.privacy_notice_deliverable(private.privacy_requests);
 
 -- The privacy request retention as it was before the update.
 CREATE OR REPLACE FUNCTION internal.retention_privacy_requests(p_limit integer)

@@ -316,3 +316,23 @@ it("words a failure after the confirmation may have committed as uncertain", asy
     expect(answer.error, label).not.toMatch(NOTHING);
   }
 });
+
+it("tells staff to contact a member who cannot be notified", async () => {
+  for (const name of ["prepare_frontend_privacy_export", "confirm_frontend_privacy_export"]) {
+    rpc.mockReset();
+    const refused = {
+      data: null,
+      error: { code: "55000", message: "cannot be notified", details: "member_not_notifiable" },
+    };
+    database(prepared(true, registry), undefined, {
+      ...(name === "prepare_frontend_privacy_export"
+        ? { prepareAnswer: refused }
+        : { confirmAnswer: refused }),
+    });
+    const answer = await refusal(await POST(request()));
+    expect(answer.status, name).toBe(409);
+    expect(answer.error, name).toBe(
+      "The member can't be notified right now, so nothing was exported. Contact the member and update the request first."
+    );
+  }
+});

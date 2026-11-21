@@ -10,7 +10,7 @@
 // refused, recorded and spent; a second confirmation, even a parallel one, is
 // refused; only the preparing staff member (never the requester or subject)
 // can confirm, at the same revision, within 15 minutes; requests can be
-// exported while open, or completed less than 720 hours ago and not
+// exported while open, or completed less than 696 hours ago and not
 // minimised; builds are limited to 10 an hour per staff member and request
 // (refused builds included) and confirmed exports to 5 a request; retention
 // clears unconfirmed digests a day after expiry. The old export command keeps
@@ -231,7 +231,7 @@ try {
     q(
       `alter table private.privacy_request_events drop constraint privacy_request_events_export_check;`
     );
-    assert.match(fails(step.sql, "55000"), /7 of 8 objects exist/);
+    assert.match(fails(step.sql, "55000"), /8 of 9 objects exist/);
     q(
       `alter table private.privacy_request_events add constraint privacy_request_events_export_check ${checkDef};`
     );
@@ -489,7 +489,7 @@ try {
       0
     );
   });
-  await check("exports only while open, or shortly after completion (720 hours)", () => {
+  await check("exports only while open, or shortly after completion (696 hours)", () => {
     const requester = user("window");
     const id = approved(requester);
     json(confirm(admin, id, json(prepare(admin, id)).export_id));
@@ -657,6 +657,152 @@ try {
     json(confirm(admin, intake, json(prepare(admin, intake)).export_id));
     assert.deepEqual(job(intake), { delivered: false, attempts: 0 });
     assert.equal(count(`private.notifications where subject_id='${intake}'`), 0);
+  });
+  const NOT_NOTIFIABLE = /The member can't be notified right now, so nothing was exported/;
+  /** Refused because the member cannot be told; checks the detail too. */
+  const unreachable = (sql) => {
+    const stderr = fails(sql, "55000", NOT_NOTIFIABLE);
+    assert.match(stderr, /DETAIL:\s+member_not_notifiable/, stderr);
+  };
+  await check("a member without the bell whose email cannot be delivered is not exported", () => {
+    // Banned, and the account's email no longer the request's address.
+    const changed = user("email-changed");
+    const changedId = approved(changed);
+    const early = json(prepare(admin, changedId)).export_id;
+    q(`update auth.users set banned_until=now()+interval '1 day',email='moved-'||id||'@example.invalid'
+      where id='${changed.id}';`);
+    unreachable(prepare(admin, changedId));
+    unreachable(confirm(admin, changedId, early));
+    unreachable(oldExport(admin, changedId));
+    // A soft-deleted account.
+    const deleted = user("email-deleted");
+    const deletedId = approved(deleted);
+    q(`update auth.users set deleted_at=now() where id='${deleted.id}';`);
+    unreachable(prepare(admin, deletedId));
+    unreachable(oldExport(admin, deletedId));
+    for (const [who, id] of [
+      [changed, changedId],
+      [deleted, deletedId],
+    ]) {
+      assert.equal(
+        count(`private.privacy_request_events where request_id='${id}' and action='exported'`),
+        0
+      );
+      assert.equal(exportedJobs(id), 0);
+      assert.equal(notices(who), 0);
+    }
+    // The same rule as the email job's claim: the banned member with the
+    // request's address can be exported (and is emailed).
+    assert.equal(
+      q(
+        `select internal.privacy_notice_deliverable(r) from private.privacy_requests r where r.id='${changedId}';`
+      ),
+      "f"
+    );
+    q(`update auth.users set email=(select requester_email from private.privacy_requests where id='${changedId}')
+      where id='${changed.id}';`);
+    json(confirm(admin, changedId, json(prepare(admin, changedId)).export_id));
+    assert.equal(exportedJobs(changedId), 1);
+  });
+
+  /** A completed request of a new member, every email so far delivered. */
+  const completedRequest = (label, hoursAgo) => {
+    const who = user(label);
+    const id = approved(who);
+    q(
+      staff(
+        admin,
+        `select api.process_frontend_privacy_request('${id}',${privacy(id).revision},'complete');`
+      )
+    );
+    q(`update private.privacy_requests set completed_at=now()-make_interval(hours=>${hoursAgo}) where id='${id}';
+      update private.privacy_notice_jobs set delivered_at=now(),attempts=1 where request_id='${id}';`);
+    return [who, id];
+  };
+  const retention = () => json(`select internal.retention_privacy_requests(100);`);
+  const minimised = (id) =>
+    q(`select minimised_at is not null from private.privacy_requests where id='${id}';`) === "t";
+  await check("an export at the end of the window is still emailed before retention", () => {
+    // Without an export, retention closes out a completed request at once.
+    const [, quiet] = completedRequest("window-quiet", 1);
+    retention();
+    assert.equal(minimised(quiet), true);
+    // The window ends 696 hours after completion, a day before retention's 30 days.
+    const [, late] = completedRequest("window-late", 697);
+    fails(prepare(admin, late), "PT409", /represented verified access request required/);
+    // At 695 hours: a banned member is emailed, and retention keeps the
+    // request (and its address) until that email is delivered.
+    const [banned, edge] = completedRequest("window-edge", 695);
+    q(`update auth.users set banned_until=now()+interval '1 day' where id='${banned.id}';`);
+    json(confirm(admin, edge, json(prepare(admin, edge)).export_id));
+    retention();
+    assert.equal(minimised(edge), false);
+    assert.equal(
+      q(
+        `select internal.privacy_notice_deliverable(r) from private.privacy_requests r where r.id='${edge}';`
+      ),
+      "t"
+    );
+    // Delivered, but exported less than 24 hours ago: still kept.
+    q(
+      `update private.privacy_notice_jobs set delivered_at=now(),attempts=1 where request_id='${edge}';`
+    );
+    retention();
+    assert.equal(minimised(edge), false);
+    q(`update private.privacy_request_events set occurred_at=occurred_at-interval '25 hours'
+      where request_id='${edge}' and action='exported';`);
+    retention();
+    assert.equal(minimised(edge), true);
+    // An email abandoned after 8 attempts no longer holds the request.
+    const [abandonedWho, abandoned] = completedRequest("window-abandoned", 1);
+    q(`update auth.users set banned_until=now()+interval '1 day' where id='${abandonedWho.id}';`);
+    json(confirm(admin, abandoned, json(prepare(admin, abandoned)).export_id));
+    q(`update private.privacy_notice_jobs set attempts=8 where request_id='${abandoned}' and kind='exported';
+      update private.privacy_request_events set occurred_at=occurred_at-interval '25 hours'
+        where request_id='${abandoned}' and action='exported';`);
+    q(
+      `update private.privacy_requests set completed_at=now()-interval '31 days' where id='${abandoned}';`
+    );
+    retention();
+    assert.equal(minimised(abandoned), true);
+  });
+  await check("retention and a confirmation never race past each other", async () => {
+    // Retention while a confirmation holds the request: left for later.
+    const [member1, held] = completedRequest("race-confirm-first", 1);
+    const heldExport = json(prepare(admin, held)).export_id;
+    const call = `select api.confirm_frontend_privacy_export('${held}',${privacy(held).revision},'${heldExport}')`;
+    const [confirmed, swept] = await Promise.all([
+      session(staff(admin, `begin;\n${call};\nselect pg_sleep(2);\ncommit;`)),
+      delayed(500, `select internal.retention_privacy_requests(100);`),
+    ]);
+    assert.equal(confirmed.status, 0, confirmed.stderr);
+    assert.equal(swept.status, 0, swept.stderr);
+    assert.equal(minimised(held), false);
+    retention();
+    assert.equal(minimised(held), false, "the export is less than a day old");
+    assert.equal(notices(member1), 1);
+    // A confirmation while retention holds the request: it then finds the
+    // request closed out and refuses; nothing was exported.
+    const [member2, closing] = completedRequest("race-retention-first", 1);
+    const closingExport = json(prepare(admin, closing)).export_id;
+    const [sweeping, refused] = await Promise.all([
+      session(
+        `begin;\nselect internal.retention_privacy_requests(100);\nselect pg_sleep(2);\ncommit;`
+      ),
+      delayed(
+        500,
+        staff(
+          admin,
+          `select api.confirm_frontend_privacy_export('${closing}',${privacy(closing).revision},'${closingExport}');`
+        )
+      ),
+    ]);
+    assert.equal(sweeping.status, 0, sweeping.stderr);
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr, /PT409: represented verified access request required/);
+    assert.equal(minimised(closing), true);
+    assert.equal(exportedJobs(closing), 0);
+    assert.equal(notices(member2), 0);
   });
   await check("retention clears the digest of unconfirmed exports a day after expiry", () => {
     const requester = user("retention");

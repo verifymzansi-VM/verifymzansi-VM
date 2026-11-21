@@ -97,10 +97,16 @@ signature) until a later update removes it (contract step, with a
 
 - **Which requests:** a verified access request at the represented revision,
   while it is open, or shortly after it is completed (until it is closed out:
-  completed less than 720 hours ago, a fixed length, and not yet minimised;
-  retention usually minimises it soon after completion, and its timing is
-  unchanged). At most 5 exports per request, old and new commands counted
-  together (PT429).
+  completed less than 696 hours ago, a fixed length a day before retention's 30
+  days, and not yet minimised; retention usually minimises it soon after
+  completion). At most 5 exports per request, old and new commands counted
+  together (PT429). When the account cannot see its bell (no access, or
+  deleted), all three commands refuse (55000, `member_not_notifiable`: "The
+  member can't be notified right now, so nothing was exported. Contact the
+  member and update the request first.") unless the export email is deliverable
+  under the email job's own rule, `internal.privacy_notice_deliverable`, which
+  `internal.claim_frontend_privacy_notice` now uses too (same behaviour).
+  Requests with no account export no personal data and are not refused.
 - **`api.prepare_frontend_privacy_export(p_case, p_revision)`** answers no
   personal data, digest or counts: the reference, dates, a new `export_id` and
   the dataset names. It keeps the export's SHA-256 digest in an
@@ -133,7 +139,12 @@ signature) until a later update removes it (contract step, with a
   abandoned email is armed again, and one still waiting covers the export.
 - **Retention:** `internal.retention_privacy_requests` (run daily by
   `api.run_retention`) also clears the digest of prepared exports never
-  confirmed, a day after they expired, and reports `export_digests_cleared`.
+  confirmed, a day after they expired, and reports `export_digests_cleared`. It
+  no longer minimises a request exported in the last 24 hours or whose export
+  email is still being tried (undelivered, fewer than 8 attempts), and it locks
+  the requests it minimises (`for update skip locked`): a request an export
+  holds is left for the next run, and an export waiting for retention then finds
+  the request closed out and refuses. Its results are otherwise unchanged.
 - **The website** checks the prepared dataset names (exactly one set in
   `src/lib/foundation/privacy-export-datasets.ts`, read from the raw object's
   own keys), confirms, and hands the file over without the export id. Every

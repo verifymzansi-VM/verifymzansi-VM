@@ -28,6 +28,8 @@ const NOTHING = {
   tooLarge: "The export is too large for a direct download. Nothing was exported.",
   limit: "This request has been exported too often. Try again later. Nothing was exported.",
   unavailable: "The data export could not be confirmed. Nothing was exported.",
+  unreachable:
+    "The member can't be notified right now, so nothing was exported. Contact the member and update the request first.",
 };
 /** After the confirmation may have been committed: the member may have been
  * told and the export recorded, so this is not a refusal. */
@@ -37,7 +39,7 @@ const UNCERTAIN =
 const SQLSTATE = /^[0-9A-Z]{5}$/;
 /** The database's "refused" answer: only the refusal was recorded. */
 const refusedAnswer = z.object({ refused: z.enum(["too_large", "changed"]) });
-type DatabaseError = { code?: string; message?: string };
+type DatabaseError = { code?: string; message?: string; details?: string };
 
 /** The refusal for a database error code or a "refused" answer. */
 function definiteRefusal(
@@ -58,6 +60,12 @@ function definiteRefusal(
       return new FoundationStaffCommandError(413, NOTHING.tooLarge);
     case "PT429":
       return new FoundationStaffCommandError(429, NOTHING.limit);
+    // A member who cannot see the bell and whose export email could not be
+    // delivered (20261120191500_privacy_export_confirm.sql).
+    case "55000":
+      return error.details === "member_not_notifiable"
+        ? new FoundationStaffCommandError(409, NOTHING.unreachable)
+        : new FoundationStaffCommandError(503, NOTHING.unavailable);
     default:
       return new FoundationStaffCommandError(503, NOTHING.unavailable);
   }

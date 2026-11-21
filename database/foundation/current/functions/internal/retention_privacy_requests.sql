@@ -9,17 +9,23 @@ CREATE OR REPLACE FUNCTION internal.retention_privacy_requests(p_limit integer)
 AS $function$
 declare minimised integer; purged integer; cleared integer;
 begin
-  with closed as (
-    select r.id, coalesce(r.completed_at,
+  with due as (
+    select r.id from private.privacy_requests r
+      cross join lateral (select coalesce(r.completed_at,
         (select max(e.occurred_at) from private.privacy_request_events e where e.request_id = r.id),
-        r.created_at) as closed_at
-    from private.privacy_requests r
+        r.created_at) as closed_at) c
     where r.status in ('completed', 'rejected') and r.minimised_at is null
-  ), due as (
-    select c.id from closed c
-    where c.closed_at < statement_timestamp() - interval '30 days'
-      or not exists (select 1 from private.privacy_notice_jobs j where j.request_id = c.id and j.delivered_at is null)
+      and (c.closed_at < statement_timestamp() - interval '30 days'
+        or not exists (select 1 from private.privacy_notice_jobs j where j.request_id = r.id and j.delivered_at is null))
+      -- Never while an access export may still be telling the member: an
+      -- export in the last 24 hours, or its email still being tried.
+      and not exists (select 1 from private.privacy_request_events e where e.request_id = r.id
+        and e.action = 'exported' and e.occurred_at > statement_timestamp() - interval '24 hours')
+      and not exists (select 1 from private.privacy_notice_jobs j where j.request_id = r.id
+        and j.kind = 'exported' and j.delivered_at is null and j.attempts < 8)
     order by c.closed_at limit p_limit
+    -- A request an export holds is left for the next run.
+    for update of r skip locked
   )
   update private.privacy_requests r
     set requester_email = 'removed',

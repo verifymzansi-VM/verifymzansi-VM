@@ -15,12 +15,19 @@ begin
   -- happen one at a time.
   select * into r from private.privacy_requests where id=p_case for no key update;
   if not found or r.revision is distinct from p_revision or r.type<>'access' or not r.identity_verified
-      or not (r.status='in_progress' or (r.status='completed' and r.completed_at>clock_timestamp()-interval '720 hours'
+      or not (r.status='in_progress' or (r.status='completed' and r.completed_at>clock_timestamp()-interval '696 hours'
         and r.minimised_at is null))
     then raise exception 'represented verified access request required' using errcode='PT409';end if;
   actor:=internal.staff_actor('dsar:manage');
   if actor=r.subject_user_id or exists(select 1 from auth.users u where u.id=actor and lower(u.email)=lower(r.requester_email))
     then raise exception 'another staff member must export your request' using errcode='42501';end if;
+  -- A member who cannot see the bell (no account access, or a deleted
+  -- account) is told only by email: no export unless that email can be
+  -- delivered under the email job's own rule.
+  if r.subject_user_id is not null and not exists(select 1 from private.current_account_access a where a.id=r.subject_user_id)
+      and not internal.privacy_notice_deliverable(r)
+    then raise exception 'The member can''t be notified right now, so nothing was exported. Contact the member and update the request first.'
+      using errcode='55000', detail='member_not_notifiable';end if;
   select * into prepared from private.privacy_request_events e
     where e.export_id=p_export and e.action='export_prepared' and e.request_id=r.id;
   if not found or prepared.actor_id is distinct from actor or prepared.represented_revision<>r.revision

@@ -2438,7 +2438,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current privacy reviewer with fresh TOTP; only the represented verified access request while it is open, or shortly after it is completed (until it is closed out), and fixed subject-scoped datasets. Oversized exports are refused in full. At most 5 exports per request (counted with prepare and confirm) and 10 per reviewer and request per hour. Every export notifies the account the request names; the requester is emailed once per request, or on every export when that account cannot sign in. Replaced by prepare and confirm; removed in the contract step."
+      "authority": "Current privacy reviewer with fresh TOTP; only the represented verified access request while it is open, or shortly after it is completed (until it is closed out), and fixed subject-scoped datasets. Oversized exports are refused in full. At most 5 exports per request (counted with prepare and confirm) and 10 per reviewer and request per hour. Every export notifies the account the request names; the requester is emailed once per request, or on every export when that account cannot sign in, and the export is refused when that email could not be delivered. Replaced by prepare and confirm; removed in the contract step."
     },
     {
       "name": "prepare_frontend_privacy_export",
@@ -2462,7 +2462,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current privacy reviewer with fresh TOTP, never the requester or data subject; a verified access request while it is open, or shortly after it is completed (until it is closed out), with fewer than 5 confirmed exports. Returns no personal data: reference, dates, a new export id and the dataset names; the digest stays in the database. Too large is answered as refused. At most 10 builds per reviewer and request per hour, refused builds included. Tells the member nothing."
+      "authority": "Current privacy reviewer with fresh TOTP, never the requester or data subject; a verified access request while it is open, or shortly after it is completed (until it is closed out), with fewer than 5 confirmed exports; refused when the account cannot see its bell and the export email could not be delivered. Returns no personal data: reference, dates, a new export id and the dataset names; the digest stays in the database. Too large is answered as refused. At most 10 builds per reviewer and request per hour, refused builds included. Tells the member nothing."
     },
     {
       "name": "confirm_frontend_privacy_export",
@@ -2491,7 +2491,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "The privacy reviewer who prepared that export (never the requester or data subject), same rules and revision, within 15 minutes, once. Rebuilds the export; a changed or too large export is answered as refused and recorded. Otherwise, in one transaction, records the export, adds a bell notice for the account the request names (every export; the export fails if it cannot), emails the requester (once per request, or every export when that account cannot sign in) and returns the data. A second confirmation is refused."
+      "authority": "The privacy reviewer who prepared that export (never the requester or data subject), same rules and revision, within 15 minutes, once. Rebuilds the export; a changed or too large export is answered as refused and recorded. Otherwise, in one transaction, records the export, adds a bell notice for the account the request names (every export; the export fails if it cannot), emails the requester (once per request, or every export when that account cannot sign in; refused when that email could not be delivered) and returns the data. A second confirmation is refused."
     },
     {
       "name": "claim_frontend_privacy_notice",

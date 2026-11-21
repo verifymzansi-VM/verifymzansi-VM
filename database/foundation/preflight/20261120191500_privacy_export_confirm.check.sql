@@ -30,14 +30,17 @@ with bodies as (
     ('internal.signal_owner_inbox(uuid)',
       '2a7742d89598d62117a9b7620e0271e9', '2a7742d89598d62117a9b7620e0271e9'),
     ('internal.export_frontend_privacy_request(uuid,integer)',
-      '939737e433fcf800d5e98a3dd1569e5d', 'fc93a2f693d79ddacb0cb36b6e65d44a'),
+      '939737e433fcf800d5e98a3dd1569e5d', '46cc7ed7289c283e04804faaa38bb156'),
     ('internal.retention_privacy_requests(integer)',
-      'ae00ab54c00fd3f6f64ac6b8061ba929', '65ca200080c2e6d9cf57ebc20bed96f7'),
+      'ae00ab54c00fd3f6f64ac6b8061ba929', '036cf32ba918a30fa0480b7fcd4a6615'),
+    ('internal.claim_frontend_privacy_notice()',
+      'ab583eeac94d2d46cee6344b5e0d6ef6', '98f8a3f23b7509881aa6dfc8b1e7a335'),
+    ('internal.privacy_notice_deliverable(private.privacy_requests)', null, '07d09e5b62485aebc0bd4d1b16e04809'),
     ('api.export_frontend_privacy_request(uuid,integer)',
       '251a62d1bb6d474172d02a2867b2556a', '251a62d1bb6d474172d02a2867b2556a'),
-    ('internal.prepare_frontend_privacy_export(uuid,integer)', null, 'd36f1261ae7bf7225e87ab2dd6c9cac1'),
+    ('internal.prepare_frontend_privacy_export(uuid,integer)', null, '3d75ecc26ff4d4a499a1e2ca3b678a49'),
     ('api.prepare_frontend_privacy_export(uuid,integer)', null, '001f2fc46398c56fd2ac6d7b3bf2cf11'),
-    ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '8452e29622998219f9e8802d2a5bb25d'),
+    ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '5fbb8a6db23bbdb1b77e81a221ec6e4d'),
     ('api.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '438d948a6a90a8fefd9c6bf49df8c99f')
   ) v(sig, reviewed, updated)
 ),
@@ -74,7 +77,8 @@ objects as (
     ('settings internal.prepare_frontend_privacy_export(uuid,integer)', 'true search_path=pg_catalog postgres false true false'),
     ('settings api.prepare_frontend_privacy_export(uuid,integer)', 'false search_path=pg_catalog postgres false true false'),
     ('settings internal.confirm_frontend_privacy_export(uuid,integer,uuid)', 'true search_path=pg_catalog postgres false true false'),
-    ('settings api.confirm_frontend_privacy_export(uuid,integer,uuid)', 'false search_path=pg_catalog postgres false true false')
+    ('settings api.confirm_frontend_privacy_export(uuid,integer,uuid)', 'false search_path=pg_catalog postgres false true false'),
+    ('settings internal.privacy_notice_deliverable(private.privacy_requests)', 'false search_path=pg_catalog postgres false false false')
   ) v(name, updated)
 ),
 actions as (
