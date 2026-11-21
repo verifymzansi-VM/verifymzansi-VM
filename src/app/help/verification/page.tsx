@@ -53,7 +53,7 @@ const REJECTIONS: RejectionEntry[] = [
     tips: [
       "Check that your full legal name matches the document exactly.",
       "Verify your 13-digit SA ID number — one digit off causes a mismatch.",
-      "If you changed your name, upload the updated document.",
+      "If you changed your name, photograph your updated document.",
     ],
   },
   {
@@ -72,13 +72,13 @@ const REJECTIONS: RejectionEntry[] = [
     tips: [
       "Photograph the entire document from corner to corner.",
       "Place it on a flat, contrasting surface.",
-      "Avoid cropping the image before uploading.",
+      "Keep all four corners inside the frame on the camera screen.",
     ],
   },
   {
     code: "wrong_document_type",
     title: "Wrong document type",
-    description: "Uploaded file isn't a recognised SA identity document.",
+    description: "The photo isn't of a recognised SA identity document.",
     tips: [
       "We accept: SA Smart ID Card, SA Green ID Book, or SA Passport.",
       "Driver's licences and bank statements are not accepted.",
@@ -89,7 +89,7 @@ const REJECTIONS: RejectionEntry[] = [
     title: "Non-South-African document",
     description: "Only SA identity documents are accepted.",
     tips: [
-      "Upload your SA ID book, SA Smart ID card, or SA passport.",
+      "Photograph your SA ID book or SA Smart ID card.",
       "Foreign passports and permits are not supported.",
     ],
   },
@@ -174,6 +174,23 @@ const CAMERA_HELP = [
       "On Android Chrome: Site settings > Camera > Allow for this site.",
       "If you tapped Block before, Chrome will not re-prompt until you change this site back to Ask or Allow.",
       "If the prompt still does not appear, restart the browser and try again.",
+    ],
+  },
+  {
+    icon: Smartphone,
+    title: "Inside WhatsApp, Facebook or Instagram",
+    subtitle: "Links opened inside an app",
+    tips: [
+      "These apps often block the camera. Open the page in Chrome or Safari instead: tap ⋮ or the share icon, then “Open in browser”.",
+    ],
+  },
+  {
+    icon: Monitor,
+    title: "No camera on your computer?",
+    subtitle: "Continue on your phone",
+    tips: [
+      "Choose Continue on your phone and scan the QR code with your phone's camera. It works once, for 15 minutes, only for your account.",
+      "No QR scanner? Sign in on your phone and open Get verified: your check carries on there.",
     ],
   },
 ] as const;
@@ -261,8 +278,8 @@ export default function VerificationHelpPage() {
               ))}
             </div>
             <p className="mt-4 rounded-2xl bg-muted/70 px-4 py-3 text-sm leading-6 text-muted-foreground">
-              You can always continue verification by uploading a clear image file instead of using
-              the live camera.
+              Photos are taken with the camera on the verification page. Photos from your gallery or
+              files can&apos;t be used. No camera at all? Contact support.
             </p>
           </section>
 

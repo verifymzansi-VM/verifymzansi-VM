@@ -1,0 +1,38 @@
+/**
+ * A tiny synthetic JPEG header as the verification page's canvas writes it
+ * (JFIF, a frame header with the size, no EXIF unless asked). Not a decodable
+ * image: the routes' image cleaning is mocked in the tests that use it.
+ */
+export function cameraJpeg({ width = 1600, height = 900, exif = false } = {}) {
+  const app0 = [
+    0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01,
+    0x00, 0x00,
+  ];
+  const app1 = exif ? [0xff, 0xe1, 0x00, 0x08, 0x45, 0x78, 0x69, 0x66, 0x00, 0x00] : [];
+  const sof = [
+    0xff,
+    0xc0,
+    0x00,
+    0x11,
+    0x08,
+    height >> 8,
+    height & 0xff,
+    width >> 8,
+    width & 0xff,
+    0x03,
+    0x01,
+    0x11,
+    0x00,
+    0x02,
+    0x11,
+    0x01,
+    0x03,
+    0x11,
+    0x01,
+  ];
+  return new Uint8Array([0xff, 0xd8, ...app0, ...app1, ...sof, 0xff, 0xda, 0x00, 0x02, 0xff, 0xd9]);
+}
+
+export function cameraJpegFile(options?: Parameters<typeof cameraJpeg>[0]) {
+  return new File([cameraJpeg(options)], "capture.jpg", { type: "image/jpeg" });
+}

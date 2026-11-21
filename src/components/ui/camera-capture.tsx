@@ -1,25 +1,41 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import {
+  AlertTriangle,
   Camera,
   CheckCircle2,
+  Circle,
+  Flashlight,
   Glasses,
   IdCard,
   Loader2,
   RefreshCw,
   ScanFace,
+  Smartphone,
   Sun,
   VideoOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useFaceLiveness } from "./use-face-liveness";
 import { SelfieCameraDialog } from "./selfie-camera-dialog";
 import { SelfieFaceGuide } from "./selfie-face-guide";
+import {
+  analyseFrame,
+  cameraProblem,
+  isInAppBrowser,
+  isPhoneOrTablet,
+  PHOTO_LIMITS,
+  QUALITY_LIMITS,
+  qualityHint,
+  scaledSize,
+  shouldRetryWithPlainerSettings,
+  type CameraProblem,
+  type FrameQuality,
+} from "./camera-capture-helpers";
 
 interface CameraCaptureProps {
   onCapture: (file: File, meta?: CaptureMeta) => void;
@@ -27,8 +43,6 @@ interface CameraCaptureProps {
   disabled?: boolean;
   cameraStartTimeoutMs?: number;
   telemetryContext?: string;
-  /** Called when camera is unavailable and user falls back to file upload */
-  onFallback?: () => void;
   /**
    * When true, an in-browser active-liveness challenge (blink / head turn)
    * must be completed before the "Take Photo" button is enabled. Use for the
@@ -39,18 +53,31 @@ interface CameraCaptureProps {
   documentGuide?: boolean;
   /** Clear the previous submission when a new capture starts. */
   onReset?: () => void;
+  /**
+   * Offered when this device's camera cannot be used: take the photos on a
+   * phone instead. Not shown on a phone or tablet.
+   */
+  onContinueOnPhone?: () => void;
+  /** Tells the page whether the ID photo is being checked (picture 01b). */
+  onReviewChange?: (reviewing: boolean) => void;
+  /**
+   * Asks the server for a capture token when the camera starts; the photo
+   * must be sent within 10 minutes of it. Null or an error stops the camera.
+   */
+  getCaptureToken?: () => Promise<string | null>;
 }
 
 export interface CaptureMeta {
   /** True when the in-browser liveness challenge was completed. */
   livenessPassed: boolean;
+  /** The capture token issued when this camera started (getCaptureToken). */
+  captureToken?: string;
 }
 
-type CameraState = "idle" | "streaming" | "captured" | "error";
+type CameraState = "idle" | "streaming" | "review" | "captured" | "error";
 const DEFAULT_CAMERA_START_TIMEOUT_MS = 15_000;
 const PERMISSION_QUERY_TIMEOUT_MS = 1_000;
-const BLOCKED_FOR_SITE_MESSAGE =
-  "Camera is blocked for this site. Your browser may not show the camera prompt again until you allow camera access in site settings. Please enable camera permission, then try again, or use the file upload below.";
+const HINT_INTERVAL_MS = 600;
 
 interface PermissionLookupResult {
   state: PermissionState | null;
@@ -71,14 +98,7 @@ type CameraNavigator = Navigator & {
   msGetUserMedia?: LegacyGetUserMedia;
 };
 
-function shouldTryRelaxedCameraConstraints(errorName: string): boolean {
-  return [
-    "OverconstrainedError",
-    "ConstraintNotSatisfiedError",
-    "NotFoundError",
-    "DevicesNotFoundError",
-  ].includes(errorName);
-}
+type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean };
 
 function getCameraErrorName(error: unknown): string {
   if (error instanceof Error) {
@@ -116,16 +136,52 @@ function getCameraRequest():
     });
 }
 
+const PROBLEM_TEXT: Record<CameraProblem, (subject: string) => { title: string; body: string }> = {
+  blocked: (subject) => ({
+    title: "Your camera is blocked for VerifyMzansi.",
+    body: `We need your camera to ${subject}. Photos from your gallery can't be used.`,
+  }),
+  none: (subject) => ({
+    title: "We can't find a camera on this device.",
+    body: `We need a camera to ${subject}. Continue on your phone, or try again.`,
+  }),
+  busy: () => ({
+    title: "Your camera didn't start.",
+    body: "Close other apps or tabs using the camera, then try again.",
+  }),
+  failed: () => ({
+    title: "We couldn't start your camera.",
+    body: "Please try again.",
+  }),
+};
+
+const BLOCKED_STEPS = [
+  {
+    title: "Android (Chrome)",
+    text: "Tap the icon left of the web address, then Permissions, then Camera: Allow.",
+  },
+  {
+    title: "iPhone (Safari)",
+    text: "Tap “aA” in the address bar, then Website Settings, then Camera: Allow.",
+  },
+  {
+    title: "Inside WhatsApp, Facebook or Instagram",
+    text: "Open this page in Chrome or Safari instead: tap ⋮ or the share icon, then “Open in browser”.",
+  },
+];
+
 export function CameraCapture({
   onCapture,
   facingMode,
   disabled = false,
   cameraStartTimeoutMs = DEFAULT_CAMERA_START_TIMEOUT_MS,
   telemetryContext,
-  onFallback,
   requireLiveness = false,
   documentGuide = false,
   onReset,
+  onContinueOnPhone,
+  onReviewChange,
+  getCaptureToken,
 }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sessionRef = useRef(0);
@@ -136,15 +192,24 @@ export function CameraCapture({
   const streamRef = useRef<MediaStream | null>(null);
   const streamContainerRef = useRef<HTMLDivElement>(null);
   const takePhotoButtonRef = useRef<HTMLButtonElement>(null);
-  const fileInputId = useId();
+  const reviewFileRef = useRef<File | null>(null);
+  const captureTokenRef = useRef<string | null>(null);
   const [state, setState] = useState<CameraState>("idle");
-  const [errorMessage, setErrorMessage] = useState<string>("");
+  const [problem, setProblem] = useState<CameraProblem | null>(null);
+  // A message other than the problem's own title and text (an interruption).
+  const [customMessage, setCustomMessage] = useState<string | null>(null);
   const [capturedUrl, setCapturedUrl] = useState<string>("");
   const [isStartingCamera, setIsStartingCamera] = useState(false);
   const [documentFormat, setDocumentFormat] = useState<"card" | "book">("card");
   const [manualCapture, setManualCapture] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [captureError, setCaptureError] = useState("");
+  const [hint, setHint] = useState<string | null>(null);
+  const [torchAvailable, setTorchAvailable] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [photoQuality, setPhotoQuality] = useState<FrameQuality | null>(null);
+  const [inAppBrowser, setInAppBrowser] = useState(false);
+  const [onPhone, setOnPhone] = useState(true);
 
   const {
     status: livenessStatus,
@@ -154,12 +219,27 @@ export function CameraCapture({
     canCapture: canCaptureLiveFrame,
   } = useFaceLiveness();
 
+  // Read the browser once after mounting (not during render, so the server
+  // and the first client render match).
+  useEffect(() => {
+    queueMicrotask(() => {
+      setInAppBrowser(isInAppBrowser(navigator.userAgent));
+      setOnPhone(isPhoneOrTablet(navigator.userAgent));
+    });
+  }, []);
+
+  useEffect(() => {
+    onReviewChange?.(state === "review");
+  }, [state, onReviewChange]);
+
   // A failed model load requires an explicit manual-review choice.
   const livenessActive = requireLiveness && livenessStatus.supported;
   const captureAllowed =
     !requireLiveness ||
     livenessStatus.livenessPassed ||
     (!livenessStatus.supported && manualCapture);
+  const subject = documentGuide ? "photograph your ID" : "take your selfie";
+  const showPhoneOption = Boolean(onContinueOnPhone) && !onPhone;
 
   const reportCameraInitFailure = useCallback(
     (
@@ -181,7 +261,7 @@ export function CameraCapture({
       }
 
       // Lazy-load Sentry so the monitoring SDK stays out of this page's
-      // critical bundle; telemetry must never block camera fallback UX.
+      // critical bundle; telemetry must never block the camera error screen.
       void import("@sentry/nextjs")
         .then((Sentry) => {
           Sentry.withScope((scope) => {
@@ -197,15 +277,16 @@ export function CameraCapture({
               facingMode,
               isSecureContext,
               topLevelFrame,
+              inAppBrowser: isInAppBrowser(navigator.userAgent),
               mediaDevicesAvailable: Boolean(getCameraRequest()),
               platform: uaData?.platform ?? navigator.platform ?? "unknown",
-              mobile: uaData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
+              mobile: uaData?.mobile ?? isPhoneOrTablet(navigator.userAgent),
             });
             Sentry.captureMessage("camera_init_failed", "warning");
           });
         })
         .catch(() => {
-          // Telemetry should never block camera fallback UX.
+          // Telemetry should never block the camera error screen.
         });
     },
     [facingMode, telemetryContext]
@@ -298,6 +379,15 @@ export function CameraCapture({
       }
       streamRef.current = null;
     }
+    setTorchAvailable(false);
+    setTorchOn(false);
+    setHint(null);
+  }, []);
+
+  const showProblem = useCallback((kind: CameraProblem, message?: string) => {
+    setProblem(kind);
+    setCustomMessage(message ?? null);
+    setState("error");
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -305,13 +395,10 @@ export function CameraCapture({
       return;
     }
 
-    // Guard: camera APIs require a secure context in modern browsers.
+    // Camera APIs need a secure connection and a current browser.
     if (!getCameraRequest()) {
       reportCameraInitFailure("MediaDevicesUnavailable", null);
-      setErrorMessage(
-        "Camera is not available. Please make sure you are using HTTPS and a modern browser, or use the file upload below."
-      );
-      setState("error");
+      showProblem("none");
       return;
     }
 
@@ -323,21 +410,23 @@ export function CameraCapture({
     try {
       setIsStartingCamera(true);
       setState("idle");
-      setErrorMessage("");
+      setCustomMessage(null);
+      setProblem(null);
       setManualCapture(false);
       onReset?.();
       stopStream();
       resetLiveness();
 
-      // Try with full constraints first, then progressively relax
+      // Try with full constraints first, then progressively relax (silently).
       let stream: MediaStream | null = null;
       // Keep the camera's native field of view. Requesting a portrait width/height
       // pair can make the browser crop a landscape sensor before we even preview it.
-      const videoConstraints: MediaTrackConstraints & { resizeMode?: ConstrainDOMString } = {
-        facingMode,
-        width: { ideal: 1280 },
-        ...(requireLiveness ? { resizeMode: { ideal: "none" } } : { height: { ideal: 720 } }),
-      };
+      const videoConstraints: MediaTrackConstraints & { resizeMode?: ConstrainDOMString } =
+        requireLiveness
+          ? { facingMode, width: { ideal: 1280 }, resizeMode: { ideal: "none" } }
+          : documentGuide
+            ? { facingMode: { ideal: facingMode }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+            : { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } };
       const constraintSets: MediaStreamConstraints[] = [
         { video: videoConstraints },
         { video: { facingMode } },
@@ -355,7 +444,7 @@ export function CameraCapture({
         } catch (innerErr) {
           if (session !== sessionRef.current) return;
           const innerName = getCameraErrorName(innerErr);
-          if (!shouldTryRelaxedCameraConstraints(innerName)) {
+          if (!shouldRetryWithPlainerSettings(innerName)) {
             throw innerErr;
           }
         }
@@ -365,7 +454,26 @@ export function CameraCapture({
         throw new DOMException("No compatible camera configuration found.", "NotFoundError");
       }
 
+      captureTokenRef.current = null;
+      if (getCaptureToken) {
+        let token: string | null = null;
+        try {
+          token = await getCaptureToken();
+        } catch {
+          token = null;
+        }
+        if (session !== sessionRef.current || !token) {
+          stream.getTracks().forEach((track) => track.stop());
+          if (session === sessionRef.current)
+            showProblem("failed", "We couldn't prepare the camera. Please try again.");
+          return;
+        }
+        captureTokenRef.current = token;
+      }
       streamRef.current = stream;
+      const [track] = stream.getVideoTracks?.() ?? [];
+      const capabilities = track?.getCapabilities?.() as TorchCapabilities | undefined;
+      setTorchAvailable(Boolean(documentGuide && capabilities?.torch));
       setState("streaming");
     } catch (err) {
       if (session !== sessionRef.current) return;
@@ -381,38 +489,12 @@ export function CameraCapture({
               queryFailed: false,
             };
       if (session !== sessionRef.current) return;
-      const permissionState = permissionLookup.state;
-
-      reportCameraInitFailure(name || "UnknownCameraError", permissionState, permissionLookup);
-
-      if (name === "NotAllowedError") {
-        if (permissionState === "denied") {
-          setErrorMessage(BLOCKED_FOR_SITE_MESSAGE);
-        } else {
-          setErrorMessage(
-            "Camera access was denied. Please allow camera access in your browser settings, or use the file upload below."
-          );
-        }
-      } else if (name === "SecurityError") {
-        setErrorMessage(
-          "Camera access requires a secure connection (HTTPS). Please use the file upload below."
-        );
-      } else if (name === "TimeoutError") {
-        setErrorMessage(
-          "Camera took too long to start. Please close other apps using the camera and try again, or use the file upload below."
-        );
-      } else if (name === "NotFoundError" || name === "NotReadableError") {
-        setErrorMessage("No camera found on this device. Please use the file upload below.");
-      } else if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
-        setErrorMessage(
-          "Your camera does not support the required settings. Please use the file upload below."
-        );
-      } else if (name === "AbortError") {
-        setErrorMessage("Camera was interrupted. Please try again or use the file upload below.");
-      } else {
-        setErrorMessage("Could not start camera. Please use the file upload below.");
-      }
-      setState("error");
+      reportCameraInitFailure(
+        name || "UnknownCameraError",
+        permissionLookup.state,
+        permissionLookup
+      );
+      showProblem(cameraProblem(name));
     } finally {
       if (session === sessionRef.current) {
         startingRef.current = false;
@@ -422,6 +504,7 @@ export function CameraCapture({
   }, [
     facingMode,
     requireLiveness,
+    documentGuide,
     getPermissionState,
     getUserMediaWithTimeout,
     disabled,
@@ -430,6 +513,8 @@ export function CameraCapture({
     stopLiveness,
     resetLiveness,
     onReset,
+    showProblem,
+    getCaptureToken,
   ]);
 
   // Cleanup stream on unmount
@@ -463,12 +548,11 @@ export function CameraCapture({
         if (session !== sessionRef.current) return;
         stopStream();
         stopLiveness();
-        setErrorMessage("Camera playback was interrupted. Please try again.");
-        setState("error");
+        showProblem("failed", "Camera playback was interrupted. Please try again.");
       });
       if (requireLiveness) void startLiveness(video);
     },
-    [requireLiveness, startLiveness, stopStream, stopLiveness]
+    [requireLiveness, startLiveness, stopStream, stopLiveness, showProblem]
   );
 
   useEffect(() => {
@@ -479,8 +563,7 @@ export function CameraCapture({
       stopLiveness();
       setIsCapturing(false);
       capturingRef.current = false;
-      setErrorMessage("Camera was interrupted. Please try again.");
-      setState("error");
+      showProblem("failed", "Camera was interrupted. Please try again.");
     };
     const tracks = streamRef.current?.getTracks() ?? [];
     tracks.forEach((track) => track.addEventListener?.("ended", interrupt));
@@ -489,7 +572,45 @@ export function CameraCapture({
       tracks.forEach((track) => track.removeEventListener?.("ended", interrupt));
       window.removeEventListener("pagehide", closeCamera);
     };
-  }, [state, closeCamera, stopStream, stopLiveness]);
+  }, [state, closeCamera, stopStream, stopLiveness, showProblem]);
+
+  // Live hints for the ID photo: light, glare and stillness. They never block
+  // the shutter; they are announced politely to screen readers.
+  useEffect(() => {
+    if (state !== "streaming" || !documentGuide) return;
+    const sample = document.createElement("canvas");
+    const timer = window.setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2 || !video.videoWidth) return;
+      const { width, height } = scaledSize(video.videoWidth, video.videoHeight, 160);
+      sample.width = width;
+      sample.height = height;
+      const ctx = sample.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      try {
+        ctx.drawImage(video, 0, 0, width, height);
+        const pixels = ctx.getImageData(0, 0, width, height).data;
+        setHint(qualityHint(analyseFrame(pixels, width, height)));
+      } catch {
+        // A frame that cannot be read gives no hint.
+      }
+    }, HINT_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [state, documentGuide]);
+
+  const toggleTorch = useCallback(async () => {
+    const [track] = streamRef.current?.getVideoTracks?.() ?? [];
+    if (!track) return;
+    const next = !torchOn;
+    try {
+      await track.applyConstraints({
+        advanced: [{ torch: next } as MediaTrackConstraintSet],
+      });
+      setTorchOn(next);
+    } catch {
+      setTorchAvailable(false);
+    }
+  }, [torchOn]);
 
   // Bring the camera frame into view as soon as streaming starts so the user
   // never has to scroll to find it (the "Open Camera" button can sit low on
@@ -530,6 +651,7 @@ export function CameraCapture({
     // Guard against capturing before the stream has produced a frame —
     // otherwise a blank 0x0 image would be uploaded as the "photo".
     if (video.videoWidth === 0 || video.videoHeight === 0 || video.readyState < 2) {
+      setCaptureError("The camera is still starting. Try again in a moment.");
       return;
     }
 
@@ -538,9 +660,16 @@ export function CameraCapture({
       return;
     }
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
+    // The saved photo: the camera's own pixels, long edge capped, as a JPEG
+    // drawn on a canvas (it carries no EXIF or location data).
+    const { width, height } = scaledSize(
+      video.videoWidth,
+      video.videoHeight,
+      documentGuide ? PHOTO_LIMITS.idLongEdge : PHOTO_LIMITS.selfieLongEdge
+    );
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) {
       setCaptureError("Could not prepare your photo. Close the camera and try again.");
       return;
@@ -553,7 +682,22 @@ export function CameraCapture({
 
     try {
       // Mirror only the preview. Save original camera pixels for ID comparison.
-      ctx.drawImage(video, 0, 0);
+      ctx.drawImage(video, 0, 0, width, height);
+      let quality: FrameQuality | null = null;
+      if (documentGuide) {
+        try {
+          const sample = scaledSize(width, height, 320);
+          const small = document.createElement("canvas");
+          small.width = sample.width;
+          small.height = sample.height;
+          const smallCtx = small.getContext("2d", { willReadFrequently: true });
+          smallCtx?.drawImage(canvas, 0, 0, sample.width, sample.height);
+          const pixels = smallCtx?.getImageData(0, 0, sample.width, sample.height).data;
+          quality = pixels ? analyseFrame(pixels, sample.width, sample.height) : null;
+        } catch {
+          quality = null;
+        }
+      }
       canvas.toBlob(
         (blob) => {
           if (session !== sessionRef.current) return;
@@ -570,13 +714,21 @@ export function CameraCapture({
           setCapturedUrl(url);
           stopStream();
           stopLiveness();
+          if (documentGuide) {
+            // The ID photo is checked by the member before it is used (01b).
+            reviewFileRef.current = file;
+            setPhotoQuality(quality);
+            setState("review");
+            return;
+          }
           setState("captured");
           onCapture(file, {
             livenessPassed: requireLiveness ? livenessStatus.livenessPassed : false,
+            captureToken: captureTokenRef.current ?? undefined,
           });
         },
         "image/jpeg",
-        0.92
+        PHOTO_LIMITS.jpegQuality
       );
     } catch {
       capturingRef.current = false;
@@ -589,6 +741,7 @@ export function CameraCapture({
     stopLiveness,
     onCapture,
     requireLiveness,
+    documentGuide,
     livenessStatus,
     captureAllowed,
     livenessActive,
@@ -609,20 +762,18 @@ export function CameraCapture({
       URL.revokeObjectURL(capturedUrl);
       setCapturedUrl("");
     }
+    reviewFileRef.current = null;
+    setPhotoQuality(null);
     resetLiveness();
     void startCamera();
   }, [capturedUrl, startCamera, resetLiveness]);
 
-  const handleFileFallback = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        onCapture(file);
-        onFallback?.();
-      }
-    },
-    [onCapture, onFallback]
-  );
+  const usePhoto = useCallback(() => {
+    const file = reviewFileRef.current;
+    if (!file) return;
+    setState("captured");
+    onCapture(file, { livenessPassed: false, captureToken: captureTokenRef.current ?? undefined });
+  }, [onCapture]);
 
   // Cleanup captured object URL
   useEffect(() => {
@@ -634,62 +785,163 @@ export function CameraCapture({
   }, [capturedUrl]);
 
   if (state === "error") {
+    const text = problem ? PROBLEM_TEXT[problem](subject) : null;
     return (
       <div className="space-y-4">
-        <div className="flex items-start gap-3 rounded-2xl border border-brand-gold-300/70 bg-brand-gold-50 p-3.5 text-sm leading-6 text-brand-gold-900 dark:border-brand-gold-400/25 dark:bg-brand-gold-400/10 dark:text-brand-gold-100">
-          <VideoOff className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-2xl border border-brand-gold-300/70 bg-brand-gold-50 p-3.5 text-sm leading-6 text-brand-gold-900 dark:border-brand-gold-400/25 dark:bg-brand-gold-400/10 dark:text-brand-gold-100"
+        >
+          <span
+            aria-hidden="true"
+            className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-gold-100 dark:bg-brand-gold-400/15"
+          >
+            <VideoOff className="h-4 w-4" />
+          </span>
           <div className="min-w-0 space-y-1">
-            <p role="alert">{errorMessage}</p>
-            <p className="text-xs leading-5 opacity-90">
-              No camera prompt? Open{" "}
-              <Link
-                href="/help/verification"
-                className="font-semibold underline underline-offset-2"
-              >
-                verification help
-              </Link>{" "}
-              for desktop and mobile permission reset steps.
-            </p>
+            {customMessage || !text ? (
+              <p>{customMessage ?? "We couldn't start your camera. Please try again."}</p>
+            ) : (
+              <>
+                <p className="font-semibold">{text.title}</p>
+                <p>{text.body}</p>
+              </>
+            )}
           </div>
         </div>
-        <Button
-          type="button"
-          ref={openButtonRef}
-          variant="outline"
-          size="lg"
-          onClick={() => void startCamera()}
-          disabled={disabled || isStartingCamera}
-          className="w-full"
-        >
-          {isStartingCamera ? (
-            <Loader2
-              className="h-4 w-4 animate-spin motion-reduce:animate-none"
-              aria-hidden="true"
-            />
-          ) : (
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+        {problem === "blocked" && (
+          <ul className="space-y-3">
+            {(inAppBrowser
+              ? [BLOCKED_STEPS[2], BLOCKED_STEPS[0], BLOCKED_STEPS[1]]
+              : BLOCKED_STEPS
+            ).map((item) => (
+              <li key={item.title} className="rounded-2xl border border-border bg-card p-3.5">
+                <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                <p className="mt-0.5 text-sm leading-6 text-muted-foreground">{item.text}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-col gap-2.5">
+          <Button
+            type="button"
+            ref={openButtonRef}
+            variant={problem === "none" && showPhoneOption ? "outline" : "trust-verified"}
+            size="lg"
+            onClick={() => void startCamera()}
+            disabled={disabled || isStartingCamera}
+            className={cn("w-full", problem === "none" && showPhoneOption && "order-2")}
+          >
+            {isStartingCamera ? (
+              <Loader2
+                className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            ) : (
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            )}
+            {isStartingCamera ? "Trying..." : "Try the camera again"}
+          </Button>
+          {showPhoneOption && (
+            <Button
+              type="button"
+              variant={problem === "none" ? "trust-verified" : "outline"}
+              size="lg"
+              onClick={onContinueOnPhone}
+              disabled={disabled}
+              className="w-full"
+            >
+              <Smartphone className="h-4 w-4" aria-hidden="true" />
+              Continue on your phone
+            </Button>
           )}
-          {isStartingCamera ? "Trying..." : "Try again"}
-        </Button>
-        <div className="space-y-2 rounded-2xl border border-dashed border-border bg-muted/30 p-3.5">
-          <label htmlFor={fileInputId} className="block text-sm font-semibold text-foreground">
-            Or upload a photo
-          </label>
-          {requireLiveness && (
-            <p className="text-xs leading-5 text-muted-foreground">
-              Uploading a file does not complete the live face check. A moderator may ask you to try
-              again on another device.
-            </p>
-          )}
-          <Input
-            id={fileInputId}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
+        </div>
+        <p className="text-xs leading-5 text-muted-foreground">
+          Still stuck? See{" "}
+          <Link
+            href="/help/verification"
+            className="font-semibold text-foreground underline underline-offset-2"
+          >
+            verification help
+          </Link>
+          .
+        </p>
+      </div>
+    );
+  }
+
+  if (state === "review" && capturedUrl) {
+    const checks: { label: string; ok: boolean | null }[] = [
+      { label: "All four corners in view", ok: null },
+      {
+        label: "Sharp enough to read",
+        ok: photoQuality ? photoQuality.sharpness >= QUALITY_LIMITS.blurry : null,
+      },
+      {
+        label: "No strong glare",
+        ok: photoQuality ? photoQuality.glare <= QUALITY_LIMITS.glare : null,
+      },
+    ];
+    return (
+      <div className="space-y-3">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-muted">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={capturedUrl} alt="Your ID photo" className="max-h-80 w-full object-contain" />
+          <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-brand-green-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+            Photo taken
+          </span>
+        </div>
+        <ul className="space-y-1.5 text-sm">
+          {checks.map(({ label, ok }) => (
+            <li key={label} className="flex items-center gap-2 text-foreground/85">
+              {ok === false ? (
+                <AlertTriangle
+                  className="h-4 w-4 shrink-0 text-brand-gold-700 dark:text-brand-gold-300"
+                  aria-hidden="true"
+                />
+              ) : ok ? (
+                <CheckCircle2
+                  className="h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-gold-300"
+                  aria-hidden="true"
+                />
+              ) : (
+                <Circle className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              )}
+              <span>
+                {ok === false
+                  ? label === "Sharp enough to read"
+                    ? "Looks blurry: retake it"
+                    : "Strong glare: retake it"
+                  : label}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs leading-5 text-muted-foreground">
+          Can you read your name and ID number in the photo? If not, retake it.
+        </p>
+        <div className="grid grid-cols-2 gap-2.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            onClick={retake}
+            ref={openButtonRef}
             disabled={disabled}
-            onChange={handleFileFallback}
-            className="h-auto cursor-pointer py-2.5 file:mr-3 file:rounded-lg file:bg-muted file:px-3 file:py-1.5 file:text-foreground sm:h-auto"
-          />
-          <p className="text-xs text-muted-foreground">JPG, PNG or WebP, up to 5 MB.</p>
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            Retake
+          </Button>
+          <Button
+            type="button"
+            variant="trust-verified"
+            size="lg"
+            onClick={usePhoto}
+            disabled={disabled}
+          >
+            Use this photo
+          </Button>
         </div>
       </div>
     );
@@ -775,6 +1027,19 @@ export function CameraCapture({
                 </span>
               </div>
             )}
+            {documentGuide && (
+              <p
+                className={cn(
+                  "absolute inset-x-0 bottom-2 mx-auto flex w-fit max-w-[90%] items-center gap-1.5 rounded-full bg-brand-gold-50 px-3 py-1 text-xs font-medium text-brand-gold-900 shadow-sm",
+                  !hint && "sr-only"
+                )}
+                role="status"
+                aria-live="polite"
+              >
+                {hint && <Sun className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+                {hint ?? ""}
+              </p>
+            )}
             {requireLiveness && (
               <SelfieFaceGuide videoRef={videoRef} passed={livenessStatus.livenessPassed} />
             )}
@@ -851,24 +1116,46 @@ export function CameraCapture({
                 </div>
               </div>
             )}
-            <Button
-              type="button"
-              ref={takePhotoButtonRef}
-              onClick={takePhoto}
-              disabled={disabled || !captureAllowed || isCapturing}
-              variant="trust-verified"
-              size="lg"
-              className="w-full"
-            >
-              <Camera className="h-4 w-4" aria-hidden="true" />
-              {isCapturing
-                ? "Saving photo..."
-                : requireLiveness && !captureAllowed
-                  ? "Complete liveness check"
-                  : manualCapture
-                    ? "Take photo for manual review"
-                    : "Take photo"}
-            </Button>
+            <div className="flex gap-2.5">
+              {torchAvailable && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  aria-pressed={torchOn}
+                  aria-label={torchOn ? "Turn the light off" : "Turn the light on"}
+                  onClick={() => void toggleTorch()}
+                  disabled={disabled}
+                  className="w-12 shrink-0 px-0"
+                >
+                  <Flashlight className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              )}
+              <Button
+                type="button"
+                ref={takePhotoButtonRef}
+                onClick={takePhoto}
+                disabled={disabled || !captureAllowed || isCapturing}
+                variant="trust-verified"
+                size="lg"
+                className="w-full"
+              >
+                <Camera className="h-4 w-4" aria-hidden="true" />
+                {isCapturing
+                  ? "Saving photo..."
+                  : requireLiveness && !captureAllowed
+                    ? "Complete liveness check"
+                    : manualCapture
+                      ? "Take photo for manual review"
+                      : "Take photo"}
+              </Button>
+            </div>
+            {documentGuide && (
+              <p className="text-xs leading-5 text-muted-foreground">
+                Lay the card on a dark, flat surface in good light. Fill the frame and keep all four
+                corners in view.
+              </p>
+            )}
             {captureError && (
               <p
                 role="alert"
@@ -888,7 +1175,7 @@ export function CameraCapture({
 
   return (
     <div className="space-y-3">
-      {documentGuide && (
+      {documentGuide && state === "idle" && !isStartingCamera && (
         <fieldset className="space-y-2" disabled={disabled}>
           <legend className="mb-2 text-sm font-medium text-foreground">
             Which ID do you have?
@@ -917,6 +1204,16 @@ export function CameraCapture({
             corners in the guide and avoid glare.
           </p>
         </fieldset>
+      )}
+      {state === "idle" && inAppBrowser && (
+        <p
+          role="note"
+          className="rounded-2xl border border-brand-gold-300/70 bg-brand-gold-50 p-3.5 text-xs leading-5 text-brand-gold-900 dark:border-brand-gold-400/25 dark:bg-brand-gold-400/10 dark:text-brand-gold-100"
+        >
+          You&apos;re inside an app such as WhatsApp, Facebook or Instagram, which may block the
+          camera. If it doesn&apos;t open, open this page in Chrome or Safari: tap ⋮ or the share
+          icon, then &ldquo;Open in browser&rdquo;.
+        </p>
       )}
       {state === "idle" && (
         <div className="rounded-2xl border-2 border-dashed border-border bg-muted/30 p-4 sm:p-5">

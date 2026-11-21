@@ -279,6 +279,8 @@ const OWNER_TABLES = [
   ["invoice_transfers", "account_id=$1"],
   ["invoices", ownPayments],
   ["listing_details", ownPosts],
+  // Continue on your phone links (20261120131212_camera_capture_handoff).
+  ["capture_handoffs", "owner_id=$1"],
   ["listing_price_drafts", "owner_id=$1"],
   ["moderation_log", ownPosts],
   [

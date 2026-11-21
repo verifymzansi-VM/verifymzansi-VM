@@ -18,6 +18,11 @@ const ALLOWED_REDIRECT_PREFIXES = [
   "/organisation-invite",
 ];
 
+// Paths allowed only exactly as written: no query string and nothing below
+// them. "Continue on your phone" sends a signed-out phone to sign in and back
+// here; its link token waits in the tab, never in the address.
+const EXACT_REDIRECTS = new Set(["/verify/continue"]);
+
 /**
  * Sanitize a return URL to prevent open redirect attacks.
  * Only allows relative paths starting with "/" that match known route prefixes.
@@ -41,6 +46,7 @@ export function sanitizeReturnUrl(url: string | null | undefined): string {
 
   // Allow exact "/" (home page)
   if (normalized === "/") return normalized;
+  if (EXACT_REDIRECTS.has(normalized)) return normalized;
 
   // Only allow known route prefixes to prevent redirect to attacker-controlled paths
   const matchesAllowed = ALLOWED_REDIRECT_PREFIXES.some(
