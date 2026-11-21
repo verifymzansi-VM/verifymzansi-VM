@@ -71,7 +71,7 @@ export function DisclosureSelfie({
       {state.status === "shown" ? (
         // A decrypted blob for this screen only; next/image cannot load it.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={state.url} alt={label} className="h-full w-full object-cover" />
+        <img src={state.url} alt={label} className="h-full w-full object-contain" />
       ) : state.status === "loading" ? (
         <Loader2
           className="h-6 w-6 animate-spin text-muted-foreground"
