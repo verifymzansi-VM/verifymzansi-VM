@@ -82,11 +82,12 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Staff operations health and a last-run record for every scheduled job, 20 November 2026
 
-`20261120163500_staff_operations_health.sql` is pending (see the applied
-register). Launch checklist item 8 (roadmap M5.5, first part). The staff page
-`/admin/operations` read job, incident and retention records that only the
-retired backend had; it now reads one staff command over what this database
-holds. The page stays switched off (`SHOW_STAFF_OPERATIONS`) until launch.
+`20261120163500_staff_operations_health.sql` was applied on 21 November 2026 at
+04:53 UTC (see the applied register). Launch checklist item 8 (roadmap M5.5,
+first part). The staff page `/admin/operations` read job, incident and retention
+records that only the retired backend had; it now reads one staff command over
+what this database holds. The page stays switched off (`SHOW_STAFF_OPERATIONS`)
+until launch.
 
 - **Every scheduled job records its last successful run.** Fifteen service-only
   commands the timed Workers start through the website (every minute: slot
@@ -6183,6 +6184,14 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   production fingerprint after it (fingerprint.sql at cd725fb9) matched the full
   replay (except the known schema grant difference)
 
-- `20261120163500_staff_operations_health.sql`: pending
+- `20261120163500_staff_operations_health.sql`: applied 2026-11-21 04:53 UTC;
+  owner-approved, apply-first, Supabase SQL editor (the owner's signed-in
+  session), preflight + fingerprint checked; update and preflight from the
+  reviewed files at a04ace88 (pull request #319) and checked in the page before
+  running; update sha256 starting d75e3442; preflight (sha256 starting 37ac91bd)
+  before "staff operations health: update not applied", after "staff operations
+  health: already applied; jobs with a recorded run: 0 of 17"; production
+  fingerprint after it (fingerprint.sql at cd725fb9) matched the full replay
+  (except the known schema grant difference)
 
 <!-- applied-register:end -->
