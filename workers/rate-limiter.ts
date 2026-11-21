@@ -519,7 +519,7 @@ export class RateLimiterDO {
       }
     }
 
-    // Skip increment when readOnly is true (check-only mode for lockout queries)
+    // readOnly: check the limits without counting this request
     if (readOnly) {
       return Response.json(
         { ok: true },
