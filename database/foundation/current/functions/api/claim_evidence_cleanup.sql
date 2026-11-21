@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.claim_evidence_cleanup(p_limit integer)
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.claim_evidence_cleanup(p_limit);
+  select internal.note_scheduled_job_run('evidence_cleanup', internal.claim_evidence_cleanup(p_limit));
 $function$;
 alter function api.claim_evidence_cleanup(integer) owner to postgres;
 revoke all on function api.claim_evidence_cleanup(integer) from public;

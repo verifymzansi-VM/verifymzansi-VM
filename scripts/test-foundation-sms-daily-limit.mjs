@@ -138,6 +138,7 @@ try {
       /^sms daily limit: already applied; codes today: 3; counted today: 3; limit: 500$/,
   });
 
+  // LIM-SQL-sms-daily (docs/testing/limits-register.json)
   await check("the codes already sent today count, and the limit is 500", () => {
     assert.equal(counted(), 3);
     assert.equal(Number(q(`select ${LIMIT_FN};`)), 500);

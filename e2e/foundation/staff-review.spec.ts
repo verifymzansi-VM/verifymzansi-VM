@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   expect,
   test,
@@ -7,11 +7,16 @@ import {
   type BrowserContext,
   type Page,
 } from "@playwright/test";
-import sharp from "sharp";
 import { E2E_FIXTURE, LOCAL_OPS_JOBS_SECRET } from "../../scripts/lib/foundation-e2e-target.mjs";
+import {
+  takeIdPhoto,
+  takeSelfieForManualReview,
+  withSyntheticCamera,
+} from "./support/synthetic-camera";
 import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
 import { isMultipartForm } from "./support/multipart";
 import { endedWithTest } from "./support/route-teardown";
+import { switchOn } from "./support/switches";
 import {
   browserSessionCookies,
   caughtMailFor,
@@ -44,8 +49,8 @@ import {
 //     sensitive action), in the database and on the staff pages;
 //   - an admin sends one member's ID back with a reason and accepts the other
 //     member's ID and selfie in the identity review; the identity viewer warns
-//     "Uploaded file" for the selfie sent as a file and not for the one sent
-//     as a camera capture (see asCameraSelfie);
+//     "Liveness not verified" for the selfie taken for manual review and not
+//     for the one sent with a completed face check (see asCameraSelfie);
 //   - a moderator approves a post in the moderation queue;
 //   - a report filed by the moderator can never be worked by the moderator
 //     (staff cannot review themselves), and an admin decides it;
@@ -53,17 +58,17 @@ import {
 //   - an admin verifies, approves and completes a member's privacy request;
 //   - the member whose ID was sent back reads the reviewer's reason on the
 //     verification page, has a notice, and receives an email that says only
-//     that the ID was sent back (BL-12, fixed by M2.7).
+//     that the ID was sent back (BL-12, fixed by M2.7);
+//   - the operations page is hidden (production's switch values), or, in the
+//     launch-configuration build, shows its panels from the live backend.
 //
-// Two steps are broken today and are marked test.fail(), each pinned to its
-// exact known symptom (characterise, support/known-break.ts); any other
-// outcome turns the run red:
+// One step is broken today and is marked test.fail(), pinned to its exact
+// known symptom (characterise, support/known-break.ts); any other outcome
+// turns the run red:
 // - "the per-section review queue lists the waiting post": D3B-02, fixed by
 //   M6.3. The section page reads the retired backend for its content queue.
-// - "the operations page shows job health": D5-02, fixed by M5.5. The page
-//   reads retired tables and functions.
 // The tests share the members and run in order; a failure skips the rest, so
-// the marked steps come last.
+// the marked step comes last.
 //
 // The email job (runOpsJob) delivers the website's own emails to the copy's
 // mail catcher through its loopback relay, which never reaches a provider.
@@ -84,7 +89,6 @@ const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const D3B02 = "D3B-02, fixed by M6.3";
-const D502 = "D5-02, fixed by M5.5";
 const TWO_STEP_PATH = "/staff/two-step";
 /** The identity viewer's three confirmations (foundation mode). */
 const REVIEW_CHECKS = [
@@ -197,25 +201,16 @@ async function otherBrowser(browser: Browser, person: Person, options: SessionOp
   return { context, page: await context.newPage(), ...guarded };
 }
 
-/** The camera is unavailable, so the photo steps offer their upload fallback,
- * exactly as on a device without a usable camera (today's capture rules). */
-async function withoutCamera(context: BrowserContext) {
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, "mediaDevices", { value: undefined, configurable: true });
-  });
-}
-
-/** The selfie upload as the live camera step sends it. The test browser has no
- * camera (and a face check would need a face), so for one member the selfie
- * request's two capture fields are changed from what the upload fallback sends
- * (captureMethod "file_upload") to what a camera capture with a completed
- * liveness challenge sends (captureMethod "camera", livenessPassed "true").
- * Nothing else in the request changes; other requests pass unchanged.
+/** The selfie upload as the live camera step sends it after a completed face
+ * check. The synthetic camera has no face, so the selfie is taken for manual
+ * review; for one member the selfie request gains what a completed liveness
+ * challenge adds (livenessPassed "true"). Nothing else in the request changes;
+ * other requests pass unchanged.
  *
  * The change is made in the page, to the form the page hands to fetch(), not
  * to the request on the network: Playwright's WebKit cannot read or rewrite a
  * multipart body with its files (see isMultipartForm). A selfie form that is
- * not the upload fallback's is refused in the page, so the step fails. */
+ * not the manual-review photo's is refused in the page, so the step fails. */
 async function asCameraSelfie(context: BrowserContext) {
   await context.addInitScript(() => {
     const send = window.fetch.bind(window);
@@ -227,23 +222,13 @@ async function asCameraSelfie(context: BrowserContext) {
         new URL(target, window.location.href).pathname === "/api/verification/upload" &&
         form.get("docType") === "selfie"
       ) {
-        if (form.get("captureMethod") !== "file_upload" || form.has("livenessPassed"))
-          return Promise.reject(new Error("the selfie form is not the upload fallback's"));
-        form.set("captureMethod", "camera");
+        if (form.get("captureMethod") !== "camera" || form.has("livenessPassed"))
+          return Promise.reject(new Error("the selfie form is not the manual-review photo's"));
         form.append("livenessPassed", "true");
       }
       return send(input, init);
     };
   });
-}
-
-/** A synthetic photo: random noise over a flat colour, never a face or a
- * document, and different on every run (the risk check rejects reused photos). */
-async function syntheticPhoto(width: number, height: number) {
-  const noise = randomBytes(width * height * 3);
-  return sharp(noise, { raw: { width, height, channels: 3 } })
-    .jpeg({ quality: 70 })
-    .toBuffer();
 }
 
 /** "Claim next 10" in a staff queue (as in member-post-publish.spec.ts): the
@@ -501,24 +486,20 @@ test.describe("staff review with an authenticator", () => {
     for (const member of [returned, poster]) {
       const context = await browser.newContext({ serviceWorkers: "block" });
       try {
-        await withoutCamera(context);
-        // One member's selfie arrives as a camera capture, the other's as an
-        // uploaded file (the staff viewer tells them apart later).
+        await withSyntheticCamera(context);
+        // Both selfies come from the camera on the page; one member's arrives
+        // with a completed face check, the other's for manual review (the
+        // staff viewer tells them apart later).
         if (member === returned) await asCameraSelfie(context);
         const { outside, failures, reply } = await guard(context);
         await signInBrowser(context, member);
         const page = await context.newPage();
         await page.goto("/verification");
-        await page.getByLabel("First name (as shown on ID)").fill(member.firstName);
-        await page.getByLabel("Surname (as shown on ID)").fill(member.lastName);
+        await page.getByLabel("All first names (as on your ID)").fill(member.firstName);
+        await page.getByLabel("Surname (as on your ID)").fill(member.lastName);
         await page.getByLabel("13-digit SA ID number").fill(member.idNumber);
         await expect(page.getByText("ID number valid")).toBeVisible();
-        await page.getByRole("button", { name: "Open camera" }).click();
-        await page.getByLabel("Or upload a photo").setInputFiles({
-          name: "id-front.jpg",
-          mimeType: "image/jpeg",
-          buffer: await syntheticPhoto(960, 600),
-        });
+        await takeIdPhoto(page);
         await page.getByRole("button", { name: "Continue" }).click();
         await expect
           .poll(() => reply("/api/verification/upload").length, { timeout: 30_000 })
@@ -526,12 +507,7 @@ test.describe("staff review with an authenticator", () => {
         await expect(page.getByRole("heading", { name: "Live selfie" })).toBeVisible({
           timeout: 20_000,
         });
-        await page.getByRole("button", { name: "Open camera" }).click();
-        await page.getByLabel("Or upload a photo").setInputFiles({
-          name: "selfie.jpg",
-          mimeType: "image/jpeg",
-          buffer: await syntheticPhoto(600, 800),
-        });
+        await takeSelfieForManualReview(page);
         await page.getByRole("button", { name: "Continue" }).click();
         await expect
           .poll(() => reply("/api/verification/upload").length, { timeout: 30_000 })
@@ -560,7 +536,7 @@ test.describe("staff review with an authenticator", () => {
               "join private.verification_current_submissions v on v.submission_id = u.submission_id " +
               `where u.owner_id = '${member.id}' and u.purpose = 'selfie' and v.case_id = u.case_id;`
           )
-        ).toBe(member === returned ? "camera:true" : "file_upload:false");
+        ).toBe(member === returned ? "camera:true" : "camera:false");
         expect(failures).toEqual([]);
         expect(outside).toEqual([]);
       } finally {
@@ -628,13 +604,13 @@ test.describe("staff review with an authenticator", () => {
     await expect(card).toHaveCount(1);
     // This member's selfie came from the camera step with a completed liveness
     // challenge: the viewer says so (as browser-reported context) and shows no
-    // "Uploaded file" warning.
+    // "Liveness not verified" warning.
     await card.getByRole("button", { name: "Review", exact: true }).first().click();
     const viewer = page.getByRole("dialog", { name: /^Identity Comparison/ });
     await expect(viewer.getByText("Selfie: Browser liveness check completed")).toBeVisible({
       timeout: 20_000,
     });
-    await expect(viewer.getByText("Selfie: Uploaded file")).toHaveCount(0);
+    await expect(viewer.getByText("Selfie: Liveness not verified")).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(viewer).toBeHidden();
     // The first step is the ID photo.
@@ -687,8 +663,10 @@ test.describe("staff review with an authenticator", () => {
       await card.getByRole("button", { name: "Review", exact: true }).first().click();
       const viewer = page.getByRole("dialog", { name: /^Identity Comparison/ });
       await expect(viewer).toBeVisible();
-      // This member's selfie was an uploaded file: the viewer warns about it.
-      await expect(viewer.getByText("Selfie: Uploaded file")).toBeVisible({ timeout: 20_000 });
+      // This member's selfie was taken for manual review: the viewer warns about it.
+      await expect(viewer.getByText("Selfie: Liveness not verified")).toBeVisible({
+        timeout: 20_000,
+      });
       for (const check of REVIEW_CHECKS) await viewer.getByLabel(check).check();
       const approve = viewer.getByRole("button", { name: `Approve ${step}` });
       await expect(approve).toBeEnabled({ timeout: 20_000 });
@@ -1126,6 +1104,49 @@ test.describe("staff review with an authenticator", () => {
     expectNoOutboundSince(mark);
   });
 
+  test("the operations page is hidden, or shows job health in the launch build", async ({
+    context,
+    page,
+  }) => {
+    const mark = readOutboundAttempts().length;
+    const { outside, failures } = await guard(context);
+    await signInBrowser(context, "admin");
+    await page.goto("/admin/operations");
+    if (!switchOn("SHOW_STAFF_OPERATIONS")) {
+      // Off until launch (SHOW_STAFF_OPERATIONS): the address leads to the
+      // staff home (its banner's only h1 says "Platform") and the menu does not
+      // list the page.
+      await expect(page.locator("h1").filter({ hasText: /^Platform$/ })).toBeVisible({
+        timeout: 20_000,
+      });
+      expect(new URL(page.url()).pathname).toBe("/admin");
+      await expect(page.getByRole("link", { name: "Operations health" })).toHaveCount(0);
+    } else {
+      // Launch build: the page reads the live backend's staff command
+      // (api.get_staff_operations_health) and shows every panel.
+      await expect(page.getByRole("heading", { name: "Operations health" })).toBeVisible({
+        timeout: 20_000,
+      });
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      for (const panel of [
+        "Scheduled jobs",
+        "Stuck emails",
+        "Stuck notices",
+        "Payment problems",
+        "Blocked deletions",
+        "Evidence retention",
+        "Open incidents",
+      ])
+        await expect(page.getByText(panel, { exact: true }).first()).toBeVisible();
+      await expect(page.getByRole("row", { name: /Sponsored places/ })).toBeVisible();
+      await expect(page.getByRole("row", { name: /Partner commissions/ })).toBeVisible();
+      await expect(page.getByRole("row", { name: /Data retention/ })).toBeVisible();
+    }
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
+  });
+
   test("the per-section review queue lists the waiting post", async ({ context, page }) => {
     test.fail(true, D3B02);
     await characterise(D3B02, async () => {
@@ -1160,51 +1181,6 @@ test.describe("staff review with an authenticator", () => {
       }
       // Promised (M6.3): the waiting post is listed for review.
       await expect(page.getByText(posts.waiting.name).first()).toBeVisible();
-      expect(failures).toEqual([]);
-      expect(outside).toEqual([]);
-      expectNoOutboundSince(mark);
-    });
-  });
-
-  test("the operations page shows job health", async ({ context, page }) => {
-    test.fail(true, D502);
-    await characterise(D502, async () => {
-      const mark = readOutboundAttempts().length;
-      const { outside, failures } = await guard(context);
-      await signInBrowser(context, "admin");
-      await page.goto("/admin/operations");
-      // The admin's staff home: its banner's only h1 says "Platform".
-      const home = page.locator("h1").filter({ hasText: /^Platform$/ });
-      const brokenOrHealthy = page
-        .getByRole("alert")
-        .filter({ hasText: "Operations health could not be loaded." })
-        .or(page.getByRole("heading", { name: "Operations health" }));
-      await expect(home.or(brokenOrHealthy).first()).toBeVisible({ timeout: 20_000 });
-      if (new URL(page.url()).pathname === "/admin") {
-        // Hidden until it works (SHOW_STAFF_OPERATIONS): the address leads to
-        // the staff home and the menu no longer lists the page.
-        await expect(page.getByRole("link", { name: "Operations health" })).toHaveCount(0);
-        expect(failures).toEqual([]);
-        expect(outside).toEqual([]);
-        expectNoOutboundSince(mark);
-        throw new KnownBreak(`${D502}: the operations page is hidden until it works`);
-      }
-      const broken = page.getByRole("alert").filter({
-        hasText:
-          "Operations health could not be loaded. Refresh to try again. This does not mean everything is working.",
-      });
-      const healthy = page.getByRole("heading", { name: "Operations health" });
-      await expect(broken.or(healthy).first()).toBeVisible({ timeout: 20_000 });
-      if (await broken.isVisible()) {
-        // D5-02 as recorded: the page reads retired tables and functions.
-        expect(failures).toEqual([]);
-        expect(outside).toEqual([]);
-        expectNoOutboundSince(mark);
-        throw new KnownBreak(`${D502}: the operations page could not load job health`);
-      }
-      // Promised (M5.5): the job health tiles are shown.
-      await expect(page.getByText("Stuck jobs")).toBeVisible();
-      await expect(page.getByText("Failed decision updates")).toBeVisible();
       expect(failures).toEqual([]);
       expect(outside).toEqual([]);
       expectNoOutboundSince(mark);

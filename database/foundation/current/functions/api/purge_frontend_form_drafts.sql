@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.purge_frontend_form_drafts(p_limit integer)
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.purge_frontend_form_drafts(p_limit)
+  select internal.note_scheduled_job_run('form_drafts', internal.purge_frontend_form_drafts(p_limit));
 $function$;
 alter function api.purge_frontend_form_drafts(integer) owner to postgres;
 revoke all on function api.purge_frontend_form_drafts(integer) from public;

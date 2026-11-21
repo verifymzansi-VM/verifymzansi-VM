@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.run_retention(p_limit integer)
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.run_retention(p_limit);
+  select internal.note_scheduled_job_run('retention', internal.run_retention(p_limit));
 $function$;
 alter function api.run_retention(integer) owner to postgres;
 revoke all on function api.run_retention(integer) from public;

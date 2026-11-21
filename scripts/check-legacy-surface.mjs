@@ -12,7 +12,9 @@
 //                        that the retired supabase/migrations tree defines
 //   retiredCommandCalls  .rpc("literal") call sites with such names
 //   retiredTableReads    .from("table") call sites (foundation exposes no
-//                        tables; Storage bucket calls are excluded)
+//                        tables; Storage bucket calls are excluded), and
+//                        .from(TABLE_CONSTANT) where an UPPER_SNAKE string
+//                        constant in the scanned sources names the table
 //
 // It fails when any count or list grows, and also when one shrinks without
 // the baseline being lowered, so the committed numbers only ever go down.

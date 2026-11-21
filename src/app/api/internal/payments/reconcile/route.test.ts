@@ -10,6 +10,8 @@ vi.mock("@/lib/foundation/billing-runtime", () => ({
 const refundJobs = vi.hoisted(() => ({ run: vi.fn(), keySet: vi.fn(() => false) }));
 vi.mock("@/lib/foundation/ozow-refunds", () => ({ runOzowRefundJobs: refundJobs.run }));
 vi.mock("@/lib/foundation/service-api", () => ({ createFoundationServiceApi: vi.fn(() => ({})) }));
+const recordRun = vi.hoisted(() => vi.fn(async () => true));
+vi.mock("@/lib/foundation/scheduled-job-runs", () => ({ recordScheduledJobRun: recordRun }));
 vi.mock("@/lib/payments/ozow-refunds", () => ({
   createOzowRefundClient: vi.fn(() => ({})),
   ozowApiRefundsEnabled: vi.fn(() => false),
@@ -53,6 +55,28 @@ describe("internal payment reconciliation", () => {
     const partial = await POST(request());
     expect(partial.status).toBe(503);
     expect(await partial.json()).toEqual({ checked: 1, failures: 1 });
+  });
+
+  it("records the run for the staff operations page only when every payment check succeeded", async () => {
+    vi.mocked(runFoundationPaymentReconciliation)
+      .mockResolvedValueOnce({ checked: 2, failures: 0 } as never)
+      .mockResolvedValueOnce({ checked: 1, failures: 1 } as never)
+      .mockRejectedValueOnce(new Error("db down"));
+    expect((await POST(request())).status).toBe(200);
+    expect(recordRun).toHaveBeenCalledExactlyOnceWith({}, "payment_checks");
+    recordRun.mockClear();
+    expect((await POST(request())).status).toBe(503);
+    expect((await POST(request())).status).toBe(503);
+    expect(recordRun).not.toHaveBeenCalled();
+  });
+
+  it("keeps a successful answer when the run cannot be recorded", async () => {
+    recordRun.mockResolvedValueOnce(false);
+    vi.mocked(runFoundationPaymentReconciliation).mockResolvedValueOnce({
+      checked: 0,
+      failures: 0,
+    } as never);
+    expect((await POST(request())).status).toBe(200);
   });
 
   it("reports refund job failures on their own, never failing the payment check", async () => {

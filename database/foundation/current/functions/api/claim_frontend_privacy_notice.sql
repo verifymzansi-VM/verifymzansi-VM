@@ -5,7 +5,9 @@ CREATE OR REPLACE FUNCTION api.claim_frontend_privacy_notice()
  RETURNS jsonb
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
-AS $function$select internal.claim_frontend_privacy_notice()$function$;
+AS $function$
+  select internal.note_scheduled_job_run('privacy_notices', internal.claim_frontend_privacy_notice());
+$function$;
 alter function api.claim_frontend_privacy_notice() owner to postgres;
 revoke all on function api.claim_frontend_privacy_notice() from public;
 grant execute on function api.claim_frontend_privacy_notice() to service_role;

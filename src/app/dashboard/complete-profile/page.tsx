@@ -10,11 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/hooks/use-toast";
-import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
+import {
+  getRestoredFoundationBrowserClient as createClient,
+  readRestoredOwnProfile,
+} from "@/lib/foundation/restored-browser-client";
 import { saPhoneSchema } from "@/lib/validations/shared";
 import { ACCOUNT_PHONE_IN_USE_ERROR, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 import { formatPhone } from "@/lib/utils/format";
-import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 
@@ -56,11 +58,9 @@ export default function CompleteProfilePage() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from(ACCOUNT_PROFILE_TABLE)
-        .select("display_name, phone, pending_phone")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      // The member's own profile from the live backend's own-account read;
+      // null when it cannot be read (the number field then starts empty).
+      const profile = await readRestoredOwnProfile(supabase, user.id);
       if (cancelled) return;
 
       if (profile?.phone) {
