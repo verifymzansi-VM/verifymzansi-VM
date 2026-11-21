@@ -168,6 +168,81 @@ test("retired table reads include tables named through string constants", () => 
   assert.equal(result.perFile["src/b.ts"].retiredTableReads, 1);
 });
 
+test("constant table reads cover let/var, type annotations, casts and namespace access", () => {
+  const result = measure([
+    {
+      path: "src/lib/account/compat.ts",
+      text: [
+        'export let LET_TABLE = "listings";',
+        'var VAR_TABLE: string | undefined = "leads";',
+        'export const TYPED_TABLE: TableName = "payments";',
+        'const PROFILE_TABLE = "account_profiles" as const;',
+        // A function type's arrow does not turn into a table name.
+        'const HANDLER: (a: string) => void = "not_a_table";',
+      ].join("\n"),
+    },
+    {
+      path: "src/app/page.tsx",
+      text: [
+        'import * as compat from "@/lib/account/compat";',
+        "await supabase.from(LET_TABLE).select('id');",
+        "await supabase.from(VAR_TABLE).select('id');",
+        "await supabase.from(TYPED_TABLE).select('id');",
+        "await supabase.from(PROFILE_TABLE as never).select('id');",
+        "await supabase.from(PROFILE_TABLE as Record<string, never>).select('id');",
+        "await supabase.from(compat.PROFILE_TABLE).select('id');",
+        "await supabase.from(HANDLER).select('id');",
+        // Non-database helpers named by an ignored receiver.
+        "Readable.from(PROFILE_TABLE);",
+        "stream.Readable.from(PROFILE_TABLE);",
+        "ReadableStream.from(PROFILE_TABLE);",
+        'Readable.from("account_profiles");',
+        "Array.from(PROFILE_TABLE);",
+        "Buffer.from(PROFILE_TABLE as string, 'utf8');",
+      ].join("\n"),
+    },
+    {
+      path: "src/b.ts",
+      // A qualified name refers to the other module, not this file's constant.
+      text: 'const PROFILE_TABLE = "payments";\nawait admin.from(compat.PROFILE_TABLE);',
+    },
+  ]);
+  assert.equal(result.perFile["src/app/page.tsx"].retiredTableReads, 6);
+  assert.equal(result.perFile["src/b.ts"].retiredTableReads, 1);
+  assert.equal(result.counts.retiredTableReads, 7);
+  assert.deepEqual(result.retiredTableNames, ["account_profiles", "leads", "listings", "payments"]);
+});
+
+test("documented limits: what a regex cannot follow", () => {
+  // The first four are real table reads the counter misses; the last is a
+  // non-database call it still counts. Fixing either needs a TypeScript parser
+  // (see the comment on TABLE_CONSTANT in scripts/lib/legacy-surface.mjs). If
+  // this count changes, update this test and that comment together.
+  const result = measure([
+    {
+      path: "src/lib/account/compat.ts",
+      text: [
+        'export const PROFILE_TABLE = "account_profiles";',
+        'export const TABLES = { PROFILE: "account_profiles" } as const;',
+        'export const PREFIX = "account";',
+      ].join("\n"),
+    },
+    {
+      path: "src/app/page.tsx",
+      text: [
+        'import { PROFILE_TABLE as T } from "@/lib/account/compat";',
+        "await supabase.from(T).select('id');", // import rename
+        "await supabase.from(TABLES.PROFILE).select('id');", // object member
+        "const table = PROFILE_TABLE;\nawait supabase.from(table).select('id');", // lower-case copy
+        "await supabase.from(`${PREFIX}_profiles`).select('id');", // computed name
+        // A helper whose receiver is not the word before `.from` still counts.
+        "const R = Readable;\nR.from(PROFILE_TABLE);",
+      ].join("\n"),
+    },
+  ]);
+  assert.equal(result.perFile["src/app/page.tsx"]?.retiredTableReads, 1);
+});
+
 test("reads function names from the retired migration tree", () => {
   const sql = [
     "create or replace function public.record_site_visit(p_path text) returns void",
