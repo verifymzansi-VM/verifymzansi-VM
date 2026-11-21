@@ -24,7 +24,15 @@ function salesReply(change: Record<string, unknown> = {}) {
       { category: "individual", term_days: 30, payments: 2, net_cents: 20700 },
       { category: "add_on", term_days: null, payments: 1, net_cents: 1500 },
     ],
-    checkouts: { days: 30, started: 8, paid: 4, failed: 1, cancelled: 1, expired: 1, open: 1 },
+    checkouts: {
+      days: 30 as const,
+      started: 8,
+      paid: 4,
+      failed: 1,
+      cancelled: 1,
+      expired: 1,
+      open: 1,
+    },
     ...change,
   };
 }
