@@ -5720,6 +5720,32 @@
         "service_role": true
       },
       "authority": "Website server only, for a disclosure that is still open and was opened by that staff member: the encrypted ID number (unless erased) and the selfie stored object (unless deleted) of each named account with a kept record, so the server can decrypt the number and show the selfie."
+    },
+    {
+      "name": "get_staff_sales_summary",
+      "updates": ["updates/20261121090305_staff_sales_and_vat.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payments:view capability (admin) and recent authenticator proof: sales of the last 12 months net of refunds (count and total), the VAT setting, the alert level (R1.8 million), the compulsory level (R2.3 million) and whether the alert is on; those sales by product (Individual slot, Multi-listing package, add-on, other) and term in days; and the online checkouts sent to Ozow in the last 30 days with how many were paid, failed, cancelled, expired or are open. Counts and amounts only; never an account id, name, email or phone. Read only."
+    },
+    {
+      "name": "get_vat_registration",
+      "updates": ["updates/20261121090305_staff_sales_and_vat.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public, like the price catalogue: the VAT setting's status (not_registered, registered or undecided) and, only when registered, the VAT number, which every VAT invoice shows anyway; no account data."
     }
   ]
 }
