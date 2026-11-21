@@ -6,14 +6,19 @@ create table private.accepted_identity_facts (
   owner_id uuid not null,
   submission_id uuid not null,
   identity_hmac text not null,
-  reviewed_by uuid not null,
+  reviewed_by uuid,
   second_reviewer uuid,
   decision_id uuid,
   reviewed_at timestamp with time zone default clock_timestamp() not null,
   revoked_at timestamp with time zone,
+  automatic_check_id uuid,
+  constraint accepted_identity_facts_automatic_check CHECK (automatic_check_id IS NULL OR second_reviewer IS NULL AND decision_id IS NULL),
+  constraint accepted_identity_facts_automatic_check_fkey FOREIGN KEY (automatic_check_id) REFERENCES private.identity_checks(id) ON DELETE RESTRICT,
+  constraint accepted_identity_facts_automatic_check_id_key UNIQUE (automatic_check_id),
   constraint accepted_identity_facts_check CHECK (owner_id <> reviewed_by AND owner_id IS DISTINCT FROM second_reviewer),
   constraint accepted_identity_facts_check1 CHECK ((second_reviewer IS NULL) = (decision_id IS NULL)),
-  constraint accepted_identity_facts_check2 CHECK (second_reviewer IS DISTINCT FROM reviewed_by),
+  constraint accepted_identity_facts_check2 CHECK (reviewed_by IS NULL OR second_reviewer IS DISTINCT FROM reviewed_by),
+  constraint accepted_identity_facts_decider_check CHECK ((reviewed_by IS NULL) = (automatic_check_id IS NOT NULL)),
   constraint accepted_identity_facts_decision_id_fkey FOREIGN KEY (decision_id) REFERENCES private.decisions(id),
   constraint accepted_identity_facts_decision_id_key UNIQUE (decision_id),
   constraint accepted_identity_facts_identity_hmac_check CHECK (identity_hmac ~ '^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$'::text),
@@ -33,5 +38,6 @@ CREATE UNIQUE INDEX accepted_identity_fingerprint_active_idx ON private.accepted
 CREATE INDEX accepted_identity_history_owner_idx ON private.accepted_identity_facts USING btree (owner_id, reviewed_at DESC, id DESC);
 CREATE UNIQUE INDEX accepted_identity_owner_active_idx ON private.accepted_identity_facts USING btree (owner_id) WHERE (revoked_at IS NULL);
 CREATE TRIGGER lock_reviewed_legal_name AFTER INSERT ON private.accepted_identity_facts FOR EACH ROW EXECUTE FUNCTION internal.lock_reviewed_legal_name();
+CREATE TRIGGER settle_identity_check_appeal AFTER INSERT ON private.accepted_identity_facts FOR EACH ROW WHEN (new.revoked_at IS NULL) EXECUTE FUNCTION internal.settle_identity_check_appeal();
 CREATE TRIGGER verification_identity_fact_guard BEFORE UPDATE ON private.accepted_identity_facts FOR EACH ROW EXECUTE FUNCTION internal.verification_identity_fact_guard();
 revoke all on private.accepted_identity_facts from public;

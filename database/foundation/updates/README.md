@@ -80,6 +80,117 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Automatic ID checks by an independent verification partner, 21 November 2026
+
+`20261121094003_automatic_identity_checks.sql` is pending (see the applied
+register). Didit plan, build step 5 (the database part of automatic ID checks).
+It changes nothing for members or staff while the new setting is `manual`, its
+starting value.
+
+- **The setting:** one row in `private.identity_check_settings`: `manual` (staff
+  review the photos, as today), `staff_final` (a clean automatic pass verifies
+  at once, anything else goes to the staff queue) or `automatic` (a clean pass
+  verifies at once, anything else is declined and the member may ask a person to
+  look again). `api.set_identity_check_mode(mode, reason)` needs the new
+  capability `identity_check:configure` (admins, authenticator code from the
+  last 15 minutes) and a reason of 5 to 500 characters; each change is logged in
+  the append-only `private.identity_check_mode_events`.
+  `api.get_identity_check_settings` (staff with `queue:view`) shows the setting,
+  any pause, the last 7 days' counts and the latest 5 changes. The setting is
+  read when a result arrives.
+- **Pause:** `api.report_identity_check_unavailable(check, reason)` (server)
+  marks a check that could not start as `unavailable` and pauses automatic
+  checks for everyone: 15 minutes after an `outage`, 1 hour after `no_credit` or
+  `not_configured`. `newly_paused` is true only for the call that started the
+  pause, so the website sends one alert. Setting the mode, even to the current
+  value, ends a pause early (for example after a top-up).
+- **Spending guard:** 3 checks per member in 7 days and 60 checks a day
+  site-wide (unavailable checks are not counted). Above either, or while the
+  setting is `manual` or paused, `api.get_identity_check_availability` answers
+  route `manual` with reason `limit`, `paused` or `mode`, and
+  `api.start_my_identity_check` refuses (PT409 `identity_check_<reason>`).
+- **A check:** `private.identity_checks`, bound to the member's open identity
+  case; the partner only sees its random id. The member starts it
+  (`api.start_my_identity_check`, typed legal names required, an unfinished
+  check is returned again); the server binds the partner session once
+  (`api.attach_identity_check_session`), reserves the two evidence files before
+  copying the photos (`api.begin_identity_check_evidence`) and records the
+  result once (`api.complete_identity_check`).
+- **The result** becomes an ordinary identity submission through
+  `internal.complete_evidence_upload` and
+  `internal.register_identity_submission` (the same files, fingerprint,
+  encrypted ID number and names snapshot as the manual route). The database adds
+  `banned`, `duplicate` (the ID number is verified on another account) and
+  `high_risk` (risk score above 50) to the website's findings. A clean pass on a
+  partner setting writes the accepted identity fact with `automatic_check_id`
+  instead of a staff reviewer (`accepted_identity_facts.reviewed_by` is null
+  only then, enforced by a check), so the name lock and the "verified" notice
+  work unchanged.
+- **Declines** (`automatic` setting, including the partner's "in review"):
+  `internal.decline_automatic_identity_submission` keeps the submission but
+  removes it from the case's current place, so no staff queue shows it and the
+  member's page offers a new attempt.
+  `api.ask_person_identity_check(check, reason)` (within 5 days, before anything
+  replaced it) records an appeal of the new kind `identity_check` in
+  `private.frontend_appeals` and puts the submission back in the staff queue. A
+  staff approval closes the appeal as `overturned`, a return or rejection as
+  `upheld` (trigger `internal.settle_identity_check_appeal`), and the existing
+  appeal notice tells the member. The appeals screen cannot resolve these
+  appeals; a new check cannot start while one is waiting.
+  `api.get_identity_check_for_case` shows reviewers the check's reason codes and
+  the member's request.
+- **The partner's copy:** `api.claim_identity_check_deletions(limit)` returns
+  sessions to delete (a check that never finished at once, also one still
+  unfinished an hour after its 24-hour expiry; a declined check 5 days after the
+  decline unless the member asked a person), skipping fraud and legal holds,
+  each held for 5 minutes; `api.mark_identity_check_provider_deleted` records
+  the deletion. Deleting our own copies of failed attempts is part of the later
+  retention update.
+
+New tables, columns, constraints and commands only (expand); no existing
+function body changes. `reviewed_by` becomes nullable and the appeal kinds gain
+`identity_check`; a website release without the matching code never calls the
+commands. ORDER: apply first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261121094003_automatic_identity_checks.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "automatic identity checks: update not
+   applied; admins: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "automatic identity checks: already applied; admins: N;
+   mode: manual; checks: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261121094003_automatic_identity_checks.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update is
+applied, and refuses once a check, an identity check appeal or a setting change
+was recorded. Otherwise it drops the commands, helpers, trigger and tables, puts
+back the two widened constraints, makes `reviewed_by` required again and removes
+the capability.
+
+`node --import tsx scripts/test-foundation-automatic-identity-checks.mjs` (part
+of `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted body and a
+premature rollback; apply, rollback and re-apply return the same fingerprints;
+the capability and the grants; nothing starts on `manual`; who may change the
+setting (moderator, governor and an admin with a 20-minute-old code are refused)
+and its log; a clean pass verified by the check with the name lock and notice;
+an automatic fact never naming a reviewer; `staff_final` sending anything else
+to the queue with its reasons; `automatic` declining "in review", banned,
+duplicate and high-risk results out of every queue; asking a person (the generic
+appeal path and the appeals screen refused, the submission back in the queue, a
+new check refused meanwhile), closed by an approval (overturned, with the
+notice) or a return (upheld); the 5-day window and a replaced attempt; the
+partner deletions (at once, after 5 days, held by a legal hold, the expiry
+sweep, a late result not recorded); both spending limits at their bound; the
+pause and its resume; session binding and result rules; and `manual` at the
+moment a result arrives.
+
 ## Authority requests: opening a kept identity record, 21 November 2026
 
 `20261121043124_identity_record_disclosure.sql` was applied on 21 November 2026
@@ -6311,5 +6422,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   sha256 starting a720f7d0; preflight sha256 starting 55a780b8; production
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
+- `20261121094003_automatic_identity_checks.sql`: pending; section Automatic ID
+  checks by an independent verification partner
 
 <!-- applied-register:end -->

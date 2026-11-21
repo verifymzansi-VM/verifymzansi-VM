@@ -5720,6 +5720,281 @@
         "service_role": true
       },
       "authority": "Website server only, for a disclosure that is still open and was opened by that staff member: the encrypted ID number (unless erased) and the selfie stored object (unless deleted) of each named account with a kept record, so the server can decrypt the number and show the selfie."
+    },
+    {
+      "name": "get_identity_check_availability",
+      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Signed-in active member with a live session: whether their next ID check goes to the automatic check or the manual route (with the reason: the setting is manual, checks are paused, or the spending guard of 3 checks per member in 7 days or 60 a day site-wide is reached), and their latest check (status, dates, whether they can still ask a person; the partner session link only while it is unfinished). Never the reasons a check did not pass."
+    },
+    {
+      "name": "start_my_identity_check",
+      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Signed-in active member with a live session, typed legal names, an identity case that is not accepted or under independent review and no identity check appeal waiting: returns their unfinished check, or starts one when the automatic route is open (setting not manual, not paused, within the spending guard; one start at a time site-wide)."
+    },
+    {
+      "name": "ask_person_identity_check",
+      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "arguments": [
+        {
+          "name": "p_check",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "The member who owns a check declined on the automatic setting, within 5 days of the decline, before anything replaced it and with no newer unfinished check: records an appeal of kind identity_check (reason 20 to 2000 characters) and puts the declined submission back in the staff identity queue. Idempotent for the same reason."
+    },
+    {
+      "name": "get_identity_check_settings",
+      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Staff with queue:view: the automatic ID check setting, the current pause and its reason, the last 7 days' counts by outcome and the latest 5 setting changes (who, when, from, to, why)."
+    },
+    {
+      "name": "set_identity_check_mode",
+      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "arguments": [
+        {
+          "name": "p_mode",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Admin (identity_check:configure) with an authenticator code from the last 15 minutes: sets the automatic ID check setting (manual, staff_final or automatic) with a reason of 5 to 500 characters; a change is logged append-only. Setting a mode, even the current one, ends a pause."
+    },
+    {
+      "name": "get_identity_check_for_case",
+      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Staff with case:claim, never for their own case: the latest automatic check of an identity case, its status, the reason codes it did not pass and the member's ask-a-person request."
+    },
+    {
+      "name": "attach_identity_check_session",
+      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "arguments": [
+        {
+          "name": "p_check",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_session_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_session_url",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only: binds the partner's session id and link (https://verify.didit.me/) to an unfinished, unexpired check, once; the same values again are a no-op."
+    },
+    {
+      "name": "report_identity_check_unavailable",
+      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "arguments": [
+        {
+          "name": "p_check",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only, for a check without a partner session: marks it unavailable (not counted by the spending guard) and pauses automatic checks for everyone, 15 minutes after an outage and 1 hour after a credit or settings problem; newly_paused tells the one call that started the pause."
+    },
+    {
+      "name": "begin_identity_check_evidence",
+      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "arguments": [
+        {
+          "name": "p_check",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_session_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only, for an unfinished check with that partner session whose member has no accepted identity or pending independent review: reserves the ID photo and selfie evidence files of the check's case (object keys; cleaned up after an hour if not completed); a repeat within 30 minutes returns the same files."
+    },
+    {
+      "name": "complete_identity_check",
+      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "arguments": [
+        {
+          "name": "p_check",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_session_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_outcome",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reasons",
+          "sqlType": "text[]",
+          "optional": true
+        },
+        {
+          "name": "p_id_front",
+          "sqlType": "jsonb",
+          "optional": true
+        },
+        {
+          "name": "p_selfie",
+          "sqlType": "jsonb",
+          "optional": true
+        },
+        {
+          "name": "p_identity",
+          "sqlType": "jsonb",
+          "optional": true
+        },
+        {
+          "name": "p_risk_score",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only, for the check's bound partner session, once: records not_finished, or completes the reserved evidence files and registers the identity submission (fingerprint, encrypted ID number, risk score), adds banned, duplicate and high-risk findings, then verifies a clean pass at once on a partner setting (an accepted identity fact decided by the check), sends anything else to staff (staff_final, or manual at that moment) or declines it (automatic)."
+    },
+    {
+      "name": "claim_identity_check_deletions",
+      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only (1 to 100): closes checks still unfinished an hour after their 24-hour expiry, then returns partner sessions due for deletion (unfinished checks at once, declined ones 5 days after the decline unless the member asked a person), skipping fraud and legal holds; each is held for 5 minutes."
+    },
+    {
+      "name": "mark_identity_check_provider_deleted",
+      "updates": ["updates/20261121094003_automatic_identity_checks.sql"],
+      "arguments": [
+        {
+          "name": "p_check",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only, for a finished check with a partner session: records that the partner deleted the session; idempotent."
     }
   ]
 }
