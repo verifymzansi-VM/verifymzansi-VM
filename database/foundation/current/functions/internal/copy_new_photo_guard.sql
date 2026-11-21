@@ -7,15 +7,16 @@ CREATE OR REPLACE FUNCTION internal.copy_new_photo_guard()
  SET search_path TO 'pg_catalog'
 AS $function$
 begin
+  -- Against the source's photos as they were when copied (the snapshot), so a
+  -- later change to the source changes nothing.
   if new.category_key in ('vehicles', 'property')
-    and exists(select 1 from private.post_copies c where c.post_id = new.id and c.source_post_id is not null)
+    and exists(select 1 from private.post_copies c where c.post_id = new.id)
     and not exists(
-      select 1 from private.post_media pm join private.media_objects m on m.id = pm.object_id
+      select 1 from private.post_media pm
+      join private.media_objects m on m.id = pm.object_id
+      join private.post_copies c on c.post_id = pm.post_id
       where pm.post_id = new.id and pm.purpose in ('cover', 'gallery') and m.kind = 'image' and m.sha256 is not null
-        and m.sha256 not in (select s.sha256 from private.post_copies c
-          join private.post_media spm on spm.post_id = c.source_post_id
-          join private.media_objects s on s.id = spm.object_id
-          where c.post_id = new.id and s.sha256 is not null)) then
+        and m.sha256 <> all(c.source_photo_sha256)) then
     raise exception 'add at least one new photo of this item' using errcode='22023', detail='copy_new_photo_required';
   end if;
   return new;

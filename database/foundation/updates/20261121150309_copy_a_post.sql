@@ -7,9 +7,9 @@
 -- "Post an item" form, and it is submitted for review like any new post.
 --
 -- From this update:
--- 1. private.post_copies: which post a copy was made from (the source becomes
---    null when it is deleted) and the request that made it. Deleted with the
---    copy.
+-- 1. private.post_copies: which post a copy was made from (kept as a plain id,
+--    so it stays after the source is deleted), the sha256 of the source's
+--    photos at copy time, and the request that made it. Deleted with the copy.
 -- 2. api.copy_my_post(post, request) (members): copies one of the caller's own
 --    Market listings that was submitted at least once (not a draft, not held
 --    by staff) into a new draft, only while the caller's Multi-listing package
@@ -23,22 +23,27 @@
 --    (internal.claim_media_cleanup), so deleting either post never removes
 --    the other's photos. A repeated request answers with the same copy.
 -- 3. Submitting a copy of a vehicle or property for review needs at least one
---    photo whose bytes (sha256) are not among the source's photos (owner
---    decision, question 5): trigger copy_new_photo_required, 22023, detail
---    copy_new_photo_required. Without a source (deleted) nothing is checked.
+--    photo whose bytes (sha256) were not among the source's photos when it
+--    was copied (owner decision, question 5): trigger copy_new_photo_required,
+--    22023, detail copy_new_photo_required. The check uses the snapshot taken
+--    at copy time, so deleting or changing the source changes nothing.
 --    A copy uses a slot only when approved and counts towards the new-post
 --    allowance like any new post (unchanged rules).
 -- 4. api.get_frontend_staff_copy_facts(posts) (staff with queue:view): for
 --    each given post under review that the caller has claimed, the post it
---    was copied from (id, title, status) and the seller's other live posts
+--    was copied from (id, title, status; status 'deleted' and no title once
+--    it is gone) and the seller's other live posts
 --    with a byte-identical photo (id, title, number of such photos, at most
 --    10 posts). Posts not claimed by the caller are left out.
 -- 5. Unfinished copies are deleted 14 days after their last change
 --    (internal.purge_copy_drafts, run by internal.run_retention, which now
 --    also returns 'copy_drafts'); never during a legal hold.
 -- 6. The privacy export's posts rows gain copied_from.
+-- 7. api.list_my_copy_drafts() (members): the caller's unfinished copies and
+--    when each will be deleted (14 days after its last change), for the
+--    Drafts tab on My posts.
 --
--- Expand only: two new API commands, a new table, a trigger; run_retention
+-- Expand only: three new API commands, a new table, a trigger; run_retention
 -- returns one more count and the export's posts rows one more field (both
 -- read without a strict field list). No command, argument or grant changes.
 -- ORDER: apply first, then merge. The website offers Copy only while
@@ -61,9 +66,11 @@ begin
     + (to_regprocedure('internal.get_frontend_staff_copy_facts(uuid[])') is not null)::integer
     + (to_regprocedure('api.get_frontend_staff_copy_facts(uuid[])') is not null)::integer
     + (to_regprocedure('internal.purge_copy_drafts(integer)') is not null)::integer
+    + (to_regprocedure('internal.list_my_copy_drafts()') is not null)::integer
+    + (to_regprocedure('api.list_my_copy_drafts()') is not null)::integer
   into present;
-  if present not in (0, 7) then
-    raise exception 'copy a post precondition: % of 7 new pieces exist', present using errcode='55000';
+  if present not in (0, 9) then
+    raise exception 'copy a post precondition: % of 9 new pieces exist', present using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
       where oid=to_regprocedure('internal.run_retention(integer)'))
@@ -77,15 +84,16 @@ begin
   end if;
 end$$;
 
--- 1. Which post a copy was made from.
+-- 1. Which post a copy was made from, and its photos' bytes at that moment.
 create table if not exists private.post_copies (
   post_id uuid primary key references private.posts(id) on delete cascade,
-  source_post_id uuid references private.posts(id) on delete set null,
+  -- A plain id: reviewers still see where a copy came from after the source goes.
+  source_post_id uuid not null,
+  source_photo_sha256 text[] not null,
   request_id uuid not null unique,
   created_at timestamptz not null default statement_timestamp(),
-  check (source_post_id is distinct from post_id)
+  check (source_post_id <> post_id)
 );
-create index if not exists post_copies_source_idx on private.post_copies(source_post_id);
 alter table private.post_copies owner to postgres;
 alter table private.post_copies enable row level security;
 revoke all on private.post_copies from public, anon, authenticated, service_role;
@@ -116,7 +124,7 @@ begin
   select * into src from private.posts p where p.id = p_post and p.owner_id = actor and p.edit_of is null for share;
   if not found then raise exception 'owned post unavailable' using errcode='42501'; end if;
   if src.kind <> 'listing' or src.status = 'draft' then
-    raise exception 'only a submitted Market listing can be copied' using errcode='22023'; end if;
+    raise exception 'only a submitted Market listing can be copied' using errcode='22023', detail='copy_source_invalid'; end if;
   if exists(select 1 from private.frontend_content_holds h where h.post_id = src.id and h.released_at is null) then
     raise exception 'staff visibility hold requires independent release' using errcode='PT423', detail='staff_visibility_hold'; end if;
   if not exists(select 1 from internal.slot_package_now(actor)) then
@@ -146,7 +154,11 @@ begin
     select copy_id, pm.object_id, pm.purpose, pm.position
     from private.post_presentation_media pm join private.media_objects m on m.id = pm.object_id
     where pm.post_id = src.id and pm.purpose = 'logo' and m.state = 'ready';
-  insert into private.post_copies(post_id, source_post_id, request_id) values (copy_id, src.id, p_request);
+  insert into private.post_copies(post_id, source_post_id, source_photo_sha256, request_id)
+    values (copy_id, src.id, array(select distinct m.sha256 from private.post_media pm
+      join private.media_objects m on m.id = pm.object_id
+      where pm.post_id = src.id and pm.purpose in ('cover', 'gallery') and m.sha256 is not null
+      order by m.sha256), p_request);
   perform internal.price_draft_actor(); -- final live owner/session check after all waits
   return (select jsonb_build_object('id', p.id, 'source_id', src.id, 'status', p.status, 'revision', p.revision)
     from private.posts p where p.id = copy_id);
@@ -173,15 +185,16 @@ language plpgsql
 set search_path to 'pg_catalog'
 as $$
 begin
+  -- Against the source's photos as they were when copied (the snapshot), so a
+  -- later change to the source changes nothing.
   if new.category_key in ('vehicles', 'property')
-    and exists(select 1 from private.post_copies c where c.post_id = new.id and c.source_post_id is not null)
+    and exists(select 1 from private.post_copies c where c.post_id = new.id)
     and not exists(
-      select 1 from private.post_media pm join private.media_objects m on m.id = pm.object_id
+      select 1 from private.post_media pm
+      join private.media_objects m on m.id = pm.object_id
+      join private.post_copies c on c.post_id = pm.post_id
       where pm.post_id = new.id and pm.purpose in ('cover', 'gallery') and m.kind = 'image' and m.sha256 is not null
-        and m.sha256 not in (select s.sha256 from private.post_copies c
-          join private.post_media spm on spm.post_id = c.source_post_id
-          join private.media_objects s on s.id = spm.object_id
-          where c.post_id = new.id and s.sha256 is not null)) then
+        and m.sha256 <> all(c.source_photo_sha256)) then
     raise exception 'add at least one new photo of this item' using errcode='22023', detail='copy_new_photo_required';
   end if;
   return new;
@@ -206,8 +219,9 @@ begin
     raise exception 'up to 25 posts' using errcode='22023'; end if;
   select coalesce(jsonb_agg(jsonb_build_object(
       'post_id', p.id,
-      'copied_from', (select jsonb_build_object('id', s.id, 'title', s.title, 'status', s.status)
-        from private.post_copies c join private.posts s on s.id = c.source_post_id where c.post_id = p.id),
+      'copied_from', (select jsonb_build_object('id', c.source_post_id, 'title', s.title,
+          'status', coalesce(s.status, 'deleted'))
+        from private.post_copies c left join private.posts s on s.id = c.source_post_id where c.post_id = p.id),
       'same_photos', coalesce((select jsonb_agg(jsonb_build_object('id', o.id, 'title', o.title, 'photos', o.n)
           order by o.n desc, o.id)
         from (select op.id, op.title, count(distinct m.sha256)::integer as n
@@ -271,6 +285,39 @@ end;
 $$;
 alter function internal.purge_copy_drafts(integer) owner to postgres;
 revoke all on function internal.purge_copy_drafts(integer) from public, anon, authenticated, service_role;
+
+-- 7. My unfinished copies, for the Drafts tab on My posts.
+create or replace function internal.list_my_copy_drafts()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'pg_catalog'
+as $$
+declare actor uuid := internal.price_draft_actor(); items jsonb;
+begin
+  select coalesce(jsonb_agg(jsonb_build_object('id', p.id,
+      'deletes_at', p.content_updated_at + interval '14 days') order by p.content_updated_at desc, p.id), '[]'::jsonb)
+    into items
+  from private.post_copies c join private.posts p on p.id = c.post_id
+  where p.owner_id = actor and p.status = 'draft' and p.edit_of is null;
+  return jsonb_build_object('items', items);
+end;
+$$;
+alter function internal.list_my_copy_drafts() owner to postgres;
+
+create or replace function api.list_my_copy_drafts()
+returns jsonb
+language sql
+stable
+set search_path to 'pg_catalog'
+as $$
+  select internal.list_my_copy_drafts();
+$$;
+alter function api.list_my_copy_drafts() owner to postgres;
+revoke all on function internal.list_my_copy_drafts(), api.list_my_copy_drafts()
+  from public, anon, authenticated, service_role;
+grant execute on function internal.list_my_copy_drafts(), api.list_my_copy_drafts() to authenticated;
 
 -- REPLACE: internal.run_retention (one more sweep, 'copy_drafts').
 CREATE OR REPLACE FUNCTION internal.run_retention(p_limit integer)

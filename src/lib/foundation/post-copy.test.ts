@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 import { NextRequest, type NextResponse } from "next/server";
 import { it, beforeEach, afterEach, expect, vi, describe } from "vitest";
-import { handlePostCopy } from "./post-copy";
+import { handlePostCopy, readMyCopyDrafts } from "./post-copy";
 import { readStaffCopyFacts } from "./staff-copy-facts";
 import { createFoundationRouteContext } from "./request-route";
 import { checkRateLimit } from "../utils/rate-limit";
@@ -92,6 +92,23 @@ describe("POST /api/listings/[id]/copy", () => {
     }
   });
 
+  it("says why a post cannot be copied", async () => {
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "22023",
+        details: "copy_source_invalid",
+        message: "only a submitted Market listing can be copied",
+      },
+    });
+    const response = await handlePostCopy(request(), id);
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      reason: "copy_source_invalid",
+      error: "Only a Market listing that has been sent for review can be copied.",
+    });
+  });
+
   it("does not trust a reply about another post", async () => {
     rpc.mockResolvedValueOnce({
       data: { id: draft, source_id: draft, status: "draft", revision: 1 },
@@ -135,5 +152,27 @@ describe("readStaffCopyFacts", () => {
     switches.SHOW_POST_COPY = false;
     expect((await readStaffCopyFacts(api, [draft])).size).toBe(0);
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("readMyCopyDrafts", () => {
+  const api = { rpc } as unknown as FoundationAuthenticatedApi;
+
+  it("reads the member's unfinished copies and their deletion dates", async () => {
+    rpc.mockResolvedValueOnce({
+      data: { items: [{ id: draft, deletes_at: "2026-12-05T10:00:00+00:00" }] },
+      error: null,
+    });
+    const drafts = await readMyCopyDrafts(api);
+    expect(rpc).toHaveBeenCalledWith("list_my_copy_drafts", {}, { get: false });
+    expect(drafts.get(draft)).toBe("2026-12-05T10:00:00+00:00");
+  });
+
+  it("reads nothing with the switch off, and shows nothing when the read fails", async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "42501" } });
+    expect((await readMyCopyDrafts(api)).size).toBe(0);
+    switches.SHOW_POST_COPY = false;
+    expect((await readMyCopyDrafts(api)).size).toBe(0);
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });

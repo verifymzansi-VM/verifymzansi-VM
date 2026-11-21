@@ -48,6 +48,7 @@ export const FOUNDATION_ERROR_REASONS = {
   contact_phone_required: ["PT409"],
   cooling_off_waiver_required: ["22023"],
   copy_new_photo_required: ["22023"],
+  copy_source_invalid: ["22023"],
   deletion_request_required: ["PT409"],
   disclosure_attestation_required: ["22023"],
   disclosure_closed: ["PT409"],

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import CreateListingPage from "./page";
+import type * as HiddenFeatures from "@/lib/hidden-features";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -21,6 +22,14 @@ const { listingCardSpy, useAuthMock } = vi.hoisted(() => ({
     profile: null,
     isLoading: false,
   })),
+}));
+
+const switches = vi.hoisted(() => ({ SHOW_POST_COPY: false }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_POST_COPY() {
+    return switches.SHOW_POST_COPY;
+  },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -991,12 +1000,14 @@ describe("CreateListingPage", () => {
       });
     }
     beforeEach(() => {
+      switches.SHOW_POST_COPY = true;
       useAuthMock.mockReturnValue({ user: { id: "owner-1" }, profile: null, isLoading: false });
       vi.mocked(useSearchParams).mockReturnValue(
         new URLSearchParams(`copy=${copyId}`) as unknown as ReturnType<typeof useSearchParams>
       );
     });
     afterEach(() => {
+      switches.SHOW_POST_COPY = false;
       vi.mocked(useSearchParams).mockReturnValue(
         new URLSearchParams() as unknown as ReturnType<typeof useSearchParams>
       );
@@ -1059,6 +1070,17 @@ describe("CreateListingPage", () => {
         fetchMock.mock.calls.some(
           (call) => call[0] === `/api/listings/${copyId}` && call[1]?.method === "PUT"
         )
+      ).toBe(false);
+    });
+
+    it("ignores ?copy= while the switch is off", async () => {
+      switches.SHOW_POST_COPY = false;
+      serveCopy(draft("electronics", {}));
+      render(<CreateListingPage />);
+      await termsLoaded();
+      expect(screen.queryByText(/Copy of/)).toBeNull();
+      expect(
+        fetchMock.mock.calls.some((call) => String(call[0]).startsWith("/api/listings/"))
       ).toBe(false);
     });
 

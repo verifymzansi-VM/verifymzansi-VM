@@ -26,7 +26,7 @@ begin
   select * into src from private.posts p where p.id = p_post and p.owner_id = actor and p.edit_of is null for share;
   if not found then raise exception 'owned post unavailable' using errcode='42501'; end if;
   if src.kind <> 'listing' or src.status = 'draft' then
-    raise exception 'only a submitted Market listing can be copied' using errcode='22023'; end if;
+    raise exception 'only a submitted Market listing can be copied' using errcode='22023', detail='copy_source_invalid'; end if;
   if exists(select 1 from private.frontend_content_holds h where h.post_id = src.id and h.released_at is null) then
     raise exception 'staff visibility hold requires independent release' using errcode='PT423', detail='staff_visibility_hold'; end if;
   if not exists(select 1 from internal.slot_package_now(actor)) then
@@ -56,7 +56,11 @@ begin
     select copy_id, pm.object_id, pm.purpose, pm.position
     from private.post_presentation_media pm join private.media_objects m on m.id = pm.object_id
     where pm.post_id = src.id and pm.purpose = 'logo' and m.state = 'ready';
-  insert into private.post_copies(post_id, source_post_id, request_id) values (copy_id, src.id, p_request);
+  insert into private.post_copies(post_id, source_post_id, source_photo_sha256, request_id)
+    values (copy_id, src.id, array(select distinct m.sha256 from private.post_media pm
+      join private.media_objects m on m.id = pm.object_id
+      where pm.post_id = src.id and pm.purpose in ('cover', 'gallery') and m.sha256 is not null
+      order by m.sha256), p_request);
   perform internal.price_draft_actor(); -- final live owner/session check after all waits
   return (select jsonb_build_object('id', p.id, 'source_id', src.id, 'status', p.status, 'revision', p.revision)
     from private.posts p where p.id = copy_id);

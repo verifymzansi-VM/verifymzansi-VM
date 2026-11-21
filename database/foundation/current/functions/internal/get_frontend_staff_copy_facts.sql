@@ -13,8 +13,9 @@ begin
     raise exception 'up to 25 posts' using errcode='22023'; end if;
   select coalesce(jsonb_agg(jsonb_build_object(
       'post_id', p.id,
-      'copied_from', (select jsonb_build_object('id', s.id, 'title', s.title, 'status', s.status)
-        from private.post_copies c join private.posts s on s.id = c.source_post_id where c.post_id = p.id),
+      'copied_from', (select jsonb_build_object('id', c.source_post_id, 'title', s.title,
+          'status', coalesce(s.status, 'deleted'))
+        from private.post_copies c left join private.posts s on s.id = c.source_post_id where c.post_id = p.id),
       'same_photos', coalesce((select jsonb_agg(jsonb_build_object('id', o.id, 'title', o.title, 'photos', o.n)
           order by o.n desc, o.id)
         from (select op.id, op.title, count(distinct m.sha256)::integer as n

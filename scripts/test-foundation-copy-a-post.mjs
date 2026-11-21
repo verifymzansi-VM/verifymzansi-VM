@@ -36,9 +36,11 @@ const UPDATE = "20261121150309_copy_a_post.sql";
 const K30 = { id: "5b0f4c1e-2a7d-4c43-9b51-7e0d3f6a9c11", cents: 10000 };
 const COPY = "api.copy_my_post(uuid,uuid)";
 const FACTS = "api.get_frontend_staff_copy_facts(uuid[])";
+const DRAFTS = "api.list_my_copy_drafts()";
 const INTERNAL = [
   "internal.copy_my_post(uuid,uuid)",
   "internal.get_frontend_staff_copy_facts(uuid[])",
+  "internal.list_my_copy_drafts()",
   "internal.copy_new_photo_guard()",
   "internal.purge_copy_drafts(integer)",
 ];
@@ -158,13 +160,13 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
     notApplied: NOT_APPLIED,
   });
 
-  await check("grants: both commands for members only; helpers for nobody", () => {
-    const grants = executeGrants(json, [COPY, FACTS, ...INTERNAL]);
-    for (const fn of [COPY, FACTS, ...INTERNAL.slice(0, 2)])
+  await check("grants: the three commands for members only; helpers for nobody", () => {
+    const grants = executeGrants(json, [COPY, FACTS, DRAFTS, ...INTERNAL]);
+    for (const fn of [COPY, FACTS, DRAFTS, ...INTERNAL.slice(0, 3)])
       assert.deepEqual(grants[fn], { anon: false, authenticated: true, service_role: false }, fn);
-    for (const fn of INTERNAL.slice(2))
+    for (const fn of INTERNAL.slice(3))
       assert.deepEqual(grants[fn], { anon: false, authenticated: false, service_role: false }, fn);
-    for (const fn of [COPY, FACTS])
+    for (const fn of [COPY, FACTS, DRAFTS])
       assert.equal(
         q(`select prosecdef from pg_proc where oid='${fn}'::regprocedure;`),
         "f",
@@ -239,6 +241,14 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
         q(`select source_post_id from private.post_copies where post_id='${made.id}';`),
         bakkie
       );
+      // The source's photo bytes at copy time (the video is not a photo).
+      assert.equal(
+        q(`select c.source_photo_sha256 = array(select distinct m.sha256 from private.post_media pm
+            join private.media_objects m on m.id=pm.object_id where pm.post_id='${bakkie}'
+            and pm.purpose in ('cover','gallery') order by m.sha256)
+            and cardinality(c.source_photo_sha256)=3 from private.post_copies c where c.post_id='${made.id}';`),
+        "t"
+      );
       // A repeated request answers with the same copy; another post with it is refused.
       assert.deepEqual(copy(sipho, bakkie, request), made);
       assert.equal(
@@ -257,10 +267,13 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
       "42501",
       /permission denied/
     );
-    fails(
-      copySql(sipho, listing(sipho, "vehicles", VEHICLE, "draft")),
-      "22023",
-      /submitted Market/
+    assert.match(
+      fails(
+        copySql(sipho, listing(sipho, "vehicles", VEHICLE, "draft")),
+        "22023",
+        /submitted Market/
+      ),
+      /copy_source_invalid/
     );
     fails(copySql(sipho, world.post(sipho, "business", "business")), "22023", /submitted Market/);
     // Held by staff.
@@ -314,16 +327,29 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
     const phone = listing(sipho, "electronics", {});
     const phoneCopy = copy(sipho, phone);
     q(submit(phoneCopy.id));
-    // With the source deleted there is nothing to compare with.
+    // The rule uses the photos as they were when copied: deleting the source,
+    // or giving it new photos, changes nothing.
     const gone = copy(sipho, listing(sipho));
-    q(
-      `delete from private.posts where id=(select source_post_id from private.post_copies where post_id='${gone.id}');`
-    );
+    q(`delete from private.posts where id='${gone.source_id}';`);
     assert.equal(
-      q(`select source_post_id is null from private.post_copies where post_id='${gone.id}';`),
-      "t"
+      q(`select source_post_id from private.post_copies where post_id='${gone.id}';`),
+      gone.source_id,
+      "the copied-from id stays"
     );
+    fails(submit(gone.id), "22023", /new photo/);
+    addPhoto(sipho, gone.id, freshSha(), 6);
     q(submit(gone.id));
+    const rephotoed = copy(sipho, listing(sipho));
+    q(`set session_replication_role=replica;
+       delete from private.post_media where post_id='${rephotoed.source_id}' and purpose='gallery';`);
+    addPhoto(sipho, rephotoed.source_id, freshSha(), 0);
+    fails(submit(rephotoed.id), "22023", /new photo/);
+    // The source later taking the copy's new photo does not block the copy.
+    const taken = copy(sipho, listing(sipho));
+    const fresh = freshSha();
+    addPhoto(sipho, taken.id, fresh, 6);
+    addPhoto(sipho, taken.source_id, fresh, 7);
+    q(submit(taken.id));
     // A post that is not a copy is never checked.
     q(submit(listing(sipho, "vehicles", VEHICLE, "draft")));
   });
@@ -385,6 +411,13 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
     assert.equal(shared.title, "Demo bakkie 2.4 GD-6");
     assert.ok(item.same_photos.length <= 10);
     assert.ok(item.same_photos.every((p) => p.id !== made.id));
+    // A deleted source still shows where the copy came from, without a page.
+    q(`delete from private.posts where id='${source}';`);
+    assert.deepEqual(facts([made.id]).items[0].copied_from, {
+      id: source,
+      title: null,
+      status: "deleted",
+    });
     // An expired claim shows nothing; members and anon are refused.
     q(`update private.queue_claims set claimed_at=now()-interval '1 hour',claim_expires_at=now()-interval '1 minute'
          where post_id='${made.id}';`);
@@ -429,6 +462,18 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
     q(`update private.posts set content_updated_at=now()-interval '15 days'
          where id in ('${old.id}','${plainDraft}','${submitted.id}');
        update private.posts set content_updated_at=now()-interval '13 days' where id='${recent.id}';`);
+    // My posts lists only unfinished copies, with their deletion dates.
+    const listed = json(member(sipho, `select api.list_my_copy_drafts();`)).items;
+    assert.deepEqual(listed.map((d) => d.id).sort(), [old.id, recent.id].sort());
+    for (const d of listed)
+      assert.equal(
+        q(`select (content_updated_at + interval '14 days' = '${d.deletes_at}'::timestamptz)::text
+          from private.posts where id='${d.id}';`),
+        "true"
+      );
+    const stranger = verified("copy-drafts-other");
+    assert.deepEqual(json(member(stranger, `select api.list_my_copy_drafts();`)), { items: [] });
+    fails(`set role anon;\nselect api.list_my_copy_drafts();`, "42501", /permission denied/);
     // LIM-F-purge_copy_drafts (1 to 5000) and LIM-SQL-copy-draft-age (14 days).
     fails(`select internal.purge_copy_drafts(0);`, "22023", /limit 1 to 5000/);
     fails(`select internal.purge_copy_drafts(5001);`, "22023", /limit 1 to 5000/);

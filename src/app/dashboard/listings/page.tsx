@@ -60,6 +60,7 @@ import {
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
 import { SHOW_ENGAGEMENT_TOTALS, SHOW_POST_COPY } from "@/lib/hidden-features";
 import { readFoundationMySlotPackage } from "@/lib/foundation/billing-runtime";
+import { readMyCopyDrafts } from "@/lib/foundation/post-copy";
 import { PostMoreMenu } from "@/components/listings/post-more-menu";
 
 export const metadata = {
@@ -273,6 +274,8 @@ export default async function ListingsPage({
         .then((slots) => slots.package?.state === "active")
         .catch(() => false)
     : false;
+  // The member's unfinished copies and when each is deleted (SHOW_POST_COPY).
+  const copyDrafts = await readMyCopyDrafts(nativeSession.api);
 
   const baseItems = [
     ...toDashboardItems(listingResponse.data).map((listing) => ({
@@ -352,10 +355,8 @@ export default async function ListingsPage({
       (item.status === "hidden" && item.status_reason === OWNER_DEACTIVATED_REASON)
   );
   const rejected = items.filter((item) => item.status === "rejected");
-  // Unfinished copies (SHOW_POST_COPY): the only drafts members make.
-  const drafts = SHOW_POST_COPY
-    ? items.filter((item) => item.status === "draft" && item.source === "listing")
-    : [];
+  // Unfinished copies (SHOW_POST_COPY): the drafts the 14-day rule deletes.
+  const drafts = items.filter((item) => item.status === "draft" && copyDrafts.has(item.id));
 
   const byArea = (list: DashboardItem[]) =>
     areaFilter ? list.filter((item) => item.area === areaFilter) : list;
@@ -486,7 +487,7 @@ export default async function ListingsPage({
           </TabsContent>
           {filteredDrafts.length > 0 ? (
             <TabsContent value="drafts" className="mt-4">
-              <DraftList drafts={filteredDrafts} />
+              <DraftList drafts={filteredDrafts} deletesAt={copyDrafts} />
             </TabsContent>
           ) : null}
         </Tabs>
@@ -651,11 +652,18 @@ function RejectedListingList({ listings }: { listings: DashboardItem[] }) {
 }
 
 /** Unfinished copies: continue in the "Post an item" form, or delete. */
-function DraftList({ drafts }: { drafts: DashboardItem[] }) {
+function DraftList({
+  drafts,
+  deletesAt,
+}: {
+  drafts: DashboardItem[];
+  deletesAt: Map<string, string>;
+}) {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        Copies you have not submitted yet. They are deleted 14 days after your last change.
+        Copies you have not sent for review yet. Each is deleted 14 days after your last change to
+        it.
       </p>
       <ul className="space-y-3">
         {drafts.map((draft) => (
@@ -676,6 +684,11 @@ function DraftList({ drafts }: { drafts: DashboardItem[] }) {
                     <p className="mt-0.5 text-sm font-semibold text-brand-green-700 dark:text-brand-gold-300">
                       {getDisplayPrice(draft)}
                     </p>
+                    {deletesAt.get(draft.id) ? (
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        Will be deleted on {formatSaLongDate(deletesAt.get(draft.id)!)}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">

@@ -102,21 +102,26 @@ makes a new Market listing from one of their own.
   share files the same way.
 - **New photo:** trigger `copy_new_photo_required` refuses moving a copy of a
   vehicle or property into review (22023, detail `copy_new_photo_required`)
-  unless one of its photos has bytes (sha256) not among the source's photos
-  (owner decision, question 5). Nothing is checked once the source is deleted.
+  unless one of its photos has bytes (sha256) not among the source's photos when
+  it was copied (owner decision, question 5). The copy keeps that list
+  (`source_photo_sha256`), so deleting or re-photographing the source changes
+  nothing. Copying a draft or a business is refused with detail
+  `copy_source_invalid`.
 - **Reviewers:** `api.get_frontend_staff_copy_facts(posts)` (staff with
   `queue:view`) returns, only for posts under review the caller has claimed (at
-  most 25 per call), the post each was copied from and the seller's other live
-  posts with a byte-identical photo (at most 10, with the number of such
-  photos).
-- **Unfinished copies:** `private.post_copies` records the source (null once it
-  is deleted) and the request. `internal.purge_copy_drafts`, run by
-  `internal.run_retention` (which now also returns `copy_drafts`), deletes a
-  copy still in draft 14 days after its last change, never during a legal hold.
-  Drafts that are not copies are untouched.
+  most 25 per call), the post each was copied from (status `deleted` and no
+  title once it is gone) and the seller's other live posts with a byte-identical
+  photo (at most 10, with the number of such photos).
+- **Unfinished copies:** `private.post_copies` records the source (a plain id,
+  kept after the source is deleted), its photo bytes and the request.
+  `api.list_my_copy_drafts()` (members) lists the caller's unfinished copies and
+  when each will be deleted, for the Drafts tab on My posts.
+  `internal.purge_copy_drafts`, run by `internal.run_retention` (which now also
+  returns `copy_drafts`), deletes a copy still in draft 14 days after its last
+  change, never during a legal hold. Drafts that are not copies are untouched.
 - **Privacy export:** the `posts` rows gain `copied_from` (no new dataset).
 
-Expand only: two new commands, a table and a trigger; `run_retention` returns
+Expand only: three new commands, a table and a trigger; `run_retention` returns
 one more count and the export's posts rows one more field, both read without a
 strict field list. ORDER: apply first, then merge; the website offers Copy only
 while `SHOW_POST_COPY` is on (off until launch switch-on).
@@ -138,7 +143,7 @@ with the owner's decision; prefer a forward fix; switch `SHOW_POST_COPY` off
 first). It refuses (55000) unless every piece of the update has the update's
 body; then it puts back `internal.run_retention` and
 `internal.frontend_privacy_export_data` byte for byte and drops the trigger, the
-six functions and `private.post_copies`. Copies already made stay as ordinary
+eight functions and `private.post_copies`. Copies already made stay as ordinary
 posts and drafts; only the record of their source goes.
 
 `node --import tsx scripts/test-foundation-copy-a-post.mjs` (part of
@@ -150,12 +155,15 @@ a copy's fields, buttons, photos (same files, focal point kept) and logo,
 without the video, its cover, contact numbers or video layout; replay of a
 request; refusals for another member, a visitor, a draft, a business, a held
 post, no package and the draft allowance; the new-photo rule for vehicles and
-property (the same bytes again do not count; other categories, a deleted source
-and posts that are not copies are not checked); photos kept when either post is
-deleted; the reviewer read only for claimed posts, refused to members, visitors,
-above 25 posts and with a stale authenticator code; the 14-day deletion (and its
-bounds, the legal hold, other drafts and submitted copies kept); and
-`copied_from` in the privacy export.
+property against the photos at copy time (the same bytes again do not count; a
+deleted or re-photographed source still needs one; the source later taking the
+copy's photo does not block it; other categories and posts that are not copies
+are not checked); photos kept when either post is deleted; the reviewer read
+only for claimed posts, refused to members, visitors, above 25 posts and with a
+stale authenticator code, and a deleted source shown as deleted; the member's
+list of unfinished copies; the 14-day deletion (and its bounds, the legal hold,
+other drafts and submitted copies kept); and `copied_from` in the privacy
+export.
 
 ## Authority requests: opening a kept identity record, 21 November 2026
 

@@ -1005,11 +1005,22 @@ function CopyFactsNotice({ facts }: { facts: NonNullable<ModerationItem["copy_fa
       {facts.copied_from ? (
         <p>
           <span className="font-medium">Copied from </span>
-          {postLink(facts.copied_from)}
-          <span className="text-muted-foreground">
-            {" "}
-            ({formatEnumLabel(facts.copied_from.status)})
-          </span>
+          {/* Only a live post has a public page to open. */}
+          {facts.copied_from.status === "deleted" ? (
+            <span className="text-muted-foreground">a post that has since been deleted</span>
+          ) : (
+            <>
+              {facts.copied_from.status === "live" ? (
+                postLink(facts.copied_from)
+              ) : (
+                <span className="font-medium">{facts.copied_from.title || "Untitled post"}</span>
+              )}
+              <span className="text-muted-foreground">
+                {" "}
+                ({formatEnumLabel(facts.copied_from.status)})
+              </span>
+            </>
+          )}
         </p>
       ) : null}
       {facts.same_photos.length > 0 ? (

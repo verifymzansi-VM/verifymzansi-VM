@@ -5762,7 +5762,20 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Staff with queue:view (fresh authenticator code), only for posts under review that the caller has claimed (up to 25): the post it was copied from (id, title, status) and the seller's other live posts with a byte-identical photo (id, title, count)."
+      "authority": "Staff with queue:view (fresh authenticator code), only for posts under review that the caller has claimed (up to 25): the post it was copied from (id, title, status; status deleted and no title once it is gone) and the seller's other live posts with a byte-identical photo (id, title, count)."
+    },
+    {
+      "name": "list_my_copy_drafts",
+      "updates": ["updates/20261121150309_copy_a_post.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current live member: the ids of their own unfinished copies (drafts made by api.copy_my_post) and when each will be deleted (14 days after its last change); nothing else."
     }
   ]
 }

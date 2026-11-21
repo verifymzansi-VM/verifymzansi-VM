@@ -30,6 +30,7 @@ import {
   submitListingCopy,
 } from "./listing-copy";
 import { CopyFinalCheck, CopyNotice, CopyVideoNote } from "./copy-notes";
+import { SHOW_POST_COPY } from "@/lib/hidden-features";
 import { Input } from "@/components/ui/input";
 import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
@@ -294,7 +295,8 @@ export default function CreateListingPage() {
   const { fields: postFields, captureRevision } = usePostTransport();
   // Copy a post (SHOW_POST_COPY): the form opened on a copy, a draft the server
   // made (?copy=<id>). It never touches the form's autosaved draft.
-  const copyId = parseCopyId(useSearchParams()?.get("copy"));
+  const searchParams = useSearchParams();
+  const copyId = SHOW_POST_COPY ? parseCopyId(searchParams?.get("copy")) : null;
   const [copyOf, setCopyOf] = useState<string | null>(null);
   const [copyLoading, setCopyLoading] = useState(copyId !== null);
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);

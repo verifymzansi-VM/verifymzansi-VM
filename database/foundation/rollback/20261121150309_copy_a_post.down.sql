@@ -4,7 +4,7 @@
 -- if it is on: a website offering Copy would then get an error.
 -- The rollback puts back internal.run_retention and
 -- internal.frontend_privacy_export_data byte for byte, drops the trigger
--- copy_new_photo_required, the six new functions and private.post_copies.
+-- copy_new_photo_required, the eight new functions and private.post_copies.
 -- Copies already made stay as ordinary posts and drafts; only the record of
 -- which post each was copied from goes, and unfinished copies are no longer
 -- deleted after 14 days (their owner can delete them on My posts).
@@ -21,18 +21,21 @@ begin
     from (values ('internal.run_retention(integer)'), ('internal.frontend_privacy_export_data(uuid)'),
       ('private.post_copies'), ('internal.copy_my_post(uuid,uuid)'), ('api.copy_my_post(uuid,uuid)'),
       ('internal.copy_new_photo_guard()'), ('internal.get_frontend_staff_copy_facts(uuid[])'),
-      ('api.get_frontend_staff_copy_facts(uuid[])'), ('internal.purge_copy_drafts(integer)')) v(sig)
+      ('api.get_frontend_staff_copy_facts(uuid[])'), ('internal.purge_copy_drafts(integer)'),
+      ('internal.list_my_copy_drafts()'), ('api.list_my_copy_drafts()')) v(sig)
   loop
     if shape not in (
         'internal.run_retention(integer) 27b281d704dc40daeeb3f97b88a839e9',
         'internal.frontend_privacy_export_data(uuid) 4aa0fa034c5c09e495530b5563ff3008',
         'private.post_copies table',
-        'internal.copy_my_post(uuid,uuid) 7a8be6e7c05af96ac9bc7b296ed361fc',
+        'internal.copy_my_post(uuid,uuid) 2195159d14323575798a6ce2421e2c47',
         'api.copy_my_post(uuid,uuid) 6e3e0f2b5320f23666814c7b798981a6',
-        'internal.copy_new_photo_guard() 385342aaccef30f6b55f71a4d98e1ccd',
-        'internal.get_frontend_staff_copy_facts(uuid[]) c391e68c2c2a5d02937238775b67dc9a',
+        'internal.copy_new_photo_guard() 43f568afc879ca564314f64ae7e3ba6f',
+        'internal.get_frontend_staff_copy_facts(uuid[]) 426567f2fded7296eaf6bf0ca9528495',
         'api.get_frontend_staff_copy_facts(uuid[]) c003659259239c0aed61f88adee6de55',
-        'internal.purge_copy_drafts(integer) 7eb58b557ed311b33b9087918dc21c9d') then
+        'internal.purge_copy_drafts(integer) 7eb58b557ed311b33b9087918dc21c9d',
+        'internal.list_my_copy_drafts() 7e7841deb0d75dbb6112c486a474978c',
+        'api.list_my_copy_drafts() 9d8551b32781bacb99abbb3ac9656cb9') then
       raise exception 'rollback precondition: the copy a post update is not applied as reviewed (%)', shape
         using errcode='55000';
     end if;
@@ -187,6 +190,8 @@ drop function internal.copy_my_post(uuid, uuid);
 drop function api.get_frontend_staff_copy_facts(uuid[]);
 drop function internal.get_frontend_staff_copy_facts(uuid[]);
 drop function internal.purge_copy_drafts(integer);
+drop function api.list_my_copy_drafts();
+drop function internal.list_my_copy_drafts();
 drop table private.post_copies;
 
 commit;
