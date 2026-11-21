@@ -16,68 +16,19 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { after, before, describe, test } from "node:test";
-import { replayFoundation } from "./lib/foundation-replay.mjs";
+import { emailOfLength, lit, openLimitsDb, refused } from "./lib/limits-sql-harness.mjs";
 
 const register = JSON.parse(readFileSync("docs/testing/limits-register.json", "utf8"));
 const TABLES = "database/foundation/current/tables/";
 const FUNCTIONS = "database/foundation/current/functions/";
 
-let db;
+let db, one, member, asMember, asService, asVisitor, seed;
 before(async () => {
-  ({ db } = await replayFoundation());
-  await db.exec(`create schema vmtest;
-    create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
-    declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); begin
-      insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
-        values(uid,p_label||'-'||uid||'@example.invalid',now(),jsonb_build_object('display_name','Fixture '||p_label));
-      insert into auth.sessions(id,user_id,aal) values(sid,uid,'aal1');
-      return jsonb_build_object('id',uid,'session',sid);
-    end$$;`);
+  ({ db, one, member, asMember, asService, asVisitor, seed } = await openLimitsDb());
 });
 after(async () => {
   await db?.close();
 });
-
-const lit = (value) => `'${String(value).replaceAll("'", "''")}'`;
-const one = async (sql, params) => Object.values((await db.query(sql, params)).rows[0] ?? {})[0];
-const member = async (label) => one(`select vmtest.member($1)`, [label]);
-
-/** Runs `sql` as `role`; for "authenticated", with `user`'s JWT claims. */
-async function as(role, sql, user) {
-  const claims = user
-    ? {
-        sub: user.id,
-        role: "authenticated",
-        session_id: user.session,
-        aal: "aal1",
-        is_anonymous: false,
-      }
-    : { role };
-  await db.exec(`select set_config('request.jwt.claim.sub',${lit(user?.id ?? "")},false),
-      set_config('request.jwt.claims',${lit(JSON.stringify(claims))},false);
-    set role ${role};`);
-  try {
-    return (await db.query(sql)).rows;
-  } finally {
-    await db.exec(
-      `reset role; select set_config('request.jwt.claims','',false), set_config('request.jwt.claim.sub','',false);`
-    );
-  }
-}
-const asMember = (user, sql) => as("authenticated", sql, user);
-const asService = (sql) => as("service_role", sql);
-const asVisitor = (sql) => as("anon", sql);
-
-async function refused(promise, code, message) {
-  await assert.rejects(promise, (error) => {
-    assert.equal(error.code, code, error.message);
-    if (message) assert.match(error.message, message);
-    return true;
-  });
-}
-/** The owner writes `sql` with triggers and foreign-key checks off (fixtures). */
-const seed = (sql) =>
-  db.exec(`set session_replication_role=replica;\n${sql}\nset session_replication_role=origin;`);
 
 // ---------------------------------------------------------------- register-driven
 
@@ -208,16 +159,7 @@ describe("text and value rules", () => {
   });
 
   test("LIM-SQL-enquiry-email-length and LIM-SQL-signup-email-length", async () => {
-    // An address of exactly n characters: a short local part and a long
-    // domain of 50-character labels, so only the length rule can refuse it.
-    const address = (n) => {
-      let domain = "";
-      while (domain.length < n - 2 - ".com".length)
-        domain += `${domain ? "." : ""}${"d".repeat(Math.min(50, n - 2 - ".com".length - domain.length - (domain ? 1 : 0)))}`;
-      const value = `a@${domain}.com`;
-      assert.equal(value.length, n);
-      return value;
-    };
+    const address = emailOfLength;
     const enquiry = (value) => one(`select internal.enquiry_email_valid($1)`, [value]);
     assert.equal(await enquiry(address(254)), true);
     assert.equal(await enquiry(address(255)), false);
