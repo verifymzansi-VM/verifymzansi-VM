@@ -276,6 +276,8 @@ const OWNER_TABLES = [
   ],
   ["individual_slot_limits", "account_id=$1"],
   ["intro_trial_requests", "owner_id=$1"],
+  // Post templates (20261121162018_post_templates): A's saved templates.
+  ["post_templates", "owner_id=$1"],
   ["invoice_transfers", "account_id=$1"],
   ["invoices", ownPayments],
   ["listing_details", ownPosts],
@@ -923,6 +925,7 @@ try {
     privacyDetails: "Synthetic privacy detail " + syntheticLetters(),
     supportName: "Supporter " + syntheticLetters(),
     supportMessage: "Synthetic support message " + syntheticLetters(),
+    templateNote: "Synthetic template description " + syntheticLetters(),
   };
   await check("world: owner A's form draft, privacy request and support message", async () => {
     await call("frontend_form_draft", {
@@ -957,7 +960,14 @@ try {
     );
     world.ids.privacyRequestId = request.id;
     world.ids.supportTicketId = ticket.id;
-    for (const name of ["privacyRequestId", "supportTicketId"])
+    // A post template (20261121162018_post_templates). Saving needs a running
+    // Multi-listing package, which A does not hold, so it is written as the
+    // database owner.
+    world.ids.templateId = sql(
+      `insert into private.post_templates(owner_id,name,data) values('${owner.id}','Synthetic template',
+        jsonb_build_object('category','vehicles','description',${literal(extra.templateNote, "text")})) returning id;`
+    ).trim();
+    for (const name of ["privacyRequestId", "supportTicketId", "templateId"])
       assert.match(world.ids[name] ?? "", /^[a-f0-9-]{36}$/, name);
   });
 
@@ -1104,11 +1114,13 @@ try {
       await call("get_owner_post_contacts", { p_post_id: world.live.id }),
       await call("get_owner_verification_readiness", {}),
       await call("frontend_form_draft", { p_flow: "listing", p_action: "read" }),
+      await call("list_my_post_templates", {}),
     ]
       .map((value) => JSON.stringify(value))
       .join("");
     for (const name of [
       "draftNote",
+      "templateNote",
       "surname",
       "buyerEmail",
       "buyerPhone",
@@ -1206,6 +1218,7 @@ try {
       p_plan_id: [plans[0]?.id ?? randomUUID()],
       p_entitlement_id: entitlementIds.slice(0, 1),
       p_before_id: [ids.enquiryId],
+      p_template: [ids.templateId],
     })[name] ?? [randomUUID()];
   const textValue = (name) =>
     ({

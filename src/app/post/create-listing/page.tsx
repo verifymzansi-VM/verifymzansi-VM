@@ -70,6 +70,7 @@ import { LISTING_CONDITIONS } from "@/lib/constants/listing-condition";
 import { ListingDetailContent } from "@/components/listings/listing-detail-content";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 import { VIDEO_GUIDANCE, VIDEO_SOUND_OFF_TIP } from "@/lib/media/video-length";
+import { useListingTemplate } from "./listing-template";
 
 const STEPS: PostFormStep[] = [
   {
@@ -409,11 +410,24 @@ export default function CreateListingPage() {
     });
   }, []);
 
+  // Start from a template (SHOW_POST_TEMPLATES): ?template=<id> fills the form.
+  const fromTemplate = useListingTemplate((fields) => {
+    setCategory(fields.category as ListingCategory);
+    setCondition(fields.condition as ListingCondition | "");
+    setCategoryAttributes(fields.categoryAttributes);
+    setDescription(fields.description);
+    setProvince(fields.province);
+    setCity(fields.city);
+    setTown(fields.town);
+    setAddress(fields.address);
+    setContactMethods(fields.contactMethods);
+  });
+
   useEffect(() => {
     if (!user?.id || isLoading || submitSucceeded) return;
 
     void Promise.resolve(restoreDraft()).then((restored) => {
-      if (!restored) return;
+      if (!restored || fromTemplate.current) return;
 
       const restoredData = restored.data;
       queueMicrotask(() => {
@@ -442,7 +456,7 @@ export default function CreateListingPage() {
         });
       });
     });
-  }, [user?.id, isLoading, submitSucceeded, restoreDraft, toast]);
+  }, [user?.id, isLoading, submitSucceeded, restoreDraft, toast, fromTemplate]);
 
   useEffect(() => {
     if (!user?.id || isLoading || isSubmitting || submitSucceeded) return;

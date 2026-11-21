@@ -1,6 +1,17 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CreatePostPage from "./page";
+import type * as HiddenFeatures from "@/lib/hidden-features";
+import { readMyPostTemplates } from "@/lib/foundation/post-templates";
+
+const switches = vi.hoisted(() => ({ SHOW_POST_TEMPLATES: false }));
+vi.mock("@/lib/hidden-features", async (importOriginal) => ({
+  ...(await importOriginal<typeof HiddenFeatures>()),
+  get SHOW_POST_TEMPLATES() {
+    return switches.SHOW_POST_TEMPLATES;
+  },
+}));
+vi.mock("@/lib/foundation/post-templates", () => ({ readMyPostTemplates: vi.fn() }));
 
 const {
   mockReadSession,
@@ -129,6 +140,65 @@ describe("CreatePostPage", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    switches.SHOW_POST_TEMPLATES = false;
+  });
+
+  const template = {
+    id: "00000000-0000-4000-8000-0000000000e1",
+    kind: "listing" as const,
+    name: "Used bakkie",
+    data: {
+      category: "vehicles",
+      condition: "used",
+      categoryAttributes: { make: "Toyota", model: "Hilux" },
+    },
+    updated_at: "2026-11-21T10:00:00Z",
+  };
+
+  it("post templates: Start from a template while the switch is on and the package runs", async () => {
+    switches.SHOW_POST_TEMPLATES = true;
+    vi.mocked(readMyPostTemplates).mockResolvedValue({
+      package_running: true,
+      templates: [template],
+    });
+    render(await CreatePostPage());
+    expect(screen.getByRole("heading", { name: "Start from a template" })).toBeInTheDocument();
+    expect(screen.getByText("1 of 20")).toBeInTheDocument();
+    expect(screen.getByText("Market · Vehicles · 3 details")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Use Used bakkie" })).toHaveAttribute(
+      "href",
+      `/post/create-listing?template=${template.id}`
+    );
+    expect(
+      screen.getByRole("button", { name: "More actions for Used bakkie" })
+    ).toBeInTheDocument();
+    // The section cards are unchanged below it.
+    expect(screen.getByRole("heading", { name: "Mzansi Market" })).toBeInTheDocument();
+  });
+
+  it("post templates: nothing new without templates, a running package or the switch", async () => {
+    switches.SHOW_POST_TEMPLATES = true;
+    vi.mocked(readMyPostTemplates).mockResolvedValue({ package_running: true, templates: [] });
+    const first = render(await CreatePostPage());
+    expect(screen.queryByText("Start from a template")).not.toBeInTheDocument();
+    first.unmount();
+    vi.mocked(readMyPostTemplates).mockResolvedValue({
+      package_running: false,
+      templates: [template],
+    });
+    const second = render(await CreatePostPage());
+    expect(screen.queryByText("Start from a template")).not.toBeInTheDocument();
+    second.unmount();
+    vi.mocked(readMyPostTemplates).mockRejectedValue(new Error("unavailable"));
+    const third = render(await CreatePostPage());
+    expect(screen.queryByText("Start from a template")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mzansi Market" })).toBeInTheDocument();
+    third.unmount();
+    switches.SHOW_POST_TEMPLATES = false;
+    vi.mocked(readMyPostTemplates).mockClear();
+    render(await CreatePostPage());
+    expect(readMyPostTemplates).not.toHaveBeenCalled();
+    expect(screen.queryByText("Start from a template")).not.toBeInTheDocument();
   });
 
   it("renders each area with the choices its form supports", async () => {

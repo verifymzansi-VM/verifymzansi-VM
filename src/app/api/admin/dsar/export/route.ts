@@ -16,12 +16,11 @@ const log = createLogger("DSARExport");
 const exportSchema = z.object({ requestId: uuidSchema });
 
 /** Datasets in a foundation access export: the registry entries of
- * internal.frontend_privacy_export_data (42 since database update
- * 20261119172135_post_views_and_likes.sql added post_likes and
- * post_likes_summary). An update that adds a dataset must first ship a website
+ * internal.frontend_privacy_export_data (43 since database update
+ * 20261121162018_post_templates.sql added post_templates; 42 before). An update that adds a dataset must first ship a website
  * that accepts the new count (website-first); foundation.test.ts checks this
  * number against database/foundation/current. */
-const FOUNDATION_EXPORT_DATASET_COUNT = 42;
+const FOUNDATION_EXPORT_DATASET_COUNT = 43;
 
 /**
  * POST /api/admin/dsar/export  { requestId }
