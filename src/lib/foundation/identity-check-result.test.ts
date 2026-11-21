@@ -239,6 +239,26 @@ describe("recording a result", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  it("refuses an evidence reservation that is not the database's exact answer", async () => {
+    vi.mocked(fetchDiditDecision).mockResolvedValue(decision());
+    const answer = (await rpc("begin_identity_check_evidence")).data;
+    for (const changed of [
+      { ...answer, owner_id: undefined },
+      { ...answer, extra: true },
+      { ...answer, start: { ...answer.start, owner_id: owner } },
+    ]) {
+      rpc.mockClear();
+      const real = rpc.getMockImplementation()!;
+      rpc.mockImplementation(async (name: string) =>
+        name === "begin_identity_check_evidence" ? { data: changed, error: null } : real(name)
+      );
+      await expect(recordIdentityCheckResult(service, config, session)).rejects.toThrow();
+      expect(rpc).not.toHaveBeenCalledWith("complete_identity_check", expect.anything());
+      rpc.mockImplementation(real);
+    }
+    expect(fetchDiditImage).not.toHaveBeenCalled();
+  });
+
   it("answers a repeated delivery without copying the photos again", async () => {
     vi.mocked(fetchDiditDecision).mockResolvedValue(decision());
     rpc.mockImplementation(async (name: string) =>

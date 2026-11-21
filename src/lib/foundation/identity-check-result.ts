@@ -62,13 +62,16 @@ export function namesMatch(
   );
 }
 
-const reserved = z.object({
+/** api.begin_identity_check_evidence's answer, exactly. */
+const reserved = z.strictObject({
+  // The member's account: the ID number is encrypted for it and the risk
+  // assessment is made for it (the webhook has no member session).
   owner_id: z.uuid(),
-  id_front: z.object({ artifact_id: z.uuid(), object_key: z.string() }),
-  selfie: z.object({ artifact_id: z.uuid(), object_key: z.string() }),
+  id_front: z.strictObject({ artifact_id: z.uuid(), object_key: z.string() }),
+  selfie: z.strictObject({ artifact_id: z.uuid(), object_key: z.string() }),
   // What the database recorded when the member started: the legal names
   // they typed, the keyed hash of their network and the kind of device.
-  start: z.object({
+  start: z.strictObject({
     first_name: z.string().min(1),
     last_name: z.string().min(1),
     network_hash: z.string().nullable(),

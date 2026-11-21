@@ -51,6 +51,10 @@ export function networkHash(address: string | null | undefined) {
   const digest = createHmac("sha256", verificationSecret("HMAC_SECRET"))
     .update(`identity-check-network-v1\0${network ?? "none"}`)
     .digest("hex");
+  // Address-kind marker: the database stores only this hash, so the first hex
+  // character carries the kind ("4" IPv4, "6" IPv6, "0" unreadable) in place of
+  // one hash character (252 bits of HMAC remain). sessionMoved compares two
+  // hashes only when their markers are equal and not "0".
   return (network ? network[0] : "0") + digest.slice(1);
 }
 
