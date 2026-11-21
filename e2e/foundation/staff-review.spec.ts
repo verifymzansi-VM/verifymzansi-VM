@@ -16,6 +16,7 @@ import {
 import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
 import { isMultipartForm } from "./support/multipart";
 import { endedWithTest } from "./support/route-teardown";
+import { switchOn } from "./support/switches";
 import {
   browserSessionCookies,
   caughtMailFor,
@@ -57,17 +58,17 @@ import {
 //   - an admin verifies, approves and completes a member's privacy request;
 //   - the member whose ID was sent back reads the reviewer's reason on the
 //     verification page, has a notice, and receives an email that says only
-//     that the ID was sent back (BL-12, fixed by M2.7).
+//     that the ID was sent back (BL-12, fixed by M2.7);
+//   - the operations page is hidden (production's switch values), or, in the
+//     launch-configuration build, shows its panels from the live backend.
 //
-// Two steps are broken today and are marked test.fail(), each pinned to its
-// exact known symptom (characterise, support/known-break.ts); any other
-// outcome turns the run red:
+// One step is broken today and is marked test.fail(), pinned to its exact
+// known symptom (characterise, support/known-break.ts); any other outcome
+// turns the run red:
 // - "the per-section review queue lists the waiting post": D3B-02, fixed by
 //   M6.3. The section page reads the retired backend for its content queue.
-// - "the operations page shows job health": D5-02, fixed by M5.5. The page
-//   reads retired tables and functions.
 // The tests share the members and run in order; a failure skips the rest, so
-// the marked steps come last.
+// the marked step comes last.
 //
 // The email job (runOpsJob) delivers the website's own emails to the copy's
 // mail catcher through its loopback relay, which never reaches a provider.
@@ -88,7 +89,6 @@ const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const D3B02 = "D3B-02, fixed by M6.3";
-const D502 = "D5-02, fixed by M5.5";
 const TWO_STEP_PATH = "/staff/two-step";
 /** The identity viewer's three confirmations (foundation mode). */
 const REVIEW_CHECKS = [
@@ -1104,6 +1104,49 @@ test.describe("staff review with an authenticator", () => {
     expectNoOutboundSince(mark);
   });
 
+  test("the operations page is hidden, or shows job health in the launch build", async ({
+    context,
+    page,
+  }) => {
+    const mark = readOutboundAttempts().length;
+    const { outside, failures } = await guard(context);
+    await signInBrowser(context, "admin");
+    await page.goto("/admin/operations");
+    if (!switchOn("SHOW_STAFF_OPERATIONS")) {
+      // Off until launch (SHOW_STAFF_OPERATIONS): the address leads to the
+      // staff home (its banner's only h1 says "Platform") and the menu does not
+      // list the page.
+      await expect(page.locator("h1").filter({ hasText: /^Platform$/ })).toBeVisible({
+        timeout: 20_000,
+      });
+      expect(new URL(page.url()).pathname).toBe("/admin");
+      await expect(page.getByRole("link", { name: "Operations health" })).toHaveCount(0);
+    } else {
+      // Launch build: the page reads the live backend's staff command
+      // (api.get_staff_operations_health) and shows every panel.
+      await expect(page.getByRole("heading", { name: "Operations health" })).toBeVisible({
+        timeout: 20_000,
+      });
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      for (const panel of [
+        "Scheduled jobs",
+        "Stuck emails",
+        "Stuck notices",
+        "Payment problems",
+        "Blocked deletions",
+        "Evidence retention",
+        "Open incidents",
+      ])
+        await expect(page.getByText(panel, { exact: true }).first()).toBeVisible();
+      await expect(page.getByRole("row", { name: /Sponsored places/ })).toBeVisible();
+      await expect(page.getByRole("row", { name: /Partner commissions/ })).toBeVisible();
+      await expect(page.getByRole("row", { name: /Data retention/ })).toBeVisible();
+    }
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
+  });
+
   test("the per-section review queue lists the waiting post", async ({ context, page }) => {
     test.fail(true, D3B02);
     await characterise(D3B02, async () => {
@@ -1138,51 +1181,6 @@ test.describe("staff review with an authenticator", () => {
       }
       // Promised (M6.3): the waiting post is listed for review.
       await expect(page.getByText(posts.waiting.name).first()).toBeVisible();
-      expect(failures).toEqual([]);
-      expect(outside).toEqual([]);
-      expectNoOutboundSince(mark);
-    });
-  });
-
-  test("the operations page shows job health", async ({ context, page }) => {
-    test.fail(true, D502);
-    await characterise(D502, async () => {
-      const mark = readOutboundAttempts().length;
-      const { outside, failures } = await guard(context);
-      await signInBrowser(context, "admin");
-      await page.goto("/admin/operations");
-      // The admin's staff home: its banner's only h1 says "Platform".
-      const home = page.locator("h1").filter({ hasText: /^Platform$/ });
-      const brokenOrHealthy = page
-        .getByRole("alert")
-        .filter({ hasText: "Operations health could not be loaded." })
-        .or(page.getByRole("heading", { name: "Operations health" }));
-      await expect(home.or(brokenOrHealthy).first()).toBeVisible({ timeout: 20_000 });
-      if (new URL(page.url()).pathname === "/admin") {
-        // Hidden until it works (SHOW_STAFF_OPERATIONS): the address leads to
-        // the staff home and the menu no longer lists the page.
-        await expect(page.getByRole("link", { name: "Operations health" })).toHaveCount(0);
-        expect(failures).toEqual([]);
-        expect(outside).toEqual([]);
-        expectNoOutboundSince(mark);
-        throw new KnownBreak(`${D502}: the operations page is hidden until it works`);
-      }
-      const broken = page.getByRole("alert").filter({
-        hasText:
-          "Operations health could not be loaded. Refresh to try again. This does not mean everything is working.",
-      });
-      const healthy = page.getByRole("heading", { name: "Operations health" });
-      await expect(broken.or(healthy).first()).toBeVisible({ timeout: 20_000 });
-      if (await broken.isVisible()) {
-        // D5-02 as recorded: the page reads retired tables and functions.
-        expect(failures).toEqual([]);
-        expect(outside).toEqual([]);
-        expectNoOutboundSince(mark);
-        throw new KnownBreak(`${D502}: the operations page could not load job health`);
-      }
-      // Promised (M5.5): the job health tiles are shown.
-      await expect(page.getByText("Stuck jobs")).toBeVisible();
-      await expect(page.getByText("Failed decision updates")).toBeVisible();
       expect(failures).toEqual([]);
       expect(outside).toEqual([]);
       expectNoOutboundSince(mark);

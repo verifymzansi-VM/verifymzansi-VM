@@ -64,7 +64,6 @@ export const ROUTE_ACCESS: Record<string, Partial<Record<RouteMethod, RouteAcces
   "api/admin/governance/restrictions/lift": { POST: "staff" },
   "api/admin/governance/roles": { POST: "staff" },
   "api/admin/member-invitations": { POST: "staff" },
-  "api/admin/ops/jobs/retry": { POST: "staff" },
   "api/admin/payments/ozow-refunds": { POST: "staff" },
   "api/admin/queue": { POST: "staff" },
   "api/admin/support/update": { POST: "staff" },

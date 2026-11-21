@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.purge_expired_inbox(p_limit integer)
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.purge_expired_inbox(p_limit);
+  select internal.note_scheduled_job_run('inbox_purge', internal.purge_expired_inbox(p_limit));
 $function$;
 alter function api.purge_expired_inbox(integer) owner to postgres;
 revoke all on function api.purge_expired_inbox(integer) from public;

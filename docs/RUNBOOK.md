@@ -1246,6 +1246,24 @@ until the owner does those steps.
   email provider. Privacy-request notices that use up their attempts raise no
   alert yet. Payment checks with failures do fail the run.
 
+### Operations health page: late jobs
+
+The staff page `/admin/operations` (off until launch) lists the 17 timed jobs
+with their last successful run (database update
+`20261120163500_staff_operations_health.sql`). A job shows **Late** when it has
+not run within its limit (10 minutes for the minute jobs, 30 for the 5-minute
+jobs, 40 for the payment status check, 26 hours for the daily refund check), and
+**Never** until its first run after the update.
+
+- **Daily refund check shows Late or Never while the Ozow refund key is not
+  set.** The check runs only with the key, so that is expected, not a fault.
+  Once the key is set it records a run after its next daily run (05:15 UTC) in
+  which Ozow's whole refund list was read.
+- The payment status check is recorded only when no payment check failed, so a
+  run with failures leaves it Late; see the Worker logs for the failed payments.
+- Every other job is recorded by its own database command; a Late one usually
+  means its Worker stopped (check the cron trigger and the Worker's logs).
+
 ### Payment alerts
 
 Payment problems are logged, kept in the database and emailed to staff (database

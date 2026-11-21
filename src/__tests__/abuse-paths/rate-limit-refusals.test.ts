@@ -112,8 +112,6 @@ const OUTSIDE = new Set([
   "analytics/events",
   "analytics/visit",
   "engagement/share",
-  // Hidden until it works on the live backend.
-  "admin/ops/jobs/retry",
 ]);
 
 type Handler = (request: NextRequest, context: unknown) => Promise<Response>;

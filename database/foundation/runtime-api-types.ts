@@ -703,6 +703,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         };
         Returns: Json;
       };
+      get_staff_operations_health: { Args: Record<never, never>; Returns: Json };
     };
   };
 };
@@ -735,6 +736,7 @@ export type FoundationRuntimeServiceDatabase = {
       record_ozow_refund_send: { Args: { p_request_id: string; p_result: Json }; Returns: Json };
       apply_ozow_refund_status: { Args: { p_event: Json }; Returns: Json };
       reconcile_ozow_refunds: { Args: { p_refunds: Json }; Returns: Json };
+      record_scheduled_job_run: { Args: { p_job: string }; Returns: boolean };
       claim_ozow_refund_checks: { Args: { p_limit: number }; Returns: Json };
       report_ozow_refund_missing: { Args: { p_request_id: string }; Returns: Json };
       start_frontend_cipc_email: {

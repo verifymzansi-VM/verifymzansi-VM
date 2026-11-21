@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The two staff routes that still finish on the retired backend, through the
+// The staff route that still finishes on the retired backend, through the
 // real staff-session -> request-route -> request-api -> admin-access ->
 // staff-mfa chain. Only fetch is replaced: a small model of Auth (user,
 // token refresh) and of api.get_my_account_context, whose `can_access`
@@ -11,7 +11,6 @@ vi.unmock("@/lib/auth/staff-mfa-guard");
 vi.mock("@/lib/hidden-features", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   SHOW_ORGANISATION_REPORT: true,
-  SHOW_STAFF_OPERATIONS: true,
 }));
 const legacy = vi.hoisted(() => ({ getUser: vi.fn(), rpc: vi.fn(), from: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -21,14 +20,12 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({ rpc: legacy.rpc, from: legacy.from }),
 }));
 
-import { POST as retryJob } from "@/app/api/admin/ops/jobs/retry/route";
 import { GET as exportReport } from "@/app/api/organisations/[id]/report/route";
 
 const BACKEND = "http://127.0.0.1:55441";
 const ACCOUNT = "11111111-1111-4111-8111-111111111111";
 const SESSION = "22222222-2222-4222-8222-222222222222";
 const ORG = "33333333-3333-4333-8333-333333333333";
-const CSRF = "a".repeat(64);
 const AUTH_COOKIE = "sb-127-auth-token";
 const now = () => Math.floor(Date.now() / 1000);
 const b64u = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -171,38 +168,6 @@ const expectRefreshedPrivateReply = (response: Response) => {
   expect(response.headers.get("set-cookie") ?? "").toContain(AUTH_COOKIE);
   expect(response.headers.get("cache-control")).toContain("no-store");
 };
-
-describe("POST /api/admin/ops/jobs/retry", () => {
-  const retry = (cookie: string) =>
-    retryJob(
-      new NextRequest("https://verifymzansi.com/api/admin/ops/jobs/retry", {
-        method: "POST",
-        headers: {
-          origin: "https://verifymzansi.com",
-          "x-csrf-token": CSRF,
-          "content-type": "application/json",
-          cookie: `vm_csrf=${CSRF}; ${cookie}`,
-        },
-        body: JSON.stringify({ jobId: "44444444-4444-4444-8444-444444444444" }),
-      })
-    );
-
-  it("sends the refreshed session cookie and no-store headers with a success", async () => {
-    refreshTo = token();
-    legacy.rpc.mockResolvedValue({ data: { ok: true }, error: null });
-    const response = await retry(expiredSessionCookie());
-    expect(response.status).toBe(200);
-    expectRefreshedPrivateReply(response);
-  });
-
-  it("sends them with a refusal from the job command too", async () => {
-    refreshTo = token();
-    legacy.rpc.mockResolvedValue({ data: { ok: false, error: "not_dead" }, error: null });
-    const response = await retry(expiredSessionCookie());
-    expect(response.status).toBe(409);
-    expectRefreshedPrivateReply(response);
-  });
-});
 
 describe("GET /api/organisations/:id/report (staff branch)", () => {
   const report = (cookie: string | null) =>

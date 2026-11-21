@@ -3414,6 +3414,74 @@
       ]
     },
     {
+      "id": "LIM-F-get_staff_operations_health",
+      "title": "internal.get_staff_operations_health: an unsent email or notice counts as stuck after 8 attempts or 1 day",
+      "value": ">= 8 or interval '1 day'",
+      "category": "attempts",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_operations_health.sql",
+          "symbol": "internal.get_staff_operations_health",
+          "contains": "and (o.delivery_attempts >= 8 or o.created_at < now_at - interval '1 day')"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_operations_health.sql",
+          "symbol": "internal.get_staff_operations_health",
+          "contains": "(w.attempts >= 8 or w.created_at < now_at - interval '1 day')"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_operations_health.sql",
+          "symbol": "internal.get_staff_operations_health",
+          "contains": "w2.deliverable and (w2.attempts >= 8 or w2.created_at < now_at - interval '1 day')"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-get_staff_operations_health-2",
+      "title": "internal.get_staff_operations_health: reads or returns at most 50 rows per list",
+      "value": "limit 50",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_operations_health.sql",
+          "symbol": "internal.get_staff_operations_health",
+          "contains": "order by o.created_at, o.id limit 50"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_operations_health.sql",
+          "symbol": "internal.get_staff_operations_health",
+          "contains": "order by w2.created_at, w2.id limit 50"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_operations_health.sql",
+          "symbol": "internal.get_staff_operations_health",
+          "contains": "order by p.last_seen_at desc, p.id limit 50"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_operations_health.sql",
+          "symbol": "internal.get_staff_operations_health",
+          "contains": "order by e.blocked_at, e.user_id limit 50"
+        },
+        {
+          "file": "database/foundation/current/functions/internal/get_staff_operations_health.sql",
+          "symbol": "internal.get_staff_operations_health",
+          "contains": "order by a.raised_at desc, a.id limit 50"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-get_staff_ozow_refunds",
       "title": "internal.get_staff_ozow_refunds: up to 50 payments required",
       "value": "> 50",
