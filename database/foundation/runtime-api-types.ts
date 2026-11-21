@@ -15,6 +15,7 @@ export type FoundationRuntimePublicDatabase = {
       get_payment_limits: { Args: Record<never, never>; Returns: Json };
       get_post_engagement: { Args: { p_post_ids: string[] }; Returns: Json };
       get_signup_mode: { Args: Record<never, never>; Returns: Json };
+      get_vat_registration: { Args: Record<never, never>; Returns: Json };
     };
   };
 };
@@ -704,6 +705,8 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Returns: Json;
       };
       get_staff_operations_health: { Args: Record<never, never>; Returns: Json };
+      get_staff_sales_summary: { Args: Record<never, never>; Returns: Json };
+      get_vat_registration: { Args: Record<never, never>; Returns: Json };
     };
   };
 };

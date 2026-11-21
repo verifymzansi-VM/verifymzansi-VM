@@ -96,6 +96,8 @@
     "get_staff_ozow_refunds",
     "get_staff_package_invoice_requests",
     "get_staff_package_move_failures",
+    "get_staff_sales_summary",
+    "get_vat_registration",
     "list_my_email_history",
     "list_my_frontend_notices",
     "list_my_frontend_notifications",

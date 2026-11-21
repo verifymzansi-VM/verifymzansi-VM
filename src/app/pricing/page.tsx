@@ -12,6 +12,7 @@ import { PricingOffers } from "@/components/billing/pricing-offers";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { PACKAGES_ON_SALE } from "@/lib/constants/pricing";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
+import { readVatStatusWording } from "@/lib/foundation/vat-registration";
 
 const HERO_POINTS = [
   { icon: ReceiptText, label: "Never renews" },
@@ -28,7 +29,7 @@ export const metadata = {
 
 export default async function PricingPage() {
   // The trial policy shows its fixed defaults (DEFAULT_COMMERCIAL_SETTINGS.trials).
-  const catalog = await getCommercialCatalog();
+  const [catalog, vatStatus] = await Promise.all([getCommercialCatalog(), readVatStatusWording()]);
   const trustConfig = getTrustPublicConfig();
   // Offers are described for search engines only while they can be bought.
   const jsonLd = catalog.onSale && {
@@ -163,7 +164,7 @@ export default async function PricingPage() {
             <Reveal>
               <BillingFaq
                 merchantName={trustConfig.ozowMerchantName}
-                vatStatus={trustConfig.vatStatus}
+                vatStatus={vatStatus ?? undefined}
               />
             </Reveal>
           </div>

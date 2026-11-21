@@ -5610,6 +5610,32 @@
         "service_role": true
       },
       "authority": "Trusted server only (service_role): records that a timed job whose success the website decides ran and succeeded, after the whole run succeeded; only payment_checks and refund_check (22023 otherwise). Writes the job name and the time (never later than now), nothing else."
+    },
+    {
+      "name": "get_staff_sales_summary",
+      "updates": ["updates/20261121090305_staff_sales_and_vat.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payments:view capability (admin) and recent authenticator proof: sales of the last 12 months net of refunds (count and total), the VAT setting, the alert level (R1.8 million), the compulsory level (R2.3 million) and whether the alert is on; those sales by product (Individual slot, Multi-listing package, add-on, other) and term in days; and the online checkouts started in the last 30 days with how many were paid, failed, cancelled, expired or are open. Counts and amounts only; never an account id, name, email or phone. Read only."
+    },
+    {
+      "name": "get_vat_registration",
+      "updates": ["updates/20261121090305_staff_sales_and_vat.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public, like the price catalogue: the VAT setting's status (not_registered, registered or undecided) and, only when registered, the VAT number, which every VAT invoice shows anyway; no account data."
     }
   ]
 }

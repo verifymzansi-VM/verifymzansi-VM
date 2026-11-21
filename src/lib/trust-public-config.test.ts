@@ -49,12 +49,6 @@ describe("trust public config", () => {
     });
   });
 
-  it("says the company is not registered for VAT, as the Terms do", () => {
-    expect(getTrustPublicConfig().vatStatus).toBe("not registered for VAT");
-    vi.stubEnv("VERIFYMZANSI_VAT_STATUS", "VAT number 4123456789");
-    expect(getTrustPublicConfig().vatStatus).toBe("VAT number 4123456789");
-  });
-
   it("renders configured legal identity fields", () => {
     vi.stubEnv("VERIFYMZANSI_LEGAL_NAME", "VerifyMzansi (Pty) Ltd");
     vi.stubEnv("VERIFYMZANSI_CIPC_NUMBER", "2026/123456/07");

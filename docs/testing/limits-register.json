@@ -12915,6 +12915,11 @@
       "file": "src/lib/utils/blurhash.ts",
       "contains": "const ENCODE_SIZE = 32;",
       "reason": "image size used to compute a blur placeholder"
+    },
+    {
+      "file": "database/foundation/current/functions/internal/vat_sales_position.sql",
+      "contains": "'alert', s.vat_status <> 'registered' and t.net_cents >= 180000000)",
+      "reason": "VAT registration alert level (R1.8 million) shown to staff in a sales report; nothing is refused"
     }
   ]
 }
