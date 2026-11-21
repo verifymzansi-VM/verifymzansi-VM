@@ -82,10 +82,10 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Automatic ID checks by an independent verification partner, 21 November 2026
 
-`20261121094003_automatic_identity_checks.sql` is pending (see the applied
-register). Didit plan, build step 5 (the database part of automatic ID checks).
-It changes nothing for members or staff while the new setting is `manual`, its
-starting value.
+`20261121094003_automatic_identity_checks.sql` was applied on 21 November 2026
+at 17:32 UTC (see the applied register). Didit plan, build step 5 (the database
+part of automatic ID checks). It changes nothing for members or staff while the
+new setting is `manual`, its starting value.
 
 **The setting stays `manual` until the retention update (Didit plan C1) is
 applied, and the database enforces it:** `api.set_identity_check_mode` refuses
@@ -240,6 +240,79 @@ result after the expiry; `manual` at the moment a result arrives; the setting
 command refusing anything but `manual` and a reason with control or direction
 characters; a new check needing a verified phone; and the five-year history
 sweep removing a closed account's checks.
+
+## Staff sales figures, the VAT alert and the VAT wording from the database, 21 November 2026
+
+`20261121090305_staff_sales_and_vat.sql` was applied on 21 November 2026 at
+17:30 UTC (see the applied register). Launch checklist item 16 (roadmap M8.7,
+remainder). Everything is computed from the existing payment records; no table
+is added.
+
+- **What a sale is.** A payment's amount, less the slots refunded or charged
+  back (reversed payment lines), and nothing once the whole payment was refunded
+  or charged back (`internal.payment_net_cents`). It counts on the day it was
+  paid, the way a sales report counts an order on its order date.
+- **The VAT position** (`internal.vat_sales_position`): sales paid in the last
+  12 months, the VAT setting (`private.invoice_merchant_config`, which the
+  invoices already check), the alert level R1.8 million and the compulsory level
+  R2.3 million (SARS, from 1 April 2026), and whether the alert is on (not
+  registered for VAT and the total at or above R1.8 million).
+- **The staff read** `api.get_staff_sales_summary()` (`payments:view`, the staff
+  payments page's own capability, with a recent authenticator code; read only):
+  the VAT position, sales of the last 12 months by product (Individual slot,
+  Multi-listing package, add-on, other) and term in days, and the online
+  checkouts sent to Ozow in the last 30 days with how many were paid, failed,
+  cancelled, expired or are still open (a checkout replaced before it reached
+  Ozow is not counted). Counts and amounts only.
+- **The public read** `api.get_vat_registration()` (visitors and members, like
+  the price catalogue): the VAT setting's status and, only when registered, the
+  VAT number. The pricing, billing and Trust & Safety pages state it instead of
+  a fixed sentence in the website.
+- **The daily payment summary** (`internal.claim_payment_digest`, service only)
+  keeps its signature and grants; the summary it stores gains one field,
+  `sales`, with the VAT position. The website reads the summary with a
+  non-strict reader, so an older release keeps sending it unchanged.
+
+New commands and one added summary field only. **Apply first, then merge:**
+until the update is applied, the release that uses it shows "Sales figures could
+not be loaded" on the staff payments page and leaves the VAT line out of the
+public pages.
+
+**Applying.**
+
+1. Run `../preflight/20261121090305_staff_sales_and_vat.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff sales and VAT: update not applied".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "staff sales and VAT: already applied; VAT setting:
+   not_registered".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261121090305_staff_sales_and_vat.down.sql` (only with the owner's
+decision; prefer a forward fix). It refuses (55000) unless the update is
+applied, every function it replaces or drops still has the update's body, and no
+other function uses what it drops; then it puts back
+`internal.claim_payment_digest` byte for byte and drops the two reads, their
+internal twins, `internal.vat_sales_position` and `internal.payment_net_cents`.
+
+`node --import tsx scripts/test-foundation-staff-sales-and-vat.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted summary
+command and a premature rollback, changing nothing; apply, rollback and re-apply
+return the same fingerprints; the rollback refuses while another function uses
+what it drops; who may run each function; sales net of a refunded slot and of a
+refunded payment, a bank transfer counted, a payment of 13 months ago left out;
+sales by product and term; online checkouts of the last 30 days by outcome (bank
+transfers, checkouts never sent to Ozow and older checkouts left out); the alert
+off one cent below R1.8 million, on at it, and off once registered for VAT; the
+daily summary's `sales` field; the public read for visitors and members; and
+only staff with `payments:view` and an authenticator code of the last 12 hours
+can read the figures (an admin whose code is 11 hours old can; a moderator, a
+member, an admin whose code is 13 hours old, the server key and a visitor are
+refused).
 
 ## Privacy exports while a request is in progress, at most 5, every one notified, 21 November 2026
 
@@ -6529,6 +6602,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   sha256 starting a720f7d0; preflight sha256 starting 55a780b8; production
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
+
 - `20261121053224_privacy_export_simple.sql`: applied 2026-11-21 17:15 UTC;
   owner-approved, apply-first, Supabase SQL editor (pull request #331); update
   and preflight from the reviewed files at 6824f7ae and checked in the page
@@ -6537,7 +6611,23 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   0", after "privacy export simple: already applied; exports recorded: 0";
   production fingerprint after it (fingerprint.sql) matched the full replay
   (except the known schema grant difference)
-- `20261121094003_automatic_identity_checks.sql`: pending; section Automatic ID
-  checks by an independent verification partner
+
+- `20261121090305_staff_sales_and_vat.sql`: applied 2026-11-21 17:30 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #333); update
+  and preflight from the reviewed files at 9ea47fcd and checked in the page
+  before running; update sha256 starting 136e84ca; preflight (sha256 starting
+  69b7a139) before "staff sales and VAT: update not applied", after "staff sales
+  and VAT: already applied; VAT setting: not_registered"; production fingerprint
+  after it (fingerprint.sql) matched the full replay (except the known schema
+  grant difference)
+
+- `20261121094003_automatic_identity_checks.sql`: applied 2026-11-21 17:32 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #335); update
+  and preflight from the reviewed files at dd710894 and checked in the page
+  before running; update sha256 starting a18f7793; preflight (sha256 starting
+  6871c179) before: update not applied (no drift, none of the update's objects,
+  the reviewed check in place; admins: 2), after: already applied (mode: manual;
+  checks: 0); production fingerprint after it (fingerprint.sql) matched the full
+  replay (except the known schema grant difference)
 
 <!-- applied-register:end -->

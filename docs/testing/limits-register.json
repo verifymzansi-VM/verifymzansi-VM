@@ -13353,6 +13353,11 @@
       "reason": "image size used to compute a blur placeholder"
     },
     {
+      "file": "database/foundation/current/functions/internal/vat_sales_position.sql",
+      "contains": "'alert', s.vat_status <> 'registered' and t.net_cents >= 180000000)",
+      "reason": "VAT registration alert level (R1.8 million) shown to staff in a sales report; nothing is refused"
+    },
+    {
       "file": "database/foundation/current/functions/internal/complete_identity_check.sql",
       "contains": "||case when s.risk_score>50 then array['high_risk'] else '{}'::text[] end) r) x;",
       "reason": "routing an automatic check with a high risk score to staff or a decline; the same 50 threshold as LIM-SQL-identity-high-risk-second-review, exercised in scripts/test-foundation-automatic-identity-checks.mjs"

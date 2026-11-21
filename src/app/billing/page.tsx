@@ -8,6 +8,7 @@ import { RetailPricing } from "@/components/billing/retail-pricing";
 import { BrandSurface } from "@/components/brand";
 import { PageHeader } from "@/components/layout/page-header";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
+import { readVatStatusWording } from "@/lib/foundation/vat-registration";
 
 export const metadata = {
   title: "Billing & Plans",
@@ -19,7 +20,7 @@ export const dynamic = "force-dynamic";
 
 export default async function BillingPage() {
   // The trial policy shows its fixed defaults (DEFAULT_COMMERCIAL_SETTINGS.trials).
-  const catalog = await getCommercialCatalog();
+  const [catalog, vatStatus] = await Promise.all([getCommercialCatalog(), readVatStatusWording()]);
   const trustConfig = getTrustPublicConfig();
 
   return (
@@ -45,7 +46,7 @@ export default async function BillingPage() {
 
           <BillingFaq
             merchantName={trustConfig.ozowMerchantName}
-            vatStatus={trustConfig.vatStatus}
+            vatStatus={vatStatus ?? undefined}
           />
         </div>
       </main>
