@@ -30,6 +30,7 @@ const BEACON_ERRORS = [
   "Analytics route error",
   "Failed to record post views",
   "Failed to update like",
+  "Failed to record post activity",
 ];
 const LEGACY_CLIENT_EVENT = "legacy_client_in_foundation";
 
