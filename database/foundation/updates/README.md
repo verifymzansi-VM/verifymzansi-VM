@@ -80,6 +80,153 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Post performance statistics for the owner's Performance page, 21 November 2026
+
+`20261121100028_post_performance_stats.sql` is **pending** (see the applied
+register). Launch checklist item 2, the part after the views and likes update.
+**Order: apply-first** (the default): the website release from the same pull
+request names the three new commands, and the deploy preflight probes every
+command in `../runtime-api-manifest.json`. The website records only while
+`SHOW_ENGAGEMENT_TOTALS` is on and shows the page only while
+`SHOW_OWNER_METRICS` is on; both stay off in production until launch, so
+applying the update changes nothing anyone sees. It adds one table, one column,
+three API commands and two internal functions, and replaces three functions with
+full bodies: the retention job, the engagement clean-up and the scheduled job
+catalogue. It refuses (55000) unless its parts are all absent or all present and
+the three functions have their reviewed bodies (or this update's).
+
+- **What the page shows, and where each figure comes from.** The restored
+  Performance page (`/dashboard/metrics`, from the 27 October frontend) shows
+  posts and live posts, views with engaged views, leads and the lead rate; for
+  the last 30 days appearances in lists, search, the home page, the showrooms
+  and organisation pages, detail views, WhatsApp, phone, website, directions,
+  booking and ticket taps, shares, saves and unique viewers; the 10 busiest
+  posts; where detail views came from; and each live post's showroom turns over
+  the last 7 days next to the fair share. The pages already send the events to
+  `/api/analytics/events` (`src/lib/analytics/commercial-events.ts`): a card
+  counts as seen when half of it is on screen for one second (the IAB/MRC
+  viewable impression rule), a detail view on opening the post's page, a tap on
+  the click. Engaged views come from the video tracker (30 seconds, or 90% of a
+  shorter video) through `/api/engagement/view`.
+  - Views, unique viewers and saves reuse what the views and likes update
+    stores: views are the post's counted views (all time), unique viewers the
+    counted views of the last 30 days (one per browser per post per day, so a
+    visitor who comes back another day counts again, as in privacy-first
+    analytics with a daily salt), saves the likes made in the last 30 days that
+    still count. Leads are the enquiries received (kept 12 months).
+  - Everything else is a daily counter per post in the new table.
+- **What is stored.** `private.post_activity_days`: one row per post per day
+  (Africa/Johannesburg) with 21 counters (`list_impressions`,
+  `search_appearances`, `homepage_appearances`, `showroom_home`,
+  `showroom_business`, `showroom_market`, `showroom_tourism`,
+  `showroom_programme`, `directory_appearances`, `views_direct`,
+  `views_internal`, `views_search`, `views_social`, `views_referral`,
+  `whatsapp_taps`, `phone_taps`, `website_taps`, `directions_taps`,
+  `booking_taps`, `ticket_taps`, `shares`); deleted with the post, and after 31
+  days by the clean-up job. `private.post_engagement_totals.engaged_views`: the
+  post's engaged views (all time). An engaged view also keeps one mark
+  (`sha256(day salt || 'engaged:' || browser || post)`) in
+  `private.post_view_marks` for 24 hours. Never an account, browser identifier,
+  network address or user agent.
+- **`api.record_post_activity(p_post_ids, p_metrics, p_device, p_account)`**
+  (service only): 1 to 50 (post, counter) pairs of the same length (22023
+  `activity_invalid` otherwise); a counter is one of the 21 columns or
+  `engaged_views`, which needs `p_device`. Each distinct (post, counter) pair
+  counts at most once per call. Pairs of posts that do not count are skipped:
+  posts that are not publicly live, the signed-in owner's own events and every
+  event by an account with an active staff role (an inactive account counts as
+  signed out). An engaged view counts at most once per browser per post in 24
+  hours, and only when that browser's view of the post was counted in the last
+  24 hours, so engaged views never exceed views. One statement per request
+  updates each post's row for the day. Returns `{"posts", "engaged"}`.
+- **`api.get_my_post_performance()`** (authenticated, live session, the caller's
+  own posts only; edit copies are not posts): `posts`, `live_posts`, `views`,
+  `engaged_views`, `leads`, `last_30_days` (keyed as the page's event names,
+  plus `unique_viewers`), `top_posts` (at most 10: post, title, area,
+  appearances, views, unique viewers, contacts, saves, shares), `sources`
+  (`direct`, `internal`, `search`, `social`, `referral`, only those above zero)
+  and `showroom_turns` (each live post on the home showroom and its area's
+  showroom: appearances in the last 7 days, the fair share, which is that
+  showroom's appearances in the last 7 days divided by the posts now eligible
+  for it, and that number of posts). The fair share is an average over every
+  eligible post; no other owner's post is named or counted separately.
+- **The clean-up is its own job.** `api.purge_post_engagement()` (service only)
+  runs the engagement clean-up (view and engaged marks older than 24 hours,
+  salts older than yesterday, waiting likes that are due, and now activity days
+  older than 31 days) and records the run as scheduled job `engagement_purge`
+  (every minute, late after 10 minutes), which the staff operations page lists.
+  The website's minute job calls it (`src/lib/foundation/operation-jobs.ts`);
+  `internal.run_retention` no longer does. Between applying and deploying, old
+  marks wait for the new website's minute job; they stop counting after 24 hours
+  anyway.
+- **Website limits (not in the database).** `/api/analytics/events` needs no
+  sign-in or cookie (list pages never run the Turnstile check, so requiring the
+  signed browser identifier would drop most first visits). It refuses cross-site
+  requests, ignores crawlers, headless browsers and prefetches, reads at most
+  16,384 bytes and 50 events, and counts within `engagement:activity` per IPv4
+  address or IPv6 /48 (30 a minute, 600 an hour, 3,000 a day). Each (post,
+  counter) pair counts once per request. A post's page events (detail views,
+  contact taps, shares) count for at most 200 requests a day per address or /48
+  (`engagement:activity:post`; more is dropped silently), far above what one
+  person reaches and with room for a shared carrier address; card appearances
+  are not checked against it, so a page left open cannot use it up. Saves (the
+  like button), sponsor clicks and organisation events are not counted there.
+  Flooding one's own or another owner's figures only changes counts the owner
+  alone sees, within those limits, and the table's size does not grow with the
+  number of events.
+
+**Write cost against the Supabase free plan (500 MB database).** Assumptions per
+visitor a day: about 30 card appearances, 3 detail pages, 0.3 contact taps, 0.05
+shares and 0.3 engaged views, sent in about 10 beacons (the pages batch up to 50
+events and send every 2 seconds while someone browses); posts on the site grow
+with visitors (assumed 500, 3,000 and 20,000 posts, every one active every day,
+which over-counts). A row is about 300 bytes with its two indexes and update
+bloat.
+
+| Daily visitors | Activity requests a day | Row updates a day | New rows a day | Activity table (31 days) | Engaged marks (24 h) |
+| -------------- | ----------------------- | ----------------- | -------------- | ------------------------ | -------------------- |
+| 1,000          | 10,000                  | about 25,000      | 500            | about 5 MB               | 300 rows, 40 KB      |
+| 10,000         | 100,000                 | about 250,000     | 3,000          | about 28 MB              | 3,000 rows, 0.4 MB   |
+| 100,000        | 1,000,000               | about 2,500,000   | 20,000         | about 186 MB             | 30,000 rows, 4 MB    |
+
+The table's size depends on posts and days, not on visitors: visitors add
+updates of existing rows (no indexed column changes, so most are HOT updates),
+not rows. 1,000 and 10,000 daily visitors fit the free plan easily. At 100,000
+daily visitors and 20,000 posts the table alone would use over a third of the
+free plan's 500 MB, at about 29 updates a second on average; by then the project
+needs the Pro plan for its overall size anyway. On Cloudflare every beacon is
+one Worker request plus one rate limiter call for the address, and one more for
+each post with page events (1 or 2 on a post page, none on a list page; about
+1.35 limiter calls a beacon on average): about 0.4 million limiter calls a month
+at 1,000 daily visitors, 4 million at 10,000 and 40 million at 100,000, against
+the 10 million requests a month Workers Paid includes (shared with the rest of
+the site).
+
+Preflight `../preflight/20261121100028_post_performance_stats.check.sql`
+(summary "post performance stats: update not applied; publicly listed posts: N"
+before, "post performance stats: already applied; activity days: N; engaged
+views: N" after; a problem row for each replaced function without its reviewed
+body); rollback `../rollback/20261121100028_post_performance_stats.down.sql`
+(only with the owner's decision; switch the recording off instead where
+possible; it refuses once any activity or engaged view is recorded, and puts
+back the three earlier function bodies byte for byte, so the retention job runs
+the clean-up again). Behaviour test
+`scripts/test-foundation-post-performance-stats.mjs` (part of
+`pnpm db:foundation:lifecycle-test`).
+
+**Applying.**
+
+1. Run `../preflight/20261121100028_post_performance_stats.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "post performance stats: update not applied; publicly
+   listed posts: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "post performance stats: already applied; activity days:
+   0; engaged views: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
 ## Authority requests: opening a kept identity record, 21 November 2026
 
 `20261121043124_identity_record_disclosure.sql` was applied on 21 November 2026
@@ -6311,5 +6458,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   sha256 starting a720f7d0; preflight sha256 starting 55a780b8; production
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
+
+- `20261121100028_post_performance_stats.sql`: pending
 
 <!-- applied-register:end -->

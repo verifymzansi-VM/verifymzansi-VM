@@ -16,6 +16,7 @@ import { POST as caseVisit } from "@/app/api/admin/business-verification/[id]/vi
 import { POST as adminCommercial } from "@/app/api/admin/commercial/route";
 import { POST as governanceAppeal } from "@/app/api/admin/governance/appeal/route";
 import { POST as ozowRefunds } from "@/app/api/admin/payments/ozow-refunds/route";
+import { POST as analyticsEvents } from "@/app/api/analytics/events/route";
 import { POST as appeals } from "@/app/api/appeals/route";
 import { POST as billingInvoices } from "@/app/api/billing/invoices/route";
 import { POST as packageAddInvoice } from "@/app/api/billing/package-add-invoice/route";
@@ -201,6 +202,7 @@ const ROUTES: Array<[string, number, Route]> = [
   ["LIM-APP-admin-commercial", 16000, adminCommercial],
   ["LIM-APP-admin-governance-appeal", 13500, governanceAppeal],
   ["LIM-APP-admin-payments-ozow-refunds", 4000, ozowRefunds],
+  ["LIM-APP-analytics-events", 16384, analyticsEvents],
   ["LIM-APP-appeals", 13000, appeals],
   ["LIM-APP-billing-invoices", 4096, billingInvoices],
   ["LIM-APP-billing-package-add-invoice", 4096, packageAddInvoice],

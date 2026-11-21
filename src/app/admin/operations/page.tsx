@@ -41,6 +41,7 @@ const JOB_LABELS: Record<ScheduledJob, string> = {
   media_cleanup: "Photo and video files deleted",
   payment_checks: "Payment status checks",
   refund_check: "Daily refund check",
+  engagement_purge: "Old view records removed",
 };
 
 const SCHEDULES: Record<OperationsHealth["jobs"][number]["every"], string> = {

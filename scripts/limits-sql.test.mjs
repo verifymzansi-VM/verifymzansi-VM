@@ -419,6 +419,18 @@ describe("member and service limits", () => {
       "22023"
     );
   });
+
+  test("LIM-SQL-activity-per-request: 1 to 50 post activity events", async () => {
+    const events = (n) =>
+      `array[${Array.from({ length: n }, () => lit(randomUUID())).join(",")}]::uuid[],` +
+      `array[${Array.from({ length: n }, () => "'shares'").join(",")}]::text[]`;
+    await asService(`select api.record_post_activity(${events(50)})`);
+    await refused(asService(`select api.record_post_activity(${events(51)})`), "22023");
+    await refused(
+      asService(`select api.record_post_activity(array[]::uuid[],array[]::text[])`),
+      "22023"
+    );
+  });
 });
 
 describe("post media allowance", () => {

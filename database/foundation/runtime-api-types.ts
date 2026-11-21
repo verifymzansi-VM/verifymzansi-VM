@@ -720,6 +720,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       };
       list_identity_disclosures: { Args: Record<never, never>; Returns: Json };
       get_staff_operations_health: { Args: Record<never, never>; Returns: Json };
+      get_my_post_performance: { Args: Record<never, never>; Returns: Json };
     };
   };
 };
@@ -913,6 +914,11 @@ export type FoundationRuntimeServiceDatabase = {
         Args: { p_disclosure: string; p_staff: string };
         Returns: Json;
       };
+      record_post_activity: {
+        Args: { p_post_ids: string[]; p_metrics: string[]; p_device?: string; p_account?: string };
+        Returns: Json;
+      };
+      purge_post_engagement: { Args: Record<never, never>; Returns: Json };
     };
   };
 };
