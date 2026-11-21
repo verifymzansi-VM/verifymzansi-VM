@@ -53,12 +53,16 @@ const CONFLICT = "internal.queue_conflict(uuid,uuid,uuid)";
 const CLAIM = "internal.claim_queue_items(text,integer)";
 const MODERATE = "internal.moderate_post(uuid,integer,text,text,text,uuid)";
 const READY = "internal.assert_posting_verification_ready(uuid,boolean)";
+const CLAIM_ONE = "internal.claim_queue_item(text,uuid)";
+const REVIEW = "internal.staff_review_post(uuid,text,uuid)";
+const RENEW = "internal.renew_queue_claim(text,uuid,text,uuid)";
 const SINGLE = "internal.single_administrator(uuid)";
-const REPLACED = [GRANT, CONFLICT, CLAIM, MODERATE, READY];
+const REPLACED = [GRANT, CONFLICT, CLAIM, MODERATE, READY, CLAIM_ONE, REVIEW, RENEW];
+const NO_ID = /staff_identity_required|ID verification required to review posts/;
 const NONE = { anon: false, authenticated: false, service_role: false };
 const REASON = "Owner's own house slots for real offers";
 const NOT_APPLIED =
-  /^one-person admin mode: update not applied; ID-verified staff: \d+; house slots: \d+$/;
+  /^one-person admin mode: update not applied; ID-verified staff: \d+; house slots: \d+; own posts without a reviewer: \d+; post claims by staff without an ID review: \d+$/;
 const MINUTE = 60;
 
 const SETUP = { update: UPDATE, label: "solo", title: "One-person admin mode" };
@@ -146,7 +150,10 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       JSON.stringify(rows)
     );
     assert.match(rows[0][1], NOT_APPLIED);
-    assert.match(rows[0][1], /; ID-verified staff: 2; house slots: 0$/);
+    assert.match(
+      rows[0][1],
+      /; ID-verified staff: 2; house slots: 0; own posts without a reviewer: 0; post claims by staff without an ID review: 0$/
+    );
     assertReadOnlyPreflight(database, kit.preflightSql);
   });
   await check("a premature rollback and drifted bodies are refused", () => {
@@ -157,7 +164,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
   await applyAndProveRollback(kit, database, check, {
     label: "one-person admin mode",
     applied:
-      /^one-person admin mode: already applied; ID-verified staff: 2; house slots: 0; self-granted slot events: 0; self-approved decisions: 0$/,
+      /^one-person admin mode: already applied; ID-verified staff: 2; house slots: 0; own posts without a reviewer: 0; post claims by staff without an ID review: 0; self-granted slot events: 0; self-approved decisions: 0$/,
     notApplied: NOT_APPLIED,
   });
 
@@ -223,16 +230,32 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     // staff capability, but no ID review of its own.
     assert.ok(!listed(second).includes(ownFree));
     assert.deepEqual(claimed(second), []);
-    fails(
-      staff(second, `select api.claim_queue_item('post','${ownFree}');`),
-      "42501",
-      /self-review is not allowed/
-    );
-    // Even holding a lease (written directly here), it cannot approve.
+    fails(staff(second, `select api.claim_queue_item('post','${ownFree}');`), "42501", NO_ID);
+    // Even holding a lease (written directly here, as a moderator whose ID
+    // review ended mid-claim would), it can neither open, approve, reject nor
+    // renew it.
     const lease = json(
       `select to_jsonb(c) from internal.take_queue_claim('${second.id}','${ownFree}',null) c;`
     );
-    fails(decideSql(second, ownFree, lease, "approve"), "42501", /caller cannot publish this post/);
+    assert.match(preflight()[0][1], /; post claims by staff without an ID review: 1;/);
+    fails(
+      staff(
+        second,
+        `select api.staff_review_post('${ownFree}','${lease.claim_generation}','${lease.claim_nonce}');`
+      ),
+      "42501",
+      NO_ID
+    );
+    for (const decision of ["approve", "reject"])
+      fails(decideSql(second, ownFree, lease, decision), "42501", NO_ID);
+    fails(
+      staff(
+        second,
+        `select api.renew_queue_claim('post','${ownFree}','${lease.claim_generation}','${lease.claim_nonce}');`
+      ),
+      "42501",
+      NO_ID
+    );
     q(`update private.queue_claims set claimed_by=null,claim_nonce=null,claimed_at=null,
       claim_expires_at=null,renewals=0 where post_id='${ownFree}';`);
     assert.equal(row(ownFree).status, "pending_moderation");
@@ -456,7 +479,7 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
     () => {
       assert.match(
         preflight()[0][1],
-        /^one-person admin mode: already applied; ID-verified staff: 1; house slots: 25; self-granted slot events: 28; self-approved decisions: 2$/
+        /^one-person admin mode: already applied; ID-verified staff: 1; house slots: 25; own posts without a reviewer: 2; post claims by staff without an ID review: 0; self-granted slot events: 28; self-approved decisions: 2$/
       );
       const before = fingerprint();
       assert.match(fails(kit.rollbackSql, "55000"), /self-granted or self-approved records exist/);
@@ -489,4 +512,31 @@ await runTwoAdminUpdateCheck(SETUP, async (run) => {
       assert.equal(row(post).status, "pending_moderation");
     }
   );
+  await check("an own post on a house slot that has ended is neither listed nor claimable", () => {
+    const post = submitted(admin);
+    const slot = fundedBy(post);
+    assert.ok(activeSlots(admin).includes(slot));
+    // The slot's end has passed, or it was revoked; the activation is still open.
+    for (const change of [
+      "ends_at=starts_at+interval '1 second'",
+      "status='revoked',revoked_reason='house_slot_ended'",
+    ]) {
+      const before = json(`select to_jsonb(e) from private.entitlements e where e.id='${slot}';`);
+      q(`set session_replication_role=replica;
+        update private.entitlements set ${change} where id='${slot}';
+        set session_replication_role=origin;`);
+      assert.equal(fundedBy(post), slot);
+      assert.ok(!listed(admin).includes(post), change);
+      assert.ok(!claimed(admin).some((l) => l.id === post), change);
+      fails(
+        staff(admin, `select api.claim_queue_item('post','${post}');`),
+        "42501",
+        /self-review is not allowed/
+      );
+      q(`set session_replication_role=replica;
+        update private.entitlements set ends_at='${before.ends_at}',status='${before.status}',
+          revoked_reason=${before.revoked_reason === null ? "null" : `'${before.revoked_reason}'`} where id='${slot}';
+        set session_replication_role=origin;`);
+    }
+  });
 });

@@ -111,8 +111,19 @@ second ID-verified administrator, and staff never review their own posts.
 - **Staff review posts only with an ID review.** `internal.queue_conflict`
   counts every post as a conflict for a staff member without an accepted ID
   review of their own (`internal.current_verified_identity`), so such an account
-  (the owner's second admin account, for one) can neither list, claim, open nor
-  approve posts. Reports are unchanged.
+  (the owner's second admin account, for one) can neither list, claim, open,
+  renew nor decide (approve or reject) posts. The per-item commands
+  (`claim_queue_item`, `staff_review_post`, `renew_queue_claim` for posts and
+  `moderate_post` for every decision) refuse through the new
+  `internal.assert_post_reviewer`: 42501 "ID verification required to review
+  posts" (detail `staff_identity_required`), otherwise "self-review is not
+  allowed" on a conflict. A moderator whose ID review ends while holding a claim
+  can no longer renew or decide it. Reports are unchanged.
+- **Who reviews the owner's other posts.** While the mode holds, the owner's own
+  posts that are not on a current house slot (free first post, paid or package
+  slots, events, and their edits) have no reviewer: nobody else is ID-verified.
+  The owner moderates members' posts from the verified account, and the second
+  account sees an empty queue.
 - **Self-approval.** `internal.queue_conflict` no longer counts the
   administrator's own pending post as a conflict when one of their own current
   house slots (active, not ended) funds it (for an edit, the live post it edits)
@@ -141,10 +152,16 @@ database returns.
 1. Run `../preflight/20261121143000_one_person_admin_mode.check.sql` unchanged
    in the SQL editor. It is read only. Continue only if its result is the single
    "summary" row reading "one-person admin mode: update not applied; ID-verified
-   staff: N; house slots: N" (any counts; N = 1 means the mode will apply).
+   staff: N; house slots: N; own posts without a reviewer: N; post claims by
+   staff without an ID review: N" (any counts). ID-verified staff 1 means the
+   mode will apply; own posts without a reviewer are the ID-verified admin's
+   pending posts (and events) not on a current house slot, which nobody can
+   review in that mode; post claims by staff without an ID review can no longer
+   be decided or renewed after the update and expire within 15 minutes.
 2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
    again: it must read "one-person admin mode: already applied; ID-verified
-   staff: N; house slots: N; self-granted slot events: 0; self-approved
+   staff: N; house slots: N; own posts without a reviewer: N; post claims by
+   staff without an ID review: N; self-granted slot events: 0; self-approved
    decisions: 0".
 3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
    compare with `../fingerprint.json`; once it matches, record it as described
@@ -157,10 +174,11 @@ admin account's own address in both places:
 The reviewed rollback is
 `../rollback/20261121143000_one_person_admin_mode.down.sql` (only with the
 owner's decision; prefer a forward fix). It refuses unless the update is applied
-and the five functions still have its bodies (both records are locked first),
-and while any event is `self_granted` or any decision `self_approved` (those
-records are kept). Otherwise it puts back the five function bodies and the audit
-view, drops `internal.single_administrator` and the two columns.
+and the eight functions still have its bodies (both records are locked first,
+access exclusive), and while any event is `self_granted` or any decision
+`self_approved` (those records are kept). Otherwise it puts back the eight
+function bodies and the audit view, drops `internal.single_administrator`,
+`internal.assert_post_reviewer` and the two columns.
 
 `node --import tsx scripts/test-foundation-one-person-admin-mode.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
@@ -177,10 +195,13 @@ self-approved too; an own post on the free first post stays a conflict; another
 member's post is approved as before; a second ID-verified staff member ends the
 mode for grants, listing, claims and a claimed item, and removing or suspending
 them brings it back; an own post on a paid slot stays a conflict; the second
-admin account without an ID review can neither claim nor approve the owner's
-post; the owner's own ID review ending turns the mode off; the rollback refuses
-a changed function and once a marked record exists; and after every later update
-a 16-minute-old code is still refused.
+admin account without an ID review can neither claim the owner's post nor, with
+a lease written directly, open, approve, reject or renew it
+(`staff_identity_required`), and the preflight counts that claim; an own post on
+a house slot that has ended or was revoked is neither listed nor claimable; the
+owner's own ID review ending turns the mode off; the rollback refuses a changed
+function and once a marked record exists; and after every later update a
+16-minute-old code is still refused.
 
 ## Business storefront, 21 November 2026
 

@@ -2,19 +2,19 @@
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so; prefer a forward fix. No website release depends on
 -- the update (it changes no API command), so no deploy is needed first.
--- It puts back the staff audit view and the five functions as they were
+-- It puts back the staff audit view and the eight functions as they were
 -- (house slots 1 to 15 in all, approval by a second ID-verified administrator
 -- only, every own post a conflict, and staff without an ID review reviewing
 -- posts again), drops internal.single_administrator and the two new columns.
--- It refuses unless the five functions still have this update's bodies, and
+-- It refuses unless the eight functions still have this update's bodies, and
 -- while any house slot event is marked self_granted or any decision
 -- self_approved: those records are kept, so a rollback after the first one
--- needs a forward fix instead. Both records are locked against new rows
--- before that check.
+-- needs a forward fix instead. Both records are locked (access exclusive,
+-- so the column drops below need no stronger lock) before that check.
 begin;
 set local lock_timeout='5s';
 -- No new marked row can be written between the check below and the drop.
-lock table private.moderation_log, private.house_slot_events in share mode;
+lock table private.moderation_log, private.house_slot_events in access exclusive mode;
 
 do $$
 declare shape text;
@@ -29,14 +29,20 @@ begin
       ('internal.queue_conflict(uuid,uuid,uuid)'),
       ('internal.claim_queue_items(text,integer)'),
       ('internal.moderate_post(uuid,integer,text,text,text,uuid)'),
-      ('internal.assert_posting_verification_ready(uuid,boolean)')) v(sig)
+      ('internal.assert_posting_verification_ready(uuid,boolean)'),
+      ('internal.claim_queue_item(text,uuid)'),
+      ('internal.staff_review_post(uuid,text,uuid)'),
+      ('internal.renew_queue_claim(text,uuid,text,uuid)')) v(sig)
   loop
     if shape not in (
         'internal.grant_house_slots(text,integer,integer,text,text) 6d72e0bc6a5f2bee76a43563f19278ac',
         'internal.queue_conflict(uuid,uuid,uuid) d4c268547c2cd0fe91f8b8726a95b061',
         'internal.claim_queue_items(text,integer) f9de196ff57fbb40b2e39d587e8d5db8',
-        'internal.moderate_post(uuid,integer,text,text,text,uuid) ee85c4cab471daa9f2d04c242d264573',
-        'internal.assert_posting_verification_ready(uuid,boolean) 45e28fa96d190f50aa15b1a106685680') then
+        'internal.moderate_post(uuid,integer,text,text,text,uuid) 51a65d3cab4ec53b7c86f15e03a4937b',
+        'internal.assert_posting_verification_ready(uuid,boolean) 45e28fa96d190f50aa15b1a106685680',
+        'internal.claim_queue_item(text,uuid) a28b6456a7ff554a868357bb504bd0d9',
+        'internal.staff_review_post(uuid,text,uuid) bddb3dfc05f96e4c4657058517c00b8a',
+        'internal.renew_queue_claim(text,uuid,text,uuid) ac7babfffdc98546fb59a743a7d683fd') then
       raise exception 'rollback precondition: % is not this update''s body', shape using errcode='55000';
     end if;
   end loop;
@@ -246,7 +252,7 @@ UNION ALL
 alter view private.frontend_staff_nonpayment_audit_events owner to postgres;
 revoke all on private.frontend_staff_nonpayment_audit_events from public;
 
--- The five functions as they were before the update.
+-- The eight functions as they were before the update.
 
 CREATE OR REPLACE FUNCTION internal.grant_house_slots(p_recipient_email text, p_slots integer, p_days integer, p_reason text, p_approved_by_email text)
  RETURNS jsonb
@@ -569,6 +575,88 @@ $function$;
 alter function internal.assert_posting_verification_ready(uuid,boolean) owner to postgres;
 revoke all on function internal.assert_posting_verification_ready(uuid,boolean) from public;
 
+CREATE OR REPLACE FUNCTION internal.claim_queue_item(p_subject text, p_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid := internal.staff_actor('queue:claim'); s record; c private.queue_claims;
+begin
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text, 1201));
+  select * into s from internal.lock_queue_subject(p_subject, p_id);
+  actor := internal.staff_actor('queue:claim'); -- authority after any lock wait
+  if internal.queue_conflict(actor, s.post_id, s.report_id) then
+    raise exception 'self-review is not allowed' using errcode = '42501';
+  end if;
+  if (select count(*) from private.queue_claims q where q.claimed_by = actor and q.claim_expires_at > clock_timestamp()
+      and not (q.post_id is not distinct from s.post_id and q.report_id is not distinct from s.report_id)) >= 20 then
+    raise exception 'claim limit of 20 items reached' using errcode = 'PT429';
+  end if;
+  c := internal.take_queue_claim(actor, s.post_id, s.report_id);
+  if c.id is null then raise exception 'item claimed by another reviewer' using errcode = 'PT409'; end if;
+  perform internal.staff_actor('queue:claim'); -- authority after the claim-row wait
+  return internal.queue_claim_view(c);
+end;
+$function$;
+alter function internal.claim_queue_item(text,uuid) owner to postgres;
+revoke all on function internal.claim_queue_item(text,uuid) from public;
+grant execute on function internal.claim_queue_item(text,uuid) to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.staff_review_post(p_post_id uuid, p_claim_generation text, p_claim_nonce uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid := internal.staff_actor('post:moderate'); c private.queue_claims; dto jsonb;
+begin
+  select q.* into c from private.queue_claims q join private.posts p on p.id = q.post_id
+    where q.post_id = p_post_id and p.status = 'pending_moderation';
+  if internal.queue_conflict(actor, p_post_id, null) then
+    raise exception 'self-review is not allowed' using errcode = '42501';
+  end if;
+  perform internal.assert_queue_claim(c, actor, p_claim_generation, p_claim_nonce);
+  dto := internal.post_review_view(p_post_id);
+  if dto->>'edit_of' is not null then
+    dto := dto || jsonb_build_object('live_version', internal.post_review_view((dto->>'edit_of')::uuid));
+  end if;
+  return dto;
+end;
+$function$;
+alter function internal.staff_review_post(uuid,text,uuid) owner to postgres;
+revoke all on function internal.staff_review_post(uuid,text,uuid) from public;
+grant execute on function internal.staff_review_post(uuid,text,uuid) to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.renew_queue_claim(p_subject text, p_id uuid, p_claim_generation text, p_claim_nonce uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid := internal.staff_actor('queue:claim'); s record; c private.queue_claims;
+begin
+  -- Renewals can turn an apparently expired committed claim into a live one.
+  -- Serialize that capacity change with acquisition and reassignment, before
+  -- taking subject/claim row locks, including when renewal later rolls back.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text,1201));
+  select * into s from internal.lock_queue_subject(p_subject, p_id);
+  c := internal.lock_queue_claim(s.post_id, s.report_id);
+  actor := internal.staff_actor('queue:claim');
+  perform internal.assert_queue_claim(c, actor, p_claim_generation, p_claim_nonce);
+  if c.renewals >= 4 then
+    raise exception 'renewal limit reached; claim the item again after it expires' using errcode = 'PT409';
+  end if;
+  update private.queue_claims set claim_expires_at = clock_timestamp() + interval '15 minutes', renewals = renewals + 1
+  where id = c.id returning * into c;
+  return internal.queue_claim_view(c);
+end;
+$function$;
+alter function internal.renew_queue_claim(text,uuid,text,uuid) owner to postgres;
+revoke all on function internal.renew_queue_claim(text,uuid,text,uuid) from public;
+grant execute on function internal.renew_queue_claim(text,uuid,text,uuid) to authenticated;
+
+drop function internal.assert_post_reviewer(uuid,uuid);
 drop function internal.single_administrator(uuid);
 
 alter table private.moderation_log drop constraint moderation_log_self_approved_check;

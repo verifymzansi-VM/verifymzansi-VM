@@ -231,6 +231,7 @@ export const FOUNDATION_ERROR_REASONS = {
   sponsorship_unavailable: ["PT404"],
   sponsorship_waitlist_full: ["PT409"],
   staff_account: ["42501", "PT409"],
+  staff_identity_required: ["42501"],
   staff_referred_customer: ["42501"],
   staff_review_required: ["42501"],
   staff_same_identity: ["42501"],

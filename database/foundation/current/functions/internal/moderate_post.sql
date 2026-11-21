@@ -41,7 +41,9 @@ begin
   -- their house slots. post:moderate already needs an authenticator code from
   -- the last 15 minutes (internal.staff_actor, requires_recent_mfa).
   v_self := post.owner_id = actor;
-  if v_self and (p_decision <> 'approve' or internal.queue_conflict(actor, post.id, null)) then
+  -- Every decision needs the reviewer's own ID review and no conflict.
+  perform internal.assert_post_reviewer(actor, post.id);
+  if v_self and p_decision <> 'approve' then
     raise exception 'self-review is not allowed' using errcode = '42501';
   end if;
   perform internal.consume_queue_claim('post', post.id, actor, p_claim_generation, p_claim_nonce);

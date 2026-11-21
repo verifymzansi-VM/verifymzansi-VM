@@ -29,6 +29,16 @@
 --    internal.staff_review_post). internal.claim_queue_items and the
 --    approval check internal.assert_posting_verification_ready now ask
 --    internal.queue_conflict instead of comparing the owner themselves.
+--    The per-item commands (internal.claim_queue_item,
+--    internal.staff_review_post, internal.renew_queue_claim for posts and
+--    internal.moderate_post for every decision) refuse through the new
+--    internal.assert_post_reviewer: 42501 "ID verification required to
+--    review posts" (detail staff_identity_required) without an ID review,
+--    otherwise "self-review is not allowed" on a conflict.
+--    While the mode holds, the owner's own posts that are not on a current
+--    house slot (free first post, paid or package slots, events, and their
+--    edits) have no reviewer: the owner moderates members' posts from the
+--    verified account, and the second account sees an empty queue.
 -- 4. internal.moderate_post lets them approve (never reject) such a post. As
 --    for every moderation decision, the admin role's post:moderate needs an
 --    authenticator code from the last 15 minutes (internal.staff_actor, 42501
@@ -68,7 +78,11 @@ begin
       ('internal.claim_queue_items(text,integer)'),
       ('internal.moderate_post(uuid,integer,text,text,text,uuid)'),
       ('internal.assert_posting_verification_ready(uuid,boolean)'),
-      ('internal.single_administrator(uuid)')) v(sig)
+      ('internal.claim_queue_item(text,uuid)'),
+      ('internal.staff_review_post(uuid,text,uuid)'),
+      ('internal.renew_queue_claim(text,uuid,text,uuid)'),
+      ('internal.single_administrator(uuid)'),
+      ('internal.assert_post_reviewer(uuid,uuid)')) v(sig)
   loop
     if shape not in (
         'internal.grant_house_slots(text,integer,integer,text,text) 77527fd29f2348e228441612a842cce2',
@@ -78,9 +92,17 @@ begin
         'internal.claim_queue_items(text,integer) fc822bf9b962527b0fba39c22d364735',
         'internal.claim_queue_items(text,integer) f9de196ff57fbb40b2e39d587e8d5db8',
         'internal.moderate_post(uuid,integer,text,text,text,uuid) 1f127647b461014ddc3d6d6ef6d086c7',
-        'internal.moderate_post(uuid,integer,text,text,text,uuid) ee85c4cab471daa9f2d04c242d264573',
+        'internal.moderate_post(uuid,integer,text,text,text,uuid) 51a65d3cab4ec53b7c86f15e03a4937b',
         'internal.assert_posting_verification_ready(uuid,boolean) c54fe760620720d67cf17c644623bd6f',
         'internal.assert_posting_verification_ready(uuid,boolean) 45e28fa96d190f50aa15b1a106685680',
+        'internal.claim_queue_item(text,uuid) ea7b6354f26d6a274ccdf1a4f54b3991',
+        'internal.claim_queue_item(text,uuid) a28b6456a7ff554a868357bb504bd0d9',
+        'internal.staff_review_post(uuid,text,uuid) b75020319ce35bcfd23ad9f9397bb043',
+        'internal.staff_review_post(uuid,text,uuid) bddb3dfc05f96e4c4657058517c00b8a',
+        'internal.renew_queue_claim(text,uuid,text,uuid) 18da441302347a2e62440f03b5c698ad',
+        'internal.renew_queue_claim(text,uuid,text,uuid) ac7babfffdc98546fb59a743a7d683fd',
+        'internal.assert_post_reviewer(uuid,uuid) absent',
+        'internal.assert_post_reviewer(uuid,uuid) 1725259d54dbdce5ad1c8823514444d0',
         'internal.single_administrator(uuid) absent',
         'internal.single_administrator(uuid) 86df529201fa210e43106b1ad93a16ff') then
       raise exception 'one-person admin mode precondition: % is not a reviewed body', shape using errcode='55000';
@@ -134,6 +156,26 @@ as $function$
 $function$;
 alter function internal.single_administrator(uuid) owner to postgres;
 revoke all on function internal.single_administrator(uuid) from public, anon, authenticated, service_role;
+
+-- 2b. One refusal for every per-item post review command: no ID review of
+-- their own (staff_identity_required), or a conflict (internal.queue_conflict).
+create or replace function internal.assert_post_reviewer(p_actor uuid, p_post_id uuid)
+ returns void
+ language plpgsql
+ set search_path to 'pg_catalog'
+as $function$
+begin
+  if internal.current_verified_identity(p_actor) is null then
+    raise exception 'ID verification required to review posts' using errcode = '42501',
+      detail = 'staff_identity_required';
+  end if;
+  if internal.queue_conflict(p_actor, p_post_id, null) then
+    raise exception 'self-review is not allowed' using errcode = '42501';
+  end if;
+end;
+$function$;
+alter function internal.assert_post_reviewer(uuid,uuid) owner to postgres;
+revoke all on function internal.assert_post_reviewer(uuid,uuid) from public, anon, authenticated, service_role;
 
 -- 3. House slots: up to 25; a self-grant in single-administrator mode.
 create or replace function internal.grant_house_slots(p_recipient_email text, p_slots integer, p_days integer, p_reason text, p_approved_by_email text)
@@ -390,7 +432,9 @@ begin
   -- their house slots. post:moderate already needs an authenticator code from
   -- the last 15 minutes (internal.staff_actor, requires_recent_mfa).
   v_self := post.owner_id = actor;
-  if v_self and (p_decision <> 'approve' or internal.queue_conflict(actor, post.id, null)) then
+  -- Every decision needs the reviewer's own ID review and no conflict.
+  perform internal.assert_post_reviewer(actor, post.id);
+  if v_self and p_decision <> 'approve' then
     raise exception 'self-review is not allowed' using errcode = '42501';
   end if;
   perform internal.consume_queue_claim('post', post.id, actor, p_claim_generation, p_claim_nonce);
@@ -490,6 +534,92 @@ end;
 $function$;
 alter function internal.assert_posting_verification_ready(uuid,boolean) owner to postgres;
 revoke all on function internal.assert_posting_verification_ready(uuid,boolean) from public, anon, authenticated, service_role;
+
+-- 7b. Claiming one item, opening a claimed post and renewing a post claim
+-- use internal.assert_post_reviewer (a de-verified holder can no longer keep
+-- a post claim alive).
+create or replace function internal.claim_queue_item(p_subject text, p_id uuid)
+ returns jsonb
+ language plpgsql
+ security definer
+ set search_path to 'pg_catalog'
+as $function$
+declare actor uuid := internal.staff_actor('queue:claim'); s record; c private.queue_claims;
+begin
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text, 1201));
+  select * into s from internal.lock_queue_subject(p_subject, p_id);
+  actor := internal.staff_actor('queue:claim'); -- authority after any lock wait
+  if s.post_id is not null then
+    perform internal.assert_post_reviewer(actor, s.post_id);
+  elsif internal.queue_conflict(actor, s.post_id, s.report_id) then
+    raise exception 'self-review is not allowed' using errcode = '42501';
+  end if;
+  if (select count(*) from private.queue_claims q where q.claimed_by = actor and q.claim_expires_at > clock_timestamp()
+      and not (q.post_id is not distinct from s.post_id and q.report_id is not distinct from s.report_id)) >= 20 then
+    raise exception 'claim limit of 20 items reached' using errcode = 'PT429';
+  end if;
+  c := internal.take_queue_claim(actor, s.post_id, s.report_id);
+  if c.id is null then raise exception 'item claimed by another reviewer' using errcode = 'PT409'; end if;
+  perform internal.staff_actor('queue:claim'); -- authority after the claim-row wait
+  return internal.queue_claim_view(c);
+end;
+$function$;
+alter function internal.claim_queue_item(text,uuid) owner to postgres;
+revoke all on function internal.claim_queue_item(text,uuid) from public, anon, authenticated, service_role;
+grant execute on function internal.claim_queue_item(text,uuid) to authenticated;
+
+create or replace function internal.staff_review_post(p_post_id uuid, p_claim_generation text, p_claim_nonce uuid)
+ returns jsonb
+ language plpgsql
+ security definer
+ set search_path to 'pg_catalog'
+as $function$
+declare actor uuid := internal.staff_actor('post:moderate'); c private.queue_claims; dto jsonb;
+begin
+  select q.* into c from private.queue_claims q join private.posts p on p.id = q.post_id
+    where q.post_id = p_post_id and p.status = 'pending_moderation';
+  perform internal.assert_post_reviewer(actor, p_post_id);
+  perform internal.assert_queue_claim(c, actor, p_claim_generation, p_claim_nonce);
+  dto := internal.post_review_view(p_post_id);
+  if dto->>'edit_of' is not null then
+    dto := dto || jsonb_build_object('live_version', internal.post_review_view((dto->>'edit_of')::uuid));
+  end if;
+  return dto;
+end;
+$function$;
+alter function internal.staff_review_post(uuid,text,uuid) owner to postgres;
+revoke all on function internal.staff_review_post(uuid,text,uuid) from public, anon, authenticated, service_role;
+grant execute on function internal.staff_review_post(uuid,text,uuid) to authenticated;
+
+create or replace function internal.renew_queue_claim(p_subject text, p_id uuid, p_claim_generation text, p_claim_nonce uuid)
+ returns jsonb
+ language plpgsql
+ security definer
+ set search_path to 'pg_catalog'
+as $function$
+declare actor uuid := internal.staff_actor('queue:claim'); s record; c private.queue_claims;
+begin
+  -- Renewals can turn an apparently expired committed claim into a live one.
+  -- Serialize that capacity change with acquisition and reassignment, before
+  -- taking subject/claim row locks, including when renewal later rolls back.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text,1201));
+  select * into s from internal.lock_queue_subject(p_subject, p_id);
+  c := internal.lock_queue_claim(s.post_id, s.report_id);
+  actor := internal.staff_actor('queue:claim');
+  perform internal.assert_queue_claim(c, actor, p_claim_generation, p_claim_nonce);
+  -- A post claim is renewed only for a reviewer who may still review it.
+  if s.post_id is not null then perform internal.assert_post_reviewer(actor, s.post_id); end if;
+  if c.renewals >= 4 then
+    raise exception 'renewal limit reached; claim the item again after it expires' using errcode = 'PT409';
+  end if;
+  update private.queue_claims set claim_expires_at = clock_timestamp() + interval '15 minutes', renewals = renewals + 1
+  where id = c.id returning * into c;
+  return internal.queue_claim_view(c);
+end;
+$function$;
+alter function internal.renew_queue_claim(text,uuid,text,uuid) owner to postgres;
+revoke all on function internal.renew_queue_claim(text,uuid,text,uuid) from public, anon, authenticated, service_role;
+grant execute on function internal.renew_queue_claim(text,uuid,text,uuid) to authenticated;
 
 -- 8. The staff Audit log shows a self-approval as post:self_approved; every
 -- other branch is unchanged.
