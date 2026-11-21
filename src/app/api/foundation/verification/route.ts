@@ -18,6 +18,7 @@ import {
   assertCaptureToken,
   CameraRequiredError,
 } from "@/lib/foundation/restored-verification-upload";
+import { refuseWhileAutomaticCheckOpen } from "@/lib/foundation/identity-check";
 const log = createLogger("FoundationVerification");
 const headers = { "Cache-Control": "private, no-store", "CDN-Cache-Control": "no-store" };
 async function handle(request: NextRequest, mutate: boolean) {
@@ -52,6 +53,7 @@ async function handle(request: NextRequest, mutate: boolean) {
       return context.respond(
         NextResponse.json(await readFoundationVerificationStatus(caller.api), { headers })
       );
+    await refuseWhileAutomaticCheckOpen(caller.api);
     const form = await readBoundedRequestFormData(request, 12 * 1024 * 1024);
     const document = form.get("document"),
       selfie = form.get("selfie"),

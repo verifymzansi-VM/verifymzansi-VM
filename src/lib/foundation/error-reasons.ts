@@ -30,6 +30,7 @@ export const FOUNDATION_ERROR_REASONS = {
   application_state: ["PT409"],
   application_unavailable: ["PT404"],
   applications_closed: ["PT409"],
+  ask_person_unavailable: ["PT409"],
   avatar_unavailable: ["22023"],
   bank_reference_invalid: ["22023"],
   bank_reference_required: ["22023"],
@@ -89,6 +90,11 @@ export const FOUNDATION_ERROR_REASONS = {
   house_slots_same_person: ["42501"],
   house_slots_self_approval: ["42501"],
   house_slots_term_invalid: ["22023"],
+  identity_check_limit: ["PT409"],
+  identity_check_mode: ["PT409"],
+  identity_check_paused: ["PT409"],
+  identity_check_retention_pending: ["PT409"],
+  identity_check_with_person: ["PT409"],
   inbox_page_invalid: ["22023"],
   invite_email_mismatch: ["42501"],
   invite_invalid: ["22023", "PT409"],
@@ -234,6 +240,7 @@ export const FOUNDATION_ERROR_REASONS = {
   transfer_resolved: ["PT409"],
   transfer_resolver_same: ["42501"],
   verification_required: ["42501", "PT409"],
+  verified_phone_required: ["PT409"],
   views_invalid: ["22023"],
 } as const satisfies Record<string, readonly string[]>;
 // </database-reasons>

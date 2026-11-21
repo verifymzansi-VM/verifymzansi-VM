@@ -720,6 +720,21 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       };
       list_identity_disclosures: { Args: Record<never, never>; Returns: Json };
       get_staff_operations_health: { Args: Record<never, never>; Returns: Json };
+      get_identity_check_availability: { Args: Record<never, never>; Returns: Json };
+      start_my_identity_check: { Args: Record<never, never>; Returns: Json };
+      ask_person_identity_check: {
+        Args: { p_check: string; p_reason: string };
+        Returns: Json;
+      };
+      get_identity_check_settings: { Args: Record<never, never>; Returns: Json };
+      set_identity_check_mode: {
+        Args: { p_mode: string; p_reason: string };
+        Returns: Json;
+      };
+      get_identity_check_for_case: {
+        Args: { p_case: string };
+        Returns: Json;
+      };
     };
   };
 };
@@ -911,6 +926,46 @@ export type FoundationRuntimeServiceDatabase = {
       };
       identity_disclosure_material: {
         Args: { p_disclosure: string; p_staff: string };
+        Returns: Json;
+      };
+      attach_identity_check_session: {
+        Args: {
+          p_check: string;
+          p_session_id: string;
+          p_session_url: string;
+          p_network_hash: string;
+          p_device_kind: string;
+        };
+        Returns: Json;
+      };
+      report_identity_check_unavailable: {
+        Args: { p_check: string; p_reason: string };
+        Returns: Json;
+      };
+      begin_identity_check_evidence: {
+        Args: { p_check: string; p_session_id: string };
+        Returns: Json;
+      };
+      complete_identity_check: {
+        Args: {
+          p_check: string;
+          p_session_id: string;
+          p_outcome: string;
+          p_reasons?: string[];
+          p_id_front?: Json;
+          p_selfie?: Json;
+          p_identity?: Json;
+          p_names?: Json;
+          p_risk_score?: number;
+        };
+        Returns: Json;
+      };
+      claim_identity_check_deletions: {
+        Args: { p_limit: number };
+        Returns: Json;
+      };
+      mark_identity_check_provider_deleted: {
+        Args: { p_check: string };
         Returns: Json;
       };
     };

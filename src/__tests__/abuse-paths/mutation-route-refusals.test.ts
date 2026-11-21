@@ -98,6 +98,7 @@ const METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 /** Routes that are not called by this website's pages, and what they rely on
  * instead of the browser checks. They must still refuse a caller without it. */
 const SERVER_TO_SERVER: Record<string, string> = {
+  "webhooks/didit": "provider signature",
   "webhooks/ozow": "provider signature",
   "webhooks/ozow/refunds": "provider signature",
   "webhooks/ops-jobs": "shared job secret",
