@@ -518,17 +518,19 @@ it is applied**: packages stay off sale and every new command refuses with PT403
   staff queue shows the days priced, the days left now and the package's end;
   the invoice gains `days_added` and `package_ends_at`. A new package's request,
   read and checkout never take an add request or an add order for theirs (the
-  checkout closes any add order still pending, even one open at Ozow: its
-  package has ended). An unpaid add invoice of a package that has ended blocks
-  no other package order (`internal.package_invoice_blocking`) and is voided by
-  the website's minute operations job (`api.void_ended_package_add_invoices`,
-  service only, no staff member, one fixed reason, which the trigger
-  `customer_invoices_system_void` refuses on any other invoice; an invoice with
-  a payment open at Ozow or a transfer waiting is left for staff). The privacy
-  export lists each request's kind, package and days.
-  `api.get_my_package_add_offer()` gives the member's running package, the days
-  left, one slot's price, the most that can be added, which ways are open, an
-  unpaid package invoice, their latest add request and the adds so far.
+  checkout closes any add order still pending, even one open at Ozow, and a Pay
+  now attempt on an add invoice: its package has ended, so it can no longer be
+  delivered; the sweep below then voids that invoice). An unpaid add invoice of
+  a package that has ended blocks no other package order
+  (`internal.package_invoice_blocking`) and is voided by the website's minute
+  operations job (`api.void_ended_package_add_invoices`, service only, no staff
+  member, one fixed reason, which the trigger `customer_invoices_system_void`
+  refuses on any other invoice; an invoice with a payment open at Ozow or a
+  transfer waiting is left for staff). The privacy export lists each request's
+  kind, package and days. `api.get_my_package_add_offer()` gives the member's
+  running package, the days left, one slot's price, the most that can be added,
+  which ways are open, an unpaid package invoice, their latest add request and
+  the adds so far.
 - **Delivery and late money.** Every way an add is paid (the Ozow notice, staff
   activation, Pay now, a bank transfer) delivers it only to the package it was
   bought for while that package runs and has room
@@ -538,7 +540,12 @@ it is applied**: packages stay off sale and every new command refuses with PT403
   Money that arrives after the package ended is not delivered: an Ozow payment
   goes to reconciliation (staff refund it in full; staff activation refuses it,
   PT409 `package_ended`); Pay now and a bank transfer are refused (PT409
-  `package_ended`; staff void the invoice and return the money).
+  `package_ended`; staff void the invoice and return the money). The same holds
+  for an order or Pay now attempt the new-package checkout closed while it was
+  open at Ozow: the 10-minute status check keeps asking Ozow about a closed
+  order with an Ozow request for 14 days, and a success reported by the notice
+  or that check is kept as paid and goes to reconciliation
+  (`complete_unfulfillable_target`), which emails staff at once.
 - **Refunds.** An add is its own line, refunded alone with the existing tools.
   When any package grant is revoked, the posts in it that still fit in the
   package's other running grants stay, the most recently approved first
@@ -594,12 +601,13 @@ issued at the price asked for and paid by a confirmed bank transfer or Pay now;
 late money refused, the ended package's invoice blocking no new package and
 voided by the sweep; an invoice issued later for the fewer days left, due by the
 package's end, and none issued with fewer than 10 days; a new-package request,
-read and checkout never taking an add's; the 245 and 250-slot limits; the
-privacy export; a refunded add keeps the posts that fit (the most recently
-approved first) and ends only the others; two adds paid at once near 250 (one
-delivered, one to reconciliation); a refund while an activation holds the
-package refused at once and going through after; and the rollback refused once
-slots were added.
+read and checkout never taking an add's, and an order or Pay now attempt it
+closed while open at Ozow still checked and, paid late, sent to reconciliation;
+the 245 and 250-slot limits; the privacy export; a refunded add keeps the posts
+that fit (the most recently approved first) and ends only the others; two adds
+paid at once near 250 (one delivered, one to reconciliation); a refund while an
+activation holds the package refused at once and going through after; and the
+rollback refused once slots were added.
 
 ## Sign-up mode in the database, and member invitations, 20 November 2026
 
