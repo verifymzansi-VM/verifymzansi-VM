@@ -82,11 +82,11 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## ID photos with the camera only, and Continue on your phone, 20 November 2026
 
-`20261120131212_camera_capture_handoff.sql` is **pending** (see the applied
-register). Didit plan, build step 2: ID photos and selfies are taken only with
-the camera on the verification page, and a member on a computer without a usable
-camera continues on their phone, **signed in there as the same account** (owner
-decision). Works on today's Manual setting.
+`20261120131212_camera_capture_handoff.sql` was applied on 21 November 2026 at
+01:58 UTC (see the applied register). Didit plan, build step 2: ID photos and
+selfies are taken only with the camera on the verification page, and a member on
+a computer without a usable camera continues on their phone, **signed in there
+as the same account** (owner decision). Works on today's Manual setting.
 
 - **Links:** new table `private.capture_handoffs`. The website makes a random
   32-byte token and stores only its SHA-256; the link carries the token in its
@@ -6069,6 +6069,15 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   limit: already applied; codes today: 0; counted today: 0; limit: 500";
   production fingerprint after it (fingerprint.sql at cd725fb9) matched the full
   replay (except the known schema grant difference)
-- `20261120131212_camera_capture_handoff.sql`: pending
+
+- `20261120131212_camera_capture_handoff.sql`: applied 2026-11-21 01:58 UTC;
+  owner-approved, apply-first, Supabase SQL editor (the owner's signed-in
+  session), preflight + fingerprint checked; update and preflight from the
+  reviewed files at 767b7172 (pull request #317) and checked in the page before
+  running; update sha256 starting c3102864; preflight (sha256 starting 69783a55)
+  before "update not applied; selfies said to be uploaded files: 0", after
+  "already applied; selfies said to be uploaded files: 0; phone links: 0";
+  production fingerprint after it (fingerprint.sql at cd725fb9) matched the full
+  replay (except the known schema grant difference)
 
 <!-- applied-register:end -->
