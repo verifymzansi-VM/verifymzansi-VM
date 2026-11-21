@@ -285,6 +285,24 @@ async function authorisedMetadata(
   if (!metadata.artifacts.some((item) => item.artifact_id === artifactId))
     throw new FoundationVerificationError(403);
 }
+/** The ID number of an encrypted receipt (identity-number-v1, bound to its
+ * owner); throws FoundationVerificationError(503) when it cannot be read. */
+export function decryptIdentityNumber(ownerId: string, number: z.infer<typeof encryptedNumber>) {
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    secret("ID_ENCRYPTION_KEY"),
+    Buffer.from(number.iv, "hex"),
+    { authTagLength: 16 }
+  );
+  decipher.setAAD(Buffer.from(`${ownerId}:id_doc`, "utf8"));
+  decipher.setAuthTag(Buffer.from(number.tag, "hex"));
+  const value = Buffer.concat([
+    decipher.update(Buffer.from(number.ciphertext, "hex")),
+    decipher.final(),
+  ]).toString("utf8");
+  if (!/^\d{13}$/.test(value)) throw new FoundationVerificationError(503);
+  return value;
+}
 export async function readFoundationReviewContext(
   api: FoundationAuthenticatedApi,
   service: FoundationServiceApi,
@@ -305,19 +323,7 @@ export async function readFoundationReviewContext(
     !artifact.object_key.startsWith(`evidence/${input.case_id}/`)
   )
     throw new FoundationVerificationError(503);
-  const decipher = createDecipheriv(
-    "aes-256-gcm",
-    secret("ID_ENCRYPTION_KEY"),
-    Buffer.from(number.iv, "hex"),
-    { authTagLength: 16 }
-  );
-  decipher.setAAD(Buffer.from(`${artifact.owner_id}:id_doc`, "utf8"));
-  decipher.setAuthTag(Buffer.from(number.tag, "hex"));
-  const claimedNumber = Buffer.concat([
-    decipher.update(Buffer.from(number.ciphertext, "hex")),
-    decipher.final(),
-  ]).toString("utf8");
-  if (!/^\d{13}$/.test(claimedNumber)) throw new FoundationVerificationError(503);
+  const claimedNumber = decryptIdentityNumber(artifact.owner_id, number);
   const fresh = await readRepresentedIdentityContext(api, input);
   if (fresh.case_version !== context.case_version || fresh.submission_id !== context.submission_id)
     throw new FoundationVerificationError(409);

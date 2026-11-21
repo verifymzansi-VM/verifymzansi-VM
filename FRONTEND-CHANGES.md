@@ -140,6 +140,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 74. Old backend retired: last unowned reads (no file rows: the group 74 part of 6 rows elsewhere) | approved by owner 2026-11-21 | Nothing. My profile and the enquiry form read the same data through named live-backend reads; an unused verification hook is deleted. Before and after pictures are identical. |
 | 75. Old backend retired: Complete profile read (item 10) (no file rows: the group 75 part of 2 rows elsewhere) | approved by owner 2026-11-21 | Nothing (pixel-identical, no visible change). 'Verify your phone number' reads the same profile through the named live-backend read; before and after pictures match pixel for pixel. |
 | 76. Limits register: size limits tested at their bound (and the group 76 part of 3 rows elsewhere) | keep | Nothing; tests only |
+| 77. Authority requests (staff) | approved by owner 2026-11-21 | Governors and admins only: a new Authority requests page (Compliance menu) to open a member's kept identity record for a police or court request, with the request form, the logged record page and a watermarked print disclosure sheet. Members see nothing new. |
 
 Questions for the owner:
 
@@ -3118,6 +3119,72 @@ and one byte over, so the limits register can mark it proven: the profile photo
 | `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | 3fe9ae84efaf |
 
 Decision: awaiting owner.
+
+### 77. Authority requests (staff)
+
+Database update 20261121043124_identity_record_disclosure (pending, apply
+first). New staff pages for the commands `api.open_identity_disclosure`,
+`api.read_identity_disclosure`, `api.list_identity_disclosures` and the server-only
+`api.identity_disclosure_material` (capability `identity:disclose`: governors
+and admins only, with an authenticator code from the last 15 minutes). Built
+from the authority request pictures the owner approved on 20 November 2026
+(form and record). Members see nothing new.
+
+- Staff menu, Compliance section, under Data requests: 'Authority requests'
+  with a building icon. Moderators do not see it; the page sends them to the
+  staff home.
+- `/admin/authority-requests`: 'Open a member's kept identity record to answer
+  a police or court request. Admins and governors only. Every opening is
+  logged.' A green line says how long ago the 2-step check was done and for how
+  many more minutes a record can be opened; an older check sends the staff
+  member to confirm it and back. '1. The request': type of request, request
+  reference, reason. '2. Find the person':
+  search by post link, ID number, phone number or email address, with 'Searching
+  by name is not allowed.' A tick box: 'I have checked that this request is
+  genuine, signed, and names this person or this post. I will keep the original
+  with the company records.' 'Open record', with 'Opening the record writes your
+  name, the reference and the time to the Audit log. A search that finds nobody
+  is logged too.' Each refusal is shown under the form and marks its field.
+  'Earlier requests': reference, disclosure number, date, who opened it, and
+  Printed, Viewed only, No match found (or the result).
+- `/admin/authority-requests/[id]`: the amber line 'Logged as disclosure D-0042.
+  Opened by … on … for …. This record closes by itself 15 minutes after it was
+  opened; opening it again is logged again.' 'Kept identity record': the
+  selfie, full names as on the ID, SA ID number, verified phone (earlier numbers
+  with their dates), how the ID was checked, the photo of the ID document
+  (Kept or Deleted with the date) and the account. 'Print disclosure sheet', with
+  the note about the sheet. No match, an account with no
+  identity kept and an ID number that was only tried each get their own short
+  text. After 15 minutes the page goes back to the list by itself.
+- `/admin/authority-requests/[id]/sheet`: the print disclosure sheet (print or
+  save as PDF; no CSV): the request, the search, who opened it and when, the
+  result and the record, a diagonal 'CONFIDENTIAL · D-0042 · name · time'
+  watermark, and the disclosure number, reference, staff member and time at the
+  top and bottom of every printed page. 'Back to the record' and 'Print or save
+  as PDF' show on screen only.
+
+Not in the pictures: there is no 'Close record' button (a record closes by
+itself after 15 minutes), and the form has no 'Who is asking' or 'Date of the
+request' fields (the request type, reference and reason are kept; the opening
+time is logged). 'How the ID was checked' reads 'Staff review' (automatic
+checks come with a later update); 'Account' shows the account id; the 'kept
+until' date waits for the retention update.
+
+Pictures (synthetic test people only, not published):
+`docs/engineering-review/screenshots/didit-pr4/` (desktop and phone).
+
+Decision: approved by owner 2026-11-21 (owner question: 'Approve the authority-request pictures (group 77), and keep its logs while the account exists plus 5 years?'; answer: 'Approve both').
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/app/admin/authority-requests/page.tsx` | visual | Group 77: the new Authority requests page (governors and admins): the intro, the 2-step line and the earlier requests. | Governors and admins: the page described in group 77; a message when the list cannot be loaded. | keep | approved by owner 2026-11-21 | 2026-11-21 | ea4cd6674461 |
+| `src/app/admin/authority-requests/authority-request-form.tsx` | visual | Group 77: the request form (request, search, confirmation, Open record). | Governors and admins: the form described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | c380743b6a12 |
+| `src/app/admin/authority-requests/[id]/page.tsx` | visual | Group 77: the record page (logged line, kept identity record, Print disclosure sheet). | Governors and admins: the record described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | 62e32bbde186 |
+| `src/app/admin/authority-requests/[id]/record-view.tsx` | visual | Group 77: one person's record (selfie, names, ID number, phones, how checked, ID photo, account), used on the page and the sheet. | Governors and admins: the record rows described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | 1470e17b35b6 |
+| `src/app/admin/authority-requests/[id]/record-parts.tsx` | visual | Group 77: the selfie, the Print button and the 15-minute close. | Governors and admins: the selfie and the buttons described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | 2bf515697b20 |
+| `src/app/admin/authority-requests/[id]/sheet/page.tsx` | visual | Group 77: the watermarked print disclosure sheet. | Governors and admins: the sheet described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | f79abc610d41 |
+| `src/app/admin/authority-requests/page.test.tsx` | test | Group 77: checks the guard, the 2-step line, the searches (never by name), opening, refusals, the earlier requests and the re-verify redirect. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | 8b8e024b8924 |
+| `src/app/admin/authority-requests/[id]/page.test.tsx` | test | Group 77: checks the record, no match, an ID number only tried, the closed record and the re-verify redirect, and the sheet's watermark and stamp. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | bdbbb9b0f78f |
 
 <!-- frontend-ledger:end -->
 
