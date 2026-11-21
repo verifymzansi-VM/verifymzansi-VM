@@ -88,20 +88,9 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 200, ttl: 3600 },
   ],
   // ── Auth ─────────────────────────────────────────────
-  "auth:lockout": [{ limit: 5, ttl: 3600 }], // 5 failed logins per email per hour
   "auth:login": [
     { limit: 10, ttl: 60 }, // 10 per minute
     { limit: 30, ttl: 3600 }, // 30 per hour
-  ],
-  "auth:login:nocaptcha": [
-    { limit: 5, ttl: 60 }, // stricter than auth:login — no Turnstile token
-    { limit: 15, ttl: 3600 }, // 15 per hour
-  ],
-  // Platform-wide budget for CAPTCHA-less logins, so a botnet spread over many
-  // IPs cannot use the widget-failed fallback for credential stuffing.
-  "auth:login:nocaptcha:global": [
-    { limit: 30, ttl: 60 },
-    { limit: 300, ttl: 3600 },
   ],
   "appeals:submit": [
     { limit: 3, ttl: 3600 }, // 3 per hour
@@ -168,14 +157,6 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 5, ttl: 60 },
     { limit: 20, ttl: 3600 },
   ],
-  "admin:flagging:enforce": [
-    { limit: 10, ttl: 60 },
-    { limit: 100, ttl: 3600 },
-  ],
-  "admin:verification:override": [
-    { limit: 10, ttl: 60 },
-    { limit: 60, ttl: 3600 },
-  ],
   "admin:governance:decide": [
     { limit: 10, ttl: 60 },
     { limit: 60, ttl: 3600 },
@@ -216,8 +197,6 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
 
   // ── Public reads (generous — browsing with filters/pagination) ──
   "businesses:read": [{ limit: 120, ttl: 60 }], // 120 per minute
-  "promotions:read": [{ limit: 120, ttl: 60 }], // 120 per minute
-  "listings:read": [{ limit: 120, ttl: 60 }], // 120 per minute
 
   // ── Profile ──────────────────────────────────────────
   "profile:update": [{ limit: 10, ttl: 60 }],
@@ -303,18 +282,6 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 5, ttl: 60 },
     { limit: 20, ttl: 3600 },
   ],
-  "billing:change-plan": [
-    { limit: 5, ttl: 60 }, // 5 per minute
-    { limit: 10, ttl: 3600 }, // 10 per hour
-  ],
-  "billing:cancel": [
-    { limit: 5, ttl: 60 }, // 5 per minute
-    { limit: 10, ttl: 3600 }, // 10 per hour
-  ],
-  "billing:cancel-pending": [
-    { limit: 5, ttl: 60 }, // 5 per minute
-    { limit: 10, ttl: 3600 }, // 10 per hour
-  ],
   "webhook:ozow": [{ limit: 100, ttl: 60 }], // webhooks can be bursty
 
   // ── Media ────────────────────────────────────────────
@@ -379,31 +346,12 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   ],
   "partner:attribution": [{ limit: 10, ttl: 3600 }],
 
-  // ── Reports ──────────────────────────────────────────
-  "report:submit": [
-    { limit: 5, ttl: 60 },
-    { limit: 15, ttl: 3600 },
-  ],
-
-  // ── Promotions management ────────────────────────────
-  "promotion:featured": [{ limit: 10, ttl: 60 }],
-  "promotion:boost": [{ limit: 10, ttl: 60 }],
-  "promotion:urgent": [{ limit: 10, ttl: 60 }],
-
   // ── Listings ─────────────────────────────────────────
-  // NOTE: the app sends these with UNDERSCORES (e.g. src/app/api/listings/
-  // route.ts sends "listing_create") — the strings must match exactly.
-  "listing:create": [
-    { limit: 10, ttl: 60 },
-    { limit: 30, ttl: 3600 },
-  ],
+  // NOTE: the app sends these with UNDERSCORES (src/lib/foundation/
+  // restored-post-route.ts sends "listing_create") — the strings must match exactly.
   listing_create: [
     { limit: 10, ttl: 60 },
     { limit: 30, ttl: 3600 },
-  ],
-  listing_update: [
-    { limit: 20, ttl: 60 },
-    { limit: 60, ttl: 3600 },
   ],
   business_create: [
     { limit: 10, ttl: 60 },
@@ -414,16 +362,6 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   "promotion:create": [
     { limit: 10, ttl: 60 },
     { limit: 30, ttl: 3600 },
-  ],
-  promotion_create: [
-    { limit: 10, ttl: 60 },
-    { limit: 30, ttl: 3600 },
-  ],
-
-  // ── DSAR (data subject access requests) ──────────────
-  "dsar:request": [
-    { limit: 3, ttl: 3600 }, // 3 per hour
-    { limit: 5, ttl: 86400 }, // 5 per day
   ],
 };
 
@@ -581,7 +519,7 @@ export class RateLimiterDO {
       }
     }
 
-    // Skip increment when readOnly is true (check-only mode for lockout queries)
+    // readOnly: check the limits without counting this request
     if (readOnly) {
       return Response.json(
         { ok: true },

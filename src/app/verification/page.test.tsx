@@ -15,7 +15,8 @@ vi.mock("@sentry/nextjs", () => ({ captureMessage: vi.fn(), addBreadcrumb: vi.fn
 // The camera has its own tests (src/components/ui/camera-capture.test.tsx).
 // Here a stand-in takes a photo the way the real one hands it to the page:
 // a camera JPEG, with the face check passed for the selfie. It never offers a
-// file input, like the real one.
+// file input, like the real one. `photo.bytes` sets the photo's size.
+const photo = vi.hoisted(() => ({ bytes: null as number | null }));
 vi.mock("@/components/ui/camera-capture", () => ({
   CameraCapture: ({
     onCapture,
@@ -29,12 +30,14 @@ vi.mock("@/components/ui/camera-capture", () => ({
     <div>
       <button
         type="button"
-        onClick={() =>
-          onCapture(new File(["photo"], "capture.jpg", { type: "image/jpeg" }), {
+        onClick={() => {
+          const file = new File(["photo"], "capture.jpg", { type: "image/jpeg" });
+          if (photo.bytes !== null) Object.defineProperty(file, "size", { value: photo.bytes });
+          onCapture(file, {
             livenessPassed: !documentGuide,
             captureToken: documentGuide ? "id-capture-token" : "selfie-capture-token",
-          })
-        }
+          });
+        }}
       >
         Take test photo
       </button>
@@ -161,6 +164,7 @@ describe("VerificationPage", () => {
     vi.clearAllMocks();
     vi.useRealTimers();
     hidden.detect = false;
+    photo.bytes = null;
     vi.stubGlobal(
       "URL",
       class MockURL extends OriginalURL {
@@ -948,6 +952,37 @@ describe("VerificationPage", () => {
       },
       { timeout: 3500 }
     );
+  });
+
+  it("LIM-APP-verification-page-precheck: accepts a 5 MB ID photo, refuses one byte more", async () => {
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        steps: [{ step_type: "phone", status: "approved" }],
+      }),
+      200
+    );
+    render(<VerificationPage />);
+    fireEvent.change(await screen.findByLabelText(/All first names \(as on your ID\)/i), {
+      target: { value: "Sipho" },
+    });
+    fireEvent.change(screen.getByLabelText(/Surname \(as on your ID\)/i), {
+      target: { value: "Mokoena" },
+    });
+    fireEvent.change(screen.getByLabelText(/13-digit SA ID number/i), {
+      target: { value: "8001015009087" },
+    });
+
+    photo.bytes = 5 * 1024 * 1024 + 1;
+    await takeCameraPhoto();
+    expect(await screen.findByText("File must be under 5MB")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Continue$/i })).toBeDisabled();
+
+    photo.bytes = 5 * 1024 * 1024;
+    await takeCameraPhoto();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^Continue$/i })).toBeEnabled();
+    });
+    expect(screen.queryByText("File must be under 5MB")).not.toBeInTheDocument();
   });
 
   it("sends camera photos for the ID and the selfie, never a file", async () => {

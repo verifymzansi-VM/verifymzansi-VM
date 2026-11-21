@@ -67,7 +67,7 @@ describe("rate-limit", () => {
         "fetch",
         vi.fn().mockResolvedValue({ status: 429, json: async () => ({ retryAfter: 30 }) })
       );
-      await checkRateLimit({ key: "private-person@example.com", action: "auth:lockout" });
+      await checkRateLimit({ key: "private-person@example.com", action: "auth:login" });
       expect(warn).toHaveBeenCalled();
       expect(JSON.stringify(warn.mock.calls)).not.toContain("private-person@example.com");
     });
@@ -214,8 +214,8 @@ describe("rate-limit", () => {
       const fetchMock = vi.fn().mockResolvedValue({ status: 200, ok: true });
       vi.stubGlobal("fetch", fetchMock);
 
-      const first = await checkSensitiveActionRateLimit("staff-3", "admin:flagging:enforce", 1);
-      const second = await checkSensitiveActionRateLimit("staff-3", "admin:flagging:enforce", 1);
+      const first = await checkSensitiveActionRateLimit("staff-3", "admin:role:assign", 1);
+      const second = await checkSensitiveActionRateLimit("staff-3", "admin:role:assign", 1);
 
       expect(first.limited).toBe(false);
       expect(second.limited).toBe(true);

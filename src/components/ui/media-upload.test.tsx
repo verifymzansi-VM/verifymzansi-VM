@@ -126,6 +126,20 @@ describe("MediaUpload", () => {
     });
   });
 
+  it("LIM-APP-media-image-precheck: accepts a 5 MB photo, refuses one byte more", async () => {
+    render(<Harness />);
+    const pick = (name: string, bytes: number) => {
+      const file = new File(["jpeg-binary"], name, { type: "image/jpeg" });
+      Object.defineProperty(file, "size", { value: bytes });
+      fireEvent.change(screen.getByLabelText("Photos"), { target: { files: [file] } });
+    };
+    pick("over.jpg", 5 * 1024 * 1024 + 1);
+    expect(await screen.findByText('"over.jpg" exceeds the 5 MB image limit.')).toBeInTheDocument();
+    expect(screen.queryByAltText("over.jpg")).not.toBeInTheDocument();
+    pick("at-limit.jpg", 5 * 1024 * 1024);
+    expect(await screen.findByAltText("at-limit.jpg")).toBeInTheDocument();
+  });
+
   it("normalizes extensionless mobile filenames before storing them in form state", async () => {
     render(<Harness />);
 

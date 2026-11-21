@@ -17,12 +17,15 @@ const LEGACY_CLIENT_MODULES = [
 ];
 
 // Receivers whose `.from("...")` is not a table read (Storage buckets, typed
-// array and iterator helpers).
+// array, iterator and stream helpers).
 const NON_TABLE_RECEIVERS = new Set([
   "storage",
   "Array",
   "Buffer",
   "Iterator",
+  "Readable",
+  "ReadableStream",
+  "Duplex",
   "Uint8Array",
   "Uint8ClampedArray",
   "Uint16Array",
@@ -44,12 +47,24 @@ const DYNAMIC_RPC = /\.rpc\s*(?:<[^>()]*>)?\(\s*[^"'\x60\s)]/;
 const STRING_NAME = /(["'\x60])([a-z][a-z0-9_]*)\1/g;
 const TABLE_READ = /(\w+)?\s*\.from\s*(?:<[^>()]*>)?\(\s*(["'\x60])([A-Za-z0-9_]+)\2/g;
 // A table named through an UPPER_SNAKE string constant instead of a literal:
-// `const PROFILE_TABLE = "account_profiles"` (optionally exported, typed
-// `: string`, or an alias of another such constant), read as
-// `.from(PROFILE_TABLE)`. Lower-case variables stay unresolved (dynamic).
+// `const PROFILE_TABLE = "account_profiles"` (const, let or var, optionally
+// exported, with any one-line type annotation, or an alias of another such
+// constant), read as `.from(PROFILE_TABLE)`, `.from(PROFILE_TABLE as T)` or
+// `.from(compat.PROFILE_TABLE)`. Lower-case variables stay unresolved (dynamic).
+//
+// Known limits (resolving them needs a TypeScript parser, not a regex):
+// constants are matched by name, so a namespace qualifier is not tied to the
+// module it imports and `TABLES.PROFILE` resolves only if some constant is
+// itself named PROFILE; object and enum members, import or export renames
+// (`import { PROFILE_TABLE as T }`), destructuring, lower-case copies
+// (`const t = PROFILE_TABLE`) and computed names (template literals,
+// concatenation) are not followed; and the receiver is only the word before
+// `.from`, so a non-database helper reached through another name still counts.
+// The legacy-surface tests pin these limits.
 const TABLE_CONSTANT =
-  /\b(?:export\s+)?const\s+([A-Z][A-Z0-9_]*)\s*(?::\s*string\s*)?=\s*(?:(["'\x60])([a-z][a-z0-9_]*)\2|([A-Z][A-Z0-9_]*)\b(?!\s*[.([]))/g;
-const CONSTANT_TABLE_READ = /(\w+)?\s*\.from\s*(?:<[^>()]*>)?\(\s*([A-Z][A-Z0-9_]*)\s*[,)]/g;
+  /\b(?:export\s+)?(?:const|let|var)\s+([A-Z][A-Z0-9_]*)\s*(?::[^=;\n]+)?=\s*(?:(["'\x60])([a-z][a-z0-9_]*)\2|([A-Z][A-Z0-9_]*)\b(?!\s*[.([]))/g;
+const CONSTANT_TABLE_READ =
+  /(\w+)?\s*\.from\s*(?:<[^>()]*>)?\(\s*(\w+\.)?([A-Z][A-Z0-9_]*)\s*(?:as\s[^,)]*)?[,)]/g;
 const BACKEND_SWITCH = /\bgetDataBackend\s*\(\s*\)/g;
 const DEFINED_FUNCTION =
   /create\s+(?:or\s+replace\s+)?function\s+(?:"?public"?\s*\.\s*)?"?([a-z0-9_]+)"?\s*\(/gi;
@@ -184,8 +199,9 @@ export function measureLegacySurface(files, { apiNames, retiredFunctionNames }) 
     }
     for (const match of text.matchAll(CONSTANT_TABLE_READ)) {
       if (match[1] && NON_TABLE_RECEIVERS.has(match[1])) continue;
-      const table =
-        tableConstants.get(file)?.get(match[2]) ?? tableConstants.get("")?.get(match[2]);
+      // A qualified name (`compat.X`) is defined elsewhere, not in this file.
+      const own = match[2] ? undefined : tableConstants.get(file)?.get(match[3]);
+      const table = own ?? tableConstants.get("")?.get(match[3]);
       if (!table) continue;
       tableNames.add(table);
       retiredTableReads += 1;

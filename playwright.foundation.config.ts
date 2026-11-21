@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 import { E2E_FIXTURE, assertLocalFoundationTarget } from "./scripts/lib/foundation-e2e-target.mjs";
+import { installWebKitFakeCamera } from "./e2e/support/webkit-fake-camera";
 
 // Browser tests for the restored website in foundation mode against the
 // private local test copy (M0.7): a throwaway Supabase stack on 127.0.0.1
@@ -24,6 +25,10 @@ assertLocalFoundationTarget({
 });
 
 const baseURL = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
+
+// WebKit has no fake camera flags: every WebKit context (the mobile-safari
+// project) gets a test-only camera picture instead (e2e/support/webkit-fake-camera.ts).
+installWebKitFakeCamera();
 
 export default defineConfig({
   testDir: "./e2e/foundation",
@@ -67,7 +72,8 @@ export default defineConfig({
     { name: "mobile-chrome", use: { ...devices["Pixel 7"] } },
     // iPhone Safari (WebKit), the same specs as mobile-chrome. Advisory: CI runs it
     // only in its own workflow, "E2E WebKit (advisory)" (e2e-webkit.yml), which
-    // no required check depends on.
+    // no required check depends on. Its camera is the test card from
+    // installWebKitFakeCamera() above.
     { name: "mobile-safari", use: { ...devices["iPhone 15"] } },
   ],
   webServer: {
