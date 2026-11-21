@@ -24,13 +24,11 @@ import { executeGrants, sqlLiteral } from "./lib/foundation-sql-checks.mjs";
 import {
   applyAndProveRollback,
   assertDriftRefused,
-  ozowSettle,
+  buyPackage as buyPackageOf,
   runTwoAdminUpdateCheck,
 } from "./lib/foundation-staff-payment-world.mjs";
 
 const UPDATE = "20261121162018_post_templates.sql";
-/** The Multi-listing package terms (20261114154823_slot_packages.sql). */
-const K30 = { id: "5b0f4c1e-2a7d-4c43-9b51-7e0d3f6a9c11", cents: 10000 };
 const API = [
   "api.save_my_post_template(text,jsonb)",
   "api.list_my_post_templates()",
@@ -48,15 +46,7 @@ await runTwoAdminUpdateCheck(SETUP, async ({ database, check, kit, world, admin 
   const { q, json, fails, member, preflight } = kit;
 
   const verified = (label) => world.verified(label, admin);
-  const buyPackage = (owner, slots) => {
-    const quoted = json(
-      member(
-        owner,
-        `select api.start_package_checkout('${K30.id}',${slots},${K30.cents * slots},true);`
-      )
-    );
-    assert.equal(ozowSettle(kit, owner, quoted.payment_id).fulfillment_status, "fulfilled");
-  };
+  const buyPackage = (owner, slots) => buyPackageOf(kit, owner, slots);
   const BAKKIE = {
     category: "vehicles",
     condition: "used",
