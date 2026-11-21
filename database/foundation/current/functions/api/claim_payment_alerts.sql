@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.claim_payment_alerts(p_limit integer)
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.claim_payment_alerts(p_limit);
+  select internal.note_scheduled_job_run('payment_alerts', internal.claim_payment_alerts(p_limit));
 $function$;
 alter function api.claim_payment_alerts(integer) owner to postgres;
 revoke all on function api.claim_payment_alerts(integer) from public;

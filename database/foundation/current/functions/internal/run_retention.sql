@@ -23,7 +23,8 @@ begin
     'commerce',internal.retention_commerce(p_limit),
     'operations',internal.retention_operations(p_limit),
     'engagement',internal.purge_post_engagement(),
-    'member_invitations',internal.purge_member_invitations(p_limit));
+    'member_invitations',internal.purge_member_invitations(p_limit),
+    'capture_handoffs',internal.purge_capture_handoffs(p_limit));
   perform pg_catalog.set_config('vm.retention','off',true);
   return result;
 end;

@@ -694,6 +694,16 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       revoke_member_invitation: { Args: { p_email: string }; Returns: Json };
       list_member_invitations: { Args: Record<never, never>; Returns: Json };
       check_email_domain: { Args: { p_email: string }; Returns: Json };
+      start_capture_handoff: {
+        Args: {
+          p_token_sha256: string;
+          p_first_name?: string;
+          p_last_name?: string;
+          p_with_id?: boolean;
+        };
+        Returns: Json;
+      };
+      get_staff_operations_health: { Args: Record<never, never>; Returns: Json };
     };
   };
 };
@@ -726,6 +736,7 @@ export type FoundationRuntimeServiceDatabase = {
       record_ozow_refund_send: { Args: { p_request_id: string; p_result: Json }; Returns: Json };
       apply_ozow_refund_status: { Args: { p_event: Json }; Returns: Json };
       reconcile_ozow_refunds: { Args: { p_refunds: Json }; Returns: Json };
+      record_scheduled_job_run: { Args: { p_job: string }; Returns: boolean };
       claim_ozow_refund_checks: { Args: { p_limit: number }; Returns: Json };
       report_ozow_refund_missing: { Args: { p_request_id: string }; Returns: Json };
       start_frontend_cipc_email: {
@@ -856,6 +867,29 @@ export type FoundationRuntimeServiceDatabase = {
           p_account?: string;
           p_liked?: boolean;
           p_device_issued_at?: string;
+        };
+        Returns: Json;
+      };
+      attach_capture_handoff_identity: {
+        Args: { p_owner: string; p_token_sha256: string; p_identity: Json };
+        Returns: Json;
+      };
+      redeem_capture_handoff: {
+        Args: { p_token_sha256: string; p_grant_sha256: string; p_signed_in: string };
+        Returns: Json;
+      };
+      capture_handoff_context: {
+        Args: { p_grant_sha256: string; p_signed_in: string };
+        Returns: Json;
+      };
+      reserve_handoff_verification_upload: {
+        Args: {
+          p_grant_sha256: string;
+          p_signed_in: string;
+          p_request: string;
+          p_purpose: string;
+          p_digest: string;
+          p_browser_liveness_passed?: boolean;
         };
         Returns: Json;
       };

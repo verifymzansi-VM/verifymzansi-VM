@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION api.void_ended_package_add_invoices(p_limit integer)
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.void_ended_package_add_invoices(p_limit);
+  select internal.note_scheduled_job_run('package_add_invoices', internal.void_ended_package_add_invoices(p_limit));
 $function$;
 alter function api.void_ended_package_add_invoices(integer) owner to postgres;
 revoke all on function api.void_ended_package_add_invoices(integer) from public;

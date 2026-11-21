@@ -80,6 +80,199 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Staff operations health and a last-run record for every scheduled job, 20 November 2026
+
+`20261120163500_staff_operations_health.sql` was applied on 21 November 2026 at
+04:53 UTC (see the applied register). Launch checklist item 8 (roadmap M5.5,
+first part). The staff page `/admin/operations` read job, incident and retention
+records that only the retired backend had; it now reads one staff command over
+what this database holds. The page stays switched off (`SHOW_STAFF_OPERATIONS`)
+until launch.
+
+- **Every scheduled job records its last successful run.** Fifteen service-only
+  commands the timed Workers start through the website (every minute: slot
+  renewals, post lifecycle, sponsorships, inbox purge, intro trials, partner
+  commissions, bank transfer expiry, added-slot invoices, email delivery,
+  payment alerts, privacy notices; every 5 minutes: retention, form drafts,
+  evidence and media cleanup) keep their signatures, grants and results; each
+  passes its result through `internal.note_scheduled_job_run`, which writes the
+  job's time in the new `private.scheduled_job_runs` (one row per job, no
+  account data, no API role access, RLS on). The record is written in the same
+  transaction as the job's work, so a failed command records nothing. At most
+  one write per job every 20 seconds, and never a time later than now (a future
+  time written by hand shows as late and is pulled back on the next run). Only
+  the api wrappers change; `internal.run_retention` and the other internal
+  functions are untouched.
+- **The two payment jobs** run several steps in the website, so their commands
+  are not changed. The website calls the new service-only command
+  `api.record_scheduled_job_run(job)` only after the whole run succeeded: the
+  10-minute payment status check when no payment failed (`payment_checks`), and
+  the daily Ozow refund check when Ozow's whole list was read (`refund_check`).
+  It accepts only those two jobs (22023 otherwise). A run that fails records
+  nothing, so the job turns late.
+- **Late jobs.** `internal.scheduled_job_catalogue()` lists each job, how often
+  it runs and when it counts as late (10 minutes for the minute jobs, 30 for the
+  5-minute jobs, 40 for the payment checks, 26 hours for the daily refund
+  check). Until a job's first run after the update it shows as late with no run
+  recorded. The refund check runs only while the Ozow refund key is set.
+- **The staff read** `api.get_staff_operations_health()` (governor and admin,
+  `audit:view`, with a recent authenticator code; read only) returns each job's
+  last run and whether it is late; stuck emails (unsent after the last of 8
+  attempts, or a day after queuing) with the size of the unsent queue; stuck
+  privacy request notices (same rule, only notices the notice job can still
+  send), and apart the number queued in the last 30 days that it can never send
+  (the request was minimised, or the account's address changed or is not
+  confirmed; retention minimises closed requests after 30 days, so older ones
+  are not counted); payment problems seen in the past 7 days and paid payments
+  not activated; account deletions held back, file deletions stuck over a day or
+  queued, ID evidence past its deletion date outside legal and fraud holds, and
+  accounts on legal hold; and open cost alarms. Lists have at most 50 rows;
+  counts are complete. It returns kinds, reasons, counts, times and an
+  8-character payment reference, never an account id, name, email, phone or
+  message text.
+
+The job commands keep their signatures, so a website release without the
+matching code works with the update, and the release with it shows "could not be
+loaded" on the (switched-off) page until the update is applied. As usual: apply
+first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261120163500_staff_operations_health.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "staff operations health: update not applied".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "staff operations health: already applied; jobs with a
+   recorded run: N of 17" (N grows to 15 within about 10 minutes as the timed
+   jobs run; the payment checks follow once the matching website release is
+   live, and the refund check after its next daily run).
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261120163500_staff_operations_health.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses (55000) unless the update is
+applied, every function it replaces or drops still has the update's body, and no
+other function uses what it drops (the run table, the catalogue, the note and
+record helpers or the read; matched as exact text); then it puts back the
+fifteen job commands byte for byte and drops the read, the record command, their
+internal twins, `internal.note_scheduled_job_run`,
+`internal.scheduled_job_catalogue` and `private.scheduled_job_runs`.
+
+`node --import tsx scripts/test-foundation-staff-operations-health.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted body and a
+premature rollback, changing nothing; apply, rollback and re-apply return the
+same fingerprints, and the rollback restores every job command byte for byte
+with its grants, leaving the two payment commands untouched; the rollback
+refuses once a job command changed later or another function uses the run table,
+the catalogue, the helpers or the read (an underscore in a name is not a
+wildcard); each of the fifteen commands, called as the timed jobs call it,
+records only its own job and returns its result unchanged, while the two payment
+commands record nothing and the record command records only those two jobs; a
+failed command records nothing, and a failed payment run turns late; at most one
+write per job every 20 seconds; a future time shows late and is pulled back to
+now; only catalogued jobs can be recorded, and members and visitors can run
+neither the commands nor the helpers; every job is listed in order and turns
+late after its limit (9 and 11 minutes, 29 and 31, 39 and 41, 25 and 27 hours);
+stuck emails and notices (notices of the last 30 days that can never be sent
+counted apart, older ones not), payment problems, blocked deletions, evidence
+past its date (a held account's excluded) and open alarms are counted and listed
+as described, with no account, subject, request or case id; lists stop at 50
+while counts stay complete; and only governor and admin with a recent
+authenticator code can read it (a moderator, a member, an admin whose code is 20
+minutes old, the server key and a visitor are refused).
+
+## ID photos with the camera only, and Continue on your phone, 20 November 2026
+
+`20261120131212_camera_capture_handoff.sql` was applied on 21 November 2026 at
+01:58 UTC (see the applied register). Didit plan, build step 2: ID photos and
+selfies are taken only with the camera on the verification page, and a member on
+a computer without a usable camera continues on their phone, **signed in there
+as the same account** (owner decision). Works on today's Manual setting.
+
+- **Links:** new table `private.capture_handoffs`. The website makes a random
+  32-byte token and stores only its SHA-256; the link carries the token in its
+  `#fragment`. A link belongs to one account, its open identity case and the
+  computer's live session, works for 15 minutes (fixed by a check) and only the
+  newest link of an account works. At most 5 links an hour per account (PT429,
+  detail `handoff_rate_limited`). No API role has table access; links are
+  deleted one day after they expire by `internal.purge_capture_handoffs`, run by
+  `api.run_retention` as `capture_handoffs`.
+- **Making a link:** `api.start_capture_handoff` (members with a live session)
+  takes the typed legal names (saved as the ID upload saves them) and
+  `p_with_id`, never an ID number receipt. With `p_with_id` the link works only
+  after `api.attach_capture_handoff_identity` (service only) has attached the
+  encrypted receipt the website's server made from the typed, checked ID number;
+  a member can never supply one. Without ID details only the selfie can be
+  taken, after an ID photo of the case (PT409 `handoff_needs_id`).
+- **The phone:** `api.redeem_capture_handoff`, `api.capture_handoff_context` and
+  `api.reserve_handoff_verification_upload` are service only and take the
+  phone's GoTrue-verified account (`p_signed_in`): none gives 42501
+  `handoff_sign_in_required`, another account 42501 `handoff_other_account`,
+  both without using the link. Opening uses the link once and binds the SHA-256
+  of a capture grant the website keeps in an HttpOnly cookie on the phone; every
+  unusable link gets PT409 `handoff_unavailable`. Reserving works only for the
+  link's case, on the computer's session, with the same rules as
+  `api.reserve_frontend_verification_upload`, and stops once the link has both
+  photos (PT409 `handoff_done`); the selfie is stored as taken with the camera.
+  The uploads are completed by the existing service commands, so signing out on
+  the computer also stops the phone.
+- **Camera only (website):** the upload routes refuse a photo the page did not
+  take: no `camera` capture method, no valid capture token from when the camera
+  started (HMAC with the server secret, bound to the account, the photo kind and
+  the sign-in session or the phone's grant, at most 10 minutes old), not a JPEG,
+  any APP1 metadata (EXIF or XMP), an ID photo under 1,000 px or a selfie under
+  480 px on the long edge. None of this proves a picture came from a live
+  camera; staff still review every case.
+- **Expand only:** `internal.record_my_selfie_capture` is unchanged. Its refusal
+  of selfies the browser says were uploaded files comes in a later contract
+  update, after this website release is deployed (here it would break the live
+  page between applying and deploying; the website already refuses them).
+
+New commands only: no existing command changes. A website release without the
+matching code never calls them, and the release with them needs them (its
+"Continue on your phone" answers "not available" without the update). ORDER:
+apply first, then merge.
+
+**Applying.**
+
+1. Run `../preflight/20261120131212_camera_capture_handoff.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "camera capture handoff: update not applied; selfies
+   said to be uploaded files: N" (any count).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "camera capture handoff: already applied; selfies said to
+   be uploaded files: N; phone links: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261120131212_camera_capture_handoff.down.sql` (only with the
+owner's decision; prefer a forward fix). It refuses unless the update is
+applied, puts back `internal.run_retention` byte for byte, and drops the five
+commands, their helpers and `private.capture_handoffs` (open links and the ID
+number receipts they hold). Uploads already completed from a phone are kept.
+
+`node --import tsx scripts/test-foundation-camera-capture-handoff.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; the refusals with a drifted body and a
+premature rollback; apply, rollback and re-apply return the same fingerprints;
+the selfie capture report is unchanged; a link stores only hashes, its case and
+session, and lasts 15 minutes; a member can never supply a receipt (the start
+takes none and the attach is server only), a link waiting for one cannot be
+opened, and bad input, missing ID details, a reused token and a sixth link in an
+hour are refused; the phone must be signed in as the same account (signed out or
+another account is refused without using the link); the phone's ID photo and
+selfie complete through the existing service commands and register the
+submission, after which the link takes nothing more; a grant reaches only its
+own case and not a decided one; a link stops working when expired, replaced,
+signed out on the computer or the account is closed; a selfie-only link; only
+the website's server opens links, attaches receipts and reserves phone uploads,
+and no API role reads the table; links go one day after they expired.
+
 ## A daily limit on SMS codes for the whole site, 20 November 2026
 
 `20261120074411_sms_daily_limit.sql` was applied on 20 November 2026 at 12:26
@@ -5980,5 +6173,25 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   limit: already applied; codes today: 0; counted today: 0; limit: 500";
   production fingerprint after it (fingerprint.sql at cd725fb9) matched the full
   replay (except the known schema grant difference)
+
+- `20261120131212_camera_capture_handoff.sql`: applied 2026-11-21 01:58 UTC;
+  owner-approved, apply-first, Supabase SQL editor (the owner's signed-in
+  session), preflight + fingerprint checked; update and preflight from the
+  reviewed files at 767b7172 (pull request #317) and checked in the page before
+  running; update sha256 starting c3102864; preflight (sha256 starting 69783a55)
+  before "update not applied; selfies said to be uploaded files: 0", after
+  "already applied; selfies said to be uploaded files: 0; phone links: 0";
+  production fingerprint after it (fingerprint.sql at cd725fb9) matched the full
+  replay (except the known schema grant difference)
+
+- `20261120163500_staff_operations_health.sql`: applied 2026-11-21 04:53 UTC;
+  owner-approved, apply-first, Supabase SQL editor (the owner's signed-in
+  session), preflight + fingerprint checked; update and preflight from the
+  reviewed files at a04ace88 (pull request #319) and checked in the page before
+  running; update sha256 starting d75e3442; preflight (sha256 starting 37ac91bd)
+  before "staff operations health: update not applied", after "staff operations
+  health: already applied; jobs with a recorded run: 0 of 17"; production
+  fingerprint after it (fingerprint.sql at cd725fb9) matched the full replay
+  (except the known schema grant difference)
 
 <!-- applied-register:end -->

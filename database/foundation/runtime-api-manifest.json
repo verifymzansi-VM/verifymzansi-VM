@@ -5418,6 +5418,198 @@
         "service_role": false
       },
       "authority": "Signed-in member with a live session and a current accepted ID review, only while Multi-listing packages are on sale: asks staff for an invoice for slots added to the account's own running package (PT409 package_ended otherwise), only while 10 or more whole days are left (PT409 package_add_invoice_too_late), at most 250 slots in all, at the price of that moment for the days left (PT428 when the total shown differs), which the invoice keeps; the member confirms the invoice cooling-off wording. Refused while a package invoice is unpaid or staff prepare an earlier request. One open request per account; the same request id returns the first answer; another order replaces a request no staff member has prepared."
+    },
+    {
+      "name": "start_capture_handoff",
+      "updates": ["updates/20261120131212_camera_capture_handoff.sql"],
+      "arguments": [
+        {
+          "name": "p_token_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_first_name",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_last_name",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_with_id",
+          "sqlType": "boolean",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current member with a live session: stores a Continue on your phone link (SHA-256 of a website-made single-use token) for their own open identity case and this session, valid 15 minutes, with the typed legal names (saved as the ID upload saves them); only the newest link of an account works; at most 5 an hour. Never takes an ID number receipt: with p_with_id the link works only after the website server attaches one (attach_capture_handoff_identity); without it, only when an ID photo of the case is already uploaded. Refused once the identity is accepted or under independent review."
+    },
+    {
+      "name": "attach_capture_handoff_identity",
+      "updates": ["updates/20261120131212_camera_capture_handoff.sql"],
+      "arguments": [
+        {
+          "name": "p_owner",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_token_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_identity",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only: attaches the encrypted ID number receipt the server made from the typed, checked ID number to that owner's new, unopened, unexpired link that waits for one; members can never supply a receipt."
+    },
+    {
+      "name": "redeem_capture_handoff",
+      "updates": ["updates/20261120131212_camera_capture_handoff.sql"],
+      "arguments": [
+        {
+          "name": "p_token_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_grant_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_signed_in",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only, when a phone opens a link: the phone must be signed in as the account that made the link (the website passes its GoTrue-verified account; none or another account is refused without using the link). Uses the link once (unknown, used, expired, replaced, signed-out computer, account without access or closed case all give the same refusal) and binds the SHA-256 of a capture grant the website gives that phone. Returns the owner id (server only), the short public name, the expiry and which photos are still needed."
+    },
+    {
+      "name": "capture_handoff_context",
+      "updates": ["updates/20261120131212_camera_capture_handoff.sql"],
+      "arguments": [
+        {
+          "name": "p_grant_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_signed_in",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only: for a phone capture grant whose link still works and whose phone is signed in as the link owner, the owner id (server only), the short public name, the expiry and which photos are still needed; nothing else."
+    },
+    {
+      "name": "reserve_handoff_verification_upload",
+      "updates": ["updates/20261120131212_camera_capture_handoff.sql"],
+      "arguments": [
+        {
+          "name": "p_grant_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_signed_in",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_request",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_purpose",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_digest",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_browser_liveness_passed",
+          "sqlType": "boolean",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only, for a phone capture grant whose link still works and whose phone is signed in as the link owner: reserves an ID photo or selfie upload for that link's case only, on the computer's session, with the same case, pairing and unfinished-upload rules as reserve_frontend_verification_upload; the selfie is stored as taken with the camera (browser-reported review context, not a proof). Refused once the link has both photos. Returns the encrypted ID number receipt for an ID photo so the server can complete it."
+    },
+    {
+      "name": "get_staff_operations_health",
+      "updates": ["updates/20261120163500_staff_operations_health.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current audit:view capability (governor, admin) and recent authenticator proof: every scheduled job with how often it runs, its last recorded run and whether it is late; counts and at most 50 rows each of stuck emails (kind, attempts, queued time, error code), stuck privacy request notices the notice job can still send (kind, attempts, queued time) with a separate count of notices from the last 30 days it can never send, payment problems seen in the past 7 days (an 8-character payment reference, reason, source, times, occurrences, whether staff were alerted), paid payments not activated, account deletions held back (reason and dates), file deletions stuck or queued, ID evidence past its deletion date outside holds, accounts on legal hold and open cost alarms; never an account id, name, email, phone or message text. Read only."
+    },
+    {
+      "name": "record_scheduled_job_run",
+      "updates": ["updates/20261120163500_staff_operations_health.sql"],
+      "arguments": [
+        {
+          "name": "p_job",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "boolean",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted server only (service_role): records that a timed job whose success the website decides ran and succeeded, after the whole run succeeded; only payment_checks and refund_check (22023 otherwise). Writes the job name and the time (never later than now), nothing else."
     }
   ]
 }

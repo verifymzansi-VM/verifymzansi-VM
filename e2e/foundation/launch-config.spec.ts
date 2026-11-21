@@ -118,6 +118,7 @@ const PAGES: Page_[] = [
     path: "/admin/operations",
     viewer: "admin",
     heading: /Operations health/i,
+    shows: [/Scheduled jobs/, /Stuck emails/, /Blocked deletions/],
   },
 ];
 
@@ -125,7 +126,6 @@ const PAGES: Page_[] = [
  * session, so nothing is changed: each must be served and must not fail. */
 const ROUTES: { feature: string; method: "GET" | "POST"; path: string }[] = [
   { feature: "SHOW_ACCOUNT_DELETION", method: "POST", path: "/api/account/delete" },
-  { feature: "SHOW_STAFF_OPERATIONS", method: "POST", path: "/api/admin/ops/jobs/retry" },
   {
     feature: "SHOW_ORGANISATION_REPORT",
     method: "GET",
@@ -144,8 +144,10 @@ const REMOVED_PAGES = [
   ),
 ];
 
-/** Routes removed for launch (old trial tools): each answers 404. */
+/** Routes removed for launch (old trial tools and the old operations
+ * "Retry" route): each answers 404. */
 const REMOVED_ROUTES = [
+  "/api/admin/ops/jobs/retry",
   "/api/admin/trials",
   "/api/trials",
   "/api/trial-extensions/00000000-0000-4000-8000-000000000000",

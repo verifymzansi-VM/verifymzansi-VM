@@ -12,6 +12,7 @@ import {
   Lock,
   Scale,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { BrandShield } from "@/components/shared/brand-shield";
 import { TrustBadge } from "@/components/trust/trust-badge";
@@ -235,6 +236,7 @@ export function StepActions({ children }: { children: ReactNode }) {
 const PRIVACY_POINTS: { icon: IconType; title: string }[] = [
   { icon: Lock, title: "Encrypted and access-logged" },
   { icon: EyeOff, title: "ID and selfie never shown publicly" },
+  { icon: Trash2, title: "ID photo deleted after 1 month" },
   { icon: Scale, title: "Handled under POPIA" },
 ];
 
@@ -262,11 +264,11 @@ export function PrivacyPanel() {
         ))}
       </ul>
       <Link
-        href="/privacy"
+        href="/privacy#retention"
         prefetch={false}
         className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-gold-300"
       >
-        Privacy policy
+        What we keep, and for how long
       </Link>
     </section>
   );
@@ -277,7 +279,7 @@ export function WhatHappensNextPanel({ verified = false }: { verified?: boolean 
     ? ["Your badge shows on your profile and posts", "Update your details if they change"]
     : [
         "Finish the four checks",
-        "Location is approved automatically; our team reviews identity",
+        "Our team checks your ID, usually within 1–2 working days",
         "Your badge appears",
       ];
 
