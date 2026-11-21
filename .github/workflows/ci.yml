@@ -509,7 +509,7 @@ jobs:
             exit 1
           fi
           echo "All critical payment routes verified in build output."
-      # Payment and KYC provider callbacks, verification start and pricing
+      # The Ozow payment callback, verification start and pricing
       # (scripts/lib/built-routes.mjs), checked in the generated route manifest.
       - name: Verify required routes in the build manifest
         run: node scripts/check-built-routes.mjs

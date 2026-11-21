@@ -37,6 +37,9 @@ const {
   };
 });
 
+/** The signed-in member (the verified session's account). */
+const ACCOUNT_ID = "00000000-0000-4000-8000-0000000000a9";
+
 /** What get_my_verification_case answers (the live verification read). */
 const verificationCase = (change: Record<string, unknown> = {}) => ({
   case_id: "00000000-0000-4000-8000-0000000000c1",
@@ -57,7 +60,7 @@ function answerVerification(change: Record<string, unknown>, decision: string | 
       ? { data: verificationCase(change), error: null }
       : {
           data: {
-            account_id: "user-1",
+            account_id: ACCOUNT_ID,
             case_id: "00000000-0000-4000-8000-0000000000c1",
             case_version: 2,
             reason: change.return_reason ?? null,
@@ -115,7 +118,11 @@ describe("CreatePostPage", () => {
       status: 200,
       json: vi.fn().mockResolvedValue({ accountVerificationStatus: "incomplete" }),
     });
-    mockReadSession.mockResolvedValue({ user: { id: "user-1" }, api: { rpc: mockRpc } });
+    mockReadSession.mockResolvedValue({
+      user: { id: ACCOUNT_ID },
+      account: { account_id: ACCOUNT_ID },
+      api: { rpc: mockRpc },
+    });
     answerVerification(VERIFIED);
   });
 

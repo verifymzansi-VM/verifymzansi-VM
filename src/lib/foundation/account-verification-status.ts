@@ -41,6 +41,7 @@ export function accountVerificationStatusFromCase(
 }
 
 const identityDecisionSchema = z.object({
+  account_id: z.uuid(),
   case_id: z.uuid().nullable(),
   case_version: z.number().int().positive().nullable(),
   reason: z.string().nullable(),
@@ -61,9 +62,11 @@ const uploadsSchema = z
   .max(2);
 
 /** Reads the signed-in member's verification case from the live backend. Any
- * failure or inconsistent answer throws: the caller decides what to show. */
+ * failure or inconsistent answer (including one about another account than
+ * `accountId`, the verified session's) throws: the caller decides what to show. */
 export async function readFoundationAccountVerificationStatus(
-  api: FoundationAuthenticatedApi
+  api: FoundationAuthenticatedApi,
+  accountId: string
 ): Promise<AccountVerificationStatus> {
   const read = await api.rpc("get_my_verification_case", {}, { get: false });
   if (read.error) throw new Error("Verification case unavailable");
@@ -76,6 +79,7 @@ export async function readFoundationAccountVerificationStatus(
     if (identity.error) throw new Error("Verification decision unavailable");
     const state = identityDecisionSchema.parse(identity.data);
     if (
+      state.account_id !== accountId ||
       state.case_id !== current.case_id ||
       state.case_version !== current.version ||
       state.reason !== current.return_reason
