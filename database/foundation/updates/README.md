@@ -82,9 +82,10 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Privacy exports while a request is in progress, at most 5, every one notified, 21 November 2026
 
-`20261121053224_privacy_export_simple.sql` is pending (see the applied
-register). It replaces only `internal.export_frontend_privacy_request` (same
-signature, owner and grants; no API, manifest or type change):
+`20261121053224_privacy_export_simple.sql` was applied on 21 November 2026 at
+17:15 UTC (see the applied register). It replaces only
+`internal.export_frontend_privacy_request` (same signature, owner and grants; no
+API, manifest or type change):
 
 - **Only an access request in progress** (identity verified, at the stated
   revision) can be exported; a completed request can no longer be. A request not
@@ -6368,6 +6369,13 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
 
-- `20261121053224_privacy_export_simple.sql`: pending
+- `20261121053224_privacy_export_simple.sql`: applied 2026-11-21 17:15 UTC;
+  owner-approved, apply-first, Supabase SQL editor (pull request #331); update
+  and preflight from the reviewed files at 6824f7ae and checked in the page
+  before running; update sha256 starting e26d63d2; preflight (sha256 starting
+  0e2c7bf3) before "privacy export simple: update not applied; exports recorded:
+  0", after "privacy export simple: already applied; exports recorded: 0";
+  production fingerprint after it (fingerprint.sql) matched the full replay
+  (except the known schema grant difference)
 
 <!-- applied-register:end -->
