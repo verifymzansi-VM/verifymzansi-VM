@@ -1,9 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AccountVerificationStatus, UserRole } from "@/types/enums";
 
-export const ACCOUNT_PROFILE_TABLE = "account_profiles";
-export const ACCOUNT_PROFILE_WRITE_TABLE = ACCOUNT_PROFILE_TABLE;
-
 export const OWNER_COMPAT_TABLES = [
   "listings",
   "businesses",

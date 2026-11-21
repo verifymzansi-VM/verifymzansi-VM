@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  ACCOUNT_PROFILE_TABLE,
-  ACCOUNT_PROFILE_WRITE_TABLE,
   applyOwnerFilter,
   getOwnerColumn,
   normalizeOwnerRecord,
@@ -14,11 +12,6 @@ describe("account compat helpers", () => {
     const client = { from: vi.fn() };
     await expect(getOwnerColumn(client as never, "listings")).resolves.toBe("owner_id");
     expect(client.from).not.toHaveBeenCalled();
-  });
-
-  it("pins account profile table constants to account_profiles", () => {
-    expect(ACCOUNT_PROFILE_TABLE).toBe("account_profiles");
-    expect(ACCOUNT_PROFILE_WRITE_TABLE).toBe("account_profiles");
   });
 
   it("normalizes seller_id records back to owner_id", () => {
