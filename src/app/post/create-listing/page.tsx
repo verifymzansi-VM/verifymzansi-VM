@@ -1624,7 +1624,7 @@ export default function CreateListingPage() {
                         priceExpected
                         category={category || null}
                         location={city || null}
-                        pendingPhotoCount={photoFiles.length}
+                        pendingPhotoCount={photoFiles.length + existingPhotos.length}
                       />
 
                       {copyOf !== null ? (
