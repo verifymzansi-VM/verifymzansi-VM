@@ -6,21 +6,10 @@ import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFoundationPartnerDashboard } from "@/lib/foundation/partners";
 import { SHOW_PARTNER_PAGE } from "@/lib/hidden-features";
 import type { PartnerDashboard } from "@/lib/partners/partner-overview";
-import { PartnerOverview } from "./partner-overview";
+import { PartnerOverview, RecentCommission } from "./partner-overview";
 
 export const metadata = { title: "Partner programme", robots: { index: false } };
 export const dynamic = "force-dynamic";
-
-const date = new Intl.DateTimeFormat("en-ZA", {
-  dateStyle: "medium",
-  timeZone: "Africa/Johannesburg",
-});
-const STATUS_TEXT: Record<string, string> = {
-  PENDING: "Pending",
-  APPROVED: "Approved",
-  PAID: "Paid",
-  REVERSED: "Reversed",
-};
 
 export default async function PartnerDashboardPage() {
   const partner = await readNativeDashboard();
@@ -118,36 +107,7 @@ function PartnerDashboardContent({
             ))}
           </dl>
 
-          <section className="space-y-2">
-            <h2 className="text-base font-semibold">Recent commission</h2>
-            {partner.recent.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No commission yet.</p>
-            ) : (
-              <ul className="space-y-2">
-                {partner.recent.map((row) => (
-                  <li
-                    key={row.id}
-                    className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm"
-                  >
-                    <span className="font-semibold">{formatPlanPrice(row.amountCents)}</span>
-                    <span className="text-muted-foreground">
-                      on {formatPlanPrice(row.baseCents)} · {date.format(new Date(row.createdAt))}
-                    </span>
-                    <Badge variant={row.status === "REVERSED" ? "secondary" : "outline"}>
-                      {STATUS_TEXT[row.status] ?? row.status}
-                    </Badge>
-                    {row.status === "PENDING" ? (
-                      <span className="text-xs text-muted-foreground">
-                        {row.manual
-                          ? "Awaiting manual approval"
-                          : `Eligible ${date.format(new Date(row.eligibleAt))}`}
-                      </span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <RecentCommission recent={partner.recent} />
           <p className="text-xs text-muted-foreground">
             No commission is paid on free trials, free events, invitation-only programmes,
             organisation-sponsored accounts, your own purchases, refunds or chargebacks.

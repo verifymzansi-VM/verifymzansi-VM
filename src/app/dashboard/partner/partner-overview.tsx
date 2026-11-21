@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPlanPrice } from "@/lib/constants/pricing";
 import { qrCodeSvg } from "@/lib/qr-code";
 import {
-  customerShortName,
   earnedThisMonth,
   nextPayoutCents,
   partnerReferralLink,
@@ -16,28 +15,26 @@ import {
   type PartnerDashboard,
 } from "@/lib/partners/partner-overview";
 
-/** A referred customer's name; the page shows only the short form. */
-export interface PartnerCustomer {
-  id: string;
-  firstName: string;
-  lastName: string;
-}
+const date = new Intl.DateTimeFormat("en-ZA", {
+  dateStyle: "medium",
+  timeZone: "Africa/Johannesburg",
+});
+const STATUS_TEXT: Record<string, string> = {
+  PENDING: "Pending",
+  APPROVED: "Approved",
+  PAID: "Paid",
+  REVERSED: "Reversed",
+};
 
-/**
- * The redesigned partner page (SHOW_PARTNER_PAGE; frontend ledger group 80).
- * `customers` stays null until the partner summary returns referred customers'
- * names (checklist item 50); the section shows only when it does.
- */
+/** The redesigned partner page (SHOW_PARTNER_PAGE; frontend ledger group 80). */
 export function PartnerOverview({
   partner,
   appUrl,
   now,
-  customers = null,
 }: {
   partner: PartnerDashboard;
   appUrl: string;
   now: Date;
-  customers?: PartnerCustomer[] | null;
 }) {
   const link = partnerReferralLink(appUrl, partner.code);
   const earned = earnedThisMonth(partner.recent, now);
@@ -124,25 +121,6 @@ export function PartnerOverview({
           </CardContent>
         </Card>
 
-        {customers && customers.length > 0 ? (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle as="h2" className="text-lg">
-                Customers
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-1 text-sm">
-                {customers.map((customer) => (
-                  <li key={customer.id}>
-                    {customerShortName(customer.firstName, customer.lastName)}
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        ) : null}
-
         <Card>
           <CardHeader className="pb-3">
             <CardTitle as="h2" className="text-lg">
@@ -187,11 +165,49 @@ export function PartnerOverview({
         </Card>
       </div>
 
+      <RecentCommission recent={partner.recent} />
+
       <p className="text-xs text-muted-foreground">
         No commission is paid on free trials, free events, invitation-only programmes,
         organisation-sponsored accounts, your own purchases, refunds or chargebacks.
       </p>
     </div>
+  );
+}
+
+/** Each commission's amount, the payment it was earned on and its stage (today's list). */
+export function RecentCommission({ recent }: { recent: PartnerDashboard["recent"] }) {
+  return (
+    <section className="space-y-2">
+      <h2 className="text-base font-semibold">Recent commission</h2>
+      {recent.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No commission yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {recent.map((row) => (
+            <li
+              key={row.id}
+              className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm"
+            >
+              <span className="font-semibold">{formatPlanPrice(row.amountCents)}</span>
+              <span className="text-muted-foreground">
+                on {formatPlanPrice(row.baseCents)} · {date.format(new Date(row.createdAt))}
+              </span>
+              <Badge variant={row.status === "REVERSED" ? "secondary" : "outline"}>
+                {STATUS_TEXT[row.status] ?? row.status}
+              </Badge>
+              {row.status === "PENDING" ? (
+                <span className="text-xs text-muted-foreground">
+                  {row.manual
+                    ? "Awaiting manual approval"
+                    : `Eligible ${date.format(new Date(row.eligibleAt))}`}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

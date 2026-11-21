@@ -47,7 +47,8 @@ function partner(overrides: Partial<PartnerDashboard> = {}): PartnerDashboard {
 }
 
 function figure(scope: HTMLElement, name: string) {
-  return within(scope).getByText(name).nextSibling?.textContent;
+  const term = Array.from(scope.querySelectorAll("dt")).find((dt) => dt.textContent === name);
+  return term?.nextSibling?.textContent;
 }
 
 describe("PartnerOverview", () => {
@@ -90,30 +91,21 @@ describe("PartnerOverview", () => {
     expect(screen.queryByText(/booklet|statement/i)).not.toBeInTheDocument();
   });
 
-  it("shows no customers section while the summary has no customer names", () => {
+  it("keeps today's recent commission list: each payment's amount and its commission", () => {
     render(<PartnerOverview partner={partner()} appUrl="https://verifymzansi.com" now={NOW} />);
-    expect(screen.queryByRole("heading", { name: "Customers" })).not.toBeInTheDocument();
+    const list = screen.getByRole("heading", { name: "Recent commission" })
+      .nextSibling as HTMLElement;
+    const rows = within(list)
+      .getAllByRole("listitem")
+      .map((li) => li.textContent);
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatch(/^R120on R600 · .*Pending/);
+    expect(rows[1]).toMatch(/^R10on R50 · .*Reversed/);
+    expect(rows[2]).toMatch(/^R45on R225 · .*Approved/);
   });
 
-  it("shows customers by first name and initial only", () => {
-    const { container } = render(
-      <PartnerOverview
-        partner={partner()}
-        appUrl="https://verifymzansi.com"
-        now={NOW}
-        customers={[
-          { id: "1", firstName: "Thando", lastName: "Dlamini" },
-          { id: "2", firstName: "Pieter Jan", lastName: "van Wyk" },
-        ]}
-      />
-    );
-    const section = screen.getByRole("heading", { name: "Customers" }).closest("div")
-      ?.parentElement as HTMLElement;
-    expect(
-      within(section)
-        .getAllByRole("listitem")
-        .map((li) => li.textContent)
-    ).toEqual(["Thando D.", "Pieter V."]);
-    expect(container.textContent).not.toMatch(/Dlamini|van Wyk|Jan/);
+  it("shows no customer names", () => {
+    render(<PartnerOverview partner={partner()} appUrl="https://verifymzansi.com" now={NOW} />);
+    expect(screen.queryByRole("heading", { name: "Customers" })).not.toBeInTheDocument();
   });
 });

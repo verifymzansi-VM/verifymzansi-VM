@@ -62,14 +62,3 @@ export function partnerReferralLink(appUrl: string, code: string) {
 export function whatsAppShareUrl(link: string) {
   return `https://wa.me/?text=${encodeURIComponent(link)}`;
 }
-
-/**
- * A referred customer as a partner may see them: the first given name and the
- * initial of the surname ("Thando D."), never the full name or contact
- * details.
- */
-export function customerShortName(firstName: string, lastName: string) {
-  const first = firstName.trim().split(/\s+/)[0] ?? "";
-  const initial = Array.from(lastName.trim())[0]?.toLocaleUpperCase("en-ZA");
-  return [first, initial ? `${initial}.` : ""].filter(Boolean).join(" ");
-}

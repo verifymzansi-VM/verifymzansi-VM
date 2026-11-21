@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   PARTNER_RECENT_LIMIT,
-  customerShortName,
   earnedThisMonth,
   nextPayoutCents,
   partnerReferralLink,
@@ -71,18 +70,5 @@ describe("sharing", () => {
     expect(whatsAppShareUrl(link)).toBe(
       "https://wa.me/?text=https%3A%2F%2Fverifymzansi.com%2F%3Fref%3DTHANDO1"
     );
-  });
-});
-
-describe("customerShortName", () => {
-  it("shows the first name and the surname's initial only", () => {
-    expect(customerShortName("Thando", "Dlamini")).toBe("Thando D.");
-    expect(customerShortName("  Thando Lwazi ", " van der Merwe")).toBe("Thando V.");
-    expect(customerShortName("Ané", "ölz")).toBe("Ané Ö.");
-  });
-
-  it("never shows more than it has", () => {
-    expect(customerShortName("Thando", "")).toBe("Thando");
-    expect(customerShortName("", "Dlamini")).toBe("D.");
   });
 });

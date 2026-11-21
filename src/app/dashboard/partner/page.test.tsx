@@ -81,7 +81,7 @@ describe("partner page with the switch on", () => {
 
   it("shows the redesigned sections from the partner summary", async () => {
     await renderPage();
-    expect(headings(2)).toEqual(["Share", "Progress", "Money", "Help"]);
+    expect(headings(2)).toEqual(["Share", "Progress", "Money", "Help", "Recent commission"]);
     const band = screen.getByRole("region", { name: "This month" });
     expect(within(band).getByText("Earned this month").nextSibling).toHaveTextContent("R120");
     expect(within(band).getByText("Next payout").nextSibling).toHaveTextContent("R45");
@@ -94,6 +94,6 @@ describe("partner page with the switch on", () => {
       "download",
       "verifymzansi-partner-THANDO1.svg"
     );
-    expect(screen.queryByText("Recent commission")).not.toBeInTheDocument();
+    expect(screen.getByText("Eligible", { exact: false })).toBeInTheDocument();
   });
 });
