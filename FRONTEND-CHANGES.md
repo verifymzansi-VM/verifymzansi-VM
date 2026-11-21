@@ -140,7 +140,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 74. Old backend retired: last unowned reads (no file rows: the group 74 part of 6 rows elsewhere) | approved by owner 2026-11-21 | Nothing. My profile and the enquiry form read the same data through named live-backend reads; an unused verification hook is deleted. Before and after pictures are identical. |
 | 75. Old backend retired: Complete profile read (item 10) (no file rows: the group 75 part of 2 rows elsewhere) | approved by owner 2026-11-21 | Nothing (pixel-identical, no visible change). 'Verify your phone number' reads the same profile through the named live-backend read; before and after pictures match pixel for pixel. |
 | 76. Limits register: size limits tested at their bound (and the group 76 part of 3 rows elsewhere) | keep | Nothing; tests only |
-| 77. Authority requests (staff) | awaiting owner | Governors and admins only: a new Authority requests page (Compliance menu) to open a member's kept identity record for a police or court request, with the request form, the logged record page and a watermarked print disclosure sheet. Members see nothing new. |
+| 77. Authority requests (staff) | approved by owner 2026-11-21 | Governors and admins only: a new Authority requests page (Compliance menu) to open a member's kept identity record for a police or court request, with the request form, the logged record page and a watermarked print disclosure sheet. Members see nothing new. |
 
 Questions for the owner:
 
@@ -3119,6 +3119,7 @@ and one byte over, so the limits register can mark it proven: the profile photo
 | `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | 3fe9ae84efaf |
 
 Decision: awaiting owner.
+
 ### 77. Authority requests (staff)
 
 Database update 20261121043124_identity_record_disclosure (pending, apply
@@ -3172,18 +3173,18 @@ until' date waits for the retention update.
 Pictures (synthetic test people only, not published):
 `docs/engineering-review/screenshots/didit-pr4/` (desktop and phone).
 
-Decision: awaiting owner (built from the approved pictures).
+Decision: approved by owner 2026-11-21 (owner question: 'Approve the authority-request pictures (group 77), and keep its logs while the account exists plus 5 years?'; answer: 'Approve both').
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/app/admin/authority-requests/page.tsx` | visual | Group 77: the new Authority requests page (governors and admins): the intro, the 2-step line and the earlier requests. | Governors and admins: the page described in group 77; a message when the list cannot be loaded. | keep | awaiting owner | 2026-11-21 | ea4cd6674461 |
-| `src/app/admin/authority-requests/authority-request-form.tsx` | visual | Group 77: the request form (request, search, confirmation, Open record). | Governors and admins: the form described in group 77. | keep | awaiting owner | 2026-11-21 | c380743b6a12 |
-| `src/app/admin/authority-requests/[id]/page.tsx` | visual | Group 77: the record page (logged line, kept identity record, Print disclosure sheet). | Governors and admins: the record described in group 77. | keep | awaiting owner | 2026-11-21 | 62e32bbde186 |
-| `src/app/admin/authority-requests/[id]/record-view.tsx` | visual | Group 77: one person's record (selfie, names, ID number, phones, how checked, ID photo, account), used on the page and the sheet. | Governors and admins: the record rows described in group 77. | keep | awaiting owner | 2026-11-21 | 1470e17b35b6 |
-| `src/app/admin/authority-requests/[id]/record-parts.tsx` | visual | Group 77: the selfie, the Print button and the 15-minute close. | Governors and admins: the selfie and the buttons described in group 77. | keep | awaiting owner | 2026-11-21 | 2bf515697b20 |
-| `src/app/admin/authority-requests/[id]/sheet/page.tsx` | visual | Group 77: the watermarked print disclosure sheet. | Governors and admins: the sheet described in group 77. | keep | awaiting owner | 2026-11-21 | f79abc610d41 |
-| `src/app/admin/authority-requests/page.test.tsx` | test | Group 77: checks the guard, the 2-step line, the searches (never by name), opening, refusals, the earlier requests and the re-verify redirect. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | 8b8e024b8924 |
-| `src/app/admin/authority-requests/[id]/page.test.tsx` | test | Group 77: checks the record, no match, an ID number only tried, the closed record and the re-verify redirect, and the sheet's watermark and stamp. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | bdbbb9b0f78f |
+| `src/app/admin/authority-requests/page.tsx` | visual | Group 77: the new Authority requests page (governors and admins): the intro, the 2-step line and the earlier requests. | Governors and admins: the page described in group 77; a message when the list cannot be loaded. | keep | approved by owner 2026-11-21 | 2026-11-21 | ea4cd6674461 |
+| `src/app/admin/authority-requests/authority-request-form.tsx` | visual | Group 77: the request form (request, search, confirmation, Open record). | Governors and admins: the form described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | c380743b6a12 |
+| `src/app/admin/authority-requests/[id]/page.tsx` | visual | Group 77: the record page (logged line, kept identity record, Print disclosure sheet). | Governors and admins: the record described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | 62e32bbde186 |
+| `src/app/admin/authority-requests/[id]/record-view.tsx` | visual | Group 77: one person's record (selfie, names, ID number, phones, how checked, ID photo, account), used on the page and the sheet. | Governors and admins: the record rows described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | 1470e17b35b6 |
+| `src/app/admin/authority-requests/[id]/record-parts.tsx` | visual | Group 77: the selfie, the Print button and the 15-minute close. | Governors and admins: the selfie and the buttons described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | 2bf515697b20 |
+| `src/app/admin/authority-requests/[id]/sheet/page.tsx` | visual | Group 77: the watermarked print disclosure sheet. | Governors and admins: the sheet described in group 77. | keep | approved by owner 2026-11-21 | 2026-11-21 | f79abc610d41 |
+| `src/app/admin/authority-requests/page.test.tsx` | test | Group 77: checks the guard, the 2-step line, the searches (never by name), opening, refusals, the earlier requests and the re-verify redirect. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | 8b8e024b8924 |
+| `src/app/admin/authority-requests/[id]/page.test.tsx` | test | Group 77: checks the record, no match, an ID number only tried, the closed record and the re-verify redirect, and the sheet's watermark and stamp. | Nothing (not part of a page) | keep | approved by owner 2026-11-21 | 2026-11-21 | bdbbb9b0f78f |
 
 <!-- frontend-ledger:end -->
 

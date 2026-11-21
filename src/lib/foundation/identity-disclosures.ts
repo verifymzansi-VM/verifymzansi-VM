@@ -237,7 +237,6 @@ export type AuthorityRequestInput = {
   attested: boolean;
 };
 
-/** The ID number's one-way fingerprint, made exactly as at verification. */
 /** The value the database searches: a post id or slug, the ID number's
  * fingerprint (never the number), an E.164 phone number or an email address.
  * Never a name. */
