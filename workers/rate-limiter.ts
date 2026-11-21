@@ -329,6 +329,10 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 600, ttl: 3600 },
     { limit: 3000, ttl: 86400 },
   ],
+  // Per address and post: requests naming one post a day (each counts a post's
+  // events once). Above what one person browsing all day reaches; a home page
+  // left open with its rotating showroom can reach it after about 5 hours.
+  "engagement:activity:post": [{ limit: 200, ttl: 86400 }],
   "engagement:like": [
     { limit: 30, ttl: 60 },
     { limit: 300, ttl: 3600 },

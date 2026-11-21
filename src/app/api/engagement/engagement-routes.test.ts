@@ -355,6 +355,42 @@ describe("Performance page events (/api/analytics/events)", () => {
     );
   });
 
+  it("each (post, counter) pair once per request", async () => {
+    await events([
+      ...Array.from({ length: 30 }, () => card("share")),
+      card("share", {}, OTHER_ID),
+      card("phone_click"),
+    ]);
+    expect(db.state.calls[0]!.args).toEqual({
+      p_post_ids: [POST_ID, OTHER_ID, POST_ID],
+      p_metrics: ["shares", "shares", "phone_taps"],
+    });
+  });
+
+  it("per-post daily limit: a post over it is dropped silently, the others still count", async () => {
+    mocks.rate.mockImplementation(async ({ action, key }: { action: string; key: string }) => ({
+      limited: action === "engagement:activity:post" && key.endsWith(POST_ID),
+    }));
+    const response = await events([card("share"), card("share", {}, OTHER_ID)], {
+      "cf-connecting-ip": "198.51.100.4",
+    });
+    expect(response.status).toBe(204);
+    expect(db.state.activity).toEqual([[OTHER_ID, "shares"]]);
+    expect(mocks.rate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "engagement:activity:post",
+        key: `v4:198.51.100.4|${POST_ID}`,
+      })
+    );
+    // Every post over its limit: no database call at all.
+    mocks.rate.mockImplementation(async ({ action }: { action: string }) => ({
+      limited: action === "engagement:activity:post",
+    }));
+    db.rpc.mockClear();
+    expect((await events([card("share")])).status).toBe(204);
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["a crawler", { "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" }],
     ["a prefetch", { "sec-purpose": "prefetch" }],

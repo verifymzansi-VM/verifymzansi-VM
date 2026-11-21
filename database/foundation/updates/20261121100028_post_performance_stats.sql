@@ -40,8 +40,9 @@
 -- 3. api.record_post_activity(p_post_ids uuid[], p_metrics text[], p_device
 --    uuid, p_account uuid) (service only): 1 to 50 (post, counter) pairs
 --    (22023 activity_invalid otherwise; a counter is one of the 21 columns
---    or engaged_views, which needs p_device). Pairs of posts that do not
---    count are skipped. Returns {"posts": n, "engaged": n}: the posts whose
+--    or engaged_views, which needs p_device). Each distinct (post, counter)
+--    pair counts at most once per call. Pairs of posts that do not count are
+--    skipped. Returns {"posts": n, "engaged": n}: the posts whose
 --    counters moved and the engaged views counted.
 -- 4. api.get_my_post_performance() (authenticated; the caller's own posts
 --    only, with a live session): returns
@@ -197,7 +198,8 @@ begin
     return jsonb_build_object('posts', 0, 'engaged', 0);
   end if;
 
-  -- The day's counters of each publicly live post the viewer does not own.
+  -- The day's counters of each publicly live post the viewer does not own;
+  -- each distinct (post, counter) pair adds at most 1 per call.
   insert into private.post_activity_days as a (post_id, day, list_impressions, search_appearances,
       homepage_appearances, showroom_home, showroom_business, showroom_market, showroom_tourism,
       showroom_programme, directory_appearances, views_direct, views_internal, views_search, views_social,
@@ -224,7 +226,7 @@ begin
     count(*) filter (where e.metric = 'booking_taps'),
     count(*) filter (where e.metric = 'ticket_taps'),
     count(*) filter (where e.metric = 'shares')
-  from unnest(p_post_ids, p_metrics) e(post_id, metric)
+  from (select distinct x.post_id, x.metric from unnest(p_post_ids, p_metrics) x(post_id, metric)) e
   join private.posts p on p.id = e.post_id
   join private.post_search_documents d on d.post_id = p.id
   where e.metric <> 'engaged_views' and d.is_visible

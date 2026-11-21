@@ -50,9 +50,12 @@ const accepted = () => new NextResponse(null, { status: 204 });
  * counters for the day (api.record_post_activity); a save (the page shows
  * likes), a sponsor click and organisation events are not counted here.
  *
- * No sign-in or cookie needed. Never counted: a crawler or headless browser,
- * a prefetch, requests over the per-source limit (`engagement:activity` per
- * IPv4 address or IPv6 /48), and (in the database) the signed-in owner's own
+ * No sign-in or cookie needed. Each (post, counter) pair counts at most once
+ * per request. Never counted: a crawler or headless browser, a prefetch,
+ * requests over the per-source limit (`engagement:activity` per IPv4 address
+ * or IPv6 /48), a post's events over its per-source daily limit
+ * (`engagement:activity:post`, one per request that names the post; dropped
+ * silently), and (in the database) the signed-in owner's own
  * events, staff events and posts that are not publicly live. Nothing about
  * the visitor is sent to the database except the GoTrue-verified account,
  * which only decides whether the event counts.
@@ -68,21 +71,39 @@ export async function POST(request: NextRequest) {
   const parsed = eventBatch.safeParse(await parseJsonRequest(request, { maxBytes: 16384 }));
   if (!parsed.success)
     return NextResponse.json({ error: "Invalid event payload" }, { status: 400 });
-  const events = parsed.data.events.flatMap((event) => {
-    if (event.table === "organisations") return [];
-    const counter = activityCounter(event);
-    return counter
-      ? [{ postId: event.id, counter } as { postId: string; counter: ActivityCounter }]
-      : [];
-  });
-  if (events.length === 0) return accepted();
+  // Each (post, counter) pair once per request.
+  const pairs = new Map<string, { postId: string; counter: ActivityCounter }>();
+  for (const event of parsed.data.events) {
+    const counter = event.table === "organisations" ? null : activityCounter(event);
+    if (counter) pairs.set(`${event.id}|${counter}`, { postId: event.id, counter });
+  }
+  if (pairs.size === 0) return accepted();
 
+  const client = engagementClientKey(request);
   const limit = await checkRateLimit({
-    key: engagementClientKey(request),
+    key: client,
     action: "engagement:activity",
     degradedMode: "local",
   });
   if (limit.limited) return accepted();
+  // Each post: at most a few hundred requests naming it per address and day.
+  const posts = [...new Set([...pairs.values()].map((pair) => pair.postId))];
+  const allowed = new Set(
+    (
+      await Promise.all(
+        posts.map(async (id) => {
+          const perPost = await checkRateLimit({
+            key: `${client}|${id}`,
+            action: "engagement:activity:post",
+            degradedMode: "local",
+          });
+          return perPost.limited ? null : id;
+        })
+      )
+    ).filter((id): id is string => id !== null)
+  );
+  const events = [...pairs.values()].filter((pair) => allowed.has(pair.postId));
+  if (events.length === 0) return accepted();
 
   const caller = await engagementCaller(request);
   try {

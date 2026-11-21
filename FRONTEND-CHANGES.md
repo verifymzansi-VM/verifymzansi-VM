@@ -141,7 +141,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 75. Old backend retired: Complete profile read (item 10) (no file rows: the group 75 part of 2 rows elsewhere) | approved by owner 2026-11-21 | Nothing (pixel-identical, no visible change). 'Verify your phone number' reads the same profile through the named live-backend read; before and after pictures match pixel for pixel. |
 | 76. Limits register: size limits tested at their bound (and the group 76 part of 3 rows elsewhere) | keep | Nothing; tests only |
 | 77. Authority requests (staff) | approved by owner 2026-11-21 | Governors and admins only: a new Authority requests page (Compliance menu) to open a member's kept identity record for a police or court request, with the request form, the logged record page and a watermarked print disclosure sheet. Members see nothing new. |
-| 81. Performance page: real figures from the live backend (item 2) (no file rows: the group 81 part of 2 rows elsewhere) | awaiting owner | Nothing today: the Performance page and the staff Operations health page stay off until launch. Once on: the Performance page looks as on 27 October with every section filled from the live backend; the staff 'Scheduled jobs' table lists an 18th job, 'Old view records removed'. |
+| 81. Performance page: real figures from the live backend (item 2) (and the group 81 part of 2 rows elsewhere) | awaiting owner | Nothing today: the Performance page and the staff Operations health page stay off until launch. Once on: the Performance page looks as on 27 October with every section filled from the live backend; the staff 'Scheduled jobs' table lists an 18th job, 'Old view records removed'. |
 
 Questions for the owner:
 
@@ -3222,6 +3222,10 @@ numbers will show unequal turns until the rotation is built.
 Owner question: show the Performance page at launch with these figures? Also
 the group 81 part of the rows for the Performance page and the staff Operations
 health page. Decision: awaiting owner.
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/components/analytics/analytics-impressions.tsx` | helper | Group 81: its comment said appearances were deduplicated on the server hourly, which was never true; it now says what happens (each card once per mount; the server counts each post once per request, within a per-network daily limit per post). Comment only. | Nothing | keep | awaiting owner | 2026-11-21 | 6c177fbca442 |
 
 <!-- frontend-ledger:end -->
 

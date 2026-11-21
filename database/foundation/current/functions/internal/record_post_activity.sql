@@ -32,7 +32,8 @@ begin
     return jsonb_build_object('posts', 0, 'engaged', 0);
   end if;
 
-  -- The day's counters of each publicly live post the viewer does not own.
+  -- The day's counters of each publicly live post the viewer does not own;
+  -- each distinct (post, counter) pair adds at most 1 per call.
   insert into private.post_activity_days as a (post_id, day, list_impressions, search_appearances,
       homepage_appearances, showroom_home, showroom_business, showroom_market, showroom_tourism,
       showroom_programme, directory_appearances, views_direct, views_internal, views_search, views_social,
@@ -59,7 +60,7 @@ begin
     count(*) filter (where e.metric = 'booking_taps'),
     count(*) filter (where e.metric = 'ticket_taps'),
     count(*) filter (where e.metric = 'shares')
-  from unnest(p_post_ids, p_metrics) e(post_id, metric)
+  from (select distinct x.post_id, x.metric from unnest(p_post_ids, p_metrics) x(post_id, metric)) e
   join private.posts p on p.id = e.post_id
   join private.post_search_documents d on d.post_id = p.id
   where e.metric <> 'engaged_views' and d.is_visible

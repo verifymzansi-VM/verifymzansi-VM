@@ -8477,6 +8477,32 @@
       ]
     },
     {
+      "id": "LIM-RL-engagement-activity-post",
+      "title": "Shared rate limit for \"engagement:activity:post\"",
+      "value": "200 per day",
+      "category": "rate",
+      "action": "engagement:activity:post",
+      "tiers": [
+        {
+          "limit": 200,
+          "ttl": 86400
+        }
+      ],
+      "enforcedAt": [
+        {
+          "file": "workers/rate-limiter.ts",
+          "symbol": "ACTION_LIMITS",
+          "contains": "\"engagement:activity:post\": [{ limit: 200, ttl: 86400 }],"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
+        }
+      ]
+    },
+    {
       "id": "LIM-RL-inbox-read",
       "title": "Shared rate limit for \"inbox:read\"",
       "value": "60 per minute",

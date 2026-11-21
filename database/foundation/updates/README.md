@@ -131,13 +131,14 @@ the three functions have their reviewed bodies (or this update's).
 - **`api.record_post_activity(p_post_ids, p_metrics, p_device, p_account)`**
   (service only): 1 to 50 (post, counter) pairs of the same length (22023
   `activity_invalid` otherwise); a counter is one of the 21 columns or
-  `engaged_views`, which needs `p_device`. Pairs of posts that do not count are
-  skipped: posts that are not publicly live, the signed-in owner's own events
-  and every event by an account with an active staff role (an inactive account
-  counts as signed out). An engaged view counts at most once per browser per
-  post in 24 hours, and only when that browser's view of the post was counted in
-  the last 24 hours, so engaged views never exceed views. One statement per
-  request updates each post's row for the day. Returns `{"posts", "engaged"}`.
+  `engaged_views`, which needs `p_device`. Each distinct (post, counter) pair
+  counts at most once per call. Pairs of posts that do not count are skipped:
+  posts that are not publicly live, the signed-in owner's own events and every
+  event by an account with an active staff role (an inactive account counts as
+  signed out). An engaged view counts at most once per browser per post in 24
+  hours, and only when that browser's view of the post was counted in the last
+  24 hours, so engaged views never exceed views. One statement per request
+  updates each post's row for the day. Returns `{"posts", "engaged"}`.
 - **`api.get_my_post_performance()`** (authenticated, live session, the caller's
   own posts only; edit copies are not posts): `posts`, `live_posts`, `views`,
   `engaged_views`, `leads`, `last_30_days` (keyed as the page's event names,
@@ -163,10 +164,15 @@ the three functions have their reviewed bodies (or this update's).
   signed browser identifier would drop most first visits). It refuses cross-site
   requests, ignores crawlers, headless browsers and prefetches, reads at most
   16,384 bytes and 50 events, and counts within `engagement:activity` per IPv4
-  address or IPv6 /48 (30 a minute, 600 an hour, 3,000 a day). Saves (the like
+  address or IPv6 /48 (30 a minute, 600 an hour, 3,000 a day). Each (post,
+  counter) pair counts once per request, and each post at most 200 requests a
+  day per address or /48 (`engagement:activity:post`; more is dropped silently),
+  above what one person browsing all day reaches, though a home page left open
+  with its rotating showroom reaches it after about 5 hours. Saves (the like
   button), sponsor clicks and organisation events are not counted there.
   Flooding one's own or another owner's figures only changes counts the owner
-  alone sees, and the table's size does not grow with the number of events.
+  alone sees, within those limits, and the table's size does not grow with the
+  number of events.
 
 **Write cost against the Supabase free plan (500 MB database).** Assumptions per
 visitor a day: about 30 card appearances, 3 detail pages, 0.3 contact taps, 0.05
@@ -187,10 +193,12 @@ updates of existing rows (no indexed column changes, so most are HOT updates),
 not rows. 1,000 and 10,000 daily visitors fit the free plan easily. At 100,000
 daily visitors and 20,000 posts the table alone would use over a third of the
 free plan's 500 MB, at about 29 updates a second on average; by then the project
-needs the Pro plan for its overall size anyway. Every beacon is also one Worker
-request and one rate limiter call on Cloudflare (Workers Paid includes 10
-million requests a month; 100,000 daily visitors would add about 30 million a
-month).
+needs the Pro plan for its overall size anyway. On Cloudflare every beacon is
+one Worker request plus one rate limiter call for the address and one for each
+post it names (about 15 on a list page, 1 or 2 on a post page; about 10 on
+average): about 3.3 million limiter calls a month at 1,000 daily visitors, 33
+million at 10,000 and 330 million at 100,000, against the 10 million requests a
+month Workers Paid includes.
 
 Preflight `../preflight/20261121100028_post_performance_stats.check.sql`
 (summary "post performance stats: update not applied; publicly listed posts: N"

@@ -12,7 +12,9 @@ const IMPRESSION_VISIBLE_RATIO = 0.5;
 const IMPRESSION_DWELL_MS = 1_000;
 
 /**
- * Records that items were seen on a surface (deduplicated server-side hourly).
+ * Records that items were seen on a surface. Each item is sent once per mount
+ * of this component; the server counts each post at most once per request and
+ * within a per-network daily limit per post (/api/analytics/events).
  * An item counts only once its card has been at least half on screen for one
  * continuous second with the tab visible, not when the page merely loads.
  * Cards are found by the link that contains the item's ID inside the section

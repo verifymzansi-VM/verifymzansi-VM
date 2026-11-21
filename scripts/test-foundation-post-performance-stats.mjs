@@ -204,7 +204,7 @@ try {
     }
   );
 
-  await check("each event adds to its post's counter for the day", () => {
+  await check("each event adds to its post's counter for the day, each pair once per call", () => {
     const result = activity([
       [post, "list_impressions"],
       [post, "list_impressions"],
@@ -219,7 +219,8 @@ try {
     assert.deepEqual(result, { posts: 2, engaged: 0 });
     activity([[post, "list_impressions"]], { account: visitor });
     const today = day(post);
-    assert.equal(today.list_impressions, 3);
+    // The pair sent twice in one call added 1; the second call added 1 more.
+    assert.equal(today.list_impressions, 2);
     assert.equal(today.showroom_home, 1);
     assert.equal(today.showroom_tourism, 1);
     assert.equal(today.views_direct, 1);
@@ -267,7 +268,8 @@ try {
       posts: 1,
       engaged: 0,
     });
-    assert.equal(day(post).ticket_taps, 50);
+    // 50 identical pairs in one call count once.
+    assert.equal(day(post).ticket_taps, 1);
   });
 
   await check("engaged views: once per browser per post, only after its view counted", () => {
@@ -345,7 +347,7 @@ try {
       website_click: 0,
       directions_click: 0,
       booking_click: 0,
-      ticket_click: 50,
+      ticket_click: 1,
       showroom_appearance: 2,
       organisation_directory_appearance: 0,
       search_appearance: 1,
@@ -367,7 +369,7 @@ try {
       appearances: today.list_impressions + 2,
       views: 2,
       unique_viewers: mine.last_30_days.unique_viewers,
-      contacts: 51,
+      contacts: 2,
       saves: 1,
       shares: 1,
     });
