@@ -97,7 +97,7 @@ export function definedFunctionNames(sqlTexts) {
  * @param {{ path: string, text: string }[]} files
  * @returns {Map<string, Map<string, string>>}
  */
-export function tableConstantsOf(files) {
+function tableConstantsOf(files) {
   /** @type {Map<string, Map<string, { value?: string, alias?: string }>>} */
   const raw = new Map([["", new Map()]]);
   const anywhere = /** @type {Map<string, { value?: string, alias?: string }>} */ (raw.get(""));
