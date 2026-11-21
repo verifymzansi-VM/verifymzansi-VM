@@ -11915,25 +11915,6 @@
       ]
     },
     {
-      "id": "LIM-T-identity_disclosures_requested_by_check",
-      "title": "private.identity_disclosures: who is asking 3 to 200 characters",
-      "value": "3 to 200",
-      "category": "length",
-      "enforcedAt": [
-        {
-          "file": "database/foundation/current/tables/private/identity_disclosures.sql",
-          "symbol": "private.identity_disclosures (identity_disclosures_requested_by_check)",
-          "contains": "constraint identity_disclosures_requested_by_check CHECK (length(requested_by) >= 3 AND length(requested_by) <= 200)"
-        }
-      ],
-      "tests": [
-        {
-          "kind": "register",
-          "file": "scripts/limits-sql.test.mjs"
-        }
-      ]
-    },
-    {
       "id": "LIM-T-identity_disclosures_subjects_check",
       "title": "private.identity_disclosures: at most 5 accounts named per opening",
       "value": "<= 5",

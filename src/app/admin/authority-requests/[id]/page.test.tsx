@@ -49,8 +49,6 @@ const disclosure = {
   opened_by_name: "Senzo N.",
   request_type: "subpoena",
   reference: "CAS 123/11/2026",
-  requested_by: "Det. Sgt. Synthetic, SAPS Test Station",
-  request_date: "2026-11-19",
   reason: "Fraud investigation into a reported listing.",
   lookup_kind: "post",
   lookup_value: "red-bicycle",
@@ -119,7 +117,7 @@ describe("Authority request record and disclosure sheet", () => {
       "href",
       `/admin/authority-requests/${ID}/sheet`
     );
-    expect(screen.getByRole("button", { name: "Close record" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Close record" })).toBeNull();
   });
 
   it("says a search found nobody, and that it is logged", async () => {
@@ -181,7 +179,6 @@ describe("Authority request record and disclosure sheet", () => {
     const sheet = container.querySelector("article")!;
     expect(within(sheet).getByText("Identity record disclosure D-0042")).toBeVisible();
     expect(within(sheet).getByText("Subpoena (Criminal Procedure Act, s205)")).toBeVisible();
-    expect(within(sheet).getByText("Det. Sgt. Synthetic, SAPS Test Station")).toBeVisible();
     expect(sheet.textContent).toMatch(/CONFIDENTIAL · D-0042 · Senzo N\./);
     expect(sheet.textContent).toMatch(/D-0042 · CAS 123\/11\/2026 · Senzo N\./);
     expect(within(sheet).getByText("Thando Sipho Dlamini")).toBeVisible();

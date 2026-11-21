@@ -19,11 +19,6 @@ import {
   type RequestType,
 } from "@/lib/admin/authority-requests";
 
-/** Today in South Africa, as yyyy-mm-dd for a date input. */
-function todayInSouthAfrica(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(new Date());
-}
-
 const SELECT =
   "flex h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -31,8 +26,6 @@ const SELECT =
 const FIELD_OF: Record<string, string> = {
   disclosure_request_type_invalid: "authority-type",
   disclosure_reference_required: "authority-reference",
-  disclosure_requester_required: "authority-requester",
-  disclosure_request_date_invalid: "authority-date",
   disclosure_reason_required: "authority-reason",
   disclosure_attestation_required: "authority-attested",
   disclosure_lookup_invalid: "authority-lookup-kind",
@@ -43,8 +36,6 @@ export function AuthorityRequestForm() {
   const router = useRouter();
   const [requestType, setRequestType] = useState<RequestType>("subpoena");
   const [reference, setReference] = useState("");
-  const [requestedBy, setRequestedBy] = useState("");
-  const [requestDate, setRequestDate] = useState(todayInSouthAfrica);
   const [reason, setReason] = useState("");
   const [lookupKind, setLookupKind] = useState<LookupKind>("post");
   const [lookupValue, setLookupValue] = useState("");
@@ -65,11 +56,8 @@ export function AuthorityRequestForm() {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
-          action: "open",
           requestType,
           reference,
-          requestedBy,
-          requestDate,
           reason,
           lookupKind,
           lookupValue,
@@ -142,34 +130,6 @@ export function AuthorityRequestForm() {
               <p id="authority-reference-hint" className="text-sm text-muted-foreground">
                 The subpoena, court order or police case number.
               </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="authority-requester">Who is asking</Label>
-              <Input
-                id="authority-requester"
-                className="h-11"
-                value={requestedBy}
-                onChange={(e) => setRequestedBy(e.target.value)}
-                maxLength={200}
-                required
-                autoComplete="off"
-                aria-invalid={invalid("authority-requester") || undefined}
-                aria-describedby={describedBy("authority-requester")}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="authority-date">Date of the request</Label>
-              <Input
-                id="authority-date"
-                type="date"
-                className="h-11"
-                value={requestDate}
-                max={todayInSouthAfrica()}
-                onChange={(e) => setRequestDate(e.target.value)}
-                required
-                aria-invalid={invalid("authority-date") || undefined}
-                aria-describedby={describedBy("authority-date")}
-              />
             </div>
           </div>
           <div className="space-y-1.5">

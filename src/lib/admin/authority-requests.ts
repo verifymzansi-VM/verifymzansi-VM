@@ -142,9 +142,6 @@ export const AUTHORITY_REQUEST_MESSAGES = {
   disclosure_request_type_invalid: "Choose the type of request.",
   disclosure_reference_required:
     "Enter the subpoena, court order or police case number (3 to 100 characters).",
-  disclosure_requester_required: "Enter who is asking (3 to 200 characters).",
-  disclosure_request_date_invalid:
-    "Enter the date on the request. It can't be in the future or more than 5 years ago.",
   disclosure_reason_required: "Enter the reason for the request (10 to 2,000 characters).",
   disclosure_attestation_required:
     "Confirm that the request is genuine, signed, and names this person or this post.",

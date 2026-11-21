@@ -8,7 +8,7 @@ import {
   lookupKindLabel,
   requestTypeLabel,
 } from "@/lib/admin/authority-requests";
-import { formatDate, formatDateTime } from "@/lib/utils/format";
+import { formatDateTime } from "@/lib/utils/format";
 import { loadDisclosureRecord } from "../load-record";
 import { PrintSheetButton } from "../record-parts";
 import { DisclosureRecordView } from "../record-view";
@@ -105,10 +105,6 @@ export default async function DisclosureSheetPage({ params }: { params: Promise<
               <dd>{requestTypeLabel(disclosure.request_type)}</dd>
               <dt className="text-slate-600">Reference</dt>
               <dd className="break-words">{disclosure.reference}</dd>
-              <dt className="text-slate-600">Who is asking</dt>
-              <dd className="break-words">{disclosure.requested_by}</dd>
-              <dt className="text-slate-600">Date of the request</dt>
-              <dd>{formatDate(`${disclosure.request_date}T12:00:00+02:00`)}</dd>
               <dt className="text-slate-600">Reason</dt>
               <dd className="whitespace-pre-line break-words">{disclosure.reason}</dd>
               <dt className="text-slate-600">Searched by</dt>

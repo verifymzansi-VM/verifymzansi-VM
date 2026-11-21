@@ -24,6 +24,21 @@ const headers = {
   "Referrer-Policy": "no-referrer",
   "Content-Security-Policy": "default-src 'none'; sandbox",
 };
+/** The staff evidence view limit (admin:evidence:view, fail closed): the
+ * refusal to answer, or null when the read may go ahead. */
+export async function limitStaffEvidenceView(accountId: string) {
+  const limit = await checkRateLimit({
+    key: accountId,
+    action: "admin:evidence:view",
+    degradedMode: "block",
+  });
+  return limit.limited
+    ? NextResponse.json(
+        { error: "Evidence protection unavailable or too many requests" },
+        { status: limit.degraded ? 503 : 429, headers }
+      )
+    : null;
+}
 export async function handleFoundationEvidenceRead(
   request: NextRequest,
   mode: "native" | "restored" = "native"
@@ -41,18 +56,8 @@ export async function handleFoundationEvidenceRead(
   }
   try {
     const caller = await context.authenticateCaller();
-    const limit = await checkRateLimit({
-      key: caller.accountId,
-      action: "admin:evidence:view",
-      degradedMode: "block",
-    });
-    if (limit.limited)
-      return context.respond(
-        NextResponse.json(
-          { error: "Evidence protection unavailable or too many requests" },
-          { status: limit.degraded ? 503 : 429, headers }
-        )
-      );
+    const limited = await limitStaffEvidenceView(caller.accountId);
+    if (limited) return context.respond(limited);
     const body = await parseJsonRequest(request, { maxBytes: 4096 });
     const restored =
       mode === "restored"

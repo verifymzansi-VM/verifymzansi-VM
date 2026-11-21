@@ -1,27 +1,19 @@
 -- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
 -- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
 
-CREATE OR REPLACE FUNCTION internal.open_identity_disclosure(p_request_type text, p_reference text, p_requested_by text, p_request_date text, p_reason text, p_lookup_kind text, p_lookup_value text, p_attested boolean)
+CREATE OR REPLACE FUNCTION internal.open_identity_disclosure(p_request_type text, p_reference text, p_reason text, p_lookup_kind text, p_lookup_value text, p_attested boolean)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid:=internal.staff_actor('identity:disclose'); today date; asked date;
+declare actor uuid:=internal.staff_actor('identity:disclose');
   v_value text; post uuid; matched uuid[]; outcome text; made timestamptz; d private.identity_disclosures;
 begin
   if p_request_type is null or p_request_type not in ('subpoena','court_order','warrant','police_case','regulator') then
     raise exception 'valid request type required' using errcode='22023',detail='disclosure_request_type_invalid'; end if;
   if not internal.identity_disclosure_text_ok(p_reference,3,100) then
     raise exception 'request reference required' using errcode='22023',detail='disclosure_reference_required'; end if;
-  if not internal.identity_disclosure_text_ok(p_requested_by,3,200) then
-    raise exception 'who is asking required' using errcode='22023',detail='disclosure_requester_required'; end if;
-  today:=(clock_timestamp() at time zone 'Africa/Johannesburg')::date;
-  if p_request_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
-    begin asked:=p_request_date::date; exception when others then asked:=null; end;
-  end if;
-  if asked is null or asked>today or asked<today-1826 then
-    raise exception 'valid request date required' using errcode='22023',detail='disclosure_request_date_invalid'; end if;
   if not internal.identity_disclosure_text_ok(p_reason,10,2000) then
     raise exception 'reason required' using errcode='22023',detail='disclosure_reason_required'; end if;
   if p_attested is distinct from true then
@@ -69,9 +61,9 @@ begin
   -- The log row is written before anything about the person is answered.
   made:=clock_timestamp();
   insert into private.identity_disclosures(opened_by,opened_at,closes_at,request_type,
-      request_reference,requested_by,request_date,reason,attested,lookup_kind,lookup_value,outcome,subject_ids,match_count)
+      request_reference,reason,attested,lookup_kind,lookup_value,outcome,subject_ids,match_count)
     values(actor,made,made+interval '15 minutes',p_request_type,
-      btrim(p_reference),btrim(p_requested_by),asked,btrim(p_reason),true,p_lookup_kind,v_value,outcome,
+      btrim(p_reference),btrim(p_reason),true,p_lookup_kind,v_value,outcome,
       matched[1:5],cardinality(matched))
     returning * into d;
   perform internal.staff_actor('identity:disclose');
@@ -79,6 +71,6 @@ begin
     'match_count',d.match_count,'closes_at',d.closes_at);
 end;
 $function$;
-alter function internal.open_identity_disclosure(text,text,text,text,text,text,text,boolean) owner to postgres;
-revoke all on function internal.open_identity_disclosure(text,text,text,text,text,text,text,boolean) from public;
-grant execute on function internal.open_identity_disclosure(text,text,text,text,text,text,text,boolean) to authenticated;
+alter function internal.open_identity_disclosure(text,text,text,text,text,boolean) owner to postgres;
+revoke all on function internal.open_identity_disclosure(text,text,text,text,text,boolean) from public;
+grant execute on function internal.open_identity_disclosure(text,text,text,text,text,boolean) to authenticated;

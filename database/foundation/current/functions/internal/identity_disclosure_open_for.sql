@@ -9,10 +9,11 @@ AS $function$
 declare d private.identity_disclosures;
 begin
   select x.* into d from private.identity_disclosures x where x.id=p_disclosure;
-  if not found or d.opened_by is distinct from p_staff then
+  if not found or d.opened_by is distinct from p_staff or not exists(select 1 from private.staff_roles r
+      join private.staff_capabilities c on c.role=r.role
+      where r.user_id=p_staff and r.revoked_at is null and c.capability='identity:disclose') then
     raise exception 'disclosure unavailable' using errcode='PT409',detail='disclosure_unavailable'; end if;
-  if d.closes_at<=clock_timestamp() or exists(select 1 from private.identity_disclosure_events e
-      where e.disclosure_id=d.id and e.kind='closed') then
+  if d.closes_at<=clock_timestamp() then
     raise exception 'disclosure closed' using errcode='PT409',detail='disclosure_closed'; end if;
   return d;
 end;

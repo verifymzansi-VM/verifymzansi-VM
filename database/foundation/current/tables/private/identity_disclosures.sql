@@ -9,8 +9,6 @@ create table private.identity_disclosures (
   closes_at timestamp with time zone not null,
   request_type text not null,
   request_reference text not null,
-  requested_by text not null,
-  request_date date not null,
   reason text not null,
   attested boolean not null,
   lookup_kind text not null,
@@ -30,7 +28,6 @@ create table private.identity_disclosures (
   constraint identity_disclosures_reason_check CHECK (length(reason) >= 10 AND length(reason) <= 2000),
   constraint identity_disclosures_reference_check CHECK (length(request_reference) >= 3 AND length(request_reference) <= 100),
   constraint identity_disclosures_request_type_check CHECK (request_type = ANY (ARRAY['subpoena'::text, 'court_order'::text, 'warrant'::text, 'police_case'::text, 'regulator'::text])),
-  constraint identity_disclosures_requested_by_check CHECK (length(requested_by) >= 3 AND length(requested_by) <= 200),
   constraint identity_disclosures_subjects_check CHECK (cardinality(subject_ids) <= 5 AND (outcome = 'no_match'::text) = (cardinality(subject_ids) = 0) AND (outcome <> 'attempt_only'::text OR lookup_kind = 'id_number'::text))
 );
 alter table private.identity_disclosures owner to postgres;

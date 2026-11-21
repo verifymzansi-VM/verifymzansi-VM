@@ -5626,16 +5626,6 @@
           "optional": false
         },
         {
-          "name": "p_requested_by",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
-          "name": "p_request_date",
-          "sqlType": "text",
-          "optional": false
-        },
-        {
           "name": "p_reason",
           "sqlType": "text",
           "optional": false
@@ -5663,7 +5653,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Governor or admin (identity:disclose) with an authenticator code from the last 15 minutes: checks an authority request (type from a closed list, reference, who is asking, a request date within 5 years and not in the future, a reason, and the confirmation that it is genuine and signed), looks the person up by post id or link slug, ID number fingerprint, phone number or email address (never by name), and writes the append-only log row before answering. Returns only the log row id, number, outcome, match count and closing time (15 minutes); a search that finds nobody is logged too."
+      "authority": "Governor or admin (identity:disclose) with an authenticator code from the last 15 minutes: checks an authority request (type from a closed list, reference, a reason, and the confirmation that it is genuine and signed), looks the person up by post id or link slug, ID number fingerprint, phone number or email address (never by name), and writes the append-only log row before answering. Returns only the log row id, number, outcome, match count and closing time (15 minutes); a search that finds nobody is logged too."
     },
     {
       "name": "read_identity_disclosure",
@@ -5692,26 +5682,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Governor or admin (identity:disclose, authenticator code from the last 15 minutes), only the staff member who opened the disclosure, until it closes: logs the look (view, print or selfie) first, then returns the request and, per named account, the kept identity record (full names as on the ID, verification date, whether the ID number and selfie are still kept, the ID photo state, verified phone numbers with dates) or, for an ID number only ever tried, the dates of the attempts. Never object keys or the encrypted number."
-    },
-    {
-      "name": "close_identity_disclosure",
-      "updates": ["updates/20261121043124_identity_record_disclosure.sql"],
-      "arguments": [
-        {
-          "name": "p_disclosure",
-          "sqlType": "uuid",
-          "optional": false
-        }
-      ],
-      "returns": "jsonb",
-      "volatility": "v",
-      "execute": {
-        "anon": false,
-        "authenticated": true,
-        "service_role": false
-      },
-      "authority": "Governor or admin (identity:disclose, authenticator code from the last 15 minutes), only the staff member who opened the disclosure: closes it early and logs the close; repeating it changes nothing."
+      "authority": "Governor or admin (identity:disclose, authenticator code from the last 15 minutes), only the staff member who opened the disclosure, while it still holds the capability, until it closes 15 minutes after opening: logs the look (view, print or selfie) first, then returns the request and, per named account, the kept identity record (full names as on the ID, verification date, whether the ID number and selfie are still kept, the ID photo state, verified phone numbers with dates) or, for an ID number only ever tried, the dates of the attempts. Never object keys or the encrypted number."
     },
     {
       "name": "list_identity_disclosures",

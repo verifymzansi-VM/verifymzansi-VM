@@ -93,10 +93,9 @@ before anything is shown.
   hold it.
 - **The request:** `api.open_identity_disclosure` takes the request type (closed
   list: `subpoena`, `court_order`, `warrant`, `police_case`, `regulator`), the
-  reference (3 to 100 characters), who is asking (3 to 200), the date of the
-  request (YYYY-MM-DD, not in the future, at most 5 years old), the reason (10
-  to 2,000) and the confirmation that the request is genuine and signed. Each
-  missing part is refused with 22023 and its own detail (`disclosure_*`).
+  reference (3 to 100 characters), the reason (10 to 2,000) and the confirmation
+  that the request is genuine and signed. Each missing part is refused with
+  22023 and its own detail (`disclosure_*`).
 - **Never by name:** the search is by `post` (post id or link slug), `id_number`
   (the one-way fingerprint the website's server makes with the verification key;
   the number itself never reaches the database here), `phone` (+27 form) or
@@ -113,22 +112,26 @@ before anything is shown.
   `private.identity_disclosure_events`, then returns the request and, per
   account, the full names as on the ID, the verification date, whether the ID
   number and the selfie are still kept, the ID photo's state and every verified
-  phone number with its dates. Only the staff member who opened it, until 15
-  minutes after it was opened (fixed by a check) or an early
-  `api.close_identity_disclosure`; otherwise PT409 `disclosure_unavailable` or
-  `disclosure_closed`. An ID number that was only tried (never accepted) returns
-  the account and the dates of the attempts, nothing more.
+  phone number with its dates. Only the staff member who opened it, while they
+  still hold the capability, until 15 minutes after it was opened (fixed by a
+  check); otherwise PT409 `disclosure_unavailable` or `disclosure_closed`. An ID
+  number that was only tried (never accepted) returns the account and the dates
+  of the attempts, nothing more.
 - **Server only:** `api.identity_disclosure_material(disclosure, staff)`
   (service role) gives the website's server the encrypted ID number and the
-  selfie's stored object of an open disclosure opened by that staff member, so
-  it can decrypt the number and show the selfie. Browsers never receive object
-  keys or ciphertext. `api.list_identity_disclosures` lists the latest 50
-  openings without the person or the search value.
+  selfie's stored object of an open disclosure opened by that staff member (who
+  must still hold the capability), so it can decrypt the number and show the
+  selfie. Browsers never receive object keys or ciphertext.
+  `api.list_identity_disclosures` lists the latest 50 openings without the
+  person or the search value.
 - **Audit log:** `private.frontend_staff_audit_events` (the staff Audit log)
   gains every opening (`identity:disclosure_<outcome>`) and every later look
   (`identity:disclosure_<kind>`), with target type `account` (one the live
   website already reads) and a reason giving only the disclosure number, the
   request type and reference, and the kind of search.
+- **Drift guard:** the update and the preflight pin `internal.staff_actor`,
+  `internal.append_only_guard` and the md5 of the audit trail view's definition,
+  so an unexpected change to any of them is refused.
 - **Keeping:** both logs refuse update, delete and truncate
   (`internal.append_only_guard`); a delete is possible only under the retention
   setting `vm.retention`. No retention job deletes them: their keeping period is
@@ -157,27 +160,28 @@ The reviewed rollback is
 owner's decision; prefer a forward fix). It refuses unless the update is
 applied, and refuses while the disclosure log holds any row (authority request
 records are kept). Otherwise it puts back the audit trail view as it was,
-removes the capability and drops the five commands, their helpers and both logs.
+removes the capability and drops the four commands, their helpers and both logs.
 
 `node --import tsx scripts/test-foundation-identity-record-disclosure.mjs` (part
 of `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
 preflight before and after, read only; the refusals with a drifted body and a
-premature rollback; apply, rollback and re-apply return the same fingerprints;
-the capability (governor and admin, recent code; never moderator); the grants
-and that nothing is security definer at the `api` layer; who may open, read,
-list and close (a visitor, a member, a moderator, an admin or governor whose
-code is 16 or 20 minutes old are refused; a governor and an admin with a fresh
-code succeed) and that a refusal logs nothing; every request rule; never by name
-(name kinds and names typed as any kind are refused, and a raw ID number too);
-log before show (the opening answers only the row, the row exists before the
-read, and when either log cannot be written nothing is answered); the record's
-content and that it never carries the stored object or ciphertext; the server
-material only for the opener; every way of searching (post id and slug, ID
-number fingerprint, current and earlier phone, email in any case); no match
-logged; an ID number only tried; only the opener; closing after 15 minutes and
-early; the list and the Audit log never show the person; both logs append-only
-with the retention exception; the rollback refused with a row; and a staff
-member who loses the role.
+premature rollback; a changed audit trail view refused; apply, rollback and
+re-apply return the same fingerprints; the capability (governor and admin,
+recent code; never moderator); the grants and that nothing is security definer
+at the `api` layer; who may open, read and list (a visitor, a member, a
+moderator, an admin or governor whose code is 16 or 20 minutes old are refused;
+a governor and an admin with a fresh code succeed) and that a refusal logs
+nothing; every request rule; never by name (name kinds and names typed as any
+kind are refused, and a raw ID number too); log before show (the opening answers
+only the row, the row exists before the read, and when either log cannot be
+written nothing is answered); the record's content and that it never carries the
+stored object or ciphertext; the server material only for the opener; every way
+of searching (post id and slug, ID number fingerprint, current and earlier
+phone, email in any case); no match logged; an ID number only tried; only the
+opener; closing after 15 minutes; the list and the Audit log never show the
+person; both logs append-only with the retention exception; the rollback refused
+with a row; and a staff member who loses the role (no record and no server
+material).
 
 ## Staff operations health and a last-run record for every scheduled job, 20 November 2026
 
@@ -358,19 +362,20 @@ number receipts they hold). Uploads already completed from a phone are kept.
 `node --import tsx scripts/test-foundation-camera-capture-handoff.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
 preflight before and after, read only; the refusals with a drifted body and a
-premature rollback; apply, rollback and re-apply return the same fingerprints;
-the selfie capture report is unchanged; a link stores only hashes, its case and
-session, and lasts 15 minutes; a member can never supply a receipt (the start
-takes none and the attach is server only), a link waiting for one cannot be
-opened, and bad input, missing ID details, a reused token and a sixth link in an
-hour are refused; the phone must be signed in as the same account (signed out or
-another account is refused without using the link); the phone's ID photo and
-selfie complete through the existing service commands and register the
-submission, after which the link takes nothing more; a grant reaches only its
-own case and not a decided one; a link stops working when expired, replaced,
-signed out on the computer or the account is closed; a selfie-only link; only
-the website's server opens links, attaches receipts and reserves phone uploads,
-and no API role reads the table; links go one day after they expired.
+premature rollback; a changed audit trail view refused; apply, rollback and
+re-apply return the same fingerprints; the selfie capture report is unchanged; a
+link stores only hashes, its case and session, and lasts 15 minutes; a member
+can never supply a receipt (the start takes none and the attach is server only),
+a link waiting for one cannot be opened, and bad input, missing ID details, a
+reused token and a sixth link in an hour are refused; the phone must be signed
+in as the same account (signed out or another account is refused without using
+the link); the phone's ID photo and selfie complete through the existing service
+commands and register the submission, after which the link takes nothing more; a
+grant reaches only its own case and not a decided one; a link stops working when
+expired, replaced, signed out on the computer or the account is closed; a
+selfie-only link; only the website's server opens links, attaches receipts and
+reserves phone uploads, and no API role reads the table; links go one day after
+they expired.
 
 ## A daily limit on SMS codes for the whole site, 20 November 2026
 
@@ -4283,21 +4288,21 @@ and status rule byte for byte, drops the rule and the setting, and drops
 `node --import tsx scripts/test-foundation-bank-transfer-expiry.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
 read-only preflight with its overdue rows, refusals with a drifted body and a
-premature rollback; apply, rollback and re-apply return the same fingerprints;
-the one rule before the sweep (no confirm or decline, also through the guard;
-the staff lists, the member read, Pay now, voiding and the erasure hold follow
-it); 13 days 23 hours 59 minutes still waits; the sweep marks 14 days or more,
-reruns change nothing, the limit holds and a row that cannot be changed does not
-stop the others; the record guard; recording the money again, once, also when it
-cleared more than 90 days ago (only the exact credit of an expired transfer);
-the invoice takes a new transfer and shows the expiry only to its member; old
-money for another account or invoice is refused; the duplicate count flags
-expired records of the same money; staff resolve an expired transfer once,
-audited; staff see each expired transfer until it is followed up; the audit
-trail; the privacy export; the grants; and the rollback refusal.
-`scripts/test-foundation-access-matrix.mjs` gives another member an invoice
-whose transfer expired, and checks that only the service role runs the sweep and
-only that member reads the expiry.
+premature rollback; a changed audit trail view refused; apply, rollback and
+re-apply return the same fingerprints; the one rule before the sweep (no confirm
+or decline, also through the guard; the staff lists, the member read, Pay now,
+voiding and the erasure hold follow it); 13 days 23 hours 59 minutes still
+waits; the sweep marks 14 days or more, reruns change nothing, the limit holds
+and a row that cannot be changed does not stop the others; the record guard;
+recording the money again, once, also when it cleared more than 90 days ago
+(only the exact credit of an expired transfer); the invoice takes a new transfer
+and shows the expiry only to its member; old money for another account or
+invoice is refused; the duplicate count flags expired records of the same money;
+staff resolve an expired transfer once, audited; staff see each expired transfer
+until it is followed up; the audit trail; the privacy export; the grants; and
+the rollback refusal. `scripts/test-foundation-access-matrix.mjs` gives another
+member an invoice whose transfer expired, and checks that only the service role
+runs the sweep and only that member reads the expiry.
 
 ## Individual slots at R69, 12 November 2026
 

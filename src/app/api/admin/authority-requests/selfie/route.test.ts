@@ -1,6 +1,6 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NextRequest, type NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { GET, POST } from "./route";
 import {
   AuthorityRequestRefused,
@@ -8,7 +8,11 @@ import {
 } from "@/lib/foundation/identity-disclosures";
 import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
 
-const { authenticateCaller } = vi.hoisted(() => ({ authenticateCaller: vi.fn() }));
+const { authenticateCaller, limitStaffEvidenceView } = vi.hoisted(() => ({
+  authenticateCaller: vi.fn(),
+  limitStaffEvidenceView: vi.fn(),
+}));
+vi.mock("@/lib/foundation/evidence-route", () => ({ limitStaffEvidenceView }));
 vi.mock("@/lib/utils/mutation-guard", () => ({ enforceMutationRequest: vi.fn(() => null) }));
 vi.mock("@/lib/foundation/runtime-connection", () => ({
   readFoundationRuntimeConnection: vi.fn(() => ({})),
@@ -40,6 +44,7 @@ const post = (body: unknown) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  limitStaffEvidenceView.mockResolvedValue(null);
   authenticateCaller.mockResolvedValue({ api: { rpc: vi.fn() }, accountId: STAFF });
 });
 
@@ -86,8 +91,11 @@ describe("/api/admin/authority-requests/selfie", () => {
     expect(await response.json()).toMatchObject({ code: "step_up_required" });
   });
 
-  it("refuses malformed bodies without reading", async () => {
+  it("refuses malformed bodies and rate-limited callers without reading", async () => {
     expect((await post({ disclosureId: DISCLOSURE })).status).toBe(422);
+    limitStaffEvidenceView.mockResolvedValueOnce(NextResponse.json({}, { status: 429 }));
+    expect((await post({ disclosureId: DISCLOSURE, subject: SUBJECT })).status).toBe(429);
+    expect(limitStaffEvidenceView).toHaveBeenCalledWith(STAFF);
     expect(readIdentityDisclosureSelfie).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
 import "server-only";
-import { createDecipheriv, createHash, createHmac } from "node:crypto";
+import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
@@ -10,8 +10,8 @@ import { FoundationStaffCommandError, staffCommandRefusal } from "./staff-comman
 import { readFoundationCookieToken, readUnverifiedFoundationTokenClaims } from "./request-api";
 import { readFoundationRuntimeConnection } from "./runtime-connection";
 import { foundationLatestAuthenticatorStep } from "./sign-in-claims";
-import { verificationSecret } from "./verification-runtime";
-import { sourceIdentityDigestToFingerprint } from "../domains/verification/identity-fingerprint";
+import { decryptIdentityNumber, verificationSecret } from "./verification-runtime";
+import { identityNumberFingerprint } from "../domains/verification/identity-processing";
 import { validateSaIdChecksum } from "../utils/sa-id-validation";
 import { getR2ObjectBytes } from "../services/storage";
 import { decryptData } from "../utils/encryption";
@@ -56,8 +56,6 @@ export class AuthorityRequestRefused extends Error {
 const REASONS_22023 = [
   "disclosure_request_type_invalid",
   "disclosure_reference_required",
-  "disclosure_requester_required",
-  "disclosure_request_date_invalid",
   "disclosure_reason_required",
   "disclosure_attestation_required",
   "disclosure_lookup_invalid",
@@ -175,8 +173,6 @@ const readResult = z.strictObject({
     opened_by_name: publicName,
     request_type: requestType,
     reference: z.string().min(3).max(100),
-    requested_by: z.string().min(3).max(200),
-    request_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     reason: z.string().min(10).max(2000),
     lookup_kind: lookupKind,
     lookup_value: z.string().max(254).nullable(),
@@ -235,8 +231,6 @@ export async function listIdentityDisclosures(api: FoundationAuthenticatedApi) {
 export type AuthorityRequestInput = {
   requestType: RequestType;
   reference: string;
-  requestedBy: string;
-  requestDate: string;
   reason: string;
   lookupKind: LookupKind;
   lookupValue: string;
@@ -244,12 +238,6 @@ export type AuthorityRequestInput = {
 };
 
 /** The ID number's one-way fingerprint, made exactly as at verification. */
-function identityNumberFingerprint(number: string, matchKey: Buffer) {
-  return sourceIdentityDigestToFingerprint(
-    createHmac("sha256", matchKey).update(number, "utf8").digest("hex")
-  );
-}
-
 /** The value the database searches: a post id or slug, the ID number's
  * fingerprint (never the number), an E.164 phone number or an email address.
  * Never a name. */
@@ -281,8 +269,6 @@ export async function openIdentityDisclosure(
     {
       p_request_type: input.requestType,
       p_reference: input.reference,
-      p_requested_by: input.requestedBy,
-      p_request_date: input.requestDate,
       p_reason: input.reason,
       p_lookup_kind: input.lookupKind,
       p_lookup_value: lookupValueFor(input.lookupKind, input.lookupValue),
@@ -299,16 +285,6 @@ export async function openIdentityDisclosure(
     matchCount: result.match_count,
     closesAt: result.closes_at,
   };
-}
-
-export async function closeIdentityDisclosure(api: FoundationAuthenticatedApi, id: string) {
-  const { data, error } = await api.rpc(
-    "close_identity_disclosure",
-    { p_disclosure: z.uuid().parse(id) },
-    { get: false }
-  );
-  if (error) refuse(error);
-  return parse(z.strictObject({ disclosure_id: z.uuid(), closed: z.literal(true) }), data);
 }
 
 async function readDisclosure(
@@ -345,23 +321,6 @@ async function readMaterial(service: FoundationServiceApi, id: string, staffId: 
   return result.records;
 }
 
-function decryptNumber(owner: string, number: z.infer<typeof encryptedNumber>) {
-  const decipher = createDecipheriv(
-    "aes-256-gcm",
-    verificationSecret("ID_ENCRYPTION_KEY"),
-    Buffer.from(number.iv, "hex"),
-    { authTagLength: 16 }
-  );
-  decipher.setAAD(Buffer.from(`${owner}:id_doc`, "utf8"));
-  decipher.setAuthTag(Buffer.from(number.tag, "hex"));
-  const value = Buffer.concat([
-    decipher.update(Buffer.from(number.ciphertext, "hex")),
-    decipher.final(),
-  ]).toString("utf8");
-  if (!/^\d{13}$/.test(value)) throw new Error("Authority request record could not be read");
-  return value;
-}
-
 /**
  * The record of an open disclosure, for the record page (`view`) or the
  * printed sheet (`print`). The database logs the look before it answers; the
@@ -386,7 +345,7 @@ export async function readIdentityDisclosure(
       let unreadable = false;
       if (record.id_number_kept && found?.encrypted_number) {
         try {
-          number = decryptNumber(record.account_id, found.encrypted_number);
+          number = decryptIdentityNumber(record.account_id, found.encrypted_number);
         } catch {
           // Logged without the record; the page says the number is kept but
           // could not be read, so staff never mistake it for "not kept".

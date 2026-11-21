@@ -8,8 +8,7 @@
 -- 2. New append-only log private.identity_disclosures: one row per opening,
 --    written before anything about the person is returned. It records who
 --    opened it, when, the request (type from a
---    closed list, reference, who is asking, the date of the request, the
---    reason, and the staff member's confirmation that the request is genuine
+--    closed list, reference and reason, and the staff member's confirmation that the request is genuine
 --    and signed), what was searched (kind and value: a post id or link, the ID
 --    number's one-way fingerprint made by the website's server, a phone number
 --    or an email address; never a name) and the outcome: record, no_record (an
@@ -19,8 +18,7 @@
 --    recent); match_count keeps the total. Each row closes 15 minutes after it
 --    was opened (closes_at, fixed by a check).
 -- 3. New append-only log private.identity_disclosure_events: every later look
---    at an open disclosure (viewed, printed, selfie_viewed) and an early
---    close (closed).
+--    at an open disclosure (viewed, printed, selfie_viewed).
 --    Both logs refuse update, delete and truncate (internal.append_only_guard);
 --    a delete is possible only under the retention setting vm.retention, and
 --    no retention job deletes them yet (their keeping period is for the owner
@@ -38,7 +36,6 @@
 --      details disclosure_unavailable and disclosure_closed). For an ID number
 --      that was only tried, it returns the accounts and dates of the attempts
 --      and nothing more.
---    - api.close_identity_disclosure(disclosure) closes it early.
 --    - api.list_identity_disclosures() lists the latest 50 openings for staff
 --      holding the capability: number, date, who opened it, request type and
 --      reference, outcome, whether it was viewed or printed; no personal data
@@ -69,14 +66,13 @@ declare present integer;
 begin
   select (to_regclass('private.identity_disclosures') is not null)::integer
     + (to_regclass('private.identity_disclosure_events') is not null)::integer
-    + (to_regprocedure('api.open_identity_disclosure(text,text,text,text,text,text,text,boolean)') is not null)::integer
+    + (to_regprocedure('api.open_identity_disclosure(text,text,text,text,text,boolean)') is not null)::integer
     + (to_regprocedure('api.read_identity_disclosure(uuid,text,uuid)') is not null)::integer
-    + (to_regprocedure('api.close_identity_disclosure(uuid)') is not null)::integer
     + (to_regprocedure('api.list_identity_disclosures()') is not null)::integer
     + (to_regprocedure('api.identity_disclosure_material(uuid,uuid)') is not null)::integer
   into present;
-  if present not in (0, 7) then
-    raise exception 'identity record disclosure precondition: % of 7 objects exist', present using errcode='55000';
+  if present not in (0, 6) then
+    raise exception 'identity record disclosure precondition: % of 6 objects exist', present using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc
       where oid=to_regprocedure('internal.staff_actor(text)')) is distinct from '269f0871f156f57c029cedcab72f6c3f' then
@@ -86,7 +82,7 @@ begin
       where oid=to_regprocedure('internal.append_only_guard()')) is distinct from 'dfac5657b00f4d86a399e04e44d2ea59' then
     raise exception 'identity record disclosure drift: internal.append_only_guard is not the reviewed body' using errcode='55000';
   end if;
-  if coalesce(pg_get_viewdef('private.frontend_staff_audit_events'::regclass) not like '%customer_invoice_voided%', true) then
+  if md5(pg_get_viewdef('private.frontend_staff_audit_events'::regclass)) not in ('6dc98a28338eefafbd8316660243f70d', '79d4c93c1637629c23a46f077320addb') then
     raise exception 'identity record disclosure drift: private.frontend_staff_audit_events is not the reviewed view' using errcode='55000';
   end if;
 end$$;
@@ -105,8 +101,6 @@ create table if not exists private.identity_disclosures (
   closes_at timestamptz not null,
   request_type text not null,
   request_reference text not null,
-  requested_by text not null,
-  request_date date not null,
   reason text not null,
   attested boolean not null,
   lookup_kind text not null,
@@ -122,7 +116,6 @@ create table if not exists private.identity_disclosures (
   constraint identity_disclosures_request_type_check
     check (request_type in ('subpoena','court_order','warrant','police_case','regulator')),
   constraint identity_disclosures_reference_check check (length(request_reference) between 3 and 100),
-  constraint identity_disclosures_requested_by_check check (length(requested_by) between 3 and 200),
   constraint identity_disclosures_reason_check check (length(reason) between 10 and 2000),
   constraint identity_disclosures_attested_check check (attested),
   constraint identity_disclosures_lookup_kind_check check (lookup_kind in ('post','id_number','phone','email')),
@@ -162,7 +155,7 @@ create table if not exists private.identity_disclosure_events (
     references private.identity_disclosures(id) on delete cascade,
   constraint identity_disclosure_events_staff_id_fkey foreign key (staff_id)
     references auth.users(id) on delete restrict,
-  constraint identity_disclosure_events_kind_check check (kind in ('viewed','printed','selfie_viewed','closed')),
+  constraint identity_disclosure_events_kind_check check (kind in ('viewed','printed','selfie_viewed')),
   constraint identity_disclosure_events_subject_check check ((kind = 'selfie_viewed') = (subject_id is not null))
 );
 alter table private.identity_disclosure_events owner to postgres;
@@ -199,8 +192,9 @@ $function$;
 alter function internal.identity_disclosure_text_ok(text,integer,integer) owner to postgres;
 revoke all on function internal.identity_disclosure_text_ok(text,integer,integer) from public, anon, authenticated, service_role;
 
--- The disclosure, still open, for the staff member who opened it. Another
--- staff member's disclosure and an unknown one give the same answer.
+-- The disclosure, still open, for the staff member who opened it while that
+-- staff member still holds identity:disclose. Another staff member's
+-- disclosure and an unknown one give the same answer.
 CREATE OR REPLACE FUNCTION internal.identity_disclosure_open_for(p_disclosure uuid, p_staff uuid)
  RETURNS private.identity_disclosures
  LANGUAGE plpgsql
@@ -209,10 +203,11 @@ AS $function$
 declare d private.identity_disclosures;
 begin
   select x.* into d from private.identity_disclosures x where x.id=p_disclosure;
-  if not found or d.opened_by is distinct from p_staff then
+  if not found or d.opened_by is distinct from p_staff or not exists(select 1 from private.staff_roles r
+      join private.staff_capabilities c on c.role=r.role
+      where r.user_id=p_staff and r.revoked_at is null and c.capability='identity:disclose') then
     raise exception 'disclosure unavailable' using errcode='PT409',detail='disclosure_unavailable'; end if;
-  if d.closes_at<=clock_timestamp() or exists(select 1 from private.identity_disclosure_events e
-      where e.disclosure_id=d.id and e.kind='closed') then
+  if d.closes_at<=clock_timestamp() then
     raise exception 'disclosure closed' using errcode='PT409',detail='disclosure_closed'; end if;
   return d;
 end;
@@ -270,27 +265,19 @@ revoke all on function internal.identity_disclosure_record(private.identity_disc
 
 -- 4a. Open a record: check the request, find the person, log, then answer
 -- with the log row's id only.
-CREATE OR REPLACE FUNCTION internal.open_identity_disclosure(p_request_type text, p_reference text, p_requested_by text, p_request_date text, p_reason text, p_lookup_kind text, p_lookup_value text, p_attested boolean)
+CREATE OR REPLACE FUNCTION internal.open_identity_disclosure(p_request_type text, p_reference text, p_reason text, p_lookup_kind text, p_lookup_value text, p_attested boolean)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare actor uuid:=internal.staff_actor('identity:disclose'); today date; asked date;
+declare actor uuid:=internal.staff_actor('identity:disclose');
   v_value text; post uuid; matched uuid[]; outcome text; made timestamptz; d private.identity_disclosures;
 begin
   if p_request_type is null or p_request_type not in ('subpoena','court_order','warrant','police_case','regulator') then
     raise exception 'valid request type required' using errcode='22023',detail='disclosure_request_type_invalid'; end if;
   if not internal.identity_disclosure_text_ok(p_reference,3,100) then
     raise exception 'request reference required' using errcode='22023',detail='disclosure_reference_required'; end if;
-  if not internal.identity_disclosure_text_ok(p_requested_by,3,200) then
-    raise exception 'who is asking required' using errcode='22023',detail='disclosure_requester_required'; end if;
-  today:=(clock_timestamp() at time zone 'Africa/Johannesburg')::date;
-  if p_request_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
-    begin asked:=p_request_date::date; exception when others then asked:=null; end;
-  end if;
-  if asked is null or asked>today or asked<today-1826 then
-    raise exception 'valid request date required' using errcode='22023',detail='disclosure_request_date_invalid'; end if;
   if not internal.identity_disclosure_text_ok(p_reason,10,2000) then
     raise exception 'reason required' using errcode='22023',detail='disclosure_reason_required'; end if;
   if p_attested is distinct from true then
@@ -338,9 +325,9 @@ begin
   -- The log row is written before anything about the person is answered.
   made:=clock_timestamp();
   insert into private.identity_disclosures(opened_by,opened_at,closes_at,request_type,
-      request_reference,requested_by,request_date,reason,attested,lookup_kind,lookup_value,outcome,subject_ids,match_count)
+      request_reference,reason,attested,lookup_kind,lookup_value,outcome,subject_ids,match_count)
     values(actor,made,made+interval '15 minutes',p_request_type,
-      btrim(p_reference),btrim(p_requested_by),asked,btrim(p_reason),true,p_lookup_kind,v_value,outcome,
+      btrim(p_reference),btrim(p_reason),true,p_lookup_kind,v_value,outcome,
       matched[1:5],cardinality(matched))
     returning * into d;
   perform internal.staff_actor('identity:disclose');
@@ -348,20 +335,20 @@ begin
     'match_count',d.match_count,'closes_at',d.closes_at);
 end;
 $function$;
-alter function internal.open_identity_disclosure(text,text,text,text,text,text,text,boolean) owner to postgres;
-revoke all on function internal.open_identity_disclosure(text,text,text,text,text,text,text,boolean) from public, anon, authenticated, service_role;
-grant execute on function internal.open_identity_disclosure(text,text,text,text,text,text,text,boolean) to authenticated;
+alter function internal.open_identity_disclosure(text,text,text,text,text,boolean) owner to postgres;
+revoke all on function internal.open_identity_disclosure(text,text,text,text,text,boolean) from public, anon, authenticated, service_role;
+grant execute on function internal.open_identity_disclosure(text,text,text,text,text,boolean) to authenticated;
 
-CREATE OR REPLACE FUNCTION api.open_identity_disclosure(p_request_type text, p_reference text, p_requested_by text, p_request_date text, p_reason text, p_lookup_kind text, p_lookup_value text, p_attested boolean)
+CREATE OR REPLACE FUNCTION api.open_identity_disclosure(p_request_type text, p_reference text, p_reason text, p_lookup_kind text, p_lookup_value text, p_attested boolean)
  RETURNS jsonb
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.open_identity_disclosure(p_request_type,p_reference,p_requested_by,p_request_date,p_reason,p_lookup_kind,p_lookup_value,p_attested);
+  select internal.open_identity_disclosure(p_request_type,p_reference,p_reason,p_lookup_kind,p_lookup_value,p_attested);
 $function$;
-alter function api.open_identity_disclosure(text,text,text,text,text,text,text,boolean) owner to postgres;
-revoke all on function api.open_identity_disclosure(text,text,text,text,text,text,text,boolean) from public, anon, authenticated, service_role;
-grant execute on function api.open_identity_disclosure(text,text,text,text,text,text,text,boolean) to authenticated;
+alter function api.open_identity_disclosure(text,text,text,text,text,boolean) owner to postgres;
+revoke all on function api.open_identity_disclosure(text,text,text,text,text,boolean) from public, anon, authenticated, service_role;
+grant execute on function api.open_identity_disclosure(text,text,text,text,text,boolean) to authenticated;
 
 -- 4b. Read an open disclosure: log the look, then answer.
 CREATE OR REPLACE FUNCTION internal.read_identity_disclosure(p_disclosure uuid, p_purpose text, p_subject uuid DEFAULT NULL::uuid)
@@ -389,8 +376,8 @@ begin
   return jsonb_build_object(
     'disclosure',jsonb_build_object('id',d.id,'number',d.number,'opened_at',d.opened_at,'closes_at',d.closes_at,
       'opened_by_name',(select internal.profile_public_name(p.display_name) from private.profiles p where p.account_id=d.opened_by),
-      'request_type',d.request_type,'reference',d.request_reference,'requested_by',d.requested_by,
-      'request_date',d.request_date,'reason',d.reason,'lookup_kind',d.lookup_kind,
+      'request_type',d.request_type,'reference',d.request_reference,'reason',d.reason,
+      'lookup_kind',d.lookup_kind,
       'lookup_value',case when d.lookup_kind='id_number' then null else d.lookup_value end,
       'outcome',d.outcome,'match_count',d.match_count),
     'records',records);
@@ -410,40 +397,6 @@ $function$;
 alter function api.read_identity_disclosure(uuid,text,uuid) owner to postgres;
 revoke all on function api.read_identity_disclosure(uuid,text,uuid) from public, anon, authenticated, service_role;
 grant execute on function api.read_identity_disclosure(uuid,text,uuid) to authenticated;
-
--- 4c. Close an open disclosure early (repeating it changes nothing).
-CREATE OR REPLACE FUNCTION internal.close_identity_disclosure(p_disclosure uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'pg_catalog'
-AS $function$
-declare actor uuid:=internal.staff_actor('identity:disclose'); d private.identity_disclosures;
-begin
-  select x.* into d from private.identity_disclosures x where x.id=p_disclosure;
-  if not found or d.opened_by is distinct from actor then
-    raise exception 'disclosure unavailable' using errcode='PT409',detail='disclosure_unavailable'; end if;
-  if d.closes_at>clock_timestamp() and not exists(select 1 from private.identity_disclosure_events e
-      where e.disclosure_id=d.id and e.kind='closed') then
-    insert into private.identity_disclosure_events(disclosure_id,staff_id,kind) values(d.id,actor,'closed');
-  end if;
-  return jsonb_build_object('disclosure_id',d.id,'closed',true);
-end;
-$function$;
-alter function internal.close_identity_disclosure(uuid) owner to postgres;
-revoke all on function internal.close_identity_disclosure(uuid) from public, anon, authenticated, service_role;
-grant execute on function internal.close_identity_disclosure(uuid) to authenticated;
-
-CREATE OR REPLACE FUNCTION api.close_identity_disclosure(p_disclosure uuid)
- RETURNS jsonb
- LANGUAGE sql
- SET search_path TO 'pg_catalog'
-AS $function$
-  select internal.close_identity_disclosure(p_disclosure);
-$function$;
-alter function api.close_identity_disclosure(uuid) owner to postgres;
-revoke all on function api.close_identity_disclosure(uuid) from public, anon, authenticated, service_role;
-grant execute on function api.close_identity_disclosure(uuid) to authenticated;
 
 -- 4d. The latest openings (no personal data about the person).
 CREATE OR REPLACE FUNCTION internal.list_identity_disclosures()
@@ -702,9 +655,8 @@ do $$
 declare f text; expected jsonb;
 begin
   for f, expected in select * from (values
-      ('api.open_identity_disclosure(text,text,text,text,text,text,text,boolean)', '{"anon":false,"authenticated":true,"service_role":false}'::jsonb),
+      ('api.open_identity_disclosure(text,text,text,text,text,boolean)', '{"anon":false,"authenticated":true,"service_role":false}'::jsonb),
       ('api.read_identity_disclosure(uuid,text,uuid)', '{"anon":false,"authenticated":true,"service_role":false}'::jsonb),
-      ('api.close_identity_disclosure(uuid)', '{"anon":false,"authenticated":true,"service_role":false}'::jsonb),
       ('api.list_identity_disclosures()', '{"anon":false,"authenticated":true,"service_role":false}'::jsonb),
       ('api.identity_disclosure_material(uuid,uuid)', '{"anon":false,"authenticated":false,"service_role":true}'::jsonb)) v
   loop

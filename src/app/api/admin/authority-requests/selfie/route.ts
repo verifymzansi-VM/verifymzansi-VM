@@ -10,6 +10,7 @@ import {
 } from "@/lib/foundation/identity-disclosures";
 import { foundationNoStore } from "@/lib/foundation/owner-route";
 import { evidenceViewResponse } from "@/lib/services/evidence-serving";
+import { limitStaffEvidenceView } from "@/lib/foundation/evidence-route";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
@@ -55,6 +56,8 @@ export async function POST(request: NextRequest) {
   }
   try {
     const caller = await context.authenticateCaller();
+    const limited = await limitStaffEvidenceView(caller.accountId);
+    if (limited) return context.respond(limited);
     const input = body.parse(await parseJsonRequest(request, { maxBytes: 1024 }));
     const bytes = await readIdentityDisclosureSelfie(
       caller.api,

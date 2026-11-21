@@ -707,8 +707,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: {
           p_request_type: string;
           p_reference: string;
-          p_requested_by: string;
-          p_request_date: string;
           p_reason: string;
           p_lookup_kind: string;
           p_lookup_value: string;
@@ -720,7 +718,6 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_disclosure: string; p_purpose: string; p_subject?: string };
         Returns: Json;
       };
-      close_identity_disclosure: { Args: { p_disclosure: string }; Returns: Json };
       list_identity_disclosures: { Args: Record<never, never>; Returns: Json };
       get_staff_operations_health: { Args: Record<never, never>; Returns: Json };
     };

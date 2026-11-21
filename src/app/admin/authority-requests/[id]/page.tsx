@@ -11,7 +11,7 @@ import {
 } from "@/lib/admin/authority-requests";
 import { formatDateTime } from "@/lib/utils/format";
 import { loadDisclosureRecord } from "./load-record";
-import { CloseRecordButton, RecordCloser } from "./record-parts";
+import { RecordCloser } from "./record-parts";
 import { DisclosureRecordView } from "./record-view";
 
 export const metadata = {
@@ -81,7 +81,6 @@ export default async function AuthorityRequestRecordPage({
           </div>
         )}
         <div className="flex flex-col-reverse gap-3 border-t pt-4 sm:flex-row sm:justify-end">
-          <CloseRecordButton disclosureId={disclosure.id} />
           <Button asChild className="h-11 w-full px-5 sm:w-auto">
             <Link href={`${AUTHORITY_REQUESTS_PATH}/${disclosure.id}/sheet`} prefetch={false}>
               <Printer className="h-4 w-4" />

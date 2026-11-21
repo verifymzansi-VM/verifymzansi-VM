@@ -5,11 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Printer, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
-import {
-  AUTHORITY_REQUESTS_ENDPOINT,
-  AUTHORITY_REQUESTS_PATH,
-  AUTHORITY_SELFIE_ENDPOINT,
-} from "@/lib/admin/authority-requests";
+import { AUTHORITY_REQUESTS_PATH, AUTHORITY_SELFIE_ENDPOINT } from "@/lib/admin/authority-requests";
 
 /**
  * Closes the page when the record closes (15 minutes after it was opened):
@@ -84,35 +80,6 @@ export function DisclosureSelfie({
         </div>
       )}
     </div>
-  );
-}
-
-/** Close record: logged, then back to Authority requests. */
-export function CloseRecordButton({ disclosureId }: { disclosureId: string }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      className="h-11 w-full px-5 sm:w-auto"
-      disabled={busy}
-      onClick={async () => {
-        setBusy(true);
-        try {
-          await fetch(AUTHORITY_REQUESTS_ENDPOINT, {
-            method: "POST",
-            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify({ action: "close", disclosureId }),
-          });
-        } finally {
-          router.replace(AUTHORITY_REQUESTS_PATH);
-        }
-      }}
-    >
-      {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-      Close record
-    </Button>
   );
 }
 

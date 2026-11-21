@@ -26,8 +26,8 @@ begin
   return jsonb_build_object(
     'disclosure',jsonb_build_object('id',d.id,'number',d.number,'opened_at',d.opened_at,'closes_at',d.closes_at,
       'opened_by_name',(select internal.profile_public_name(p.display_name) from private.profiles p where p.account_id=d.opened_by),
-      'request_type',d.request_type,'reference',d.request_reference,'requested_by',d.requested_by,
-      'request_date',d.request_date,'reason',d.reason,'lookup_kind',d.lookup_kind,
+      'request_type',d.request_type,'reference',d.request_reference,'reason',d.reason,
+      'lookup_kind',d.lookup_kind,
       'lookup_value',case when d.lookup_kind='id_number' then null else d.lookup_value end,
       'outcome',d.outcome,'match_count',d.match_count),
     'records',records);

@@ -11,7 +11,6 @@ import { FoundationStaffCommandError } from "./staff-command";
 import {
   AuthorityRequestRefused,
   authorityRequestRefusal,
-  closeIdentityDisclosure,
   listIdentityDisclosures,
   lookupValueFor,
   openIdentityDisclosure,
@@ -41,8 +40,6 @@ const service = { rpc: machine } as unknown as FoundationServiceApi;
 const request = {
   requestType: "subpoena" as const,
   reference: "CAS 123/11/2026",
-  requestedBy: "Det. Sgt. Synthetic, SAPS Test",
-  requestDate: "2026-11-19",
   reason: "Fraud investigation into a reported listing.",
   lookupKind: "phone" as const,
   lookupValue: "082 123 4567",
@@ -58,8 +55,6 @@ function disclosure(outcome = "record") {
     opened_by_name: "Senzo N.",
     request_type: "subpoena",
     reference: "CAS 123/11/2026",
-    requested_by: "Det. Sgt. Synthetic, SAPS Test",
-    request_date: "2026-11-19",
     reason: "Fraud investigation into a reported listing.",
     lookup_kind: "phone",
     lookup_value: "+27821234567",
@@ -174,8 +169,6 @@ describe("authority requests: what is searched", () => {
       {
         p_request_type: "subpoena",
         p_reference: "CAS 123/11/2026",
-        p_requested_by: "Det. Sgt. Synthetic, SAPS Test",
-        p_request_date: "2026-11-19",
         p_reason: "Fraud investigation into a reported listing.",
         p_lookup_kind: "phone",
         p_lookup_value: "+27821234567",
@@ -371,14 +364,5 @@ describe("authority requests: reading a record", () => {
     await expect(
       readIdentityDisclosureSelfie(api, service, STAFF, DISCLOSURE, OWNER)
     ).rejects.toThrow("could not be read");
-  });
-
-  it("closes through api.close_identity_disclosure", async () => {
-    rpc.mockResolvedValue({ data: { disclosure_id: DISCLOSURE, closed: true }, error: null });
-    await expect(closeIdentityDisclosure(api, DISCLOSURE)).resolves.toEqual({
-      disclosure_id: DISCLOSURE,
-      closed: true,
-    });
-    await expect(closeIdentityDisclosure(api, "not-a-uuid")).rejects.toThrow();
   });
 });

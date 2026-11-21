@@ -9,7 +9,7 @@ create table private.identity_disclosure_events (
   subject_id uuid,
   occurred_at timestamp with time zone default clock_timestamp() not null,
   constraint identity_disclosure_events_disclosure_id_fkey FOREIGN KEY (disclosure_id) REFERENCES private.identity_disclosures(id) ON DELETE CASCADE,
-  constraint identity_disclosure_events_kind_check CHECK (kind = ANY (ARRAY['viewed'::text, 'printed'::text, 'selfie_viewed'::text, 'closed'::text])),
+  constraint identity_disclosure_events_kind_check CHECK (kind = ANY (ARRAY['viewed'::text, 'printed'::text, 'selfie_viewed'::text])),
   constraint identity_disclosure_events_pkey PRIMARY KEY (id),
   constraint identity_disclosure_events_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES auth.users(id) ON DELETE RESTRICT,
   constraint identity_disclosure_events_subject_check CHECK ((kind = 'selfie_viewed'::text) = (subject_id IS NOT NULL))

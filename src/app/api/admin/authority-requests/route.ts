@@ -4,7 +4,6 @@ import { createLogger } from "@/lib/utils/logger";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import {
   authorityRequestRefusal,
-  closeIdentityDisclosure,
   openIdentityDisclosure,
 } from "@/lib/foundation/identity-disclosures";
 
@@ -19,26 +18,19 @@ const text = (min: number, max: number) =>
     .min(min)
     .max(max)
     .regex(/^[^\x00-\x08\x0b\x0c\x0e-\x1f\x7f]*$/);
-const body = z.discriminatedUnion("action", [
-  z.strictObject({
-    action: z.literal("open"),
-    requestType: z.enum(["subpoena", "court_order", "warrant", "police_case", "regulator"]),
-    reference: text(1, 100),
-    requestedBy: text(1, 200),
-    requestDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    reason: text(1, 2000),
-    lookupKind: z.enum(["post", "id_number", "phone", "email"]),
-    lookupValue: text(1, 2048),
-    attested: z.boolean(),
-  }),
-  z.strictObject({ action: z.literal("close"), disclosureId: z.uuid() }),
-]);
+const body = z.strictObject({
+  requestType: z.enum(["subpoena", "court_order", "warrant", "police_case", "regulator"]),
+  reference: text(1, 100),
+  reason: text(1, 2000),
+  lookupKind: z.enum(["post", "id_number", "phone", "email"]),
+  lookupValue: text(1, 2048),
+  attested: z.boolean(),
+});
 
 /**
  * POST /api/admin/authority-requests
  *
- * Open a member's kept identity record against an authority request, or close
- * an open one early. Same-origin, CSRF and a per-client rate limit
+ * Open a member's kept identity record against an authority request. Same-origin, CSRF and a per-client rate limit
  * (handleFoundationOwnerRoute); the database checks the caller is a governor
  * or admin with an authenticator code from the last 15 minutes, writes the log
  * row before answering (a search that finds nobody is logged too) and answers
@@ -56,11 +48,6 @@ export async function POST(request: NextRequest) {
     unavailableMessage:
       "The request could not be confirmed. Reload the page; if a record opened, it is listed under Earlier requests.",
     refusal: authorityRequestRefusal,
-    command: async (api, input) => {
-      const parsed = body.parse(input);
-      if (parsed.action === "close") return closeIdentityDisclosure(api, parsed.disclosureId);
-      const { action: _action, ...request } = parsed;
-      return openIdentityDisclosure(api, request);
-    },
+    command: async (api, input) => openIdentityDisclosure(api, body.parse(input)),
   });
 }

@@ -29,14 +29,13 @@ with bodies as (
 shape as (
   select (to_regclass('private.identity_disclosures') is not null)::integer
     + (to_regclass('private.identity_disclosure_events') is not null)::integer
-    + (to_regprocedure('api.open_identity_disclosure(text,text,text,text,text,text,text,boolean)') is not null)::integer
+    + (to_regprocedure('api.open_identity_disclosure(text,text,text,text,text,boolean)') is not null)::integer
     + (to_regprocedure('api.read_identity_disclosure(uuid,text,uuid)') is not null)::integer
-    + (to_regprocedure('api.close_identity_disclosure(uuid)') is not null)::integer
     + (to_regprocedure('api.list_identity_disclosures()') is not null)::integer
     + (to_regprocedure('api.identity_disclosure_material(uuid,uuid)') is not null)::integer
     as present,
-    coalesce(pg_get_viewdef('private.frontend_staff_audit_events'::regclass) like '%customer_invoice_voided%', false) as view_reviewed,
-    coalesce(pg_get_viewdef('private.frontend_staff_audit_events'::regclass) like '%identity_disclosure%', false) as view_updated
+    md5(pg_get_viewdef('private.frontend_staff_audit_events'::regclass)) is not distinct from '6dc98a28338eefafbd8316660243f70d' as view_reviewed,
+    md5(pg_get_viewdef('private.frontend_staff_audit_events'::regclass)) is not distinct from '79d4c93c1637629c23a46f077320addb' as view_updated
 ),
 state as (
   select
@@ -49,26 +48,26 @@ problems as (
   select 'problem' as kind, sig || ' is not the reviewed body (md5 ' || coalesce(body, 'missing') || '); do not apply the update' as detail
     from bodies where body is distinct from reviewed and body is distinct from updated
   union all
-  select 'problem', 'private.frontend_staff_audit_events is not the reviewed view; do not apply the update'
-    from shape where not view_reviewed
+  select 'problem', 'private.frontend_staff_audit_events is not the reviewed view (md5 ' || coalesce(md5(pg_get_viewdef('private.frontend_staff_audit_events'::regclass)), 'missing') || '); do not apply the update'
+    from shape where not view_reviewed and not view_updated
   union all
   select 'problem', 'only part of the update is present'
     from state, shape
     where not exists (select 1 from bodies where body is distinct from reviewed and body is distinct from updated)
-      and view_reviewed
+      and (view_reviewed or view_updated)
       and not ((reviewed = total and present = 0 and not view_updated)
-        or (updated = total and present = 7 and view_updated))
+        or (updated = total and present = 6 and view_updated))
 )
 select 'summary' as kind,
   'identity record disclosure: '
-    || case when s.updated = s.total and sh.present = 7 and sh.view_reviewed and sh.view_updated then 'already applied'
+    || case when s.updated = s.total and sh.present = 6 and sh.view_updated then 'already applied'
          when s.reviewed = s.total and sh.present = 0 and sh.view_reviewed and not sh.view_updated then 'update not applied'
          else 'unexpected state' end
     || '; governors and admins: ' || (select count(*) from private.staff_roles r
          where r.revoked_at is null and r.role in ('governor', 'admin'))
     -- The table exists only after the update, so it is read through
     -- query_to_xml, which runs only on this branch.
-    || case when sh.present = 7 and s.updated = s.total
+    || case when sh.present = 6 and s.updated = s.total
          then '; disclosures: ' || (xpath('/row/n/text()', query_to_xml(
              'select count(*) as n from private.identity_disclosures', false, true, '')))[1]::text
          else '' end as detail

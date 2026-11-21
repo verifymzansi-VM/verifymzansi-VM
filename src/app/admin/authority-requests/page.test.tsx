@@ -102,7 +102,6 @@ describe("AuthorityRequestsPage", () => {
     );
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toMatchObject({
-      action: "open",
       reference: "CAS 123/11/2026",
       attested: true,
     });

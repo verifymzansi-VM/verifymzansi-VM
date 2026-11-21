@@ -42,9 +42,8 @@ const [PREFLIGHT, ROLLBACK] = [
 );
 const STAFF_ACTOR = "internal.staff_actor(text)";
 const APPEND_ONLY = "internal.append_only_guard()";
-const OPEN = "api.open_identity_disclosure(text,text,text,text,text,text,text,boolean)";
+const OPEN = "api.open_identity_disclosure(text,text,text,text,text,boolean)";
 const READ = "api.read_identity_disclosure(uuid,text,uuid)";
-const CLOSE = "api.close_identity_disclosure(uuid)";
 const LIST = "api.list_identity_disclosures()";
 const MATERIAL = "api.identity_disclosure_material(uuid,uuid)";
 
@@ -71,8 +70,6 @@ try {
   const fp = (label) =>
     `${createHash("sha256").update(`person-${label}-${randomUUID()}`).digest("base64url").slice(0, 42)}A`;
   const phoneNumber = () => `+2782${String(randomInt(1e7)).padStart(7, "0")}`;
-  const today = () =>
-    new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(new Date());
 
   // Synthetic people, written as the database owner with triggers and foreign
   // keys off (as the other replayed-schema checks seed identity rows).
@@ -132,8 +129,6 @@ try {
   const request = (overrides = {}) => ({
     type: "subpoena",
     reference: "CAS 123/11/2026",
-    requestedBy: "Det. Sgt. Synthetic, SAPS Test Station",
-    date: today(),
     reason: "Fraud investigation into a reported listing; the subpoena names the account holder.",
     kind: "phone",
     value: "+27820000000",
@@ -141,15 +136,7 @@ try {
     ...overrides,
   });
   const openSql = (r) =>
-    `select api.open_identity_disclosure(${[
-      r.type,
-      r.reference,
-      r.requestedBy,
-      r.date,
-      r.reason,
-      r.kind,
-      r.value,
-    ]
+    `select api.open_identity_disclosure(${[r.type, r.reference, r.reason, r.kind, r.value]
       .map((v) => (v === null ? "null" : sqlLiteral(v)))
       .join(",")},${r.attested === null ? "null" : r.attested});`;
   const totpMinutesAgo = (minutes) => Math.floor(Date.now() / 1000) - minutes * 60;
@@ -202,6 +189,26 @@ try {
     )
   );
 
+  await check("an audit trail view that is not the reviewed one is refused", () => {
+    const before = fingerprint();
+    const view = q(`select pg_get_viewdef('private.frontend_staff_audit_events'::regclass);`);
+    q(`create or replace view private.frontend_staff_audit_events with (security_invoker=true) as ${view.replace(/;\s*$/, "")}
+      union all select 'x:'||gen_random_uuid()::text,now(),null::uuid,null::uuid,'account','x:y',null::text where false;`);
+    const rows = preflight();
+    assert.match(rows[0][1], /unexpected state/);
+    assert.ok(
+      rows.some((r) =>
+        r[1].startsWith("private.frontend_staff_audit_events is not the reviewed view")
+      ),
+      JSON.stringify(rows)
+    );
+    assert.match(fails(step.sql, "55000"), /frontend_staff_audit_events is not the reviewed view/);
+    q(
+      `create or replace view private.frontend_staff_audit_events with (security_invoker=true) as ${view}`
+    );
+    assert.equal(fingerprint(), before);
+  });
+
   // ------------------------------------------------------------- apply
   applyWithRollbackCheck(database, {
     step,
@@ -237,10 +244,9 @@ try {
     }
   );
   await check("grants: staff commands for authenticated, the material for the server only", () => {
-    assert.deepEqual(executeGrants(json, [OPEN, READ, CLOSE, LIST, MATERIAL]), {
+    assert.deepEqual(executeGrants(json, [OPEN, READ, LIST, MATERIAL]), {
       [OPEN]: { anon: false, authenticated: true, service_role: false },
       [READ]: { anon: false, authenticated: true, service_role: false },
-      [CLOSE]: { anon: false, authenticated: true, service_role: false },
       [LIST]: { anon: false, authenticated: true, service_role: false },
       [MATERIAL]: { anon: false, authenticated: false, service_role: true },
     });
@@ -281,7 +287,7 @@ try {
         "t"
       );
     }
-    for (const fn of [OPEN, READ, CLOSE, LIST, MATERIAL])
+    for (const fn of [OPEN, READ, LIST, MATERIAL])
       assert.equal(
         q(
           `select prosecdef::text||':'||array_to_string(proconfig,',') from pg_proc where oid='${fn}'::regprocedure;`
@@ -318,13 +324,9 @@ try {
     assert.equal(byAdmin.outcome, "record");
     assert.equal(logCount(), before + 2);
   });
-  await check("who may read, list, close and fetch material: the same rule", () => {
+  await check("who may read, list and fetch material: the same rule", () => {
     const opened = open(admin, thandoRequest);
-    for (const sql of [
-      readSql(opened.disclosure_id),
-      `select api.list_identity_disclosures();`,
-      `select api.close_identity_disclosure('${opened.disclosure_id}');`,
-    ]) {
+    for (const sql of [readSql(opened.disclosure_id), `select api.list_identity_disclosures();`]) {
       fails(`set role anon;\n${sql}`, "42501", /permission denied for function/);
       fails(member(plainMember, sql), "42501", /staff session with second factor required/);
       fails(staff(moderator, sql), "42501", /capability not granted/);
@@ -340,32 +342,24 @@ try {
     assert.ok(json(staff(governor, `select api.list_identity_disclosures();`)).items.length >= 1);
   });
 
-  await check(
-    "a request needs its type, reference, who is asking, date, reason and the confirmation",
-    () => {
-      const before = logCount();
-      const refused = [
-        [{ type: "letter" }, "disclosure_request_type_invalid"],
-        [{ type: null }, "disclosure_request_type_invalid"],
-        [{ reference: "  " }, "disclosure_reference_required"],
-        [{ reference: "x".repeat(101) }, "disclosure_reference_required"],
-        [{ requestedBy: "" }, "disclosure_requester_required"],
-        [{ date: "2099-01-01" }, "disclosure_request_date_invalid"],
-        [{ date: "2026-02-30" }, "disclosure_request_date_invalid"],
-        [{ date: "1 Nov 2026" }, "disclosure_request_date_invalid"],
-        [{ date: "2015-01-01" }, "disclosure_request_date_invalid"],
-        [{ reason: "short" }, "disclosure_reason_required"],
-        [{ attested: false }, "disclosure_attestation_required"],
-        [{ attested: null }, "disclosure_attestation_required"],
-      ];
-      for (const [change, reason] of refused) {
-        const stderr = fails(staff(admin, openSql(request(change))), "22023");
-        assert.match(stderr, new RegExp(`DETAIL:\\s+${reason}`), stderr);
-        assert.ok(!stderr.includes("Thando") && !stderr.includes("+2782"), stderr);
-      }
-      assert.equal(logCount(), before, "nothing is logged for an incomplete request");
+  await check("a request needs its type, reference, reason and the confirmation", () => {
+    const before = logCount();
+    const refused = [
+      [{ type: "letter" }, "disclosure_request_type_invalid"],
+      [{ type: null }, "disclosure_request_type_invalid"],
+      [{ reference: "  " }, "disclosure_reference_required"],
+      [{ reference: "x".repeat(101) }, "disclosure_reference_required"],
+      [{ reason: "short" }, "disclosure_reason_required"],
+      [{ attested: false }, "disclosure_attestation_required"],
+      [{ attested: null }, "disclosure_attestation_required"],
+    ];
+    for (const [change, reason] of refused) {
+      const stderr = fails(staff(admin, openSql(request(change))), "22023");
+      assert.match(stderr, new RegExp(`DETAIL:\\s+${reason}`), stderr);
+      assert.ok(!stderr.includes("Thando") && !stderr.includes("+2782"), stderr);
     }
-  );
+    assert.equal(logCount(), before, "nothing is logged for an incomplete request");
+  });
   await check("never by name: only post, ID number, phone or email, each in its own form", () => {
     const before = logCount();
     for (const kind of ["name", "full_name", "surname", "legal_name", ""]) {
@@ -590,22 +584,18 @@ try {
       ]);
     }
   );
-  await check("only the opener can read or close it", () => {
+  await check("only the opener can read it", () => {
     const opened = open(admin, thandoRequest);
-    for (const sql of [
-      readSql(opened.disclosure_id),
-      `select api.close_identity_disclosure('${opened.disclosure_id}');`,
-    ]) {
-      assert.match(fails(staff(otherAdmin, sql), "PT409"), /DETAIL:\s+disclosure_unavailable/);
-      assert.match(fails(staff(governor, sql), "PT409"), /DETAIL:\s+disclosure_unavailable/);
-    }
+    const sql = readSql(opened.disclosure_id);
+    assert.match(fails(staff(otherAdmin, sql), "PT409"), /DETAIL:\s+disclosure_unavailable/);
+    assert.match(fails(staff(governor, sql), "PT409"), /DETAIL:\s+disclosure_unavailable/);
     assert.match(
       fails(staff(admin, readSql(randomUUID())), "PT409"),
       /DETAIL:\s+disclosure_unavailable/
     );
     assert.ok(read(admin, opened.disclosure_id).records.length === 1);
   });
-  await check("a record closes 15 minutes after it was opened, or earlier when closed", () => {
+  await check("a record closes 15 minutes after it was opened", () => {
     const opened = open(admin, thandoRequest);
     age(opened.disclosure_id, "14 minutes 50 seconds");
     assert.equal(read(admin, opened.disclosure_id).records.length, 1);
@@ -622,26 +612,6 @@ try {
         "PT409"
       ),
       /DETAIL:\s+disclosure_closed/
-    );
-    // Closing early.
-    const early = open(admin, thandoRequest);
-    assert.deepEqual(
-      json(staff(admin, `select api.close_identity_disclosure('${early.disclosure_id}');`)),
-      {
-        disclosure_id: early.disclosure_id,
-        closed: true,
-      }
-    );
-    assert.match(
-      fails(staff(admin, readSql(early.disclosure_id)), "PT409"),
-      /DETAIL:\s+disclosure_closed/
-    );
-    json(staff(admin, `select api.close_identity_disclosure('${early.disclosure_id}');`));
-    assert.equal(
-      q(
-        `select count(*) from private.identity_disclosure_events where disclosure_id='${early.disclosure_id}' and kind='closed';`
-      ),
-      "1"
     );
   });
   await check("the list shows requests, never the person or the search value", () => {
@@ -693,7 +663,6 @@ try {
         "identity_disclosure_no_match",
         "identity_disclosure_viewed",
         "identity_disclosure_selfie_viewed",
-        "identity_disclosure_closed",
       ])
         assert.ok(actions.has(action), `${action} in ${[...actions]}`);
       for (const item of page.items) {
@@ -723,14 +692,26 @@ try {
     assert.match(fails(ROLLBACK, "55000"), /the disclosure log is not empty/);
     assert.equal(fingerprint(), before);
   });
-  await check("a staff member who loses the role can no longer read an open record", () => {
-    const leaving = staffMember("leaving", "admin");
-    const opened = open(leaving, thandoRequest);
-    q(
-      `update private.staff_roles set revoked_at=now(),revoked_by='${admin.id}' where user_id='${leaving.id}' and revoked_at is null;`
-    );
-    fails(staff(leaving, readSql(opened.disclosure_id)), "42501", /capability not granted/);
-  });
+  await check(
+    "a staff member who loses the role can no longer read an open record or get its material",
+    () => {
+      const leaving = staffMember("leaving", "admin");
+      const opened = open(leaving, thandoRequest);
+      q(
+        `update private.staff_roles set revoked_at=now(),revoked_by='${admin.id}' where user_id='${leaving.id}' and revoked_at is null;`
+      );
+      fails(staff(leaving, readSql(opened.disclosure_id)), "42501", /capability not granted/);
+      assert.match(
+        fails(
+          service(
+            `select api.identity_disclosure_material('${opened.disclosure_id}','${leaving.id}');`
+          ),
+          "PT409"
+        ),
+        /DETAIL:\s+disclosure_unavailable/
+      );
+    }
+  );
 
   const later = steps.slice(index + 1);
   if (later.length) {
