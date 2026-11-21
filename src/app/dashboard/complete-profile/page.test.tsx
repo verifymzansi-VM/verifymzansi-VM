@@ -84,6 +84,19 @@ describe("CompleteProfilePage", () => {
     });
   });
 
+  it("sends a signed-out visitor to sign in without reading a profile", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+
+    render(<CompleteProfilePage />);
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/login");
+    });
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockReadOwnProfile).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText(/SA mobile number/i)).not.toBeInTheDocument();
+  });
+
   it("reads the member's own profile by name, without a table-style call", async () => {
     render(<CompleteProfilePage />);
 
