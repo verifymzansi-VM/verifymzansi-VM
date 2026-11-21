@@ -6,9 +6,7 @@ import { SalesSummary } from "./sales-summary";
 vi.mock("server-only", () => ({}));
 
 const summary = (vat: Partial<StaffSalesSummary["vat"]> = {}): StaffSalesSummary => ({
-  generated_at: "2026-11-21T09:03:05.123456+00:00",
   vat: {
-    since: "2025-11-21T09:03:05.123456+00:00",
     payments: 5,
     net_cents: 42900,
     vat_status: "not_registered",

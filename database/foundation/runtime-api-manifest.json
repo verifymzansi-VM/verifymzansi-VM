@@ -5732,7 +5732,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current payments:view capability (admin) and recent authenticator proof: sales of the last 12 months net of refunds (count and total), the VAT setting, the alert level (R1.8 million), the compulsory level (R2.3 million) and whether the alert is on; those sales by product (Individual slot, Multi-listing package, add-on, other) and term in days; and the online checkouts started in the last 30 days with how many were paid, failed, cancelled, expired or are open. Counts and amounts only; never an account id, name, email or phone. Read only."
+      "authority": "Current payments:view capability (admin) and recent authenticator proof: sales of the last 12 months net of refunds (count and total), the VAT setting, the alert level (R1.8 million), the compulsory level (R2.3 million) and whether the alert is on; those sales by product (Individual slot, Multi-listing package, add-on, other) and term in days; and the online checkouts sent to Ozow in the last 30 days with how many were paid, failed, cancelled, expired or are open. Counts and amounts only; never an account id, name, email or phone. Read only."
     },
     {
       "name": "get_vat_registration",

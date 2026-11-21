@@ -3193,11 +3193,14 @@ Launch checklist item 16 (roadmap M8.7, remainder). Database update
 `20261121090305_staff_sales_and_vat.sql` adds two reads; no table.
 
 - Staff payments page (`/admin/payments`, `payments:view`): a new 'Sales and
-  VAT' card under the page title, in the existing staff card style. Three
+  VAT' card under the page title, in the existing staff card style. Its
+  description says the figures are money paid through the website in the last
+  12 months, less refunds, and that sponsor fees paid outside the website are
+  not included. Three
   figures: 'Last 12 months' (sales paid in the last 12 months less refunds,
   with the number of payments), 'VAT' ('Not registered', 'Registered' or 'Not
   set', with 'Alert at R1 800 000.00'), and 'Checkout drop-off, 30 days' (the
-  share of online checkouts started in 30 days that were not paid, with 'N of M
+  share of online checkouts sent to Ozow in 30 days that were not paid, with 'N of M
   online checkouts paid'); a line 'Not paid: N failed · N cancelled · N expired
   · N still open'; and a table of sales by product (Individual slot,
   Multi-listing package, Add-on, Other) with the term under the product name,
@@ -3213,15 +3216,18 @@ Launch checklist item 16 (roadmap M8.7, remainder). Database update
 - Pricing, Billing and Trust & Safety: the 'VAT status' line reads the
   database's VAT setting instead of a fixed sentence. Today it reads 'not
   registered for VAT', as before; it is left out if the setting cannot be read
-  or is not set.
+  or is not set. The Terms text used only when the published Terms cannot be
+  read (`src/lib/legal/terms-text.ts`, for example a local preview without a
+  database) no longer adds its own 'VAT status: ...' line; that text already
+  says 'VerifyMzansi is not registered for VAT.'
 
 Pictures (synthetic data, desktop and phone: normal, VAT alert, could not be
 loaded) are kept privately for the owner.
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/admin/commercial/sales-summary.tsx` | visual | Group 79: the 'Sales and VAT' card on the staff payments page. | Staff only: the card described above. | keep | awaiting owner | 2026-11-21 | dc720518019c |
-| `src/components/admin/commercial/sales-summary.test.tsx` | test | Group 79: the card shows the figures, the drop-off, the table, the alert at R1.8 million, the empty state, and never figures it could not read. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | 2b43cfeb11f8 |
+| `src/components/admin/commercial/sales-summary.tsx` | visual | Group 79: the 'Sales and VAT' card on the staff payments page. | Staff only: the card described above. | keep | awaiting owner | 2026-11-21 | 2b9d77f556e9 |
+| `src/components/admin/commercial/sales-summary.test.tsx` | test | Group 79: the card shows the figures, the drop-off, the table, the alert at R1.8 million, the empty state, and never figures it could not read. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | fb085dabc9cd |
 
 Decision: awaiting owner.
 

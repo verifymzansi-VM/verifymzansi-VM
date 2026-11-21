@@ -339,7 +339,6 @@ describe("the daily summary", () => {
 
   it("adds the 12-month sales and, at R1.8 million, the VAT alert", () => {
     const sales = {
-      since: "2025-11-12T05:00:00+00:00",
       payments: 5,
       net_cents: 42900,
       vat_status: "not_registered",
@@ -378,6 +377,29 @@ describe("the daily summary", () => {
     ]);
     // A summary stored before the update has no sales field.
     expect(paymentSummaryEmail(STAFF, digest()).sections.map((s) => s.heading)).not.toContain(
+      "Sales and VAT"
+    );
+  });
+
+  it("still sends the summary when the sales part has a field it does not know, or cannot be read", async () => {
+    const sales = {
+      payments: 5,
+      net_cents: 42900,
+      vat_status: "not_registered",
+      alert_cents: 180000000,
+      compulsory_cents: 230000000,
+      alert: false,
+    };
+    answers({ claim: null, problems: [] }, digest({ sales: { ...sales, later_field: 1 } }));
+    expect(await run()).toEqual([]);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0].sections.at(-1).heading).toBe("Sales and VAT");
+    expect(names()).toContain("complete_payment_digest");
+    send.mockClear();
+    answers({ claim: null, problems: [] }, digest({ sales: { ...sales, net_cents: "many" } }));
+    expect(await run()).toEqual([]);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0].sections.map((s: { heading: string }) => s.heading)).not.toContain(
       "Sales and VAT"
     );
   });

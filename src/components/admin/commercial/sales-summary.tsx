@@ -40,7 +40,7 @@ export function SalesSummary({ summary }: { summary: StaffSalesSummary | null })
   return (
     <AdminCard
       title="Sales and VAT"
-      description="Paid in the last 12 months, less refunds. Each payment counts on the day it was paid."
+      description="Paid through the website in the last 12 months, less refunds. Sponsor fees paid outside the website are not included."
     >
       {vat.alert ? (
         <p

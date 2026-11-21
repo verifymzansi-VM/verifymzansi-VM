@@ -20,8 +20,8 @@ with bodies as (
     ('internal.claim_payment_digest(integer,integer)', '4b00aeccb8a082bf08f8e4c189bf47cf', 'a512218f46687b0913fa0c49228fede4'),
     -- Added by the update.
     ('internal.payment_net_cents(private.payments)', null, '28d85be00f5d30c0f2121b120ea55dc9'),
-    ('internal.vat_sales_position()', null, '2507c1fbd9a7d763923a458b14051d13'),
-    ('internal.get_staff_sales_summary()', null, '2ce8164ab420b33ffbcbda958e260747'),
+    ('internal.vat_sales_position()', null, '87d7738f16d38f1ef6bd523fa7d34888'),
+    ('internal.get_staff_sales_summary()', null, 'dd9f4b3f0f4782b818a735bdc2f13a2e'),
     ('api.get_staff_sales_summary()', null, '8eb614811b615aeda5e06f4f045ef18a'),
     ('internal.get_vat_registration()', null, '923498193777b09fdbc938b56e6247c2'),
     ('api.get_vat_registration()', null, '49b7012d8d0c514c280404290243b484')

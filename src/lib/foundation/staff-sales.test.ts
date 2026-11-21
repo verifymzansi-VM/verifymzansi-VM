@@ -5,14 +5,9 @@ import { FoundationStaffCommandError } from "./staff-command";
 
 vi.mock("server-only", () => ({}));
 
-// As the database writes it (to_jsonb of timestamptz).
-const AT = "2026-11-21T09:03:05.123456+00:00";
-
 function salesReply(change: Record<string, unknown> = {}) {
   return {
-    generated_at: AT,
     vat: {
-      since: "2025-11-21T09:03:05.123456+00:00",
       payments: 5,
       net_cents: 42900,
       vat_status: "not_registered",

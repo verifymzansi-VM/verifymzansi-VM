@@ -10,7 +10,6 @@ import { settleStaffCommand } from "./staff-command";
  * less any refunded or charged-back slots (nothing once the whole payment was
  * reversed), counted on the day it was paid.
  */
-const instant = z.iso.datetime({ offset: true });
 const count = z.number().int().nonnegative();
 const cents = z.number().int().nonnegative();
 
@@ -18,7 +17,6 @@ const cents = z.number().int().nonnegative();
  * alert is on when not registered for VAT and the total reached the alert
  * level. Also in the daily payment summary (./payment-alerts.ts). */
 export const vatSalesPositionSchema = z.strictObject({
-  since: instant,
   payments: count,
   net_cents: cents,
   vat_status: z.enum(["not_registered", "registered", "undecided"]),
@@ -36,7 +34,6 @@ export const SALES_CATEGORY_LABELS = {
 } as const;
 
 const staffSalesSummarySchema = z.strictObject({
-  generated_at: instant,
   vat: vatSalesPositionSchema,
   products: z
     .array(
@@ -70,7 +67,7 @@ export async function readStaffSalesSummary(
   );
 }
 
-/** Share of started online checkouts that were not paid, in whole percent;
+/** Share of the online checkouts sent to Ozow that were not paid, in whole percent;
  * null before any checkout started. */
 export function checkoutDropOffPercent(checkouts: StaffSalesSummary["checkouts"]) {
   if (checkouts.started === 0) return null;

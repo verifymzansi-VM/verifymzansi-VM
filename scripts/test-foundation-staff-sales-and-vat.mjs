@@ -87,16 +87,19 @@ try {
     provider = "ozow",
     createdDaysAgo = 1,
     paidDaysAgo = createdDaysAgo,
+    // Sent to Ozow (it has an Ozow request); false for a checkout replaced
+    // before it reached Ozow.
+    sent = provider === "ozow",
   }) => {
     const paid = ["complete", "refunded", "chargeback"].includes(status);
     const fulfilled = status === "complete" ? "fulfilled" : paid ? "reversed" : "unfulfilled";
     return q(`set session_replication_role = replica;
       insert into private.payments(owner_id, product_kind, plan_version_id, addon_version_id, target_post_id,
-          amount_cents, currency, snapshot, status, fulfillment_status, provider, provider_transaction_id,
-          created_at, completed_at)
+          amount_cents, currency, snapshot, status, fulfillment_status, provider, provider_request_id,
+          provider_transaction_id, created_at, completed_at)
         values ('${buyer.id}', ${addon ? "'addon'" : "'plan'"}, ${plan ? `'${plan}'` : "null"},
           ${addon ? `'${addon}'` : "null"}, ${addon ? "gen_random_uuid()" : "null"}, ${cents}, 'ZAR', '{}',
-          '${status}', '${fulfilled}', '${provider}',
+          '${status}', '${fulfilled}', '${provider}', ${sent ? "'req-'||gen_random_uuid()" : "null"},
           ${paid && provider === "ozow" ? "'tx-'||gen_random_uuid()" : "null"},
           now() - interval '${createdDaysAgo} days',
           ${paid ? `now() - interval '${paidDaysAgo} days'` : "null"})
@@ -170,7 +173,15 @@ try {
 
   await check("no sales yet: zero, no alert, the VAT setting, no checkouts", () => {
     const summary = read();
-    assert.deepEqual(Object.keys(summary).sort(), ["checkouts", "generated_at", "products", "vat"]);
+    assert.deepEqual(Object.keys(summary).sort(), ["checkouts", "products", "vat"]);
+    assert.deepEqual(Object.keys(summary.vat).sort(), [
+      "alert",
+      "alert_cents",
+      "compulsory_cents",
+      "net_cents",
+      "payments",
+      "vat_status",
+    ]);
     assert.equal(summary.vat.net_cents, 0);
     assert.equal(summary.vat.payments, 0);
     assert.equal(summary.vat.vat_status, "not_registered");
@@ -222,6 +233,11 @@ try {
     createdDaysAgo: 40,
   });
 
+  // Checkouts that never reached Ozow (replaced before they were sent): not
+  // counted as started.
+  pay({ buyer: f, plan: PLANS.individual_90d, cents: 20700, status: "expired", sent: false });
+  pay({ buyer: e, plan: PLANS.individual_30d, cents: 6900, status: "pending", sent: false });
+
   await check("12-month sales are net of refunds and count on the day paid", () => {
     const { vat } = read();
     // 6900 + (20700 - 6900) + 0 + 20700 + 1500
@@ -239,7 +255,7 @@ try {
     ]);
   });
 
-  await check("online checkouts of the last 30 days and how each ended", () => {
+  await check("online checkouts sent to Ozow in the last 30 days and how each ended", () => {
     assert.deepEqual(read().checkouts, {
       days: 30,
       started: 8,

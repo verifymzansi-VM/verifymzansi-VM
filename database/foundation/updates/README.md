@@ -98,9 +98,10 @@ computed from the existing payment records; no table is added.
 - **The staff read** `api.get_staff_sales_summary()` (`payments:view`, the staff
   payments page's own capability, with a recent authenticator code; read only):
   the VAT position, sales of the last 12 months by product (Individual slot,
-  Multi-listing package, add-on, other) and term in days, and the online (Ozow)
-  checkouts started in the last 30 days with how many were paid, failed,
-  cancelled, expired or are still open. Counts and amounts only.
+  Multi-listing package, add-on, other) and term in days, and the online
+  checkouts sent to Ozow in the last 30 days with how many were paid, failed,
+  cancelled, expired or are still open (a checkout replaced before it reached
+  Ozow is not counted). Counts and amounts only.
 - **The public read** `api.get_vat_registration()` (visitors and members, like
   the price catalogue): the VAT setting's status and, only when registered, the
   VAT number. The pricing, billing and Trust & Safety pages state it instead of
@@ -143,12 +144,13 @@ return the same fingerprints; the rollback refuses while another function uses
 what it drops; who may run each function; sales net of a refunded slot and of a
 refunded payment, a bank transfer counted, a payment of 13 months ago left out;
 sales by product and term; online checkouts of the last 30 days by outcome (bank
-transfers and older checkouts left out); the alert off one cent below R1.8
-million, on at it, and off once registered for VAT; the daily summary's `sales`
-field; the public read for visitors and members; and only staff with
-`payments:view` and an authenticator code of the last 12 hours can read the
-figures (an admin whose code is 11 hours old can; a moderator, a member, an
-admin whose code is 13 hours old, the server key and a visitor are refused).
+transfers, checkouts never sent to Ozow and older checkouts left out); the alert
+off one cent below R1.8 million, on at it, and off once registered for VAT; the
+daily summary's `sales` field; the public read for visitors and members; and
+only staff with `payments:view` and an authenticator code of the last 12 hours
+can read the figures (an admin whose code is 11 hours old can; a moderator, a
+member, an admin whose code is 13 hours old, the server key and a visitor are
+refused).
 
 ## Authority requests: opening a kept identity record, 21 November 2026
 

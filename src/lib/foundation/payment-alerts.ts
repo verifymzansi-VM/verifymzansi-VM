@@ -148,8 +148,10 @@ const digestSchema = z.object({
   unalerted: z.number().int().nonnegative(),
   outcomes: z.record(z.string().regex(/^[a-z_]{1,64}$/), z.number().int().nonnegative()),
   // 20261121090305: the rolling 12-month sales and the VAT alert. Absent from
-  // a summary stored before that update.
-  sales: vatSalesPositionSchema.optional(),
+  // a summary stored before that update. Read leniently: a field it does not
+  // know is ignored, and a sales part it cannot read is left out of the email
+  // instead of stopping the summary.
+  sales: vatSalesPositionSchema.loose().optional().catch(undefined),
 });
 type Digest = z.infer<typeof digestSchema>;
 

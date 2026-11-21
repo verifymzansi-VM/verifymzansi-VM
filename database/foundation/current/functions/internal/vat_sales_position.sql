@@ -19,8 +19,7 @@ AS $function$
     select coalesce((select c.registration_status from private.invoice_merchant_config c where c.singleton),
       'undecided') as vat_status
   )
-  select jsonb_build_object('since', statement_timestamp() - interval '12 months',
-    'payments', t.payments, 'net_cents', t.net_cents, 'vat_status', s.vat_status,
+  select jsonb_build_object('payments', t.payments, 'net_cents', t.net_cents, 'vat_status', s.vat_status,
     'alert_cents', 180000000, 'compulsory_cents', 230000000,
     'alert', s.vat_status <> 'registered' and t.net_cents >= 180000000)
   from totals t, setting s;

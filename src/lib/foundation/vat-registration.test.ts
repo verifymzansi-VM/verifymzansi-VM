@@ -30,6 +30,12 @@ describe("VAT wording from the database setting", () => {
     await expect(
       readVatRegistration(publicApi({ data: null, error: { code: "PGRST202" } }))
     ).rejects.toThrow("Foundation VAT setting unavailable");
+    // Any number the database accepts (5 to 30 characters) is kept.
+    await expect(
+      readVatRegistration(
+        publicApi({ data: { status: "registered", vat_number: "4123/456/789" }, error: null })
+      )
+    ).resolves.toEqual({ status: "registered", vat_number: "4123/456/789" });
   });
 
   it("gives no wording when the database cannot be reached, rather than guessing", async () => {

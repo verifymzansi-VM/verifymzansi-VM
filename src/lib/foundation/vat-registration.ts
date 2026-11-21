@@ -9,10 +9,8 @@ const log = createLogger("VatRegistration");
 
 const vatRegistrationSchema = z.strictObject({
   status: z.enum(["not_registered", "registered", "undecided"]),
-  vat_number: z
-    .string()
-    .regex(/^[0-9A-Za-z -]{5,30}$/)
-    .nullable(),
+  // The database's own rule: 5 to 30 characters once trimmed.
+  vat_number: z.string().trim().min(5).max(30).nullable(),
 });
 export type VatRegistration = z.infer<typeof vatRegistrationSchema>;
 
