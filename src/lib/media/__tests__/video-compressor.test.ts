@@ -417,6 +417,20 @@ describe("compressVideo", () => {
     expect(mockExec).not.toHaveBeenCalled();
   });
 
+  it("LIM-APP-video-copy-size: without mounting, copies an original of exactly 50 MB into memory, not one byte more", async () => {
+    for (const [bytes, copied] of [
+      [50 * 1024 * 1024, true],
+      [50 * 1024 * 1024 + 1, false],
+    ] as const) {
+      mockWriteFile.mockClear();
+      const file = fakeFile(10, "phone.mov", "video/quicktime");
+      Object.defineProperty(file, "size", { value: bytes });
+      await compressVideo(file, { forceTranscode: true });
+      if (copied) expect(mockWriteFile).toHaveBeenCalledWith("input.mov", expect.anything());
+      else expect(mockWriteFile).not.toHaveBeenCalled();
+    }
+  });
+
   it("unmounts the picked file when the encoder fails", async () => {
     mockMount.current = vi.fn(async () => true);
     mockExec.mockResolvedValueOnce(1);

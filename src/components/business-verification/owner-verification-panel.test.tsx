@@ -64,6 +64,23 @@ describe("CIPC upload", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/cipc"))).toBe(false);
   });
 
+  it("LIM-APP-business-check-precheck: reads a 5 MB PDF, refuses one byte more before uploading", async () => {
+    const sized = (bytes: number) => {
+      const file = pdf();
+      Object.defineProperty(file, "size", { value: bytes });
+      return file;
+    };
+    const previews = () =>
+      fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/cipc/preview")).length;
+    render(<OwnerVerificationPanel businessId="b1" />);
+    await choose(sized(5 * 1024 * 1024 + 1));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Files can be up to 5 MB.");
+    expect(previews()).toBe(0);
+    await choose(sized(5 * 1024 * 1024));
+    expect(await screen.findByText(/Looks like an original CIPC download/)).toBeInTheDocument();
+    expect(previews()).toBe(1);
+  });
+
   it("confirms an original download and offers the office as the address", async () => {
     render(<OwnerVerificationPanel businessId="b1" />);
     await choose(pdf());
