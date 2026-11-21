@@ -95,7 +95,7 @@ export function SaveTemplateDialog({
     >
       <DialogContent className="max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:translate-y-0 max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0">
         <form onSubmit={save} className="grid gap-4">
-          <DialogHeader>
+          <DialogHeader className="text-left">
             <DialogTitle className="text-2xl">Save as a template</DialogTitle>
             <DialogDescription className="sr-only">
               A template fills in the post form next time. It never keeps photos or prices.

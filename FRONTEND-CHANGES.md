@@ -3224,7 +3224,7 @@ phone 375).
 
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `src/components/post-templates/save-template-dialog.tsx` | visual | Group 87: the 'Save as a template' dialog (bottom sheet on phones) and its save. | Switch on: the dialog described in group 87. | keep | awaiting owner | 2026-11-21 | 9940040af5ff |
+| `src/components/post-templates/save-template-dialog.tsx` | visual | Group 87: the 'Save as a template' dialog (bottom sheet on phones) and its save. | Switch on: the dialog described in group 87. | keep | awaiting owner | 2026-11-21 | 16d8a67a628f |
 | `src/components/post-templates/save-template-button.tsx` | visual | Group 87: the 'Save as template' button on a post form, shown only while the package runs. | Switch on, running package: the button described in group 87. | keep | awaiting owner | 2026-11-21 | 2eb0e776281c |
 | `src/components/post-templates/save-template-button.test.tsx` | test | Group 87: checks naming and saving, a refusal, and no button without a running package or with the switch off. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | 692ad40e19d5 |
 | `src/components/post-templates/template-picker.tsx` | visual | Group 87: 'Start from a template' with its cards, Use, and the Rename and Delete dialogs. | Switch on: the section described in group 87. | keep | awaiting owner | 2026-11-21 | 2504f927e5fd |
