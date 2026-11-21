@@ -39,8 +39,9 @@ begin
   elsif route->>'route'<>'automatic' then
     raise exception 'automatic identity checks are off' using errcode='PT409',detail='identity_check_mode'; end if;
   now_at:=clock_timestamp();
-  insert into private.identity_checks(owner_id,case_id,created_at,expires_at)
-    values(actor,(opened->>'case_id')::uuid,now_at,now_at+interval '24 hours') returning * into k;
+  insert into private.identity_checks(owner_id,case_id,created_at,expires_at,start_first_name,start_last_name)
+    select actor,(opened->>'case_id')::uuid,now_at,now_at+interval '24 hours',p.legal_first_name,p.legal_last_name
+      from private.profiles p where p.account_id=actor returning * into k;
   perform internal.price_draft_actor();
   return jsonb_build_object('check_id',k.id,'session_id',null,'session_url',null,'created',true);
 end$function$;

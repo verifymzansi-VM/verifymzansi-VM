@@ -17,7 +17,10 @@
 --    settings problem); setting the mode, even to the same value, ends a pause.
 -- 2. private.identity_checks: one row per automatic check, bound to the
 --    member's open identity case. The partner only ever sees the row's random
---    id. A check that cannot start is "unavailable" and is not counted.
+--    id: the start context the website compares the result with (the typed
+--    legal names at start, a keyed hash of the member's network and the device
+--    kind) stays on the row, never in the partner's session. A check that
+--    cannot start is "unavailable" and is not counted.
 -- 3. Spending guard: at most 3 checks per member in 7 days and 60 checks a day
 --    site-wide. Above either, or while the setting is manual or paused,
 --    api.get_identity_check_availability answers route "manual" with the reason
@@ -173,6 +176,10 @@ create table if not exists private.identity_checks (
   provider_deleted_at timestamptz,
   asked_at timestamptz,
   ask_reason text,
+  start_first_name text not null,
+  start_last_name text not null,
+  network_hash text,
+  device_kind text,
   constraint identity_checks_pkey primary key (id),
   constraint identity_checks_session_id_key unique (session_id),
   constraint identity_checks_submission_id_key unique (submission_id),
@@ -197,12 +204,19 @@ create table if not exists private.identity_checks (
     check ((submission_id is not null) = (status in ('approved','with_staff','declined'))),
   constraint identity_checks_declined_check check ((status = 'declined') = (declined_at is not null)),
   constraint identity_checks_reasons_check check (reasons <@ array['provider_declined','provider_in_review',
-    'names_differ','document_not_accepted','id_number_invalid','under_18','banned','duplicate','high_risk']::text[]),
+    'names_differ','document_not_accepted','id_number_invalid','under_18','session_moved','banned','duplicate',
+    'high_risk']::text[]),
   constraint identity_checks_provider_deleted_check
     check (provider_deleted_at is null or (session_id is not null and status <> 'started')),
   constraint identity_checks_asked_check check ((asked_at is null) = (ask_reason is null)
     and (asked_at is null or status = 'declined')),
-  constraint identity_checks_ask_reason_check check (char_length(ask_reason) between 20 and 2000)
+  constraint identity_checks_ask_reason_check check (char_length(ask_reason) between 20 and 2000),
+  constraint identity_checks_start_names_check
+    check (internal.person_name_valid(start_first_name) and internal.person_name_valid(start_last_name)),
+  constraint identity_checks_start_context_check check ((network_hash is null) = (device_kind is null)
+    and (network_hash is null or session_id is not null)
+    and (network_hash is null or network_hash ~ '^[a-f0-9]{64}$')
+    and (device_kind is null or device_kind in ('phone','computer')))
 );
 alter table private.identity_checks owner to postgres;
 alter table private.identity_checks enable row level security;
@@ -416,7 +430,8 @@ alter function api.get_identity_check_availability() owner to postgres;
 revoke all on function api.get_identity_check_availability() from public, anon, authenticated, service_role;
 grant execute on function api.get_identity_check_availability() to authenticated;
 
--- Starts the member's automatic check, or returns their unfinished one. An
+-- Starts the member's automatic check (recording the typed legal names it
+-- starts with), or returns their unfinished one. An
 -- unfinished check is resumed whatever the setting, pause or spending guard
 -- now say (it was counted when it started; if the setting is manual when the
 -- result arrives, the result goes to staff). A new check needs no request to a
@@ -461,8 +476,9 @@ begin
   elsif route->>'route'<>'automatic' then
     raise exception 'automatic identity checks are off' using errcode='PT409',detail='identity_check_mode'; end if;
   now_at:=clock_timestamp();
-  insert into private.identity_checks(owner_id,case_id,created_at,expires_at)
-    values(actor,(opened->>'case_id')::uuid,now_at,now_at+interval '24 hours') returning * into k;
+  insert into private.identity_checks(owner_id,case_id,created_at,expires_at,start_first_name,start_last_name)
+    select actor,(opened->>'case_id')::uuid,now_at,now_at+interval '24 hours',p.legal_first_name,p.legal_last_name
+      from private.profiles p where p.account_id=actor returning * into k;
   perform internal.price_draft_actor();
   return jsonb_build_object('check_id',k.id,'session_id',null,'session_url',null,'created',true);
 end$function$;
@@ -530,8 +546,12 @@ grant execute on function api.ask_person_identity_check(uuid,text) to authentica
 
 -- ------------------------------------------------------- the website's server
 
--- Binds the partner's session (its id and link) to an unfinished check, once.
-CREATE OR REPLACE FUNCTION internal.attach_identity_check_session(p_check uuid, p_session_id uuid, p_session_url text)
+-- Binds the partner's session (its id and link) to an unfinished check, once,
+-- with the start context the website computed: a keyed hash of the member's
+-- network (64 lowercase hex characters) and the device kind (phone or
+-- computer).
+CREATE OR REPLACE FUNCTION internal.attach_identity_check_session(p_check uuid, p_session_id uuid, p_session_url text,
+  p_network_hash text, p_device_kind text)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -540,32 +560,36 @@ AS $function$
 declare k private.identity_checks;
 begin
   if p_check is null or p_session_id is null or p_session_url is null
-    or p_session_url not like 'https://verify.didit.me/%' or char_length(p_session_url)>500 then
+    or p_session_url not like 'https://verify.didit.me/%' or char_length(p_session_url)>500
+    or p_network_hash is null or p_network_hash !~ '^[a-f0-9]{64}$'
+    or p_device_kind is null or p_device_kind not in('phone','computer') then
     raise exception 'identity check session required' using errcode='22023'; end if;
   select x.* into k from private.identity_checks x where x.id=p_check for update;
   if not found or k.status<>'started' or k.expires_at<=clock_timestamp() then
     raise exception 'unfinished identity check required' using errcode='PT409'; end if;
   if k.session_id is not null then
-    if (k.session_id,k.session_url)=(p_session_id,p_session_url) then
+    if (k.session_id,k.session_url,k.network_hash,k.device_kind)=(p_session_id,p_session_url,p_network_hash,p_device_kind) then
       return jsonb_build_object('check_id',k.id,'reused',true); end if;
     raise exception 'identity check already has a session' using errcode='PT409'; end if;
-  update private.identity_checks set session_id=p_session_id,session_url=p_session_url where id=k.id;
+  update private.identity_checks set session_id=p_session_id,session_url=p_session_url,
+    network_hash=p_network_hash,device_kind=p_device_kind where id=k.id;
   return jsonb_build_object('check_id',k.id,'reused',false);
 end$function$;
-alter function internal.attach_identity_check_session(uuid,uuid,text) owner to postgres;
-revoke all on function internal.attach_identity_check_session(uuid,uuid,text) from public, anon, authenticated, service_role;
-grant execute on function internal.attach_identity_check_session(uuid,uuid,text) to service_role;
+alter function internal.attach_identity_check_session(uuid,uuid,text,text,text) owner to postgres;
+revoke all on function internal.attach_identity_check_session(uuid,uuid,text,text,text) from public, anon, authenticated, service_role;
+grant execute on function internal.attach_identity_check_session(uuid,uuid,text,text,text) to service_role;
 
-CREATE OR REPLACE FUNCTION api.attach_identity_check_session(p_check uuid, p_session_id uuid, p_session_url text)
+CREATE OR REPLACE FUNCTION api.attach_identity_check_session(p_check uuid, p_session_id uuid, p_session_url text,
+  p_network_hash text, p_device_kind text)
  RETURNS jsonb
  LANGUAGE sql
  SET search_path TO 'pg_catalog'
 AS $function$
-  select internal.attach_identity_check_session(p_check,p_session_id,p_session_url);
+  select internal.attach_identity_check_session(p_check,p_session_id,p_session_url,p_network_hash,p_device_kind);
 $function$;
-alter function api.attach_identity_check_session(uuid,uuid,text) owner to postgres;
-revoke all on function api.attach_identity_check_session(uuid,uuid,text) from public, anon, authenticated, service_role;
-grant execute on function api.attach_identity_check_session(uuid,uuid,text) to service_role;
+alter function api.attach_identity_check_session(uuid,uuid,text,text,text) owner to postgres;
+revoke all on function api.attach_identity_check_session(uuid,uuid,text,text,text) from public, anon, authenticated, service_role;
+grant execute on function api.attach_identity_check_session(uuid,uuid,text,text,text) to service_role;
 
 -- The partner could not start a check (no credit, an outage or missing
 -- settings): the check becomes unavailable (not counted) and automatic checks
@@ -613,7 +637,9 @@ grant execute on function api.report_identity_check_unavailable(uuid,text) to se
 -- Before copying the partner's ID photo and selfie into private storage: two
 -- evidence files of the check's case, reserved like a member's upload (the
 -- same object keys, cleaned up after an hour if never completed). A repeat
--- call within 30 minutes returns the same files.
+-- call within 30 minutes returns the same files. Also returns the check's
+-- start context (typed legal names at start, network hash, device kind) for
+-- the website's own comparisons.
 CREATE OR REPLACE FUNCTION internal.begin_identity_check_evidence(p_check uuid, p_session_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -646,7 +672,9 @@ begin
     update private.identity_checks set id_artifact_id=id_art.id,selfie_artifact_id=selfie_art.id where id=k.id;
   end if;
   return jsonb_build_object('id_front',jsonb_build_object('artifact_id',id_art.id,'object_key',id_art.object_key),
-    'selfie',jsonb_build_object('artifact_id',selfie_art.id,'object_key',selfie_art.object_key));
+    'selfie',jsonb_build_object('artifact_id',selfie_art.id,'object_key',selfie_art.object_key),
+    'start',jsonb_build_object('first_name',k.start_first_name,'last_name',k.start_last_name,
+      'network_hash',k.network_hash,'device_kind',k.device_kind));
 end$function$;
 alter function internal.begin_identity_check_evidence(uuid,uuid) owner to postgres;
 revoke all on function internal.begin_identity_check_evidence(uuid,uuid) from public, anon, authenticated, service_role;
@@ -667,7 +695,8 @@ grant execute on function api.begin_identity_check_evidence(uuid,uuid) to servic
 -- p_outcome is the partner's answer after the website's own checks:
 -- approved, declined, in_review, or not_finished (abandoned, expired, or no
 -- readable ID number; no evidence then). p_reasons are the website's findings
--- (names_differ, document_not_accepted, id_number_invalid, under_18). For
+-- (names_differ, document_not_accepted, id_number_invalid, under_18, and
+-- session_moved when the result came from another network or device). For
 -- the other outcomes the website has copied both photos into the reserved
 -- files and gives their receipts (as complete_evidence_upload takes them), the
 -- fingerprint and encrypted ID number (as the manual upload gives them) and
@@ -692,7 +721,8 @@ declare k private.identity_checks; subject uuid; done jsonb; submitted jsonb; s 
 begin
   if p_check is null or p_session_id is null or p_outcome is null
     or p_outcome not in('approved','declined','in_review','not_finished')
-    or p_reasons is null or not (p_reasons <@ array['names_differ','document_not_accepted','id_number_invalid','under_18']::text[]) then
+    or p_reasons is null
+    or not (p_reasons <@ array['names_differ','document_not_accepted','id_number_invalid','under_18','session_moved']::text[]) then
     raise exception 'identity check result required' using errcode='22023'; end if;
   if (p_outcome='not_finished') <> (p_id_front is null and p_selfie is null and p_identity is null and p_names is null and p_risk_score is null)
     or (p_outcome<>'not_finished' and (jsonb_typeof(p_id_front) is distinct from 'object' or jsonb_typeof(p_selfie) is distinct from 'object'

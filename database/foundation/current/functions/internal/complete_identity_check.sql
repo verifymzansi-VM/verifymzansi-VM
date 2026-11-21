@@ -12,7 +12,8 @@ declare k private.identity_checks; subject uuid; done jsonb; submitted jsonb; s 
 begin
   if p_check is null or p_session_id is null or p_outcome is null
     or p_outcome not in('approved','declined','in_review','not_finished')
-    or p_reasons is null or not (p_reasons <@ array['names_differ','document_not_accepted','id_number_invalid','under_18']::text[]) then
+    or p_reasons is null
+    or not (p_reasons <@ array['names_differ','document_not_accepted','id_number_invalid','under_18','session_moved']::text[]) then
     raise exception 'identity check result required' using errcode='22023'; end if;
   if (p_outcome='not_finished') <> (p_id_front is null and p_selfie is null and p_identity is null and p_names is null and p_risk_score is null)
     or (p_outcome<>'not_finished' and (jsonb_typeof(p_id_front) is distinct from 'object' or jsonb_typeof(p_selfie) is distinct from 'object'

@@ -33,7 +33,9 @@ begin
     update private.identity_checks set id_artifact_id=id_art.id,selfie_artifact_id=selfie_art.id where id=k.id;
   end if;
   return jsonb_build_object('id_front',jsonb_build_object('artifact_id',id_art.id,'object_key',id_art.object_key),
-    'selfie',jsonb_build_object('artifact_id',selfie_art.id,'object_key',selfie_art.object_key));
+    'selfie',jsonb_build_object('artifact_id',selfie_art.id,'object_key',selfie_art.object_key),
+    'start',jsonb_build_object('first_name',k.start_first_name,'last_name',k.start_last_name,
+      'network_hash',k.network_hash,'device_kind',k.device_kind));
 end$function$;
 alter function internal.begin_identity_check_evidence(uuid,uuid) owner to postgres;
 revoke all on function internal.begin_identity_check_evidence(uuid,uuid) from public;

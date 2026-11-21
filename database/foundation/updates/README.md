@@ -94,7 +94,9 @@ function. This update deletes the partner's copy of a check only when it never
 finished and 5 days after an automatic decline nobody asked about. C1 must set
 `identity_checks.provider_delete_due` for checks staff reject or send back
 (`staff_final`, or after "ask a person") and for checks whose "ask a person"
-ends without the identity being accepted.
+ends without the identity being accepted, and decide how long a check row (with
+its start names, network hash and device kind, which are kept only as long as
+the row) stays after a failed attempt.
 
 - **The setting:** one row in `private.identity_check_settings`: `manual` (staff
   review the photos, as today), `staff_final` (a clean automatic pass verifies
@@ -122,9 +124,14 @@ ends without the identity being accepted.
   setting now says; if the setting is `manual` when its result arrives, the
   result goes to staff.
 - **A check:** `private.identity_checks`, bound to the member's open identity
-  case; the partner only sees its random id. The member starts it
-  (`api.start_my_identity_check`, a verified phone and typed legal names
-  required); the server binds the partner session once
+  case; the partner only sees its random id. The start context stays on the row,
+  never with the partner: the typed legal names at start (recorded by
+  `api.start_my_identity_check`), and a keyed hash of the member's network (64
+  lowercase hex) and the device kind (`phone` or `computer`), given by the
+  server to `api.attach_identity_check_session`.
+  `api.begin_identity_check_evidence` returns them to the server. The member
+  starts it (`api.start_my_identity_check`, a verified phone and typed legal
+  names required); the server binds the partner session once
   (`api.attach_identity_check_session`), reserves the two evidence files before
   copying the photos (`api.begin_identity_check_evidence`) and records the
   result once (`api.complete_identity_check`). A result after the check's
@@ -138,10 +145,13 @@ ends without the identity being accepted.
   typed names during the check), the database adds `names_differ`, so a clean
   pass always locks the names that were compared. It also adds `banned`,
   `duplicate` (the ID number is verified on another account) and `high_risk`
-  (risk score above 50). A clean pass on a partner setting writes the accepted
-  identity fact with `automatic_check_id` instead of a staff reviewer
-  (`accepted_identity_facts.reviewed_by` is null only then, enforced by a
-  check), so the name lock and the "verified" notice work unchanged.
+  (risk score above 50). The server may add `session_moved` when the result came
+  from another network or device; like the other findings it sends the result to
+  staff (`staff_final`) or declines it (`automatic`). A clean pass on a partner
+  setting writes the accepted identity fact with `automatic_check_id` instead of
+  a staff reviewer (`accepted_identity_facts.reviewed_by` is null only then,
+  enforced by a check), so the name lock and the "verified" notice work
+  unchanged.
 - **Declines** (`automatic` setting, including the partner's "in review"):
   `internal.decline_automatic_identity_submission` keeps the submission but
   removes it from the case's current place, so no staff queue shows it and the
@@ -171,15 +181,18 @@ ends without the identity being accepted.
 **For the server code (Didit plan, build step 6).**
 
 - **Session link lure:** the partner session link is a bearer link. Compare the
-  partner's IP address and device with the member's session, treat a mismatch as
-  `in_review`, and consider the partner's phone step.
+  partner's network and device with the start context
+  `api.begin_identity_check_evidence` returns, pass `session_moved` on a
+  mismatch, and consider the partner's phone step. Send the partner no names or
+  network data.
 - **No bypass of the automatic route:** the website's photo upload and
   submission routes must check `api.get_identity_check_availability` first, so
   an automatic decline and the one "ask a person" per check cannot be bypassed
   through the manual route while the automatic route is open.
 - **Names:** compare the typed names with the names on the ID without regard to
-  case in the website, and pass the typed names (from the member's profile, as
-  the database snapshots them) as `p_names`.
+  case in the website, and pass the typed names as `p_names` (the start names
+  `api.begin_identity_check_evidence` returns; the database still compares them
+  with the submission's snapshot).
 
 New tables, columns, constraints and commands only (expand); no existing
 function body changes. `reviewed_by` becomes nullable for automatic facts only;

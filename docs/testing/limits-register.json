@@ -13098,7 +13098,7 @@
         {
           "file": "database/foundation/current/functions/internal/attach_identity_check_session.sql",
           "symbol": "internal.attach_identity_check_session",
-          "contains": "or p_session_url not like 'https://verify.didit.me/%' or char_length(p_session_url)>500 then"
+          "contains": "or p_session_url not like 'https://verify.didit.me/%' or char_length(p_session_url)>500"
         }
       ],
       "tests": [

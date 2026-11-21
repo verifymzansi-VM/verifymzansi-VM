@@ -61,7 +61,7 @@ const STAFF_COMMANDS = [
   "api.get_identity_check_for_case(uuid)",
 ];
 const SERVICE_COMMANDS = [
-  "api.attach_identity_check_session(uuid,uuid,text)",
+  "api.attach_identity_check_session(uuid,uuid,text,text,text)",
   "api.report_identity_check_unavailable(uuid,text)",
   "api.begin_identity_check_evidence(uuid,uuid)",
   "api.complete_identity_check(uuid,uuid,text,text[],jsonb,jsonb,jsonb,jsonb,integer)",
@@ -181,15 +181,21 @@ try {
   const setMode = (mode) => q(`update private.identity_check_settings set mode='${mode}';`);
   const checkRow = (id) =>
     json(`select to_jsonb(k) from private.identity_checks k where k.id='${id}';`);
+  // A keyed hash of the member's network, as the website computes it.
+  const NET = createHash("sha256").update("synthetic network").digest("hex");
+  const attachSql = (
+    check,
+    session,
+    url = `https://verify.didit.me/session/${session}`,
+    hash = NET,
+    kind = "phone"
+  ) =>
+    `select api.attach_identity_check_session('${check}','${session}',${sqlLiteral(url)},${hash === null ? "null" : sqlLiteral(hash)},${kind === null ? "null" : sqlLiteral(kind)});`;
   /** Starts a check for `who` and binds a synthetic partner session. */
   const startWithSession = (who) => {
     const started = start(who);
     const session = randomUUID();
-    json(
-      service(
-        `select api.attach_identity_check_session('${started.check_id}','${session}','https://verify.didit.me/session/${session}');`
-      )
-    );
+    json(service(attachSql(started.check_id, session)));
     return { check: started.check_id, session };
   };
   const TYPED = { first_name: "Thando Sipho", last_name: "Dlamini" };
@@ -762,8 +768,8 @@ try {
         )
       );
       q(`set session_replication_role=replica;
-      insert into private.identity_checks(owner_id,case_id,status,created_at,expires_at,finished_at)
-      select c.subject_id,c.id,'not_finished',now()-interval '1 hour',now()-interval '1 hour'+interval '24 hours',now()
+      insert into private.identity_checks(owner_id,case_id,status,created_at,expires_at,finished_at,start_first_name,start_last_name)
+      select c.subject_id,c.id,'not_finished',now()-interval '1 hour',now()-interval '1 hour'+interval '24 hours',now(),'Thando','Dlamini'
         from private.evidence_cases c, generate_series(1,${59 - counted}) g
         where c.id=(select case_id from private.identity_checks order by created_at limit 1);
       set session_replication_role=origin;`);
@@ -834,25 +840,29 @@ try {
   await check("sessions bind once; results need the bound session and reserved files", () => {
     const m = namedMember("binding");
     const c = startWithSession(m);
-    assert.equal(
-      json(
-        service(
-          `select api.attach_identity_check_session('${c.check}','${c.session}','https://verify.didit.me/session/${c.session}');`
-        )
-      ).reused,
-      true
-    );
-    fails(
-      service(
-        `select api.attach_identity_check_session('${c.check}','${randomUUID()}','https://verify.didit.me/session/x');`
-      ),
-      "PT409"
-    );
-    fails(
-      service(
-        `select api.attach_identity_check_session('${c.check}','${randomUUID()}','https://example.com/session/x');`
-      ),
-      "22023"
+    assert.equal(json(service(attachSql(c.check, c.session))).reused, true);
+    fails(service(attachSql(c.check, randomUUID(), "https://verify.didit.me/session/x")), "PT409");
+    fails(service(attachSql(c.check, randomUUID(), "https://example.com/session/x")), "22023");
+    // The start context: a 64-hex network hash and the device kind, set once.
+    const other = createHash("sha256").update("another network").digest("hex");
+    fails(service(attachSql(c.check, c.session, undefined, other)), "PT409");
+    fails(service(attachSql(c.check, c.session, undefined, NET, "computer")), "PT409");
+    const d = start(namedMember("binding-2")).check_id;
+    for (const [hash, kind] of [
+      [NET.toUpperCase(), "phone"],
+      [NET.slice(1), "phone"],
+      [null, "phone"],
+      [NET, "tablet"],
+      [NET, null],
+    ])
+      fails(service(attachSql(d, randomUUID(), undefined, hash, kind)), "22023");
+    // Only the website's server can set it.
+    fails(member(m, attachSql(d, randomUUID())), "42501");
+    assert.equal(checkRow(d).network_hash, null);
+    const row = checkRow(c.check);
+    assert.deepEqual(
+      [row.start_first_name, row.start_last_name, row.network_hash, row.device_kind],
+      ["Thando Sipho", "Dlamini", NET, "phone"]
     );
     fails(service(completeSql({ ...c, session: randomUUID() }, "approved")), "PT409");
     assert.match(fails(service(completeSql(c, "approved")), "PT409"), /not reserved/);
@@ -874,6 +884,22 @@ try {
       files
     );
     assert.match(files.id_front.object_key, /^evidence\//);
+    assert.deepEqual(files.start, {
+      first_name: "Thando Sipho",
+      last_name: "Dlamini",
+      network_hash: NET,
+      device_kind: "phone",
+    });
+  });
+  await check("session_moved goes to staff on staff_final and is declined on automatic", () => {
+    setMode("staff_final");
+    const a = startWithSession(namedMember("moved-staff"));
+    assert.equal(finish(a, "approved", { reasons: ["session_moved"] }).status, "with_staff");
+    assert.deepEqual(checkRow(a.check).reasons, ["session_moved"]);
+    setMode("automatic");
+    const b = startWithSession(namedMember("moved-auto"));
+    assert.equal(finish(b, "approved", { reasons: ["session_moved"] }).status, "declined");
+    assert.deepEqual(checkRow(b.check).reasons, ["session_moved"]);
   });
   await check("a result after the 24-hour expiry is recorded as not finished", () => {
     const m = namedMember("too-late");

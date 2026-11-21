@@ -929,7 +929,13 @@ export type FoundationRuntimeServiceDatabase = {
         Returns: Json;
       };
       attach_identity_check_session: {
-        Args: { p_check: string; p_session_id: string; p_session_url: string };
+        Args: {
+          p_check: string;
+          p_session_id: string;
+          p_session_url: string;
+          p_network_hash: string;
+          p_device_kind: string;
+        };
         Returns: Json;
       };
       report_identity_check_unavailable: {
