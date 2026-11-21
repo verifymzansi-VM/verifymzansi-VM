@@ -13432,28 +13432,18 @@
       "reason": "image size used to compute a blur placeholder"
     },
     {
-      "file": "database/foundation/current/functions/internal/confirm_frontend_privacy_export.sql",
-      "contains": "or privacy_notice_jobs.attempts>=8);",
-      "reason": "the privacy notice email retry cap (LIM-F-claim_frontend_privacy_notice), read here to tell whether an export email is still being tried; it is not a separate limit"
-    },
-    {
-      "file": "database/foundation/current/functions/internal/confirm_frontend_privacy_export.sql",
-      "contains": "and j.delivered_at is null and j.attempts<8)",
-      "reason": "the privacy notice email retry cap (LIM-F-claim_frontend_privacy_notice), read here to tell whether an export email is still being tried; it is not a separate limit"
-    },
-    {
-      "file": "database/foundation/current/functions/internal/export_frontend_privacy_request.sql",
-      "contains": "or privacy_notice_jobs.attempts>=8);",
-      "reason": "the privacy notice email retry cap (LIM-F-claim_frontend_privacy_notice), read here to tell whether an export email is still being tried; it is not a separate limit"
-    },
-    {
-      "file": "database/foundation/current/functions/internal/export_frontend_privacy_request.sql",
-      "contains": "and j.delivered_at is null and j.attempts<8)",
-      "reason": "the privacy notice email retry cap (LIM-F-claim_frontend_privacy_notice), read here to tell whether an export email is still being tried; it is not a separate limit"
-    },
-    {
       "file": "database/foundation/current/functions/internal/retention_privacy_requests.sql",
       "contains": "and j.kind = 'exported' and j.delivered_at is null and j.attempts < 8)",
+      "reason": "the privacy notice email retry cap (LIM-F-claim_frontend_privacy_notice), read here to tell whether an export email is still being tried; it is not a separate limit"
+    },
+    {
+      "file": "database/foundation/current/functions/internal/confirm_frontend_privacy_export.sql",
+      "contains": "and privacy_notice_jobs.attempts<8 then privacy_notice_jobs.next_attempt_at else clock_timestamp() end",
+      "reason": "the privacy notice email retry cap (LIM-F-claim_frontend_privacy_notice), read here to tell whether an export email is still being tried; it is not a separate limit"
+    },
+    {
+      "file": "database/foundation/current/functions/internal/export_frontend_privacy_request.sql",
+      "contains": "and privacy_notice_jobs.attempts<8 then privacy_notice_jobs.next_attempt_at else clock_timestamp() end",
       "reason": "the privacy notice email retry cap (LIM-F-claim_frontend_privacy_notice), read here to tell whether an export email is still being tried; it is not a separate limit"
     }
   ]

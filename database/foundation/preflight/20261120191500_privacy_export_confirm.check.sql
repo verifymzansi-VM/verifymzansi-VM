@@ -14,7 +14,11 @@
 -- columns (name and type), the unique index (unique, valid, pg_get_indexdef)
 -- and the export check (pg_get_constraintdef md5). It also refuses while
 -- private.notifications has any trigger or rule but its reviewed update guard
--- (the export's bell notice must not be dropped or changed). It counts:
+-- (the export's bell notice must not be dropped or changed), and while
+-- private.privacy_notice_jobs has any trigger or rule (none in the baseline;
+-- re-arming an export email relies on the job row as written and on
+-- internal.complete_frontend_privacy_notice, whose body it also pins). It
+-- counts:
 -- - "exports recorded": 'exported' events (the old command's and confirmed
 --   ones);
 -- - "export emails waiting": 'exported' email jobs not yet delivered;
@@ -29,8 +33,10 @@ with bodies as (
   from (values
     ('internal.signal_owner_inbox(uuid)',
       '2a7742d89598d62117a9b7620e0271e9', '2a7742d89598d62117a9b7620e0271e9'),
+    ('internal.complete_frontend_privacy_notice(uuid,uuid,boolean)',
+      '6850de7c9de63d0352b4362a14c263d0', '6850de7c9de63d0352b4362a14c263d0'),
     ('internal.export_frontend_privacy_request(uuid,integer)',
-      '939737e433fcf800d5e98a3dd1569e5d', 'd29fd99879829f9a6df017b1a351e93c'),
+      '939737e433fcf800d5e98a3dd1569e5d', '49e4d463e4529a6f9ef9a115fbc0b5e5'),
     ('internal.retention_privacy_requests(integer)',
       'ae00ab54c00fd3f6f64ac6b8061ba929', 'cbb20e00ff20ef8448bd64b79081596e'),
     ('internal.claim_frontend_privacy_notice()',
@@ -40,7 +46,7 @@ with bodies as (
       '251a62d1bb6d474172d02a2867b2556a', '251a62d1bb6d474172d02a2867b2556a'),
     ('internal.prepare_frontend_privacy_export(uuid,integer)', null, 'd00c387a3868a4ed4296001f8c295249'),
     ('api.prepare_frontend_privacy_export(uuid,integer)', null, '001f2fc46398c56fd2ac6d7b3bf2cf11'),
-    ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '5f2a7f2e960e24fa7e56e25251513684'),
+    ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '3a5235816f71272ad425ced5d87e5af4'),
     ('api.confirm_frontend_privacy_export(uuid,integer,uuid)', null, '438d948a6a90a8fefd9c6bf49df8c99f')
   ) v(sig, reviewed, updated)
 ),
@@ -119,6 +125,10 @@ problems as (
   union all
   select 'problem', 'private.notifications has an unreviewed trigger or rule; do not apply the update'
     from notification_guards g where not g.reviewed
+  union all
+  select 'problem', 'private.privacy_notice_jobs has a trigger or rule; do not apply the update'
+    where exists (select 1 from pg_trigger t where t.tgrelid = 'private.privacy_notice_jobs'::regclass and not t.tgisinternal)
+      or exists (select 1 from pg_rewrite w where w.ev_class = 'private.privacy_notice_jobs'::regclass)
   union all
   select 'problem', 'only part of the update is present'
     from verdict v

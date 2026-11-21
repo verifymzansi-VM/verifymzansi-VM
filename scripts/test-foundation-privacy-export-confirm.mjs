@@ -245,6 +245,24 @@ try {
     assert.match(fails(step.sql, "55000"), /relies on is not the reviewed body/);
     assert.ok(preflight().some((r) => r[1].startsWith(`${signal} is not the reviewed body`)));
     q(`${live};`);
+    // A changed completion of the email job (the re-arm relies on it).
+    const complete = "internal.complete_frontend_privacy_notice(uuid,uuid,boolean)";
+    const liveComplete = q(`select pg_get_functiondef('${complete}'::regprocedure);`);
+    q(
+      `do $$begin execute replace(pg_get_functiondef('${complete}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
+    );
+    assert.match(fails(step.sql, "55000"), /relies on is not the reviewed body/);
+    assert.ok(preflight().some((r) => r[1].startsWith(`${complete} is not the reviewed body`)));
+    q(`${liveComplete};`);
+    // Any trigger or rule on the email jobs.
+    q(`create function vmtest.keep_job() returns trigger language plpgsql as $$begin return new; end$$;
+      create trigger keep_job before update on private.privacy_notice_jobs for each row execute function vmtest.keep_job();`);
+    assert.match(fails(step.sql, "55000"), /privacy_notice_jobs has a trigger or rule/);
+    assert.ok(
+      preflight().some((r) => /privacy_notice_jobs has a trigger or rule/.test(r[1])),
+      JSON.stringify(preflight())
+    );
+    q(`drop trigger keep_job on private.privacy_notice_jobs; drop function vmtest.keep_job();`);
     // Any trigger or rule on private.notifications but its update guard.
     const unreviewed = /unreviewed trigger or rule/;
     q(`create function vmtest.keep_notice() returns trigger language plpgsql as $$begin return new; end$$;
@@ -806,8 +824,8 @@ try {
   });
   await check("an undeliverable export email never holds a request for ever", () => {
     /** Exported now; then made undeliverable by `breakIt`; finally aged past
-     * the 24-hour export hold and the 7-day cap, and 31 days after
-     * completion. */
+     * the 24-hour export hold only (well inside the 7-day cap), 31 days
+     * after completion: only the delivery rule lets it go. */
     const scenario = (label, setup, breakIt) => {
       const [who, id] = completedRequest(label, 1);
       setup?.(who);
@@ -816,9 +834,10 @@ try {
       breakIt(who, id);
       retention();
       assert.equal(minimised(id), false, `${label}: the 24-hour export hold`);
-      q(`update private.privacy_request_events set occurred_at=occurred_at-interval '8 days'
+      q(`update private.privacy_request_events set occurred_at=occurred_at-interval '25 hours'
           where request_id='${id}' and action='exported';
         update private.privacy_requests set completed_at=now()-interval '31 days' where id='${id}';`);
+      assert.equal(exportedJobs(id), 1, `${label}: its email still waits`);
       retention();
       assert.equal(minimised(id), true, label);
     };
@@ -891,14 +910,65 @@ try {
     );
     assert.equal(notices(banned), 2);
   });
+  await check("a later export re-arms a part-tried email with all its tries", () => {
+    const banned = user("part-tried");
+    const id = approved(banned);
+    q(`update auth.users set banned_until=now()+interval '1 day' where id='${banned.id}';`);
+    json(confirm(admin, id, json(prepare(admin, id)).export_id));
+    // Seven tries used, the next one due in an hour.
+    q(`update private.privacy_notice_jobs set attempts=7,next_attempt_at=now()+interval '1 hour'
+      where request_id='${id}' and kind='exported';`);
+    const due = q(
+      `select next_attempt_at from private.privacy_notice_jobs where request_id='${id}' and kind='exported';`
+    );
+    json(confirm(admin, id, json(prepare(admin, id)).export_id));
+    assert.deepEqual(
+      json(`select jsonb_build_object('attempts',attempts,'delivered',delivered_at is not null,
+          'same_time',next_attempt_at='${due}'::timestamptz)
+        from private.privacy_notice_jobs where request_id='${id}' and kind='exported';`),
+      { attempts: 0, delivered: false, same_time: true }
+    );
+    assert.equal(exportedJobs(id), 1);
+  });
+  await check("no email job is created for an address that cannot be emailed", () => {
+    // The Auth user removed before the export: the request names no account
+    // and its address is not deliverable; the export (no personal data) goes
+    // ahead with no email job and no notice.
+    const gone = user("auth-removed");
+    const goneId = approved(gone);
+    q(`delete from auth.users where id='${gone.id}';`);
+    assert.equal(privacy(goneId).subject_user_id, null);
+    const plan = json(prepare(admin, goneId));
+    assert.equal(plan.account_found, false);
+    assert.deepEqual(json(confirm(admin, goneId, plan.export_id)).datasets, {});
+    assert.equal(exportedJobs(goneId), 0);
+    assert.equal(count(`private.notifications where subject_id='${goneId}'`), 0);
+    // A request with no account and a reviewed address is still emailed.
+    const intake = json(
+      staff(
+        admin,
+        "select api.record_frontend_privacy_intake('access','nobody-'||gen_random_uuid()||'@example.invalid',null,'Emailed access request','Recorded from the privacy mailbox');"
+      )
+    ).id;
+    for (const action of ["verify_identity", "approve"])
+      q(
+        staff(
+          admin,
+          `select api.process_frontend_privacy_request('${intake}',${privacy(intake).revision},'${action}');`
+        )
+      );
+    json(confirm(admin, intake, json(prepare(admin, intake)).export_id));
+    assert.equal(exportedJobs(intake), 1);
+  });
   await check(
     "a confirmation committed in the middle of a sweep is seen before minimising",
     async () => {
       // Deterministic. For this check only, retention runs as a role without
       // row-security bypass, and a row-security policy makes that role wait,
       // while the sweep reads the target request, on an advisory lock the
-      // test holds. The sweep has taken its statement snapshot by then; the
-      // confirmation commits while it waits; then the lock is released.
+      // test holds. The confirmation starts only once pg_locks shows the
+      // sweep waiting for that lock (its statement snapshot already taken),
+      // and commits; only then is the lock released.
       const [requester, target] = completedRequest("race-mid-sweep", 695);
       const exportId = json(prepare(admin, target)).export_id;
       const RETENTION = "internal.retention_privacy_requests(integer)";
@@ -930,26 +1000,49 @@ try {
         alter function ${RETENTION} owner to vm_sweeper;`);
       const call = `select api.confirm_frontend_privacy_export('${target}',${privacy(target).revision},'${exportId}')`;
       const epoch = "select extract(epoch from clock_timestamp());";
+      /** Advisory lock 424242 holders: "granted" or "waiting". */
+      const gateLocks = (granted) =>
+        Number(
+          q(`select count(*) from pg_locks where locktype='advisory' and classid=0 and objid=424242
+            and objsubid=1 and granted=${granted};`)
+        );
+      const until = async (label, test) => {
+        for (let i = 0; i < 300; i += 1) {
+          if (test()) return;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        throw new Error(`timed out waiting: ${label}`);
+      };
+      q(`create table vmtest.sweep_gate_release(released boolean);`);
       try {
-        const [gate, sweep, confirmed] = await Promise.all([
-          // Holds the gate for 3 seconds.
-          session(
-            `select pg_advisory_lock(424242);\nselect pg_sleep(3);\n${epoch}\nselect pg_advisory_unlock(424242);`
-          ),
-          // Starts at 0.5 s and waits at the gate while reading the target.
-          delayed(500, `${epoch}\nselect internal.retention_privacy_requests(100);`),
-          // Commits at about 1 s, while the sweep waits.
-          delayed(1000, staff(admin, `begin;\n${call};\n${epoch}\ncommit;`)),
-        ]);
-        assert.equal(gate.status, 0, gate.stderr);
-        assert.equal(sweep.status, 0, sweep.stderr);
+        // The gate holds the lock until the test writes the release row.
+        const gate = session(`select pg_advisory_lock(424242);
+          do $$begin
+            for i in 1..600 loop
+              exit when exists(select 1 from vmtest.sweep_gate_release);
+              perform pg_sleep(0.05);
+            end loop;
+          end$$;
+          ${epoch}
+          select pg_advisory_unlock(424242);`);
+        await until("the gate holds the lock", () => gateLocks(true) === 1);
+        // The sweep starts, takes its snapshot and waits at the gate.
+        const sweep = session(`${epoch}\nselect internal.retention_privacy_requests(100);`);
+        await until("the sweep waits at the gate", () => gateLocks(false) === 1);
+        // Only now the confirmation runs and commits.
+        const confirmed = await session(staff(admin, `begin;\n${call};\n${epoch}\ncommit;`));
         assert.equal(confirmed.status, 0, confirmed.stderr);
-        const released = Number(gate.stdout.trim().split("\n").filter(Boolean).at(-2));
-        const swept = Number(sweep.stdout.trim().split("\n")[0]);
+        assert.equal(gateLocks(false), 1, "the sweep still waits");
+        q(`insert into vmtest.sweep_gate_release values(true);`);
+        const [gateDone, swept] = await Promise.all([gate, sweep]);
+        assert.equal(gateDone.status, 0, gateDone.stderr);
+        assert.equal(swept.status, 0, swept.stderr);
+        const released = Number(gateDone.stdout.trim().split("\n").filter(Boolean).at(-2));
+        const started = Number(swept.stdout.trim().split("\n")[0]);
         const committed = Number(confirmed.stdout.trim().split("\n").at(-1));
         assert.ok(
-          swept < committed && committed < released,
-          JSON.stringify({ swept, committed, released })
+          started < committed && committed < released,
+          JSON.stringify({ started, committed, released })
         );
         // Statement 2 sees the export: the request is kept.
         assert.equal(minimised(target), false);
@@ -961,6 +1054,7 @@ try {
           ${TABLES.map((t) => `drop policy vm_sweeper_all on ${t};`).join("\n")}
           drop function vmtest.sweep_gate(uuid);
           drop table vmtest.sweep_gate_target;
+          drop table vmtest.sweep_gate_release;
           drop owned by vm_sweeper;
           drop role vm_sweeper;`);
       }

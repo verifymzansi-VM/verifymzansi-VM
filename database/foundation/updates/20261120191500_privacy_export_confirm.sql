@@ -85,10 +85,14 @@
 --    private.notifications has any trigger or rule but its reviewed update
 --    guard. The requester's email goes once per request while that account
 --    can sign in, and on every export when it cannot (or there is none),
---    since then nobody sees the bell; an email already claimed by the worker
---    is armed again, so the later export is emailed too. No email job is
---    created for an account that sees its bell while its address cannot be
---    emailed (the bell tells it; a job that can never run is not created).
+--    since then nobody sees the bell; an email already claimed, part-tried
+--    or used up is armed again with all 8 tries, so the later export is
+--    emailed too (bounded by 5 exports a request). An email job is created
+--    only for an address the email job can deliver to (point 8): never for
+--    an account that sees its bell while its address cannot be emailed (the
+--    bell tells it), nor for a request with no account (none, or its Auth
+--    user removed) whose address cannot be emailed; a job that can never run
+--    would only hold the request.
 --
 -- 8. internal.privacy_notice_deliverable(request): the email job's rule for
 --    a deliverable address (not minimised; a manual request, an erased
@@ -138,8 +142,9 @@ begin
   end if;
   if exists(select 1 from (values
       ('internal.signal_owner_inbox(uuid)','2a7742d89598d62117a9b7620e0271e9','2a7742d89598d62117a9b7620e0271e9'),
+      ('internal.complete_frontend_privacy_notice(uuid,uuid,boolean)','6850de7c9de63d0352b4362a14c263d0','6850de7c9de63d0352b4362a14c263d0'),
       ('api.export_frontend_privacy_request(uuid,integer)','251a62d1bb6d474172d02a2867b2556a','251a62d1bb6d474172d02a2867b2556a'),
-      ('internal.export_frontend_privacy_request(uuid,integer)','939737e433fcf800d5e98a3dd1569e5d','d29fd99879829f9a6df017b1a351e93c'),
+      ('internal.export_frontend_privacy_request(uuid,integer)','939737e433fcf800d5e98a3dd1569e5d','49e4d463e4529a6f9ef9a115fbc0b5e5'),
       ('internal.retention_privacy_requests(integer)','ae00ab54c00fd3f6f64ac6b8061ba929','cbb20e00ff20ef8448bd64b79081596e'),
       ('internal.claim_frontend_privacy_notice()','ab583eeac94d2d46cee6344b5e0d6ef6','98f8a3f23b7509881aa6dfc8b1e7a335')) v(sig,reviewed,updated)
     where (select md5(replace(p.prosrc,E'\r\n',E'\n')) from pg_proc p where p.oid=to_regprocedure(v.sig))
@@ -155,6 +160,13 @@ begin
     or exists(select 1 from pg_rewrite w where w.ev_class='private.notifications'::regclass) then
     raise exception 'privacy export confirm drift: private.notifications has an unreviewed trigger or rule' using errcode='55000';
   end if;
+  -- Re-arming an email relies on the job row as written (and on
+  -- internal.complete_frontend_privacy_notice refusing a cleared claim): no
+  -- trigger or rule on private.privacy_notice_jobs (none in the baseline).
+  if exists(select 1 from pg_trigger t where t.tgrelid='private.privacy_notice_jobs'::regclass and not t.tgisinternal)
+    or exists(select 1 from pg_rewrite w where w.ev_class='private.privacy_notice_jobs'::regclass) then
+    raise exception 'privacy export confirm drift: private.privacy_notice_jobs has a trigger or rule' using errcode='55000';
+  end if;
   if (select array_agg(m[1] order by m[1])::text[] from pg_constraint c,
         regexp_matches(pg_get_constraintdef(c.oid),'''([a-z_]+)''','g') m
       where c.conrelid='private.privacy_request_events'::regclass and c.conname='privacy_request_events_action_check')
@@ -166,7 +178,7 @@ begin
   if present=9 and (exists(select 1 from (values
       ('internal.prepare_frontend_privacy_export(uuid,integer)','d00c387a3868a4ed4296001f8c295249','true'),
       ('api.prepare_frontend_privacy_export(uuid,integer)','001f2fc46398c56fd2ac6d7b3bf2cf11','false'),
-      ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)','5f2a7f2e960e24fa7e56e25251513684','true'),
+      ('internal.confirm_frontend_privacy_export(uuid,integer,uuid)','3a5235816f71272ad425ced5d87e5af4','true'),
       ('api.confirm_frontend_privacy_export(uuid,integer,uuid)','438d948a6a90a8fefd9c6bf49df8c99f','false')) v(sig,body,definer)
     where (select md5(replace(p.prosrc,E'\r\n',E'\n'))||' '||p.prosecdef::text||' '||coalesce(array_to_string(p.proconfig,','),'')
           ||' '||p.proowner::regrole::text||' '||has_function_privilege('anon',p.oid,'execute')::text
@@ -387,20 +399,25 @@ begin
   -- drops it aborts the whole export. The requester is emailed: once per
   -- request while the account can sign in (and so see the bell), on every
   -- export otherwise (no account, or closed, banned, suspended or
-  -- restricted). A delivered, abandoned or in-flight email is armed again
-  -- (an in-flight one is sent again: its worker's completion no longer
-  -- matches the claim); one still waiting covers this export too. No email
-  -- is armed for an account that sees its bell while its address cannot be
-  -- emailed: the bell tells it, and a job that can never run is not created.
-  if not bell or deliverable then
+  -- restricted). A delivered, abandoned, in-flight or part-tried email is
+  -- armed again with all its tries (an in-flight one is sent again: its
+  -- worker's completion no longer matches the claim; a waiting one keeps its
+  -- next try time); one waiting untried covers this export too. An email is
+  -- armed only for an address the email job can deliver to: never a job that
+  -- can never run (an account that sees its bell but cannot be emailed, a
+  -- request whose account is gone, or one with no account and no reviewed
+  -- address). One is required only when it can be delivered and nobody sees
+  -- a bell.
+  if deliverable then
     insert into private.privacy_notice_jobs(request_id,kind) values(r.id,'exported')
-      on conflict(request_id,kind) do update set delivered_at=null,attempts=0,next_attempt_at=clock_timestamp(),
-        claim_token=null,locked_until=null
+      on conflict(request_id,kind) do update set delivered_at=null,attempts=0,claim_token=null,locked_until=null,
+        next_attempt_at=case when privacy_notice_jobs.delivered_at is null and privacy_notice_jobs.claim_token is null
+          and privacy_notice_jobs.attempts<8 then privacy_notice_jobs.next_attempt_at else clock_timestamp() end
       where not bell and (privacy_notice_jobs.delivered_at is not null or privacy_notice_jobs.claim_token is not null
-        or privacy_notice_jobs.attempts>=8);
+        or privacy_notice_jobs.attempts>0);
   end if;
-  if not bell and not exists(select 1 from private.privacy_notice_jobs j where j.request_id=r.id and j.kind='exported'
-      and j.delivered_at is null and j.attempts<8)
+  if deliverable and not bell and not exists(select 1 from private.privacy_notice_jobs j where j.request_id=r.id
+      and j.kind='exported' and j.delivered_at is null and j.attempts=0)
     then raise exception 'export email could not be queued' using errcode='55000';end if;
   if r.subject_user_id is not null then
     insert into private.notifications(account_id,kind,subject_id) values(r.subject_user_id,'privacy_export_made',r.id)
@@ -471,20 +488,25 @@ begin
   -- drops it aborts the whole export. The requester is emailed: once per
   -- request while the account can sign in (and so see the bell), on every
   -- export otherwise (no account, or closed, banned, suspended or
-  -- restricted). A delivered, abandoned or in-flight email is armed again
-  -- (an in-flight one is sent again: its worker's completion no longer
-  -- matches the claim); one still waiting covers this export too. No email
-  -- is armed for an account that sees its bell while its address cannot be
-  -- emailed: the bell tells it, and a job that can never run is not created.
-  if not bell or deliverable then
+  -- restricted). A delivered, abandoned, in-flight or part-tried email is
+  -- armed again with all its tries (an in-flight one is sent again: its
+  -- worker's completion no longer matches the claim; a waiting one keeps its
+  -- next try time); one waiting untried covers this export too. An email is
+  -- armed only for an address the email job can deliver to: never a job that
+  -- can never run (an account that sees its bell but cannot be emailed, a
+  -- request whose account is gone, or one with no account and no reviewed
+  -- address). One is required only when it can be delivered and nobody sees
+  -- a bell.
+  if deliverable then
     insert into private.privacy_notice_jobs(request_id,kind) values(r.id,'exported')
-      on conflict(request_id,kind) do update set delivered_at=null,attempts=0,next_attempt_at=clock_timestamp(),
-        claim_token=null,locked_until=null
+      on conflict(request_id,kind) do update set delivered_at=null,attempts=0,claim_token=null,locked_until=null,
+        next_attempt_at=case when privacy_notice_jobs.delivered_at is null and privacy_notice_jobs.claim_token is null
+          and privacy_notice_jobs.attempts<8 then privacy_notice_jobs.next_attempt_at else clock_timestamp() end
       where not bell and (privacy_notice_jobs.delivered_at is not null or privacy_notice_jobs.claim_token is not null
-        or privacy_notice_jobs.attempts>=8);
+        or privacy_notice_jobs.attempts>0);
   end if;
-  if not bell and not exists(select 1 from private.privacy_notice_jobs j where j.request_id=r.id and j.kind='exported'
-      and j.delivered_at is null and j.attempts<8)
+  if deliverable and not bell and not exists(select 1 from private.privacy_notice_jobs j where j.request_id=r.id
+      and j.kind='exported' and j.delivered_at is null and j.attempts=0)
     then raise exception 'export email could not be queued' using errcode='55000';end if;
   if r.subject_user_id is not null then
     insert into private.notifications(account_id,kind,subject_id) values(r.subject_user_id,'privacy_export_made',r.id)

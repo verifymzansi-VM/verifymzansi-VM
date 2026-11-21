@@ -44,20 +44,25 @@ begin
   -- drops it aborts the whole export. The requester is emailed: once per
   -- request while the account can sign in (and so see the bell), on every
   -- export otherwise (no account, or closed, banned, suspended or
-  -- restricted). A delivered, abandoned or in-flight email is armed again
-  -- (an in-flight one is sent again: its worker's completion no longer
-  -- matches the claim); one still waiting covers this export too. No email
-  -- is armed for an account that sees its bell while its address cannot be
-  -- emailed: the bell tells it, and a job that can never run is not created.
-  if not bell or deliverable then
+  -- restricted). A delivered, abandoned, in-flight or part-tried email is
+  -- armed again with all its tries (an in-flight one is sent again: its
+  -- worker's completion no longer matches the claim; a waiting one keeps its
+  -- next try time); one waiting untried covers this export too. An email is
+  -- armed only for an address the email job can deliver to: never a job that
+  -- can never run (an account that sees its bell but cannot be emailed, a
+  -- request whose account is gone, or one with no account and no reviewed
+  -- address). One is required only when it can be delivered and nobody sees
+  -- a bell.
+  if deliverable then
     insert into private.privacy_notice_jobs(request_id,kind) values(r.id,'exported')
-      on conflict(request_id,kind) do update set delivered_at=null,attempts=0,next_attempt_at=clock_timestamp(),
-        claim_token=null,locked_until=null
+      on conflict(request_id,kind) do update set delivered_at=null,attempts=0,claim_token=null,locked_until=null,
+        next_attempt_at=case when privacy_notice_jobs.delivered_at is null and privacy_notice_jobs.claim_token is null
+          and privacy_notice_jobs.attempts<8 then privacy_notice_jobs.next_attempt_at else clock_timestamp() end
       where not bell and (privacy_notice_jobs.delivered_at is not null or privacy_notice_jobs.claim_token is not null
-        or privacy_notice_jobs.attempts>=8);
+        or privacy_notice_jobs.attempts>0);
   end if;
-  if not bell and not exists(select 1 from private.privacy_notice_jobs j where j.request_id=r.id and j.kind='exported'
-      and j.delivered_at is null and j.attempts<8)
+  if deliverable and not bell and not exists(select 1 from private.privacy_notice_jobs j where j.request_id=r.id
+      and j.kind='exported' and j.delivered_at is null and j.attempts=0)
     then raise exception 'export email could not be queued' using errcode='55000';end if;
   if r.subject_user_id is not null then
     insert into private.notifications(account_id,kind,subject_id) values(r.subject_user_id,'privacy_export_made',r.id)

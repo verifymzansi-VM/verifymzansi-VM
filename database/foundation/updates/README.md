@@ -136,10 +136,14 @@ signature) until a later update removes it (contract step, with a
   guard. The requester's email goes once per request while that account can sign
   in, and on every export when it cannot (no account, or closed, banned,
   suspended or restricted), since nobody would see the bell: a delivered,
-  abandoned or in-flight email is armed again (an in-flight one is sent again),
-  and one still waiting covers the export. No email job is created for an
-  account that sees its bell while its address cannot be emailed.
-- **Retention:** `internal.retention_privacy_requests` (run daily by
+  abandoned, in-flight or part-tried email is armed again with all its tries (an
+  in-flight one is sent again), and one waiting untried covers the export. An
+  email job is created only for an address the email job can deliver to: never
+  for an account that sees its bell but cannot be emailed, nor for a request
+  with no account (none, or its Auth user removed) whose address cannot be
+  emailed.
+- **Retention:** `internal.retention_privacy_requests` (run every 5 minutes by
+  the retention worker, `wrangler.retention-cleanup.toml`, through
   `api.run_retention`) also clears the digest of prepared exports never
   confirmed, a day after they expired, and reports `export_digests_cleared`. Two
   holds keep a request from being minimised while an export may still be telling
