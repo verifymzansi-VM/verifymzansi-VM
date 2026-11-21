@@ -39,7 +39,10 @@ const [PREFLIGHT, ROLLBACK] = [
 );
 const EXPORT = "internal.export_frontend_privacy_request(uuid,integer)";
 const API_EXPORT = "api.export_frontend_privacy_request(uuid,integer)";
-const [MAIN_MD5, NEW_MD5] = ["939737e433fcf800d5e98a3dd1569e5d", "87d2eed178e199afc407b4236ffed816"];
+const [MAIN_MD5, NEW_MD5] = [
+  "939737e433fcf800d5e98a3dd1569e5d",
+  "87d2eed178e199afc407b4236ffed816",
+];
 const NOT_IN_PROGRESS = /DETAIL:\s+privacy_export_not_in_progress/;
 const REPRESENTED = /represented verified access request required/;
 
@@ -53,11 +56,18 @@ try {
   const admin = staffUser("admin", "admin");
   const governor = staffUser("governor", "governor");
   const moderator = staffUser("moderator", "moderator");
-  const revision = (id) => json(`select to_jsonb(r) from private.privacy_requests r where r.id='${id}';`).revision;
+  const revision = (id) =>
+    json(`select to_jsonb(r) from private.privacy_requests r where r.id='${id}';`).revision;
   const record = (who, type = "access") =>
-    json(service(`select api.record_frontend_privacy_request('${who.id}','${who.session}','${type}','Fixture Member','0123','Synthetic request ${crypto.randomUUID()}');`)).id;
-  const processSql = (id, action) => `select api.process_frontend_privacy_request('${id}',${revision(id)},'${action}');`;
-  const process = (id, ...actions) => actions.forEach((action) => q(staff(admin, processSql(id, action))));
+    json(
+      service(
+        `select api.record_frontend_privacy_request('${who.id}','${who.session}','${type}','Fixture Member','0123','Synthetic request ${crypto.randomUUID()}');`
+      )
+    ).id;
+  const processSql = (id, action) =>
+    `select api.process_frontend_privacy_request('${id}',${revision(id)},'${action}');`;
+  const process = (id, ...actions) =>
+    actions.forEach((action) => q(staff(admin, processSql(id, action))));
   /** A verified access request of `who`, in progress. */
   const approved = (who) => {
     const id = record(who);
@@ -67,19 +77,30 @@ try {
   const exportSql = (who, id, rev = revision(id), totpAt = undefined) =>
     staff(who, `select api.export_frontend_privacy_request('${id}',${rev});`, totpAt);
   const count = (sql) => Number(q(`select count(*) from ${sql};`));
-  const exportsOf = (id) => count(`private.privacy_request_events where request_id='${id}' and action='exported'`);
-  const emailsOf = (id) => count(`private.privacy_notice_jobs where request_id='${id}' and kind='exported'`);
-  const noticesOf = (who) => count(`private.notifications where account_id='${who.id}' and kind='privacy_export_made'`);
-  const nothingRecorded = (id, who) => assert.deepEqual([exportsOf(id), emailsOf(id), noticesOf(who)], [0, 0, 0]);
+  const exportsOf = (id) =>
+    count(`private.privacy_request_events where request_id='${id}' and action='exported'`);
+  const emailsOf = (id) =>
+    count(`private.privacy_notice_jobs where request_id='${id}' and kind='exported'`);
+  const noticesOf = (who) =>
+    count(`private.notifications where account_id='${who.id}' and kind='privacy_export_made'`);
+  const nothingRecorded = (id, who) =>
+    assert.deepEqual([exportsOf(id), emailsOf(id), noticesOf(who)], [0, 0, 0]);
 
   // ------------------------------------------------------------ before
   await check("preflight before the update: read only, summary only", () => {
     assert.equal(bodyMd5(EXPORT), MAIN_MD5);
-    assert.deepEqual(preflight(), [["summary", "privacy export simple: update not applied; exports recorded: 0"]]);
+    assert.deepEqual(preflight(), [
+      ["summary", "privacy export simple: update not applied; exports recorded: 0"],
+    ]);
     assertReadOnlyPreflight(database, PREFLIGHT);
   });
   await check("drift and a premature rollback are refused", () =>
-    assertDriftRefused(ctx, { rollback: ROLLBACK, updateSql: step.sql, signatures: [EXPORT], drift: /privacy export simple drift/ })
+    assertDriftRefused(ctx, {
+      rollback: ROLLBACK,
+      updateSql: step.sql,
+      signatures: [EXPORT],
+      drift: /privacy export simple drift/,
+    })
   );
 
   // ------------------------------------------------------------- apply
@@ -121,7 +142,8 @@ try {
     const open = user("states-open");
     const id = approved(open);
     fails(exportSql(admin, id, revision(id) - 1), "PT409", REPRESENTED);
-    for (const other of [submitted, unverified, rejected, deletion, id]) assert.equal(exportsOf(other), 0);
+    for (const other of [submitted, unverified, rejected, deletion, id])
+      assert.equal(exportsOf(other), 0);
     assert.equal(noticesOf(who) + noticesOf(open), 0);
     assert.equal(json(exportSql(admin, id)).request_id, id);
     process(id, "complete");
@@ -132,8 +154,15 @@ try {
     const who = user("staff-checks");
     const id = approved(who);
     fails(exportSql(moderator, id), "42501", /capability not granted/);
-    fails(exportSql(admin, id, revision(id), Math.floor(Date.now() / 1000) - 20 * 60), "42501", /recent second-factor/);
-    fails(member(who, `select api.export_frontend_privacy_request('${id}',${revision(id)});`), "42501");
+    fails(
+      exportSql(admin, id, revision(id), Math.floor(Date.now() / 1000) - 20 * 60),
+      "42501",
+      /recent second-factor/
+    );
+    fails(
+      member(who, `select api.export_frontend_privacy_request('${id}',${revision(id)});`),
+      "42501"
+    );
     const own = approved(governor);
     fails(exportSql(governor, own), "42501", /another staff member must export your request/);
     nothingRecorded(id, who);
@@ -191,7 +220,9 @@ try {
     );
     const next = approved(who);
     const [done, refused] = await Promise.all([
-      session(staff(admin, `begin;\n${processSql(next, "complete")}\nselect pg_sleep(2);\ncommit;`)),
+      session(
+        staff(admin, `begin;\n${processSql(next, "complete")}\nselect pg_sleep(2);\ncommit;`)
+      ),
       delayed(500, exportSql(governor, next)),
     ]);
     assert.equal(done.status, 0, done.stderr);
@@ -216,4 +247,6 @@ try {
 } finally {
   database.stop();
 }
-console.log(`Privacy export simple checks passed: ${checks.length} in ${Math.round((Date.now() - started) / 1000)} s.`);
+console.log(
+  `Privacy export simple checks passed: ${checks.length} in ${Math.round((Date.now() - started) / 1000)} s.`
+);
