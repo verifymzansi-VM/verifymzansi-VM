@@ -4,7 +4,7 @@
 CREATE OR REPLACE FUNCTION internal.list_my_post_templates()
  RETURNS jsonb
  LANGUAGE plpgsql
- STABLE SECURITY DEFINER
+ SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid := internal.price_draft_actor();

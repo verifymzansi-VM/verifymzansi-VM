@@ -4,7 +4,6 @@
 CREATE OR REPLACE FUNCTION api.list_my_post_templates()
  RETURNS jsonb
  LANGUAGE sql
- STABLE
  SET search_path TO 'pg_catalog'
 AS $function$
   select internal.list_my_post_templates();

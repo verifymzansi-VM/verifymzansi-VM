@@ -133,7 +133,6 @@ alter function internal.save_my_post_template(text, jsonb) owner to postgres;
 create or replace function internal.list_my_post_templates()
 returns jsonb
 language plpgsql
-stable
 security definer
 set search_path to 'pg_catalog'
 as $$
@@ -201,7 +200,6 @@ $$;
 create or replace function api.list_my_post_templates()
 returns jsonb
 language sql
-stable
 set search_path to 'pg_catalog'
 as $$
   select internal.list_my_post_templates();

@@ -5750,7 +5750,7 @@
       "updates": ["updates/20261121162018_post_templates.sql"],
       "arguments": [],
       "returns": "jsonb",
-      "volatility": "s",
+      "volatility": "v",
       "execute": {
         "anon": false,
         "authenticated": true,
