@@ -1,4 +1,4 @@
--- Reviewed rollback for updates/20261121181953_one_person_admin_mode.sql.
+-- Reviewed rollback for updates/20261121143000_one_person_admin_mode.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
 -- owner has decided so; prefer a forward fix. No website release depends on
 -- the update (it changes no API command), so no deploy is needed first.

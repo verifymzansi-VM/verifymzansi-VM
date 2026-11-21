@@ -82,7 +82,7 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Single-administrator mode for house slots, 21 November 2026
 
-`20261121181953_one_person_admin_mode.sql` is pending (see the applied
+`20261121143000_one_person_admin_mode.sql` is pending (see the applied
 register). Launch checklist item 67 (owner's decision of 21 November 2026,
 "Option A", cap 25). The owner has two admin accounts but one ID, so the
 two-person rules for house slots could not be met: a house-slot grant needs a
@@ -131,7 +131,7 @@ database returns.
 
 **Applying.**
 
-1. Run `../preflight/20261121181953_one_person_admin_mode.check.sql` unchanged
+1. Run `../preflight/20261121143000_one_person_admin_mode.check.sql` unchanged
    in the SQL editor. It is read only. Continue only if its result is the single
    "summary" row reading "one-person admin mode: update not applied; ID-verified
    staff: N; house slots: N" (any counts; N = 1 means the mode will apply).
@@ -148,7 +148,7 @@ admin account's own address in both places:
 `select internal.grant_house_slots('<verified admin email>', <1 to 25>, <7 to 180 days>, '<written reason, 5 to 500 characters>', '<verified admin email>');`
 
 The reviewed rollback is
-`../rollback/20261121181953_one_person_admin_mode.down.sql` (only with the
+`../rollback/20261121143000_one_person_admin_mode.down.sql` (only with the
 owner's decision; prefer a forward fix). It refuses unless the update is
 applied, and while any event is `self_granted` or any decision `self_approved`
 (those records are kept). Otherwise it puts back the five function bodies and
@@ -6720,6 +6720,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   checks: 0); production fingerprint after it (fingerprint.sql) matched the full
   replay (except the known schema grant difference)
 
-- `20261121181953_one_person_admin_mode.sql`: pending; apply-first
+- `20261121143000_one_person_admin_mode.sql`: pending; apply-first
 
 <!-- applied-register:end -->

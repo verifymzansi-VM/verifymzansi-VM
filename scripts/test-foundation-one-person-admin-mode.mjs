@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behaviour checks for 20261121181953_one_person_admin_mode.sql (owner's
+// Behaviour checks for 20261121143000_one_person_admin_mode.sql (owner's
 // decision of 21 November 2026): single-administrator mode for house slots,
 // logged.
 //
@@ -41,7 +41,7 @@ import {
   sqlValue,
 } from "./lib/foundation-staff-payment-world.mjs";
 
-const UPDATE = "20261121181953_one_person_admin_mode.sql";
+const UPDATE = "20261121143000_one_person_admin_mode.sql";
 const GRANT = "internal.grant_house_slots(text,integer,integer,text,text)";
 const CONFLICT = "internal.queue_conflict(uuid,uuid,uuid)";
 const CLAIM = "internal.claim_queue_items(text,integer)";

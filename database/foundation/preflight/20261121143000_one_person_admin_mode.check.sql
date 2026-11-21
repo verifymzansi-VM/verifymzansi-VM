@@ -1,4 +1,4 @@
--- Read-only preflight for updates/20261121181953_one_person_admin_mode.sql.
+-- Read-only preflight for updates/20261121143000_one_person_admin_mode.sql.
 --
 -- Run this file unchanged in the Supabase SQL editor before applying the
 -- update, and again after it. It changes nothing: the first statement makes

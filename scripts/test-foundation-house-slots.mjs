@@ -69,7 +69,7 @@ const EXPORT_LATER = [
 /** The grant after later reviewed updates. */
 const GRANT_LATER = [
   ADDED[GRANT],
-  // 20261121181953_one_person_admin_mode.sql (up to 25; single-administrator mode)
+  // 20261121143000_one_person_admin_mode.sql (up to 25; single-administrator mode)
   "6d72e0bc6a5f2bee76a43563f19278ac",
 ];
 const LIFECYCLE = "internal.run_post_lifecycle(integer)";

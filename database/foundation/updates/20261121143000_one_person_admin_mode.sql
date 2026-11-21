@@ -47,8 +47,8 @@
 -- reviewed body (or this update's), internal.single_administrator is absent
 -- (or this update's), the staff audit view is the reviewed one (or this
 -- update's) and both new columns are absent or both present.
--- Read-only preflight: ../preflight/20261121181953_one_person_admin_mode.check.sql.
--- Rollback: ../rollback/20261121181953_one_person_admin_mode.down.sql.
+-- Read-only preflight: ../preflight/20261121143000_one_person_admin_mode.check.sql.
+-- Rollback: ../rollback/20261121143000_one_person_admin_mode.down.sql.
 begin;
 -- Never wait more than 5 seconds for anything this update needs.
 set local lock_timeout='5s';
