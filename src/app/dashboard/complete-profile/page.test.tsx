@@ -2,12 +2,11 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CompleteProfilePage from "./page";
-import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 
 const mockPush = vi.fn();
 const mockFetch = vi.fn();
 const mockGetUser = vi.fn();
-const mockMaybeSingle = vi.fn();
+const mockReadOwnProfile = vi.fn();
 const mockToast = vi.fn();
 const mockFrom = vi.fn();
 
@@ -33,19 +32,11 @@ vi.mock("@/components/layout/page-header", () => ({
   ),
 }));
 
-vi.mock("@/lib/foundation/restored-browser-client", () => ({
-  getRestoredFoundationBrowserClient: () => ({
-    auth: { getUser: mockGetUser },
-    from: mockFrom,
-  }),
-}));
+const mockClient = { auth: { getUser: mockGetUser }, from: mockFrom };
 
-mockFrom.mockImplementation(() => ({
-  select: () => ({
-    eq: () => ({
-      maybeSingle: mockMaybeSingle,
-    }),
-  }),
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => mockClient,
+  readRestoredOwnProfile: (...args: unknown[]) => mockReadOwnProfile(...args),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -55,22 +46,12 @@ vi.mock("@/hooks/use-toast", () => ({
 describe("CompleteProfilePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockFrom.mockImplementation(() => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: mockMaybeSingle,
-        }),
-      }),
-    }));
     window.history.replaceState({}, "", "/dashboard/complete-profile");
     mockGetUser.mockResolvedValue({
       data: { user: { id: "user-1" } },
       error: null,
     });
-    mockMaybeSingle.mockResolvedValue({
-      data: { display_name: "Nomsa", phone: null },
-      error: null,
-    });
+    mockReadOwnProfile.mockResolvedValue({ display_name: "Nomsa", phone: null });
     global.fetch = mockFetch;
   });
 
@@ -94,10 +75,7 @@ describe("CompleteProfilePage", () => {
       "",
       "/dashboard/complete-profile?returnUrl=%2Fpost%2Fcreate-listing"
     );
-    mockMaybeSingle.mockResolvedValue({
-      data: { display_name: "Nomsa", phone: "0712345678" },
-      error: null,
-    });
+    mockReadOwnProfile.mockResolvedValue({ display_name: "Nomsa", phone: "0712345678" });
 
     render(<CompleteProfilePage />);
 
@@ -106,19 +84,30 @@ describe("CompleteProfilePage", () => {
     });
   });
 
-  it("queries the canonical account profile table", async () => {
+  it("reads the member's own profile by name, without a table-style call", async () => {
     render(<CompleteProfilePage />);
 
     await waitFor(() => {
-      expect(mockFrom).toHaveBeenCalledWith(ACCOUNT_PROFILE_TABLE);
+      expect(mockReadOwnProfile).toHaveBeenCalledWith(mockClient, "user-1");
     });
-    expect(ACCOUNT_PROFILE_TABLE).toBe("account_profiles");
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("keeps the number field empty when the profile cannot be read", async () => {
+    mockReadOwnProfile.mockResolvedValue(null);
+
+    render(<CompleteProfilePage />);
+
+    const input = (await screen.findByLabelText(/SA mobile number/i)) as HTMLInputElement;
+    expect(input.value).toBe("");
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("pre-fills phone input from pending_phone", async () => {
-    mockMaybeSingle.mockResolvedValue({
-      data: { display_name: "Nomsa", phone: null, pending_phone: "+27711234567" },
-      error: null,
+    mockReadOwnProfile.mockResolvedValue({
+      display_name: "Nomsa",
+      phone: null,
+      pending_phone: "+27711234567",
     });
 
     render(<CompleteProfilePage />);

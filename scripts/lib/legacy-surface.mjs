@@ -43,6 +43,13 @@ const LITERAL_RPC = /\.rpc\s*(?:<[^>()]*>)?\(\s*(["'\x60])([A-Za-z0-9_]+)\1/g;
 const DYNAMIC_RPC = /\.rpc\s*(?:<[^>()]*>)?\(\s*[^"'\x60\s)]/;
 const STRING_NAME = /(["'\x60])([a-z][a-z0-9_]*)\1/g;
 const TABLE_READ = /(\w+)?\s*\.from\s*(?:<[^>()]*>)?\(\s*(["'\x60])([A-Za-z0-9_]+)\2/g;
+// A table named through an UPPER_SNAKE string constant instead of a literal:
+// `const PROFILE_TABLE = "account_profiles"` (optionally exported, typed
+// `: string`, or an alias of another such constant), read as
+// `.from(PROFILE_TABLE)`. Lower-case variables stay unresolved (dynamic).
+const TABLE_CONSTANT =
+  /\b(?:export\s+)?const\s+([A-Z][A-Z0-9_]*)\s*(?::\s*string\s*)?=\s*(?:(["'\x60])([a-z][a-z0-9_]*)\2|([A-Z][A-Z0-9_]*)\b(?!\s*[.([]))/g;
+const CONSTANT_TABLE_READ = /(\w+)?\s*\.from\s*(?:<[^>()]*>)?\(\s*([A-Z][A-Z0-9_]*)\s*[,)]/g;
 const BACKEND_SWITCH = /\bgetDataBackend\s*\(\s*\)/g;
 const DEFINED_FUNCTION =
   /create\s+(?:or\s+replace\s+)?function\s+(?:"?public"?\s*\.\s*)?"?([a-z0-9_]+)"?\s*\(/gi;
@@ -84,12 +91,51 @@ export function definedFunctionNames(sqlTexts) {
 }
 
 /**
+ * String constants that name a table: per file, and across all files under
+ * the key "". Aliases are resolved. A file's own definition wins over one
+ * elsewhere; across files the first definition (in the given order) wins.
+ * @param {{ path: string, text: string }[]} files
+ * @returns {Map<string, Map<string, string>>}
+ */
+export function tableConstantsOf(files) {
+  /** @type {Map<string, Map<string, { value?: string, alias?: string }>>} */
+  const raw = new Map([["", new Map()]]);
+  const anywhere = /** @type {Map<string, { value?: string, alias?: string }>} */ (raw.get(""));
+  for (const { path: file, text } of files) {
+    const own = new Map();
+    for (const match of text.matchAll(TABLE_CONSTANT)) {
+      const entry = match[3] ? { value: match[3] } : { alias: match[4] };
+      own.set(match[1], entry);
+      if (!anywhere.has(match[1])) anywhere.set(match[1], entry);
+    }
+    if (own.size > 0) raw.set(file, own);
+  }
+  /** @type {Map<string, Map<string, string>>} */
+  const resolved = new Map();
+  for (const [file, own] of raw) {
+    const values = new Map();
+    for (const [name, first] of own) {
+      let entry = first;
+      // Follow aliases (own file first, then anywhere), a bounded number of hops.
+      for (let hop = 0; entry && !entry.value && hop < 8; hop++) {
+        const alias = /** @type {string} */ (entry.alias);
+        entry = own.get(alias) ?? anywhere.get(alias);
+      }
+      if (entry?.value) values.set(name, entry.value);
+    }
+    resolved.set(file, values);
+  }
+  return resolved;
+}
+
+/**
  * @param {{ path: string, text: string }[]} files scanned production files
  * @param {{ apiNames: Set<string>, retiredFunctionNames: Set<string> }} names
  *   apiNames: every foundation `api` command (database/foundation manifests);
  *   retiredFunctionNames: functions the retired migration tree defines.
  */
 export function measureLegacySurface(files, { apiNames, retiredFunctionNames }) {
+  const tableConstants = tableConstantsOf(files);
   let backendSwitches = 0;
   let retiredCommandCalls = 0;
   let retiredTableReads = 0;
@@ -133,6 +179,15 @@ export function measureLegacySurface(files, { apiNames, retiredFunctionNames }) 
     for (const match of text.matchAll(TABLE_READ)) {
       if (match[1] && NON_TABLE_RECEIVERS.has(match[1])) continue;
       tableNames.add(match[3]);
+      retiredTableReads += 1;
+      bump(file, "retiredTableReads");
+    }
+    for (const match of text.matchAll(CONSTANT_TABLE_READ)) {
+      if (match[1] && NON_TABLE_RECEIVERS.has(match[1])) continue;
+      const table =
+        tableConstants.get(file)?.get(match[2]) ?? tableConstants.get("")?.get(match[2]);
+      if (!table) continue;
+      tableNames.add(table);
       retiredTableReads += 1;
       bump(file, "retiredTableReads");
     }

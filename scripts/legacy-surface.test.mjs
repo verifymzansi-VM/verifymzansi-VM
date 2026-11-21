@@ -132,6 +132,42 @@ test("retired table reads skip Storage buckets and typed-array helpers", () => {
   assert.deepEqual(topFiles(result.perFile, "retiredTableReads"), ["src/a.ts (3)"]);
 });
 
+test("retired table reads include tables named through string constants", () => {
+  const result = measure([
+    {
+      path: "src/lib/account/compat.ts",
+      text: [
+        'export const PROFILE_TABLE = "account_profiles";',
+        "export const PROFILE_WRITE_TABLE = PROFILE_TABLE;",
+        'export const TABLES = ["listings", "leads"] as const;',
+        "export const LIMIT = MAX_ROWS * 2;",
+      ].join("\n"),
+    },
+    {
+      path: "src/app/page.tsx",
+      text: [
+        'import { PROFILE_TABLE, PROFILE_WRITE_TABLE } from "@/lib/account/compat";',
+        "await supabase\n  .from(PROFILE_TABLE)\n  .select('phone');",
+        "await supabase.from(PROFILE_WRITE_TABLE).update({});",
+        // Not tables: arrays, unknown names, lower-case variables, typed-array helpers.
+        "Array.from(TABLES);",
+        "client.from(TABLES);",
+        "client.from(NOT_DEFINED_ANYWHERE);",
+        "client.from(tableName);",
+      ].join("\n"),
+    },
+    {
+      path: "src/b.ts",
+      // A file's own definition wins over one elsewhere.
+      text: 'const PROFILE_TABLE = "payments";\nawait admin.from(PROFILE_TABLE, { schema: "x" });',
+    },
+  ]);
+  assert.equal(result.counts.retiredTableReads, 3);
+  assert.deepEqual(result.retiredTableNames, ["account_profiles", "payments"]);
+  assert.equal(result.perFile["src/app/page.tsx"].retiredTableReads, 2);
+  assert.equal(result.perFile["src/b.ts"].retiredTableReads, 1);
+});
+
 test("reads function names from the retired migration tree", () => {
   const sql = [
     "create or replace function public.record_site_visit(p_path text) returns void",
