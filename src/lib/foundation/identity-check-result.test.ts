@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FoundationServiceApi } from "./service-api";
 import { fetchDiditDecision, fetchDiditImage, type DiditDecision } from "./didit-client";
-import { sealStartContext, type IdentityCheckStartContext } from "./identity-check-context";
+import { networkHash } from "./identity-check-context";
 import {
   comparableName,
   namesMatch,
@@ -35,22 +35,17 @@ const caseId = "66666666-6666-4666-8666-666666666666";
 const adult = "8001015009087";
 const child = "1501015009083";
 const config = { apiKey: "fixture-key", workflowId: "77777777-7777-4777-8777-777777777777" };
-const start: IdentityCheckStartContext = {
-  owner,
-  first: "Thando Sipho",
-  last: "Dlamini",
-  network: "4:198.51.100",
-  device: "handheld",
-};
+const names = { first_name: "Thando Sipho", last_name: "Dlamini" };
+/** What the database recorded when the member started (begin_identity_check_evidence). */
+const start = () => ({ ...names, network_hash: networkHash("198.51.100.7"), device_kind: "phone" });
 const rpc = vi.fn();
 const service = { rpc } as unknown as FoundationServiceApi;
 
-function decision(overrides: Partial<DiditDecision> = {}, context = start): DiditDecision {
+function decision(overrides: Partial<DiditDecision> = {}): DiditDecision {
   return {
     session_id: session,
     status: "Approved",
     vendor_data: check,
-    metadata: { start: sealStartContext(check, context) },
     id_verifications: [
       {
         first_name: "THANDO SIPHO",
@@ -78,6 +73,8 @@ beforeEach(() => {
       case "begin_identity_check_evidence":
         return {
           data: {
+            owner_id: owner,
+            start: start(),
             id_front: { artifact_id: idArtifact, object_key: `evidence/${caseId}/${idArtifact}` },
             selfie: {
               artifact_id: selfieArtifact,
@@ -115,19 +112,22 @@ describe("the partner's status", () => {
 
 describe("names (typed versus the ID)", () => {
   it("are compared without regard to case, Unicode form or spacing", () => {
-    expect(namesMatch(start, { first_name: "THANDO  SIPHO", last_name: "dlamini" })).toBe(true);
+    expect(namesMatch(names, { first_name: "THANDO  SIPHO", last_name: "dlamini" })).toBe(true);
     // The same letters composed differently (NFC typed, NFD on the ID).
     expect(
-      namesMatch({ first: "Zoë", last: "Ndlovu" }, { first_name: "ZOË", last_name: "NDLOVU" })
+      namesMatch(
+        { first_name: "Zo" + String.fromCodePoint(0xeb), last_name: "Ndlovu" },
+        { first_name: "ZOE" + String.fromCodePoint(0x308), last_name: "NDLOVU" }
+      )
     ).toBe(true);
-    expect(namesMatch(start, { first_name: "THANDO", last_name: "DLAMINI" })).toBe(false);
-    expect(namesMatch(start, { first_name: null, last_name: "DLAMINI" })).toBe(false);
+    expect(namesMatch(names, { first_name: "THANDO", last_name: "DLAMINI" })).toBe(false);
+    expect(namesMatch(names, { first_name: null, last_name: "DLAMINI" })).toBe(false);
     expect(comparableName(" Ａnna ")).toBe("anna");
   });
 });
 
 describe("recording a result", () => {
-  it("records a clean pass with the photos, the encrypted number and exactly the typed names", async () => {
+  it("records a clean pass with the photos, the encrypted number and exactly the start names", async () => {
     vi.mocked(fetchDiditDecision).mockResolvedValue(decision());
     expect(await recordIdentityCheckResult(service, config, session)).toEqual({
       recorded: true,
@@ -159,7 +159,7 @@ describe("recording a result", () => {
     );
   });
 
-  it("sends a pass from another network or device to a person (scam lure)", async () => {
+  it("adds session_moved when the check happened on another network or device (scam lure)", async () => {
     for (const seen of [
       [{ ip_address: "203.0.113.9", platform: "mobile" }],
       [{ ip_address: "198.51.100.42", platform: "desktop" }],
@@ -168,9 +168,9 @@ describe("recording a result", () => {
       rpc.mockClear();
       vi.mocked(fetchDiditDecision).mockResolvedValue(decision({ ip_analyses: seen }));
       await recordIdentityCheckResult(service, config, session);
-      expect(completion().p_outcome).toBe("in_review");
+      expect(completion()).toMatchObject({ p_outcome: "approved", p_reasons: ["session_moved"] });
     }
-    // A decline stays a decline.
+    // The partner's outcome is passed as it is.
     rpc.mockClear();
     vi.mocked(fetchDiditDecision).mockResolvedValue(
       decision({
@@ -179,7 +179,7 @@ describe("recording a result", () => {
       })
     );
     await recordIdentityCheckResult(service, config, session);
-    expect(completion().p_outcome).toBe("declined");
+    expect(completion()).toMatchObject({ p_outcome: "declined", p_reasons: ["session_moved"] });
   });
 
   it("adds names_differ and document_not_accepted from the ID", async () => {
@@ -205,7 +205,6 @@ describe("recording a result", () => {
       [{ id_verifications: [{ ...document!, personal_number: child }] }, ["under_18"]],
       [{ status: "Declined", liveness_checks: [] }, []],
       [{ status: "Expired" }, []],
-      [{ metadata: { start: "v1.forged" } }, []],
     ];
     for (const [overrides, reasons] of cases) {
       rpc.mockClear();

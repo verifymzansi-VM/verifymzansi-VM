@@ -36,7 +36,7 @@ describe("settings", () => {
 });
 
 describe("a new session", () => {
-  it("sends only the check id and the sealed context, and answers the frame link", async () => {
+  it("sends only the check id (no name, contact, network or device), and answers the frame link", async () => {
     fetchMock.mockResolvedValue(
       reply(201, {
         session_id: session,
@@ -44,9 +44,7 @@ describe("a new session", () => {
         status: "Not Started",
       })
     );
-    expect(
-      await createDiditSession(config, { checkId: check, sealedContext: "v1.sealed" })
-    ).toEqual({
+    expect(await createDiditSession(config, check)).toEqual({
       sessionId: session,
       url: "https://verify.didit.me/session/abc",
     });
@@ -57,15 +55,12 @@ describe("a new session", () => {
     expect(JSON.parse(init.body)).toEqual({
       workflow_id: config.workflowId,
       vendor_data: check,
-      metadata: { start: "v1.sealed" },
     });
   });
 
   it("refuses a link outside the frame origin", async () => {
     fetchMock.mockResolvedValue(reply(201, { session_id: session, url: "https://evil.example/x" }));
-    await expect(
-      createDiditSession(config, { checkId: check, sealedContext: "v1.sealed" })
-    ).rejects.toMatchObject({ reason: "outage" });
+    await expect(createDiditSession(config, check)).rejects.toMatchObject({ reason: "outage" });
   });
 
   it("names why the partner refused: credit, our settings or the partner", async () => {
@@ -83,10 +78,7 @@ describe("a new session", () => {
     for (const [answer, reason] of cases) {
       if (answer instanceof Error) fetchMock.mockRejectedValueOnce(answer);
       else fetchMock.mockResolvedValueOnce(answer);
-      const failure = await createDiditSession(config, {
-        checkId: check,
-        sealedContext: "s",
-      }).catch((error: unknown) => error);
+      const failure = await createDiditSession(config, check).catch((error: unknown) => error);
       expect(failure).toBeInstanceOf(DiditError);
       expect((failure as DiditError).reason).toBe(reason);
     }

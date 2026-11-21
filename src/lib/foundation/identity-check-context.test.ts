@@ -3,47 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   deviceOfPlatform,
   deviceOfUserAgent,
+  networkHash,
   networkOf,
-  openStartContext,
-  sealStartContext,
   sessionMoved,
-  type IdentityCheckStartContext,
 } from "./identity-check-context";
 vi.mock("server-only", () => ({}));
 
-const check = "11111111-1111-4111-8111-111111111111";
-const other = "22222222-2222-4222-8222-222222222222";
-const context: IdentityCheckStartContext = {
-  owner: "33333333-3333-4333-8333-333333333333",
-  first: "Thando Sipho",
-  last: "Dlamini",
-  network: "4:198.51.100",
-  device: "handheld",
-};
-
 beforeEach(() => {
-  vi.stubEnv("ID_ENCRYPTION_KEY", "fedcba9876543210".repeat(4));
-});
-
-describe("the sealed start context", () => {
-  it("opens only for its own check and holds no readable personal data", () => {
-    const sealed = sealStartContext(check, context);
-    expect(openStartContext(check, sealed)).toEqual(context);
-    expect(openStartContext(other, sealed)).toBeNull();
-    for (const visible of ["Thando", "Dlamini", "198.51", context.owner])
-      expect(sealed).not.toContain(visible);
-    // A fresh IV each time.
-    expect(sealStartContext(check, context)).not.toBe(sealed);
-  });
-
-  it("refuses an altered, missing or foreign value", () => {
-    const sealed = sealStartContext(check, context);
-    const flipped = sealed.slice(0, -2) + (sealed.endsWith("A") ? "B" : "A") + sealed.slice(-1);
-    for (const value of [flipped, "", null, undefined, "v2." + sealed.slice(3), "v1.abc"])
-      expect(openStartContext(check, value)).toBeNull();
-    vi.stubEnv("ID_ENCRYPTION_KEY", "0123456789abcdef".repeat(4));
-    expect(openStartContext(check, sealed)).toBeNull();
-  });
+  vi.stubEnv("HMAC_SECRET", "0123456789abcdef".repeat(4));
 });
 
 describe("network and device", () => {
@@ -57,51 +24,70 @@ describe("network and device", () => {
       expect(networkOf(bad)).toBeNull();
   });
 
+  it("keeps only a keyed hash of the network, marked with the address kind", () => {
+    const hash = networkHash("198.51.100.7");
+    expect(hash).toMatch(/^4[a-f0-9]{63}$/);
+    expect(hash).toBe(networkHash("198.51.100.200"));
+    expect(hash).not.toBe(networkHash("198.51.101.7"));
+    expect(networkHash("2001:db8::1")).toMatch(/^6[a-f0-9]{63}$/);
+    expect(networkHash("unknown")).toMatch(/^0[a-f0-9]{63}$/);
+    // Another key gives another hash: the network cannot be read back.
+    vi.stubEnv("HMAC_SECRET", "fedcba9876543210".repeat(4));
+    expect(networkHash("198.51.100.7")).not.toBe(hash);
+  });
+
   it("tells a phone or tablet from a computer, in both descriptions", () => {
     expect(
       deviceOfUserAgent("Mozilla/5.0 (Linux; Android 14; SM-A146P) Mobile Safari/537.36")
-    ).toBe("handheld");
+    ).toBe("phone");
     expect(deviceOfUserAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X)")).toBe(
-      "handheld"
+      "phone"
     );
     expect(deviceOfUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131")).toBe(
-      "desktop"
+      "computer"
     );
-    expect(deviceOfUserAgent(null)).toBe("desktop");
-    expect(deviceOfPlatform("mobile")).toBe("handheld");
-    expect(deviceOfPlatform("Tablet")).toBe("handheld");
-    expect(deviceOfPlatform("desktop")).toBe("desktop");
+    expect(deviceOfUserAgent(null)).toBe("computer");
+    expect(deviceOfPlatform("mobile")).toBe("phone");
+    expect(deviceOfPlatform("Tablet")).toBe("phone");
+    expect(deviceOfPlatform("desktop")).toBe("computer");
     expect(deviceOfPlatform("tv")).toBeNull();
   });
 });
 
 describe("a check that moved away from where it started (scam lure)", () => {
-  const start = { network: "4:198.51.100", device: "handheld" as const };
+  const start = () => ({ network_hash: networkHash("198.51.100.7"), device_kind: "phone" });
 
   it("stays when the partner saw the same network and kind of device", () => {
-    expect(sessionMoved(start, { ip_address: "198.51.100.99", platform: "mobile" })).toBe(false);
+    expect(sessionMoved(start(), { ip_address: "198.51.100.99", platform: "mobile" })).toBe(false);
   });
 
   it("moved when the network or the device differs", () => {
-    expect(sessionMoved(start, { ip_address: "203.0.113.5", platform: "mobile" })).toBe(true);
-    expect(sessionMoved(start, { ip_address: "198.51.100.99", platform: "desktop" })).toBe(true);
+    expect(sessionMoved(start(), { ip_address: "203.0.113.5", platform: "mobile" })).toBe(true);
+    expect(sessionMoved(start(), { ip_address: "198.51.100.99", platform: "desktop" })).toBe(true);
   });
 
-  it("moved when the partner reports no IP analysis at all (fail closed)", () => {
-    expect(sessionMoved(start, undefined)).toBe(true);
-  });
-
-  it("compares a network only between addresses of the same kind", () => {
-    expect(sessionMoved(start, { ip_address: "2001:db8::1", platform: "mobile" })).toBe(false);
+  it("moved when the partner reports no IP analysis, or the start was not recorded (fail closed)", () => {
+    expect(sessionMoved(start(), undefined)).toBe(true);
     expect(
       sessionMoved(
-        { network: null, device: "desktop" },
+        { network_hash: null, device_kind: null },
+        { ip_address: "198.51.100.99", platform: "mobile" }
+      )
+    ).toBe(true);
+  });
+
+  it("compares a network only between known addresses of the same kind", () => {
+    expect(sessionMoved(start(), { ip_address: "2001:db8::1", platform: "mobile" })).toBe(false);
+    expect(sessionMoved(start(), { ip_address: null, platform: "mobile" })).toBe(false);
+    expect(
+      sessionMoved(
+        { network_hash: networkHash("unknown"), device_kind: "computer" },
         { ip_address: "203.0.113.5", platform: "desktop" }
       )
     ).toBe(false);
     expect(
       sessionMoved(
-        { network: "6:2001:db8:0", device: "desktop" },
+        { network_hash: networkHash("2001:db8:0::5"), device_kind: "computer" },
         { ip_address: "2001:db8:1::1", platform: "desktop" }
       )
     ).toBe(true);

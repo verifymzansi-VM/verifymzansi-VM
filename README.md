@@ -327,6 +327,18 @@ an hour (one alert to the support address) and members take their photos on the
 page instead. The 5-minute retention job deletes due Didit sessions only when
 the key is set.
 
+Didit receives only the random check id. Where the member started (a keyed hash
+of the network, made with the existing `HMAC_SECRET`, and phone or computer) and
+the names they typed stay in our database and are compared with what Didit
+reports.
+
+For the verification screens: the frame and camera headers apply only when
+`/verification` is loaded as a fresh page (not reached by an in-app link); a
+computer without a camera should not start the check (continue on the phone,
+where the check starts); a check started on a computer and finished on a phone
+counts as moved and goes to a person (or, fully automatic, is declined with "ask
+a person").
+
 ## Key Commands
 
 | Command                        | Purpose                                              |

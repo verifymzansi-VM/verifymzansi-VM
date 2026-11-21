@@ -1,74 +1,15 @@
 import "server-only";
-import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
-import { z } from "zod";
+import { createHmac } from "node:crypto";
 import { verificationSecret } from "./verification-runtime";
 
 /**
- * What the server knows when a member starts an automatic ID check, kept with
- * the partner session as one sealed value (AES-256-GCM, bound to the check
- * id) that the partner stores but cannot read:
- *
- * - the account, needed to encrypt the ID number for it;
- * - the legal names the member typed, passed back to the database exactly
- *   (`p_names`) and compared with the names on the ID;
- * - the member's network and kind of device, compared with what the partner
- *   saw during the check (the session link is a bearer link: a scammer could
- *   start a check and send the link to a victim).
- *
- * The key is derived from ID_ENCRYPTION_KEY for this purpose only.
+ * Where a member started an automatic ID check, compared with where the
+ * partner saw the check happen. The session link is a bearer link: a scammer
+ * could start a check and send the link to a victim. The database keeps only
+ * a keyed hash of the member's network and the kind of device
+ * (api.attach_identity_check_session); the partner receives neither.
  */
-const contextSchema = z.strictObject({
-  owner: z.uuid(),
-  first: z.string().min(1).max(400),
-  last: z.string().min(1).max(400),
-  network: z.string().max(40).nullable(),
-  device: z.enum(["handheld", "desktop"]),
-});
-export type IdentityCheckStartContext = z.infer<typeof contextSchema>;
-
-const VERSION = "v1.";
-const aad = (checkId: string) => Buffer.from(`identity-check-start-v1\0${checkId}`, "utf8");
-const sealKey = () =>
-  createHmac("sha256", verificationSecret("ID_ENCRYPTION_KEY"))
-    .update("identity-check-seal-v1")
-    .digest();
-
-export function sealStartContext(checkId: string, context: IdentityCheckStartContext) {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", sealKey(), iv);
-  cipher.setAAD(aad(checkId));
-  const body = Buffer.concat([
-    cipher.update(JSON.stringify(contextSchema.parse(context)), "utf8"),
-    cipher.final(),
-  ]);
-  return VERSION + Buffer.concat([iv, body, cipher.getAuthTag()]).toString("base64url");
-}
-
-/** The sealed context of this check, or null when it is missing, altered or
- * belongs to another check. */
-export function openStartContext(
-  checkId: string,
-  sealed: string | null | undefined
-): IdentityCheckStartContext | null {
-  if (!sealed?.startsWith(VERSION) || sealed.length > 4096) return null;
-  try {
-    const raw = Buffer.from(sealed.slice(VERSION.length), "base64url");
-    if (raw.length < 29) return null;
-    const decipher = createDecipheriv("aes-256-gcm", sealKey(), raw.subarray(0, 12), {
-      authTagLength: 16,
-    });
-    decipher.setAAD(aad(checkId));
-    decipher.setAuthTag(raw.subarray(raw.length - 16));
-    const text = Buffer.concat([
-      decipher.update(raw.subarray(12, raw.length - 16)),
-      decipher.final(),
-    ]).toString("utf8");
-    const parsed = contextSchema.safeParse(JSON.parse(text));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
+export type DeviceKind = "phone" | "computer";
 
 /**
  * The network an address belongs to: IPv4 /24 ("4:198.51.100") or IPv6 /48
@@ -98,39 +39,53 @@ export function networkOf(address: string | null | undefined): string | null {
     .join(":")}`;
 }
 
+/**
+ * The keyed hash (HMAC-SHA256 with HMAC_SECRET, domain-separated) of an
+ * address's network, as 64 hex characters. The first character is replaced by
+ * the address kind ("4", "6", or "0" when the address cannot be read), so two
+ * networks are compared only when they are of the same kind: a browser can
+ * reach this site over IPv6 and the partner over IPv4.
+ */
+export function networkHash(address: string | null | undefined) {
+  const network = networkOf(address);
+  const digest = createHmac("sha256", verificationSecret("HMAC_SECRET"))
+    .update(`identity-check-network-v1\0${network ?? "none"}`)
+    .digest("hex");
+  return (network ? network[0] : "0") + digest.slice(1);
+}
+
 /** Phone or tablet versus computer, from the browser's own description. */
-export function deviceOfUserAgent(userAgent: string | null | undefined) {
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent ?? "") ? "handheld" : "desktop";
+export function deviceOfUserAgent(userAgent: string | null | undefined): DeviceKind {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent ?? "") ? "phone" : "computer";
 }
 
 /** The partner's `platform` (mobile, tablet, desktop) in the same terms. */
-export function deviceOfPlatform(platform: string | null | undefined) {
+export function deviceOfPlatform(platform: string | null | undefined): DeviceKind | null {
   const value = platform?.trim().toLowerCase();
   return value === "mobile" || value === "tablet"
-    ? "handheld"
+    ? "phone"
     : value === "desktop"
-      ? "desktop"
+      ? "computer"
       : null;
 }
 
 /**
  * True when the check did not happen on the network and kind of device that
  * started it. The partner's IP analysis is required (fail closed when it is
- * missing); a network is compared only when both addresses are of the same
- * kind (a browser can reach this site over IPv6 and the partner over IPv4),
- * and a device only when the partner names it.
+ * missing or the start was not recorded); networks are compared only when
+ * both are known and of the same kind, and the device only when the partner
+ * names it.
  */
 export function sessionMoved(
-  start: Pick<IdentityCheckStartContext, "network" | "device">,
+  start: { network_hash: string | null; device_kind: string | null },
   seen: { ip_address?: string | null; platform?: string | null } | undefined
 ) {
-  if (!seen) return true;
-  const network = networkOf(seen.ip_address);
+  if (!seen || !start.network_hash || !start.device_kind) return true;
+  const network = networkHash(seen.ip_address);
   const device = deviceOfPlatform(seen.platform);
   const networkMoved =
-    start.network !== null &&
-    network !== null &&
-    start.network.slice(0, 2) === network.slice(0, 2) &&
-    start.network !== network;
-  return networkMoved || (device !== null && device !== start.device);
+    start.network_hash[0] !== "0" &&
+    network[0] === start.network_hash[0] &&
+    network !== start.network_hash;
+  return networkMoved || (device !== null && device !== start.device_kind);
 }

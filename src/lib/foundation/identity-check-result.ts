@@ -8,7 +8,7 @@ import {
   type DiditConfig,
   type DiditDecision,
 } from "./didit-client";
-import { openStartContext, sessionMoved } from "./identity-check-context";
+import { sessionMoved } from "./identity-check-context";
 import { cleanEvidence, verificationSecret } from "./verification-runtime";
 import { processIdentityNumber } from "../domains/verification/identity-processing";
 import { isUnder18FromSaId, validateSaIdChecksum } from "../utils/sa-id-validation";
@@ -23,7 +23,8 @@ import { putImmutableR2Bytes } from "../services/storage";
  * a check that already has its result is answered as it was.
  */
 type Outcome = "approved" | "declined" | "in_review" | "not_finished";
-type Reason = "names_differ" | "document_not_accepted" | "id_number_invalid" | "under_18";
+type Reason =
+  "names_differ" | "document_not_accepted" | "id_number_invalid" | "under_18" | "session_moved";
 
 /** The partner's status as a result, or null while the session is still going. */
 export function outcomeOf(status: string): Outcome | null {
@@ -48,7 +49,7 @@ export const comparableName = (value: string | null | undefined) =>
   (value ?? "").normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
 
 export function namesMatch(
-  typed: { first: string; last: string },
+  typed: { first_name: string; last_name: string },
   onId: { first_name?: string | null; last_name?: string | null }
 ) {
   const first = comparableName(onId.first_name);
@@ -56,14 +57,23 @@ export function namesMatch(
   return (
     first !== "" &&
     last !== "" &&
-    first === comparableName(typed.first) &&
-    last === comparableName(typed.last)
+    first === comparableName(typed.first_name) &&
+    last === comparableName(typed.last_name)
   );
 }
 
 const reserved = z.object({
+  owner_id: z.uuid(),
   id_front: z.object({ artifact_id: z.uuid(), object_key: z.string() }),
   selfie: z.object({ artifact_id: z.uuid(), object_key: z.string() }),
+  // What the database recorded when the member started: the legal names
+  // they typed, the keyed hash of their network and the kind of device.
+  start: z.object({
+    first_name: z.string().min(1),
+    last_name: z.string().min(1),
+    network_hash: z.string().nullable(),
+    device_kind: z.string().nullable(),
+  }),
 });
 const stored = /^evidence\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/;
 const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
@@ -107,7 +117,7 @@ export async function recordIdentityCheckResult(
   // console) carries no check id: nothing to record.
   const checkId = z.uuid().safeParse(decision.vendor_data);
   if (!checkId.success) return { recorded: false, status: "not_ours" };
-  let outcome = outcomeOf(decision.status);
+  const outcome = outcomeOf(decision.status);
   if (!outcome) return { recorded: false, status: decision.status };
   const check = checkId.data;
   const complete = async (args: {
@@ -129,11 +139,10 @@ export async function recordIdentityCheckResult(
     return { recorded: true, status };
   };
 
-  const start = openStartContext(check, decision.metadata?.start);
   const document = decision.id_verifications?.[0];
   const face = decision.liveness_checks?.[0];
-  // Nothing a person could review, or not a session this site started.
-  if (outcome === "not_finished" || !start || !document?.front_image || !face?.reference_image)
+  // Nothing a person could review.
+  if (outcome === "not_finished" || !document?.front_image || !face?.reference_image)
     return complete({ outcome: "not_finished" });
   // Only a valid adult South African ID number becomes a submission; anything
   // else keeps nothing (the partner's copy is deleted at once).
@@ -142,14 +151,6 @@ export async function recordIdentityCheckResult(
     return complete({ outcome: "not_finished", reasons: ["id_number_invalid"] });
   if (isUnder18FromSaId(number) !== false)
     return complete({ outcome: "not_finished", reasons: ["under_18"] });
-
-  const reasons: Reason[] = [];
-  if (!namesMatch(start, document)) reasons.push("names_differ");
-  if (document.issuing_state !== "ZAF") reasons.push("document_not_accepted");
-  // The link was opened elsewhere: a clean pass goes to a person (or is
-  // declined on the fully automatic setting, where "ask a person" is open).
-  if (outcome === "approved" && sessionMoved(start, decision.ip_analyses?.[0]))
-    outcome = "in_review";
 
   const begun = await service.rpc("begin_identity_check_evidence", {
     p_check: check,
@@ -162,18 +163,25 @@ export async function recordIdentityCheckResult(
   const targets = reserved.parse(begun.data);
   if (!stored.test(targets.id_front.object_key) || !stored.test(targets.selfie.object_key))
     throw new Error("Identity check evidence target changed");
+  const { start } = targets;
+  const reasons: Reason[] = [];
+  if (!namesMatch(start, document)) reasons.push("names_differ");
+  if (document.issuing_state !== "ZAF") reasons.push("document_not_accepted");
+  // The link was opened on another network or kind of device: the result
+  // goes to a person (or is declined, with "ask a person", when automatic).
+  if (sessionMoved(start, decision.ip_analyses?.[0])) reasons.push("session_moved");
   const [idFront, selfie] = await Promise.all([
     storePhoto(targets.id_front.object_key, document.front_image, false),
     storePhoto(targets.selfie.object_key, face.reference_image, true),
   ]);
-  const identity = processIdentityNumber(start.owner, number, {
+  const identity = processIdentityNumber(targets.owner_id, number, {
     identityMatchKey: verificationSecret("HMAC_SECRET").toString("hex"),
     numberEncryptionKey: verificationSecret("ID_ENCRYPTION_KEY").toString("hex"),
     identityKeyId: "identity-match-v1",
     encryptionKeyId: "identity-number-v1",
   });
   const assessed = await service.rpc("assess_identity_upload", {
-    p_owner: start.owner,
+    p_owner: targets.owner_id,
     p_fingerprint: identity.fingerprint,
     p_document_sha256: idFront.content,
     p_selfie_sha256: selfie.content,
@@ -187,9 +195,9 @@ export async function recordIdentityCheckResult(
       p_id_front: idFront.receipt,
       p_selfie: selfie.receipt,
       p_identity: { fingerprint: identity.fingerprint, encrypted_number: identity.encryptedNumber },
-      // Exactly the names the member typed; the database marks the result
-      // names_differ if they changed during the check.
-      p_names: { first_name: start.first, last_name: start.last },
+      // The names recorded at the start, exactly; the database marks the
+      // result names_differ if the profile changed during the check.
+      p_names: { first_name: start.first_name, last_name: start.last_name },
       p_risk_score: risk.risk_score,
     },
   });

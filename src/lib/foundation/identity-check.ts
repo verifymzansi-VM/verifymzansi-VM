@@ -4,7 +4,6 @@ import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { createFoundationServiceApi, type FoundationServiceApi } from "./service-api";
 import { handleFoundationOwnerRoute, type FoundationRefusal } from "./owner-route";
-import { readFoundationAccountProfile } from "./account-profile";
 import { lookupDatabaseReason, type FoundationErrorReason } from "./error-reasons";
 import { FoundationVerificationError } from "./verification-runtime";
 import {
@@ -13,7 +12,7 @@ import {
   DiditError,
   type DiditUnavailableReason,
 } from "./didit-client";
-import { deviceOfUserAgent, networkOf, sealStartContext } from "./identity-check-context";
+import { deviceOfUserAgent, networkHash } from "./identity-check-context";
 import { sendStaffOperationsEmail } from "../services/email";
 import { SUPPORT_CONTACT_EMAIL } from "../contact-email";
 import { getClientIp } from "../utils/rate-limit";
@@ -127,7 +126,7 @@ const started = z.object({
   created: z.boolean(),
 });
 
-async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest, owner: string) {
+async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest) {
   const { data, error } = await api.rpc("start_my_identity_check", {}, { get: false });
   if (error) {
     if (error.code === "PT409")
@@ -148,20 +147,9 @@ async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest,
     return new IdentityCheckRefusal(409, "identity_check_paused", UNAVAILABLE);
   };
   if (!config) throw await unavailable("not_configured");
-  const profile = await readFoundationAccountProfile(api);
-  if (!profile.legal_first_name || !profile.legal_last_name)
-    throw new IdentityCheckRefusal(409, "legal_name_required", UNAVAILABLE);
-  const ip = getClientIp(request);
-  const sealedContext = sealStartContext(check.check_id, {
-    owner,
-    first: profile.legal_first_name,
-    last: profile.legal_last_name,
-    network: networkOf(ip === "unknown" ? null : ip),
-    device: deviceOfUserAgent(request.headers.get("user-agent")),
-  });
   let session: Awaited<ReturnType<typeof createDiditSession>>;
   try {
-    session = await createDiditSession(config, { checkId: check.check_id, sealedContext });
+    session = await createDiditSession(config, check.check_id);
   } catch (failure) {
     if (failure instanceof DiditError) throw await unavailable(failure.reason);
     throw failure;
@@ -170,6 +158,10 @@ async function startCheck(api: FoundationAuthenticatedApi, request: NextRequest,
     p_check: check.check_id,
     p_session_id: session.sessionId,
     p_session_url: session.url,
+    // Where the member started (compared with where the partner saw the
+    // check): a keyed hash of the network and the kind of device only.
+    p_network_hash: networkHash(getClientIp(request)),
+    p_device_kind: deviceOfUserAgent(request.headers.get("user-agent")),
   });
   if (attached.error) throw new Error("Identity check session was not attached");
   return { checkId: check.check_id, url: session.url };
@@ -210,13 +202,12 @@ export function handleIdentityCheckStart(request: NextRequest) {
     log,
     action: "verification:identity-check",
     mutate: true,
-    requireCaller: true,
     unavailableMessage: "Verification is temporarily unavailable",
     signInMessage: "Sign in to manage verification",
-    command: async (api, input, caller) => {
+    command: async (api, input) => {
       if (!z.strictObject({}).safeParse(input).success)
         throw new IdentityCheckRefusal(400, "invalid_request", "Reload the page and try again");
-      return startCheck(api, request, caller!.accountId);
+      return startCheck(api, request);
     },
     refusal,
   });

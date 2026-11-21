@@ -10,7 +10,7 @@ import {
   refuseWhileAutomaticCheckOpen,
 } from "./identity-check";
 import { createDiditSession, DiditError } from "./didit-client";
-import { openStartContext } from "./identity-check-context";
+import { networkHash } from "./identity-check-context";
 import { FoundationVerificationError } from "./verification-runtime";
 import { sendStaffOperationsEmail } from "../services/email";
 vi.mock("server-only", () => ({}));
@@ -48,18 +48,6 @@ const session = "33333333-3333-4333-8333-333333333333";
 const rpc = vi.fn();
 const serviceRpc = vi.fn();
 const api = { rpc } as unknown as FoundationAuthenticatedApi;
-const profile = {
-  display_name: "Thando D",
-  public_name: "Thando D.",
-  bio: null,
-  avatar_object_id: null,
-  legal_first_name: "Thando Sipho",
-  legal_last_name: "Dlamini",
-  legal_name_locked: false,
-  identity_verified: false,
-  revision: 1,
-  updated_at: "2026-11-21T10:00:00Z",
-};
 const post = (path: string, body: unknown = {}) =>
   new NextRequest(`https://verifymzansi.com${path}`, {
     method: "POST",
@@ -74,7 +62,7 @@ const start = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("ID_ENCRYPTION_KEY", "fedcba9876543210".repeat(4));
+  vi.stubEnv("HMAC_SECRET", "0123456789abcdef".repeat(4));
   vi.stubEnv("DIDIT_API_KEY", "fixture-key");
   vi.stubEnv("DIDIT_WORKFLOW_ID", "77777777-7777-4777-8777-777777777777");
   vi.mocked(sendStaffOperationsEmail).mockResolvedValue({ success: true } as never);
@@ -162,11 +150,12 @@ describe("starting a check", () => {
     error: null,
   });
   const memberRpc = (first: unknown) =>
-    rpc.mockImplementation(async (name: string) =>
-      name === "start_my_identity_check" ? first : { data: profile, error: null }
-    );
+    rpc.mockImplementation(async (name: string) => {
+      if (name !== "start_my_identity_check") throw new Error(`unexpected ${name}`);
+      return first;
+    });
 
-  it("creates the partner session with the sealed start context and binds it to the check", async () => {
+  it("creates the partner session with the check id only, and records where the member started", async () => {
     memberRpc(started());
     vi.mocked(createDiditSession).mockResolvedValue({
       sessionId: session,
@@ -175,19 +164,13 @@ describe("starting a check", () => {
     expect(await start()).toEqual({
       data: { checkId: check, url: "https://verify.didit.me/session/abc" },
     });
-    const sealed = vi.mocked(createDiditSession).mock.calls[0]![1];
-    expect(sealed.checkId).toBe(check);
-    expect(openStartContext(check, sealed.sealedContext)).toEqual({
-      owner,
-      first: "Thando Sipho",
-      last: "Dlamini",
-      network: "4:198.51.100",
-      device: "handheld",
-    });
+    expect(vi.mocked(createDiditSession).mock.calls[0]).toEqual([expect.anything(), check]);
     expect(serviceRpc).toHaveBeenCalledWith("attach_identity_check_session", {
       p_check: check,
       p_session_id: session,
       p_session_url: "https://verify.didit.me/session/abc",
+      p_network_hash: networkHash("198.51.100.7"),
+      p_device_kind: "phone",
     });
   });
 

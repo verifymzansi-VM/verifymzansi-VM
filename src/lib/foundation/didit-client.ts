@@ -7,7 +7,7 @@ import { IDENTITY_CHECK_FRAME_ORIGIN } from "../verification/identity-check-fram
  * owner sets DIDIT_API_KEY (scopes: create sessions, read decisions, delete
  * sessions) and DIDIT_WORKFLOW_ID as Worker settings; this code never makes
  * or handles keys. The partner receives only our random check id
- * (`vendor_data`) and a sealed start context it cannot read (`metadata`).
+ * (`vendor_data`): no name, contact, network or device detail.
  */
 const API = "https://verification.didit.me";
 const TIMEOUT_MS = 10_000;
@@ -80,14 +80,10 @@ const sessionUrl = z
 const createdSession = z.object({ session_id: z.uuid(), url: sessionUrl });
 
 /** A new partner session for one check. */
-export async function createDiditSession(
-  config: DiditConfig,
-  input: { checkId: string; sealedContext: string }
-) {
+export async function createDiditSession(config: DiditConfig, checkId: string) {
   const response = await call(config, "POST", "/v3/session/", {
     workflow_id: config.workflowId,
-    vendor_data: input.checkId,
-    metadata: { start: input.sealedContext },
+    vendor_data: checkId,
   });
   if (!response.ok) return refused(response);
   const parsed = createdSession.safeParse(await response.json().catch(() => null));
@@ -100,7 +96,6 @@ const decisionSchema = z.object({
   session_id: z.uuid(),
   status: z.string(),
   vendor_data: text,
-  metadata: z.object({ start: text }).nullish(),
   id_verifications: z
     .array(
       z.object({
