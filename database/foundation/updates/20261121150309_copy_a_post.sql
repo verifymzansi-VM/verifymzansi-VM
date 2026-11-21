@@ -290,7 +290,6 @@ revoke all on function internal.purge_copy_drafts(integer) from public, anon, au
 create or replace function internal.list_my_copy_drafts()
 returns jsonb
 language plpgsql
-stable
 security definer
 set search_path to 'pg_catalog'
 as $$
@@ -309,7 +308,6 @@ alter function internal.list_my_copy_drafts() owner to postgres;
 create or replace function api.list_my_copy_drafts()
 returns jsonb
 language sql
-stable
 set search_path to 'pg_catalog'
 as $$
   select internal.list_my_copy_drafts();

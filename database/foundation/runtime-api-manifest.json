@@ -5769,7 +5769,7 @@
       "updates": ["updates/20261121150309_copy_a_post.sql"],
       "arguments": [],
       "returns": "jsonb",
-      "volatility": "s",
+      "volatility": "v",
       "execute": {
         "anon": false,
         "authenticated": true,
