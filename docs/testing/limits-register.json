@@ -4440,6 +4440,25 @@
       ]
     },
     {
+      "id": "LIM-F-purge_capture_handoffs",
+      "title": "internal.purge_capture_handoffs: limit 1 to 5000",
+      "value": "1 to 5000",
+      "category": "batch",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/purge_capture_handoffs.sql",
+          "symbol": "internal.purge_capture_handoffs",
+          "contains": "if p_limit is null or p_limit not between 1 and 5000 then"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
       "id": "LIM-F-purge_expired_identity_bans",
       "title": "internal.purge_expired_identity_bans: limit 1 to 5000",
       "value": "1 to 5000",
@@ -5418,6 +5437,25 @@
           "file": "database/foundation/current/functions/internal/reserve_frontend_seen_reply_file.sql",
           "symbol": "internal.reserve_frontend_seen_reply_file",
           "contains": "if (select count(*) from private.frontend_business_reply_files where check_id=x.id)>=20 then raise exception 'attachment limit reached' using errcode='PT429';end if;"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-reserve_handoff_verification_upload",
+      "title": "internal.reserve_handoff_verification_upload",
+      "value": ">= 5",
+      "category": "rate",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/reserve_handoff_verification_upload.sql",
+          "symbol": "internal.reserve_handoff_verification_upload",
+          "contains": "if (select count(*) from private.evidence_artifacts a where a.case_id=h.case_id and a.state='intent')>=5 then"
         }
       ],
       "tests": [
@@ -6501,6 +6539,25 @@
           "file": "database/foundation/current/functions/internal/stage_frontend_post_command.sql",
           "symbol": "internal.stage_frontend_post_command",
           "contains": "or jsonb_typeof(p_payload) is distinct from 'object' or octet_length(p_payload::text)>131072"
+        }
+      ],
+      "tests": [
+        {
+          "kind": "declaration",
+          "mechanism": "LIM-MECH-SQL-GUARD"
+        }
+      ]
+    },
+    {
+      "id": "LIM-F-start_capture_handoff",
+      "title": "internal.start_capture_handoff",
+      "value": ">= 5 in 1 hour",
+      "category": "rate",
+      "enforcedAt": [
+        {
+          "file": "database/foundation/current/functions/internal/start_capture_handoff.sql",
+          "symbol": "internal.start_capture_handoff",
+          "contains": "and x.created_at>clock_timestamp()-interval '1 hour')>=5 then"
         }
       ],
       "tests": [
@@ -9306,6 +9363,88 @@
       "tests": [
         {
           "kind": "behaviour",
+          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "LIM-RL-verification-capture-token",
+      "title": "Shared rate limit for \"verification:capture-token\"",
+      "value": "30 per 600 s",
+      "category": "rate",
+      "action": "verification:capture-token",
+      "tiers": [
+        {
+          "limit": 30,
+          "ttl": 600
+        }
+      ],
+      "enforcedAt": [
+        {
+          "file": "workers/rate-limiter.ts",
+          "symbol": "ACTION_LIMITS",
+          "contains": "\"verification:capture-token\": ["
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "LIM-RL-verification-handoff",
+      "title": "Shared rate limit for \"verification:handoff\"",
+      "value": "10 per 600 s, 30 per hour",
+      "category": "rate",
+      "action": "verification:handoff",
+      "tiers": [
+        {
+          "limit": 10,
+          "ttl": 600
+        },
+        {
+          "limit": 30,
+          "ttl": 3600
+        }
+      ],
+      "enforcedAt": [
+        {
+          "file": "workers/rate-limiter.ts",
+          "symbol": "ACTION_LIMITS",
+          "contains": "\"verification:handoff\": ["
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
+          "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "LIM-RL-verification-handoff-open",
+      "title": "Shared rate limit for \"verification:handoff-open\"",
+      "value": "20 per 600 s",
+      "category": "rate",
+      "action": "verification:handoff-open",
+      "tiers": [
+        {
+          "limit": 20,
+          "ttl": 600
+        }
+      ],
+      "enforcedAt": [
+        {
+          "file": "workers/rate-limiter.ts",
+          "symbol": "ACTION_LIMITS",
+          "contains": "\"verification:handoff-open\": ["
+        }
+      ],
+      "tests": [
+        {
+          "kind": "register",
           "file": "src/__tests__/limits/rate-limiter-limits.test.ts"
         }
       ]
