@@ -7,6 +7,9 @@ import {
 } from "./request-body";
 import { parseJsonRequest } from "./api";
 
+// LIM-MECH-BODY-READER (docs/testing/limits-register.json): the bounded body
+// reader behind every route's maxBytes request body cap.
+
 describe("bounded request bodies", () => {
   it("counts UTF-8 bytes rather than characters", async () => {
     const request = new Request("http://localhost", { method: "POST", body: '"éé"' });

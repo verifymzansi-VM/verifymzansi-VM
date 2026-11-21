@@ -546,6 +546,7 @@ try {
   await check(
     "at most 200 invitations per staff member in 24 hours, counted from their events",
     () => {
+      // LIM-SQL-member-invitations-day (docs/testing/limits-register.json)
       // Three today (an invitation and two renewals) plus 196.
       q(`insert into private.member_invitation_events(email,action,actor_id)
       select 'bulk-'||g||'@example.co.za','invite','${owner.id}' from generate_series(1,196) g;`);

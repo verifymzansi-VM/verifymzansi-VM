@@ -138,6 +138,7 @@ try {
     moderator = staffUser("moderator", "moderator");
 
   // --------------------------------------------------------- staff sessions
+  // LIM-SQL-staff-totp-age (docs/testing/limits-register.json)
   // internal.staff_actor guards every staff command: an AAL2 claim backed by a
   // live AAL2 session row, a verified authenticator app, an authenticator code
   // from the last 12 hours for every capability, and from the last 15 minutes

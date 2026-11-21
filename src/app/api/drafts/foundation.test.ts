@@ -98,6 +98,7 @@ describe("PUT /api/drafts", () => {
     expect(mockOwnerRoute).not.toHaveBeenCalled();
   });
 
+  // LIM-APP-drafts-body (docs/testing/limits-register.json)
   it("rejects a multibyte draft exceeding 64 KiB", async () => {
     const res = await PUT(
       createPUTRequest({ flow: "listing", step: 1, data: { title: "é".repeat(33 * 1024) } })
