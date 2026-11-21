@@ -87,6 +87,8 @@ interface UnifiedLayoutProps {
   layoutMode?: "public" | "review";
   galleryPhotos: string[];
   deliveryAvailable: boolean;
+  /** Hides the "Live offers" fact: the page shows the business's stock below. */
+  hideLiveOffers?: boolean;
 }
 
 interface BusinessHeroMediaItem {
@@ -472,6 +474,7 @@ export function UnifiedLayout({
   layoutMode = "public",
   galleryPhotos,
   deliveryAvailable,
+  hideLiveOffers = false,
 }: UnifiedLayoutProps) {
   const [viewCount, setViewCount] = useState(business.view_count ?? 0);
   const handleViewRecorded = useCallback(() => {
@@ -700,14 +703,16 @@ export function UnifiedLayout({
               : "Hero-led presentation"}
           </p>
         </div>
-        <div className="rounded-2xl bg-muted/40 p-3">
-          <p className="text-xs font-semibold text-muted-foreground">Live offers</p>
-          <p className="mt-1 text-sm font-medium">
-            {promotions.length > 0
-              ? `${promotions.length} Tourism & Events posts visible`
-              : "No live posts yet"}
-          </p>
-        </div>
+        {hideLiveOffers ? null : (
+          <div className="rounded-2xl bg-muted/40 p-3">
+            <p className="text-xs font-semibold text-muted-foreground">Live offers</p>
+            <p className="mt-1 text-sm font-medium">
+              {promotions.length > 0
+                ? `${promotions.length} Tourism & Events posts visible`
+                : "No live posts yet"}
+            </p>
+          </div>
+        )}
       </div>
     );
 

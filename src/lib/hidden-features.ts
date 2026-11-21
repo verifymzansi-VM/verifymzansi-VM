@@ -101,3 +101,15 @@ export const SHOW_SPONSOR_OFFER: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.
  * Package teams are not built yet (roadmap P4c), so a package has one person.
  */
 export const SHOW_PACKAGE_TEAMS: boolean = LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_PACKAGE_TEAMS;
+
+/**
+ * The storefront of a Multi-listing package (business tools plan section 1,
+ * item 17b): "All stock" on the package owner's checked business page, and on
+ * each listing in it the business's name and "See all N cars". Reads the live
+ * backend's api.get_public_storefront and the search filter 'storefront'
+ * (database update 20261121131915_business_storefront.sql). Off until launch
+ * switch-on (item 60; frontend ledger group 85): while off, both pages are as
+ * before and /api/listings refuses the storefront filters.
+ */
+export const SHOW_BUSINESS_STOREFRONT: boolean =
+  LAUNCH_CONFIG_BUILD && LAUNCH_VALUES.SHOW_BUSINESS_STOREFRONT;

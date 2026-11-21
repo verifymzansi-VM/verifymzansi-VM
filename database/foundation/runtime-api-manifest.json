@@ -5720,6 +5720,25 @@
         "service_role": true
       },
       "authority": "Website server only, for a disclosure that is still open and was opened by that staff member: the encrypted ID number (unless erased) and the selfie stored object (unless deleted) of each named account with a kept record, so the server can decrypt the number and show the selfie."
+    },
+    {
+      "name": "get_public_storefront",
+      "updates": ["updates/20261121131915_business_storefront.sql"],
+      "arguments": [
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Public: for a publicly live business with a storefront (current CIPC sticker, its owner's package running, the owner's first such business) or a live listing holding that package's slot, the business id and name, the listing count, categories, vehicle makes and property areas; null for any other post. Card facts only: no owner, package, slot, account or contact."
     }
   ]
 }

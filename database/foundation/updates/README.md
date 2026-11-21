@@ -80,6 +80,77 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Business storefront, 21 November 2026
+
+`20261121131915_business_storefront.sql` is pending (see the applied register).
+Launch checklist item 17b, business tools plan section 1 (owner-approved 20
+November 2026): a Multi-listing package's live Market listings show on its
+owner's existing business page as "All stock", and each of those listings names
+the business and links to it. Nothing is stored; there is no set-up step.
+
+- **Which business:** `internal.storefront_package(business)` gives the package
+  whose listings a business page shows. A business has one only when it is
+  publicly live, holds a current CIPC sticker (the business check, owner
+  decision 12 of 14 November), its owner's package runs now
+  (`internal.slot_package_now`) and it is the owner's first such business
+  (earliest published, then id). An owner with several checked businesses has
+  one storefront, and every listing links to that one.
+- **Which listings:** the Market listings that hold a slot of that package (an
+  unreleased activation on one of its grants), as public search already shows
+  them. `internal.storefront_of_post(post)` goes the other way: for a live
+  listing in a storefront, the storefront's business; for a business, the
+  business itself.
+- **Search:** `internal.search_posts` (so `api.search_posts` and
+  `api.search_post_cards`) accepts `storefront` (a business id; a business
+  without a storefront matches nothing) and `make` (1 to 80 characters, only
+  with `storefront`; the vehicle make in any case). Every other filter, order,
+  page and count is unchanged and works inside a storefront.
+- **The read:** `api.get_public_storefront(post id)` (visitors and members,
+  security invoker over a security definer `internal` twin) returns, for a
+  business with a storefront or a listing in one, the business id and name, the
+  number of listings, their categories with counts, and the vehicle makes and
+  property areas (province and city) among them; null for any other post. Only
+  public card facts: no owner, package, slot, account or contact.
+
+New command and two optional search filters only (expand). A website without the
+matching code never sends the new filters. ORDER: apply first, then merge; the
+website reads the storefront only while `SHOW_BUSINESS_STOREFRONT` is on (off
+until launch switch-on).
+
+**Applying.**
+
+1. Run `../preflight/20261121131915_business_storefront.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "business storefront: update not applied; running
+   packages: N; checked businesses: M" (any counts).
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "business storefront: already applied; running packages:
+   N; checked businesses: M; storefronts: K".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`; once it matches, record it as described
+   above.
+
+The reviewed rollback is
+`../rollback/20261121131915_business_storefront.down.sql` (only with the owner's
+decision; prefer a forward fix; switch `SHOW_BUSINESS_STOREFRONT` off first). It
+refuses (55000) unless every function of the update has the update's body; then
+it puts back `internal.search_posts` byte for byte and drops the read and the
+two helpers. No data is removed (the update stores none).
+
+`node --import tsx scripts/test-foundation-business-storefront.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after, read only; a drifted search body and a premature
+rollback refused; apply, rollback and re-apply return the same fingerprints; the
+grants (the read for visitors and members, never the server key; the helpers for
+nobody; the api wrapper security invoker); a package bought through checkout
+with a checked business shows only its live listings (not a draft or a deleted
+one), with the read's fields the same from the business, from each listing and
+for a member; every search filter inside the storefront (make in any case,
+category with gearbox and year, text, area, pages and totals); the malformed
+filters refused and the make's 80-character bound; only the owner's first
+checked business; none without a sticker, with an expired one, without a
+package, or after the package ended.
+
 ## Authority requests: opening a kept identity record, 21 November 2026
 
 `20261121043124_identity_record_disclosure.sql` was applied on 21 November 2026
@@ -6311,5 +6382,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   sha256 starting a720f7d0; preflight sha256 starting 55a780b8; production
   fingerprint after it (fingerprint.sql) matched the full replay (except the
   known schema grant difference)
+- `20261121131915_business_storefront.sql`: pending; apply-first
 
 <!-- applied-register:end -->

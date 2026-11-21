@@ -33,14 +33,16 @@
       "row_level_security": "8b1899fdc009987a139d975d4a5315cb",
       "triggers": "521fb8002d5e19e9a0a0aeac8de97886"
     },
-    "pendingApplication": []
+    "pendingApplication": [
+      "20261121131915_business_storefront.sql"
+    ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql), and posting-v4 once 20261112122001_publish_posting_terms_v4.sql is applied (current from 20261112173841_switch_posting_terms_v4.sql).",
     "schema_grants: production has 8 items (d397fed9c8bd9d4fc50ebdd777899d93) and the replay 7 (categories below). The extra production item is `internal supabase_auth_admin:USAGE`, which Supabase grants when the Auth \"Before user created\" hook is switched on; no repository file creates it (see replay/hosted-auth-hook-grants.sql)."
   ],
-  "updateCount": 96,
-  "lastUpdate": "20261121043124_identity_record_disclosure.sql",
+  "updateCount": 97,
+  "lastUpdate": "20261121131915_business_storefront.sql",
   "categories": {
     "column_grants": {
       "items": 10,
@@ -59,16 +61,16 @@
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 1096,
-      "fingerprint": "d883e32c9c771d09c300eb2b91d0b2a4"
+      "items": 1100,
+      "fingerprint": "9f18ce4180c750ee1639163ac8e67a94"
     },
     "function_grants": {
-      "items": 791,
-      "fingerprint": "92b6cf3d70a46ad1a6c9bf879a1d4797"
+      "items": 795,
+      "fingerprint": "d47ba0436978e3e4233e88022c68e968"
     },
     "function_metadata": {
-      "items": 1096,
-      "fingerprint": "fe06c0ab792110a48614f094ccae496a"
+      "items": 1100,
+      "fingerprint": "d5479be724530037170b69d46e1ca424"
     },
     "indexes": {
       "items": 578,
