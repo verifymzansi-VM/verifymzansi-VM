@@ -4,27 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { formatPlanPrice } from "@/lib/constants/pricing";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFoundationPartnerDashboard } from "@/lib/foundation/partners";
+import { SHOW_PARTNER_PAGE } from "@/lib/hidden-features";
+import type { PartnerDashboard } from "@/lib/partners/partner-overview";
+import { PartnerOverview } from "./partner-overview";
 
 export const metadata = { title: "Partner programme", robots: { index: false } };
 export const dynamic = "force-dynamic";
-
-interface PartnerDashboard {
-  code: string;
-  status: string;
-  rateBps: number;
-  referrals: number;
-  payingReferrals: number;
-  totals: Record<string, number>;
-  recent: Array<{
-    id: string;
-    amountCents: number;
-    baseCents: number;
-    status: string;
-    createdAt: string;
-    eligibleAt: string;
-    manual: boolean;
-  }>;
-}
 
 const date = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "medium",
@@ -41,6 +26,10 @@ export default async function PartnerDashboardPage() {
   const partner = await readNativeDashboard();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 
+  // The redesigned page (frontend ledger group 80) stays off until the partner
+  // agreement is signed; until then partners see the page below, unchanged.
+  if (SHOW_PARTNER_PAGE && partner)
+    return <PartnerOverview partner={partner} appUrl={appUrl} now={new Date()} />;
   return <PartnerDashboardContent partner={partner} appUrl={appUrl} />;
 }
 

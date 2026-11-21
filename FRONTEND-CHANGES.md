@@ -140,6 +140,7 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 74. Old backend retired: last unowned reads (no file rows: the group 74 part of 6 rows elsewhere) | approved by owner 2026-11-21 | Nothing. My profile and the enquiry form read the same data through named live-backend reads; an unused verification hook is deleted. Before and after pictures are identical. |
 | 75. Old backend retired: Complete profile read (item 10) (no file rows: the group 75 part of 2 rows elsewhere) | approved by owner 2026-11-21 | Nothing (pixel-identical, no visible change). 'Verify your phone number' reads the same profile through the named live-backend read; before and after pictures match pixel for pixel. |
 | 76. Limits register: size limits tested at their bound (and the group 76 part of 3 rows elsewhere) | keep | Nothing; tests only |
+| 80. Partner page (item 48) | awaiting owner (with the group 80 part of 1 row in group 4); wording to confirm | Nothing today (switch off; SHOW_PARTNER_PAGE stays off at launch too, until the partner agreement is signed). Once on, a partner's page shows: the green band with 'Earned this month' and 'Next payout'; 'Share' with the link, code, 'Share on WhatsApp' and 'Download QR code'; 'Progress' (Signed up, Paying); 'Money' (Pending, Approved, Paid); 'Help' (Partner rules, Contact us). No customers, statements or booklet yet (they wait for item 50 and the partner agreement). Someone who is not a partner sees today's page either way. |
 
 Questions for the owner:
 
@@ -878,7 +879,7 @@ None left: the three filter files were put back to `0b562f42` (see "Put back").
 | `src/app/billing/checkout/page.tsx`                                           | rewiring          | Foundation checkout summary; a failed summary read is now logged (M5.1). Retired-backend removal: retired-backend branch removed.                                                                                                                                                                                                                                                                                                                                                           | Nothing (same look and steps) Pricing switch (group 17): tells the confirmation page when no plan is on sale (its note is in checkout-confirm.tsx). R69 slots (group 18): reads the member's Individual slots (ID review, slots held, limit) so the page offers only what can be bought. Renew early (group 32): a renewal link (`?renew=` a slot, `all` or `soon` for the reminder's 'Renew all'; without a term the 30-day one) reads the member's slots and hands the slots that can be renewed, each with the date its new days start, to the confirmation page (its wording is in checkout-confirm.tsx). Invoice choice: group 36.                                                                                                                                                                                                                                                                                                                                                                      | keep     | awaiting owner (earlier change); M5.1 part approved by owner 2026-11-12; pricing switch part approved by owner 2026-11-12; R69 slots part approved by owner 2026-11-12 (pricing switch); retired-backend removal part awaiting owner; renew early part approved by owner 2026-11-14                                         | 2026-11-17 | deae8c395660 |
 | `src/app/dashboard/affiliations/page.tsx`                                     | rewiring          | Native affiliation workspace. Retired-backend branch removed.                                                                                                                                                                                                                                                                                                                                                                                                                               | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | b8d71550fc03 |
 | `src/app/dashboard/leads/page.tsx`                                            | rewiring          | Native enquiries. Retired-backend branch removed. Group 68: the signed-in check reads the account the sign-in gate verified (live backend) instead of the old client.                                                                                                                                                                                                                                                                                                                                                                                                                                           | Nothing (same look and steps) Group 68: Nothing on screen.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner; group 68 part approved by owner 2026-11-20                                                                                                                                                                                                                                                                                                              | 2026-11-20 | bebdf57d36a9 |
-| `src/app/dashboard/partner/page.tsx`                                          | rewiring          | Native partner dashboard. Retired-backend branch removed.                                                                                                                                                                                                                                                                                                                                                                                                                                   | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 7fc8669f7f6f |
+| `src/app/dashboard/partner/page.tsx` | rewiring | Native partner dashboard. Retired-backend branch removed. Group 80: with SHOW_PARTNER_PAGE on, a partner gets the redesigned page (partner-overview.tsx); the summary's type moved to src/lib/partners/partner-overview.ts. With the switch off, the page is unchanged. | Nothing (same look and steps) Group 80: nothing today (switch off). Once on, a partner sees the redesigned page described in group 80; someone who is not a partner sees today's page. | keep | awaiting owner; group 80 part awaiting owner | 2026-11-21 | 99181e616069 |
 | `src/app/layout.tsx`                                                          | rewiring          | `&amp;` entity in the no-JavaScript notice. M10.3: the 'Launching soon' pop-up is removed (owner decision OD-15). Retired-backend removal: stub browser suite session cookie check removed from the signed-in shell hint. Launching soon pop-up returned to the 27 Oct baseline at owner's request; reverses part of group 12: the pop-up and its switch are back, on, and still left out of Playwright runs. Owner decision 18 November 2026: only the pop-up comes back; the slim be-the-first cards and the slim Every poster ID-reviewed line of group 12 stay. | M10.3: no 'We're launching soon' pop-up over the first page a visitor opens. Launching soon pop-up (returned to the 27 Oct baseline at owner's request; reverses part of group 12): the 'We're launching soon' pop-up shows again over the first page a visitor opens, as in the chosen version. | keep     | awaiting owner; M10.3 part approved by owner 2026-11-12; retired-backend removal part awaiting owner; launching soon pop-up part: returned to the 27 Oct baseline at owner's request; reverses part of group 12 | 2026-11-18 | 0ea8baf43ace |
 | `src/app/listing/[id]/page.tsx`                                               | rewiring          | Foundation listing detail; similar posts from collection read. Retired-backend branch removed. Group 61: the full-screen viewer gets the listing's real like total (was always 0). Group 68: the old client's signed-in check is removed. It only decided whether the poster gets their own number in the page, and that number is never sent (always empty), so the public page reads no session. | Nothing (same look and steps) Group 61 (only while the counters are shown): the viewer's like count is the real total. Group 68: Nothing on screen. | keep     | awaiting owner; group 61 part awaiting owner; group 68 part approved by owner 2026-11-20 | 2026-11-20 | 475c4aa46a1f |
 | `src/app/organisation-invite/page.tsx`                                        | rewiring          | Native invite preview. Retired-backend branch removed.                                                                                                                                                                                                                                                                                                                                                                                                                                      | Nothing (same look and steps)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | keep     | awaiting owner                                                                                                                                                                                                                                                                                                              | 2026-11-08 | 126caa3e74c3 |
@@ -3116,6 +3117,78 @@ and one byte over, so the limits register can mark it proven: the profile photo
 | File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/components/business-verification/owner-verification-panel.test.tsx` | test | Group 76: a test that a 5 MB CIPC PDF is read and one byte more is refused before anything is uploaded. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | 3fe9ae84efaf |
+
+Decision: awaiting owner.
+
+### 80. Partner page (item 48)
+
+Launch checklist item 48, website only. The partner's own page
+(`/dashboard/partner`) gets the design the owner approved on 14 November 2026,
+built from the site's own page header, dark-green brand band, cards and
+buttons. It is behind the switch `SHOW_PARTNER_PAGE`
+(`src/lib/hidden-features.ts`), off in production and off at launch too
+(`LAUNCH_VALUES`): the partner programme opens only once the partner agreement
+is signed. While off, partners see today's page unchanged; someone who is not a
+partner sees today's page either way.
+
+The page uses only what the partner's own summary already returns
+(`api.my_partner_dashboard`); no database change. What a partner sees once it
+is switched on:
+
+- Green band: 'Earned this month' (commission created this calendar month in
+  South African time, including commission still in its 30-day wait, less
+  reversed commission, so a refund lowers it) with 'Includes commission still
+  in its 30-day wait.'; and 'Next payout' (approved commission not yet paid,
+  in gold) with 'Approved commission only.'. If the partner's latest 50
+  commissions are all from this month, the line under 'Earned this month'
+  reads 'From your latest 50 commissions.' instead (the summary returns 50 at
+  most).
+- 'Share' (with the partner's status badge): the referral link, 'Code
+  <code>', a filled 'Share on WhatsApp' button (opens WhatsApp with the link as
+  the message) and an outlined 'Download QR code' button (an SVG file of the
+  link's QR code, drawn by the website's server with the same QR maker as
+  'Continue on your phone').
+- 'Progress': 'Signed up' and 'Paying' counts.
+- 'Money': 'Pending', 'Approved' and 'Paid' totals, and today's line '<rate>%
+  of each qualifying payment. Commission is pending for 30 days, then approved
+  if the payment stands.'.
+- 'Help': 'Partner rules' (the Terms' Partners section, `/terms#partners`) and
+  'Contact us' (`/contact?topic=general_support`).
+- Today's closing line on what earns no commission is kept.
+- Not shown on the new page: today's 'Recent commission' list (not part of the
+  approved design; statements replace it with item 50).
+
+Wording to confirm (legally sensitive, kept minimal): 'Includes commission
+still in its 30-day wait.', 'Approved commission only.', 'Next payout', the
+rate and 30-day line (today's wording), and 'Partner rules' pointing at the
+Terms.
+
+Waits for item 50 or the partner agreement, so left out:
+
+- 'ID-reviewed' in Progress (the summary has no such count).
+- 'Customers' ('Thando D.'): the summary returns no customer names. The section
+  is built and shows only when names are passed (first name and surname
+  initial only, tested), which nothing does yet. The published Terms
+  (posting-v5, Partners) say a partner never sees a customer's name, so the
+  Terms need changing before it can be switched on.
+- Monthly statements with bank reference and PDF.
+- The partner booklet (no approved text and no page yet).
+
+Also changed, outside the checked scope: `src/lib/hidden-features.ts` and
+`src/lib/launch-config.ts` (the switch, off at launch) with
+`src/lib/launch-config.test.ts`; `src/lib/partners/partner-overview.ts` (the
+figures, link, WhatsApp link and short customer name) with its test;
+`src/lib/qr-code.ts` (the QR maker, moved out of
+`src/lib/foundation/capture-handoff.ts`, which now uses it unchanged) with its
+test.
+
+Pictures: the coordinator takes them (desktop 1280 px and phone 375 px).
+
+| File | Kind | Reason | What changes on screen | Proposed | Owner decision | Date | Version |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/app/dashboard/partner/partner-overview.tsx` | visual | Group 80: the redesigned partner page (approved design, 14 November 2026), shown only with SHOW_PARTNER_PAGE on. | Nothing today (switch off). Once on: the page described in group 80. | keep | awaiting owner | 2026-11-21 | 7e96135fdcf4 |
+| `src/app/dashboard/partner/partner-overview.test.tsx` | test | Group 80: the figures, sharing links, QR download, help links, no customers section without names, and customers shown by first name and initial only. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | 6fcd1b009449 |
+| `src/app/dashboard/partner/page.test.tsx` | test | Group 80: with the switch off the page shows today's sections; someone who is not a partner sees the same page either way; with it on, the redesigned sections. | Nothing (not part of a page) | keep | awaiting owner | 2026-11-21 | 0931afe30504 |
 
 Decision: awaiting owner.
 
