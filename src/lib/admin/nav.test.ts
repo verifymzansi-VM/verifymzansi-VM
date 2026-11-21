@@ -38,6 +38,8 @@ function adminPages(dir = path.join(APP_DIR, "admin"), route = "/admin"): string
  * its parent entry's capability, checked below.
  */
 const SUB_PAGES: Record<string, string> = {
+  "/admin/authority-requests/[id]": "/admin/authority-requests",
+  "/admin/authority-requests/[id]/sheet": "/admin/authority-requests",
   "/admin/business-verification/[id]": "/admin/business-verification",
   "/admin/dsar/new": "/admin/dsar",
   "/admin/governance/appeals/[id]": "/admin/governance/appeals",
@@ -77,6 +79,7 @@ describe("admin navigation registry", () => {
     expect(hrefs).toContain("/admin/support");
     expect(hrefs).not.toContain("/admin/governance/escalations");
     expect(hrefs).not.toContain("/admin/dsar");
+    expect(hrefs).not.toContain("/admin/authority-requests");
     expect(hrefs).not.toContain("/admin/operations");
   });
 
@@ -85,6 +88,7 @@ describe("admin navigation registry", () => {
     for (const href of [
       "/admin/governance/escalations",
       "/admin/dsar",
+      "/admin/authority-requests",
       "/admin/governance/roles",
       "/admin/support",
     ]) {

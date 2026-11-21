@@ -211,6 +211,13 @@ export const ADMIN_NAV: readonly NavItem[] = [
     capability: "dsar:manage",
     badge: "dsar_overdue",
   },
+  {
+    href: "/admin/authority-requests",
+    label: "Authority requests",
+    icon: "landmark",
+    section: "compliance",
+    capability: "identity:disclose",
+  },
 
   {
     href: "/admin/governance/oversight",

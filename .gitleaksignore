@@ -16,3 +16,8 @@
 # Test input, not a credential: a made-up fixture value ("playwright-...") in the
 # throwaway browser-test copy's environment. Exact fingerprint only.
 267e45d817f95f5991f9b644886a5c6e90db7bc3:scripts/lib/foundation-e2e-website.mjs:generic-api-key:41
+
+# Synthetic test input, not a credential: a made-up 64-hex identity-matching
+# key in the authority request adapter test. Replaced in a later commit by a
+# key made at run time. Exact fingerprint only.
+f1283a25285af694451b3fb5b17ada8a7a1836f1:src/lib/foundation/identity-disclosures.test.ts:generic-api-key:34

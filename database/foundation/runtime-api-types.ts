@@ -704,6 +704,22 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         };
         Returns: Json;
       };
+      open_identity_disclosure: {
+        Args: {
+          p_request_type: string;
+          p_reference: string;
+          p_reason: string;
+          p_lookup_kind: string;
+          p_lookup_value: string;
+          p_attested: boolean;
+        };
+        Returns: Json;
+      };
+      read_identity_disclosure: {
+        Args: { p_disclosure: string; p_purpose: string; p_subject?: string };
+        Returns: Json;
+      };
+      list_identity_disclosures: { Args: Record<never, never>; Returns: Json };
       get_staff_operations_health: { Args: Record<never, never>; Returns: Json };
       get_staff_sales_summary: { Args: Record<never, never>; Returns: Json };
       get_vat_registration: { Args: Record<never, never>; Returns: Json };
@@ -894,6 +910,10 @@ export type FoundationRuntimeServiceDatabase = {
           p_digest: string;
           p_browser_liveness_passed?: boolean;
         };
+        Returns: Json;
+      };
+      identity_disclosure_material: {
+        Args: { p_disclosure: string; p_staff: string };
         Returns: Json;
       };
     };

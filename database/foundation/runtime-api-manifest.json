@@ -5612,6 +5612,116 @@
       "authority": "Trusted server only (service_role): records that a timed job whose success the website decides ran and succeeded, after the whole run succeeded; only payment_checks and refund_check (22023 otherwise). Writes the job name and the time (never later than now), nothing else."
     },
     {
+      "name": "open_identity_disclosure",
+      "updates": ["updates/20261121043124_identity_record_disclosure.sql"],
+      "arguments": [
+        {
+          "name": "p_request_type",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reference",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_lookup_kind",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_lookup_value",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_attested",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Governor or admin (identity:disclose) with an authenticator code from the last 15 minutes: checks an authority request (type from a closed list, reference, a reason, and the confirmation that it is genuine and signed), looks the person up by post id or link slug, ID number fingerprint, phone number or email address (never by name), and writes the append-only log row before answering. Returns only the log row id, number, outcome, match count and closing time (15 minutes); a search that finds nobody is logged too."
+    },
+    {
+      "name": "read_identity_disclosure",
+      "updates": ["updates/20261121043124_identity_record_disclosure.sql"],
+      "arguments": [
+        {
+          "name": "p_disclosure",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_purpose",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_subject",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Governor or admin (identity:disclose, authenticator code from the last 15 minutes), only the staff member who opened the disclosure, while it still holds the capability, until it closes 15 minutes after opening: logs the look (view, print or selfie) first, then returns the request and, per named account, the kept identity record (full names as on the ID, verification date, whether the ID number and selfie are still kept, the ID photo state, verified phone numbers with dates) or, for an ID number only ever tried, the dates of the attempts. Never object keys or the encrypted number."
+    },
+    {
+      "name": "list_identity_disclosures",
+      "updates": ["updates/20261121043124_identity_record_disclosure.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Governor or admin (identity:disclose, authenticator code from the last 15 minutes): the latest 50 openings with number, date, who opened it, request type and reference, outcome and whether it was viewed or printed; no personal data about the person searched for."
+    },
+    {
+      "name": "identity_disclosure_material",
+      "updates": ["updates/20261121043124_identity_record_disclosure.sql"],
+      "arguments": [
+        {
+          "name": "p_disclosure",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_staff",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Website server only, for a disclosure that is still open and was opened by that staff member: the encrypted ID number (unless erased) and the selfie stored object (unless deleted) of each named account with a kept record, so the server can decrypt the number and show the selfie."
+    },
+    {
       "name": "get_staff_sales_summary",
       "updates": ["updates/20261121090305_staff_sales_and_vat.sql"],
       "arguments": [],

@@ -9,6 +9,10 @@ create sequence private.frontend_evidence_claim_events_id_seq as bigint incremen
 alter sequence private.frontend_evidence_claim_events_id_seq owned by private.frontend_evidence_claim_events.id;
 alter sequence private.frontend_evidence_claim_events_id_seq owner to postgres;
 revoke all on sequence private.frontend_evidence_claim_events_id_seq from public;
+create sequence private.identity_disclosures_number_seq as bigint increment by 1 minvalue 1 maxvalue 9223372036854775807 start with 1 cache 1 no cycle;
+alter sequence private.identity_disclosures_number_seq owned by private.identity_disclosures.number;
+alter sequence private.identity_disclosures_number_seq owner to postgres;
+revoke all on sequence private.identity_disclosures_number_seq from public;
 create sequence private.moderation_log_id_seq as bigint increment by 1 minvalue 1 maxvalue 9223372036854775807 start with 1 cache 1 no cycle;
 alter sequence private.moderation_log_id_seq owned by private.moderation_log.id;
 alter sequence private.moderation_log_id_seq owner to postgres;
